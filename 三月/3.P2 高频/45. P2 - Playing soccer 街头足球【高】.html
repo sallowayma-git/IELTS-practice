@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Playing Soccer - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+   .custom-br {
+    display: block;
+    margin-bottom: 1300px;
+    content: "";
+  }
+  * {
+    line-height: 30px;
+  }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px;
+    --font-size-large: 20px;
+  }
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    font-size: inherit;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular);
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    color: #111827;
+    padding-bottom: 82px; 
+  }
+  .top-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: absolute; 
+    left:50%;
+    top: 10px;
+    display: inline-block; 
+    background:var(--panel); 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--panel);
+    cursor:pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+	position: absolute;
+	right: 10px;
+	top: 10px;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+    min-width: 280px;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+    font-size: inherit;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:calc(100vh - 82px);
+    width:100%; 
+    overflow: hidden;
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+    -webkit-overflow-scrolling: touch;
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4,h5 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+    font-size: inherit;
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: break-word; 
+    hyphens: auto; 
+  }
+  .paragraph-label {
+    font-weight: 600;
+    color: var(--accent);
+    margin-right: 8px;
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+    font-size: inherit;
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition: all 0.2s ease;
+    font-size: inherit;
+  }
+  button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+    transition: filter 0.2s ease;
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow:var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+    transform: none;
+    box-shadow: none;
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 94px; 
+    width: 320px; 
+    max-width: calc(100% - 24px); 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow:var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+    background: transparent;
+    font-size: inherit;
+  }
+  #notes textarea:focus {
+    outline: none;
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 94px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+    animation: fadeIn 0.3s, fadeOut 0.3s 1.2s;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translate(-50%, 20px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+  }
+  @keyframes fadeOut {
+    from { opacity: 1; transform: translate(-50%, 0); }
+    to { opacity: 0; transform: translate(-50%, 20px); }
+  }
+  .heading-options, .company-option, .letter-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:6px 0;
+  }
+  .heading-options .heading-option, .company-option label, .letter-option label {
+    cursor:pointer;
+    padding:4px 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    transition: all 0.2s;
+    font-size: inherit;
+  }
+  .heading-options .heading-option:hover, .company-option label:hover, .letter-option label:hover {
+    background:#f1f5f9;
+    border-color:var(--accent);
+    color:var(--accent);
+  }
+  input.blank {
+    width: 140px;
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    font-size: inherit;
+  }
+  input.blank:focus {
+    outline: none;
+    border-color:var(--accent);
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  .word-limit {
+    color: var(--muted);
+    font-size: 0.9em;
+    margin: 4px 0 8px;
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-top:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+    overflow-x: auto;
+    padding-bottom: 4px;
+    max-width: calc(100% - 80px);
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+    flex-shrink:0;
+    font-size: inherit;
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: inherit;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+    font-size: inherit;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  ul {
+    list-style-type: none;
+    padding-left: 20px;
+    margin: 8px 0;
+    font-size: inherit;
+  }
+  ul li::before {
+    content: "- ";
+    color: inherit;
+    font-weight: 500;
+  }
+  /* 修改复选框组为竖向排列 */
+  .checkbox-group-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 8px 0;
+    padding-left: 10px;
+  }
+  .checkbox-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 4px 0;
+  }
+  .checkbox-option input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin-top: 3px;
+    flex-shrink: 0;
+  }
+  .checkbox-option label {
+    cursor: pointer;
+    line-height: 1.4;
+  }
+  @media (max-width: 768px) {
+    .shell {
+      flex-direction: column;
+      height: auto;
+      min-height: calc(100vh - 82px);
+    }
+    #left, #right {
+      flex: none;
+      width: 100%;
+      min-width: auto;
+      max-height: 50vh;
+    }
+    #divider {
+      flex: none;
+      height: 8px;
+      width: 100%;
+      cursor: ns-resize;
+      background: linear-gradient(0deg,var(--line),#d1d5db);
+    }
+    .practice-nav .questions {
+      max-width: calc(100% - 60px);
+    }
+    .top-controls {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    #timer-container {
+      align-self: flex-end;
+      margin-top: -28px;
+    }
+    input.blank {
+      width: 100px;
+    }
+    .checkbox-group-vertical {
+      padding-left: 5px;
+    }
+  }
+</style>
+</head>
+<body class="font-regular">
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+</div>
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (16px - Default)</div>
+  <div class="font-option" data-size="moderate">Moderate (18px - Larger)</div>
+  <div class="font-option" data-size="large">Large (20px - Largest)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+	<div id="top" class="top" style="background-color: #bb5252; width: 100%; height: 60px;">
+        <h3 style="font-size: 23px;line-height: 55px;margin-left: 10px;">Playing Soccer</h3>
+		 <div id="timer-container" >
+        <div id="timer" style="margin: 0px auto;">00:00</div>
+        <button id="settingsBtn" onclick="openSettingsModal()">
+          Settings
+        </button>
+      </div>
+	</div>
+<div class="shell">
+  <section class="pane" id="left">
+    You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</br><p></p><p></p>
+    <h3>Playing Soccer</h3>
+    <p>There are many differences between playing soccer in the street and joining a youth team in an organized league in the USA</p>
+   
+    <span class="paragraph-label">A</span> Street soccer, as its name implies, is an informal variation of the sport, often played on the street, particularly in urban areas. There are many reasons for the widespread popularity of street soccer. Unlike youth soccer, its more formally organized counterpart, no large space is needed, and goal posts, corner markers, and marked lines, associated with the formal game, are typically absent, as are game officials or referees. Another attraction of street soccer is that it is played frequently and competitively, but does not necessarily require standard 11-a-side teams or fixed playing positions. Unlike in youth soccer, inexperienced street soccer players rarely learn from repetitive technical and tactical drills. Instead, they learn from their poor performance in competition, unconscious of the skills they are nonetheless developing, and without older adults or coaches present. Players learn without effort through playing the game, and soon attain an almost natural feeling for the sport.</br><p></p>
+    
+    <span class="paragraph-label">B</span> However, there are lots of cities in the world today where conditions are such that street soccer is no longer possible. Congested traffic now dominates where games were once played. Parks and open fields are used as hangouts for older teenagers with other interests. Add to this the requirement in many localities for official permits to use public spaces and the managed schedules that many young people have today, and spontaneous play of any kind is hard to imagine.</br><p></p>
+    
+    <span class="paragraph-label">C</span> In spite of all these obstacles, which are probably solvable in most instances, there is another sociological explanation of why in many places street soccer doesn't enjoy the same popularity it once did. In his book How Soccer Explains the World, US writer Franklin Foer observes: But for all the talk of freedom, the 1960s parenting style had a far less relaxed side too. Like the 1960s consumer movement which brought seat belts and airbags to cars, the (youth) soccer movement felt like it could create a set of … regulations that would protect both the child's body and mind from damage. Soccer leagues like the one I played in as a child handed out 'participation' prizes to every player, no matter how few games his (or her) team won. Where most of the world accepts the practice of using your head to hit the ball as an essential element of the game, some (youth) soccer parents have worried over the potential for injury to the brain. An entire industry grew up to manufacture protective headgear. Even though very little medical evidence supports this fear, some youth leagues prohibited heading the ball altogether.</br><p></p>
+    
+    <span class="paragraph-label">D</span> A growing body of people don't believe street soccer involves a legitimate educational method. They argue that children need to be taught by experts. Youth soccer instruction now begins with four-year-olds, so that they will have an advantage as six-year-olds. This need to get ahead brings with it a fear of falling behind that only expert instruction can prevent. This type of instruction leaves no room for the trial-and-error approach of street soccer.</br><p></p>
+    
+    <span class="paragraph-label">E</span> One of the basic ideas of street soccer is that young players are assigned a particular role by a better player and are expected to play for the good of the team. Such an assignment runs counter to the idea of youth soccer that every child needs to learn every position and will benefit from doing so. In street soccer, you fill the role that you are best able to at a particular time. While this role assignment can change from game to game, the purpose is always the same: to get the best out of each individual at any given moment.</br><p></p>
+    
+    <span class="paragraph-label">F</span> In street soccer, children have to learn patience, to wait their turn, to realize that they are not entitled to make decisions, or even be listened to simply because they show up. Positions of responsibility are earned through competition within the team. Younger players in street soccer must wait to attain those positions. In youth soccer, however, with its overly democratic values, youngsters are guaranteed their time in the spotlight. Whether it's their turn to be captain, to play a central position or to take a crucial shot, youth soccer players come to believe that hard work and patience aren't really necessary.</br><p></p>
+    
+    <span class="paragraph-label">G</span> Not only does every youth soccer player get a chance, it is assumed that each individual has played well. 'Everyone's a winner; no one's a loser' is a guiding principle of youth soccer. This ensures each individual goes away positive about themselves. No one can leave a game or a practice feeling bad. But, if there really are no losers, then why try at all? Since giving less than your best receives the same reward as giving your best, why go to any extra effort? In street soccer, every game results in a winner and a loser and everyone knows who is who. Losing a game is a common experience and players learn early on how to handle this. As a result, unlike most youth soccer players, they acquire resilience. A further difference between these two strands of soccer is that in street soccer a formal record is not kept. You can lose one day and win the next. The results are only temporary and are forgotten within minutes of the end of the match. But in organized youth soccer, the position each person plays and the results are formally noted and maintained throughout a season.</br><p></p>
+    
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+  </section>
+  
+  <div id="divider" title="Drag to resize"></div>
+  
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 14–19</h4>
+      Reading Passage 2 has seven sections, A–G.</br><p></p>
+      Which section contains the following information?</br><p></p>
+      Write the correct letter, A–G, in boxes 14–19 on your answer sheet.</br><p></p>
+      
+      <a id="q14-anchor"></a>
+      <div id="q14-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">14.</span> a contrast between the ways young players gain experience of playing different positions</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q14" value="A"> A</div>
+          <div class="heading-option"><input type="radio" name="q14" value="B"> B</div>
+          <div class="heading-option"><input type="radio" name="q14" value="C"> C</div>
+          <div class="heading-option"><input type="radio" name="q14" value="D"> D</div>
+          <div class="heading-option"><input type="radio" name="q14" value="E"> E</div>
+          <div class="heading-option"><input type="radio" name="q14" value="F"> F</div>
+          <div class="heading-option"><input type="radio" name="q14" value="G"> G</div>
+        </div>
+      </div>
+      
+      <a id="q15-anchor"></a>
+      <div id="q15-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">15.</span> examples outside sport of greater emphasis on individual safety</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q15" value="A"> A</div>
+          <div class="heading-option"><input type="radio" name="q15" value="B"> B</div>
+          <div class="heading-option"><input type="radio" name="q15" value="C"> C</div>
+          <div class="heading-option"><input type="radio" name="q15" value="D"> D</div>
+          <div class="heading-option"><input type="radio" name="q15" value="E"> E</div>
+          <div class="heading-option"><input type="radio" name="q15" value="F"> F</div>
+          <div class="heading-option"><input type="radio" name="q15" value="G"> G</div>
+        </div>
+      </div>
+      
+      <a id="q16-anchor"></a>
+      <div id="q16-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">16.</span> a description of methods of selection for leadership on soccer teams</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q16" value="A"> A</div>
+          <div class="heading-option"><input type="radio" name="q16" value="B"> B</div>
+          <div class="heading-option"><input type="radio" name="q16" value="C"> C</div>
+          <div class="heading-option"><input type="radio" name="q16" value="D"> D</div>
+          <div class="heading-option"><input type="radio" name="q16" value="E"> E</div>
+          <div class="heading-option"><input type="radio" name="q16" value="F"> F</div>
+          <div class="heading-option"><input type="radio" name="q16" value="G"> G</div>
+        </div>
+      </div>
+      
+      <a id="q17-anchor"></a>
+      <div id="q17-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">17.</span> details of urban changes that discourage street soccer</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q17" value="A"> A</div>
+          <div class="heading-option"><input type="radio" name="q17" value="B"> B</div>
+          <div class="heading-option"><input type="radio" name="q17" value="C"> C</div>
+          <div class="heading-option"><input type="radio" name="q17" value="D"> D</div>
+          <div class="heading-option"><input type="radio" name="q17" value="E"> E</div>
+          <div class="heading-option"><input type="radio" name="q17" value="F"> F</div>
+          <div class="heading-option"><input type="radio" name="q17" value="G"> G</div>
+        </div>
+      </div>
+      
+      <a id="q18-anchor"></a>
+      <div id="q18-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">18.</span> a mention of the lesson that failure teaches street soccer players</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q18" value="A"> A</div>
+          <div class="heading-option"><input type="radio" name="q18" value="B"> B</div>
+          <div class="heading-option"><input type="radio" name="q18" value="C"> C</div>
+          <div class="heading-option"><input type="radio" name="q18" value="D"> D</div>
+          <div class="heading-option"><input type="radio" name="q18" value="E"> E</div>
+          <div class="heading-option"><input type="radio" name="q18" value="F"> F</div>
+          <div class="heading-option"><input type="radio" name="q18" value="G"> G</div>
+        </div>
+      </div>
+      
+      <a id="q19-anchor"></a>
+      <div id="q19-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">19.</span> an explanation of why youth soccer emphasises the need for coaches</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q19" value="A"> A</div>
+          <div class="heading-option"><input type="radio" name="q19" value="B"> B</div>
+          <div class="heading-option"><input type="radio" name="q19" value="C"> C</div>
+          <div class="heading-option"><input type="radio" name="q19" value="D"> D</div>
+          <div class="heading-option"><input type="radio" name="q19" value="E"> E</div>
+          <div class="heading-option"><input type="radio" name="q19" value="F"> F</div>
+          <div class="heading-option"><input type="radio" name="q19" value="G"> G</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 20 and 21</h4>
+      Choose TWO letters, A–E.</br><p></p>
+      Write the correct letters in boxes 20 and 21 on your answer sheet.</br><p></p>
+      <span class="word-limit">The list below gives some possible reasons for the popularity of street soccer.</br><p></p>
+      <span class="word-limit">Which TWO of these reasons are mentioned by the writer of the text?</br><p></p>
+      
+      <div class="checkbox-group-vertical">
+        <div class="checkbox-option">
+          <input type="checkbox" id="q20-A" name="q20" value="A">
+          <label for="q20-A">A Many famous soccer players got their start in street soccer.</label>
+        </div>
+        <div class="checkbox-option">
+          <input type="checkbox" id="q20-B" name="q20" value="B">
+          <label for="q20-B">B Young people can begin playing street soccer at a very early age.</label>
+        </div>
+        <div class="checkbox-option">
+          <input type="checkbox" id="q20-C" name="q20" value="C">
+          <label for="q20-C">C You do not need elaborate facilities to play street soccer.</label>
+        </div>
+        <div class="checkbox-option">
+          <input type="checkbox" id="q20-D" name="q20" value="D">
+          <label for="q20-D">D Inexperienced street soccer players are not criticised for mistakes.</label>
+        </div>
+        <div class="checkbox-option">
+          <input type="checkbox" id="q20-E" name="q20" value="E">
+          <label for="q20-E">E Street soccer teams can have varying numbers of players.</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 22 and 23</h4>
+      Choose TWO letters, A–E.</br><p></p>
+      Write the correct letters in boxes 22 and 23 on your answer sheet.</br><p></p>
+      <span class="word-limit">The list below gives some possible results of the 1960s parenting style.</br><p></p>
+      <span class="word-limit">Which TWO of these results are mentioned by Franklin Foer in the excerpt from How Soccer Explains the World?</br><p></p>
+      
+      <div class="checkbox-group-vertical">
+        <div class="checkbox-option">
+          <input type="checkbox" id="q22-A" name="q22" value="A">
+          <label for="q22-A">A Participation in youth soccer became much more expensive.</label>
+        </div>
+        <div class="checkbox-option">
+          <input type="checkbox" id="q22-B" name="q22" value="B">
+          <label for="q22-B">B Some youth soccer leagues adopted more restrictive rules of play.</label>
+        </div>
+        <div class="checkbox-option">
+          <input type="checkbox" id="q22-C" name="q22" value="C">
+          <label for="q22-C">C Fewer young people joined youth soccer teams.</label>
+        </div>
+        <div class="checkbox-option">
+          <input type="checkbox" id="q22-D" name="q22" value="D">
+          <label for="q22-D">D Youth soccer players were sometimes rewarded for simply playing in games.</label>
+        </div>
+        <div class="checkbox-option">
+          <input type="checkbox" id="q22-E" name="q22" value="E">
+          <label for="q22-E">E Soccer equipment manufacturers directed advertising towards parents.</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 24–26</h4>
+      Complete the summary below.</br><p></p>
+      Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</br><p></p>
+      <span class="word-limit">Write your answers in boxes 24–26 on your answer sheet.</br><p></p>
+      
+      <h5>Winners and losers</h5>
+      <span class="summary-text">
+        For youth soccer players, a key <span class="question-number"><a id="q24-anchor"></a>24.</span> <input type="text" class="blank" id="q24" name="q24"> is that they should always come away from the game with a positive attitude. In this respect, regardless of the effort the players make, they get some kind of <span class="question-number"><a id="q25-anchor"></a>25.</span> <input type="text" class="blank" id="q25" name="q25"> at the end of a game. In street soccer, however, players gain resilience because they have to learn to cope with failure. But the outcome of a match isn't remembered for long. In fact, no-one ever keeps a <span class="question-number"><a id="q26-anchor"></a>26.</span> <input type="text" class="blank" id="q26" name="q26"> of the results of games.
+      </br><p></p>
+    </div>
+    
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <div id="results"></div>
+    
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>14</td>
+            <td>E</td>
+            <td>
+              <span class="explanation-text">段落E对比了街头足球和青少年足球在球员获得不同位置经验的方式。街头足球中球员被分配特定角色，而青少年足球要求每个孩子学习每个位置。</span><br>
+              <span class="explanation-original">原文：One of the basic ideas of street soccer is that young players are assigned a particular role... Such an assignment runs counter to the idea of youth soccer that every child needs to learn every position... (Paragraph E)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>15</td>
+            <td>C</td>
+            <td>
+              <span class="explanation-text">段落C提到了体育领域外的安全强调例子：1960年代消费者运动带来了汽车安全带和安全气囊，类似地青少年足球运动也制定了保护规则。</span><br>
+              <span class="explanation-original">原文：Like the 1960s consumer movement which brought seat belts and airbags to cars, the (youth) soccer movement felt like it could create a set of ... regulations... (Paragraph C)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>16</td>
+            <td>F</td>
+            <td>
+              <span class="explanation-text">段落F描述了足球队伍中领导职位的选拔方式：在街头足球中，责任职位通过队内竞争获得，年轻球员必须等待才能获得这些职位。</span><br>
+              <span class="explanation-original">原文：Positions of responsibility are earned through competition within the team. Younger players in street soccer must wait to attain those positions. (Paragraph F)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>17</td>
+            <td>B</td>
+            <td>
+              <span class="explanation-text">段落B详细描述了阻碍街头足球的城市变化：交通拥堵占据了曾经的游戏场地，公园和开阔场地被有其他兴趣的大龄青少年占据，还需要使用公共空间的官方许可。</span><br>
+              <span class="explanation-original">原文：Congested traffic now dominates where games were once played. Parks and open fields are used as hangouts... official permits to use public spaces... (Paragraph B)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>18</td>
+            <td>G</td>
+            <td>
+              <span class="explanation-text">段落G提到失败给街头足球球员带来的教训：输掉比赛是常见经历，球员很早就学会如何处理失败，从而获得韧性。</span><br>
+              <span class="explanation-original">原文：Losing a game is a common experience and players learn early on how to handle this. As a result... they acquire resilience. (Paragraph G)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>19</td>
+            <td>D</td>
+            <td>
+              <span class="explanation-text">段落D解释了为什么青少年足球强调需要教练：人们认为儿童需要专家教导，担心落后只有专家指导才能防止。</span><br>
+              <span class="explanation-original">原文：They argue that children need to be taught by experts... fear of falling behind that only expert instruction can prevent. (Paragraph D)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>20 & 21</td>
+            <td>C, E</td>
+            <td>
+              <span class="explanation-text">段落A提到街头足球受欢迎的原因：不需要复杂设施（C）和球队人数可以变化（E）。A段明确说"no large space is needed"和"does not necessarily require standard 11-a-side teams or fixed playing positions"。</span><br>
+              <span class="explanation-original">原文：no large space is needed... does not necessarily require standard 11-a-side teams or fixed playing positions. (Paragraph A)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>22 & 23</td>
+            <td>B, D</td>
+            <td>
+              <span class="explanation-text">段落C提到Franklin Foer指出1960年代育儿风格的结果：一些青少年足球联盟采用了更严格的比赛规则（B），以及青少年足球球员有时仅仅因为参加比赛就获得奖励（D）。</span><br>
+              <span class="explanation-original">原文：some youth leagues prohibited heading the ball altogether (对应B)... handed out 'participation' prizes to every player (对应D). (Paragraph C)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>24</td>
+            <td>principle</td>
+            <td>
+              <span class="explanation-text">段落G提到青少年足球的一个关键原则是"每个人都是赢家，没有人是输家"。</span><br>
+              <span class="explanation-original">原文：'Everyone's a winner; no one's a loser' is a guiding principle of youth soccer. (Paragraph G)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>25</td>
+            <td>reward</td>
+            <td>
+              <span class="explanation-text">段落G提到无论球员付出多少努力，他们都会得到某种奖励。</span><br>
+              <span class="explanation-original">原文：Since giving less than your best receives the same reward as giving your best... (Paragraph G)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>26</td>
+            <td>record</td>
+            <td>
+              <span class="explanation-text">段落G提到在街头足球中，没有人会记录比赛结果。</span><br>
+              <span class="explanation-original">原文：in street soccer a formal record is not kept. (Paragraph G)</span>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; 
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+window.onload = startTimer;
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+    localStorage.setItem('fontSize', size);
+  });
+});
+document.addEventListener('DOMContentLoaded', function() {
+  const savedFontSize = localStorage.getItem('fontSize');
+  if (savedFontSize) {
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${savedFontSize}`);
+  }
+});
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+  if (notesPanel.style.display === 'flex') {
+    noteArea.focus();
+  }
+}
+btnCloseNotes.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+const answers = {
+  q14: 'E',
+  q15: 'C',
+  q16: 'F',
+  q17: 'B',
+  q18: 'G',
+  q19: 'D',
+  q20: ['C', 'E'],
+  q22: ['B', 'D'],
+  q24: 'principle',
+  q25: 'reward',
+  q26: 'record'
+};
+function grade() {
+  clearInterval(timerInterval);
+  
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  for (let i = 14; i <= 19; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  const q20Checkboxes = document.querySelectorAll('input[name="q20"]:checked');
+  const q20Selected = Array.from(q20Checkboxes).map(cb => cb.value).sort();
+  const q20Correct = answers['q20'].sort();
+  const q20IsCorrect = q20Selected.length === 2 && q20Selected[0] === q20Correct[0] && q20Selected[1] === q20Correct[1];
+  if (q20IsCorrect) correct++;
+  resultLines.push(`Q20 & Q21: ${q20Selected.join(', ') || 'No answer'} ${q20IsCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers['q20'].join(', ')})`}`);
+  
+  const q22Checkboxes = document.querySelectorAll('input[name="q22"]:checked');
+  const q22Selected = Array.from(q22Checkboxes).map(cb => cb.value).sort();
+  const q22Correct = answers['q22'].sort();
+  const q22IsCorrect = q22Selected.length === 2 && q22Selected[0] === q22Correct[0] && q22Selected[1] === q22Correct[1];
+  if (q22IsCorrect) correct++;
+  resultLines.push(`Q22 & Q23: ${q22Selected.join(', ') || 'No answer'} ${q22IsCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers['q22'].join(', ')})`}`);
+  
+  for (let i = 24; i <= 26; i++) {
+    const qName = `q${i}`;
+    const input = document.getElementById(qName);
+    const userAns = input ? input.value.trim().toLowerCase() : 'No answer';
+    const correctAns = answers[qName].toLowerCase();
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers[qName]})`}`);
+  }
+  
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</br><p></p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+function resetForm() {
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+    checkbox.checked = false;
+  });
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+  
+  showToast('Practice reset');
+}
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+(function() {
+  for (let i = 14; i <= 19; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+  
+  document.querySelectorAll('input[name="q20"]').forEach(checkbox => {
+    checkbox.addEventListener('change', () => {
+      const checkedCount = document.querySelectorAll('input[name="q20"]:checked').length;
+      if (checkedCount >= 2) {
+        document.getElementById('q20-nav').classList.add('answered');
+        document.getElementById('q21-nav').classList.add('answered');
+      } else {
+        document.getElementById('q20-nav').classList.remove('answered');
+        document.getElementById('q21-nav').classList.remove('answered');
+      }
+    });
+  });
+  
+  document.querySelectorAll('input[name="q22"]').forEach(checkbox => {
+    checkbox.addEventListener('change', () => {
+      const checkedCount = document.querySelectorAll('input[name="q22"]:checked').length;
+      if (checkedCount >= 2) {
+        document.getElementById('q22-nav').classList.add('answered');
+        document.getElementById('q23-nav').classList.add('answered');
+      } else {
+        document.getElementById('q22-nav').classList.remove('answered');
+        document.getElementById('q23-nav').classList.remove('answered');
+      }
+    });
+  });
+  
+  for (let i = 24; i <= 26; i++) {
+    const input = document.getElementById(`q${i}`);
+    input.addEventListener('input', () => {
+      if (input.value.trim()) {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      } else {
+        document.getElementById(`q${i}-nav`).classList.remove('answered');
+      }
+    });
+  }
+})();
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isResizing = false;
+divider.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  
+  const containerWidth = leftPane.parentElement.offsetWidth;
+  const mousePosition = e.clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const leftWidthPercent = (mousePosition / containerWidth) * 100;
+  
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+});
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    document.body.style.cursor = '';
+  }
+});
+divider.addEventListener('touchstart', (e) => {
+  isResizing = true;
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.addEventListener('touchmove', (e) => {
+  if (!isResizing) return;
+  
+  const containerWidth = leftPane.parentElement.offsetWidth;
+  const touch = e.touches[0];
+  const touchPosition = touch.clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const leftWidthPercent = (touchPosition / containerWidth) * 100;
+  
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+  
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.addEventListener('touchend', () => {
+  if (isResizing) {
+    isResizing = false;
+  }
+});
+</script>
+</body>
+</html>

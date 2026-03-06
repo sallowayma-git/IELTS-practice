@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Living Dunes - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    /* 字体大小变量 - 基础regular，逐级放大 */
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px; /* 比regular大1号 */
+    --font-size-large: 20px;    /* 比moderate大1号 */
+  }
+  /* 字体大小类 - 所有元素继承 */
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    font-size: inherit; /* 所有元素继承父级字体大小 */
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular); /* 默认regular */
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: static; 
+    display: inline-block; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:#fff;
+    cursor:pointer;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:100vh; 
+    width:100%; 
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: normal; 
+    hyphens: none; 
+  }
+  #left p.paragraph-label { 
+    font-weight: 600; 
+    margin-top: 16px; 
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 24px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+  }
+  .answer-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin:4px 0 8px;
+  }
+  .answer-option label {
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:4px;
+  }
+  .mcq-option {
+    margin: 6px 0;
+    padding: 4px;
+    cursor: pointer;
+  }
+  .mcq-option input {
+    margin-right: 8px;
+  }
+  input.blank {
+    width: 30%; /* 缩小填空长度 */
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  body { 
+    padding-bottom: 82px; 
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-bottom:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    border-bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  .heading-list {
+    list-style-type: none;
+    padding-left: 0;
+    margin: 10px 0;
+  }
+  .heading-list li {
+    margin: 6px 0;
+    padding: 4px;
+    cursor: pointer;
+  }
+  .heading-list li input {
+    margin-right: 8px;
+  }
+</style>
+</head>
+<body class="font-regular">
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+<!-- 字体设置模态框 -->
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (Default - 16px)</div>
+  <div class="font-option" data-size="moderate">Moderate (Larger - 18px)</div>
+  <div class="font-option" data-size="large">Large (Largest - 20px)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 3 
+      <div id="timer-container">
+        <span id="timer">00:00</span>
+        <button id="settingsBtn" onclick="openSettingsModal()">Settings</button>
+      </div>
+    </h2>
+    <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+    
+    <h3>Living dunes</h3>
+    <p>Things don’t come much stranger than heaps of sand that can move and sing of their own accord. Sally Palmer investigates</p>
+    
+    <p class="paragraph-label">A</p>
+    <p>Armies of giant sand dunes are advancing across the world’s deserts, engulfing anything that crosses their path. They are tens of metres tall and hundreds of metres long. Fortunately, they aren’t going very fast. Even the smallest, speediest dunes only travel about 100 metres over the course of a year, while the bigger ones, which weigh something in the order of 10,000 tonnes, barely move one metre in that time. However, their insidious creep can have serious consequences if there is an oil installation or a railway line in their path.</p>
+    
+    <p class="paragraph-label">B</p>
+    <p>About 47% of the world’s land mass, including Antarctica, most of Australia and large areas of Africa, is classified as arid or semi-arid desert. Only around 20% of that is sand-covered, however, and over half of that is classified as ‘linear’ sand dunes. These form in a long curving wave, as a result of wind blowing strongly from several quarters, flipping them from side to side. Although linear dunes are static, sand blowing off them can cause problems for desert villages, burying crops and buildings.</p>
+    
+    <p class="paragraph-label">C</p>
+    <p>Moving dunes make up just a small percentage of the rest, but they are of the most interest to scientists. They are known as ‘barchans’: heavy, crescent-shaped sand piles with a ridged crest and two elongated arms, one curving away to either side. ‘Barchan dunes only tend to form where you have one-directional winds on the edge of sandy deserts near coastal areas,’ says Giles Wiggs, a geomorphologist at Oxford University, who has been studying the formation and movement of sand dunes for more than a decade.</p>
+    
+    <p class="paragraph-label">D</p>
+    <p>But even with strong winds, how can entire barchans move while retaining their form? That question was first answered in the mid-20th century by British explorer Ralph Alger Bagnold, and his answer hinges on the fact that dunes aren’t solid, but granular. Bagnold figured out how barchan dunes are able to move grain by grain. Imagine a single grain of sand being blown up the back of a dune by the wind and deposited on the top. More grains follow the same pattern, until the accumulated weight of piled-up sand finally pushes the top down the dune face. The grain tumbles, then stops on the face until subsequent mini-avalanches bury it. Eventually, it reappears at the back of the dune, ready to repeat the process. As this happens to every grain of sand in the dune, the whole thing creeps in the direction of the prevailing wind.</p>
+    
+    <p class="paragraph-label">E</p>
+    <p>The relationship between the wind and barchan dunes is complex. As a dune grows, it modifies the speed and course of the wind, which in turn alters how that dune and its neighbours evolve. ‘Interestingly, the dune can regulate its own shape, and maintain it as it moves,’ says Dr Stéphane Douady, a physicist at École Normale Supérieure (ENS) in France. ‘Even when two dunes collide, they quickly take on their distinctive shapes again. It’s like a living organism.’</p>
+    
+    <p class="paragraph-label">F</p>
+    <p>Douady and his colleagues have also been studying an even odder phenomenon than moving dunes: some barchans actually sing. Local legends attributed the sounds to dangerous spirits which were trying to trap unwary travellers. Douady is more pragmatic. ‘It’s a strong booming noise with a low frequency,’ he explains, making a noise like a foghorn to demonstrate. ‘It can last for a long time – up to several minutes. It’s a very loud sound and you don’t understand where it’s coming from when you first hear it.’ There are about 50 dunes distributed across 35 deserts round the world that are known to sing. Douady says the sound is caused by the way sand avalanches down the faces of particular dunes. Rather than tumbling randomly, the sand grains flow in synchrony and set each other vibrating like the membrane on a gigantic loudspeaker. The synchronisation causes the air to move in and out between the grains, creating a powerful sound wave.</p>
+    
+    <p class="paragraph-label">G</p>
+    <p>What really surprised the scientists, however, was that they were able to take samples of the singing sand back to France and replicate the sound at ENS, proving that it’s the sand, not the dune shape, that causes the sound. Their studies show the grains are a uniform shape, well-rounded from years of striking each other, and that the variations in size affect the tone. Crucially, the grains are coated with a special veneer, which Douady calls ‘desert glaze’, made from a precise combination of minerals from surrounding rocks including iron, aluminium, manganese, silicon and calcium. The team found that after a month or so, the veneer wore off and the grains lost their ‘voice’. ‘We managed to reproduce the desert glaze and then the grains started to sing again,’ says Douady. ‘We tried putting the coating onto different grains, but they weren’t round enough and it didn’t work. But some American colleagues made some artificial grains and managed to make them sing, after covering them in desert glaze.’ Douady has now made recordings of dunesong from all over the world which are to be made into a CD.</p>
+    
+    <!-- 多加空白行防止加载不完全 -->
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- Questions 27-33: Paragraph Headings -->
+    <div class="group">
+      <h4>Questions 27–33</h4>
+      <p>Reading Passage 3 has seven paragraphs, A–G.</p>
+      <p>Choose the correct heading for each paragraph from the list of headings below.</p>
+      <p>Write the correct number, i–ix, in boxes 27–33 on your answer sheet.</p>
+      
+      <h5>List of Headings</h5>
+      <ul class="heading-list">
+        <li>i. Moving rapidly across the desert</li>
+        <li>ii. Recreating the process in a laboratory</li>
+        <li>iii. Strange music created by human movement</li>
+        <li>iv. A potential threat to industry and communications</li>
+        <li>v. Dunes coming together and re-forming</li>
+        <li>vi. Needing a specific combination of conditions</li>
+        <li>vii. A continuous cycle</li>
+        <li>viii. The commonest type of dune</li>
+        <li>ix. Old superstitions demystified</li>
+      </ul>
+      
+      <a id="q27-anchor"></a>
+      <div id="q27-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>27. Paragraph A</p>
+        <div class="answer-option">
+          <label><input name="q27" type="radio" value="i"> i</label>
+          <label><input name="q27" type="radio" value="ii"> ii</label>
+          <label><input name="q27" type="radio" value="iii"> iii</label>
+          <label><input name="q27" type="radio" value="iv"> iv</label>
+          <label><input name="q27" type="radio" value="v"> v</label>
+          <label><input name="q27" type="radio" value="vi"> vi</label>
+          <label><input name="q27" type="radio" value="vii"> vii</label>
+          <label><input name="q27" type="radio" value="viii"> viii</label>
+          <label><input name="q27" type="radio" value="ix"> ix</label>
+        </div>
+      </div>
+      
+      <a id="q28-anchor"></a>
+      <div id="q28-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>28. Paragraph B</p>
+        <div class="answer-option">
+          <label><input name="q28" type="radio" value="i"> i</label>
+          <label><input name="q28" type="radio" value="ii"> ii</label>
+          <label><input name="q28" type="radio" value="iii"> iii</label>
+          <label><input name="q28" type="radio" value="iv"> iv</label>
+          <label><input name="q28" type="radio" value="v"> v</label>
+          <label><input name="q28" type="radio" value="vi"> vi</label>
+          <label><input name="q28" type="radio" value="vii"> vii</label>
+          <label><input name="q28" type="radio" value="viii"> viii</label>
+          <label><input name="q28" type="radio" value="ix"> ix</label>
+        </div>
+      </div>
+      
+      <a id="q29-anchor"></a>
+      <div id="q29-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>29. Paragraph C</p>
+        <div class="answer-option">
+          <label><input name="q29" type="radio" value="i"> i</label>
+          <label><input name="q29" type="radio" value="ii"> ii</label>
+          <label><input name="q29" type="radio" value="iii"> iii</label>
+          <label><input name="q29" type="radio" value="iv"> iv</label>
+          <label><input name="q29" type="radio" value="v"> v</label>
+          <label><input name="q29" type="radio" value="vi"> vi</label>
+          <label><input name="q29" type="radio" value="vii"> vii</label>
+          <label><input name="q29" type="radio" value="viii"> viii</label>
+          <label><input name="q29" type="radio" value="ix"> ix</label>
+        </div>
+      </div>
+      
+      <a id="q30-anchor"></a>
+      <div id="q30-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>30. Paragraph D</p>
+        <div class="answer-option">
+          <label><input name="q30" type="radio" value="i"> i</label>
+          <label><input name="q30" type="radio" value="ii"> ii</label>
+          <label><input name="q30" type="radio" value="iii"> iii</label>
+          <label><input name="q30" type="radio" value="iv"> iv</label>
+          <label><input name="q30" type="radio" value="v"> v</label>
+          <label><input name="q30" type="radio" value="vi"> vi</label>
+          <label><input name="q30" type="radio" value="vii"> vii</label>
+          <label><input name="q30" type="radio" value="viii"> viii</label>
+          <label><input name="q30" type="radio" value="ix"> ix</label>
+        </div>
+      </div>
+      
+      <a id="q31-anchor"></a>
+      <div id="q31-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>31. Paragraph E</p>
+        <div class="answer-option">
+          <label><input name="q31" type="radio" value="i"> i</label>
+          <label><input name="q31" type="radio" value="ii"> ii</label>
+          <label><input name="q31" type="radio" value="iii"> iii</label>
+          <label><input name="q31" type="radio" value="iv"> iv</label>
+          <label><input name="q31" type="radio" value="v"> v</label>
+          <label><input name="q31" type="radio" value="vi"> vi</label>
+          <label><input name="q31" type="radio" value="vii"> vii</label>
+          <label><input name="q31" type="radio" value="viii"> viii</label>
+          <label><input name="q31" type="radio" value="ix"> ix</label>
+        </div>
+      </div>
+      
+      <a id="q32-anchor"></a>
+      <div id="q32-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>32. Paragraph F</p>
+        <div class="answer-option">
+          <label><input name="q32" type="radio" value="i"> i</label>
+          <label><input name="q32" type="radio" value="ii"> ii</label>
+          <label><input name="q32" type="radio" value="iii"> iii</label>
+          <label><input name="q32" type="radio" value="iv"> iv</label>
+          <label><input name="q32" type="radio" value="v"> v</label>
+          <label><input name="q32" type="radio" value="vi"> vi</label>
+          <label><input name="q32" type="radio" value="vii"> vii</label>
+          <label><input name="q32" type="radio" value="viii"> viii</label>
+          <label><input name="q32" type="radio" value="ix"> ix</label>
+        </div>
+      </div>
+      
+      <a id="q33-anchor"></a>
+      <div id="q33-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>33. Paragraph G</p>
+        <div class="answer-option">
+          <label><input name="q33" type="radio" value="i"> i</label>
+          <label><input name="q33" type="radio" value="ii"> ii</label>
+          <label><input name="q33" type="radio" value="iii"> iii</label>
+          <label><input name="q33" type="radio" value="iv"> iv</label>
+          <label><input name="q33" type="radio" value="v"> v</label>
+          <label><input name="q33" type="radio" value="vi"> vi</label>
+          <label><input name="q33" type="radio" value="vii"> vii</label>
+          <label><input name="q33" type="radio" value="viii"> viii</label>
+          <label><input name="q33" type="radio" value="ix"> ix</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Questions 34-36: Multiple Choice -->
+    <div class="group">
+      <h4>Questions 34–36</h4>
+      <p>Choose the correct letter, A, B, C or D.</p>
+      <p>Write the correct letter in boxes 34–36 on your answer sheet.</p>
+      
+      <a id="q34-anchor"></a>
+      <div id="q34-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>34. What are we told about linear dunes?</p>
+        <div class="mcq-options">
+          <div class="mcq-option"><label><input name="q34" type="radio" value="A"> A. They are formed by strong winds blowing from one direction.</label></div>
+          <div class="mcq-option"><label><input name="q34" type="radio" value="B"> B. They can move up to 100 metres in a twelve-month period.</label></div>
+          <div class="mcq-option"><label><input name="q34" type="radio" value="C"> C. They develop in a recognisable shape.</label></div>
+          <div class="mcq-option"><label><input name="q34" type="radio" value="D"> D. They make up about 20% of the world’s deserts.</label></div>
+        </div>
+      </div>
+      
+      <a id="q35-anchor"></a>
+      <div id="q35-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>35. Bagnold discovered that movement in barchans was caused by</p>
+        <div class="mcq-options">
+          <div class="mcq-option"><label><input name="q35" type="radio" value="A"> A. the long straight shape of the dunes.</label></div>
+          <div class="mcq-option"><label><input name="q35" type="radio" value="B"> B. the particular composition of the dunes.</label></div>
+          <div class="mcq-option"><label><input name="q35" type="radio" value="C"> C. the exceptionally heavy nature of the sand grains.</label></div>
+          <div class="mcq-option"><label><input name="q35" type="radio" value="D"> D. the unusual strength of the wind in certain seasons.</label></div>
+        </div>
+      </div>
+      
+      <a id="q36-anchor"></a>
+      <div id="q36-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>36. Why does Dr Douady compare a barchan dune to a living organism?</p>
+        <div class="mcq-options">
+          <div class="mcq-option"><label><input name="q36" type="radio" value="A"> A. It starts small and then increases in size.</label></div>
+          <div class="mcq-option"><label><input name="q36" type="radio" value="B"> B. It has an effect on its immediate surroundings.</label></div>
+          <div class="mcq-option"><label><input name="q36" type="radio" value="C"> C. Its relations with desert organisms are quite developed.</label></div>
+          <div class="mcq-option"><label><input name="q36" type="radio" value="D"> D. Its outline stays the same even after a period of movement.</label></div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Questions 37-40: Summary Completion -->
+    <div class="group">
+      <h4>Questions 37–40</h4>
+      <p>Complete the summary below.</p>
+      <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+      <p>Write your answers in boxes 37–40 on your answer sheet.</p>
+      
+      <h4>Singing dunes</h4>
+      <p>Singing dunes, which belong to the type of dunes known as <span class="question-number">37.</span><a id="q37-anchor"></a><input type="text" class="blank" id="q37">, produce a very loud sound which is transmitted at a low frequency. Researchers have worked out that sand grains fall down the dune and start vibrating against other grains, forming a sound wave.</p>
+      <p>Research proves that the individual grains have a similar <span class="question-number">38.</span><a id="q38-anchor"></a><input type="text" class="blank" id="q38">, but the differences in dimensions alter the <span class="question-number">39.</span><a id="q39-anchor"></a><input type="text" class="blank" id="q39"> of the ‘song’. Each grain is covered with a mixture of different <span class="question-number">40.</span><a id="q40-anchor"></a><input type="text" class="blank" id="q40">, and this is vital to the sound production.</p>
+    </div>
+    
+    <!-- Submit & Reset Buttons -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <!-- Results & Answer Key -->
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <!-- 27-33 段落标题匹配 -->
+          <tr>
+            <td>27</td>
+            <td>iv</td>
+            <td>
+              <p class="explanation-text">段落A末句明确提到沙丘的缓慢移动对“油气设施、铁路线”等工业与交通设施有严重影响，与标题iv“A potential threat to industry and communications”完全对应。</p>
+              <p class="explanation-original">原文：However, their insidious creep can have serious consequences if there is an oil installation or a railway line in their path. (Paragraph A)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>28</td>
+            <td>viii</td>
+            <td>
+              <p class="explanation-text">段落B指出全球沙漠中20%为沙覆盖区，其中“超过一半”是线形沙丘，说明线形沙丘是“最常见的沙丘类型”，对应标题viii“The commonest type of dune”。</p>
+              <p class="explanation-original">原文：Only around 20% of that is sand-covered, however, and over half of that is classified as ‘linear’ sand dunes. (Paragraph B)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>29</td>
+            <td>vi</td>
+            <td>
+              <p class="explanation-text">段落C提到新月形沙丘（barchans）的形成需要“单向风、沙质沙漠边缘、沿海地区”等特定条件组合，对应标题vi“Needing a specific combination of conditions”。</p>
+              <p class="explanation-original">原文：Barchan dunes only tend to form where you have one-directional winds on the edge of sandy deserts near coastal areas. (Paragraph C)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>30</td>
+            <td>vii</td>
+            <td>
+              <p class="explanation-text">段落D详细描述沙粒“被吹上沙丘背坡→堆积后滑落→最终回到背坡重新开始”的循环过程，推动沙丘整体移动，对应标题vii“A continuous cycle”。</p>
+              <p class="explanation-original">原文：Eventually, it reappears at the back of the dune, ready to repeat the process. (Paragraph D)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>31</td>
+            <td>v</td>
+            <td>
+              <p class="explanation-text">段落E提到“即使两个沙丘相撞，也会迅速恢复其独特形状”，即沙丘“聚合后重新形成”，对应标题v“Dunes coming together and re-forming”。</p>
+              <p class="explanation-original">原文：Even when two dunes collide, they quickly take on their distinctive shapes again. (Paragraph E)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>32</td>
+            <td>ix</td>
+            <td>
+              <p class="explanation-text">段落F开头指出当地传说将沙丘歌声归因于“危险精灵”，而Douady用科学解释（沙粒同步滑落振动）取代迷信说法，对应标题ix“Old superstitions demystified”。</p>
+              <p class="explanation-original">原文：Local legends attributed the sounds to dangerous spirits... Douady is more pragmatic... the sound is caused by the way sand avalanches down the faces of particular dunes. (Paragraph F)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>33</td>
+            <td>ii</td>
+            <td>
+              <p class="explanation-text">段落G首句提到科学家将唱歌沙子样本带回法国实验室（ENS）并“复制出声音”，对应标题ii“Recreating the process in a laboratory”。</p>
+              <p class="explanation-original">原文：they were able to take samples of the singing sand back to France and replicate the sound at ENS. (Paragraph G)</p>
+            </td>
+          </tr>
+          <!-- 34-36 选择题 -->
+          <tr>
+            <td>34</td>
+            <td>C</td>
+            <td>
+              <p class="explanation-text">选项C“形成可识别的形状”正确：段落B明确线形沙丘“呈长而弯曲的波状”（form in a long curving wave），即有可识别的形态。A错（单向风是新月形沙丘的形成条件）；B错（段落B指出线形沙丘是静态的，static）；D错（20%是全球沙漠中“沙覆盖区”的比例，非线形沙丘占全球沙漠的比例）。</p>
+              <p class="explanation-original">原文：These form in a long curving wave... Although linear dunes are static. (Paragraph B)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>35</td>
+            <td>B</td>
+            <td>
+              <p class="explanation-text">选项B“沙丘的特定组成”正确：段落D提到Bagnold发现沙丘移动的关键是“沙丘非固体，而是颗粒状（granular）”，即沙丘的组成性质导致移动。A错（线形沙丘是长直形，新月形是新月形）；C错（原文未提沙粒“异常沉重”）；D错（原文未提“特定季节的强风”）。</p>
+              <p class="explanation-original">原文：his answer hinges on the fact that dunes aren’t solid, but granular. Bagnold figured out how barchan dunes are able to move grain by grain. (Paragraph D)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>36</td>
+            <td>D</td>
+            <td>
+              <p class="explanation-text">选项D“移动后轮廓仍保持不变”正确：段落E提到沙丘“能调节自身形状并在移动中保持，即使相撞也能迅速恢复独特形状”，这是类比“活体生物”的核心原因。B错（改变风是沙丘与环境的互动，非类比核心）；A、C原文未提及。</p>
+              <p class="explanation-original">原文：the dune can regulate its own shape, and maintain it as it moves... Even when two dunes collide, they quickly take on their distinctive shapes again. (Paragraph E)</p>
+            </td>
+          </tr>
+          <!-- 37-40 摘要填空 -->
+          <tr>
+            <td>37</td>
+            <td>barchans</td>
+            <td>
+              <p class="explanation-text">段落F明确“会唱歌的沙丘属于新月形沙丘（barchans）”，直接对应填空要求。</p>
+              <p class="explanation-original">原文：some barchans actually sing. (Paragraph F)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>38</td>
+            <td>shape</td>
+            <td>
+              <p class="explanation-text">段落G提到研究显示唱歌沙粒“形状统一（uniform shape）”，即“相似的形状”，对应填空。</p>
+              <p class="explanation-original">原文：Their studies show the grains are a uniform shape. (Paragraph G)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>39</td>
+            <td>tone</td>
+            <td>
+              <p class="explanation-text">段落G指出沙粒“尺寸差异影响音调（variations in size affect the tone）”，即尺寸不同改变“歌声”的音调，对应填空。</p>
+              <p class="explanation-original">原文：the variations in size affect the tone. (Paragraph G)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>40</td>
+            <td>minerals</td>
+            <td>
+              <p class="explanation-text">段落G提到沙粒表面覆盖“沙漠釉层（desert glaze）”，其成分是“多种矿物的精确组合”，且该釉层对发声至关重要，对应填空。</p>
+              <p class="explanation-original">the grains are coated with a special veneer... made from a precise combination of minerals from surrounding rocks. (Paragraph G)</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<!-- 文本选择工具栏 -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<!-- 笔记面板 -->
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<!-- 提示框 -->
+<div id="toast"></div>
+<script>
+// 计时器核心功能
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; // 计时器间隔ID，用于后续停止
+// 启动计时器
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+// 页面加载时启动计时器
+window.onload = startTimer;
+// 拖拽分隔线调整左右面板宽度
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isDragging = false;
+divider.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.clientX - containerRect.left;
+  // 限制最小宽度，防止面板过窄
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+});
+window.addEventListener('mouseup', () => {
+  if (isDragging) {
+    isDragging = false;
+    document.body.style.cursor = '';
+  }
+});
+// 触摸设备支持
+divider.addEventListener('touchstart', (e) => {
+  isDragging = true;
+  e.preventDefault();
+}, { passive: false });
+window.addEventListener('touchmove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.touches[0].clientX - containerRect.left;
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+}, { passive: false });
+window.addEventListener('touchend', () => {
+  isDragging = false;
+});
+// 文本高亮功能
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+// 定位选择工具栏
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    // 确保工具栏不超出视口
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+// 更新工具栏状态
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+// 监听文本选择事件
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+// 滚动时重新定位工具栏
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+// 点击高亮文本时显示工具栏
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+// 执行高亮
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    // 处理跨元素选择的情况
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+// 移除高亮
+function removeHighlight() {
+  if (currentHlNode) {
+    // 移除单个高亮元素
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize(); // 合并相邻文本节点
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  // 移除选择范围内的所有高亮
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      // 判断节点是否在选择范围内
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+// 绑定高亮按钮事件
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// 笔记功能
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+// 切换笔记面板显示
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+// 关闭笔记面板
+btnCloseNotes.addEventListener('click', toggleNotes);
+// 复制笔记
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+// 选中文本添加到笔记
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    // 滚动到笔记底部
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+// 提示框功能
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+// 字体设置功能
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+// 打开字体设置模态框
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+// 关闭字体设置模态框
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+// 点击模态框外部关闭
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+// 切换字体大小（影响所有元素）
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    // 移除所有字体类，添加选中的类
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    // 显示提示
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+  });
+});
+// 答案与评分功能（Submit后停止计时器）
+const answers = {
+  q27: 'iv',
+  q28: 'viii',
+  q29: 'vi',
+  q30: 'vii',
+  q31: 'v',
+  q32: 'ix',
+  q33: 'ii',
+  q34: 'C',
+  q35: 'B',
+  q36: 'D',
+  q37: 'barchans',
+  q38: 'shape',
+  q39: 'tone',
+  q40: 'minerals'
+};
+// 评分函数（Submit后执行，包含停止计时器）
+function grade() {
+  // 1. 停止计时器
+  clearInterval(timerInterval);
+  
+  // 2. 计算得分
+  let total = 14;
+  let correct = 0;
+  const resultLines = [];
+  
+  // 检查27-33题（段落标题）
+  for (let i = 27; i <= 33; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 检查34-36题（选择题）
+  for (let i = 34; i <= 36; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 检查37-40题（填空题，忽略大小写）
+  for (let i = 37; i <= 40; i++) {
+    const qName = `q${i}`;
+    const input = document.getElementById(qName);
+    const userAns = input ? input.value.trim().toLowerCase() : 'No answer';
+    const correctAns = answers[qName].toLowerCase();
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers[qName]})`}`);
+  }
+  
+  // 3. 显示结果
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  // 4. 展开答案面板
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  // 5. 标记所有题目为已回答
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+// 重置功能（重置计时器、选项、高亮等）
+function resetForm() {
+  // 1. 重置计时器
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  // 2. 重置27-36题单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 3. 重置37-40题填空题
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 4. 重置结果和答案面板
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  // 5. 重置导航栏已回答状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  // 6. 重置笔记
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  // 7. 移除所有高亮
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+}
+// 滚动到指定题目
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  // 高亮导航项
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+// 监听输入，标记题目为已回答
+(function() {
+  // 监听单选按钮（27-36题）
+  for (let i = 27; i <= 36; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+  
+  // 监听填空题（37-40题）
+  for (let i = 37; i <= 40; i++) {
+    const input = document.getElementById(`q${i}`);
+    input.addEventListener('input', () => {
+      if (input.value.trim()) {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      } else {
+        document.getElementById(`q${i}-nav`).classList.remove('answered');
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

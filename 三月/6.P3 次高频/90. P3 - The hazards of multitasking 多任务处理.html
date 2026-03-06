@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>P3 – The hazards of multitasking</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 6000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:54px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .droplabel { color:#64748b; }
+  .cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:grid; gap:8px; }
+  .pool-slot { min-height:40px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); }
+  .card:active { cursor:grabbing; }
+  .tag { background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .btn-clear { border:1px solid #e5e7eb; background:#fff; border-radius:8px; padding:6px 8px; cursor:pointer; }
+  .ghost { opacity: .5; }
+  .over { outline:2px dashed #3b82f6; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .opt-list { display:flex; flex-wrap:wrap; gap:10px; margin:4px 0 10px; align-items:center; }
+  .opt-item { display:inline-flex; align-items:center; gap:4px; margin-right:12px; }
+  .choice-text { font-size:13px; color:#1e293b; margin-left:2px; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+<div class="shell">
+<section class="pane" id="left">
+  <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+  <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+  <h3>The hazards of multitasking</h3>
+  <p><em>Doing more than one thing at once – is it always a good idea?</em></p>
+  <p>You arrive at the office, review your to-do list and start to feel a headache coming on. You resolve to tackle the items as quickly as possible. While you return calls, you sort e-mail and other letters. You begin keying in slides for tomorrow's presentation. Then your manager comes in wanting an immediate update on sales figures. You have just opened the spreadsheet when a very important customer calls. With the receiver held between your shoulder and your ear, you continue adding up the sales totals until, 15 minutes later, you finally manage, politely, to get rid of the client. You've been multitasking again.</p>
+  <p>You may believe that anyone who wants to get ahead today should master the art of multitasking. However, a recent study by the Families and Work Institute in New York City has found that 45 per cent of US workers believe that they are asked or expected to work on too many tasks at once. Managers may be surprised to learn that they are actually wasting their workers' time. As it turns out, the human brain cannot really master the computer's art of crunching data in the background while moving between process windows. Instead, a growing number of studies show that trying to juggle jobs rather than completing them sequentially can take longer and leave workers with a reduced ability to perform each task. In addition, the stress associated with multitasking may contribute to short-term memory difficulties. The combination results in inefficiency, careless thinking and mistakes – not to mention the possible dangers of divided attention for drivers, air-traffic controllers and others who handle machinery.</p>
+  <p>How can a time-management strategy that has become part of the common wisdom actually be so wrong? Exploring that question requires a closer look at an area of consciousness research that examines how the brain focuses attention. One of the modern foundations of current knowledge of multitasking was laid in 1935, when the American psychologist John Ridley Stroop reported that processing information from one task could cause interference with another. Stroop noticed that when study participants were asked to name the colour of a word – such as 'green' – printed in a different colour – red, for example – they experienced difficulty saying the name of the colour. This phenomenon is thought to occur when two tasks get tangled: the brain must suppress one that has been learned so well that it has become automatic (reading) to attend to a second task that requires concentration (naming the colour).</p>
+  <p>During the past couple of decades, psychologists have probed more deeply into the nature and limitations of multitasking. Psychologist and brain-researcher Ernst Poppel, of the Ludwig-Maximilian University in Munich, believes that it is impossible to carry out two or three different tasks simultaneously with the same degree of concentration. He says that seemingly simultaneous awareness and processing of information actually take place in 'three-second windows'.</p>
+  <p>In these three-second segments, the brain takes in, as a block, all the data about the environment streaming in from the sensory systems; subsequent events are processed in the next window. So a person can concentrate on a conversation for three seconds, then for three seconds on a crying child, and three seconds on a computer screen. While one subject at a time occupies the foreground of consciousness, the others stay in the background until they, in turn, are given access to the central processor.</p>
+  <p>Another experiment by psychologist David E. Meyer, of the University of Michigan, quantified just how much time we can lose when we shuttle between tasks. The researchers asked test participants to write a report and check their e-mail at the same time. Those individuals who constantly jumped back and forth between the two tasks took about one and a half times as long to finish as those who completed one job before turning to the other. Each switchover from one task to another meant re-thinking and thus involved additional neural resources. In effect, the brain needs time to shut off the rules for one task and to turn on the rules for another. 'Multitasking saves time only when it is a matter of relaxed, routine tasks,' Meyer says. It also takes the brain longer to adapt when switching rapidly back to an interrupted task rather than waiting longer before switching back.</p>
+  <p>By its nature multitasking is stressful, and the area in the brain most involved with multitasking is also most affected by the resulting stress. Located behind the forehead, the prefrontal cortex – which neuroscientists call the 'executive' part of the brain – helps us to assess tasks, prioritise them and assign mental resources. It also 'marks' the spot at which a task has been interrupted, so that we can return to it later. This stress can also affect brain cells in another region, the hippocampus, which is important for forming new memories; damage in that area also makes it difficult for a person to acquire new skills.</p>
+  <p>Psychiatrists Edward Hallowell and John Ratey, of Harvard University, say that multitasking can bring about a brain condition that causes sufferers to constantly seek new information while having difficulties concentrating on its content. All in all, it may be wise to let the e-mail wait while you work on your presentation. You will save time and perform each task better.</p>
+  <p>&nbsp;</p>
+</section>
+<div id="divider" title="Drag to resize"></div>
+<section class="pane" id="right">
+  <h3>Questions</h3>
+
+  <!-- Questions 27–31 matching -->
+  <div class="group">
+    <h4>Questions 27–31</h4>
+    <p>Look at the following theories (27–31) and the list of people below. Match each theory with the correct person A, B, C or D. <strong>NB You may use any letter more than once.</strong></p>
+    <p><strong>List of People</strong><br/> A John Ridley Stroop<br/> B Ernst Poppel<br/> C David E. Meyer<br/> D Edward Hallowell & John Ratey</p>
+
+    <div id="q27-anchor" style="padding:8px 0; border-top:1px dashed var(--line);">
+      <p>27 Less attention will be paid to each task when more than one task is attempted at the same time.</p>
+      <div class="opt-list">
+        <label class="opt-item"><input type="radio" name="q27" value="A"> A</label>
+        <label class="opt-item"><input type="radio" name="q27" value="B"> B</label>
+        <label class="opt-item"><input type="radio" name="q27" value="C"> C</label>
+        <label class="opt-item"><input type="radio" name="q27" value="D"> D</label>
+      </div>
+    </div>
+    <div id="q28-anchor" style="padding:8px 0; border-top:1px dashed var(--line);">
+      <p>28 Repeated changes of task mean that the brain will take a while to adjust.</p>
+      <div class="opt-list">
+        <label class="opt-item"><input type="radio" name="q28" value="A"> A</label>
+        <label class="opt-item"><input type="radio" name="q28" value="B"> B</label>
+        <label class="opt-item"><input type="radio" name="q28" value="C"> C</label>
+        <label class="opt-item"><input type="radio" name="q28" value="D"> D</label>
+      </div>
+    </div>
+    <div id="q29-anchor" style="padding:8px 0; border-top:1px dashed var(--line);">
+      <p>29 Using the skills required for one task may make performing another one more difficult.</p>
+      <div class="opt-list">
+        <label class="opt-item"><input type="radio" name="q29" value="A"> A</label>
+        <label class="opt-item"><input type="radio" name="q29" value="B"> B</label>
+        <label class="opt-item"><input type="radio" name="q29" value="C"> C</label>
+        <label class="opt-item"><input type="radio" name="q29" value="D"> D</label>
+      </div>
+    </div>
+    <div id="q30-anchor" style="padding:8px 0; border-top:1px dashed var(--line);">
+      <p>30 When multitasking, the brain can only focus on single tasks for very short periods.</p>
+      <div class="opt-list">
+        <label class="opt-item"><input type="radio" name="q30" value="A"> A</label>
+        <label class="opt-item"><input type="radio" name="q30" value="B"> B</label>
+        <label class="opt-item"><input type="radio" name="q30" value="C"> C</label>
+        <label class="opt-item"><input type="radio" name="q30" value="D"> D</label>
+      </div>
+    </div>
+    <div id="q31-anchor" style="padding:8px 0; border-top:1px dashed var(--line);">
+      <p>31 Multitasking can lead to a medical problem.</p>
+      <div class="opt-list">
+        <label class="opt-item"><input type="radio" name="q31" value="A"> A</label>
+        <label class="opt-item"><input type="radio" name="q31" value="B"> B</label>
+        <label class="opt-item"><input type="radio" name="q31" value="C"> C</label>
+        <label class="opt-item"><input type="radio" name="q31" value="D"> D</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Questions 32–34 multiple choice -->
+  <div class="group">
+    <h4>Questions 32–34</h4>
+    <p>Choose the correct letter, A, B, C or D.</p>
+
+    <div id="q32-anchor" style="padding:8px 0;">
+      <p><strong>32</strong> What is suggested about the worker in the opening paragraph?</p>
+      <div class="opt-list" style="flex-direction:column; align-items:flex-start;">
+        <label><input type="radio" name="q32" value="A"> A Anxiety deprived him of sleep the previous night.</label>
+        <label><input type="radio" name="q32" value="B"> B He feels overwhelmed by his workload.</label>
+        <label><input type="radio" name="q32" value="C"> C His manager has expressed disapproval.</label>
+        <label><input type="radio" name="q32" value="D"> D He finds his work dull and uninteresting.</label>
+      </div>
+    </div>
+    <div id="q33-anchor" style="padding:8px 0; border-top:1px dashed var(--line);">
+      <p><strong>33</strong> Drivers and air-traffic controllers are mentioned in the passage because they</p>
+      <div class="opt-list" style="flex-direction:column; align-items:flex-start;">
+        <label><input type="radio" name="q33" value="A"> A need to perform several tasks at once.</label>
+        <label><input type="radio" name="q33" value="B"> B are unable to maintain concentration.</label>
+        <label><input type="radio" name="q33" value="C"> C use their time efficiently.</label>
+        <label><input type="radio" name="q33" value="D"> D cannot afford to make mistakes.</label>
+      </div>
+    </div>
+    <div id="q34-anchor" style="padding:8px 0; border-top:1px dashed var(--line);">
+      <p><strong>34</strong> In John Ridley Stroop's experiment, participants found it difficult to</p>
+      <div class="opt-list" style="flex-direction:column; align-items:flex-start;">
+        <label><input type="radio" name="q34" value="A"> A tell one colour from another.</label>
+        <label><input type="radio" name="q34" value="B"> B match up pairs of similar colours.</label>
+        <label><input type="radio" name="q34" value="C"> C read out the name of one colour printed in another colour.</label>
+        <label><input type="radio" name="q34" value="D"> D decide what colour looks appropriate for a particular word.</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Questions 35–39 summary (NO MORE THAN TWO WORDS) -->
+  <div class="group">
+    <h4>Questions 35–39</h4>
+    <p>Complete the summary below. Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>
+    <div id="q35-anchor" style="padding:8px 0;">
+      <p>The stressful nature of multitasking has been shown to affect parts of the brain. The area most affected is the prefrontal cortex, which is found to the rear of the <input class="blank" name="q35" placeholder="35"/> . It is the part of the brain which judges tasks, then puts them in order of importance and allocates <input class="blank" name="q36" placeholder="36"/> ; it also enables a worker to resume a task which has been put to one side.</p>
+      <p>A second area, the hippocampus, may also be affected by the stress of multitasking. If any <input class="blank" name="q37" placeholder="37"/> in the hippocampus are affected, people may have problems with storing <input class="blank" name="q38" placeholder="38"/> as well as learning <input class="blank" name="q39" placeholder="39"/> .</p>
+    </div>
+  </div>
+
+  <!-- Question 40 multiple choice -->
+  <div class="group">
+    <h4>Question 40</h4>
+    <p>Choose the correct letter, A, B, C or D.</p>
+    <div id="q40-anchor" style="padding:8px 0;">
+      <p><strong>40</strong> The main aim of this passage is to</p>
+      <div class="opt-list" style="flex-direction:column; align-items:flex-start;">
+        <label><input type="radio" name="q40" value="A"> A describe areas where multitasking is useful.</label>
+        <label><input type="radio" name="q40" value="B"> B challenge widely held opinions on multitasking.</label>
+        <label><input type="radio" name="q40" value="C"> C show the physical damage that multitasking can cause.</label>
+        <label><input type="radio" name="q40" value="D"> D call for better psychological experiments on multitasking.</label>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button class="primary" onclick="grade()">Submit</button>
+    <button onclick="resetForm()">Reset</button>
+    <button onclick="toggleNotes()">Notes</button>
+  </div>
+  <div id="results"></div>
+  <details class="answerbox" id="answerBox">
+    <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+    <div id="answerContent"></div>
+  </details>
+</section>
+</div>
+
+<!-- highlight toolbar -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// Timer
+let _t=0; const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  var span=document.createElement('span'); span.className='hl';
+  try { lastRange.surroundContents(span); }
+  catch(e){
+    var wrap=document.createElement('span'); wrap.className='hl';
+    wrap.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrap);
+  }
+  selbar.style.display='none';
+  showToast('Highlighted');
+}
+function removeHighlight(){
+  if(currentHlNode){
+    var p = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+    p.removeChild(currentHlNode); p.normalize();
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  if(!lastRange) return;
+  var selRect = lastRange.getBoundingClientRect();
+  var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  var toRemove=[];
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n.classList && n.classList.contains('hl')) {
+      var r = n.getBoundingClientRect();
+      if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+    }
+  }
+  toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+window.toggleNotes = toggleNotes;
+btnClose.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+  else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+  toggleNotes();
+  if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  selbar.style.display='none';
+});
+
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+
+// Answer key and grading
+var answers = {
+  "q27":"B", "q28":"C", "q29":"A", "q30":"B", "q31":"D",
+  "q32":"B", "q33":"D", "q34":"C",
+  "q35":"forehead", "q36":"mental resources", "q37":"cells", "q38":"new memories", "q39":"new skills",
+  "q40":"B"
+};
+var acceptable = {
+  "q35": ["forehead"],
+  "q36": ["mental resources"],
+  "q37": ["cells"],
+  "q38": ["new memories", "memories"],
+  "q39": ["new skills", "skills"]
+};
+
+function markChoice(q, user){
+  return String(user||'').toUpperCase() === String(answers[q]).toUpperCase();
+}
+function markBlank(q, user){
+  var u = String(user||'').trim().toLowerCase();
+  var key = String(answers[q]).trim().toLowerCase();
+  if(acceptable[q]) return acceptable[q].map(a => a.toLowerCase()).includes(u);
+  return u === key;
+}
+
+function grade(){
+  var total=0, correct=0, lines=[];
+  function push(q, ok, user){
+    total++; if(ok) correct++;
+    lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✅':'❌'));
+  }
+  // 27–31 matching
+  for(var n=27;n<=31;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, markChoice('q'+n, val), val);
+  }
+  // 32–34 multiple choice
+  for(var n=32;n<=34;n++){
+    var sel=document.querySelector('input[name="q'+n+'"]:checked');
+    var val=sel?sel.value:'';
+    push('q'+n, markChoice('q'+n, val), val);
+  }
+  // 35–39 blanks
+  for(var n=35;n<=39;n++){
+    var el=document.querySelector('input[name="q'+n+'"]');
+    var val=el?el.value:'';
+    push('q'+n, markBlank('q'+n, val), val);
+  }
+  // 40 multiple choice
+  var sel40=document.querySelector('input[name="q40"]:checked');
+  var val40=sel40?sel40.value:'';
+  push('q40', markChoice('q40', val40), val40);
+
+  var acc = (total? Math.round(100*correct/total):0);
+  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
+  html += '<pre>'+lines.join('\n')+'</pre>';
+  document.getElementById('results').innerHTML = html;
+  
+  var ahtml = '<ol>';
+  ahtml += '<li>27 → B (Ernst Poppel)</li>';
+  ahtml += '<li>28 → C (David E. Meyer)</li>';
+  ahtml += '<li>29 → A (John Ridley Stroop)</li>';
+  ahtml += '<li>30 → B (Ernst Poppel)</li>';
+  ahtml += '<li>31 → D (Hallowell & Ratey)</li>';
+  ahtml += '<li>32 → B</li><li>33 → D</li><li>34 → C</li>';
+  ahtml += '<li>35 → forehead</li><li>36 → mental resources</li><li>37 → cells</li><li>38 → new memories</li><li>39 → new skills</li>';
+  ahtml += '<li>40 → B (challenge widely held opinions)</li>';
+  ahtml += '</ol>';
+  document.getElementById('answerContent').innerHTML = ahtml;
+  document.querySelector('#answerBox .badge').textContent='tap to view';
+}
+
+function resetForm(){
+  document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
+  document.querySelectorAll('input.blank').forEach(el=>el.value="");
+  document.getElementById('results').innerHTML='';
+  document.getElementById('answerContent').innerHTML='';
+  document.querySelector('#answerBox .badge').textContent='hidden';
+  document.querySelectorAll('.q-item').forEach(item => item.classList.remove('answered'));
+}
+
+function scrollToElement(id){
+  var el = document.getElementById(id);
+  if(el){ el.scrollIntoView({behavior:'smooth', block:'center'}); }
+  var navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  var btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ btn.classList.add('active'); setTimeout(() => btn.classList.remove('active'), 800); }
+}
+
+// mark answered status in bottom nav
+(function(){
+  function markAnswered(qn){
+    var nav = document.getElementById('q'+qn+'-nav');
+    if(!nav) return;
+    var radios = document.querySelectorAll('input[name="q'+qn+'"]');
+    var text = document.querySelector('input[name="q'+qn+'"].blank');
+    var answered=false;
+    if(radios.length){ radios.forEach(r=>{ if(r.checked) answered=true; }); }
+    if(text){ answered = answered || (text.value && text.value.trim().length>0); }
+    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
+  }
+  for(var q=27;q<=40;q++){
+    (function(n){
+      var radios = document.querySelectorAll('input[name="q'+n+'"]');
+      radios.forEach(r => r.addEventListener('change', function(){ markAnswered(n); }));
+      var text = document.querySelector('input[name="q'+n+'"].blank');
+      if(text) text.addEventListener('input', function(){ markAnswered(n); });
+    })(q);
+  }
+  for(var q=27;q<=40;q++){ markAnswered(q); }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P2 – How to be Happy</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); padding-bottom: 82px; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  input.blank { border:none; border-bottom:1px solid #9ca3af; padding:2px 4px; font-size:1em; background:transparent; }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 85px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  .practice-nav { background:#fff; padding:12px 20px; display:flex; align-items:center; gap:16px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .practice-nav .controls { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  #timer { display: inline-block; background:#fff; border:1px solid var(--line); border-radius:10px; padding:4px 10px; font-size:14px; vertical-align: middle; cursor: pointer; user-select: none;}
+  .theme-toggle { cursor: pointer; background: transparent; border: none; font-size: 18px; padding: 4px; }
+  #selbar { z-index: 6000 !important; }
+  .list-box { border: 1px solid #ccc; padding: 12px; margin-top: 1em; border-radius: 8px; background: #f9fafb; }
+  .option-pool { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding: 10px; background: #f1f5f9; border-radius: 6px; min-height: 48px; }
+  .dropzone { border:2px dashed #cbd5e1; border-radius:10px; min-height:40px; min-width: 40px; padding:4px; display:inline-flex; align-items:center; justify-content:center; vertical-align: middle; margin-right: 8px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 12px; display:inline-flex; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); }
+  .card:active { cursor:grabbing; }
+  .ghost { opacity: .4; visibility: hidden; }
+  .over { outline:2px solid var(--accent); background-color: #eef2ff; }
+
+  /* Dark Mode Styles */
+  body.dark-mode { --bg: #1a1a1a; --panel: #2a2a2a; --line: #4a4a4a; --muted: #999; color: #e0e0e0; }
+  body.dark-mode .pane, body.dark-mode #right { background: var(--panel); color: #e0e0e0; }
+  body.dark-mode #right { background: #222; }
+  body.dark-mode button, body.dark-mode .theme-toggle { background: #3a3a3a; color: #e0e0e0; border-color: #555; }
+  body.dark-mode button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  body.dark-mode input.blank { color: #e0e0e0; border-bottom-color: #666; }
+  body.dark-mode .group, body.dark-mode #results, body.dark-mode details.answerbox, body.dark-mode .list-box { background: #2f2f2f; border-color: var(--line); }
+  body.dark-mode .practice-nav { background: #252525; border-top-color: #444; }
+  body.dark-mode .practice-nav .q-item { background: #3a3a3a; color: #ccc; border-color: #555; }
+  body.dark-mode .practice-nav .q-item:hover { background: #4a4a4a; border-color: var(--accent); }
+  body.dark-mode .practice-nav .q-item.answered { background: #3949ab; border-color: #5c6bc0; color: #e8eaf6; }
+  body.dark-mode .practice-nav .q-item.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  body.dark-mode #timer { background: #3a3a3a; color: #ccc; border-color: #555; }
+  body.dark-mode #notes { background: #2f2f2f; border-color: var(--line); }
+  body.dark-mode #notes header { border-bottom-color: var(--line); }
+  body.dark-mode #notes textarea { background: #2a2a2a; color: #e0e0e0; }
+  body.dark-mode .hl { background-color: #5b21b6; color: #f5f3ff; }
+  body.dark-mode .option-pool { background: #222; }
+  body.dark-mode .dropzone { background: #333; border-color: #555; }
+  body.dark-mode .over { background-color: #3949ab; }
+  body.dark-mode .card { background: #444; border-color: #666; }
+</style>
+</head>
+<body>
+
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2</h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    
+    <h3>How to be Happy</h3>
+    <p><em>Some recent developments in the science of happiness</em></p>
+    
+    <h4>A</h4>
+    <p>A psychiatrist Tony Fernando was walking down the street when he saw a group of young homeless men sitting on the footpath. As Fernando handed out gifts of food, he tried to video the men's reactions in his mind, recording how their gratitude lifted him in return. 'I felt warm, content, meaningful,' he says. Fernando believes the brain can be trained to make us happy and that his ‘video method' is one way to achieve this. In fact, a growing body of scientific research internationally is showing how we can learn happiness in the same way we can learn to play the piano. In the soft tissue that forms the brain, there are approximately ten trillion synapses connecting roughly a hundred billion neurons. Active synapses become more sensitive; less active synapses die, but new ones grow quickly. This is relatively new thinking – just 30 years ago, neuroscientists believed that adult brain cells couldn't regenerate. One of the pioneers in this field is University of Wisconsin professor Richard Davidson. He studied Buddhist monks using brain scans in his research facility, and found that those trained in meditation had higher levels of activity in the left prefrontal cortex – the area associated with happiness. Davidson believes that the trained brain is physically different from the untrained one.</p>
+    
+    <h4>B</h4>
+    <p>The idea that we can train our brains to find more happiness has been called 'mindfulness' by neuropsychologist Rick Hanson, author of Hardwiring Happiness. It was in college that Hanson, quite unintentionally, first recognised the importance of something that would become his life's work. As an unconfident teenager, he discovered he could turn a small event, ‘a young woman smiling at me', into a good feeling he could hold on to. To do this, Hanson employs exactly the same imaginary 'video method' as psychiatrist Tony Fernando. ‘The brain takes its shape from what the mind rests upon,' says Hanson. If you keep resting your mind on self-criticism and worries, he argues, your brain will be shaped by that. Hanson explains that resting it on pleasant feelings and the things you have accomplished means that over time your brain will take on a different shape, with strength and optimism hard-wired into it.</p>
+    
+    <h4>C</h4>
+    <p>In New Zealand, the Mental Health Foundation runs mindfulness programmes in 14 schools. Foundation CEO Judi Clements says, 'It's a valuable approach because children are told to pay attention, but aren't told how to pay attention.' Preliminary results on the outcomes found that children had sustained increases in well-being. The Foundation recognises five pathways to happiness – being active, connecting with others, taking notice, learning and giving. And, says Clements, ‘We're detecting a hunger for it from different organisations and professions as well, so the Foundation is soon going to pilot an online "well-being game" in several workplaces.' The project leader is psychologist Carsten Grimm, who is interested in whether some pathways to happiness are more effective than others. In a study, Grimm recorded the activities and corresponding happiness scores of 173 people. What he found was that people who used several pathways to happiness achieved the best results, suggesting it's better to have a balance than concentrate on the single pathway you most identify with.</p>
+    
+    <h4>D</h4>
+    <p>However, Associate Professor of Psychological Medicine Nathan Consedine greets our relentless search for the secrets to happiness with a tired sigh. ‘The more you chase it, the less you get it,' he says, quoting studies showing those who value contentment and well-being are, in fact, less happy. The big question, he says, is whether there's any benefit in actively seeking happiness. He cites a study, for example, which showed that people who were happier were less inclined to show sympathy. Consedine says that's probably because happy people are strongly motivated to stay happy, but engaging sympathetically with others typically involves engaging with their distress, and that's going to reduce their own happiness. Consedine's not disagreeing with the theory of mindfulness, but believes there's more work to be done.</p>
+    
+    <h4>E</h4>
+    <p>Some of that work is being conducted at Auckland University's Centre for Brain Research. Associate Professor Johanna Montgomery has been studying Hanson's theory - that altering our brain activity at a synaptic level affects our behaviour. She accepts that it's a logical explanation based on studies from animals, but we haven't yet got the technology to prove it scientifically in humans. It's true that MRI scans certainly do indicate an increased flow of blood to different areas of the brain which are experiencing positive stimuli. However, she warns that this is a long way from confirming that the brain itself is developing or strengthening.</p>
+    
+    <h4>F</h4>
+    <p>Nonetheless, Montgomery believes she is making progress. In the laboratory, when scientists want to experiment with synaptic connections, they stimulate the brain with electricity, as this copies the high-frequency firings that happen normally in the brain every second. Using this technique, Montgomery has made a number of findings. For example, the hormones that are released routinely in response to good or bad situations – such as adrenaline – act to regulate the brain, in the same way that weather has a regulating effect on human activity more generally. But scientists understand some of these stimuli better than others. More is known about the impact on brain activity of prolonged periods of fear than the effects of 'happiness' hormones that are released by positive events in life. This is one potentially important area that she hopes to investigate further in future.</p>
+    
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 14–17</h4>
+      <p>Reading Passage 2 has six paragraphs, A–F.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p>NB You may use any letter more than once.</p>
+      
+      <p><a id="q14-anchor"></a><span class="dropzone" data-target="q14"></span>14 a reference to a fact that two scientists use the same technique to promote their own happiness</p>
+      <p><a id="q15-anchor"></a><span class="dropzone" data-target="q15"></span>15 the suggestion that scientific opinion about an aspect of brain function has changed over a given time period</p>
+      <p><a id="q16-anchor"></a><span class="dropzone" data-target="q16"></span>16 an estimate of how numerous some brain components are</p>
+      <p><a id="q17-anchor"></a><span class="dropzone" data-target="q17"></span>17 the reason why some educational courses were set up</p>
+      <div class="option-pool" id="pool-para">
+        <div class="card" draggable="true" data-value="A" data-clone="true">A</div>
+        <div class="card" draggable="true" data-value="B" data-clone="true">B</div>
+        <div class="card" draggable="true" data-value="C" data-clone="true">C</div>
+        <div class="card" draggable="true" data-value="D" data-clone="true">D</div>
+        <div class="card" draggable="true" data-value="E" data-clone="true">E</div>
+        <div class="card" draggable="true" data-value="F" data-clone="true">F</div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 18–21</h4>
+      <p>Look at the following statements (Questions 18–21) and the list of people below.</p>
+      <p>Match each statement with the correct person, A–F.</p>
+
+      <p><a id="q18-anchor"></a><span class="dropzone" data-target="q18"></span>18 It's better to look for a variety of ways to increase happiness than focus on just one.</p>
+      <p><a id="q19-anchor"></a><span class="dropzone" data-target="q19"></span>19 Focusing on personal achievements rather than negative experiences will make people happier.</p>
+      <p><a id="q20-anchor"></a><span class="dropzone" data-target="q20"></span>20 Happy people might have a reason not to display one favourable characteristic.</p>
+      <p><a id="q21-anchor"></a><span class="dropzone" data-target="q21"></span>21 A range of groups are becoming more interested in learning techniques to improve happiness.</p>
+
+      <div class="option-pool" id="pool-people">
+        <div class="card" draggable="true" data-value="A"><strong>A</strong> Tony Fernando</div>
+        <div class="card" draggable="true" data-value="B"><strong>B</strong> Richard Davidson</div>
+        <div class="card" draggable="true" data-value="C"><strong>C</strong> Rick Hanson</div>
+        <div class="card" draggable="true" data-value="D"><strong>D</strong> Judi Clements</div>
+        <div class="card" draggable="true" data-value="E"><strong>E</strong> Carsten Grimm</div>
+        <div class="card" draggable="true" data-value="F"><strong>F</strong> Nathan Consedine</div>
+      </div>
+    </div>
+
+    <div class="group">
+        <h4>Questions 22–26</h4>
+        <p>Complete the summary below.</p>
+        <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+        
+        <div style="padding: 10px; border: 1px solid #ccc; border-radius: 8px; margin-top: 1em;">
+            <h5 style="text-align: center; margin-top: 0;">Auckland University's Centre for Brain Research</h5>
+            <p>Associate Professor Johanna Montgomery says that current research into brain activity and behaviour only relates to 22 <a id="q22-anchor"></a><input name="q22" type="text" class="blank" maxlength="20"> so Hanson's theories have not been proved correct. While scans do show that positive stimuli result in more 23 <a id="q23-anchor"></a><input name="q23" type="text" class="blank" maxlength="20"> reaching parts of the brain, this isn't proof that the brain is getting stronger.</p>
+            <p>But Montgomery is making progress. In laboratory experiments, scientists use 24 <a id="q24-anchor"></a><input name="q24" type="text" class="blank" maxlength="20"> to initiate brain activity, because it's similar to natural processes. One finding is that hormones can be compared to the 25 <a id="q25-anchor"></a><input name="q25" type="text" class="blank" maxlength="20">, because both can change human behaviour. But scientists understand some stimuli, such as 26 <a id="q26-anchor"></a><input name="q26" type="text" class="blank" maxlength="20">, better than they understand more positive stimuli.</p>
+        </div>
+    </div>
+
+
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Timer Logic
+    let _t = 0;
+    let isTimerPaused = false;
+    const _timerEl = document.getElementById('timer');
+    const timerInterval = setInterval(() => {
+        if (!isTimerPaused) {
+            _t++;
+            const m = String(Math.floor(_t / 60)).padStart(2, '0');
+            const s = String(_t % 60).padStart(2, '0');
+            _timerEl.textContent = m + ':' + s;
+        }
+    }, 1000);
+    window.toggleTimer = () => {
+        isTimerPaused = !isTimerPaused;
+        _timerEl.style.color = isTimerPaused ? 'var(--muted)' : '';
+        _timerEl.style.borderColor = isTimerPaused ? 'var(--muted)' : 'var(--line)';
+    };
+
+    // Divider Logic
+    const divider = document.getElementById('divider');
+    const left = document.getElementById('left');
+    let dragging = false;
+    divider.addEventListener('mousedown', () => dragging = true);
+    window.addEventListener('mouseup', () => dragging = false);
+    window.addEventListener('mousemove', (e) => {
+        if (dragging) {
+            const container = document.querySelector('.shell').getBoundingClientRect();
+            let x = e.clientX - container.left;
+            x = Math.max(280, Math.min(container.width - 320, x));
+            left.style.flex = `0 0 ${x}px`;
+        }
+    });
+
+    // Highlight & Notes Logic (从Mind Music页面复制的完整高亮功能)
+    var selbar = document.getElementById('selbar');
+    var btnHL = document.getElementById('btnHL');
+    var btnUH = document.getElementById('btnUH');
+    var btnNote = document.getElementById('btnNote');
+    var lastRange=null;
+    var currentHlNode=null;
+    var keepToolbar=false;
+    
+    function positionSelbarForRect(rect){
+      selbar.style.display='flex';
+      requestAnimationFrame(function(){
+        var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+        var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+        selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+        selbar.style.left = Math.max(8, leftPos) + 'px';
+      });
+    }
+    
+    function updateSelbar(){
+      var sel=window.getSelection();
+      if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+        selbar.style.display='none'; 
+        currentHlNode=null; 
+        return; 
+      }
+      var range = sel.getRangeAt(0);
+      lastRange = range.cloneRange();
+      currentHlNode=null;
+      positionSelbarForRect(range.getBoundingClientRect());
+    }
+    
+    // 为左侧和右侧面板都添加高亮功能
+    document.getElementById('left').addEventListener('mouseup', updateSelbar);
+    document.getElementById('right').addEventListener('mouseup', updateSelbar);
+    
+    document.addEventListener('selectionchange', function(){ 
+      var sel=window.getSelection(); 
+      if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+        if(!keepToolbar && !currentHlNode){ 
+          selbar.style.display='none'; 
+        } 
+      } 
+    });
+    
+    document.addEventListener('scroll', function(){ 
+      if(selbar.style.display==='flex') updateSelbar(); 
+    });
+    
+    document.addEventListener('mousedown', function(e){
+      var t = e.target;
+      if(t.classList && t.classList.contains('hl')){
+        keepToolbar = true;
+      } else {
+        keepToolbar = false;
+      }
+    }, true);
+    
+    document.addEventListener('click', function(e){
+      var target = e.target;
+      if(target.classList && target.classList.contains('hl')){
+        currentHlNode = target;
+        lastRange = null;
+        positionSelbarForRect(target.getBoundingClientRect());
+        var sel=window.getSelection();
+        if(sel) sel.removeAllRanges();
+        setTimeout(function(){ keepToolbar=false; }, 0);
+      }
+    }, true);
+    
+    function doHighlight(){
+      if(currentHlNode) return;
+      if(!lastRange || lastRange.collapsed) return;
+      var span=document.createElement('span'); span.className='hl';
+      try { lastRange.surroundContents(span); }
+      catch(e){
+        var wrap=document.createElement('span'); wrap.className='hl';
+        wrap.appendChild(lastRange.cloneContents());
+        lastRange.deleteContents();
+        lastRange.insertNode(wrap);
+      }
+      selbar.style.display='none';
+      showToast('Highlighted');
+    }
+    
+    function removeHighlight(){
+      if(currentHlNode){
+        var p = currentHlNode.parentNode;
+        while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode);
+        p.removeChild(currentHlNode); p.normalize();
+        currentHlNode = null;
+        selbar.style.display='none';
+        showToast('Highlight removed');
+        return;
+      }
+      if(!lastRange) return;
+      var selRect = lastRange.getBoundingClientRect();
+      var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+      var toRemove=[];
+      while(walker.nextNode()){
+        var n=walker.currentNode;
+        if(n.classList && n.classList.contains('hl')) {
+          var r = n.getBoundingClientRect();
+          if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n);
+        }
+      }
+      toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+      selbar.style.display='none';
+      showToast('Highlight removed');
+    }
+    
+    btnHL.addEventListener('click', doHighlight);
+    btnUH.addEventListener('click', removeHighlight);
+    
+    // Toast
+    var toastEl=document.getElementById('toast');
+    function showToast(msg){
+      toastEl.textContent=msg; 
+      toastEl.style.display='block';
+      setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+    }
+
+    // Notes功能
+    var notes = document.getElementById('notes');
+    var noteArea = document.getElementById('noteArea');
+    var btnCopy=document.getElementById('btnCopy');
+    var btnClose=document.getElementById('btnClose');
+    
+    window.toggleNotes = function(){ 
+      notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+    };
+    
+    btnClose.addEventListener('click', toggleNotes);
+    
+    btnCopy.addEventListener('click', async function(){ 
+      await navigator.clipboard.writeText(noteArea.value||''); 
+      showToast('Copied'); 
+    });
+    
+    btnNote.addEventListener('click', function(){
+      var text = '';
+      if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); }
+      else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); }
+      toggleNotes();
+      if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+      selbar.style.display='none';
+    });
+
+    // Dark Mode
+    window.toggleDarkMode = () => {
+        document.body.classList.toggle('dark-mode');
+        const isDark = document.body.classList.contains('dark-mode');
+        localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
+        document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️';
+    };
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        toggleDarkMode();
+    }
+    
+    // Grading & Reset
+    const answers = { q14: "B", q15: "A", q16: "A", q17: "C", q18: "E", q19: "C", q20: "F", q21: "D", q22: "animals", q23: "blood", q24: "electricity", q25: "weather", q26: "fear" };
+    window.grade = () => {
+        let total = 0, correct = 0;
+        const lines = [];
+        const push = (q, ok, user) => { total++; if (ok) correct++; lines.push(`${q.toUpperCase()}: ${user || 'None'} ${ok ? '✅' : '❌'}`); };
+        
+        for (let n = 14; n <= 21; n++) {
+            const qName = `q${n}`;
+            const zone = document.querySelector(`.dropzone[data-target="${qName}"]`);
+            const card = zone ? zone.querySelector('.card') : null;
+            const val = card ? card.dataset.value : '';
+            push(qName, val === answers[qName], val);
+        }
+        for (let n = 22; n <= 26; n++) {
+            const qName = `q${n}`;
+            const input = document.querySelector(`input[name="${qName}"]`);
+            const val = input ? input.value.trim().toLowerCase() : '';
+            push(qName, val === answers[qName], val);
+        }
+        
+        const acc = total ? Math.round(100 * correct / total) : 0;
+        document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p><pre>${lines.join('\n')}</pre>`;
+        let ahtml = '<ol start="14">';
+        for (let i = 14; i <= 26; i++) { ahtml += `<li>${answers['q' + i]}</li>`; }
+        ahtml += '</ol>';
+        document.getElementById('answerContent').innerHTML = ahtml;
+        document.querySelector('#answerBox .badge').textContent = 'tap to view';
+    };
+    
+    window.resetForm = () => {
+        document.querySelectorAll('input[type="text"]').forEach(el => el.value = "");
+        document.querySelectorAll('.dropzone').forEach(zone => zone.innerHTML = '');
+        
+        document.querySelectorAll('.card[data-clone="false"]').forEach(card => {
+            const originPool = document.getElementById(card.dataset.originPool);
+            if (originPool) originPool.appendChild(card);
+        });
+
+        document.getElementById('results').innerHTML='';
+        document.getElementById('answerContent').innerHTML='';
+        document.querySelector('#answerBox .badge').textContent = 'hidden';
+        document.querySelectorAll('.q-item.answered').forEach(item => item.classList.remove('answered'));
+    };
+
+    // Navigation and Marking
+    window.scrollToElement = (id) => {
+        const el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+    const markAnswered = (target) => {
+        const nav = document.getElementById(`${target}-nav`);
+        if (!nav) return;
+        let answered = false;
+        const zone = document.querySelector(`.dropzone[data-target="${target}"]`);
+        const text = document.querySelector(`input[name="${target}"]`);
+        if (zone) answered = !!zone.querySelector('.card');
+        if (text) answered = text.value.trim().length > 0;
+        nav.classList.toggle('answered', answered);
+    };
+    
+    // Drag and Drop Logic
+    const cards = document.querySelectorAll('.card');
+    const dropzones = document.querySelectorAll('.dropzone');
+    let draggedItem = null;
+
+    cards.forEach(card => {
+        card.dataset.originPool = card.parentElement.id;
+        card.addEventListener('dragstart', function(e) {
+            draggedItem = this;
+            if (this.dataset.clone === 'true') {
+                 // No visual change for cloning source
+            } else {
+                setTimeout(() => this.classList.add('ghost'), 0);
+            }
+        });
+        card.addEventListener('dragend', function() {
+            if (this.dataset.clone !== 'true') {
+                this.classList.remove('ghost');
+            }
+        });
+    });
+
+    dropzones.forEach(zone => {
+        zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+        zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+        zone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('over');
+            if (!draggedItem) return;
+
+            let itemToDrop = draggedItem;
+
+            if (draggedItem.dataset.clone === 'true') {
+                itemToDrop = draggedItem.cloneNode(true);
+            }
+            
+            if (this.children.length > 0 && this.children[0].classList.contains('card')) {
+                const existingCard = this.children[0];
+                const originPool = document.getElementById(existingCard.dataset.originPool);
+                if (originPool) originPool.appendChild(existingCard);
+            }
+            this.innerHTML = '';
+            this.appendChild(itemToDrop);
+            
+            markAnswered(this.dataset.target);
+        });
+    });
+
+    document.querySelectorAll('.option-pool').forEach(pool => {
+        pool.addEventListener('dragover', e => { e.preventDefault(); pool.classList.add('over'); });
+        pool.addEventListener('dragleave', () => pool.classList.remove('over'));
+        pool.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('over');
+            if (draggedItem && !draggedItem.dataset.clone) {
+                const oldZone = draggedItem.parentElement;
+                if (oldZone.classList.contains('dropzone')) {
+                    oldZone.innerHTML = '';
+                    markAnswered(oldZone.dataset.target);
+                }
+                this.appendChild(draggedItem);
+            }
+        });
+    });
+
+    for(let q=14;q<=26;q++){
+        const input = document.querySelector(`input[name="q${q}"]`);
+        if(input) input.addEventListener('input', () => markAnswered(`q${q}`));
+    }
+});
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+if (!window.practicePageEnhancer) {
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() { console.log('练习页面增强脚本已加载'); };
+    script.onerror = function() { console.error('练习页面增强脚本加载失败'); loadInlineEnhancer(); };
+    document.head.appendChild(script);
+}
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    window.practicePageEnhancer = {
+        initialize: function() { this.setupCommunication(); this.setupAnswerListeners(); this.interceptSubmit(); },
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', { pageType: this.detectPageType(), url: window.location.href });
+                }
+            });
+        },
+        detectPageType: function() { const title = document.title || ''; if (title.includes('P1')) return 'P1'; if (title.includes('P2')) return 'P2'; if (title.includes('P3')) return 'P3'; return 'unknown'; },
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            document.addEventListener('input', (e) => { if (e.target.name) this.answers[e.target.name] = e.target.value; });
+        },
+        interceptSubmit: function() {
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => {
+                    document.querySelectorAll('.dropzone').forEach(zone => {
+                        const qName = zone.dataset.target;
+                        const card = zone.querySelector('.card');
+                        if (qName) this.answers[qName] = card ? card.dataset.value : '';
+                    });
+                    originalGrade(); 
+                    setTimeout(() => this.handleSubmit(), 200);
+                };
+            }
+        },
+        handleSubmit: function() {
+            const results = { sessionId: this.sessionId, startTime: this.startTime, endTime: Date.now(), duration: Math.round((Date.now() - this.startTime) / 1000), answers: this.answers, scoreInfo: this.extractScore(), pageType: this.detectPageType(), url: window.location.href };
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return { correct: correct, total: total, accuracy: total > 0 ? correct / total : 0, percentage: Math.round((correct / total) * 100), source: 'inline_extraction' };
+            }
+            return null;
+        },
+        sendMessage: function(type, data) { if (this.parentWindow) this.parentWindow.postMessage({ type: type, data: data, source: 'practice_page' }, '*'); }
+    };
+    if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', () => { window.practicePageEnhancer.initialize(); }); }
+    else { window.practicePageEnhancer.initialize(); }
+}
+</script>
+
+</body>
+</html>

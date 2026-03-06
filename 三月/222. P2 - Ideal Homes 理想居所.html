@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Ideal Homes – 雅思阅读练习 (双侧高亮)</title>
+<style>
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px;
+    --font-size-large: 20px;
+  }
+  .font-regular { font-size: var(--font-size-regular) !important; }
+  .font-moderate { font-size: var(--font-size-moderate) !important; }
+  .font-large { font-size: var(--font-size-large) !important; }
+  * { box-sizing: border-box; font-size: inherit; transition: background-color 0.2s, border-color 0.2s; }
+  html,body { height:100%; font-size: var(--font-size-regular); }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color: #111827; padding-bottom: 82px; }
+  .top-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+  #timer-container { display: inline-flex; align-items: center; gap: 8px; }
+  #timer { display: inline-block; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:2px 8px; }
+  #settingsBtn { padding:2px 8px; border:1px solid var(--line); border-radius:10px; background:var(--panel); cursor:pointer; display: flex; align-items: center; gap: 4px; }
+  #settingsModal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; box-shadow:var(--shadow); z-index: 1000; display: none; min-width: 280px; }
+  #settingsModal h4 { margin-top:0; font-weight: 600; }
+  #settingsModal .font-option { margin:8px 0; cursor:pointer; padding:4px 8px; border-radius:6px; }
+  #settingsModal .font-option:hover { background:#f1f5f9; }
+  #settingsModal .close-modal { margin-top:12px; padding:6px 12px; border:1px solid var(--line); border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; }
+  .shell { display:flex; height:calc(100vh - 82px); width:100%; overflow: hidden; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; -webkit-overflow-scrolling: touch; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; font-weight: 600; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: break-word; hyphens: auto; }
+  .paragraph-label { font-weight: 600; color: var(--accent); margin-right: 8px; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+  table { border-collapse: collapse; width:100%; margin: 10px 0; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:left; }
+  th { background-color: #f1f5f9; font-weight: 600; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; transition: all 0.2s; }
+  button:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:14px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; transition: filter 0.2s; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 6000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow:var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; transform: none; box-shadow: none; }
+  #notes { position: fixed; right: 12px; bottom: 94px; width: 320px; max-width: calc(100% - 24px); height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow:var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; line-height:1.5; background: transparent; }
+  #notes textarea:focus { outline: none; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 94px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; animation: fadeIn 0.3s, fadeOut 0.3s 1.2s; }
+  @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, 20px); } to { opacity: 1; transform: translate(-50%, 0); } }
+  @keyframes fadeOut { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, 20px); } }
+  .question-number { font-weight: 600; }
+  .word-limit { color: var(--muted); font-size: 0.9em; margin: 4px 0 8px; }
+  .radio-group { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+  .radio-group label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+  .practice-nav { background:#fff; border-top:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; overflow-x: auto; padding-bottom: 4px; max-width: calc(100% - 80px); }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; transition:all 0.2s; min-width:36px; text-align:center; flex-shrink:0; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+  details.answerbox summary::before { content: "▼"; font-size: 12px; transition: transform 0.2s; }
+  details.answerbox[open] summary::before { transform: rotate(180deg); }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; margin-bottom:14px; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  .explanation-text { margin-bottom: 4px; }
+  .explanation-original { font-style: italic; color: #555; font-size: 0.9em; margin-top: 0; }
+  ul { list-style-type: none; padding-left: 20px; margin: 8px 0; }
+  ul li::before { content: "- "; }
+  .flow-step { margin: 8px 0; }
+  .flow-step select, .flow-step .radio-group { margin-left: 8px; }
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; height: auto; min-height: calc(100vh - 82px); }
+    #left, #right { flex: none; width: 100%; min-width: auto; max-height: 50vh; }
+    #divider { flex: none; height: 8px; width: 100%; cursor: ns-resize; background: linear-gradient(0deg,var(--line),#d1d5db); }
+  }
+</style>
+</head>
+<body class="font-regular">
+<!-- 底部导航 -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+</div>
+
+<!-- 字体设置模态框 -->
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (16px - Default)</div>
+  <div class="font-option" data-size="moderate">Moderate (18px - Larger)</div>
+  <div class="font-option" data-size="large">Large (20px - Largest)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+
+<!-- 主容器 -->
+<div class="shell">
+  <!-- 左面板：文章 Ideal Homes -->
+  <section class="pane" id="left">
+    <div class="top-controls">
+      <h2>READING PASSAGE 2</h2>
+      <div id="timer-container">
+        <span id="timer">00:00</span>
+        <button id="settingsBtn" onclick="openSettingsModal()">Settings</button>
+      </div>
+    </div>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    <h3>Ideal Homes</h3>
+    <p><em>New ideas and some old ones</em></p>
+
+    <p><span class="paragraph-label">A</span> The traditional kampung houses of Malaysia do not need air‑conditioning. Built on stilts and with steep roofs, they have year‑round ventilation. The raised structure ensures a cooling breeze comes up through the floorboards, while the high roof acts as a chimney to release hot air. The airtight, concrete boxes of modern city construction, in contrast, are heat traps, says Muhammad Peter Davis of University Putra Malaysia. He has calculated that typical modern Malaysian houses are 5°C hotter than the air outside. The builders of kampung houses "had no knowledge of modern science or engineering but they came up with the perfect design," says Davis.</p>
+    <p><span class="paragraph-label">B</span> This story of ancient architectural sophistication and modern insanity is repeated around the world. In the name of modernism, people have thrown away architecture designed to cope with the environment in which they live, and adopted house designs originating from cold, northern environments, where the idea is to keep heat in.</p>
+    <p><span class="paragraph-label">C</span> Once, the aim of architectural modernists was to build structures that kept nature out and to replace it with air‑conditioning. Now they are learning that they cannot do that effectively. Slowly, they are seeing the benefit of working with nature, rather than against it. In California, they probably use more power for air‑conditioning than anywhere else on Earth. According to Arthur Rosenfeld from the University of California, what California needs is white paint. If Los Angeles painted its roofs white, planted trees to shade buildings, and chose lighter‑colored paving, it could reduce city temperatures by 3°C and cut the annual air‑conditioning bill by US$170 million a year.</p>
+    <p><span class="paragraph-label">D</span> Modern buildings are greedy in their use of energy. Much is made of the contribution of transportation to global warming, through its emissions of greenhouse gases. But, globally, transportation is responsible for just 22 per cent of carbon dioxide emissions. The building sector is responsible for 31 per cent, mostly the result of heating and air‑conditioning systems. In developing countries, where demand for electricity for buildings is rising by 5 per cent a year, the biggest demand is for air‑conditioning in modern buildings which are often designed to cope with every different climatic condition.</p>
+    <p><span class="paragraph-label">E</span> Before air‑conditioning, much of the Arab world kept cool through thoughtful building design. Many buildings were built according to the principles of the wind tower, a tall structure with vertical vents at the top that open in all directions to catch any passing breeze. Typically, these wind‑tower buildings were made of local materials such as stone, mud brick, wood and palm‑tree fronds. The buildings were inward‑looking, which served the dual function of focusing attention on the courtyard, where family members spend time together, and protecting living areas from the rays of the sun.</p>
+    <p><span class="paragraph-label">F</span> Throughout the Middle East today, wind towers are often little more than museum pieces. But there are exceptions. Jordan has won awards for the architecture of a village on the shores of the Red Sea, which is designed to conserve energy. Made of rough, local stone in a traditional style, it combines the ventilation system of the wind towers for summer coolness with up‑to‑date heating and floor insulation to protect against the desert cold in winter.</p>
+    <p><span class="paragraph-label">G</span> Traditional building materials, like traditional building designs, are being rediscovered by those looking for low‑energy solutions to the current construction needs. Clay is one such material: As the Dutch housing contractor R van der Ley has argued in promoting a series of clay housing projects in developing countries, clay has many benefits over its industrialized version, brick. Clay blocks cost only half as much as ordinary bricks. Clay also generates work because people can find it, mould it, bake it and work it themselves. Two hundred clay bricks can be made with the fuel oil that makes just one ordinary brick. Moreover, clay is an excellent insulator against both cold and heat outside, and can easily be recycled.</p>
+    <p><span class="paragraph-label">H</span> But although traditional methods and materials can be revived in appropriate settings, new green, low‑energy technologies are needed, especially in urban environments. The thermal insulation of homes in cold countries is an example. In 1983, Sweden adopted a national standard, requiring the country's homes to lose no more than 60 kilowatt‑hours per square metre over the year. To meet that standard, windows were double‑glazed, and walls and roofs insulated. Every home became a fortress against the cold air outside. Unfortunately, the rest of Europe has not followed the lead.</p>
+    <p><span class="paragraph-label">I</span> In the United States, Amory Lovins has promoted a range of low‑energy technologies: "super‑windows", for example, which let in invisible light but can be "tuned" to either allow in, or reflect away, infrared solar radiation — the stuff that heats. Buildings with large expanses of window (and big energy bills) can be designed to achieve optimum temperatures.</p>
+    <p><span class="paragraph-label">J</span> As well as more efficient use of energy, the world also needs new sources of renewable power. Solar energy is being tried out in the developing world, in villages often far from electricity grids. The world's biggest solar power installation got underway in the Philippines, in 2001, where a project commenced to install solar panels for 400,000 people in 150 villages. Such projects are demonstrating that countries, whether developing or developed, no longer need huge national grids to supply electricity. Every home can do its own thing with the help of a solar panel and a storage battery.</p>
+    <p><span class="paragraph-label">K</span> Houses, of course, are more than machines for living in. They are social and psychological spaces, too. Future houses may not look exactly like kampungs or wind towers or any other traditional models. But to work for us and for our environment, they will have to suit us as well as these traditional forms did.</p>
+    <p>&nbsp;</p>
+  </section>
+  
+  <!-- 分隔线 -->
+  <div id="divider" title="Drag to resize"></div>
+  
+  <!-- 右面板：题目 -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- 14-18 段落匹配 (选择段落字母) -->
+    <div class="group">
+      <h4>Questions 14–18</h4>
+      <p>The reading passage has eleven paragraphs A–K.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p>Write the correct letter, A–K, in boxes 14–18.</p>
+      <p class="word-limit">NB You may use any letter more than once.</p>
+
+      <div id="q14-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <a id="q14-anchor"></a>
+        <p><span class="question-number">14.</span> reasons why a particular construction material is advantageous</p>
+        <select id="q14" name="q14">
+          <option value="">-- Select --</option>
+          <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option><option value="H">H</option><option value="I">I</option><option value="J">J</option><option value="K">K</option>
+        </select>
+      </div>
+      <div id="q15-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <a id="q15-anchor"></a>
+        <p><span class="question-number">15.</span> an example of a construction design which benefits domestic interaction</p>
+        <select id="q15" name="q15">
+          <option value="">-- Select --</option>
+          <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option><option value="H">H</option><option value="I">I</option><option value="J">J</option><option value="K">K</option>
+        </select>
+      </div>
+      <div id="q16-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <a id="q16-anchor"></a>
+        <p><span class="question-number">16.</span> a description of a house that is ventilated from below</p>
+        <select id="q16" name="q16">
+          <option value="">-- Select --</option>
+          <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option><option value="H">H</option><option value="I">I</option><option value="J">J</option><option value="K">K</option>
+        </select>
+      </div>
+      <div id="q17-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <a id="q17-anchor"></a>
+        <p><span class="question-number">17.</span> an example of self‑sufficient energy supply</p>
+        <select id="q17" name="q17">
+          <option value="">-- Select --</option>
+          <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option><option value="H">H</option><option value="I">I</option><option value="J">J</option><option value="K">K</option>
+        </select>
+      </div>
+      <div id="q18-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <a id="q18-anchor"></a>
+        <p><span class="question-number">18.</span> suggested methods of reducing temperatures in a city</p>
+        <select id="q18" name="q18">
+          <option value="">-- Select --</option>
+          <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option><option value="H">H</option><option value="I">I</option><option value="J">J</option><option value="K">K</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 19-22 人物观点匹配 (选择A-G) -->
+    <div class="group">
+      <h4>Questions 19–22</h4>
+      <p>Look at the following people and the list of ideas below.</p>
+      <p>Match each person with the correct idea, A–G.</p>
+      <p>Write the correct letter, A–G, in boxes 19–22.</p>
+      <p class="word-limit">List of ideas</p>
+      <ul style="list-style-type: none; padding-left:0;">
+        <li>A The choice of a certain construction material can have a socio‑economic impact.</li>
+        <li>B Throughout the world, people are rejecting traditional housing design in order to appear modern.</li>
+        <li>C Houses should not only meet people's physical needs but also their social and psychological needs.</li>
+        <li>D Traditional knowledge can be superior to modern knowledge.</li>
+        <li>E There is an innovation that can save costs on both air‑conditioning and heating.</li>
+        <li>F Solar energy can meet the energy needs of people living in villages in developing countries.</li>
+        <li>G There is a very simple solution that can save on the cost of air‑conditioning.</li>
+      </ul>
+
+      <div id="q19-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <a id="q19-anchor"></a>
+        <p><span class="question-number">19.</span> Muhammad Peter Davis</p>
+        <select id="q19" name="q19">
+          <option value="">-- Select --</option>
+          <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option>
+        </select>
+      </div>
+      <div id="q20-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <a id="q20-anchor"></a>
+        <p><span class="question-number">20.</span> Arthur Rosenfeld</p>
+        <select id="q20" name="q20">
+          <option value="">-- Select --</option>
+          <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option>
+        </select>
+      </div>
+      <div id="q21-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <a id="q21-anchor"></a>
+        <p><span class="question-number">21.</span> R van der Ley</p>
+        <select id="q21" name="q21">
+          <option value="">-- Select --</option>
+          <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option>
+        </select>
+      </div>
+      <div id="q22-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <a id="q22-anchor"></a>
+        <p><span class="question-number">22.</span> Amory Lovins</p>
+        <select id="q22" name="q22">
+          <option value="">-- Select --</option>
+          <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 23-26 判断题 True/False/Not Given -->
+    <div class="group">
+      <h4>Questions 23–26</h4>
+      <p>Do the following statements agree with the information in Reading Passage 2?</p>
+      <p>Write <strong>TRUE</strong>, <strong>FALSE</strong> or <strong>NOT GIVEN</strong>.</p>
+
+      <div id="q23-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <a id="q23-anchor"></a>
+        <p><span class="question-number">23.</span> The air temperature in modern Malaysian houses is lower than the air temperature outside.</p>
+        <div class="radio-group">
+          <label><input type="radio" name="q23" value="True"> True</label>
+          <label><input type="radio" name="q23" value="False"> False</label>
+          <label><input type="radio" name="q23" value="Not Given"> Not Given</label>
+        </div>
+      </div>
+      <div id="q24-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <a id="q24-anchor"></a>
+        <p><span class="question-number">24.</span> The construction industry is more to blame than transport for global warming.</p>
+        <div class="radio-group">
+          <label><input type="radio" name="q24" value="True"> True</label>
+          <label><input type="radio" name="q24" value="False"> False</label>
+          <label><input type="radio" name="q24" value="Not Given"> Not Given</label>
+        </div>
+      </div>
+      <div id="q25-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <a id="q25-anchor"></a>
+        <p><span class="question-number">25.</span> The use of wind towers for cooling is widespread in the Middle East today.</p>
+        <div class="radio-group">
+          <label><input type="radio" name="q25" value="True"> True</label>
+          <label><input type="radio" name="q25" value="False"> False</label>
+          <label><input type="radio" name="q25" value="Not Given"> Not Given</label>
+        </div>
+      </div>
+      <div id="q26-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <a id="q26-anchor"></a>
+        <p><span class="question-number">26.</span> The 'super‑windows' promoted by Amory Lovins can be installed at low cost.</p>
+        <div class="radio-group">
+          <label><input type="radio" name="q26" value="True"> True</label>
+          <label><input type="radio" name="q26" value="False"> False</label>
+          <label><input type="radio" name="q26" value="Not Given"> Not Given</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 提交和重置按钮 -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+
+    <!-- 结果显示 -->
+    <div id="results"></div>
+
+    <!-- 答案面板 -->
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<!-- 文本选择工具栏 -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+
+<!-- 笔记面板 -->
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+
+<!-- 提示框 -->
+<div id="toast"></div>
+
+<script>
+// 计时器
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval;
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+window.onload = startTimer;
+
+// 字体设置
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+function openSettingsModal() { settingsModal.style.display = 'block'; }
+function closeSettingsModal() { settingsModal.style.display = 'none'; }
+window.addEventListener('click', (e) => { if (e.target === settingsModal) closeSettingsModal(); });
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    localStorage.setItem('fontSize', size);
+    showToast(`Font set to ${size}`);
+    closeSettingsModal();
+  });
+});
+const savedSize = localStorage.getItem('fontSize');
+if(savedSize) body.classList.add(`font-${savedSize}`);
+
+// 高亮与笔记 (左右两侧均监听mouseup)
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none'; currentHlNode = null; return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+});
+document.addEventListener('scroll', () => { if (selbar.style.display === 'flex') updateSelbar(); });
+document.addEventListener('mousedown', (e) => { keepToolbar = e.target.classList?.contains('hl') || false; }, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target; lastRange = null; positionSelbar(e.target.getBoundingClientRect());
+    window.getSelection()?.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const span = document.createElement('span'); span.className = 'hl';
+  try { lastRange.surroundContents(span); } catch (e) {
+    const wrap = document.createElement('span'); wrap.className = 'hl';
+    wrap.appendChild(lastRange.cloneContents()); lastRange.deleteContents(); lastRange.insertNode(wrap);
+  }
+  selbar.style.display = 'none'; showToast('Highlighted');
+}
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    parent.removeChild(currentHlNode); parent.normalize(); currentHlNode = null;
+    selbar.style.display = 'none'; showToast('Highlight removed'); return;
+  }
+  if (!lastRange) return;
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const r = node.getBoundingClientRect();
+      if (!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(node);
+    }
+  }
+  toRemove.forEach(el => { const p = el.parentNode; while (el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  selbar.style.display = 'none'; showToast('Highlights removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+function toggleNotes() { notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex'; if (notesPanel.style.display === 'flex') noteArea.focus(); }
+btnCloseNotes.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async () => { await navigator.clipboard.writeText(noteArea.value || ''); showToast('Notes copied'); });
+btnNote.addEventListener('click', () => {
+  let txt = '';
+  if (currentHlNode) txt = currentHlNode.textContent.trim();
+  else if (lastRange) txt = lastRange.cloneContents().textContent.trim();
+  toggleNotes();
+  if (txt) { noteArea.value = noteArea.value ? `${noteArea.value}\n> ${txt}\n` : `> ${txt}\n`; noteArea.scrollTop = noteArea.scrollHeight; }
+  selbar.style.display = 'none';
+});
+
+function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 1500); }
+
+// 答案数据 (根据PDF)
+const answers = {
+  q14: 'G', q15: 'E', q16: 'A', q17: 'J', q18: 'C',
+  q19: 'D', q20: 'G', q21: 'A', q22: 'E',
+  q23: 'False', q24: 'True', q25: 'False', q26: 'Not Given'
+};
+
+function grade() {
+  clearInterval(timerInterval); // 停止计时
+  let total = 13, correct = 0;
+  const lines = [];
+
+  // 14-18 select
+  for (let i = 14; i <= 18; i++) {
+    const sel = document.getElementById(`q${i}`);
+    const user = sel ? sel.value : '';
+    const ans = answers[`q${i}`];
+    const ok = user === ans;
+    if (ok) correct++;
+    lines.push(`q${i}: ${user || 'no answer'} ${ok ? '✅' : '❌ (correct: '+ans+')'}`);
+  }
+  // 19-22 select
+  for (let i = 19; i <= 22; i++) {
+    const sel = document.getElementById(`q${i}`);
+    const user = sel ? sel.value : '';
+    const ans = answers[`q${i}`];
+    const ok = user === ans;
+    if (ok) correct++;
+    lines.push(`q${i}: ${user || 'no answer'} ${ok ? '✅' : '❌ (correct: '+ans+')'}`);
+  }
+  // 23-26 radio
+  for (let i = 23; i <= 26; i++) {
+    const radio = document.querySelector(`input[name="q${i}"]:checked`);
+    const user = radio ? radio.value : 'no answer';
+    const ans = answers[`q${i}`];
+    const ok = user === ans;
+    if (ok) correct++;
+    lines.push(`q${i}: ${user} ${ok ? '✅' : '❌ (correct: '+ans+')'}`);
+  }
+
+  const perc = Math.round((correct/total)*100);
+  document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} (${perc}%)</p><pre>${lines.join('\n')}</pre>`;
+  
+  // 填充答案面板
+  let answerHtml = '<h4>正确答案及解析</h4><table><tr><th>题号</th><th>答案</th><th>解析/定位</th></tr>';
+  answerHtml += '<tr><td>14</td><td>G</td><td>G段讲粘土的优势，对应“reasons why a particular construction material is advantageous”。</td></tr>';
+  answerHtml += '<tr><td>15</td><td>E</td><td>E段风塔 courtyard family，对应“benefits domestic interaction”。</td></tr>';
+  answerHtml += '<tr><td>16</td><td>A</td><td>A段高脚屋，凉风从地板下上来，对应“ventilated from below”。</td></tr>';
+  answerHtml += '<tr><td>17</td><td>J</td><td>J段菲律宾太阳能项目，对应“self‑sufficient energy supply”。</td></tr>';
+  answerHtml += '<tr><td>18</td><td>C</td><td>C段刷白屋顶、植树降温，对应“reducing temperatures in a city”。</td></tr>';
+  answerHtml += '<tr><td>19</td><td>D</td><td>Davis认为传统知识优于现代，对应D。</td></tr>';
+  answerHtml += '<tr><td>20</td><td>G</td><td>Rosenfeld提出白漆简单方案，对应G。</td></tr>';
+  answerHtml += '<tr><td>21</td><td>A</td><td>van der Ley强调粘土的社会经济影响，对应A。</td></tr>';
+  answerHtml += '<tr><td>22</td><td>E</td><td>Lovins超级窗户可节省采暖和制冷，对应E。</td></tr>';
+  answerHtml += '<tr><td>23</td><td>False</td><td>A段现代住宅比室外高5°C，题干说更低，矛盾。</td></tr>';
+  answerHtml += '<tr><td>24</td><td>True</td><td>D段交通22%，建筑31%，建筑责任更大。</td></tr>';
+  answerHtml += '<tr><td>25</td><td>False</td><td>F段风塔如今大多是博物馆藏品，并非广泛使用。</td></tr>';
+  answerHtml += '<tr><td>26</td><td>Not Given</td><td>I段介绍超级窗户功能，未提及成本。</td></tr>';
+  answerHtml += '</table>';
+  document.getElementById('answerContent').innerHTML = answerHtml;
+  
+  document.getElementById('answerBox').open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  document.querySelectorAll('.q-item').forEach(item => item.classList.add('answered'));
+}
+
+function resetForm() {
+  clearInterval(timerInterval);
+  _t = 0; _timerEl.textContent = '00:00';
+  startTimer();
+  
+  // 重置所有select
+  for (let i = 14; i <= 22; i++) {
+    const sel = document.getElementById(`q${i}`);
+    if (sel) sel.value = '';
+  }
+  // 重置所有radio
+  for (let i = 23; i <= 26; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(r => r.checked = false);
+  }
+  
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('answerContent').innerHTML = '';
+  document.getElementById('answerBox').open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  document.querySelectorAll('.q-item').forEach(item => item.classList.remove('answered'));
+  
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  document.querySelectorAll('.hl').forEach(el => { let p = el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); });
+  showToast('Reset done');
+}
+
+function scrollToElement(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  document.querySelectorAll('.q-item').forEach(i => i.classList.remove('active'));
+  const nav = document.getElementById(id.replace('-anchor','-nav'));
+  if (nav) { nav.classList.add('active'); setTimeout(() => nav.classList.remove('active'), 800); }
+}
+
+// 拖拽分隔栏
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isResizing = false;
+divider.addEventListener('mousedown', (e) => { isResizing = true; document.body.style.cursor = 'ew-resize'; e.preventDefault(); });
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  const cw = leftPane.parentElement.offsetWidth;
+  const mx = e.clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const pct = (mx/cw)*100;
+  if (pct > 20 && pct < 80) { leftPane.style.flex = `0 0 ${pct}%`; rightPane.style.flex = `1 1 ${100-pct}%`; }
+});
+document.addEventListener('mouseup', () => { if (isResizing) { isResizing = false; document.body.style.cursor = ''; } });
+divider.addEventListener('touchstart', (e) => { isResizing = true; e.preventDefault(); });
+document.addEventListener('touchmove', (e) => {
+  if (!isResizing) return;
+  const cw = leftPane.parentElement.offsetWidth;
+  const tx = e.touches[0].clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const pct = (tx/cw)*100;
+  if (pct > 20 && pct < 80) { leftPane.style.flex = `0 0 ${pct}%`; rightPane.style.flex = `1 1 ${100-pct}%`; }
+  e.preventDefault();
+});
+document.addEventListener('touchend', () => { isResizing = false; });
+
+// 标记已回答导航
+for (let i = 14; i <= 22; i++) {
+  const sel = document.getElementById(`q${i}`);
+  if (sel) {
+    sel.addEventListener('change', function() {
+      document.getElementById(`q${i}-nav`).classList.add('answered');
+    });
+  }
+}
+for (let i = 23; i <= 26; i++) {
+  document.querySelectorAll(`input[name="q${i}"]`).forEach(r => {
+    r.addEventListener('change', () => {
+      document.getElementById(`q${i}-nav`).classList.add('answered');
+    });
+  });
+}
+</script>
+</body>
+</html>

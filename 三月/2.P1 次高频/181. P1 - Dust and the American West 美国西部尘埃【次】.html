@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P1 – Dust and the American West</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root { 
+    --line: #e5e7eb; --bg: #f6f7fb; --panel: #fff; --accent: #3b82f6; 
+    --muted: #6b7280; --shadow: 0 6px 20px rgba(0,0,0,.12); 
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { 
+    margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background: var(--bg); padding-bottom: 70px; color: #111827;
+  }
+  .shell { display: flex; height: 100vh; width: 100%; }
+  .pane { background: var(--panel); overflow: auto; padding: 20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background: #fbfbff; border-left: 1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg, #e5e7eb, #d1d5db); cursor: ew-resize; position: relative; z-index: 5; user-select: none; }
+  h2, h3, h4 { margin: 0 0 10px; }
+  #left p, #right p, #right li { margin: 0 0 12px; line-height: 1.6; }
+  .group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+  .q-block { margin-bottom: 16px; }
+  .options { display: flex; gap: 16px; margin-top: 8px; }
+  .options label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .blank { border:none; border-bottom:1px solid #9ca3af; padding:4px 2px; font-size:1em; background:transparent; width: 120px; }
+  .blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  button { padding: 8px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+  button:hover { background: #f8fafc; border-color: #cbd5e1; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: #2563eb; }
+  .practice-nav { background: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 5px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+  .practice-nav .title { font-weight: 600; color: var(--muted); }
+  .practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; }
+  .practice-nav .q-item:hover { background: #f1f5f9; border-color: var(--accent); }
+  .practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+  .practice-nav .controls { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+  #timer { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.2s; min-width: 70px; text-align: center; font-size: 14px; font-weight: bold; }
+  #timer:hover { background: #f1f5f9; border-color: var(--accent); }
+  #timer.paused { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+  .theme-toggle { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; width: 32px; height: 32px; font-size: 16px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+  #selbar { position: absolute; display: none; z-index: 2000; background: #111; color: #fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+  #selbar button { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+  #notes { position: fixed; right: 12px; bottom: 85px; width: 320px; height: 42vh; background: #fff; border: 1px solid var(--line); border-radius: 12px; display: none; flex-direction: column; z-index: 1500; box-shadow: var(--shadow); }
+  #notes header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  #notes textarea { flex: 1; border: 0; padding: 10px; resize: none; font-size: 14px; line-height: 1.5; background-color: inherit; color: inherit; }
+  #toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 3000; font-size: 14px; }
+  #results { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 16px 0; }
+  #results p { margin: 0 0 8px; }
+  #results pre { font-family: monospace; white-space: pre-wrap; margin: 0; }
+  .badge { background: #eef2ff; color: #4338ca; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 500; }
+  details.answerbox { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+  details.answerbox summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+  details.answerbox summary::-webkit-details-marker { display: none; }
+  #answerContent { margin-top: 10px; }
+  #answerContent ol { margin: 0; padding-left: 20px; }
+  .hl { background: #fff3a3; }
+  body.dark { --bg: #0f172a; --panel: #1e293b; --line: #334155; --muted: #94a3b8; color: #e2e8f0; }
+  body.dark .pane, body.dark #right { background: var(--panel); }
+  body.dark #right { background: #131c2d; }
+  body.dark button, body.dark .theme-toggle { background: #334155; color: #e2e8f0; border-color: #475569; }
+  body.dark .group, body.dark #results, body.dark details.answerbox, body.dark #notes { background: #1e293b; border-color: #334155; }
+  body.dark .practice-nav { background: #1e293b; border-top-color: #334155; }
+  body.dark .q-item { background: #334155; color: #e2e8f0; border-color: #475569; }
+  body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+  body.dark #timer.paused { background: #402323; color: #f87171; border-color: #7f1d1d; }
+  body.dark .blank { color: #e2e8f0; border-bottom-color: #64748b; }
+  body.dark .hl { background: #b45309; }
+  body.dark .badge { background: #312e81; color: #a5b4fc; }
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; height: auto; }
+    #left, #right { min-height: 50vh; }
+    #divider { display: none; }
+    #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 1. Bottom Navigation Bar -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q1-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q1-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q1-anchor')">4</div>
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q1-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q1-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q1-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q8-anchor')">9</div>
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q8-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q8-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q8-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q8-anchor')">13</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<!-- 2. Main Content Shell -->
+<div class="shell">
+  <!-- Left Pane: Reading Passage -->
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 1</h2>
+    <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
+    
+    <h3>Dust and the American West</h3>
+  
+    <p>Images of deserts in the United States show dusty, barren landscapes, but the land may not always have been this way. Ever since settlers moved west across the US, there has been dust, clouds of it, everywhere. It was part of the landscape, or so it seemed to them. But there were no records of the landscape of the West until the settlers arrived. Now, evidence is starting to emerge which suggests that before the settlers, there was very little dust.</p>
+    <p>The evidence comes from the San Juan Mountains of southwest Colorado, downwind of Arizona and New Mexico. There, Jason Neff, a geochemist from the University of Colorado, has been analyzing sediments, the sand, stones and mud, laid down over the past 5,000 years. Atmospheric dust was minimal throughout those five millennia until the mid-19th century, he says, but then, ‘from about 1860 to 1900, dust deposition rates shot up.'</p>
+    <p>This is surprising because usually dry means dusty, and the American West has almost always been dry, often drier than today. There was a near-permanent drought between 900 and 1300 which was so intense that it destroyed a series of Native American civilizations, including the Anasazi, whose cliff homes are now US national treasures. Yet the evidence from the San Juan lakes is that it was not dusty. Even as their civilization was collapsing, the Anasazi seem to have protected their soils from erosion.</p>
+    <p>This was not the case with the European settlers once they brought their cows. The landscape the cattle were introduced to was remarkably ill-equipped to cope with grazing animals, says Neff. ‘Unlike most other parts of the US, there were few grazers in the American Southwest until the Europeans came. No bison and few antelope or deer.'</p>
+    <p>In the Great Plains to the east and north, bison roamed in vast herds. Their regular grazing had created tough grass, while the herds manured the soil. In the Southwest, the land had few defenses against a sudden invasion of millions of livestock, whose teeth stripped the grass and whose hooves punctured the hard crust of desert soils that protected them from the wind. The invasion was sudden, funded by a bubble of speculative investment, much of it from Britain. The money went into railroads and herds of cattle and sheep that rode the rails to the wide open pastures. By 1900, when sedimentation rates peaked, there were 20 million cattle and 25 million sheep in the West.</p>
+    <p>One of the biggest ranches was owned by the Aztec Land and Cattle Company, which owned a million acres of land by 1884. Each acre had cost the company a mere 50 cents, and like many other speculators, it was only interested in quick profits and had little incentive to protect the soils from overgrazing. By the time Aztec sold the ranch in 1901, it was barren, with cattle carcasses scattered across the exhausted land. Such was the damage to the grasslands that even now few of the pastures have recovered. The parched and exposed soil simply blew away. The 1862 Homestead Act was passed in order to encourage the populating of the West. Any family willing to make the journey was entitled to claim 160 acres and farm it. Yet by the time people moved west in large numbers, the cattle companies had taken most of the land and surrounded it with barbed wire. The water sources were therefore cut off, and were aggressively guarded. It was only in the 1930s, with the passage of the Taylor Grazing Act, that federal authorities finally sought to limit cattle herds.</p>
+    <p>Soil scientists have known for a while about the importance of the hard crust that forms on arid soils. 'These crusts can survive winds of up to a hundred miles an hour, but cattle hooves break the crust,' says Jayne Belnap, a soil ecologist at the US Geological Survey, Utah. The scale of the dust clouds created by the livestock invasion has until now been largely unknown. When Neff first discovered dust in Colorado lake sediments laid down in the 19th century, he was initially unsure where it came from. Maybe it had crossed the Pacific from China's Gobi Desert.</p>
+    <p>But after investigating the size and chemical composition of the dust, Neff was clear that it mostly came from the American Southwest, mainly Arizona and New Mexico. Now, with the soil crusts gone, dust clouds still head north and are having significant ecological effects in the Colorado mountains. They carry nutrients with them into areas which previously evolved and survived without them. But perhaps the most dramatic impact of the dust has been on snowfields in the Rocky Mountain Range. Even a thin sprinkling of dark material means snow absorbs more solar radiation, meaning that snowmelt occurs far more rapidly during springtime. The impact on the ski tourism industry is obvious.</p>
+    <p>The loss of snow and the shrinking of glaciers across the American West in the past century have been dramatic. Glacier National Park in Montana, for example, has lost three-quarters of its snow cover since 1910. All this is frequently attributed to global warming. While this almost certainly plays a role, Neff's findings suggest that dust may also contribute.</p>
+    
+    <p>&nbsp;</p> <!-- Final padding -->
+  </section>
+
+  <!-- Draggable Divider -->
+  <div id="divider" title="Drag to resize"></div>
+
+  <!-- Right Pane: Questions and Controls -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <a id="q1-anchor"></a>
+      <h4>Questions 1–7</h4>
+      <p>Do the following statements agree with the information in Reading Passage 1?</p>
+      <div class="q-block"><p><strong>1</strong> Jason Neff discovered there had been a dramatic rise in dust levels in the second half of the nineteenth century.</p><div class="options"><label><input type="radio" name="q1" value="true"> TRUE</label><label><input type="radio" name="q1" value="false"> FALSE</label><label><input type="radio" name="q1" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>2</strong> The Anasazi civilization disappeared due to the impact of dust in the atmosphere.</p><div class="options"><label><input type="radio" name="q2" value="true"> TRUE</label><label><input type="radio" name="q2" value="false"> FALSE</label><label><input type="radio" name="q2" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>3</strong> Before cattle were introduced to the American Southwest, large numbers of bison occupied the area.</p><div class="options"><label><input type="radio" name="q3" value="true"> TRUE</label><label><input type="radio" name="q3" value="false"> FALSE</label><label><input type="radio" name="q3" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>4</strong> The bison population in the Great Plains diminished because European settlers found it easy to hunt them.</p><div class="options"><label><input type="radio" name="q4" value="true"> TRUE</label><label><input type="radio" name="q4" value="false"> FALSE</label><label><input type="radio" name="q4" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>5</strong> The development of railroads across the US was more expensive than originally expected.</p><div class="options"><label><input type="radio" name="q5" value="true"> TRUE</label><label><input type="radio" name="q5" value="false"> FALSE</label><label><input type="radio" name="q5" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>6</strong> The Aztec Land and Cattle Company worked hard to take care of the grazing land it owned.</p><div class="options"><label><input type="radio" name="q6" value="true"> TRUE</label><label><input type="radio" name="q6" value="false"> FALSE</label><label><input type="radio" name="q6" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>7</strong> Most of the land once owned by the Aztec Land and Cattle Company remains infertile today.</p><div class="options"><label><input type="radio" name="q7" value="true"> TRUE</label><label><input type="radio" name="q7" value="false"> FALSE</label><label><input type="radio" name="q7" value="not given"> NOT GIVEN</label></div></div>
+    </div>
+    
+    <div class="group">
+      <a id="q8-anchor"></a>
+      <h4>Questions 8–13</h4>
+      <p>Complete the notes below. Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>
+      <h5>American Southwest: 1860s to present day</h5>
+      <p><strong>1862</strong> — Homestead Act was passed to encourage settlement in the West.</p>
+      <p><strong>1930s</strong> — Laws were passed to control the size of <strong>8</strong> <input class="blank" name="q8">.</p>
+      <p><strong>Today Jayne Belnap believes:</strong></p>
+      <ul>
+        <li>soil was not affected by high <strong>9</strong> <input class="blank" name="q9"></li>
+        <li>soil was seriously affected by cattle hooves.</li>
+      </ul>
+      <p><strong>Jason Neff:</strong></p>
+      <ul>
+        <li>found that <strong>10</strong> <input class="blank" name="q10"> in the Colorado region contained dust</li>
+        <li>examined the dust for its chemical content as well as its <strong>11</strong> <input class="blank" name="q11"></li>
+        <li>concluded that the dust was from the American Southwest</li>
+        <li>found that dust affects mountain environments by bringing in <strong>12</strong> <input class="blank" name="q12"> that are not normally found there, causing faster seasonal snowmelt</li>
+        <li>argues that dust is partly to blame for the gradual disappearance of some <strong>13</strong> <input class="blank" name="q13"> and snow.</li>
+      </ul>
+    </div>
+
+    <!-- Controls and Results -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<!-- 3. UI Helper Elements -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// --- MASTER JAVASCRIPT TEMPLATE ---
+
+// 1. STATE & ANSWERS
+const answers = {
+    q1: "true", q2: "false", q3: "false", q4: "not given", q5: "not given",
+    q6: "false", q7: "true", q8: "cattle herds", q9: "winds", q10: "lake sediments",
+    q11: "size", q12: "nutrients", q13: "glaciers"
+};
+
+// 2. UI & INTERACTIVITY
+let timerSeconds = 0, isTimerPaused = false;
+const timerEl = document.getElementById('timer');
+
+function toggleTimer() { isTimerPaused = !isTimerPaused; timerEl.classList.toggle('paused', isTimerPaused); showToast(isTimerPaused ? 'Timer paused' : 'Timer resumed'); }
+setInterval(() => { if (!isTimerPaused) { timerSeconds++; const m = String(Math.floor(timerSeconds / 60)).padStart(2, '0'); const s = String(timerSeconds % 60).padStart(2, '0'); timerEl.textContent = `${m}:${s}`; } }, 1000);
+function toggleDarkMode() { document.body.classList.toggle('dark'); const isDark = document.body.classList.contains('dark'); localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled'); document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️'; }
+function scrollToElement(id) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+function showToast(msg) { const toastEl = document.getElementById('toast'); toastEl.textContent = msg; toastEl.style.display = 'block'; setTimeout(() => { toastEl.style.display = 'none'; }, 1500); }
+
+// 3. HIGHLIGHT AND NOTES FUNCTIONALITY
+const selbar = document.getElementById('selbar');
+let lastRange = null;
+function handleTextSelection() { setTimeout(() => { const sel = window.getSelection(); if (sel.toString().trim().length > 0) { lastRange = sel.getRangeAt(0).cloneRange(); const rect = lastRange.getBoundingClientRect(); selbar.style.top = `${window.scrollY + rect.top - selbar.offsetHeight - 5}px`; selbar.style.left = `${window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2}px`; selbar.style.display = 'flex'; } else { selbar.style.display = 'none'; } }, 10); }
+['left', 'right'].forEach(id => document.getElementById(id).addEventListener('mouseup', handleTextSelection));
+document.addEventListener('mousedown', (e) => { if (!selbar.contains(e.target)) selbar.style.display = 'none'; });
+document.getElementById('btnHL').addEventListener('click', () => { if (lastRange) { const span = document.createElement('span'); span.className = 'hl'; try { lastRange.surroundContents(span); } catch(e) { console.error(e); } selbar.style.display = 'none'; window.getSelection().removeAllRanges(); } });
+document.getElementById('btnUH').addEventListener('click', () => { if (lastRange) { let container = lastRange.commonAncestorContainer; if (container.nodeType !== 1) container = container.parentElement; const highlights = container.querySelectorAll('.hl'); highlights.forEach(hl => { if (window.getSelection().containsNode(hl, true)) { const parent = hl.parentNode; while (hl.firstChild) parent.insertBefore(hl.firstChild, hl); parent.removeChild(hl); parent.normalize(); } }); selbar.style.display = 'none'; window.getSelection().removeAllRanges(); } });
+document.getElementById('btnNote').addEventListener('click', () => { const text = window.getSelection().toString().trim(); if (text) { const noteArea = document.getElementById('noteArea'); noteArea.value += (noteArea.value ? '\n\n' : '') + `> ${text}`; toggleNotes(); noteArea.scrollTop = noteArea.scrollHeight; } selbar.style.display = 'none'; });
+function toggleNotes() { const notePad = document.getElementById('notes'); notePad.style.display = notePad.style.display === 'flex' ? 'none' : 'flex'; }
+document.getElementById('btnClose').addEventListener('click', toggleNotes);
+document.getElementById('btnCopy').addEventListener('click', () => { navigator.clipboard.writeText(document.getElementById('noteArea').value); showToast('Notes copied'); });
+
+// 4. GRADING & STATE MANAGEMENT
+function grade() {
+    let total = 0, correct = 0, lines = [];
+    const push = (q, ok, user, correctAns) => { total++; if(ok) correct++; const displayAns = String(correctAns).charAt(0).toUpperCase() + String(correctAns).slice(1); lines.push(`${q.toUpperCase().replace('Q','')}: ${user || 'None'} ${ok ? '✅' : `❌ (Ans: ${displayAns})`}`); };
+    Object.keys(answers).forEach(qKey => {
+        const correctAns = answers[qKey];
+        let userAnswer = null;
+        const radio = document.querySelector(`input[name="${qKey}"]:checked`);
+        const textInput = document.querySelector(`input[name="${qKey}"]`);
+        if (radio) userAnswer = radio.value;
+        else if (textInput) userAnswer = textInput.value.trim() || null;
+        const isCorrect = userAnswer !== null && userAnswer.toLowerCase() === String(correctAns).toLowerCase();
+        push(qKey, isCorrect, userAnswer, correctAns);
+    });
+    const acc = total ? Math.round(100 * correct / total) : 0;
+    document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p><pre>${lines.join('\n')}</pre>`;
+    document.getElementById('answerContent').innerHTML = `<ol start="1">${Object.entries(answers).map(([key, val]) => `<li><strong>${key.replace('q','')}:</strong> ${String(val).charAt(0).toUpperCase() + String(val).slice(1)}</li>`).join('')}</ol>`;
+    document.querySelector('#answerBox .badge').textContent = 'tap to view';
+    document.getElementById('answerBox').open = true;
+}
+
+function resetForm() {
+    document.querySelectorAll('input[type="radio"], input[type="text"]').forEach(el => {
+        if (el.type === 'radio') el.checked = false;
+        else el.value = '';
+    });
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('answerContent').innerHTML = '';
+    document.querySelector('#answerBox .badge').textContent = 'hidden';
+    document.getElementById('answerBox').open = false;
+    updateAnswerStatus();
+    showToast('Form has been reset');
+}
+
+function updateAnswerStatus() {
+    document.querySelectorAll('.q-item').forEach(item => {
+        const qNum = item.id.replace('-nav', '');
+        let answered = false;
+        const radio = document.querySelector(`input[name="${qNum}"]:checked`);
+        const textInput = document.querySelector(`input[name="${qNum}"]`);
+        if (radio) answered = true;
+        else if (textInput) answered = textInput.value.trim() !== '';
+        item.classList.toggle('answered', answered);
+    });
+}
+
+// 5. INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        toggleDarkMode();
+        document.querySelector('.theme-toggle').textContent = '🌙';
+    }
+    document.querySelectorAll('input[type="radio"], input[type="text"]').forEach(el => {
+        el.addEventListener('input', updateAnswerStatus);
+        el.addEventListener('change', updateAnswerStatus);
+    });
+});
+</script>
+
+<!-- Practice page enhancer integration -->
+<script>
+  if (!window.practicePageEnhancer) {
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = () => console.log('Enhancer loaded.');
+    script.onerror = () => { console.error('Enhancer failed to load'); loadInlineEnhancer(); };
+    document.head.appendChild(script);
+  }
+  function loadInlineEnhancer() { if (window.practicePageEnhancer) return; window.practicePageEnhancer = { initialize: function () { this.setupCommunication(); this.setupAnswerListeners(); this.interceptSubmit(); }, setupCommunication: function () { this.parentWindow = window.opener || window.parent; window.addEventListener('message', (e) => { if (e.data?.type === 'INIT_SESSION') { this.sessionId = e.data.data.sessionId; this.sendMessage('SESSION_READY', { pageType: this.detectPageType(), url: window.location.href }); } }); }, detectPageType: () => { const t = document.title || ''; if (t.includes('P1')) return 'P1'; if (t.includes('P2')) return 'P2'; if (t.includes('P3')) return 'P3'; return 'unknown'; }, setupAnswerListeners: function () { this.answers = {}; this.startTime = Date.now(); document.addEventListener('input', (e) => { if (e.target.name) this.answers[e.target.name] = e.target.value; }); document.addEventListener('change', (e) => { if (e.target.name) this.answers[e.target.name] = e.target.value; }); }, interceptSubmit: function () { if (typeof window.grade === 'function') { const originalGrade = window.grade; window.grade = () => { originalGrade(); setTimeout(() => this.handleSubmit(), 200); }; } }, handleSubmit: function () { const results = { sessionId: this.sessionId, startTime: this.startTime, endTime: Date.now(), duration: Math.round((Date.now() - this.startTime) / 1000), answers: this.answers, scoreInfo: this.extractScore(), pageType: this.detectPageType(), url: window.location.href }; this.sendMessage('PRACTICE_COMPLETE', results); }, extractScore: () => { const el = document.getElementById('results'); if (!el) return null; const text = el.textContent || ''; const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i); if (scoreMatch) { const correct = parseInt(scoreMatch[1]), total = parseInt(scoreMatch[2]); return { correct, total, accuracy: total > 0 ? correct / total : 0, percentage: Math.round((correct / total) * 100), source: 'inline_extraction' }; } return null; }, sendMessage: function (type, data) { if (this.parentWindow) this.parentWindow.postMessage({ type, data, source: 'practice_page' }, '*'); } }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => window.practicePageEnhancer.initialize()); else window.practicePageEnhancer.initialize(); }
+</script>
+
+</body>
+</html>

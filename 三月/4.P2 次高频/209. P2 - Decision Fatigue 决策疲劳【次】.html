@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P2 – Decision Fatigue</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+:root { 
+  --line: #e5e7eb; --bg: #f6f7fb; --panel: #fff; --accent: #3b82f6; 
+  --muted: #6b7280; --shadow: 0 6px 20px rgba(0,0,0,.15); 
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { 
+  margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+  background: var(--bg); padding-bottom: 70px; 
+}
+.shell { display: flex; height: 100vh; width: 100%; }
+.pane { background: var(--panel); overflow: auto; padding: 20px; position: relative; }
+#left { flex: 0 0 50%; min-width: 280px; }
+#right { flex: 1 1 auto; min-width: 320px; background: #fbfbff; border-left: 1px solid var(--line); }
+#divider { flex: 0 0 8px; background: linear-gradient(90deg, #e5e7eb, #d1d5db); cursor: ew-resize; position: relative; z-index: 5; user-select: none; }
+h2, h3, h4 { margin: 0 0 10px; }
+#left p { margin: 0 0 12px; line-height: 1.6; }
+.group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+.blank { border:none; border-bottom:1px solid #9ca3af; padding:4px 2px; font-size:1em; background:transparent; width: 120px; margin: 0 4px; }
+.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+button { padding: 8px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+button:hover { background: #f8fafc; border-color: #cbd5e1; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.primary:hover { background: #2563eb; }
+
+/* Navigation Bar */
+.practice-nav { background: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 5px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+.practice-nav .title { font-weight: 600; color: var(--muted); }
+.practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; }
+.practice-nav .q-item:hover { background: #f1f5f9; border-color: var(--accent); }
+.practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+.practice-nav .q-item.active { background: var(--accent); color: #fff; }
+.practice-nav .controls { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+#timer { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.2s; min-width: 70px; text-align: center; font-size: 14px; font-weight: bold; }
+#timer:hover { background: #f1f5f9; border-color: var(--accent); }
+#timer.paused { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+.theme-toggle { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; width: 32px; height: 32px; font-size: 16px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+.theme-toggle:hover { background: var(--accent); color: #fff; border-color: var(--accent); transform: scale(1.05); }
+
+/* Highlight & Notes Tools */
+#selbar { position: absolute; display: none; z-index: 2000; background: #1f2937; color: #fff; border-radius: 6px; padding: 4px; box-shadow: var(--shadow); font-size: 13px; gap: 4px; align-items: center; transform: translateX(-50%); }
+#selbar::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #1f2937 transparent transparent transparent; }
+#selbar button { background: transparent; color: #fff; border: 1px solid transparent; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+#selbar button:hover { background: rgba(255,255,255,0.2); }
+
+#notes { position: fixed; right: 20px; bottom: 80px; width: 300px; height: 300px; background: #fff; border: 1px solid var(--line); border-radius: 8px; display: none; flex-direction: column; z-index: 1500; box-shadow: var(--shadow); font-size: 14px; }
+#notes header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--line); background: #f9fafb; border-radius: 8px 8px 0 0; }
+#notes header strong { font-weight: 600; color: #374151; }
+#notes header div { display: flex; gap: 6px; }
+#notes textarea { flex: 1; border: 0; padding: 12px; resize: none; font-family: inherit; line-height: 1.5; outline: none; }
+#notes textarea:focus { background: #fefefe; }
+.hl { background-color: #fde047; cursor: pointer; border-bottom: 1px dashed #ca8a04; }
+
+#toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 3000; font-size: 14px; }
+#results { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 16px 0; font-family: monospace; white-space: pre-wrap; }
+#results p { margin: 0 0 8px; }
+details.answerbox { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+details.answerbox summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+details.answerbox summary::-webkit-details-marker { display: none; }
+#answerContent { margin-top: 10px; }
+#answerContent ol { margin: 0; padding-left: 20px; }
+
+/* DRAG & DROP STYLES */
+.cardpool { background:#f1f5f9; border-radius:10px; padding:12px; margin-top: 12px; min-height: 48px; }
+.pool-vertical { display: flex; flex-direction: column; gap: 8px; }
+.card { 
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; 
+    padding: 10px 14px; display: block; cursor: grab; 
+    box-shadow: 0 1px 3px rgba(0,0,0,.05); user-select: none;
+    font-size: 14px; line-height: 1.4; width: 100%;
+    text-align: left;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+.card:hover { border-color: var(--accent); background: #fcfcfc; }
+.card:active { cursor: grabbing; }
+.card.ghost { opacity: 0.5; background: #e2e8f0; }
+.card strong { color: var(--accent); margin-right: 6px; font-weight: 700; }
+.dropzone { 
+    border: 2px dashed #cbd5e1; background: #f8fafc; border-radius: 8px; 
+    min-height: 50px; padding: 4px; 
+    display: flex; align-items: center; justify-content: center; 
+    width: 100%; margin-top: 6px; margin-bottom: 12px;
+    transition: all 0.2s;
+}
+.dropzone.over { outline: 2px solid var(--accent); background: #eff6ff; border-color: var(--accent); }
+.dropzone .card { margin: 0; width: 100%; border: 1px solid var(--accent); box-shadow: none; background: #fff; }
+
+/* Question List Styles */
+.question-row { display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px dashed var(--line); padding-bottom: 12px; align-items: flex-start; }
+.question-text { flex: 1; margin-right: 15px; }
+.match-row { display: flex; align-items: center; margin-bottom: 10px; }
+.match-row span.label { width: 40px; font-weight: bold; margin-right: 10px; text-align: right; }
+
+.info-box { border: 1px solid var(--line); background: #fafafa; padding: 10px; margin-bottom: 15px; border-radius: 6px; font-size: 0.9em; }
+.info-box ul { padding-left: 20px; margin: 5px 0; }
+
+body.dark { --bg: #0f172a; --panel: #1e293b; --line: #334155; --muted: #94a3b8; color: #e2e8f0; }
+body.dark .pane, body.dark #right { background: var(--panel); }
+body.dark #right { background: #131c2d; }
+body.dark button, body.dark .theme-toggle { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark button:hover { background: #475569; }
+body.dark .group, body.dark #results, body.dark details.answerbox, body.dark .list-box, body.dark #notes, body.dark header { background: #1e293b; border-color: #334155; }
+body.dark .practice-nav { background: #1e293b; border-top-color: #334155; }
+body.dark .q-item { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark .q-item:hover { background: #475569; }
+body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+body.dark #timer { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark #timer.paused { background: #402323; color: #f87171; border-color: #7f1d1d; }
+body.dark .hl { background-color: #a16207; border-bottom-color: #eab308; color: #fff; }
+body.dark .cardpool { background:#0f172a; }
+body.dark .card { background: #334155; border-color: #475569; color: #e2e8f0; }
+body.dark .dropzone { border-color: #475569; background: #131c2d; }
+body.dark .dropzone.over { background: #1e293b; }
+body.dark #notes textarea { background: #1e293b; color: #e2e8f0; }
+body.dark .info-box { background: #334155; border-color: #475569; }
+
+@media (max-width: 768px) {
+  .shell { flex-direction: column; }
+  #divider { display: none; }
+  #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- 1. Bottom Navigation Bar -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <!-- Group 1 -->
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <!-- Group 2 -->
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <!-- Group 3 -->
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<!-- 2. Main Content Shell -->
+<div class="shell">
+  <!-- Left Pane: Reading Passage -->
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2</h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    
+    <h3>Decision Fatigue</h3>
+    <p><em>'Decision fatigue' helps explain why ordinarily sensible people avoid making decisions or are easily persuaded to make the wrong decisions when they are tired. Yet few people are conscious of it, and researchers are only beginning to understand why it happens.</em></p>
+  
+    <h4>A</h4>
+    <p>No matter how rational people try to be, they can't make decision after decision without paying a biological price. This 'decision fatigue' is different from ordinary physical fatigue. People are not conscious of being tired, but nevertheless they are low on energy. The more choices one makes throughout the day, the harder it becomes for the brain, and eventually it looks for shortcuts: either to act impulsively instead of expending the energy to think through the possible results, or the ultimate energy saver: do nothing. Avoiding a decision often creates bigger problems in the long run, but for the moment it eases the mental strain.</p>
+
+    <h4>B</h4>
+    <p>Decision fatigue involves a phenomenon called ego depletion, a term coined by social psychologist Roy F. Baumeister. His research demonstrated that there is a finite store of mental stamina for exerting self-control. For example, when people fended off the temptation to eat freshly baked biscuits, they were then less able to resist other temptations. When they tried to resist the urge to cry during a sad movie, afterwards they gave up more quickly on tasks requiring self-discipline, such as working on a geometry puzzle. The experiments confirmed the 19th-century notion of willpower being like a muscle that became tired with use; something which could be conserved by avoiding temptation.</p>
+
+    <h4>C</h4>
+    <p>Decision fatigue leaves people vulnerable to marketers who know how to time their sales, as Jonathan Levav demonstrated. He visited a tailor to have a suit made for his wedding and began going through the choices of fabric, buttons, and so forth, and when he got through the third pile of fabric samples. Levav recalls, "I couldn't tell the choices apart anymore. After a while my only response to the tailor became, 'What do you recommend?'" Levav put the experience to use in an experiment conducted at German car dealerships, where real customers had to choose among four styles of gearshift knobs, 25 configurations of the engine and gearbox, and a palette of 56 colours for the interior. As they started picking features, customers would carefully weigh the choices, but as decision fatigue set in they would start settling for the default option. By manipulating the order of the car buyers' choices, the researchers found that customers would end up paying more.</p>
+
+    <h4>D</h4>
+    <p>Similarly, sweet snacks are featured prominently at cash registers at most supermarkets. With their willpower reduced after shopping, people are especially vulnerable to sweet drinks and snacks. While supermarkets figured this out a long time ago, only recently did researchers discover why. Baumeister's research team tested the notion that people could build up willpower by first indulging in pleasure. They found that a delicious, thick milkshake strengthened willpower by helping people perform better than expected on their next task. However, the experiment also included a control group who drank a tasteless low-fat dairy beverage. It provided them with no pleasure, yet it produced similar improvements in self-control. Baumeister concluded that even the tasteless drink had worked because the brain, like the rest of the body, derived energy from glucose, the simple sugar manufactured from all kinds of foods, including milk.</p>
+
+    <h4>E</h4>
+    <p>To establish cause and effect, researchers at Baumeister's lab tried refueling the brain in experiments involving lemonade mixed either with sugar or with a diet sweetener. The sugary lemonade provided a burst of glucose, the effects of which could be observed immediately in the lab; the sugarless sweeteners tasted similar but did not contain the glucose. Again and again, the sugar restored willpower, but the artificial sweetener had no effect. The glucose would mitigate the ego depletion and sometimes completely reverse it, improving self-control and the quality of decisions: the subjects resisted irrational bias when making choices and, when making financial decisions, they were more likely to choose the better long-term strategy instead of going for a quick payoff.</p>
+
+    <h4>F</h4>
+    <p>However, some brain researchers had reservations about the glucose connection. "Todd Heatherton, a pioneer of social neuroscience, believed in ego depletion but didn't see how this process could be caused simply by variations in glucose levels." To observe the process, and to see if it could be reversed by glucose, Heatherton's team recorded images of the brains of 45 people who were on a low-calorie diet as they reacted to pictures of food. Next, these dieters watched a comedy video while forcing themselves to suppress their laughter—thereby draining mental energy and inducing ego depletion. When they were again shown pictures of food, further brain scans revealed more activity in the brain's reward centre and a decrease in the amygdala, which helps control impulses. The food's appeal, in other words, registered more strongly while impulse control weakened. What surprised Heatherton was that administering glucose completely reversed the brain changes brought about by ego depletion.</p>
+
+    <h4>G</h4>
+    <p>"Good decision-making is not a trait of the person," Baumeister says. "It's a state that fluctuates." His studies show that people with the best self-control are the ones who avoid temptations, and who establish habits that eliminate the mental effort of making choices. Instead of counting on willpower all day, they conserve it so that it's available for important decisions. "Even the wisest people won't make good choices when they're not rested and their glucose is low," Baumeister notes. If a decision must be made late in the afternoon or in the evening, they know not to do it on an empty stomach. The best decision-makers, according to Baumeister, "are the ones who know when not to trust themselves."</p>
+    
+    <p>&nbsp;</p> <!-- Final padding -->
+  </section>
+
+  <!-- Draggable Divider -->
+  <div id="divider" title="Drag to resize"></div>
+
+  <!-- Right Pane: Questions and Controls -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- QUESTION GROUP 1: SECTION MATCHING (DRAG & DROP) -->
+    <div class="group">
+      <h4>Questions 14–19</h4>
+      <p>Reading Passage 2 has seven sections, <strong>A–G</strong>.</p>
+      <p>Which section contains the following information?</p>
+      <p><em>Drag the correct section letter (A-G) to the box next to the statement.</em></p>
+
+      <!-- Draggable Options Pool (Cloneable because multiple items can come from same section) -->
+      <div class="cardpool pool-vertical" id="pool-sections">
+        <div class="card" draggable="true" id="card-A" data-value="A" data-clone="true"><strong>A</strong></div>
+        <div class="card" draggable="true" id="card-B" data-value="B" data-clone="true"><strong>B</strong></div>
+        <div class="card" draggable="true" id="card-C" data-value="C" data-clone="true"><strong>C</strong></div>
+        <div class="card" draggable="true" id="card-D" data-value="D" data-clone="true"><strong>D</strong></div>
+        <div class="card" draggable="true" id="card-E" data-value="E" data-clone="true"><strong>E</strong></div>
+        <div class="card" draggable="true" id="card-F" data-value="F" data-clone="true"><strong>F</strong></div>
+        <div class="card" draggable="true" id="card-G" data-value="G" data-clone="true"><strong>G</strong></div>
+      </div>
+
+      <hr style="border:0; border-top:1px dashed var(--line); margin:20px 0;">
+
+      <div style="margin-bottom:10px;">
+        <p><a id="q14-anchor"></a><strong>14</strong> research in which two substances that tasted alike had different effects on the subjects</p>
+        <span class="dropzone" data-target="q14"></span>
+      </div>
+      <div style="margin-bottom:10px;">
+        <p><a id="q15-anchor"></a><strong>15</strong> an instance where controlling emotions while viewing something upsetting led to a lack of perseverance in other activities</p>
+        <span class="dropzone" data-target="q15"></span>
+      </div>
+      <div style="margin-bottom:10px;">
+        <p><a id="q16-anchor"></a><strong>16</strong> an explanation of why it is important to eat something before making a decision at the end of the day</p>
+        <span class="dropzone" data-target="q16"></span>
+      </div>
+      <div style="margin-bottom:10px;">
+        <p><a id="q17-anchor"></a><strong>17</strong> a reference to a researcher who was not initially convinced of the effect of glucose</p>
+        <span class="dropzone" data-target="q17"></span>
+      </div>
+      <div style="margin-bottom:10px;">
+        <p><a id="q18-anchor"></a><strong>18</strong> an account of research that mirrored an experience the researcher had in his personal life</p>
+        <span class="dropzone" data-target="q18"></span>
+      </div>
+      <div style="margin-bottom:10px;">
+        <p><a id="q19-anchor"></a><strong>19</strong> an example of how the location of products in a shop can be used to take advantage of 'decision fatigue'</p>
+        <span class="dropzone" data-target="q19"></span>
+      </div>
+    </div>
+
+    <!-- QUESTION GROUP 2: SUMMARY COMPLETION -->
+    <div class="group">
+      <h4>Questions 20–22</h4>
+      <p>Complete the summary below.</p>
+      <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+      
+      <h3>The biological price of decision-making</h3>
+      <p>Even when people attempt to be <a id="q20-anchor"></a><strong>20</strong> <input class="blank" type="text" name="q20">, they experience 'decision fatigue' if they make several decisions in a row. They are not aware of how <a id="q21-anchor"></a><strong>21</strong> <input class="blank" type="text" name="q21"> they are, but it is increasingly more difficult for their brains to make decisions as the day progresses. After making many decisions in one day, the brain seeks <a id="q22-anchor"></a><strong>22</strong> <input class="blank" type="text" name="q22"> in order to conserve energy. The person may fail to consider the consequences of their decision or not make a decision at all. Avoiding decisions reduces the immediate strain but can cause difficulties later.</p>
+    </div>
+
+    <!-- QUESTION GROUP 3: MATCHING RESEARCHERS (DRAG & DROP) -->
+    <div class="group">
+      <h4>Questions 23–26</h4>
+      <p>Look at the following statements (Questions 23–26) and the list of researchers below.</p>
+      <p>Match each statement with the correct researcher, <strong>A, B or C</strong>.</p>
+      <p><em>Drag the correct researcher block to the box below each statement.</em></p>
+
+      <div class="info-box">
+        <strong>List of Researchers</strong>
+        <ul style="list-style:none; padding-left:10px;">
+          <li><strong>A</strong> Roy F. Baumeister</li>
+          <li><strong>B</strong> Jonathan Levav</li>
+          <li><strong>C</strong> Todd Heatherton</li>
+        </ul>
+      </div>
+
+      <!-- Draggable Options Pool (Cloneable) -->
+      <div class="cardpool pool-vertical" id="pool-researchers">
+        <div class="card" draggable="true" id="res-A" data-value="A" data-clone="true"><strong>A</strong> Roy F. Baumeister</div>
+        <div class="card" draggable="true" id="res-B" data-value="B" data-clone="true"><strong>B</strong> Jonathan Levav</div>
+        <div class="card" draggable="true" id="res-C" data-value="C" data-clone="true"><strong>C</strong> Todd Heatherton</div>
+      </div>
+
+      <hr style="border:0; border-top:1px dashed var(--line); margin:20px 0;">
+
+      <div style="margin-bottom:10px;">
+        <p><a id="q23-anchor"></a><strong>23</strong> The energy people have for exercising willpower is limited.</p>
+        <span class="dropzone" data-target="q23"></span>
+      </div>
+      <div style="margin-bottom:10px;">
+        <p><a id="q24-anchor"></a><strong>24</strong> Even an unpleasant substance had a positive effect on willpower.</p>
+        <span class="dropzone" data-target="q24"></span>
+      </div>
+      <div style="margin-bottom:10px;">
+        <p><a id="q25-anchor"></a><strong>25</strong> People's responses to images changed after having to exercise self-control.</p>
+        <span class="dropzone" data-target="q25"></span>
+      </div>
+      <div style="margin-bottom:10px;">
+        <p><a id="q26-anchor"></a><strong>26</strong> The sequence of options presented to consumers could be used to the consumers' disadvantage.</p>
+        <span class="dropzone" data-target="q26"></span>
+      </div>
+    </div>
+
+    <!-- Controls and Results -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<!-- 3. UI Helper Elements -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// --- MASTER JAVASCRIPT TEMPLATE ---
+
+// 1. STATE & ANSWERS
+const answers = {
+    q14: "e",
+    q15: "b",
+    q16: "g",
+    q17: "f",
+    q18: "c",
+    q19: "d",
+    q20: "rational",
+    q21: "tired",
+    q22: "shortcuts",
+    q23: "a",
+    q24: "a",
+    q25: "c",
+    q26: "b"
+};
+
+// 2. UI & INTERACTIVITY (Highlighter, Timer, Dark Mode)
+let timerSeconds = 0, timerInterval;
+let isTimerPaused = false;
+const timerEl = document.getElementById('timer');
+
+function toggleTimer() {
+    isTimerPaused = !isTimerPaused;
+    timerEl.classList.toggle('paused', isTimerPaused);
+    showToast(isTimerPaused ? 'Timer paused' : 'Timer resumed');
+}
+
+setInterval(() => {
+    if (!isTimerPaused) {
+        timerSeconds++;
+        const minutes = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+        const seconds = String(timerSeconds % 60).padStart(2, '0');
+        timerEl.textContent = `${minutes}:${seconds}`;
+    }
+}, 1000);
+
+function toggleDarkMode() {
+    document.body.classList.toggle('dark-mode');
+    document.body.classList.toggle('dark');
+    const isDark = document.body.classList.contains('dark-mode');
+    localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
+    document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️';
+}
+
+function scrollToElement(id) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function showToast(msg) {
+    const toastEl = document.getElementById('toast');
+    toastEl.textContent = msg;
+    toastEl.style.display = 'block';
+    setTimeout(() => { toastEl.style.display = 'none'; }, 1500);
+}
+
+// 3. HIGHLIGHTING & NOTE TAKING LOGIC - MODIFIED FOR RIGHT PANE
+const selbar = document.getElementById('selbar');
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+
+// Handle Text Selection - Now works in both left and right panes
+document.addEventListener('mouseup', (e) => {
+    const sel = window.getSelection();
+    // Show toolbar if text is selected within either pane (#left or #right)
+    const leftPane = document.getElementById('left');
+    const rightPane = document.getElementById('right');
+    
+    if (sel.toString().length > 0 && 
+        (leftPane.contains(sel.anchorNode) || rightPane.contains(sel.anchorNode))) {
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        selbar.style.top = `${rect.top + window.scrollY - 40}px`;
+        selbar.style.left = `${rect.left + rect.width / 2}px`;
+        selbar.style.display = 'flex';
+    } else if (!selbar.contains(e.target)) {
+        selbar.style.display = 'none';
+    }
+});
+
+document.getElementById('btnHL').onclick = () => {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const span = document.createElement('span');
+    span.className = 'hl';
+    try {
+        range.surroundContents(span);
+        sel.removeAllRanges();
+        selbar.style.display = 'none';
+    } catch (e) {
+        showToast("Cannot highlight across different blocks.");
+    }
+};
+
+document.getElementById('btnUH').onclick = () => {
+    const sel = window.getSelection();
+    const node = sel.anchorNode;
+    
+    // Find the closest parent with 'hl' class
+    let hlElement = null;
+    if (node) {
+        if (node.nodeType === Node.TEXT_NODE && node.parentElement.classList.contains('hl')) {
+            hlElement = node.parentElement;
+        } else if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains('hl')) {
+            hlElement = node;
+        } else {
+            // Try to find a parent with 'hl' class
+            let current = node;
+            while (current && current !== document.body) {
+                if (current.classList && current.classList.contains('hl')) {
+                    hlElement = current;
+                    break;
+                }
+                current = current.parentElement;
+            }
+        }
+    }
+    
+    if (hlElement) {
+        const text = document.createTextNode(hlElement.textContent);
+        hlElement.parentNode.replaceChild(text, hlElement);
+        sel.removeAllRanges();
+        selbar.style.display = 'none';
+    } else {
+        showToast("Select a highlighted area to remove.");
+    }
+};
+
+document.getElementById('btnNote').onclick = () => {
+    const sel = window.getSelection();
+    if (sel.toString().length > 0) {
+        const selectedText = sel.toString();
+        noteArea.value += (noteArea.value ? '\n\n' : '') + `"${selectedText}"`;
+    }
+    toggleNotes();
+    selbar.style.display = 'none';
+};
+
+function toggleNotes() {
+    notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+
+document.getElementById('btnClose').onclick = toggleNotes;
+document.getElementById('btnCopy').onclick = () => {
+    noteArea.select();
+    document.execCommand('copy');
+    showToast('Notes copied to clipboard');
+};
+
+// 4. DRAG AND DROP LOGIC
+document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', card.id);
+        setTimeout(() => card.classList.add('ghost'), 0);
+    });
+    card.addEventListener('dragend', () => card.classList.remove('ghost'));
+});
+
+document.querySelectorAll('.dropzone').forEach(zone => {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('over');
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        
+        if (!draggedCard) return;
+
+        const originPool = document.getElementById(draggedCard.dataset.originPool);
+        const cardToDrop = draggedCard.dataset.clone === 'true' ? draggedCard.cloneNode(true) : draggedCard;
+        
+        // Return existing card to its pool
+        if (zone.children.length > 0 && zone.children[0].classList.contains('card')) {
+            const existingCard = zone.children[0];
+            const itsOriginPool = document.getElementById(existingCard.dataset.originPool);
+            if (itsOriginPool) itsOriginPool.appendChild(existingCard);
+        }
+
+        zone.innerHTML = '';
+        zone.appendChild(cardToDrop);
+        
+        // Re-attach drag events for cloned cards
+        if (draggedCard.dataset.clone === 'true') {
+            cardToDrop.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', cardToDrop.id);
+                setTimeout(() => cardToDrop.classList.add('ghost'), 0);
+            });
+            cardToDrop.addEventListener('dragend', () => cardToDrop.classList.remove('ghost'));
+            
+            // Generate unique ID for the clone
+            cardToDrop.id = 'clone-' + Math.random().toString(36).substr(2, 9);
+            cardToDrop.dataset.originPool = draggedCard.dataset.originPool;
+        }
+
+        updateAnswerStatus();
+    });
+});
+
+document.querySelectorAll('.cardpool').forEach(pool => {
+    pool.addEventListener('dragover', e => e.preventDefault());
+    pool.addEventListener('drop', e => {
+        e.preventDefault();
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        if (draggedCard && draggedCard.parentElement.classList.contains('dropzone')) {
+            const oldZone = draggedCard.parentElement;
+            
+            // Logic: if it's a clone, destroy it. If it's unique, append back to pool.
+            if (draggedCard.dataset.clone === 'true') {
+                draggedCard.remove();
+            } else {
+                pool.appendChild(draggedCard);
+            }
+            
+            oldZone.innerHTML = ''; // Clear the dropzone
+            updateAnswerStatus();
+        }
+    });
+});
+
+// 5. GRADING & STATE MANAGEMENT
+function grade() {
+    let total = 0, correct = 0, lines = [];
+    
+    Object.keys(answers).forEach(qKey => {
+        const textInput = document.querySelector(`input[name="${qKey}"][type="text"]`);
+        const radioInput = document.querySelector(`input[name="${qKey}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qKey}"]`);
+        let userAnswer = '';
+        
+        if (textInput) {
+            userAnswer = textInput.value.trim();
+        } else if (radioInput) {
+            userAnswer = radioInput.value;
+        } else if (dropzone) {
+            const card = dropzone.querySelector('.card');
+            userAnswer = card ? card.dataset.value : '';
+        }
+        
+        const isCorrect = userAnswer.toLowerCase() === answers[qKey].toLowerCase();
+        
+        total++;
+        if (isCorrect) correct++;
+        
+        let resultLine = `${qKey.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : `❌ (Correct: ${answers[qKey]})`}`;
+        lines.push(resultLine);
+    });
+
+    const acc = total ? Math.round(100 * correct / total) : 0;
+    document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p><pre>${lines.join('\n')}</pre>`;
+    document.getElementById('answerContent').innerHTML = `<ol start="14">${Object.entries(answers).map(([key, val]) => `<li><strong>${key.replace('q','')}:</strong> ${val}</li>`).join('')}</ol>`;
+    document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+
+function resetForm() {
+    document.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
+    document.querySelectorAll('input[type="radio"]').forEach(input => input.checked = false);
+    document.querySelectorAll('.dropzone').forEach(zone => {
+        if (zone.children.length > 0) {
+            const card = zone.children[0];
+            const originPool = document.getElementById(card.dataset.originPool);
+            if (originPool && card.dataset.clone !== 'true') {
+                originPool.appendChild(card);
+            } else {
+                card.remove(); 
+            }
+        }
+        zone.innerHTML = '';
+    });
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('answerContent').innerHTML = '';
+    document.querySelector('#answerBox .badge').textContent = 'hidden';
+    updateAnswerStatus();
+    showToast('Form has been reset');
+}
+
+function updateAnswerStatus() {
+    document.querySelectorAll('.q-item').forEach(item => {
+        const qNum = item.id.replace('-nav', '');
+        const textInput = document.querySelector(`input[name="${qNum}"][type="text"]`);
+        const radioInput = document.querySelector(`input[name="${qNum}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qNum}"]`);
+        let answered = false;
+        
+        if (textInput) answered = textInput.value.trim() !== '';
+        if (radioInput) answered = true;
+        if (dropzone) answered = !!dropzone.querySelector('.card');
+        
+        item.classList.toggle('answered', answered);
+    });
+}
+
+// 6. INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        toggleDarkMode();
+    }
+    document.querySelectorAll('input, .dropzone').forEach(el => {
+        el.addEventListener('input', updateAnswerStatus);
+        el.addEventListener('change', updateAnswerStatus);
+        el.addEventListener('drop', updateAnswerStatus);
+    });
+    
+    // Setup origin pool data for cards
+    document.querySelectorAll('.card').forEach(card => {
+        if (card.parentElement.classList.contains('cardpool')) {
+            card.dataset.originPool = card.parentElement.id;
+        }
+    });
+
+    // Load LMS script
+    if (!window.practicePageEnhancer) {
+        const script = document.createElement('script');
+        script.src = '../../js/practice-page-enhancer.js';
+        script.onload = () => console.log('Enhancer loaded.');
+        script.onerror = () => console.error('Failed to load enhancer.');
+        document.head.appendChild(script);
+    }
+});
+</script>
+
+</body>
+</html>
