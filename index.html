@@ -55,7 +55,8 @@
         <div id="browse-view" class="view hero-panel hero-section">
             <div class="browse-title-bar hero-panel__header">
                 <button class="browse-title-trigger" id="browse-title-trigger" type="button" aria-haspopup="true"
-                    aria-expanded="false" title="列表偏好">📚<span class="browse-title-dot" aria-hidden="true"></span></button>
+                    aria-expanded="false" title="列表偏好">📚<span class="browse-title-dot"
+                        aria-hidden="true"></span></button>
                 <h2 id="browse-title">题库浏览</h2>
                 <div class="browse-preference-panel" id="browse-preference-panel" hidden>
                     <label class="browse-preference-option">
@@ -486,6 +487,195 @@
             </div>
         </div>
     </div>
+
+    <!-- 首次开源许可弹窗 (Claude 暖色极简设计风格) -->
+    <style>
+        /* ── License Modal ── */
+        #license-modal {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(245, 244, 239, 0.88);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.35s ease;
+            z-index: 9999;
+        }
+
+        #license-modal.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #license-modal .lm-card {
+            max-width: 480px;
+            width: calc(100% - 48px);
+            background: #FFFEFB;
+            border: 1px solid rgba(0, 0, 0, 0.07);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow:
+                0 2px 4px rgba(0, 0, 0, 0.04),
+                0 8px 24px rgba(0, 0, 0, 0.07),
+                0 24px 48px rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            box-sizing: border-box;
+            transform: translateY(8px);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        #license-modal.show .lm-card {
+            transform: translateY(0);
+        }
+
+        #license-modal .lm-title {
+            color: #1A1614;
+            font-size: 22px;
+            line-height: 32px;
+            font-weight: 600;
+            margin: 0 0 24px 0;
+            letter-spacing: -0.01em;
+        }
+
+        #license-modal .lm-body {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            text-align: left;
+        }
+
+        #license-modal .lm-body p {
+            margin: 0;
+            color: #5A534E;
+            font-size: 15px;
+            line-height: 24px;
+        }
+
+        #license-modal .lm-body .lm-warning {
+            color: #C06025;
+            font-weight: 600;
+        }
+
+        #license-modal .lm-body strong {
+            color: #1A1614;
+            font-weight: 600;
+        }
+
+        #license-modal .lm-info-box {
+            padding: 14px 16px;
+            background: #F8F5F0;
+            border: 1px solid #EDE7DC;
+            border-radius: 10px;
+        }
+
+        #license-modal .lm-footer {
+            margin-top: 24px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
+        #license-modal .lm-btn {
+            background: #1A1614;
+            color: #FFFEFB;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 40px;
+            font-size: 15px;
+            line-height: 24px;
+            font-weight: 500;
+            cursor: pointer;
+            letter-spacing: 0.01em;
+            /* layered shadow for depth */
+            box-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.08) inset,
+                0 2px 4px rgba(0, 0, 0, 0.20),
+                0 4px 8px rgba(0, 0, 0, 0.10);
+            transition:
+                background 0.18s ease,
+                box-shadow 0.18s ease,
+                transform 0.12s ease;
+        }
+
+        #license-modal .lm-btn:hover {
+            background: #2E2521;
+            box-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.10) inset,
+                0 4px 10px rgba(0, 0, 0, 0.22),
+                0 8px 20px rgba(0, 0, 0, 0.12);
+            transform: translateY(-1px);
+        }
+
+        #license-modal .lm-btn:active {
+            background: #0F0C0B;
+            box-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.05) inset,
+                0 1px 3px rgba(0, 0, 0, 0.20);
+            transform: translateY(0);
+        }
+    </style>
+    <div id="license-modal">
+        <div class="lm-card">
+            <h2 class="lm-title">开源项目使用须知</h2>
+            <div class="lm-body">
+                <p>
+                    感谢使用！本项目是自由开源软件，采用 <strong>GPL-3.0 License</strong> 发布。
+                </p>
+                <p class="lm-warning">
+                    我们明确反对任何形式的倒卖、改名后二次分发并牟利等行为。
+                </p>
+                <p>
+                    本项目的初衷是自由使用、学习与改进，而不是作为倒卖工具获取不正当收益。
+                </p>
+                <div class="lm-info-box">
+                    <p>
+                        任何分发、修改或再发布行为，都必须遵守 GPL-3.0 协议，包括<strong>公开源码、保留开源许可，并尊重用户的自由</strong>。
+                    </p>
+                </div>
+            </div>
+            <div class="lm-footer">
+                <button class="lm-btn" onclick="acceptGplLicense()">我已了解</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        window.acceptGplLicense = function () {
+            try {
+                localStorage.setItem('hasSeenGplLicense', 'true');
+            } catch (e) {
+                console.warn('LocalStorage error:', e);
+            }
+            var modal = document.getElementById('license-modal');
+            if (modal) {
+                // Use opacity/pointer-events only — never touch display
+                modal.classList.remove('show');
+            }
+        };
+
+        // Show only when not yet accepted
+        (function () {
+            try {
+                if (!localStorage.getItem('hasSeenGplLicense')) {
+                    var modal = document.getElementById('license-modal');
+                    if (modal) {
+                        // Use rAF so the CSS transition fires after initial render
+                        requestAnimationFrame(function () {
+                            requestAnimationFrame(function () { modal.classList.add('show'); });
+                        });
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        })();
+    </script>
 </body>
 
 </html>
