@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P1 – Ahead of its time</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+:root { 
+  --line: #e5e7eb; --bg: #f6f7fb; --panel: #fff; --accent: #3b82f6; 
+  --muted: #6b7280; --shadow: 0 6px 20px rgba(0,0,0,.12); 
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { 
+  margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+  background: var(--bg); padding-bottom: 70px; 
+}
+.shell { display: flex; height: 100vh; width: 100%; }
+.pane { background: var(--panel); overflow: auto; padding: 20px; }
+#left { flex: 0 0 50%; min-width: 280px; }
+#right { flex: 1 1 auto; min-width: 320px; background: #fbfbff; border-left: 1px solid var(--line); }
+#divider { flex: 0 0 8px; background: linear-gradient(90deg, #e5e7eb, #d1d5db); cursor: ew-resize; position: relative; z-index: 5; user-select: none; }
+h2, h3, h4 { margin: 0 0 10px; }
+#left p { margin: 0 0 12px; line-height: 1.6; }
+.group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+.blank { border:none; border-bottom:1px solid #9ca3af; padding:4px 2px; font-size:1em; background:transparent; width: 120px; margin: 0 4px; }
+.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+button { padding: 8px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+button:hover { background: #f8fafc; border-color: #cbd5e1; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.primary:hover { background: #2563eb; }
+.practice-nav { background: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 5px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+.practice-nav .title { font-weight: 600; color: var(--muted); }
+.practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; }
+.practice-nav .q-item:hover { background: #f1f5f9; border-color: var(--accent); }
+.practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+.practice-nav .q-item.active { background: var(--accent); color: #fff; }
+.practice-nav .controls { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+#timer { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.2s; min-width: 70px; text-align: center; font-size: 14px; font-weight: bold; }
+#timer:hover { background: #f1f5f9; border-color: var(--accent); }
+#timer.paused { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+.theme-toggle { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; width: 32px; height: 32px; font-size: 16px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+.theme-toggle:hover { background: var(--accent); color: #fff; border-color: var(--accent); transform: scale(1.05); }
+#selbar { position: absolute; display: none; z-index: 2000; background: #111; color: #fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+#selbar button { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+#selbar button:hover { border-color: #fff; }
+#notes { position: fixed; right: 12px; bottom: 85px; width: 320px; height: 42vh; background: #fff; border: 1px solid var(--line); border-radius: 12px; display: none; flex-direction: column; z-index: 1500; box-shadow: var(--shadow); }
+#notes header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+#notes textarea { flex: 1; border: 0; padding: 10px; resize: none; font-size: 14px; line-height: 1.5; background-color: inherit; color: inherit; }
+#toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 3000; font-size: 14px; }
+#results { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 16px 0; font-family: monospace; white-space: pre-wrap; }
+#results p { margin: 0 0 8px; }
+details.answerbox { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+details.answerbox summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+details.answerbox summary::-webkit-details-marker { display: none; }
+#answerContent { margin-top: 10px; }
+#answerContent ol { margin: 0; padding-left: 20px; }
+.hl { background: #fff3a3; }
+.cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; margin-top: 12px; min-height: 48px; }
+.card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 12px; display:inline-flex; align-items:center; cursor:grab; box-shadow:0 2px 4px rgba(0,0,0,.05); user-select:none; }
+.card.ghost { opacity: 0.4; }
+.dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:42px; padding:4px; display:inline-flex; align-items:center; justify-content:center; width:42px; height: 42px; vertical-align:middle; margin-right: 8px; }
+.dropzone.over { outline: 2px solid var(--accent); background: #eff6ff; }
+.dropzone .card { box-shadow: none; }
+body.dark { --bg: #0f172a; --panel: #1e293b; --line: #334155; --muted: #94a3b8; color: #e2e8f0; }
+body.dark .pane, body.dark #right { background: var(--panel); }
+body.dark #right { background: #131c2d; }
+body.dark button, body.dark .theme-toggle { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark button:hover { background: #475569; }
+body.dark .group, body.dark #results, body.dark details.answerbox, body.dark .list-box, body.dark #notes { background: #1e293b; border-color: #334155; }
+body.dark .practice-nav { background: #1e293b; border-top-color: #334155; }
+body.dark .q-item { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark .q-item:hover { background: #475569; }
+body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+body.dark #timer { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark #timer.paused { background: #402323; color: #f87171; border-color: #7f1d1d; }
+body.dark .blank { color: #e2e8f0; border-bottom-color: #64748b; }
+body.dark .hl { background: #b45309; }
+body.dark .cardpool { background:#0f172a; }
+body.dark .card { background: #334155; border-color: #475569; }
+body.dark .dropzone { border-color: #475569; background: #131c2d; }
+body.dark .dropzone.over { background: #1e293b; }
+body.dark #notes textarea { background: #1e293b; color: #e2e8f0; }
+@media (max-width: 768px) {
+  .shell { flex-direction: column; }
+  #divider { display: none; }
+  #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+}
+/* New styles for page watermark */
+#watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 2em; color: rgba(150, 150, 150, 0.25); pointer-events: none; z-index: 0; white-space: nowrap; font-style: italic; user-select: none; }
+/* Override specific to this page */
+.question-row { display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px dashed var(--line); padding-bottom: 12px; align-items: flex-start; }
+.question-text { flex: 1; margin-right: 15px; }
+.radio-group { display: flex; gap: 12px; flex-shrink: 0; }
+.radio-group label { font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.flow-chart { display: flex; flex-direction: column; align-items: center; gap: 15px; max-width: 600px; margin: 20px auto; }
+.flow-box { border: 2px solid #333; padding: 10px 15px; width: 100%; text-align: center; background: #fff; border-radius: 4px; position: relative; }
+.flow-arrow { font-size: 24px; color: #333; margin: -5px 0; }
+body.dark .flow-box { background: #1e293b; border-color: #94a3b8; color: #e2e8f0; }
+body.dark .flow-arrow { color: #94a3b8; }
+ul.notes-list { padding-left: 20px; line-height: 1.8; }
+ul.notes-list li { margin-bottom: 8px; }
+/* Style for footer note in answer box */
+.footer-note { margin-top: 15px; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 0.85em; color: var(--muted); text-align: center; margin-bottom: 40px; }
+</style>
+</head>
+<body>
+
+<!-- Watermark -->
+<div id="watermark">本机考版本为免费发放，如果您被收费请立即退款并举报</div>
+
+<!-- 1. Bottom Navigation Bar -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <!-- Group 1 -->
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q3-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q4-anchor')">4</div>
+    <!-- Group 2 -->
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q5-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q7-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q9-anchor')">9</div>
+    <!-- Group 3 -->
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q10-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q11-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<!-- 2. Main Content Shell -->
+<div class="shell">
+  <!-- Left Pane: Reading Passage -->
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 1</h2>
+    <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
+    
+    <h3>Ahead of its time</h3>
+    <p><em>A chance discovery in New Zealand has challenged the country's recorded history.</em></p>
+  
+    <p>One October afternoon, a young New Zealander, Sam Tobin, called his dogs and went for a walk down to the nearby Ruamahanga River. Having been very high for days, the river had at last fallen, and Tobin was eager to see what changes the floods had brought. The family farm borders the river, and a four-metre-high flood bank testifies to its natural tendency to flood.</p>
+
+    <p>Tobin stepped out onto a broad shoulder of river sand, where he noticed what he initially took to be a whitish rock, lit by the sun. Then, getting closer, he realised it was a bone. Such a thing was not uncommon in these parts - he had often come home with fragments, or even whole skeletons, of cows and sheep. But as he scraped aside a stone he realised that it was a human bone, something quite new in his experience. As he picked it up, he saw it was a skull, discoloured with age.</p>
+
+    <p>Tobin replaced the skull and hurried home to tell his mother what the river had delivered to their doorstep. It would prove to be a spectacular find, setting in motion an investigation by some of the country's most respected specialists, and ultimately challenging our most firmly held assertions about the human settlement of New Zealand.</p>
+
+    <p>The police were immediately called, but despite a thorough search they could find nothing that might shed light on the identity of the Ruamahanga skull, or the circumstances of its sudden appearance. The skull was then taken north to be examined by forensic pathologist Dr Fetvis at Auckland Hospital. Despite being hampered by its damaged and incomplete condition - the jawbone and lower left portion of the cranium were missing - Dr Fetvis determined that the skull was that of a female. He'd then consulted with a colleague, Dr Koelmeyer, who believed that the deterioration of the bone placed the time of dead 'before living memory' and, most significantly as it would turn out, the skull appeared to be European in origin.</p>
+
+    <p>Wellington-based forensic anthropologist Dr Watt also examined the skull, and suggested it belonged to a 40–45-year-old. He believed that it could be the remains of an old farm burial, but was not certain, and proposed the use of radiocarbon dating to make sure it wasn't a recent death. As a result, the Institute of Geological and Nuclear Sciences (GNS) in Lower Hutt was contacted, and provided with a sample of bone that had originated in the top of the skull. In a little over three weeks, the seemingly astonishing results from the GNS laboratory came back. Cutting through the bewildering complexity of the scientific analysis was a single line reading: conventional radiocarbon age approximately 296 years. This was staggering, for the skull was about 200 years older than Dr Koelmeyer had believed.</p>
+
+    <p>Of course, a skull of this age wasn't particularly unusual in New Zealand. The Maori people have been living in the country for at least 800 years and scientists frequently come across human remains of considerable age. The fascinating question, however, was how a skull of this race, let alone this gender, had reached these remote islands in the South Pacific at such a time, long before the arrival of the explorer Captain Cook in 1769, and perhaps even before the very first European landfall - the fleeting visit of the Dutch explorer Tasman in 1642 - neither of whom had women among their crews.</p>
+
+    <p>The first known European women in the Pacific came with a doomed colonising venture which sailed from Peru in 1595 under the command of Spanish captain Mendana. However, it is unlikely the Ruamahanga skull originated from this expedition because no evidence of Mendana's ships has ever been found in New Zealand, while a team of archaeologists working in the Solomon Islands in 1979 did discover the remains of European vessels dating from the 16th century.</p>
+
+    <p>Two centuries were to pass before the first recorded European females arrived in New Zealand, both having escaped from prison in Australia. Kathleen Hagerty and Charlotte Edgar are known to have reached the country in 1806. How then do we account for the Ruamahanga skull, which appears to be about 100 years older than that? It is impossible to say with certainty, but the most likely explanation is that a Spanish or Portuguese trading ship was washed onto these wild shores as a result of a shipwreck and a woman got ashore. Implausible, perhaps, but the Ruamahanga skull, today resting in the Wellington Museum, could be the kind of concrete evidence that demands such a drastic re-evaluation of history.</p>
+    
+    <p>&nbsp;</p> <!-- Final padding -->
+  </section>
+
+  <!-- Draggable Divider -->
+  <div id="divider" title="Drag to resize"></div>
+
+  <!-- Right Pane: Questions and Controls -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- QUESTION GROUP 1: TRUE/FALSE/NOT GIVEN -->
+    <div class="group">
+      <h4>Questions 1–4</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 1?</p>
+      <p><em>In boxes 1–4 on your answer sheet, write</em></p>
+      <ul style="list-style:none; padding-left:0; font-weight:bold; font-size:0.9em;">
+        <li>TRUE <span style="font-weight:normal; margin-left:45px;">if the statement agrees with the information</span></li>
+        <li>FALSE <span style="font-weight:normal; margin-left:38px;">if the statement contradicts the information</span></li>
+        <li>NOT GIVEN <span style="font-weight:normal; margin-left:8px;">if there is no information on this</span></li>
+      </ul>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q1-anchor"></a><b>1</b> The Ruamahanga River often floods.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q1" value="true"> True</label>
+            <label><input type="radio" name="q1" value="false"> False</label>
+            <label><input type="radio" name="q1" value="not given"> NG</label>
+        </div>
+      </div>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q2-anchor"></a><b>2</b> When Tobin first found the object in the river, he mistook it for something else.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q2" value="true"> True</label>
+            <label><input type="radio" name="q2" value="false"> False</label>
+            <label><input type="radio" name="q2" value="not given"> NG</label>
+        </div>
+      </div>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q3-anchor"></a><b>3</b> Tobin could not decide what part of the body the bone came from.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q3" value="true"> True</label>
+            <label><input type="radio" name="q3" value="false"> False</label>
+            <label><input type="radio" name="q3" value="not given"> NG</label>
+        </div>
+      </div>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q4-anchor"></a><b>4</b> Tobin's mother was surprised that the skull caused debate among specialists.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q4" value="true"> True</label>
+            <label><input type="radio" name="q4" value="false"> False</label>
+            <label><input type="radio" name="q4" value="not given"> NG</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUESTION GROUP 2: FLOW-CHART COMPLETION -->
+    <div class="group">
+      <h4>Questions 5–9</h4>
+      <p>Complete the flow-chart below.</p>
+      <p>Choose <strong>NO MORE THAN TWO WORDS AND/OR A NUMBER</strong> from the passage for each answer.</p>
+      
+      <h3 style="text-align:center;">The events after the river flooded</h3>
+      <div class="flow-chart">
+        <div class="flow-box">Tobin found a human skull.</div>
+        <div class="flow-arrow">⬇</div>
+        <div class="flow-box">The <a id="q5-anchor"></a><b>5</b> <input class="blank" type="text" name="q5"> were initially involved in trying to explain the presence of the skull.</div>
+        <div class="flow-arrow">⬇</div>
+        <div class="flow-box">Dr Ferris believed the skull belonged to a female.</div>
+        <div class="flow-arrow">⬇</div>
+        <div class="flow-box">Dr Koelmeyer suggested it was a <a id="q6-anchor"></a><b>6</b> <input class="blank" type="text" name="q6"> skull.</div>
+        <div class="flow-arrow">⬇</div>
+        <div class="flow-box">Dr Watt recommended <a id="q7-anchor"></a><b>7</b> <input class="blank" type="text" name="q7"> to establish the skull's age.</div>
+        <div class="flow-arrow">⬇</div>
+        <div class="flow-box">A bone <a id="q8-anchor"></a><b>8</b> <input class="blank" type="text" name="q8"> was sent to the GNS.</div>
+        <div class="flow-arrow">⬇</div>
+        <div class="flow-box">The age of the skull was about <a id="q9-anchor"></a><b>9</b> <input class="blank" type="text" name="q9"> years.</div>
+      </div>
+    </div>
+
+    <!-- QUESTION GROUP 3: NOTES COMPLETION -->
+    <div class="group">
+      <h4>Questions 10–13</h4>
+      <p>Complete the notes below.</p>
+      <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+      
+      <h5>Problem of the skull's origins</h5>
+      <ul class="notes-list">
+        <li>old bones common in New Zealand</li>
+        <li>Maori living there for 800 years</li>
+        <li>Ruamahanga skull surprising because of its
+          <ul style="list-style:none; padding-left:15px;">
+            <li>– age</li>
+            <li>– <a id="q10-anchor"></a><b>10</b> <input class="blank" type="text" name="q10"></li>
+            <li>– gender</li>
+          </ul>
+        </li>
+      </ul>
+
+      <h5>Mendana expedition</h5>
+      <ul class="notes-list">
+        <li>possible source of skull</li>
+        <li>but probably did not visit New Zealand</li>
+        <li>evidence of this expedition found elsewhere by <a id="q11-anchor"></a><b>11</b> <input class="blank" type="text" name="q11"></li>
+      </ul>
+
+      <h5>New Zealand</h5>
+      <ul class="notes-list">
+        <li>first European explorer arrived in 1642</li>
+        <li>Hagerty and Edgar arrived in 1806 from <a id="q12-anchor"></a><b>12</b> <input class="blank" type="text" name="q12">, where they had been imprisoned</li>
+      </ul>
+
+      <h5>Possible solution</h5>
+      <ul class="notes-list">
+        <li>Ruamahanga skull may have reached New Zealand in 17th century after a <a id="q13-anchor"></a><b>13</b> <input class="blank" type="text" name="q13"></li>
+      </ul>
+    </div>
+
+    <!-- Controls and Results -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+      <div class="footer-note">本机考版本完全免费，小红书账号276752989获取</div>
+    </details>
+  </section>
+</div>
+
+<!-- 3. UI Helper Elements -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// --- MASTER JAVASCRIPT TEMPLATE ---
+
+// 1. STATE & ANSWERS
+const answers = {
+    q1: "true",
+    q2: "true",
+    q3: "false",
+    q4: "not given",
+    q5: "police",
+    q6: "european",
+    q7: "radiocarbon dating",
+    q8: "sample",
+    q9: "296",
+    q10: "race",
+    q11: "archaeologists",
+    q12: "australia",
+    q13: "shipwreck"
+};
+
+// 2. UI & INTERACTIVITY
+let timerSeconds = 0, timerInterval;
+let isTimerPaused = false;
+const timerEl = document.getElementById('timer');
+
+function toggleTimer() {
+    isTimerPaused = !isTimerPaused;
+    timerEl.classList.toggle('paused', isTimerPaused);
+    showToast(isTimerPaused ? 'Timer paused' : 'Timer resumed');
+}
+
+setInterval(() => {
+    if (!isTimerPaused) {
+        timerSeconds++;
+        const minutes = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+        const seconds = String(timerSeconds % 60).padStart(2, '0');
+        timerEl.textContent = `${minutes}:${seconds}`;
+    }
+}, 1000);
+
+function toggleDarkMode() {
+    document.body.classList.toggle('dark-mode');
+    document.body.classList.toggle('dark');
+    const isDark = document.body.classList.contains('dark-mode');
+    localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
+    document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️';
+}
+
+function scrollToElement(id) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function showToast(msg) {
+    const toastEl = document.getElementById('toast');
+    toastEl.textContent = msg;
+    toastEl.style.display = 'block';
+    setTimeout(() => { toastEl.style.display = 'none'; }, 1500);
+}
+
+// 3. HIGHLIGHTING & NOTE TAKING LOGIC - MODIFIED FOR RIGHT PANE
+const selbar = document.getElementById('selbar');
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+
+// Handle Text Selection - Now works in both left and right panes
+document.addEventListener('mouseup', (e) => {
+    const sel = window.getSelection();
+    // Show toolbar if text is selected within either pane (#left or #right)
+    const leftPane = document.getElementById('left');
+    const rightPane = document.getElementById('right');
+    
+    if (sel.toString().length > 0 && 
+        (leftPane.contains(sel.anchorNode) || rightPane.contains(sel.anchorNode))) {
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        selbar.style.top = `${rect.top + window.scrollY - 40}px`;
+        selbar.style.left = `${rect.left + rect.width / 2}px`;
+        selbar.style.display = 'flex';
+    } else if (!selbar.contains(e.target)) {
+        selbar.style.display = 'none';
+    }
+});
+
+document.getElementById('btnHL').onclick = () => {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const span = document.createElement('span');
+    span.className = 'hl';
+    try {
+        range.surroundContents(span);
+        sel.removeAllRanges();
+        selbar.style.display = 'none';
+    } catch (e) {
+        showToast("Cannot highlight across different blocks.");
+    }
+};
+
+document.getElementById('btnUH').onclick = () => {
+    const sel = window.getSelection();
+    const node = sel.anchorNode;
+    
+    // Find the closest parent with 'hl' class
+    let hlElement = null;
+    if (node) {
+        if (node.nodeType === Node.TEXT_NODE && node.parentElement.classList.contains('hl')) {
+            hlElement = node.parentElement;
+        } else if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains('hl')) {
+            hlElement = node;
+        } else {
+            // Try to find a parent with 'hl' class
+            let current = node;
+            while (current && current !== document.body) {
+                if (current.classList && current.classList.contains('hl')) {
+                    hlElement = current;
+                    break;
+                }
+                current = current.parentElement;
+            }
+        }
+    }
+    
+    if (hlElement) {
+        const text = document.createTextNode(hlElement.textContent);
+        hlElement.parentNode.replaceChild(text, hlElement);
+        sel.removeAllRanges();
+        selbar.style.display = 'none';
+    } else {
+        showToast("Select a highlighted area to remove.");
+    }
+};
+
+document.getElementById('btnNote').onclick = () => {
+    const sel = window.getSelection();
+    if (sel.toString().length > 0) {
+        const selectedText = sel.toString();
+        noteArea.value += (noteArea.value ? '\n\n' : '') + `"${selectedText}"`;
+    }
+    toggleNotes();
+    selbar.style.display = 'none';
+};
+
+function toggleNotes() {
+    notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+
+document.getElementById('btnClose').onclick = toggleNotes;
+document.getElementById('btnCopy').onclick = () => {
+    noteArea.select();
+    document.execCommand('copy');
+    showToast('Notes copied to clipboard');
+};
+
+// 4. DRAG AND DROP LOGIC (Not used in this test but kept for structure)
+document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', card.id);
+        setTimeout(() => card.classList.add('ghost'), 0);
+    });
+    card.addEventListener('dragend', () => card.classList.remove('ghost'));
+});
+
+document.querySelectorAll('.dropzone').forEach(zone => {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('over');
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        
+        if (!draggedCard) return;
+
+        const originPool = document.getElementById(draggedCard.dataset.originPool);
+        const cardToDrop = draggedCard.dataset.clone === 'true' ? draggedCard.cloneNode(true) : draggedCard;
+        
+        // Return existing card to its pool
+        if (zone.children.length > 0 && zone.children[0].classList.contains('card')) {
+            const existingCard = zone.children[0];
+            const itsOriginPool = document.getElementById(existingCard.dataset.originPool);
+            if (itsOriginPool) itsOriginPool.appendChild(existingCard);
+        }
+
+        zone.innerHTML = '';
+        zone.appendChild(cardToDrop);
+        updateAnswerStatus();
+    });
+});
+
+document.querySelectorAll('.cardpool').forEach(pool => {
+    pool.addEventListener('dragover', e => e.preventDefault());
+    pool.addEventListener('drop', e => {
+        e.preventDefault();
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        if (draggedCard && draggedCard.parentElement.classList.contains('dropzone')) {
+            const oldZone = draggedCard.parentElement;
+            
+            if (draggedCard.dataset.clone === 'true') {
+                draggedCard.remove();
+            } else {
+                pool.appendChild(draggedCard);
+            }
+            
+            oldZone.innerHTML = '';
+            updateAnswerStatus();
+        }
+    });
+});
+
+// 5. GRADING & STATE MANAGEMENT
+function grade() {
+    let total = 0, correct = 0, lines = [];
+    
+    Object.keys(answers).forEach(qKey => {
+        const textInput = document.querySelector(`input[name="${qKey}"][type="text"]`);
+        const radioInput = document.querySelector(`input[name="${qKey}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qKey}"]`);
+        let userAnswer = '';
+        
+        if (textInput) {
+            userAnswer = textInput.value.trim();
+        } else if (radioInput) {
+            userAnswer = radioInput.value;
+        } else if (dropzone) {
+            const card = dropzone.querySelector('.card');
+            userAnswer = card ? card.dataset.value : '';
+        }
+        
+        const isCorrect = userAnswer.toLowerCase() === answers[qKey].toLowerCase();
+        
+        total++;
+        if (isCorrect) correct++;
+        
+        let resultLine = `${qKey.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : `❌ (Correct: ${answers[qKey]})`}`;
+        lines.push(resultLine);
+    });
+
+    const acc = total ? Math.round(100 * correct / total) : 0;
+    document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p><pre>${lines.join('\n')}</pre>`;
+    document.getElementById('answerContent').innerHTML = `<ol start="1">${Object.entries(answers).map(([key, val]) => `<li><strong>${key.replace('q','')}:</strong> ${val}</li>`).join('')}</ol>`;
+    document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+
+function resetForm() {
+    document.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
+    document.querySelectorAll('input[type="radio"]').forEach(input => input.checked = false);
+    document.querySelectorAll('.dropzone').forEach(zone => {
+        if (zone.children.length > 0) {
+            const card = zone.children[0];
+            const originPool = document.getElementById(card.dataset.originPool);
+            if (originPool && card.dataset.clone !== 'true') {
+                originPool.appendChild(card);
+            } else {
+                card.remove(); 
+            }
+        }
+        zone.innerHTML = '';
+    });
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('answerContent').innerHTML = '';
+    document.querySelector('#answerBox .badge').textContent = 'hidden';
+    updateAnswerStatus();
+    showToast('Form has been reset');
+}
+
+function updateAnswerStatus() {
+    document.querySelectorAll('.q-item').forEach(item => {
+        const qNum = item.id.replace('-nav', '');
+        const textInput = document.querySelector(`input[name="${qNum}"][type="text"]`);
+        const radioInput = document.querySelector(`input[name="${qNum}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qNum}"]`);
+        let answered = false;
+        
+        if (textInput) answered = textInput.value.trim() !== '';
+        if (radioInput) answered = true;
+        if (dropzone) answered = !!dropzone.querySelector('.card');
+        
+        item.classList.toggle('answered', answered);
+    });
+}
+
+// 6. INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        toggleDarkMode();
+    }
+    document.querySelectorAll('input, .dropzone').forEach(el => {
+        el.addEventListener('input', updateAnswerStatus);
+        el.addEventListener('change', updateAnswerStatus);
+        el.addEventListener('drop', updateAnswerStatus);
+    });
+    
+    // Setup origin pool data for cards
+    document.querySelectorAll('.card').forEach(card => {
+        if (card.parentElement.classList.contains('cardpool')) {
+            card.dataset.originPool = card.parentElement.id;
+        }
+    });
+
+    // Load LMS script
+    if (!window.practicePageEnhancer) {
+        const script = document.createElement('script');
+        script.src = '../../js/practice-page-enhancer.js';
+        script.onload = () => console.log('Enhancer loaded.');
+        script.onerror = () => console.error('Failed to load enhancer.');
+        document.head.appendChild(script);
+    }
+});
+</script>
+
+</body>
+</html>

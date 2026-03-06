@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Investment in Shares vs. Investment in Other Assets - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+   .custom-br {
+    display: block;
+    margin-bottom: 1300px;
+    content: "";
+  }
+  * {
+    line-height: 30px;
+  }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px;
+    --font-size-large: 20px;
+  }
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    font-size: inherit;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular);
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    color: #111827;
+    padding-bottom: 82px; 
+  }
+  .top-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: absolute; 
+    left:50%;
+    top: 10px;
+    display: inline-block; 
+    background:var(--panel); 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--panel);
+    cursor:pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+	position: absolute;
+	right: 10px;
+	top: 10px;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+    min-width: 280px;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+    font-size: inherit;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:calc(100vh - 82px);
+    width:100%; 
+    overflow: hidden;
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+    -webkit-overflow-scrolling: touch;
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4,h5 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+    font-size: inherit;
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: break-word; 
+    hyphens: auto; 
+  }
+  .paragraph-label {
+    font-weight: 600;
+    color: var(--accent);
+    margin-right: 8px;
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+    font-size: inherit;
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition: all 0.2s ease;
+    font-size: inherit;
+  }
+  button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+    transition: filter 0.2s ease;
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow:var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+    transform: none;
+    box-shadow: none;
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 94px; 
+    width: 320px; 
+    max-width: calc(100% - 24px); 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow:var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+    background: transparent;
+    font-size: inherit;
+  }
+  #notes textarea:focus {
+    outline: none;
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 94px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+    animation: fadeIn 0.3s, fadeOut 0.3s 1.2s;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translate(-50%, 20px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+  }
+  @keyframes fadeOut {
+    from { opacity: 1; transform: translate(-50%, 0); }
+    to { opacity: 0; transform: translate(-50%, 20px); }
+  }
+  .heading-options, .economist-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:6px 0;
+  }
+  .heading-options .heading-option, .economist-option label {
+    cursor:pointer;
+    padding:4px 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    transition: all 0.2s;
+    font-size: inherit;
+  }
+  .heading-options .heading-option:hover, .economist-option label:hover {
+    background:#f1f5f9;
+    border-color:var(--accent);
+    color:var(--accent);
+  }
+  input.blank {
+    width: 140px;
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    font-size: inherit;
+  }
+  input.blank:focus {
+    outline: none;
+    border-color:var(--accent);
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  .word-limit {
+    color: var(--muted);
+    font-size: 0.9em;
+    margin: 4px 0 8px;
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-top:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+    overflow-x: auto;
+    padding-bottom: 4px;
+    max-width: calc(100% - 80px);
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+    flex-shrink:0;
+    font-size: inherit;
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: inherit;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+    font-size: inherit;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  ul {
+    list-style-type: none;
+    padding-left: 20px;
+    margin: 8px 0;
+    font-size: inherit;
+  }
+  ul li::before {
+    content: "- ";
+    color: inherit;
+    font-weight: 500;
+  }
+  @media (max-width: 768px) {
+    .shell {
+      flex-direction: column;
+      height: auto;
+      min-height: calc(100vh - 82px);
+    }
+    #left, #right {
+      flex: none;
+      width: 100%;
+      min-width: auto;
+      max-height: 50vh;
+    }
+    #divider {
+      flex: none;
+      height: 8px;
+      width: 100%;
+      cursor: ns-resize;
+      background: linear-gradient(0deg,var(--line),#d1d5db);
+    }
+    .practice-nav .questions {
+      max-width: calc(100% - 60px);
+    }
+    .top-controls {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    #timer-container {
+      align-self: flex-end;
+      margin-top: -28px;
+    }
+    input.blank {
+      width: 100px;
+    }
+  }
+</style>
+</head>
+<body class="font-regular">
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+</div>
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (16px - Default)</div>
+  <div class="font-option" data-size="moderate">Moderate (18px - Larger)</div>
+  <div class="font-option" data-size="large">Large (20px - Largest)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+	<div id="top" class="top" style="background-color: #bb5252; width: 100%; height: 60px;">
+        <h3 style="font-size: 23px;line-height: 55px;margin-left: 10px;">Investment in Shares vs. Investment in Other Assets</h3>
+		 <div id="timer-container" >
+        <div id="timer" style="margin: 0px auto;">00:00</div>
+        <button id="settingsBtn" onclick="openSettingsModal()">
+          Settings
+        </button>
+      </div>
+	</div>
+<div class="shell">
+  <section class="pane" id="left">
+    You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</br><p></p><p></p>
+    <h3 >Investment in Shares vs. Investment in Other Assets</h3>
+    <p><em>Which Gives the Greater Gain?</em></p>
+    <p><em>How one university collected the data to try and answer this question</em></p>
+   
+    <span class="paragraph-label">A</span> It all began in 1958 with a phone call from Louis Engel, a banker at Merrill Lynch, a US-based financial management company, who wanted to know how investors in shares had performed relative to investors in other assets such as low-risk investments with guaranteed returns. 'I don't know, but if you gave me $50,000 I could find out,' replied Jim Lorie, a dean at the University of Chicago's business school. Louis Engel soon agreed to provide the funding, and more. The result, in 1960, was the launch of the University's Center for Research in Security Prices. Half a century later CRSP (pronounced 'crisp') data are everywhere. They provided the foundation of at least one-third of all empirical research in finance over the past 40 years, according to a presentation at a symposium held this month. They probably influenced much of the rest.</br><p></p>
+    
+    <span class="paragraph-label">B</span> Getting the CRSP data together was a tough process in what were then the early days of computers. Up to three million pieces of information on all the shares traded on the New York Stock Exchange between 1926 and 1960 were transferred from paper in the exchange's archive to magnetic tape. A lot of time was spent adjusting prices to take account of complexities in the market. Lorie and his co-researcher, Lawrence Fisher, chose January 1926 as the start date because they wanted the data to span at least one complete business cycle from boom to bust, or vice versa.</br><p></p>
+    
+    <span class="paragraph-label">C</span> When these two economists published the first study based on the CRSP data in 1964, they reported that the annual compound return on the shares over the entire 35-year period was (depending on the tax status of the investor) between 6.8% and 9%. Acknowledging that good data on the performance of other assets were not available, the study claimed that the rate of return on shares was 'substantially higher than for alternative investment media', providing the first empirical support for the still-popular idea that shares outperform other investments over the long run. Fisher and Lorie also observed that many people chose to invest in assets with lower returns because they were cautious by nature and were concerned about the risk of loss inherent in investing in the stock market. Economists today call the amount of extra return that investors need to compensate them for this additional risk the 'equity risk premium', although they differ greatly on how big investors should expect it to be.</br><p></p>
+    
+    <span class="paragraph-label">D</span> After Fisher and Lorie's 1964 report there was no stopping the love affair between financial economists and the data that studying these numbers produced. Myron Scholes, now a Nobel laureate, became director of CRSP in 1974, and ensured the database was both kept up to date and made readily available to academic economists everywhere. In turn, this resource became ever more useful as computing power became more affordable. The CRSP database has since been expanded to include a full range of different types of investments. It has been replicated across the world.</br><p></p>
+    
+    <span class="paragraph-label">E</span> One of the earliest uses of CRSP data was by Eugene Fama, an economist at the University of Chicago, to support his 'efficient-market hypothesis'. He found that over a lengthy period share prices tended to rise and fall randomly, without showing much of a pattern. Markets are efficient, he said, because all relevant information is reflected in share prices at any given moment, meaning there are no predictable movements in prices for smart investors to exploit. Fama did concede that there was some evidence of temporary short-term predictability in share prices, however. That stipulation has resulted in a vast number of papers based on discovering such 'variations' through data mining. In theory, such anomalies are potentially lucrative for investors, but as believers in efficient markets observe with satisfaction, it seems that no sooner are such anomalies discovered and reported in journals than they typically disappear.</br><p></p>
+    
+    <span class="paragraph-label">F</span> However, the sheer volume of material means that financial economists are becoming increasingly specialised, which may have costs as well as benefits. Some economists worry that much of this statistical analysis is creating some interference that drowns out serious thinking about the big questions, such as why the financial system nearly collapsed in 2008 and how a repeat can be avoided. Robert Shiller, an economist at Yale University and a long-time sceptic about the efficient-market hypothesis, feels that with the creation of the CRSP database economists suddenly believed that finance had become scientific. According to Shiller, conventional ideas about investing and financial markets – and about their vulnerabilities – seemed out of date to the new empiricists. He worries that academic departments are full of economists who are so specialised in data analysis that they fail to see and understand the whole. They get a sense of authority from work that contains lots of data. To have seen the 2008 global financial crisis coming, he argues, it would have been better to 'go back to old-fashioned readings of history, studying institutions and laws. We should have talked to grandpa.'</br><p></p>
+    
+    <span class="paragraph-label">G</span> Scholes responds to this criticism with the contention that the usefulness of this empirical analysis is proven by the fact that demand for it continues to grow. At CRSP's 50th-anniversary symposium, plans were unveiled to publish indicators on an expanding range of investments, as well as for growth and value stocks. These indicators, CRSP claims, will be more academically rigorous and cheaper than existing ones. For believers in the efficiency of markets, that should be enough to ensure CRSP's continuing success.</br><p></p>
+    
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+  </section>
+  
+  <div id="divider" title="Drag to resize"></div>
+  
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 14–20</h4>
+      Reading Passage 2 has seven paragraphs, A–G.</br><p></p>
+      Choose the correct heading for each paragraph from the list of headings below.</br><p></p>
+      Write the correct number, i–viii, in boxes 14–20 on your answer sheet.</br><p></p>
+      <span class="word-limit">List of Headings</br><p></p>
+      <ul>
+        <li>i Technological developments improve CRSP data</li>
+        <li>ii Initial findings of the CRSP project</li>
+        <li>iii A request and a far-reaching result</li>
+        <li>iv Difficulties in collecting CRSP data</li>
+        <li>v What the future holds</li>
+        <li>vi Too much data for people to have an overall understanding</li>
+        <li>vii Other university departments which depend on CRSP</li>
+        <li>viii CRSP data not always being a useful basis for investment</li>
+      </ul>
+      
+      <a id="q14-anchor"></a>
+      <div id="q14-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">14.</span> Paragraph A</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q14" value="i"> i</div>
+          <div class="heading-option"><input type="radio" name="q14" value="ii"> ii</div>
+          <div class="heading-option"><input type="radio" name="q14" value="iii"> iii</div>
+          <div class="heading-option"><input type="radio" name="q14" value="iv"> iv</div>
+          <div class="heading-option"><input type="radio" name="q14" value="v"> v</div>
+          <div class="heading-option"><input type="radio" name="q14" value="vi"> vi</div>
+          <div class="heading-option"><input type="radio" name="q14" value="vii"> vii</div>
+          <div class="heading-option"><input type="radio" name="q14" value="viii"> viii</div>
+        </div>
+      </div>
+      
+      <a id="q15-anchor"></a>
+      <div id="q15-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">15.</span> Paragraph B</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q15" value="i"> i</div>
+          <div class="heading-option"><input type="radio" name="q15" value="ii"> ii</div>
+          <div class="heading-option"><input type="radio" name="q15" value="iii"> iii</div>
+          <div class="heading-option"><input type="radio" name="q15" value="iv"> iv</div>
+          <div class="heading-option"><input type="radio" name="q15" value="v"> v</div>
+          <div class="heading-option"><input type="radio" name="q15" value="vi"> vi</div>
+          <div class="heading-option"><input type="radio" name="q15" value="vii"> vii</div>
+          <div class="heading-option"><input type="radio" name="q15" value="viii"> viii</div>
+        </div>
+      </div>
+      
+      <a id="q16-anchor"></a>
+      <div id="q16-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">16.</span> Paragraph C</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q16" value="i"> i</div>
+          <div class="heading-option"><input type="radio" name="q16" value="ii"> ii</div>
+          <div class="heading-option"><input type="radio" name="q16" value="iii"> iii</div>
+          <div class="heading-option"><input type="radio" name="q16" value="iv"> iv</div>
+          <div class="heading-option"><input type="radio" name="q16" value="v"> v</div>
+          <div class="heading-option"><input type="radio" name="q16" value="vi"> vi</div>
+          <div class="heading-option"><input type="radio" name="q16" value="vii"> vii</div>
+          <div class="heading-option"><input type="radio" name="q16" value="viii"> viii</div>
+        </div>
+      </div>
+      
+      <a id="q17-anchor"></a>
+      <div id="q17-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">17.</span> Paragraph D</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q17" value="i"> i</div>
+          <div class="heading-option"><input type="radio" name="q17" value="ii"> ii</div>
+          <div class="heading-option"><input type="radio" name="q17" value="iii"> iii</div>
+          <div class="heading-option"><input type="radio" name="q17" value="iv"> iv</div>
+          <div class="heading-option"><input type="radio" name="q17" value="v"> v</div>
+          <div class="heading-option"><input type="radio" name="q17" value="vi"> vi</div>
+          <div class="heading-option"><input type="radio" name="q17" value="vii"> vii</div>
+          <div class="heading-option"><input type="radio" name="q17" value="viii"> viii</div>
+        </div>
+      </div>
+      
+      <a id="q18-anchor"></a>
+      <div id="q18-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">18.</span> Paragraph E</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q18" value="i"> i</div>
+          <div class="heading-option"><input type="radio" name="q18" value="ii"> ii</div>
+          <div class="heading-option"><input type="radio" name="q18" value="iii"> iii</div>
+          <div class="heading-option"><input type="radio" name="q18" value="iv"> iv</div>
+          <div class="heading-option"><input type="radio" name="q18" value="v"> v</div>
+          <div class="heading-option"><input type="radio" name="q18" value="vi"> vi</div>
+          <div class="heading-option"><input type="radio" name="q18" value="vii"> vii</div>
+          <div class="heading-option"><input type="radio" name="q18" value="viii"> viii</div>
+        </div>
+      </div>
+      
+      <a id="q19-anchor"></a>
+      <div id="q19-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">19.</span> Paragraph F</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q19" value="i"> i</div>
+          <div class="heading-option"><input type="radio" name="q19" value="ii"> ii</div>
+          <div class="heading-option"><input type="radio" name="q19" value="iii"> iii</div>
+          <div class="heading-option"><input type="radio" name="q19" value="iv"> iv</div>
+          <div class="heading-option"><input type="radio" name="q19" value="v"> v</div>
+          <div class="heading-option"><input type="radio" name="q19" value="vi"> vi</div>
+          <div class="heading-option"><input type="radio" name="q19" value="vii"> vii</div>
+          <div class="heading-option"><input type="radio" name="q19" value="viii"> viii</div>
+        </div>
+      </div>
+      
+      <a id="q20-anchor"></a>
+      <div id="q20-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">20.</span> Paragraph G</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q20" value="i"> i</div>
+          <div class="heading-option"><input type="radio" name="q20" value="ii"> ii</div>
+          <div class="heading-option"><input type="radio" name="q20" value="iii"> iii</div>
+          <div class="heading-option"><input type="radio" name="q20" value="iv"> iv</div>
+          <div class="heading-option"><input type="radio" name="q20" value="v"> v</div>
+          <div class="heading-option"><input type="radio" name="q20" value="vi"> vi</div>
+          <div class="heading-option"><input type="radio" name="q20" value="vii"> vii</div>
+          <div class="heading-option"><input type="radio" name="q20" value="viii"> viii</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 21–23</h4>
+      Look at the following statements and the list of economists below.</br><p></p>
+      Match each statement with the correct economist, A, B, C or D.</br><p></p>
+      Write the correct letter, A, B, C or D, in boxes 21–23 on your answer sheet.</br><p></p>
+      <span class="word-limit">NB You may use any letter more than once.</br><p></p>
+      <span class="word-limit">List of Economists</br><p></p>
+      <ul>
+        A Fisher and Lorie</br><p></p>
+        B Myron Scholes</br><p></p>
+        C Eugene Fama</br><p></p>
+        D Robert Shiller</br><p></p>
+      </ul>
+      
+      <a id="q21-anchor"></a>
+      <div id="q21-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">21.</span> A traditional approach may have helped predict a financial downturn.</br><p></p>
+        <div class="economist-option">
+          <label><input name="q21" type="radio" value="A"> A</label>
+          <label><input name="q21" type="radio" value="B"> B</label>
+          <label><input name="q21" type="radio" value="C"> C</label>
+          <label><input name="q21" type="radio" value="D"> D</label>
+        </div>
+      </div>
+      
+      <a id="q22-anchor"></a>
+      <div id="q22-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">22.</span> Some people invest conservatively and as a result make less money.</br><p></p>
+        <div class="economist-option">
+          <label><input name="q22" type="radio" value="A"> A</label>
+          <label><input name="q22" type="radio" value="B"> B</label>
+          <label><input name="q22" type="radio" value="C"> C</label>
+          <label><input name="q22" type="radio" value="D"> D</label>
+        </div>
+      </div>
+      
+      <a id="q23-anchor"></a>
+      <div id="q23-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">23.</span> It may be possible to forecast share prices but not over the long term.</br><p></p>
+        <div class="economist-option">
+          <label><input name="q23" type="radio" value="A"> A</label>
+          <label><input name="q23" type="radio" value="B"> B</label>
+          <label><input name="q23" type="radio" value="C"> C</label>
+          <label><input name="q23" type="radio" value="D"> D</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 24–26</h4>
+      Complete the summary below.</br><p></p>
+      Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</br><p></p>
+      <span class="word-limit">Write your answers in boxes 24–26 on your answer sheet.</br><p></p>
+      
+      <h5>The beginnings of CRSP</h5>
+      <span class="summary-text">
+        In 1958 a <span class="question-number"><a id="q24-anchor"></a>24.</span> <input type="text" class="blank" id="q24" name="q24"> working for a financial management company telephoned Jim Lorie to ask how well investments in shares performed in comparison to investments in low-risk assets. Lorie offered to find out and as a result the University of Chicago's Center for Research in Security Prices (CRSP) was launched. Compiling the CRSP data was difficult because <span class="question-number"><a id="q25-anchor"></a>25.</span> <input type="text" class="blank" id="q25" name="q25"> were still being developed and information that had previously been on <span class="question-number"><a id="q26-anchor"></a>26.</span> <input type="text" class="blank" id="q26" name="q26"> needed to be put onto magnetic tape.
+      </br><p></p>
+    </div>
+    
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <div id="results"></div>
+    
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>14</td>
+            <td>iii</td>
+            <td>
+              <span class="explanation-text">段落A描述CRSP项目的起源：一个请求（银行家询问股票投资表现）和深远的结果（CRSP成立并影响深远），对应标题iii"一个请求和深远的结果"。</br><p></p>
+              <span class="explanation-original">原文：It all began in 1958 with a phone call... The result, in 1960, was the launch of... CRSP... CRSP data are everywhere... influenced much of the rest. (Paragraph A)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>15</td>
+            <td>iv</td>
+            <td>
+              <span class="explanation-text">段落B详细描述收集CRSP数据的困难：早期计算机时代、信息从纸质转换到磁带、调整价格复杂性，对应标题iv"收集CRSP数据的困难"。</br><p></p>
+              <span class="explanation-original">原文：Getting the CRSP data together was a tough process... Up to three million pieces of information... transferred from paper to magnetic tape... adjusting prices to take account of complexities. (Paragraph B)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>16</td>
+            <td>ii</td>
+            <td>
+              <span class="explanation-text">段落C报告基于CRSP数据的第一个研究发现：股票年回报率6.8%-9%，首次实证支持股票长期表现更优，对应标题ii"CRSP项目的最初发现"。</br><p></p>
+              <span class="explanation-original">原文：When these two economists published the first study... they reported that the annual compound return... between 6.8% and 9%... providing the first empirical support for the idea that shares outperform other investments. (Paragraph C)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>17</td>
+            <td>i</td>
+            <td>
+              <span class="explanation-text">段落D描述技术进步（计算能力提升、数据库更新扩容）改善CRSP数据，对应标题i"技术进步改善CRSP数据"。</br><p></p>
+              <span class="explanation-original">原文：Myron Scholes... ensured the database was kept up to date... as computing power became more affordable... database has since been expanded... replicated across the world. (Paragraph D)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>18</td>
+            <td>viii</td>
+            <td>
+              <span class="explanation-text">段落E描述Fama使用CRSP数据支持有效市场假说，但指出股价异常（可预测性）一旦被发现就消失，暗示CRSP数据不总是有用的投资基础，对应标题viii"CRSP数据不总是有用的投资基础"。</br><p></p>
+              <span class="explanation-original">原文：no predictable movements in prices... some evidence of temporary short-term predictability... anomalies... no sooner are such anomalies discovered... than they typically disappear. (Paragraph E)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>19</td>
+            <td>vi</td>
+            <td>
+              <span class="explanation-text">段落F批评数据过多导致经济学家过于专业化，只见树木不见森林，无法把握整体，对应标题vi"数据过多导致人们无法整体理解"。</br><p></p>
+              <span class="explanation-original">原文：the sheer volume of material... economists... so specialised in data analysis that they fail to see and understand the whole. (Paragraph F)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>20</td>
+            <td>v</td>
+            <td>
+              <span class="explanation-text">段落G展望CRSP未来计划与前景：发布更多指标、更严谨、更便宜，对应标题v"未来展望"。</br><p></p>
+              <span class="explanation-original">原文：At CRSP's 50th-anniversary symposium, plans were unveiled to publish indicators... will be more academically rigorous and cheaper... ensure CRSP's continuing success. (Paragraph G)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>21</td>
+            <td>D</td>
+            <td>
+              <span class="explanation-text">题干"传统方法可能有助于预测金融衰退"对应Robert Shiller，F段提到他主张回归传统历史研究方法预测危机。</br><p></p>
+              <span class="explanation-original">原文：To have seen the 2008 global financial crisis coming... better to 'go back to old-fashioned readings of history, studying institutions and laws.' (Paragraph F, Robert Shiller)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>22</td>
+            <td>A</td>
+            <td>
+              <span class="explanation-text">题干"一些人保守投资，结果赚得少"对应Fisher和Lorie，C段指出许多人因谨慎选择低回报资产。</br><p></p>
+              <span class="explanation-original">原文：many people chose to invest in assets with lower returns because they were cautious by nature. (Paragraph C, Fisher and Lorie)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>23</td>
+            <td>C</td>
+            <td>
+              <span class="explanation-text">题干"可能预测股价但非长期"对应Eugene Fama，E段承认股价有短期可预测性但长期随机。</br><p></p>
+              <span class="explanation-original">原文：Fama did concede that there was some evidence of temporary short-term predictability in share prices... no predictable movements in prices. (Paragraph E, Eugene Fama)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>24</td>
+            <td>banker</td>
+            <td>
+              <span class="explanation-text">题干"1958年，一位____打电话给Jim Lorie"，A段明确提到"a banker at Merrill Lynch"，对应"banker"（不超过1词）。</br><p></p>
+              <span class="explanation-original">原文：a banker at Merrill Lynch... who wanted to know how investors in shares had performed. (Paragraph A)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>25</td>
+            <td>computers</td>
+            <td>
+              <span class="explanation-text">题干"CRSP数据收集困难因为____仍在发展"，B段提到"early days of computers"，对应"computers"（不超过1词）。</br><p></p>
+              <span class="explanation-original">原文：a tough process in what were then the early days of computers. (Paragraph B)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>26</td>
+            <td>paper</td>
+            <td>
+              <span class="explanation-text">题干"信息之前记录在____上需转换到磁带"，B段提到"transferred from paper... to magnetic tape"，对应"paper"（不超过1词）。</br><p></p>
+              <span class="explanation-original">原文：information... were transferred from paper in the exchange's archive to magnetic tape. (Paragraph B)</br><p></p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; 
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+window.onload = startTimer;
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+    localStorage.setItem('fontSize', size);
+  });
+});
+document.addEventListener('DOMContentLoaded', function() {
+  const savedFontSize = localStorage.getItem('fontSize');
+  if (savedFontSize) {
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${savedFontSize}`);
+  }
+});
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+  if (notesPanel.style.display === 'flex') {
+    noteArea.focus();
+  }
+}
+btnCloseNotes.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+const answers = {
+  q14: 'iii',
+  q15: 'iv',
+  q16: 'ii',
+  q17: 'i',
+  q18: 'viii',
+  q19: 'vi',
+  q20: 'v',
+  q21: 'D',
+  q22: 'A',
+  q23: 'C',
+  q24: 'banker',
+  q25: 'computers',
+  q26: 'paper'
+};
+function grade() {
+  clearInterval(timerInterval);
+  
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  for (let i = 14; i <= 20; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  for (let i = 21; i <= 23; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  for (let i = 24; i <= 26; i++) {
+    const qName = `q${i}`;
+    const input = document.getElementById(qName);
+    const userAns = input ? input.value.trim().toLowerCase() : 'No answer';
+    const correctAns = answers[qName].toLowerCase();
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers[qName]})`}`);
+  }
+  
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</br><p></p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+function resetForm() {
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+  
+  showToast('Practice reset');
+}
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+(function() {
+  for (let i = 14; i <= 20; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+  for (let i = 21; i <= 23; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+  for (let i = 24; i <= 26; i++) {
+    const input = document.getElementById(`q${i}`);
+    input.addEventListener('input', () => {
+      if (input.value.trim()) {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      } else {
+        document.getElementById(`q${i}-nav`).classList.remove('answered');
+      }
+    });
+  }
+})();
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isResizing = false;
+divider.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  
+  const containerWidth = leftPane.parentElement.offsetWidth;
+  const mousePosition = e.clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const leftWidthPercent = (mousePosition / containerWidth) * 100;
+  
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+});
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    document.body.style.cursor = '';
+  }
+});
+divider.addEventListener('touchstart', (e) => {
+  isResizing = true;
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.addEventListener('touchmove', (e) => {
+  if (!isResizing) return;
+  
+  const containerWidth = leftPane.parentElement.offsetWidth;
+  const touch = e.touches[0];
+  const touchPosition = touch.clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const leftWidthPercent = (touchPosition / containerWidth) * 100;
+  
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+  
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.addEventListener('touchend', () => {
+  if (isResizing) {
+    isResizing = false;
+  }
+});
+</script>
+</body>
+</html>

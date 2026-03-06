@@ -3,7 +3,7 @@
 
     const RAW_DEFAULT_PATH_MAP = {
         reading: {
-            root: '睡着过项目组/2. 所有文章(11.20)[192篇]/',
+            root: '',
             exceptions: {}
         },
         listening: {
@@ -135,10 +135,10 @@
         const pathsByType = { reading: [], listening: [] };
 
         exams.forEach((exam) => {
-            if (!exam || typeof exam.path !== 'string' || !exam.type) {
+            if (!exam || (!exam.folder && typeof exam.path !== 'string') || !exam.type) {
                 return;
             }
-            const normalized = exam.path.replace(/\\/g, '/');
+            const normalized = (exam.folder || exam.path).replace(/\\/g, '/');
             if (exam.type === 'reading') {
                 pathsByType.reading.push(normalized);
             } else if (exam.type === 'listening') {
@@ -242,9 +242,7 @@
         }
 
         resolveScriptPathRoot(type) {
-            const defaultRoot = type === 'reading'
-                ? '睡着过项目组/2. 所有文章(11.20)[192篇]/'
-                : 'ListeningPractice/';
+            // 1. 尝试从脚本数据的 pathRoot 元数据读取
             try {
                 if (type === 'reading') {
                     const rootMeta = global.completeExamIndex && global.completeExamIndex.pathRoot;
@@ -265,7 +263,25 @@
                     }
                 }
             } catch (_) { }
-            return defaultRoot;
+
+            // 2. 从 exam 条目的 folder/path 字段动态推算公共根路径
+            try {
+                const source = type === 'reading' ? global.completeExamIndex : global.listeningExamIndex;
+                if (Array.isArray(source) && source.length) {
+                    const folders = source
+                        .filter(function (e) { return e && (e.folder || e.path); })
+                        .map(function (e) { return String(e.folder || e.path).replace(/\\/g, '/'); });
+                    if (folders.length) {
+                        const derived = computeCommonRoot(folders);
+                        if (derived) {
+                            return derived;
+                        }
+                    }
+                }
+            } catch (_) { }
+
+            // 3. 最终 fallback（空字符串表示无固定前缀）
+            return type === 'listening' ? 'ListeningPractice/' : '';
         }
 
         finishLibraryLoading(startTime) {

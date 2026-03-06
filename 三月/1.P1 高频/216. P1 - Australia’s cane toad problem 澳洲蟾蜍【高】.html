@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P1 – Australia’s cane toad problem</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+:root { 
+  --line: #e5e7eb; --bg: #f6f7fb; --panel: #fff; --accent: #3b82f6; 
+  --muted: #6b7280; --shadow: 0 6px 20px rgba(0,0,0,.12); 
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { 
+  margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+  background: var(--bg); padding-bottom: 70px; 
+}
+.shell { display: flex; height: 100vh; width: 100%; }
+.pane { background: var(--panel); overflow: auto; padding: 20px; }
+#left { flex: 0 0 50%; min-width: 280px; position: relative; }
+#right { flex: 1 1 auto; min-width: 320px; background: #fbfbff; border-left: 1px solid var(--line); position: relative; }
+#divider { flex: 0 0 8px; background: linear-gradient(90deg, #e5e7eb, #d1d5db); cursor: ew-resize; position: relative; z-index: 5; user-select: none; }
+h2, h3, h4 { margin: 0 0 10px; }
+#left p { margin: 0 0 12px; line-height: 1.6; }
+.group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+.blank { border:none; border-bottom:1px solid #9ca3af; padding:4px 2px; font-size:1em; background:transparent; width: 120px; margin: 0 4px; }
+.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+button { padding: 8px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+button:hover { background: #f8fafc; border-color: #cbd5e1; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.primary:hover { background: #2563eb; }
+.practice-nav { background: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 5px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+.practice-nav .title { font-weight: 600; color: var(--muted); }
+.practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; }
+.practice-nav .q-item:hover { background: #f1f5f9; border-color: var(--accent); }
+.practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+.practice-nav .q-item.active { background: var(--accent); color: #fff; }
+.practice-nav .controls { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+#timer { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.2s; min-width: 70px; text-align: center; font-size: 14px; font-weight: bold; }
+#timer:hover { background: #f1f5f9; border-color: var(--accent); }
+#timer.paused { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+.theme-toggle { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; width: 32px; height: 32px; font-size: 16px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+.theme-toggle:hover { background: var(--accent); color: #fff; border-color: var(--accent); transform: scale(1.05); }
+#selbar { position: absolute; display: none; z-index: 2000; background: #111; color: #fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+#selbar button { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+#selbar button:hover { border-color: #fff; }
+#notes { position: fixed; right: 12px; bottom: 85px; width: 320px; height: 42vh; background: #fff; border: 1px solid var(--line); border-radius: 12px; display: none; flex-direction: column; z-index: 1500; box-shadow: var(--shadow); }
+#notes header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+#notes textarea { flex: 1; border: 0; padding: 10px; resize: none; font-size: 14px; line-height: 1.5; background-color: inherit; color: inherit; }
+#toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 3000; font-size: 14px; }
+#results { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 16px 0; font-family: monospace; white-space: pre-wrap; }
+#results p { margin: 0 0 8px; }
+details.answerbox { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+details.answerbox summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+details.answerbox summary::-webkit-details-marker { display: none; }
+#answerContent { margin-top: 10px; }
+#answerContent ol { margin: 0; padding-left: 20px; }
+.hl { background: #fff3a3; }
+.cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; margin-top: 12px; min-height: 48px; }
+.card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 12px; display:inline-flex; align-items:center; cursor:grab; box-shadow:0 2px 4px rgba(0,0,0,.05); user-select:none; }
+.card.ghost { opacity: 0.4; }
+.dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:42px; padding:4px; display:inline-flex; align-items:center; justify-content:center; width:42px; height: 42px; vertical-align:middle; margin-right: 8px; }
+.dropzone.over { outline: 2px solid var(--accent); background: #eff6ff; }
+.dropzone .card { box-shadow: none; }
+body.dark { --bg: #0f172a; --panel: #1e293b; --line: #334155; --muted: #94a3b8; color: #e2e8f0; }
+body.dark .pane, body.dark #right { background: var(--panel); }
+body.dark #right { background: #131c2d; }
+body.dark button, body.dark .theme-toggle { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark button:hover { background: #475569; }
+body.dark .group, body.dark #results, body.dark details.answerbox, body.dark .list-box, body.dark #notes { background: #1e293b; border-color: #334155; }
+body.dark .practice-nav { background: #1e293b; border-top-color: #334155; }
+body.dark .q-item { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark .q-item:hover { background: #475569; }
+body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+body.dark #timer { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark #timer.paused { background: #402323; color: #f87171; border-color: #7f1d1d; }
+body.dark .blank { color: #e2e8f0; border-bottom-color: #64748b; }
+body.dark .hl { background: #b45309; }
+body.dark .cardpool { background:#0f172a; }
+body.dark .card { background: #334155; border-color: #475569; }
+body.dark .dropzone { border-color: #475569; background: #131c2d; }
+body.dark .dropzone.over { background: #1e293b; }
+body.dark #notes textarea { background: #1e293b; color: #e2e8f0; }
+@media (max-width: 768px) {
+  .shell { flex-direction: column; }
+  #divider { display: none; }
+  #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+}
+/* Watermark Style - Increased opacity and z-index */
+#watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 2em; color: rgba(100, 100, 100, 0.25); pointer-events: none; z-index: 9999; white-space: nowrap; font-style: italic; user-select: none; }
+/* Override specific to this page */
+.info-box { border: 1px solid var(--line); background: #fafafa; padding: 10px; margin-bottom: 15px; border-radius: 6px; font-size: 0.9em; }
+.info-box ul { padding-left: 20px; margin: 5px 0; }
+.match-row { display: flex; align-items: center; margin-bottom: 10px; }
+.match-row span.label { width: 90px; font-weight: bold; margin-right: 10px; }
+body.dark .info-box { background: #1e293b; border-color: #334155; }
+/* Style for footer note in answer box */
+.footer-note { margin-top: 15px; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 0.85em; color: var(--muted); text-align: center; }
+/* Question list overrides */
+ul.notes-list { padding-left: 18px; line-height: 2; list-style: disc; }
+ul.notes-list ul { padding-left: 18px; list-style: none; }
+.question-row { display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px dashed var(--line); padding-bottom: 12px; align-items: flex-start; }
+.question-text { flex: 1; margin-right: 15px; }
+.radio-group { display: flex; gap: 12px; flex-shrink: 0; }
+.radio-group label { font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+</style>
+</head>
+<body>
+
+<!-- Watermark -->
+<div id="watermark">本机考版本为免费发放，如果您被收费请立即退款并举报</div>
+
+<!-- 1. Bottom Navigation Bar -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q3-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q4-anchor')">4</div>
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q5-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q7-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q9-anchor')">9</div>
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q10-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q11-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<!-- 2. Main Content Shell -->
+<div class="shell">
+  <!-- Left Pane: Reading Passage -->
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 1</h2>
+    <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
+    
+    <h3>Australia’s cane toad problem</h3>
+    <p><em>How a toad introduced in Australia to control pests has itself become a pest</em></p>
+  
+    <p>In the north of Australia there are many sugar cane plantations, which early in the 20th century were being damaged by a particular pest. This was a species of beetle whose larvae, the infant form of the beetle, lived underground in the soil in the sugar cane fields. The sugar cane plants were weakened or died because their roots were eaten by the larvae. This had serious economic consequences for sugar cane farmers. Modern pesticides were not developed until the 1940s, so farmers had to use what was available at the time. Chemicals like arsenic and copper were used, but these were not only expensive but also stayed in the environment and were poisonous to people, plants and animals. It was generally acknowledged by government, farmers and scientists that cheaper and safer methods of pest control had to be found.</p>
+
+    <p>A promising replacement for copper and arsenic was the use of biological control. Farmers already used some forms of biological pest control in the form of predatory and parasitic wasps and flies, insect-eating birds, and plants from different regions or countries to control pests. Common practice was to release these introduced agents into new environments, the expectation being that they would destroy resident pests. Some species of toad already had successful records as agents of biological control in gardens. For example, in 19th-century France toads were sold to gardeners at markets in Paris to eat insect pests in their gardens. In the early 20th century French sugar cane farmers first took giant toads from South America to control pests in their Caribbean sugar cane plantations. Although there is no evidence that these toads did help to control pests, sugar cane scientists then carried some of these toads from Jamaica and Barbados to Puerto Rico and from there to Hawaii.</p>
+
+    <p>The idea of biological control of pests was not new to Australia. For example, in 1926 there had been a highly successful prevention of the increase of the exotic prickly-pear cactus by the introduction of a moth from Argentina. This success added strength to the argument that biological control was the answer to the sugar cane industry’s pest problems. Accordingly, in the early 1930s a decision was taken to introduce the giant South American toads, which in Australia are now commonly called cane toads, into Australian sugar cane plantations.</p>
+
+    <p>In 1935, an Australian entomologist brought 101 cane toads from Hawaii and released them in sugar cane plantations in the north of Australia. However, over the following years it became clear that the cane toads were a failure. There was a fatal flaw in the plan to use them as a form of biological control. This was that earthbound cane toads were expected to eat the mostly flying adult beetles in order to eliminate the soil-dwelling beetle larvae that ate the roots of the cane sugar plants. This, of course, cane toads could not do.</p>
+
+    <p>Prior to their introduction in Australia, there had been very few opponents and only one made his views public. He was a retired former Chief Entomologist from the state government of New South Wales named Walter Froggatt. He forecast that cane toads might become as great a pest in Australia as rabbits. However, Froggatt’s peers rebuked him and eminent scientists branded his views ‘decidedly pessimistic’. It is estimated that today as many as a hundred million cane toads form a toxic infestation which is slowly spreading throughout the land.</p>
+
+    <p>Cane toads are large, heavily built amphibians. Average-sized adults are 10-15 cm long and weigh more than a kilo. They have large swellings on each shoulder from which they squirt poison when they are threatened. This venom contains 14 different chemicals, but they do not appear to be harmful to humans as no-one has died in Australia from cane toad poison. Until recently there was no understanding of the toxicity of cane toad poison, but it is now clear that freshwater crocodiles, goannas (large lizards) and dingoes (wild dogs) have died after eating cane toads. Cane toads compete with native Australian fauna for food, and eat the eggs and young of ground-nesting birds. As their numbers increase, they are taking over more and more of the land where native Australian fauna live.</p>
+
+    <p>The lesson that can be learned from the introduction of cane toads is important. It is wrong to think that such an awful biological event could not be repeated. In this instance, the catalyst was the overwhelming consensus of support for introducing cane toads to Australia. The error was that there was little or no testing of these biological agents before they were introduced to see what unplanned effects they might have on the environment.</p>
+    
+    <p>&nbsp;</p> <!-- Final padding -->
+  </section>
+
+  <!-- Draggable Divider -->
+  <div id="divider" title="Drag to resize"></div>
+
+  <!-- Right Pane: Questions and Controls -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- QUESTION GROUP 1: NOTE COMPLETION -->
+    <div class="group">
+      <h4>Questions 1–7</h4>
+      <p>Complete the notes below.</p>
+      <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+      
+      <h3>Pest control</h3>
+      
+      <h5>Early 20th-century problems in Australia</h5>
+      <ul class="notes-list">
+        <li>The larvae of a type of <a id="q1-anchor"></a><b>1</b> <input class="blank" type="text" name="q1"> were a serious pest in sugar cane fields.</li>
+        <li>Its larvae ate the <a id="q2-anchor"></a><b>2</b> <input class="blank" type="text" name="q2"> of the plant.</li>
+        <li>Chemical pesticides were unsatisfactory because they were:
+          <ul>
+            <li>– poisonous</li>
+            <li>– <a id="q3-anchor"></a><b>3</b> <input class="blank" type="text" name="q3"></li>
+            <li>– difficult to remove from the ground</li>
+          </ul>
+        </li>
+      </ul>
+
+      <h5>Experiences with biological pest control</h5>
+      <ul class="notes-list">
+        <li>The use of insects, plants and birds was widespread.</li>
+        <li>In the 19th century French <a id="q4-anchor"></a><b>4</b> <input class="blank" type="text" name="q4"> used toads.</li>
+        <li>In Australia a <a id="q5-anchor"></a><b>5</b> <input class="blank" type="text" name="q5"> stopped the spread of prickly-pear cactus.</li>
+        <li>Cane toads were brought to Australia from <a id="q6-anchor"></a><b>6</b> <input class="blank" type="text" name="q6">.</li>
+        <li>Cane toads proved to be a <a id="q7-anchor"></a><b>7</b> <input class="blank" type="text" name="q7"> as pest control.</li>
+      </ul>
+    </div>
+
+    <!-- QUESTION GROUP 2: TRUE/FALSE/NOT GIVEN -->
+    <div class="group">
+      <h4>Questions 8–13</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 1?</p>
+      <p><em>In boxes 8–13 on your answer sheet, write</em></p>
+      <ul style="list-style:none; padding-left:0; font-weight:bold; font-size:0.9em;">
+        <li>TRUE <span style="font-weight:normal; margin-left:45px;">if the statement agrees with the information</span></li>
+        <li>FALSE <span style="font-weight:normal; margin-left:38px;">if the statement contradicts the information</span></li>
+        <li>NOT GIVEN <span style="font-weight:normal; margin-left:8px;">if there is no information on this</span></li>
+      </ul>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q8-anchor"></a><b>8</b> The outcome of the introduction of cane toads was immediately obvious.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q8" value="true"> True</label>
+            <label><input type="radio" name="q8" value="false"> False</label>
+            <label><input type="radio" name="q8" value="not given"> NG</label>
+        </div>
+      </div>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q9-anchor"></a><b>9</b> Rabbits were introduced to Australia to control weeds.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q9" value="true"> True</label>
+            <label><input type="radio" name="q9" value="false"> False</label>
+            <label><input type="radio" name="q9" value="not given"> NG</label>
+        </div>
+      </div>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q10-anchor"></a><b>10</b> Walter Froggatt was criticised for his efforts to stop the introduction of the cane toad to Australia.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q10" value="true"> True</label>
+            <label><input type="radio" name="q10" value="false"> False</label>
+            <label><input type="radio" name="q10" value="not given"> NG</label>
+        </div>
+      </div>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q11-anchor"></a><b>11</b> The average size of cane toads has increased since their introduction.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q11" value="true"> True</label>
+            <label><input type="radio" name="q11" value="false"> False</label>
+            <label><input type="radio" name="q11" value="not given"> NG</label>
+        </div>
+      </div>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q12-anchor"></a><b>12</b> Australian animals can eat cane toads safely.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q12" value="true"> True</label>
+            <label><input type="radio" name="q12" value="false"> False</label>
+            <label><input type="radio" name="q12" value="not given"> NG</label>
+        </div>
+      </div>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q13-anchor"></a><b>13</b> In many places cane toads are gaining control of the habitats of Australian fauna.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q13" value="true"> True</label>
+            <label><input type="radio" name="q13" value="false"> False</label>
+            <label><input type="radio" name="q13" value="not given"> NG</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls and Results -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+      <div class="footer-note">本机考版本完全免费，小红书账号276752989获取</div>
+    </details>
+  </section>
+</div>
+
+<!-- 3. UI Helper Elements -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// --- MASTER JAVASCRIPT TEMPLATE ---
+
+// 1. STATE & ANSWERS
+const answers = {
+    q1: "beetle",
+    q2: "roots",
+    q3: "expensive",
+    q4: "gardeners",
+    q5: "moth",
+    q6: "hawaii",
+    q7: "failure",
+    q8: "false",
+    q9: "not given",
+    q10: "true",
+    q11: "not given",
+    q12: "false",
+    q13: "true"
+};
+
+// 2. UI & INTERACTIVITY
+let timerSeconds = 0, timerInterval;
+let isTimerPaused = false;
+const timerEl = document.getElementById('timer');
+
+function toggleTimer() {
+    isTimerPaused = !isTimerPaused;
+    timerEl.classList.toggle('paused', isTimerPaused);
+    showToast(isTimerPaused ? 'Timer paused' : 'Timer resumed');
+}
+
+setInterval(() => {
+    if (!isTimerPaused) {
+        timerSeconds++;
+        const minutes = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+        const seconds = String(timerSeconds % 60).padStart(2, '0');
+        timerEl.textContent = `${minutes}:${seconds}`;
+    }
+}, 1000);
+
+function toggleDarkMode() {
+    document.body.classList.toggle('dark-mode');
+    document.body.classList.toggle('dark');
+    const isDark = document.body.classList.contains('dark-mode');
+    localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
+    document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️';
+}
+
+function scrollToElement(id) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function showToast(msg) {
+    const toastEl = document.getElementById('toast');
+    toastEl.textContent = msg;
+    toastEl.style.display = 'block';
+    setTimeout(() => { toastEl.style.display = 'none'; }, 1500);
+}
+
+// 3. HIGHLIGHTING & NOTE TAKING LOGIC
+const selbar = document.getElementById('selbar');
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+
+// Handle Text Selection - Works in both left (passage) and right (questions) panes
+document.addEventListener('mouseup', (e) => {
+    const sel = window.getSelection();
+    // Allow highlighting in both panes by checking if selection is within .shell
+    if (sel.toString().length > 0 && document.querySelector('.shell').contains(sel.anchorNode)) {
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        selbar.style.top = `${rect.top + window.scrollY - 40}px`;
+        selbar.style.left = `${rect.left + rect.width / 2}px`;
+        selbar.style.display = 'flex';
+    } else if (!selbar.contains(e.target)) {
+        selbar.style.display = 'none';
+    }
+});
+
+document.getElementById('btnHL').onclick = () => {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const span = document.createElement('span');
+    span.className = 'hl';
+    try {
+        range.surroundContents(span);
+        sel.removeAllRanges();
+        selbar.style.display = 'none';
+    } catch (e) {
+        showToast("Cannot highlight across different blocks.");
+    }
+};
+
+document.getElementById('btnUH').onclick = () => {
+    const sel = window.getSelection();
+    if (sel.anchorNode.parentElement.classList.contains('hl')) {
+        const parent = sel.anchorNode.parentElement;
+        const text = document.createTextNode(parent.textContent);
+        parent.parentNode.replaceChild(text, parent);
+        sel.removeAllRanges();
+        selbar.style.display = 'none';
+    } else {
+        showToast("Select a highlighted area to remove.");
+    }
+};
+
+document.getElementById('btnNote').onclick = () => {
+    toggleNotes();
+    selbar.style.display = 'none';
+};
+
+function toggleNotes() {
+    notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+
+document.getElementById('btnClose').onclick = toggleNotes;
+document.getElementById('btnCopy').onclick = () => {
+    noteArea.select();
+    document.execCommand('copy');
+    showToast('Notes copied to clipboard');
+};
+
+// 4. GRADING & STATE MANAGEMENT
+function grade() {
+    let total = 0, correct = 0, lines = [];
+    
+    Object.keys(answers).forEach(qKey => {
+        const textInput = document.querySelector(`input[name="${qKey}"][type="text"]`);
+        const radioInput = document.querySelector(`input[name="${qKey}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qKey}"]`);
+        let userAnswer = '';
+        
+        if (textInput) {
+            userAnswer = textInput.value.trim();
+        } else if (radioInput) {
+            userAnswer = radioInput.value;
+        } else if (dropzone) {
+            const card = dropzone.querySelector('.card');
+            userAnswer = card ? card.dataset.value : '';
+        }
+        
+        const isCorrect = userAnswer.toLowerCase() === answers[qKey].toLowerCase();
+        
+        total++;
+        if (isCorrect) correct++;
+        
+        let resultLine = `${qKey.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : `❌ (Correct: ${answers[qKey]})`}`;
+        lines.push(resultLine);
+    });
+
+    const acc = total ? Math.round(100 * correct / total) : 0;
+    document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p><pre>${lines.join('\n')}</pre>`;
+    document.getElementById('answerContent').innerHTML = `<ol start="1">${Object.entries(answers).map(([key, val]) => `<li><strong>${key.replace('q','')}:</strong> ${val}</li>`).join('')}</ol>`;
+    document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+
+function resetForm() {
+    document.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
+    document.querySelectorAll('input[type="radio"]').forEach(input => input.checked = false);
+    document.querySelectorAll('.dropzone').forEach(zone => {
+        if (zone.children.length > 0) {
+            const card = zone.children[0];
+            const originPool = document.getElementById(card.dataset.originPool);
+            if (originPool && card.dataset.clone !== 'true') {
+                originPool.appendChild(card);
+            }
+        }
+        zone.innerHTML = '';
+    });
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('answerContent').innerHTML = '';
+    document.querySelector('#answerBox .badge').textContent = 'hidden';
+    updateAnswerStatus();
+    showToast('Form has been reset');
+}
+
+function updateAnswerStatus() {
+    document.querySelectorAll('.q-item').forEach(item => {
+        const qNum = item.id.replace('-nav', '');
+        const textInput = document.querySelector(`input[name="${qNum}"][type="text"]`);
+        const radioInput = document.querySelector(`input[name="${qNum}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qNum}"]`);
+        let answered = false;
+        
+        if (textInput) answered = textInput.value.trim() !== '';
+        if (radioInput) answered = true;
+        if (dropzone) answered = !!dropzone.querySelector('.card');
+        
+        item.classList.toggle('answered', answered);
+    });
+}
+
+// 5. INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        toggleDarkMode();
+    }
+    document.querySelectorAll('input, .dropzone').forEach(el => {
+        el.addEventListener('input', updateAnswerStatus);
+        el.addEventListener('change', updateAnswerStatus); // For radios
+        el.addEventListener('drop', updateAnswerStatus);
+    });
+    
+    // Load LMS script
+    if (!window.practicePageEnhancer) {
+        const script = document.createElement('script');
+        script.src = '../../js/practice-page-enhancer.js';
+        script.onload = () => console.log('Enhancer loaded.');
+        script.onerror = () => console.error('Failed to load enhancer.');
+        document.head.appendChild(script);
+    }
+});
+</script>
+
+</body>
+</html>

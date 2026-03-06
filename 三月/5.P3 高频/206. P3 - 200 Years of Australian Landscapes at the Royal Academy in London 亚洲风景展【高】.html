@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P3 – 200 Years of Australian Landscapes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+:root { 
+  --line: #e5e7eb; --bg: #f6f7fb; --panel: #fff; --accent: #3b82f6; 
+  --muted: #6b7280; --shadow: 0 6px 20px rgba(0,0,0,.15); 
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { 
+  margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+  background: var(--bg); padding-bottom: 70px; 
+}
+.shell { display: flex; height: 100vh; width: 100%; }
+.pane { background: var(--panel); overflow: auto; padding: 20px; position: relative; }
+#left { flex: 0 0 50%; min-width: 280px; }
+#right { flex: 1 1 auto; min-width: 320px; background: #fbfbff; border-left: 1px solid var(--line); }
+#divider { flex: 0 0 8px; background: linear-gradient(90deg, #e5e7eb, #d1d5db); cursor: ew-resize; position: relative; z-index: 5; user-select: none; }
+h2, h3, h4 { margin: 0 0 10px; }
+#left p { margin: 0 0 12px; line-height: 1.6; }
+.group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+.blank { border:none; border-bottom:1px solid #9ca3af; padding:4px 2px; font-size:1em; background:transparent; width: 120px; margin: 0 4px; }
+.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+button { padding: 8px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+button:hover { background: #f8fafc; border-color: #cbd5e1; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.primary:hover { background: #2563eb; }
+
+/* Navigation Bar */
+.practice-nav { background: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 5px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+.practice-nav .title { font-weight: 600; color: var(--muted); }
+.practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; }
+.practice-nav .q-item:hover { background: #f1f5f9; border-color: var(--accent); }
+.practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+.practice-nav .q-item.active { background: var(--accent); color: #fff; }
+.practice-nav .controls { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+#timer { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.2s; min-width: 70px; text-align: center; font-size: 14px; font-weight: bold; }
+#timer:hover { background: #f1f5f9; border-color: var(--accent); }
+#timer.paused { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+.theme-toggle { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; width: 32px; height: 32px; font-size: 16px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+.theme-toggle:hover { background: var(--accent); color: #fff; border-color: var(--accent); transform: scale(1.05); }
+
+/* Highlight & Notes Tools */
+#selbar { position: absolute; display: none; z-index: 2000; background: #1f2937; color: #fff; border-radius: 6px; padding: 4px; box-shadow: var(--shadow); font-size: 13px; gap: 4px; align-items: center; transform: translateX(-50%); }
+#selbar::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #1f2937 transparent transparent transparent; }
+#selbar button { background: transparent; color: #fff; border: 1px solid transparent; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+#selbar button:hover { background: rgba(255,255,255,0.2); }
+
+/* Right side selection toolbar */
+#selbar-right { position: absolute; display: none; z-index: 2000; background: #1f2937; color: #fff; border-radius: 6px; padding: 4px; box-shadow: var(--shadow); font-size: 13px; gap: 4px; align-items: center; transform: translateX(-50%); }
+#selbar-right::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #1f2937 transparent transparent transparent; }
+#selbar-right button { background: transparent; color: #fff; border: 1px solid transparent; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+#selbar-right button:hover { background: rgba(255,255,255,0.2); }
+
+#notes { position: fixed; right: 20px; bottom: 80px; width: 300px; height: 300px; background: #fff; border: 1px solid var(--line); border-radius: 8px; display: none; flex-direction: column; z-index: 1500; box-shadow: var(--shadow); font-size: 14px; }
+#notes header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--line); background: #f9fafb; border-radius: 8px 8px 0 0; }
+#notes header strong { font-weight: 600; color: #374151; }
+#notes header div { display: flex; gap: 6px; }
+#notes textarea { flex: 1; border: 0; padding: 12px; resize: none; font-family: inherit; line-height: 1.5; outline: none; }
+#notes textarea:focus { background: #fefefe; }
+.hl { background-color: #fde047; cursor: pointer; border-bottom: 1px dashed #ca8a04; }
+.hl-right { background-color: #a7f3d0; cursor: pointer; border-bottom: 1px dashed #10b981; }
+
+#toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 3000; font-size: 14px; }
+#results { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 16px 0; font-family: monospace; white-space: pre-wrap; }
+#results p { margin: 0 0 8px; }
+details.answerbox { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+details.answerbox summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+details.answerbox summary::-webkit-details-marker { display: none; }
+#answerContent { margin-top: 10px; }
+#answerContent ol { margin: 0; padding-left: 20px; }
+
+/* DRAG & DROP STYLES */
+.cardpool { background:#f1f5f9; border-radius:10px; padding:12px; margin-top: 12px; min-height: 48px; }
+.pool-vertical { display: flex; flex-direction: column; gap: 8px; }
+.card { 
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; 
+    padding: 10px 14px; display: block; cursor: grab; 
+    box-shadow: 0 1px 3px rgba(0,0,0,.05); user-select: none;
+    font-size: 14px; line-height: 1.4; width: 100%;
+    text-align: left;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+.card:hover { border-color: var(--accent); background: #fcfcfc; }
+.card:active { cursor: grabbing; }
+.card.ghost { opacity: 0.5; background: #e2e8f0; }
+.card strong { color: var(--accent); margin-right: 6px; font-weight: 700; }
+.dropzone { 
+    border: 2px dashed #cbd5e1; background: #f8fafc; border-radius: 8px; 
+    min-height: 50px; padding: 4px; 
+    display: flex; align-items: center; justify-content: center; 
+    width: 100%; margin-top: 6px; margin-bottom: 12px;
+    transition: all 0.2s;
+}
+.dropzone.over { outline: 2px solid var(--accent); background: #eff6ff; border-color: var(--accent); }
+.dropzone .card { margin: 0; width: 100%; border: 1px solid var(--accent); box-shadow: none; background: #fff; }
+
+/* Question List Styles */
+.mcq-group { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.mcq-group label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 14px; line-height: 1.4; padding: 6px; border-radius: 6px; transition: background 0.1s; }
+.mcq-group label:hover { background: #f3f4f6; }
+.mcq-group input { margin-top: 3px; }
+
+.question-row { display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px dashed var(--line); padding-bottom: 12px; align-items: flex-start; }
+.question-text { flex: 1; margin-right: 15px; }
+.radio-group { display: flex; gap: 12px; flex-shrink: 0; }
+.radio-group label { font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+
+body.dark { --bg: #0f172a; --panel: #1e293b; --line: #334155; --muted: #94a3b8; color: #e2e8f0; }
+body.dark .pane, body.dark #right { background: var(--panel); }
+body.dark #right { background: #131c2d; }
+body.dark button, body.dark .theme-toggle { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark button:hover { background: #475569; }
+body.dark .group, body.dark #results, body.dark details.answerbox, body.dark .list-box, body.dark #notes, body.dark header { background: #1e293b; border-color: #334155; }
+body.dark .practice-nav { background: #1e293b; border-top-color: #334155; }
+body.dark .q-item { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark .q-item:hover { background: #475569; }
+body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+body.dark #timer { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark #timer.paused { background: #402323; color: #f87171; border-color: #7f1d1d; }
+body.dark .hl { background-color: #a16207; border-bottom-color: #eab308; color: #fff; }
+body.dark .hl-right { background-color: #065f46; border-bottom-color: #10b981; color: #fff; }
+body.dark .cardpool { background:#0f172a; }
+body.dark .card { background: #334155; border-color: #475569; color: #e2e8f0; }
+body.dark .dropzone { border-color: #475569; background: #131c2d; }
+body.dark .dropzone.over { background: #1e293b; }
+body.dark #notes textarea { background: #1e293b; color: #e2e8f0; }
+body.dark .mcq-group label:hover { background: #334155; }
+
+@media (max-width: 768px) {
+  .shell { flex-direction: column; }
+  #divider { display: none; }
+  #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- 1. Bottom Navigation Bar -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <!-- Group 1 -->
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <!-- Group 2 -->
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <!-- Group 3 -->
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<!-- 2. Main Content Shell -->
+<div class="shell">
+  <!-- Left Pane: Reading Passage -->
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 3</h2>
+    <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+    
+    <h3>200 Years of Australian Landscapes at the Royal Academy in London</h3>
+    <p><em>This exhibition promises to chart the evolution of a nation through its art, but not everyone agrees with the reasons behind the choice of artwork.</em></p>
+  
+    <p>For the casual viewer, the exhibition of landscapes, <em>Australia</em>, selected by the Royal Academy of Art, will be a spectacular guide through Australian art history. Included in the exhibition are a range of artists and styles, dating from the earliest days of colonial art and progressing through expressionism and modernism to the greats of the 20th century, culminating with the current generation of Australian artists. It is hardly surprising, then, that this results in a flexible, wide-ranging notion of landscape.</p>
+
+    <p>But this landmark exhibition gives rise to some questions, and perhaps problems, regarding Britain's relationship with its former colony. By choosing a style of painting at which British artists excel, the Academy could be seen as inviting criticism that hints at a telling attitude towards Australian art by comparison. But it is the very theme of landscape that provides the strongest connection to Australian art from Britain. To consider it condescending is perhaps too strong, but for Joanna Mendelssohn, an Australian critic and Associate Professor at the University of NSW's College of Fine Arts (COFA), there is a suggestion that British artistic values have directed this exhibition, rather than allowing Australia the freedom to demonstrate its maturity.</p>
+
+    <p>What Mendelssohn found surprising about this exhibition was that the underlying rules for the selection of works seemed to have been so conservative. Since the landscape is a very strong British artistic theme, it appeared to her that when the British looked to the art of a former colony, there was a tendency for them to think that those colonies would continue to be like the British themselves. In reviewing <em>Australia</em>, the British insisted on looking at the genre of landscape painting.</p>
+
+    <p>Because of colonial ties, it was inevitable during Australian art's formative years that it would reflect Britain's devotion to the beloved landscape before its own character and idiosyncrasies took shape. And while Mendelssohn's concern over the exhibition's conventional selection is valid, the Academy is nevertheless embracing the peculiarities of Australian art from the mid-19th century onward, albeit within the boundaries of landscape.</p>
+
+    <p><em>Australia</em> is curated by Kathleen Soriano, director of exhibitions at the Royal Academy. "Certainly the influence of English, French, or German art is much more evident in the early periods, in the early 1800s to mid-1800s," she says. "What I wanted to show was how Australian art develops a real distinctiveness, associated with the landscape and the light."</p>
+
+    <p>The fusion of tradition of the European kind with something more specifically Australian, and often personal, is crucial to the exhibition, and extends particularly to some of the more contemporary artists involved. Sydney-born video artist Shaun Gladwell is a good example of this. Gladwell's most famous piece, which is featured in the exhibition, is <em>Storm Sequence</em> (2000), a video of Gladwell skateboarding on the Bondi seafront as one of Sydney's signature brutal storms lingers offshore. It is his acknowledgment of landscape (or seascape) tradition, colored by Gladwell's own individualism. "To exhibit my work in this show might make some sense because I was interested in Turner and the idea of atmosphere affecting vision, something I was really interested in around the time of <em>Storm Sequence</em>. I was thinking about this tradition of Romantic landscape, but I wanted to make it personal," says Gladwell. But he didn't want to just embark on borrowing imagery from elsewhere. He wanted to bring it to his experience and his world through skateboarding and beach culture.</p>
+
+    <p>So while it may seem narrow for Britain to reduce Australian art to the genre of landscape, there can be little denying that British landscape painting is still relevant to a current generation of Australian practitioners, however indirectly.</p>
+
+    <p>Visitors to the exhibition encounter Australian Aboriginal art first, the idea being that these works warrant a prominent position because they were 'first'. Over the last couple of decades, London has hosted many successful exhibitions of Aboriginal art in smaller spaces, but for Soriano, <em>Australia</em> represents an opportunity to place such art in a broader context, with new relationships to the art of the settlers and white Australia. 'One of the reasons landscape makes sense as being the right theme was because Aboriginal art started in and on the landscape,' she says. '[The exhibition] is a beautiful meshing of the two different kinds of art, that allowed me to bring them together comfortably and honestly within this theme. It was important for me to present Indigenous art to audiences, and I felt it was most authentic that it was seen as part of Australian art history, rather than a separate area with a world of its own.'</p>
+
+    <p>Meanwhile, Australian critic Mendelssohn also points out that London is increasingly less important to today's generation of artists, and this somewhat weakens the ceremony surrounding the exhibition in London. 'China is the most important art market in the world,' she says. 'If you've made it in Shanghai, you've made it. The world has changed. My students in Australia, who come from all over the world, really want to see Venice Biennale and Art Basel, but they're less interested in going to London. When I was growing up, London was the destination, and then when I was at university all the smart young things wanted to go to New York,' she added. 'Now they want to go everywhere. There's no such thing as the centre and the periphery like there used to be. It's much more complicated.'</p>
+    
+    <p>&nbsp;</p> <!-- Final padding -->
+  </section>
+
+  <!-- Draggable Divider -->
+  <div id="divider" title="Drag to resize"></div>
+
+  <!-- Right Pane: Questions and Controls -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- QUESTION GROUP 1: YES/NO/NOT GIVEN -->
+    <div class="group">
+      <h4>Questions 27–31</h4>
+      <p>Do the following statements agree with the views of the writer in Reading Passage 3?</p>
+      <p><em>In boxes 27–31 on your answer sheet, write</em></p>
+      <ul style="list-style:none; padding-left:0; font-weight:bold; font-size:0.9em;">
+        <li>YES <span style="font-weight:normal; margin-left:45px;">if the statement agrees with the views of the writer</span></li>
+        <li>NO <span style="font-weight:normal; margin-left:52px;">if the statement contradicts the views of the writer</span></li>
+        <li>NOT GIVEN <span style="font-weight:normal; margin-left:8px;">if it is impossible to say what the writer thinks about this</span></li>
+      </ul>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q27-anchor"></a><b>27</b> As expected, the artworks chosen for the exhibition reflect a narrow interpretation of landscape.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q27" value="yes"> Yes</label>
+            <label><input type="radio" name="q27" value="no"> No</label>
+            <label><input type="radio" name="q27" value="not given"> NG</label>
+        </div>
+      </div>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q28-anchor"></a><b>28</b> The Academy rejected Australian suggestions for the subject of the exhibition.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q28" value="yes"> Yes</label>
+            <label><input type="radio" name="q28" value="no"> No</label>
+            <label><input type="radio" name="q28" value="not given"> NG</label>
+        </div>
+      </div>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q29-anchor"></a><b>29</b> The colonial relationship meant that early Australian landscape painting followed the traditions of English landscape painting.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q29" value="yes"> Yes</label>
+            <label><input type="radio" name="q29" value="no"> No</label>
+            <label><input type="radio" name="q29" value="not given"> NG</label>
+        </div>
+      </div>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q30-anchor"></a><b>30</b> The exhibition reflects the fact that Australian art developed its own particular qualities.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q30" value="yes"> Yes</label>
+            <label><input type="radio" name="q30" value="no"> No</label>
+            <label><input type="radio" name="q30" value="not given"> NG</label>
+        </div>
+      </div>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q31-anchor"></a><b>31</b> Contemporary Australian artists have generally rejected British landscape traditions.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q31" value="yes"> Yes</label>
+            <label><input type="radio" name="q31" value="no"> No</label>
+            <label><input type="radio" name="q31" value="not given"> NG</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUESTION GROUP 2: MULTIPLE CHOICE -->
+    <div class="group">
+      <h4>Questions 32–36</h4>
+      <p>Choose the correct letter, <strong>A, B, C or D</strong>.</p>
+      
+      <div style="margin-bottom:16px;">
+        <p><a id="q32-anchor"></a><strong>32</strong> What is the writer's main point in the second paragraph?</p>
+        <div class="mcq-group">
+          <label><input type="radio" name="q32" value="a"> A. Australian landscape painting derives from the British tradition.</label>
+          <label><input type="radio" name="q32" value="b"> B. Australian landscape painting is more highly regarded than British.</label>
+          <label><input type="radio" name="q32" value="c"> C. Britain is still imposing its principles on Australian art.</label>
+          <label><input type="radio" name="q32" value="d"> D. British art cannot be compared to Australian art.</label>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <p><a id="q33-anchor"></a><strong>33</strong> What does Joanna Mendelssohn find surprising?</p>
+        <div class="mcq-group">
+          <label><input type="radio" name="q33" value="a"> A. Modern Australian landscape painting has great variety.</label>
+          <label><input type="radio" name="q33" value="b"> B. The guidelines for the choice of work were very traditional.</label>
+          <label><input type="radio" name="q33" value="c"> C. Landscape painting remains a popular subject for British artists.</label>
+          <label><input type="radio" name="q33" value="d"> D. The British find the Australian landscape unsuitable as a subject.</label>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <p><a id="q34-anchor"></a><strong>34</strong> Shaun Gladwell's work is included in the exhibition because</p>
+        <div class="mcq-group">
+          <label><input type="radio" name="q34" value="a"> A. it adopts a subjective approach to depicting the landscape.</label>
+          <label><input type="radio" name="q34" value="b"> B. skateboarding is an inspiration to many Australian artists.</label>
+          <label><input type="radio" name="q34" value="c"> C. storms are a significant feature in the Australian landscape.</label>
+          <label><input type="radio" name="q34" value="d"> D. Bondi is an iconic Australian location.</label>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <p><a id="q35-anchor"></a><strong>35</strong> What was the reason for Soriano including Aboriginal art in the exhibition</p>
+        <div class="mcq-group">
+          <label><input type="radio" name="q35" value="a"> A. It is not well known in London art circles.</label>
+          <label><input type="radio" name="q35" value="b"> B. Aboriginal landscape painting influenced Australian settlers.</label>
+          <label><input type="radio" name="q35" value="c"> C. It is part of the Australian art tradition and not independent of it.</label>
+          <label><input type="radio" name="q35" value="d"> D. Modern Aboriginal painting deals with changes to the landscape.</label>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <p><a id="q36-anchor"></a><strong>36</strong> By referring to China, Mendelssohn is making the point that</p>
+        <div class="mcq-group">
+          <label><input type="radio" name="q36" value="a"> A. having an exhibition in London is not as important as it used to be.</label>
+          <label><input type="radio" name="q36" value="b"> B. young artists in Britain are not interested in Australian art.</label>
+          <label><input type="radio" name="q36" value="c"> C. art from Shanghai is more important than Australian art.</label>
+          <label><input type="radio" name="q36" value="d"> D. New York is still a preferred destination for young artists.</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUESTION GROUP 3: MATCHING ENDINGS -->
+    <div class="group">
+      <h4>Questions 37–40</h4>
+      <p>Complete each sentence with the correct ending, <strong>A–F</strong>, below.</p>
+      <p><em>Drag the correct ending block to the box below each sentence start.</em></p>
+
+      <!-- Draggable Full Text Options -->
+      <div class="cardpool pool-vertical" id="pool-endings">
+        <div class="card" draggable="true" id="c-a" data-value="A"><strong>A</strong> reflects the mood created by the natural environment.</div>
+        <div class="card" draggable="true" id="c-b" data-value="B"><strong>B</strong> demonstrates that the dominant art form in Australia is landscape painting.</div>
+        <div class="card" draggable="true" id="c-c" data-value="C"><strong>C</strong> demonstrates an understanding of the historical importance of the land.</div>
+        <div class="card" draggable="true" id="c-d" data-value="D"><strong>D</strong> showcases a very small number of artists.</div>
+        <div class="card" draggable="true" id="c-e" data-value="E"><strong>E</strong> demonstrates a strong European flavour.</div>
+        <div class="card" draggable="true" id="c-f" data-value="F"><strong>F</strong> shows an acceptance of the unique qualities of Australian art.</div>
+      </div>
+
+      <hr style="border:0; border-top:1px dashed var(--line); margin:20px 0;">
+
+      <div>
+        <p><a id="q37-anchor"></a><strong>37</strong> In spite of its conservatism, the Royal Academy exhibition</p>
+        <span class="dropzone" data-target="q37"></span>
+      </div>
+      <div>
+        <p><a id="q38-anchor"></a><strong>38</strong> Australian art of the early to mid-1800s</p>
+        <span class="dropzone" data-target="q38"></span>
+      </div>
+      <div>
+        <p><a id="q39-anchor"></a><strong>39</strong> The modern work by Gladwell chosen for the exhibition</p>
+        <span class="dropzone" data-target="q39"></span>
+      </div>
+      <div>
+        <p><a id="q40-anchor"></a><strong>40</strong> Including Aboriginal art in the exhibition</p>
+        <span class="dropzone" data-target="q40"></span>
+      </div>
+    </div>
+
+    <!-- Controls and Results -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<!-- 3. UI Helper Elements -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+
+<!-- Right side selection toolbar -->
+<div aria-label="Right side selection tools" id="selbar-right" role="toolbar">
+  <button id="btnHL-right">Highlight</button>
+  <button id="btnUH-right">Remove</button>
+</div>
+
+<div id="notes">
+  <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// --- MASTER JAVASCRIPT TEMPLATE ---
+
+// 1. STATE & ANSWERS
+const answers = {
+    q27: "no",
+    q28: "not given",
+    q29: "yes",
+    q30: "yes",
+    q31: "no",
+    q32: "c",
+    q33: "b",
+    q34: "a",
+    q35: "c",
+    q36: "a",
+    q37: "f",
+    q38: "e",
+    q39: "a",
+    q40: "c"
+};
+
+// 2. UI & INTERACTIVITY (Highlighter, Timer, Dark Mode)
+let timerSeconds = 0, timerInterval;
+let isTimerPaused = false;
+const timerEl = document.getElementById('timer');
+
+function toggleTimer() {
+    isTimerPaused = !isTimerPaused;
+    timerEl.classList.toggle('paused', isTimerPaused);
+    showToast(isTimerPaused ? 'Timer paused' : 'Timer resumed');
+}
+
+setInterval(() => {
+    if (!isTimerPaused) {
+        timerSeconds++;
+        const minutes = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+        const seconds = String(timerSeconds % 60).padStart(2, '0');
+        timerEl.textContent = `${minutes}:${seconds}`;
+    }
+}, 1000);
+
+function toggleDarkMode() {
+    document.body.classList.toggle('dark-mode');
+    document.body.classList.toggle('dark');
+    const isDark = document.body.classList.contains('dark-mode');
+    localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
+    document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️';
+}
+
+function scrollToElement(id) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function showToast(msg) {
+    const toastEl = document.getElementById('toast');
+    toastEl.textContent = msg;
+    toastEl.style.display = 'block';
+    setTimeout(() => { toastEl.style.display = 'none'; }, 1500);
+}
+
+// 3. HIGHLIGHTING & NOTE TAKING LOGIC
+const selbar = document.getElementById('selbar');
+const selbarRight = document.getElementById('selbar-right');
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+
+// Handle Text Selection in Left Pane (Reading Passage)
+document.addEventListener('mouseup', (e) => {
+    const sel = window.getSelection();
+    const isLeftPane = document.getElementById('left').contains(sel.anchorNode);
+    const isRightPane = document.getElementById('right').contains(sel.anchorNode);
+    
+    // Only show toolbar if text is selected within either pane
+    if (sel.toString().length > 0) {
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        
+        if (isLeftPane) {
+            selbarRight.style.display = 'none';
+            selbar.style.top = `${rect.top + window.scrollY - 40}px`;
+            selbar.style.left = `${rect.left + rect.width / 2}px`;
+            selbar.style.display = 'flex';
+        } else if (isRightPane) {
+            selbar.style.display = 'none';
+            selbarRight.style.top = `${rect.top + window.scrollY - 40}px`;
+            selbarRight.style.left = `${rect.left + rect.width / 2}px`;
+            selbarRight.style.display = 'flex';
+        }
+    } else if (!selbar.contains(e.target) && !selbarRight.contains(e.target)) {
+        selbar.style.display = 'none';
+        selbarRight.style.display = 'none';
+    }
+});
+
+// Left Pane Highlighting
+document.getElementById('btnHL').onclick = () => {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const span = document.createElement('span');
+    span.className = 'hl';
+    try {
+        range.surroundContents(span);
+        sel.removeAllRanges();
+        selbar.style.display = 'none';
+    } catch (e) {
+        showToast("Cannot highlight across different blocks.");
+    }
+};
+
+// Right Pane Highlighting
+document.getElementById('btnHL-right').onclick = () => {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const span = document.createElement('span');
+    span.className = 'hl-right';
+    try {
+        range.surroundContents(span);
+        sel.removeAllRanges();
+        selbarRight.style.display = 'none';
+    } catch (e) {
+        showToast("Cannot highlight across different blocks.");
+    }
+};
+
+// Left Pane Remove Highlight
+document.getElementById('btnUH').onclick = () => {
+    const sel = window.getSelection();
+    if (sel.anchorNode && sel.anchorNode.parentElement && 
+        sel.anchorNode.parentElement.classList.contains('hl')) {
+        const parent = sel.anchorNode.parentElement;
+        const text = document.createTextNode(parent.textContent);
+        parent.parentNode.replaceChild(text, parent);
+        sel.removeAllRanges();
+        selbar.style.display = 'none';
+    } else {
+        showToast("Select a highlighted area to remove.");
+    }
+};
+
+// Right Pane Remove Highlight
+document.getElementById('btnUH-right').onclick = () => {
+    const sel = window.getSelection();
+    if (sel.anchorNode && sel.anchorNode.parentElement && 
+        sel.anchorNode.parentElement.classList.contains('hl-right')) {
+        const parent = sel.anchorNode.parentElement;
+        const text = document.createTextNode(parent.textContent);
+        parent.parentNode.replaceChild(text, parent);
+        sel.removeAllRanges();
+        selbarRight.style.display = 'none';
+    } else {
+        showToast("Select a highlighted area to remove.");
+    }
+};
+
+document.getElementById('btnNote').onclick = () => {
+    toggleNotes();
+    selbar.style.display = 'none';
+};
+
+function toggleNotes() {
+    notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+
+document.getElementById('btnClose').onclick = toggleNotes;
+document.getElementById('btnCopy').onclick = () => {
+    noteArea.select();
+    document.execCommand('copy');
+    showToast('Notes copied to clipboard');
+};
+
+// 4. DRAG AND DROP LOGIC
+document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', card.id);
+        setTimeout(() => card.classList.add('ghost'), 0);
+    });
+    card.addEventListener('dragend', () => card.classList.remove('ghost'));
+});
+
+document.querySelectorAll('.dropzone').forEach(zone => {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('over');
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        
+        if (!draggedCard) return;
+
+        const originPool = document.getElementById(draggedCard.dataset.originPool);
+        const cardToDrop = draggedCard.dataset.clone === 'true' ? draggedCard.cloneNode(true) : draggedCard;
+        
+        // Return existing card to its pool
+        if (zone.children.length > 0 && zone.children[0].classList.contains('card')) {
+            const existingCard = zone.children[0];
+            const itsOriginPool = document.getElementById(existingCard.dataset.originPool);
+            if (itsOriginPool) itsOriginPool.appendChild(existingCard);
+        }
+
+        zone.innerHTML = '';
+        zone.appendChild(cardToDrop);
+        updateAnswerStatus();
+    });
+});
+
+document.querySelectorAll('.cardpool').forEach(pool => {
+    pool.addEventListener('dragover', e => e.preventDefault());
+    pool.addEventListener('drop', e => {
+        e.preventDefault();
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        if (draggedCard && draggedCard.parentElement.classList.contains('dropzone')) {
+            const oldZone = draggedCard.parentElement;
+            
+            if (draggedCard.dataset.clone === 'true') {
+                draggedCard.remove();
+            } else {
+                pool.appendChild(draggedCard);
+            }
+            
+            oldZone.innerHTML = '';
+            updateAnswerStatus();
+        }
+    });
+});
+
+// 5. GRADING & STATE MANAGEMENT
+function grade() {
+    let total = 0, correct = 0, lines = [];
+    
+    Object.keys(answers).forEach(qKey => {
+        const textInput = document.querySelector(`input[name="${qKey}"][type="text"]`);
+        const radioInput = document.querySelector(`input[name="${qKey}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qKey}"]`);
+        let userAnswer = '';
+        
+        if (textInput) {
+            userAnswer = textInput.value.trim();
+        } else if (radioInput) {
+            userAnswer = radioInput.value;
+        } else if (dropzone) {
+            const card = dropzone.querySelector('.card');
+            userAnswer = card ? card.dataset.value : '';
+        }
+        
+        const isCorrect = userAnswer.toLowerCase() === answers[qKey].toLowerCase();
+        
+        total++;
+        if (isCorrect) correct++;
+        
+        let resultLine = `${qKey.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : `❌ (Correct: ${answers[qKey]})`}`;
+        lines.push(resultLine);
+    });
+
+    const acc = total ? Math.round(100 * correct / total) : 0;
+    document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p><pre>${lines.join('\n')}</pre>`;
+    document.getElementById('answerContent').innerHTML = `<ol start="27">${Object.entries(answers).map(([key, val]) => `<li><strong>${key.replace('q','')}:</strong> ${val}</li>`).join('')}</ol>`;
+    document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+
+function resetForm() {
+    document.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
+    document.querySelectorAll('input[type="radio"]').forEach(input => input.checked = false);
+    document.querySelectorAll('.dropzone').forEach(zone => {
+        if (zone.children.length > 0) {
+            const card = zone.children[0];
+            const originPool = document.getElementById(card.dataset.originPool);
+            if (originPool && card.dataset.clone !== 'true') {
+                originPool.appendChild(card);
+            } else {
+                card.remove(); 
+            }
+        }
+        zone.innerHTML = '';
+    });
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('answerContent').innerHTML = '';
+    document.querySelector('#answerBox .badge').textContent = 'hidden';
+    updateAnswerStatus();
+    showToast('Form has been reset');
+}
+
+function updateAnswerStatus() {
+    document.querySelectorAll('.q-item').forEach(item => {
+        const qNum = item.id.replace('-nav', '');
+        const textInput = document.querySelector(`input[name="${qNum}"][type="text"]`);
+        const radioInput = document.querySelector(`input[name="${qNum}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qNum}"]`);
+        let answered = false;
+        
+        if (textInput) answered = textInput.value.trim() !== '';
+        if (radioInput) answered = true;
+        if (dropzone) answered = !!dropzone.querySelector('.card');
+        
+        item.classList.toggle('answered', answered);
+    });
+}
+
+// 6. INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        toggleDarkMode();
+    }
+    document.querySelectorAll('input, .dropzone').forEach(el => {
+        el.addEventListener('input', updateAnswerStatus);
+        el.addEventListener('change', updateAnswerStatus);
+        el.addEventListener('drop', updateAnswerStatus);
+    });
+    
+    // Setup origin pool data for cards
+    document.querySelectorAll('.card').forEach(card => {
+        if (card.parentElement.classList.contains('cardpool')) {
+            card.dataset.originPool = card.parentElement.id;
+        }
+    });
+
+    // Load LMS script
+    if (!window.practicePageEnhancer) {
+        const script = document.createElement('script');
+        script.src = '../../js/practice-page-enhancer.js';
+        script.onload = () => console.log('Enhancer loaded.');
+        script.onerror = () => console.error('Failed to load enhancer.');
+        document.head.appendChild(script);
+    }
+});
+</script>
+
+</body>
+</html>

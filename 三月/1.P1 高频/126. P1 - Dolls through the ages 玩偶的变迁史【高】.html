@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Dolls through the ages - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+   .custom-br {
+    display: block;
+    margin-bottom: 1300px;
+    content: "";
+  }
+
+
+  * {
+    line-height: 30px;
+    font-size: inherit;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px;
+    --font-size-large: 20px;
+  }
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular);
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    color: #111827;
+    padding-bottom: 82px; 
+  }
+  .top-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: absolute; 
+    left:50%;
+    top: 10px;
+    transform: translateX(-50%);
+    display: inline-block; 
+    background:var(--panel); 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--panel);
+    cursor:pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+	position: absolute;
+	right: 10px;
+	top: 10px;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+    min-width: 280px;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+    font-size: inherit;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:calc(100vh - 82px);
+    width:100%; 
+    overflow: hidden;
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+    -webkit-overflow-scrolling: touch;
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4,h5 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+    font-size: inherit;
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: break-word; 
+    hyphens: auto; 
+  }
+  .paragraph-label {
+    font-weight: 600;
+    color: var(--accent);
+    margin-right: 8px;
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+    font-size: inherit;
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition: all 0.2s ease;
+    font-size: inherit;
+  }
+  button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+    transition: filter 0.2s ease;
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow:var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+    transform: none;
+    box-shadow: none;
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 94px; 
+    width: 320px; 
+    max-width: calc(100% - 24px); 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow:var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+    background: transparent;
+    font-size: inherit;
+  }
+  #notes textarea:focus {
+    outline: none;
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 94px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+    animation: fadeIn 0.3s, fadeOut 0.3s 1.2s;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translate(-50%, 20px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+  }
+  @keyframes fadeOut {
+    from { opacity: 1; transform: translate(-50%, 0); }
+    to { opacity: 0; transform: translate(-50%, 20px); }
+  }
+  .tf-option, .blank-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:6px 0;
+  }
+  .tf-option label, .blank-option label {
+    cursor:pointer;
+    padding:4px 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    transition: all 0.2s;
+    font-size: inherit;
+  }
+  .tf-option label:hover, .blank-option label:hover {
+    background:#f1f5f9;
+    border-color:var(--accent);
+    color:var(--accent);
+  }
+  input.blank {
+    width: 100px;
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    font-size: inherit;
+  }
+  input.blank:focus {
+    outline: none;
+    border-color:var(--accent);
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  .word-limit {
+    color: var(--muted);
+    font-size: 0.9em;
+    margin: 4px 0 8px;
+  }
+  /* 修正1-6题字体颜色，使其与其他文本保持一致 */
+  .summary-text {
+    color: #111827;
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-top:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+    overflow-x: auto;
+    padding-bottom: 4px;
+    max-width: calc(100% - 80px);
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+    flex-shrink:0;
+    font-size: inherit;
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: inherit;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+    font-size: inherit;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  ul {
+    list-style-type: none;
+    padding-left: 20px;
+    margin: 8px 0;
+    font-size: inherit;
+  }
+  ul li::before {
+    content: "- ";
+    color: inherit;
+    font-weight: 500;
+  }
+  @media (max-width: 768px) {
+    .shell {
+      flex-direction: column;
+      height: auto;
+      min-height: calc(100vh - 82px);
+    }
+    #left, #right {
+      flex: none;
+      width: 100%;
+      min-width: auto;
+      max-height: 50vh;
+    }
+    #divider {
+      flex: none;
+      height: 8px;
+      width: 100%;
+      cursor: ns-resize;
+      background: linear-gradient(0deg,var(--line),#d1d5db);
+    }
+    .practice-nav .questions {
+      max-width: calc(100% - 60px);
+    }
+    .top-controls {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    #timer-container {
+      align-self: flex-end;
+      margin-top: -28px;
+    }
+    input.blank {
+      width: 80px;
+    }
+  }
+</style>
+</head>
+<body class="font-regular">
+<!-- 底部导航 -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q3-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q4-anchor')">4</div>
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q5-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q7-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q9-anchor')">9</div>
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q10-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q11-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
+  </div>
+</div>
+<!-- 字体设置模态框 -->
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (16px - Default)</div>
+  <div class="font-option" data-size="moderate">Moderate (18px - Larger)</div>
+  <div class="font-option" data-size="large">Large (20px - Largest)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+<!-- 顶部标题栏 -->
+<div id="top" class="top" style="background-color: #bb5252; width: 100%; height: 60px;">
+  <h3 style="font-size: 23px;line-height: 55px;margin-left: 10px;">Dolls through the ages</h3>
+  <div id="timer-container" >
+    <div id="timer" style="margin: 0px auto;">00:00</div>
+    <button id="settingsBtn" onclick="openSettingsModal()">
+      Settings
+    </button>
+  </div>
+</div>
+<!-- 主容器 -->
+<div class="shell">
+  <!-- 左面板：文章 -->
+  <section class="pane" id="left">
+    You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</br>
+    <p></p>
+    <h3>Dolls through the ages</h3>
+    <p>
+      What is today a simple children’s toy has a surprisingly rich history. Dolls have been a part of humankind for thousands of years. Often depicting religious figures, or used as playthings, early dolls were probably made from primitive materials such as clay, fur, or wood.
+    </p>
+    <p>
+      Dolls constructed of flat pieces of wood, painted with various designs, and with ‘hair’ made of clay, have often been found in Egyptian graves dating back to 2000 BC. Egyptian tombs of wealthy families have included pottery dolls. Dolls being placed in these graves leads some to believe that they were cherished possessions.
+    </p>
+    <p>
+      Girls from ancient Greece and Rome offered their wooden dolls to goddesses after they were too ‘grown-up’ to play with dolls. Most ancient dolls that were found in tombs were very simple creations, often made from such materials as clay, rags, wood, or bone. Some of the more unique dolls were made with ivory or wax. The main goal was to make the doll as lifelike as possible. That ideal led to the creation of dolls with movable limbs and removable garments, dating back to 600 BC.
+    </p>
+    <p>
+      Following the era of the ancient dolls, Europe became a major hub for doll production. These dolls were primarily made of wood. Fewer than 30 examples of primitive wooden stump dolls from England survive today. The Grodnertal area of Germany produced many peg wooden dolls, a type of doll that has very simple peg joints and resembles a clothespin (a device for hanging washing on a clothesline). An alternative to wood was developed in the 1800s.
+    </p>
+    <p>
+      ‘Composition’ is a collective term for mixtures of pulped wood or paper that were used to make doll heads and bodies. These mixtures were moulded under pressure, creating a durable doll that could be mass-produced. Manufacturers closely guarded the recipes for their mixtures, sometimes using strange ingredients like ash or eggshells. Papier-mâché, a type of composition, was one of the most popular mixtures.
+    </p>
+    <p>
+      In addition to wooden dolls, wax dolls grew in popularity in the 17th and 18th centuries. Munich in Germany was a major manufacturing centre for wax dolls. Wax dollmakers would model a doll’s head in wax or clay, and then cover it with plaster to create a mould. Then they would pour melted wax into the cast. The wax for the head would be very thin, no more than 3 mm. Some of the most distinctive wax dolls were created in England between 1850 and 1930. One of the first dolls that portrayed a baby was made in England from wax at the beginning of the 19th century.
+    </p>
+    <p>
+      Around the same time, porcelain became popular. It is made by firing special clays in a kiln at more than 2372 degrees Fahrenheit (1300°C), and only a few clays can withstand firing at such high temperatures. Porcelain is used generically to refer to both china and bisque dolls; china is glazed, whereas bisque is unglazed. Germany, France, and Denmark started creating china heads for dolls in the 1840s. These china heads were replaced in the 1860s by ones made of bisque. Bisque, which is porcelain fired twice with colour added to it after the first firing, looked more like skin than china did.
+    </p>
+    <p>
+      In France, the bébé was popular in the 1880s, and it has become a highly sought-after doll today. The bébé, first made in the 1850s, was different from its predecessors because it depicted a younger girl. Until then, most French dolls were representations of adults. Although the French dolls were unrivalled in their artistry, German bisque dolls became quite popular because they were not as expensive. Kammer & Reinhardt introduced a bisque character doll in the 1900s, starting a trend of creating realistic dolls.
+    </p>
+    <p>
+      For many centuries, rag dolls were made by mothers for their children. The term ‘rag doll’ refers generically to dolls made of any fabric. ‘Cloth doll’ refers to a subset of rag dolls made of linen or cotton. Commercially produced rag dolls were first introduced in the 1850s by English and American manufacturers. Although not as sophisticated as dolls made from other materials, rag dolls were well loved, often as a child’s first toy.
+    </p>
+    <p>
+      Dollmaking did not become an industry in the United States until after the Civil War in the 1860s. Doll production was concentrated in the New England region of the United States, with dolls made from a variety of materials such as leather, rubber, papier-mâché, and cloth. Celluloid was developed in the state of New Jersey in the late 1860s and was used to manufacture dolls until the mid-1950s. German, French, American, and Japanese factories churned out cheaply produced celluloid dolls in mass quantities. However, celluloid fell out of favour because of its extreme flammability and propensity to fade in bright light.
+    </p>
+    <p>
+      After World War I, dollmakers experimented with plastics. Hard plastic dolls were manufactured in the 1940s. They resembled composition dolls, but they were much more durable. Other materials used in doll manufacturing included rubber, foam rubber, and vinyl in the 1950s and 1960s. Vinyl changed dollmaking, allowing dollmakers to root hair into the head, rather than using wigs or painting the hair. Although most dolls are now mass-manufactured using these modern materials, many modern dollmakers are still using the traditional materials of the past to make collectible dolls.
+    </p>
+    <!-- 多加空白行防止加载不完全 -->
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+  </section>
+  <!-- 分隔线 -->
+  <div id="divider" title="Drag to resize"></div>
+  <!-- 右面板：题目和答案 -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- 1-6题：填空题 -->
+    <div class="group">
+      <h4>Questions 1–6</h4>
+      Complete the notes below.</br><p></p>
+      Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</br><p></p>
+      <span class="word-limit">Write your answers in boxes 1–6 on your answer sheet.</br><p></p>
+      
+      <h5>Dolls</h5>
+      <span class="summary-text">
+        <strong>Earliest known dolls</strong></br>
+        • represented religious figures</br>
+        • used as toys</br>
+        • Egypt, 2000 BC</br>
+        – bodies were made of wood</br>
+        – <span class="question-number"><a id="q1-anchor"></a>1.</span> <input type="text" class="blank" id="q1" name="q1"> was used for the hair</br><p></p>
+        
+        <strong>Ancient Greece and Rome</strong></br>
+        – dolls were given to <span class="question-number"><a id="q2-anchor"></a>2.</span> <input type="text" class="blank" id="q2" name="q2"> by older girls</br><p></p>
+        
+        • 600 BC</br>
+        – realistic dolls had separate clothes and <span class="question-number"><a id="q3-anchor"></a>3.</span> <input type="text" class="blank" id="q3" name="q3"> that could be put in different positions</br><p></p>
+        
+        <strong>17th and 18th centuries</strong></br>
+        – dolls made of <span class="question-number"><a id="q4-anchor"></a>4.</span> <input type="text" class="blank" id="q4" name="q4"> became more common</br>
+        – moulds made of <span class="question-number"><a id="q5-anchor"></a>5.</span> <input type="text" class="blank" id="q5" name="q5"></br><p></p>
+        
+        <strong>1800s</strong></br>
+        – new manufacturing process developed</br>
+        – new group of mixtures known as <span class="question-number"><a id="q6-anchor"></a>6.</span> <input type="text" class="blank" id="q6" name="q6"></br>
+        – recipes for these mixtures kept secret</br><p></p>
+      </span>
+    </div>
+    
+    <!-- 7-13题：判断题 -->
+    <div class="group">
+      <h4>Questions 7–13</h4>
+      Do the following statements agree with the information in Reading Passage 1?</br><p></p>
+      In boxes 7–13 on your answer sheet, write:</br><p></p>
+      <ul>
+        <li>TRUE if the statement agrees with the information</li>
+        <li>FALSE if the statement contradicts the information</li>
+        <li>NOT GIVEN if there is no information about this</li>
+      </ul>
+      
+      <a id="q7-anchor"></a>
+      <div id="q7-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">7.</span> Bisque dolls appear less realistic than dolls made of china.</br><p></p>
+        <div class="tf-option">
+          <label><input type="radio" name="q7" value="TRUE"> TRUE</label>
+          <label><input type="radio" name="q7" value="FALSE"> FALSE</label>
+          <label><input type="radio" name="q7" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q8-anchor"></a>
+      <div id="q8-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">8.</span> French dolls tended to cost more than German bisque dolls.</br><p></p>
+        <div class="tf-option">
+          <label><input type="radio" name="q8" value="TRUE"> TRUE</label>
+          <label><input type="radio" name="q8" value="FALSE"> FALSE</label>
+          <label><input type="radio" name="q8" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q9-anchor"></a>
+      <div id="q9-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">9.</span> The first rag dolls were made in the 1850s.</br><p></p>
+        <div class="tf-option">
+          <label><input type="radio" name="q9" value="TRUE"> TRUE</label>
+          <label><input type="radio" name="q9" value="FALSE"> FALSE</label>
+          <label><input type="radio" name="q9" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q10-anchor"></a>
+      <div id="q10-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">10.</span> Only dolls made of cotton or linen are classified as cloth dolls.</br><p></p>
+        <div class="tf-option">
+          <label><input type="radio" name="q10" value="TRUE"> TRUE</label>
+          <label><input type="radio" name="q10" value="FALSE"> FALSE</label>
+          <label><input type="radio" name="q10" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q11-anchor"></a>
+      <div id="q11-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">11.</span> Dolls made of celluloid tended to lose their colour.</br><p></p>
+        <div class="tf-option">
+          <label><input type="radio" name="q11" value="TRUE"> TRUE</label>
+          <label><input type="radio" name="q11" value="FALSE"> FALSE</label>
+          <label><input type="radio" name="q11" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q12-anchor"></a>
+      <div id="q12-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">12.</span> Composition dolls lasted longer than the plastic dolls that were made in the 1940s.</br><p></p>
+        <div class="tf-option">
+          <label><input type="radio" name="q12" value="TRUE"> TRUE</label>
+          <label><input type="radio" name="q12" value="FALSE"> FALSE</label>
+          <label><input type="radio" name="q12" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q13-anchor"></a>
+      <div id="q13-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">13.</span> Doll collectors prefer a doll to be dressed in its original clothing.</br><p></p>
+        <div class="tf-option">
+          <label><input type="radio" name="q13" value="TRUE"> TRUE</label>
+          <label><input type="radio" name="q13" value="FALSE"> FALSE</label>
+          <label><input type="radio" name="q13" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 提交、重置、笔记按钮 -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <!-- 结果显示区域 -->
+    <div id="results"></div>
+    
+    <!-- 答案详情面板 -->
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>1</td>
+            <td>clay</td>
+            <td>
+              <span class="explanation-text">题干“埃及公元前2000年玩偶的头发材料”，原文明确提到“with ‘hair’ made of clay”，对应“clay”（符合“ONE WORD ONLY”要求）。</br><p></p>
+              <span class="explanation-original">原文：Dolls constructed of flat pieces of wood... and with ‘hair’ made of clay, have often been found in Egyptian graves dating back to 2000 BC. (Paragraph 2)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>goddesses</td>
+            <td>
+              <span class="explanation-text">题干“古希腊和罗马年长女孩将玩偶送给____”，原文提到“Girls from ancient Greece and Rome offered their wooden dolls to goddesses”，对应“goddesses”。</br><p></p>
+              <span class="explanation-original">原文：Girls from ancient Greece and Rome offered their wooden dolls to goddesses after they were too ‘grown-up’ to play with dolls. (Paragraph 3)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>limbs</td>
+            <td>
+              <span class="explanation-text">题干“公元前600年玩偶可摆不同姿势的____”，原文提到“dolls with movable limbs and removable garments, dating back to 600 BC”，“movable limbs”即“可摆不同姿势的肢体”，对应“limbs”。</br><p></p>
+              <span class="explanation-original">原文：That ideal led to the creation of dolls with movable limbs and removable garments, dating back to 600 BC. (Paragraph 3)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>wax</td>
+            <td>
+              <span class="explanation-text">题干“17-18世纪更常见的玩偶材料”，原文提到“wax dolls grew in popularity in the 17th and 18th centuries”，“grew in popularity”即“became more common”，对应“wax”。</br><p></p>
+              <span class="explanation-original">原文：In addition to wooden dolls, wax dolls grew in popularity in the 17th and 18th centuries. (Paragraph 6)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>plaster</td>
+            <td>
+              <span class="explanation-text">题干“17-18世纪制作玩偶的模具材料”，原文提到“cover it with plaster to create a mould”，对应“plaster”。</br><p></p>
+              <span class="explanation-original">原文：Wax dollmakers would model a doll’s head in wax or clay, and then cover it with plaster to create a mould. (Paragraph 6)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>composition</td>
+            <td>
+              <span class="explanation-text">题干“1800年代新的混合材料类别名称”，原文提到“‘Composition’ is a collective term for mixtures of pulped wood or paper”，“collective term”即“group of mixtures known as”，对应“composition”。</br><p></p>
+              <span class="explanation-original">原文：‘Composition’ is a collective term for mixtures of pulped wood or paper that were used to make doll heads and bodies. (Paragraph 5)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>FALSE</td>
+            <td>
+              <span class="explanation-text">题干“素烧瓷（bisque）玩偶比瓷（china）玩偶更不逼真”，原文明确“Bisque... looked more like skin than china did”，即bisque更像皮肤（更逼真），与题干矛盾，故为FALSE。</br><p></p>
+              <span class="explanation-original">原文：Bisque, which is porcelain fired twice with colour added to it after the first firing, looked more like skin than china did. (Paragraph 7)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>TRUE</td>
+            <td>
+              <span class="explanation-text">题干“法国玩偶往往比德国素烧瓷玩偶贵”，原文提到“German bisque dolls became quite popular because they were not as expensive”，即德国玩偶“没那么贵”，反推法国玩偶更贵，与题干一致，故为TRUE。</br><p></p>
+              <span class="explanation-original">原文：Although the French dolls were unrivalled in their artistry, German bisque dolls became quite popular because they were not as expensive. (Paragraph 8)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>FALSE</td>
+            <td>
+              <span class="explanation-text">题干“第一批布偶（rag dolls）制作于1850年代”，原文提到“For many centuries, rag dolls were made by mothers... Commercially produced rag dolls were first introduced in the 1850s”，1850年代是“商业化生产”的开始，而非“第一批布偶”的诞生时间，与题干矛盾，故为FALSE。</br><p></p>
+              <span class="explanation-original">原文：For many centuries, rag dolls were made by mothers for their children... Commercially produced rag dolls were first introduced in the 1850s by English and American manufacturers. (Paragraph 9)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td>TRUE</td>
+            <td>
+              <span class="explanation-text">题干“只有棉或亚麻制作的玩偶被归为布制玩偶（cloth dolls）”，原文提到“‘Cloth doll’ refers to a subset of rag dolls made of linen or cotton”，明确cloth doll的定义是“亚麻或棉制作”，与题干一致，故为TRUE。</br><p></p>
+              <span class="explanation-original">原文：‘Cloth doll’ refers to a subset of rag dolls made of linen or cotton. (Paragraph 9)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>11</td>
+            <td>TRUE</td>
+            <td>
+              <span class="explanation-text">题干“赛璐璐（celluloid）玩偶容易褪色”，原文提到“celluloid fell out of favour because of its extreme flammability and propensity to fade in bright light”，“propensity to fade”即“tended to lose their colour”，与题干一致，故为TRUE。</br><p></p>
+              <span class="explanation-original">原文：However, celluloid fell out of favour because of its extreme flammability and propensity to fade in bright light. (Paragraph 10)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>12</td>
+            <td>FALSE</td>
+            <td>
+              <span class="explanation-text">题干“合成材料（composition）玩偶比1940年代塑料玩偶更耐用”，原文提到“Hard plastic dolls... were much more durable [than composition dolls]”，即塑料玩偶“更耐用”，与题干矛盾，故为FALSE。</br><p></p>
+              <span class="explanation-original">原文：Hard plastic dolls were manufactured in the 1940s. They resembled composition dolls, but they were much more durable. (Paragraph 11)</span>
+            </td>
+          </tr>
+          <tr>
+            <td>13</td>
+            <td>NOT GIVEN</td>
+            <td>
+              <span class="explanation-text">题干“玩偶收藏者更喜欢玩偶穿原装衣服”，全文仅提到“现代制作者用传统材料制作收藏玩偶”，未涉及“收藏者对原装衣服的偏好”，无相关信息，故为NOT GIVEN。</br><p></p>
+              <span class="explanation-original">原文：Although most dolls are now mass-manufactured using these modern materials, many modern dollmakers are still using the traditional materials of the past to make collectible dolls. (Paragraph 11)</span>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<!-- 文本选择工具栏 -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<!-- 笔记面板 -->
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<!-- 提示框 -->
+<div id="toast"></div>
+<script>
+// 计时器核心功能
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; // 计时器间隔ID，用于submit后停止
+
+// 启动计时器
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+
+// 页面加载时启动计时器
+window.onload = startTimer;
+
+// 字体设置功能
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+
+// 打开字体设置模态框
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+
+// 关闭字体设置模态框
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+
+// 点击模态框外部关闭
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+
+// 切换字体大小（影响所有元素）
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    // 移除所有字体类，添加选中的类
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    // 显示提示
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+    // 保存字体偏好到本地存储
+    localStorage.setItem('fontSize', size);
+  });
+});
+
+// 页面加载时应用保存的字体偏好
+document.addEventListener('DOMContentLoaded', function() {
+  const savedFontSize = localStorage.getItem('fontSize');
+  if (savedFontSize) {
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${savedFontSize}`);
+  }
+});
+
+// 高亮功能
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+
+// 定位选择工具栏
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    // 确保工具栏不超出视口
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+
+// 更新工具栏状态
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+
+// 监听文本选择事件
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+
+// 滚动时重新定位工具栏
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+
+// 点击高亮文本时显示工具栏
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+
+// 执行高亮
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    // 处理跨元素选择的情况
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+
+// 移除高亮
+function removeHighlight() {
+  if (currentHlNode) {
+    // 移除单个高亮元素
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize(); // 合并相邻文本节点
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  // 移除选择范围内的所有高亮
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      // 判断节点是否在选择范围内
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+
+// 绑定高亮按钮事件
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+
+// 笔记功能
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+
+// 切换笔记面板显示
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+  if (notesPanel.style.display === 'flex') {
+    noteArea.focus();
+  }
+}
+
+// 关闭笔记面板
+btnCloseNotes.addEventListener('click', toggleNotes);
+
+// 复制笔记
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+
+// 选中文本添加到笔记
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+
+// 提示框功能
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+
+// 答案与评分功能（Submit后停止计时器）
+const answers = {
+  q1: 'clay',
+  q2: 'goddesses',
+  q3: 'limbs',
+  q4: 'wax',
+  q5: 'plaster',
+  q6: 'composition',
+  q7: 'FALSE',
+  q8: 'TRUE',
+  q9: 'FALSE',
+  q10: 'TRUE',
+  q11: 'TRUE',
+  q12: 'FALSE',
+  q13: 'NOT GIVEN'
+};
+
+// 评分函数
+function grade() {
+  // 1. 停止计时器
+  clearInterval(timerInterval);
+  
+  // 2. 计算得分
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  // 处理1-6题（填空题）
+  for (let i = 1; i <= 6; i++) {
+    const qName = `q${i}`;
+    const input = document.getElementById(qName);
+    const userAns = input ? input.value.trim().toLowerCase() : 'No answer';
+    const correctAns = answers[qName].toLowerCase();
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers[qName]})`}`);
+  }
+  
+  // 处理7-13题（判断题）
+  for (let i = 7; i <= 13; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 3. 显示结果
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</br><p></p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  // 4. 展开答案面板
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  // 5. 标记所有题目为已回答
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+
+// 重置功能
+function resetForm() {
+  // 1. 重置计时器
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  // 2. 重置所有单选按钮和输入框
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 3. 重置结果和答案面板
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  // 4. 重置导航栏状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  // 5. 重置笔记
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  // 6. 移除所有高亮
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+  
+  showToast('Practice reset');
+}
+
+// 滚动到指定题目
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  // 高亮导航项
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+
+// 监听输入，标记题目为已回答
+(function() {
+  // 监听填空题（1-6）
+  for (let i = 1; i <= 6; i++) {
+    const qName = `q${i}`;
+    const input = document.getElementById(qName);
+    input.addEventListener('input', () => {
+      if (input.value.trim()) {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      } else {
+        document.getElementById(`q${i}-nav`).classList.remove('answered');
+      }
+    });
+  }
+  
+  // 监听判断题（7-13）
+  for (let i = 7; i <= 13; i++) {
+    const qName = `q${i}`;
+    document.querySelectorAll(`input[name="${qName}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+})();
+
+// 拖拽分隔线调整面板宽度
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isResizing = false;
+
+// 开始拖拽
+divider.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  document.body.style.cursor = 'ew-resize';
+  // 阻止事件冒泡和默认行为
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+// 处理拖拽
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  
+  // 计算左右面板的总宽度
+  const containerWidth = leftPane.parentElement.offsetWidth;
+  // 计算鼠标在容器中的位置百分比
+  const mousePosition = e.clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const leftWidthPercent = (mousePosition / containerWidth) * 100;
+  
+  // 限制最小宽度为280px
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+});
+
+// 结束拖拽
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    document.body.style.cursor = '';
+  }
+});
+
+// 移动端触摸支持
+divider.addEventListener('touchstart', (e) => {
+  isResizing = true;
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+document.addEventListener('touchmove', (e) => {
+  if (!isResizing) return;
+  
+  const containerWidth = leftPane.parentElement.offsetWidth;
+  const touch = e.touches[0];
+  const touchPosition = touch.clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const leftWidthPercent = (touchPosition / containerWidth) * 100;
+  
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+  
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+document.addEventListener('touchend', () => {
+  if (isResizing) {
+    isResizing = false;
+  }
+});
+</script>
+</body>
+</html>
+    

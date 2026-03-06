@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Early Approaches to Organisational Design - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    /* 字体大小变量 - 基础regular，逐级放大 */
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px; /* 比regular大1号 */
+    --font-size-large: 20px;    /* 比moderate大1号 */
+  }
+  /* 字体大小类 - 所有元素继承 */
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    font-size: inherit; /* 所有元素继承父级字体大小 */
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular); /* 默认regular */
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: static; 
+    display: inline-block; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:#fff;
+    cursor:pointer;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:100vh; 
+    width:100%; 
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: normal; 
+    hyphens: none; 
+  }
+  .paragraph-label {
+    font-weight: 600;
+    color: var(--accent);
+    margin-right: 8px;
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 24px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+  }
+  .multi-select-option {
+    display:flex;
+    flex-direction: column;
+    gap:6px;
+    margin:6px 0;
+  }
+  .multi-select-option label {
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .person-match-option {
+    display:flex;
+    flex-direction: column;
+    gap:6px;
+    margin:6px 0;
+  }
+  .person-match-option label {
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  .question-hint {
+    color: var(--muted);
+    font-size: 0.9em;
+    margin: 4px 0 8px;
+  }
+  body { 
+    padding-bottom: 82px; 
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-bottom:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    border-bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  /* 列表样式：移除默认黑点，替换为短横线，按行排列 */
+  ul {
+    list-style-type: none;
+    padding-left: 20px;
+    margin: 8px 0;
+  }
+  ul li::before {
+    content: "- ";
+    color: inherit;
+    font-weight: 500;
+  }
+</style>
+</head>
+<body class="font-regular">
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+</div>
+<!-- 字体设置模态框 -->
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (Default - 16px)</div>
+  <div class="font-option" data-size="moderate">Moderate (Larger - 18px)</div>
+  <div class="font-option" data-size="large">Large (Largest - 20px)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2 
+      <div id="timer-container">
+        <span id="timer">00:00</span>
+        <button id="settingsBtn" onclick="openSettingsModal()">Settings</button>
+      </div>
+    </h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    
+    <h3>Early Approaches to Organisational Design</h3>
+    <p>A review of the classical and neoclassical theories of organisational structures</p>
+    
+    <p>Determining the ‘best’ type of organisational structure for a particular situation has long been an important task for managers in all types of organisations. All structures have advantages and disadvantages and managers face the challenge of developing the most appropriate design for changing circumstances.</p>
+    
+    <p><span class="paragraph-label">A</span> <strong>The Classical Approach</strong><br>
+    Early management writers attempted to approach organisational design using a set of principles that would make an organisational structure perform efficiently in most situations, independent of external conditions and internal objectives. The sociologist Max Weber and management writers Frederick Taylor and Henri Fayol were major contributors to this so-called classical approach. They believed that the most efficient organisations had a legalised, formal and hierarchical structure called a ‘bureaucracy’. Members of the organisation were guided by a sense of duty to the organisation and by a set of rational rules and regulations. According to Weber, such organisations were characterised by the specialisation of tasks, appointment by merit, and an impersonal climate.</p>
+    
+    <p><span class="paragraph-label">B</span> Today the word ‘bureaucracy’ sometimes has negative connotations. Early management writers, however, commended bureaucracy as an organisational design for its rationality, rules for decision-making, clear chain of command, and promotion of people based on ability and experience, rather than favouritism or whim. Weber also believed that clearly specified authority and responsibility made performance easier to evaluate and reward.</p>
+    
+    <p><span class="paragraph-label">C</span> <strong>Criticism of the Classical Approach</strong><br>
+    Weber, Taylor and Fayol developed their theories when organisations that resembled this bureaucratic model were modern and efficient. It became evident, however, that some of the major advantages of the bureaucratic structure could become disadvantages if the theory were applied dogmatically. For example, the safeguards against favouritism could be rigidly imposed by adhering excessively to rules, resulting in both managers and subordinates becoming depersonalised.</p>
+    
+    <p><span class="paragraph-label">D</span> The classical approach has been criticised from two major perspectives. First, the theory may not have a basis in reality. Have organisations like those described by Weber and the others ever existed? Second, it claims that organisations designed and managed according to bureaucratic principles will enjoy the predicted benefits. But critics argue that the world no longer fits the assumptions in Weber’s model (if it ever did), and so a bureaucracy might not yield beneficial results.</p>
+    
+    <p><span class="paragraph-label">E</span> Early human relations researchers and behavioural scientists attempted to deal with the major inadequacy of the classical bureaucratic model: neglect of the human element. They argued that an industrial organisation has two objectives: economic effectiveness and employee satisfaction. They also wrote that the bureaucratic structure could be improved by permitting more subordinate participation in decision-making. Because these researchers tried to improve, and not reject, the classical model, they are sometimes called neoclassical theorists and include Douglas McGregor, Chris Argyris and Rensis Likert.</p>
+    
+    <p><span class="paragraph-label">F</span> <strong>The Neoclassical Approach</strong><br>
+    McGregor believed that the vertical division of labour that characterised bureaucratic organisations was derived from negative and false assumptions about workers which he called Theory X. Managers assume lower-level employees lack ambition and need orders to work effectively. The rigid formal hierarchy is designed to maintain managers’ power over subordinates. Decision-making takes place at upper levels of management while the decisions are carried out by people at lower levels. McGregor argued that organisations based instead on Theory Y assumptions use their members’ potential. Theory Y assumes that most people find work satisfying, commit themselves willingly to organisational goals and seek responsibility. Members have more independence than in bureaucratic organisations and lower-level participation in decision-making is encouraged.</p>
+    
+    <p><span class="paragraph-label">G</span> Argyris was concerned that managers in bureaucratic organisations had near-total responsibility for controlling their subordinates’ work. He argued that managerial domination makes subordinates passive and dependent, and decreases their sense of responsibility and self-control. Argyris argued for an alternative organisational design that acknowledged human needs and feelings, and increased workers’ satisfaction. Like McGregor, he favoured giving subordinates more independence and decision-making power to create a more informal organisational culture.</p>
+    
+    <p><span class="paragraph-label">H</span> Likert shared the perspectives of McGregor and Argyris. In his research, he found that managers who encouraged their subordinates could motivate them more than traditional authoritarian managers. Likert based his model of four possible systems on these findings. In System 1, power and authority are distributed strictly according to the classical management-subordinate relationship: a manager gives orders to lower-level members. In System 4 organisations, by contrast, there is extensive participation in decision-making and problem-solving groups. Some individuals in each group also belong to other work groups to ensure communication between them. System 4 represents Likert’s view of an ideal organisation.</p>
+    
+    <p><span class="paragraph-label">I</span> <strong>Criticisms of the Neoclassical Approach</strong><br>
+    The neoclassical approach to organisational design compensates for limitations in the traditional classical model, but it has also been criticised. First, the neoclassicists share the classical assumption that there is one best way to design an organisation. They overlook environmental, technological, and other variables that might affect an organisation’s design, and overemphasise psychological and behavioural variables. Second, Theories X and Y oversimplify human motivation and neglect individual differences. Not everyone is motivated by the non-monetary aspects of work, nor is all work satisfying. Finally, the coordination of work groups to achieve organisational goals may be more difficult than the neoclassicists suggest, particularly when the objectives of lower-level employees are not consistent with those of upper-level managers.</p>
+    
+    <!-- 多加空白行防止加载不完全 -->
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- Questions 14-15: Multiple Select (Classical Approach Characteristics) -->
+    <div class="group">
+      <h4>Questions 14 and 15</h4>
+      <p>Choose <strong>TWO letters, A–E</strong>.</p>
+      <p class="question-hint">Write the correct letters in boxes 14 and 15 on your answer sheet.</p>
+      <p>According to the writer, which TWO of the following are characteristics of the classical approach to organisational design?</p>
+      
+      <a id="q14-anchor"></a>
+      <div id="q14-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <div class="multi-select-option">
+          <label><input name="q14" type="checkbox" value="A"> A. A marked ranking order for employees</label>
+          <label><input name="q14" type="checkbox" value="B"> B. Giving importance to everyone’s work</label>
+          <label><input name="q14" type="checkbox" value="C"> C. The advancement of older workers</label>
+          <label><input name="q14" type="checkbox" value="D"> D. A neutral working environment</label>
+          <label><input name="q14" type="checkbox" value="E"> E. Increased benefits for workers</label>
+        </div>
+      </div>
+      
+      <a id="q15-anchor"></a>
+      <div id="q15-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p class="question-hint">Note: Questions 14 and 15 share the same options. Select TWO distinct answers.</p>
+      </div>
+    </div>
+    
+    <!-- Questions 16-17: Multiple Select (Criticisms of Classical Approach) -->
+    <div class="group">
+      <h4>Questions 16 and 17</h4>
+      <p>Choose <strong>TWO letters, A–E</strong>.</p>
+      <p class="question-hint">Write the correct letters in boxes 16 and 17 on your answer sheet.</p>
+      <p>According to the writer, which TWO of the following are criticisms of the classical approach to organisational design?</p>
+      
+      <a id="q16-anchor"></a>
+      <div id="q16-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <div class="multi-select-option">
+          <label><input name="q16" type="checkbox" value="A"> A. Too many guidelines are proposed</label>
+          <label><input name="q16" type="checkbox" value="B"> B. Certain practices become negative if they are implemented too strictly</label>
+          <label><input name="q16" type="checkbox" value="C"> C. Managers and workers are unable to co-operate with each other</label>
+          <label><input name="q16" type="checkbox" value="D"> D. The administrative standards are unsuited to some work environments</label>
+          <label><input name="q16" type="checkbox" value="E"> E. Positive outcomes which were expected in the past would be unlikely today</label>
+        </div>
+      </div>
+      
+      <a id="q17-anchor"></a>
+      <div id="q17-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p class="question-hint">Note: Questions 16 and 17 share the same options. Select TWO distinct answers.</p>
+      </div>
+    </div>
+    
+    <!-- Questions 18-19: Multiple Select (Aims of Neoclassical Approach) -->
+    <div class="group">
+      <h4>Questions 18 and 19</h4>
+      <p>Choose <strong>TWO letters, A–E</strong>.</p>
+      <p class="question-hint">Write the correct letters in boxes 18 and 19 on your answer sheet.</p>
+      <p>According to the writer, which TWO of the following are aims of the neoclassical approach to organisational design?</p>
+      
+      <a id="q18-anchor"></a>
+      <div id="q18-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <div class="multi-select-option">
+          <label><input name="q18" type="checkbox" value="A"> A. To ensure workers are treated as individual people</label>
+          <label><input name="q18" type="checkbox" value="B"> B. To create a formal atmosphere in the workplace</label>
+          <label><input name="q18" type="checkbox" value="C"> C. To change the methods of production</label>
+          <label><input name="q18" type="checkbox" value="D"> D. To allow workers a greater say in what happens at the workplace</label>
+          <label><input name="q18" type="checkbox" value="E"> E. To standardise the procedures for promotion of workers</label>
+        </div>
+      </div>
+      
+      <a id="q19-anchor"></a>
+      <div id="q19-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p class="question-hint">Note: Questions 18 and 19 share the same options. Select TWO distinct answers.</p>
+      </div>
+    </div>
+    
+    <!-- Questions 20-21: Multiple Select (Criticisms of Neoclassical Approach) -->
+    <div class="group">
+      <h4>Questions 20 and 21</h4>
+      <p>Choose <strong>TWO letters, A–E</strong>.</p>
+      <p class="question-hint">Write the correct letters in boxes 20 and 21 on your answer sheet.</p>
+      <p>According to the writer, which TWO of the following are criticisms of the neoclassical approach to organisational design?</p>
+      
+      <a id="q20-anchor"></a>
+      <div id="q20-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <div class="multi-select-option">
+          <label><input name="q20" type="checkbox" value="A"> A. It suggests that workers are involved in too many decisions</label>
+          <label><input name="q20" type="checkbox" value="B"> B. The effects of some psychological factors are given low importance</label>
+          <label><input name="q20" type="checkbox" value="C"> C. The effects of the workplace surroundings are ignored</label>
+          <label><input name="q20" type="checkbox" value="D"> D. It exaggerates the success of the organisations that use this approach</label>
+          <label><input name="q20" type="checkbox" value="E"> E. It assumes that all people work for enjoyment rather than financial gain</label>
+        </div>
+      </div>
+      
+      <a id="q21-anchor"></a>
+      <div id="q21-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p class="question-hint">Note: Questions 20 and 21 share the same options. Select TWO distinct answers.</p>
+      </div>
+    </div>
+    
+    <!-- Questions 22-26: Person & Belief Matching -->
+    <div class="group">
+      <h4>Questions 22–26</h4>
+      <p>Look at the following beliefs (Questions 22–26) and the list of people below.</p>
+      <p>Match each belief with the correct person, A–D.</p>
+      <p class="question-hint">Write the correct letter, A–D, in boxes 22–26 on your answer sheet. <strong>NB: You may use any letter more than once.</strong></p>
+      
+      <h5>List of People</h5>
+      <ul>
+        <li>A Max Weber</li>
+        <li>B Douglas McGregor</li>
+        <li>C Chris Argyris</li>
+        <li>D Rensis Likert</li>
+      </ul>
+      
+      <a id="q22-anchor"></a>
+      <div id="q22-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">22.</span> The classical approach relied upon managers having incorrect views about workers.</p>
+        <div class="person-match-option">
+          <label><input name="q22" type="radio" value="A"> A</label>
+          <label><input name="q22" type="radio" value="B"> B</label>
+          <label><input name="q22" type="radio" value="C"> C</label>
+          <label><input name="q22" type="radio" value="D"> D</label>
+        </div>
+      </div>
+      
+      <a id="q23-anchor"></a>
+      <div id="q23-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">23.</span> In the best organisational model, there is shared decision-making and interaction between teams at work.</p>
+        <div class="person-match-option">
+          <label><input name="q23" type="radio" value="A"> A</label>
+          <label><input name="q23" type="radio" value="B"> B</label>
+          <label><input name="q23" type="radio" value="C"> C</label>
+          <label><input name="q23" type="radio" value="D"> D</label>
+        </div>
+      </div>
+      
+      <a id="q24-anchor"></a>
+      <div id="q24-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">24.</span> In an efficient organisation, workers develop expertise in particular areas.</p>
+        <div class="person-match-option">
+          <label><input name="q24" type="radio" value="A"> A</label>
+          <label><input name="q24" type="radio" value="B"> B</label>
+          <label><input name="q24" type="radio" value="C"> C</label>
+          <label><input name="q24" type="radio" value="D"> D</label>
+        </div>
+      </div>
+      
+      <a id="q25-anchor"></a>
+      <div id="q25-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">25.</span> An organisation must take into account the emotional demands of people.</p>
+        <div class="person-match-option">
+          <label><input name="q25" type="radio" value="A"> A</label>
+          <label><input name="q25" type="radio" value="B"> B</label>
+          <label><input name="q25" type="radio" value="C"> C</label>
+          <label><input name="q25" type="radio" value="D"> D</label>
+        </div>
+      </div>
+      
+      <a id="q26-anchor"></a>
+      <div id="q26-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">26.</span> The classical approach allowed workers’ skills to be assessed in a straightforward way.</p>
+        <div class="person-match-option">
+          <label><input name="q26" type="radio" value="A"> A</label>
+          <label><input name="q26" type="radio" value="B"> B</label>
+          <label><input name="q26" type="radio" value="C"> C</label>
+          <label><input name="q26" type="radio" value="D"> D</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Submit & Reset Buttons -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <!-- Results & Answer Key -->
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>14</td>
+            <td>A</td>
+            <td>
+              <p class="explanation-text">题干要求选古典学派特征，A段提到古典学派主张“正式的等级制结构（hierarchical structure）”和“清晰的指挥链（clear chain of command）”，即“员工有明显的等级序列（marked ranking order）”，对应A。</p>
+              <p class="explanation-original">原文：they believed that the most efficient organisations had a legalised, formal and hierarchical structure... clear chain of command. (Paragraphs A, B)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>15</td>
+            <td>D</td>
+            <td>
+              <p class="explanation-text">题干要求选古典学派特征，A段明确韦伯提出官僚制特征包括“非个人化氛围（impersonal climate）”，即“中性的工作环境（neutral working environment）”，对应D。B（重视所有人工作）、C（年长者晋升）、E（增加员工福利）均未提及。</p>
+              <p class="explanation-original">原文：According to Weber, such organisations were characterised by... an impersonal climate. (Paragraph A)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>16</td>
+            <td>B</td>
+            <td>
+              <p class="explanation-text">题干要求选对古典学派的批评，C段指出“若教条式应用古典理论，优势会变劣势，如过度遵守规则导致僵化（adhering excessively to rules）”，即“某些做法执行过严会变负面”，对应B。</p>
+              <p class="explanation-original">原文：some of the major advantages... could become disadvantages if the theory were applied dogmatically... adhering excessively to rules. (Paragraph C)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>17</td>
+            <td>E</td>
+            <td>
+              <p class="explanation-text">题干要求选对古典学派的批评，D段提到“如今世界已不符合韦伯模型的假设，官僚制可能无法产生预期益处”，即“过去预期的积极结果如今不太可能”，对应E。</p>
+              <p class="explanation-original">原文：the world no longer fits the assumptions in Weber’s model... so a bureaucracy might not yield beneficial results. (Paragraph D)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>18</td>
+            <td>A</td>
+            <td>
+              <p class="explanation-text">题干要求选新古典学派的目标，E段指出新古典学派弥补古典学派“忽视人的因素（neglect of the human element）”，主张“关注员工满意度（employee satisfaction）”，G段提到阿吉里斯主张“认可人的需求与情感（acknowledged human needs and feelings）”，即“将员工视为个体对待”，对应A。</p>
+              <p class="explanation-original">原文：deal with the major inadequacy... neglect of the human element... employee satisfaction; acknowledged human needs and feelings. (Paragraphs E, G)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>19</td>
+            <td>D</td>
+            <td>
+              <p class="explanation-text">题干要求选新古典学派的目标，E段提到新古典学派主张“允许下属更多参与决策（more subordinate participation in decision-making）”，F段麦格雷戈的Y理论也鼓励“基层参与决策”，即“让员工对工作有更大发言权”，对应D。B（正式氛围）与新古典“非正式文化”相反，C（改变生产方式）、E（标准化晋升）均为古典学派特征。</p>
+              <p class="explanation-original">原文：improved by permitting more subordinate participation in decision-making; lower-level participation in decision-making is encouraged. (Paragraphs E, F)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>20</td>
+            <td>C</td>
+            <td>
+              <p class="explanation-text">题干要求选对新古典学派的批评，I段指出新古典学派“忽视环境、技术等变量（overlook environmental, technological variables）”，即“忽视工作环境的影响”，对应C。B（低重视心理因素）与原文“过度强调心理变量”相反。</p>
+              <p class="explanation-original">原文：They overlook environmental, technological, and other variables that might affect an organisation’s design. (Paragraph I)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>21</td>
+            <td>E</td>
+            <td>
+              <p class="explanation-text">题干要求选对新古典学派的批评，I段提到“X/Y理论简化动机，并非所有人都受非金钱因素激励（not everyone is motivated by non-monetary aspects）”，即“假定所有人为享受而非经济收益工作”，对应E。</p>
+              <p class="explanation-original">原文：Theories X and Y oversimplify human motivation... Not everyone is motivated by the non-monetary aspects of work. (Paragraph I)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>22</td>
+            <td>B</td>
+            <td>
+              <p class="explanation-text">题干“古典学派基于管理者对员工的错误看法”，F段麦格雷戈指出古典学派的分工源于“对员工的负面错误假设（negative and false assumptions）”，即X理论，对应B（Douglas McGregor）。</p>
+              <p class="explanation-original">原文：Douglas McGregor... the vertical division of labour... derived from negative and false assumptions about workers which he called Theory X. (Paragraph F)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>23</td>
+            <td>D</td>
+            <td>
+              <p class="explanation-text">题干“理想组织模型中存在共享决策与团队互动”，H段利克特的4号系统强调“广泛参与决策（extensive participation in decision-making）”和“团队间沟通（communication between work groups）”，对应D（Rensis Likert）。</p>
+              <p class="explanation-original">原文：Rensis Likert... System 4... extensive participation in decision-making... some individuals... belong to other work groups to ensure communication between them. (Paragraph H)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>24</td>
+            <td>A</td>
+            <td>
+              <p class="explanation-text">题干“高效组织中员工在特定领域发展专长”，A段韦伯提出官僚制特征包括“任务专业化（specialisation of tasks）”，即“员工在特定领域发展专业技能”，对应A（Max Weber）。</p>
+              <p class="explanation-original">原文：Max Weber... such organisations were characterised by the specialisation of tasks. (Paragraph A)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>25</td>
+            <td>C</td>
+            <td>
+              <p class="explanation-text">题干“组织必须考虑人的情感需求”，G段阿吉里斯主张“认可人的需求与情感（acknowledged human needs and feelings）”，对应C（Chris Argyris）。</p>
+              <p class="explanation-original">原文：Chris Argyris... an alternative organisational design that acknowledged human needs and feelings. (Paragraph G)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>26</td>
+            <td>A</td>
+            <td>
+              <p class="explanation-text">题干“古典学派使员工技能评估更直接”，B段韦伯认为“明确的权责（clearly specified authority and responsibility）”让绩效评估更易进行，即“员工技能评估更直接”，对应A（Max Weber）。</p>
+              <p class="explanation-original">原文：Max Weber... clearly specified authority and responsibility made performance easier to evaluate and reward. (Paragraph B)</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<!-- 文本选择工具栏 -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<!-- 笔记面板 -->
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<!-- 提示框 -->
+<div id="toast"></div>
+<script>
+// 计时器核心功能
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; // 计时器间隔ID，用于后续停止
+// 启动计时器
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+// 页面加载时启动计时器
+window.onload = startTimer;
+// 拖拽分隔线调整左右面板宽度
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isDragging = false;
+divider.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.clientX - containerRect.left;
+  // 限制最小宽度，防止面板过窄
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+});
+window.addEventListener('mouseup', () => {
+  if (isDragging) {
+    isDragging = false;
+    document.body.style.cursor = '';
+  }
+});
+// 触摸设备支持
+divider.addEventListener('touchstart', (e) => {
+  isDragging = true;
+  e.preventDefault();
+}, { passive: false });
+window.addEventListener('touchmove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.touches[0].clientX - containerRect.left;
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+}, { passive: false });
+window.addEventListener('touchend', () => {
+  isDragging = false;
+});
+// 文本高亮功能
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+// 定位选择工具栏
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    // 确保工具栏不超出视口
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+// 更新工具栏状态
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+// 监听文本选择事件
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+// 滚动时重新定位工具栏
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+// 点击高亮文本时显示工具栏
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+// 执行高亮
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    // 处理跨元素选择的情况
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+// 移除高亮
+function removeHighlight() {
+  if (currentHlNode) {
+    // 移除单个高亮元素
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize(); // 合并相邻文本节点
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  // 移除选择范围内的所有高亮
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      // 判断节点是否在选择范围内
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+// 绑定高亮按钮事件
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// 笔记功能
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+// 切换笔记面板显示
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+// 关闭笔记面板
+btnCloseNotes.addEventListener('click', toggleNotes);
+// 复制笔记
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+// 选中文本添加到笔记
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    // 滚动到笔记底部
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+// 提示框功能
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+// 字体设置功能
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+// 打开字体设置模态框
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+// 关闭字体设置模态框
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+// 点击模态框外部关闭
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+// 切换字体大小（影响所有元素）
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    // 移除所有字体类，添加选中的类
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    // 显示提示
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+  });
+});
+// 答案与评分功能（Submit后停止计时器）
+const answers = {
+  q14: 'A',
+  q15: 'D',
+  q16: 'B',
+  q17: 'E',
+  q18: 'A',
+  q19: 'D',
+  q20: 'C',
+  q21: 'E',
+  q22: 'B',
+  q23: 'D',
+  q24: 'A',
+  q25: 'C',
+  q26: 'A'
+};
+// 评分函数（Submit后执行，包含停止计时器）
+function grade() {
+  // 1. 停止计时器
+  clearInterval(timerInterval);
+  
+  // 2. 计算得分
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  // 处理多选题（14-21，每题1分，需选对指定答案）
+  const multiSelectQuestions = [14, 15, 16, 17, 18, 19, 20, 21];
+  multiSelectQuestions.forEach(i => {
+    const qName = `q${i}`;
+    const checked = Array.from(document.querySelectorAll(`input[name="${qName}"]:checked`)).map(el => el.value);
+    const correctAns = answers[qName];
+    const isCorrect = checked.includes(correctAns) && checked.length === 1; // 多选题需仅选对目标答案（因每题对应唯一正确项）
+    if (isCorrect) correct++;
+    const userAns = checked.join(', ') || 'No answer';
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  });
+  
+  // 处理人物匹配题（22-26，每题1分）
+  for (let i = 22; i <= 26; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 3. 显示结果
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  // 4. 展开答案面板
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  // 5. 标记所有题目为已回答
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+// 重置功能（重置计时器、选项、高亮等）
+function resetForm() {
+  // 1. 重置计时器
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  // 2. 重置所有复选框和单选按钮
+  document.querySelectorAll('input[type="checkbox"], input[type="radio"]').forEach(input => {
+    input.checked = false;
+  });
+  
+  // 3. 重置结果和答案面板
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  // 4. 重置导航栏已回答状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  // 5. 重置笔记
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  // 6. 移除所有高亮
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+}
+// 滚动到指定题目
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  // 高亮导航项
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+// 监听输入，标记题目为已回答
+(function() {
+  // 监听多选题（14-21）
+  for (let i = 14; i <= 21; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(input => {
+      input.addEventListener('change', () => {
+        const anyChecked = Array.from(document.querySelectorAll(`input[name="q${i}"]:checked`)).length > 0;
+        if (anyChecked) {
+          document.getElementById(`q${i}-nav`).classList.add('answered');
+        } else {
+          document.getElementById(`q${i}-nav`).classList.remove('answered');
+        }
+      });
+    });
+  }
+  
+  // 监听单选按钮（22-26）
+  for (let i = 22; i <= 26; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+})();
+</script>
+</body>
+</html>

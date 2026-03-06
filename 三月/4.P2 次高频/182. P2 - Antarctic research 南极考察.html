@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P2 – Antarctic research</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root { 
+    --line: #e5e7eb; --bg: #f6f7fb; --panel: #fff; --accent: #3b82f6; 
+    --muted: #6b7280; --shadow: 0 6px 20px rgba(0,0,0,.12); 
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { 
+    margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background: var(--bg); padding-bottom: 70px; color: #111827;
+  }
+  .shell { display: flex; height: 100vh; width: 100%; }
+  .pane { background: var(--panel); overflow: auto; padding: 20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background: #fbfbff; border-left: 1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg, #e5e7eb, #d1d5db); cursor: ew-resize; position: relative; z-index: 5; user-select: none; }
+  h2, h3, h4 { margin: 0 0 10px; }
+  #left p, #right p, #right li { margin: 0 0 12px; line-height: 1.6; }
+  .group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+  .q-match-item { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
+  .q-match-item .q-text { flex-grow: 1; }
+  .dropzone { 
+    border: 2px dashed #cbd5e1; background: #f8fafc; border-radius: 10px; 
+    min-height: 42px; padding: 6px; display: flex; align-items: center; justify-content: center; 
+    flex-shrink: 0; flex-basis: 60px;
+    transition: background-color 0.2s, outline 0.2s; 
+  }
+  .dropzone.over { outline: 2px solid var(--accent); background: #eff6ff; }
+  .dropzone .card { box-shadow: none; cursor: default; }
+  .option-pool { background:#f9fafb; border: 1px solid var(--line); border-radius: 8px; padding: 12px; display:flex; flex-wrap:wrap; gap:8px; margin-top: 12px; min-height: 48px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 12px; display:inline-flex; align-items:center; cursor:grab; box-shadow:0 2px 4px rgba(0,0,0,.05); user-select:none; transition: box-shadow 0.2s; }
+  .card:active { cursor: grabbing; box-shadow: var(--shadow); }
+  .card.ghost { opacity: 0.4; }
+  .blank { border:none; border-bottom:1px solid #9ca3af; padding:4px 2px; font-size:1em; background:transparent; width: 120px; }
+  .blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  button { padding: 8px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+  button:hover { background: #f8fafc; border-color: #cbd5e1; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: #2563eb; }
+  .practice-nav { background: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 5px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+  .practice-nav .title { font-weight: 600; color: var(--muted); }
+  .practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; }
+  .practice-nav .q-item:hover { background: #f1f5f9; border-color: var(--accent); }
+  .practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+  .practice-nav .controls { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+  #timer { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.2s; min-width: 70px; text-align: center; font-size: 14px; font-weight: bold; }
+  #timer:hover { background: #f1f5f9; border-color: var(--accent); }
+  #timer.paused { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+  .theme-toggle { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; width: 32px; height: 32px; font-size: 16px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+  #selbar { position: absolute; display: none; z-index: 2000; background: #111; color: #fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+  #selbar button { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+  #notes { position: fixed; right: 12px; bottom: 85px; width: 320px; height: 42vh; background: #fff; border: 1px solid var(--line); border-radius: 12px; display: none; flex-direction: column; z-index: 1500; box-shadow: var(--shadow); }
+  #notes header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  #notes textarea { flex: 1; border: 0; padding: 10px; resize: none; font-size: 14px; line-height: 1.5; background-color: inherit; color: inherit; }
+  #toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 3000; font-size: 14px; }
+  #results { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 16px 0; }
+  #results p { margin: 0 0 8px; }
+  #results pre { font-family: monospace; white-space: pre-wrap; margin: 0; }
+  .badge { background: #eef2ff; color: #4338ca; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 500; }
+  details.answerbox { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+  details.answerbox summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+  details.answerbox summary::-webkit-details-marker { display: none; }
+  #answerContent { margin-top: 10px; }
+  #answerContent ol { margin: 0; padding-left: 20px; }
+  .hl { background: #fff3a3; }
+  body.dark { --bg: #0f172a; --panel: #1e293b; --line: #334155; --muted: #94a3b8; color: #e2e8f0; }
+  body.dark .pane, body.dark #right { background: var(--panel); }
+  body.dark #right { background: #131c2d; }
+  body.dark button, body.dark .theme-toggle { background: #334155; color: #e2e8f0; border-color: #475569; }
+  body.dark .group, body.dark #results, body.dark details.answerbox, body.dark #notes { background: #1e293b; border-color: #334155; }
+  body.dark .practice-nav { background: #1e293b; border-top-color: #334155; }
+  body.dark .q-item { background: #334155; color: #e2e8f0; border-color: #475569; }
+  body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+  body.dark #timer.paused { background: #402323; color: #f87171; border-color: #7f1d1d; }
+  body.dark .hl { background: #b45309; }
+  body.dark .option-pool { background:#0f172a; border-color: var(--line); }
+  body.dark .card { background: #334155; border-color: #475569; }
+  body.dark .dropzone { border-color: #475569; background: #131c2d; }
+  body.dark .dropzone.over { background: #1e293b; }
+  body.dark .badge { background: #312e81; color: #a5b4fc; }
+  body.dark .blank { color: #e2e8f0; border-bottom-color: #64748b; }
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; height: auto; }
+    #left, #right { min-height: 50vh; }
+    #divider { display: none; }
+    #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+    .q-match-item { flex-direction: column; align-items: stretch; }
+    .dropzone { flex-basis: 42px; width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 1. Bottom Navigation Bar -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q14-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q14-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q14-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q18-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q18-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q18-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q18-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q18-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q24-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q24-anchor')">26</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<!-- 2. Main Content Shell -->
+<div class="shell">
+  <!-- Left Pane: Reading Passage -->
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2</h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    
+    <h3>Antarctic research</h3>
+    <p><em>Thirteen nations took part in the recent International Polar Year</em></p>
+  
+    <h4>A</h4>
+    <p>New Zealand's contribution to International Polar Year was a 52-day voyage by the ship Tangaroa in order to conduct research in Antarctica's Ross Sea. Lead scientist Mary Livingston emphasises just what a multi-faceted expedition this was, bringing together zoologists, oceanographers, meteorologists and other scientists from the Ministry of Fisheries, the National Institute for Water and Atmospheric Research, the National Museum and various universities, to study life beneath the seas of Antarctica. Competition for berths – the ship can carry 44 people, including 13 crew – was fierce. Voyage leader Stu Hanchet says, ‘We could have filled the science positions four times over ... we had so many people requesting a berth ... We ended up with a really strong team.'</p>
+    
+    <h4>B</h4>
+    <p>It would be hard to overstate how hostile the Antarctic environment is for scientists. The Tangaroa's captain, Graham Leachman, explains that the Ross Sea is subject to katabatic winds* that sweep down off the Antarctic continent to create rough seas. Another danger is the possibility of the ship colliding with floating ice. ‘Even though the ship's officers use all sorts of high-tech equipment ... none of it can tell you how thick the ice is,' says Leachman, ‘and you still can't beat looking out of the window.' In the dark, he says, you can't tell how thick the ice is, but if you can see its colour, it's possible to estimate. This is why he prefers sailing in summer, when the hours of daylight in these high latitudes are longest, even though this plays tricks with his passengers' body clocks.</p>
+    
+    <h4>C</h4>
+    <p>Analysis of what the expedition found continues, but it's likely that several new species have been discovered and numerous other secrets revealed about life 3,000 metres below the surface. ‘We have collected huge worms and strange crustaceans,' says Livingston, 'but most impressive of all were the starfish that measured more than half a metre across – that's most abnormal for creatures belonging to this species.' This phenomenon of Antarctic seas is called 'gigantism' – the fact that some species grow to unusually large sizes. Livingston suggests various possible causes for gigantism including the extreme cold, few predators and high levels of oxygen in the seawater, but as yet no final determination can be made. Another interesting discovery was that in some places every inch of the sea floor was covered with life, whereas elsewhere icebergs have scoured out deep scars and ravines in the sea floor as they go by.</p>
+
+    <h4>D</h4>
+    <p>By using deep-sea trawl nets, high-definition cameras and water samplers, the team has revealed that many of the creatures that live at extreme depths have a bizarre appearance. Among them were spotted tunicates, plankton-eating animals that are slender structures that appear to be fashioned from glass. The most fearsome-looking fish was the Southern Ocean daggertooth, a species that is ‘monocyclic', meaning the fish die after the first spawning. They are also unusual for being capable of shedding their teeth and growing a new set. Another predatory fish brought to the surface was the stareater, an extraordinary species that has an appendage like a piece of cord hanging from its chin. In these deep, dark waters, this glows red and attracts prey to swim within striking distance. Just as impressive and much more beautiful were the basket stars, a species related to starfish that lives on the seabed. The basket stars' five arms branch out numerous times to form a spectacular fan-like structure which they turn to face into the current so that food is brought into their embrace.</p>
+
+    <h4>E</h4>
+    <p>But whatever exciting discoveries were made, everyday life onboard ship in the Ross Sea is unrelenting. Most people share a cabin with one other person – they're allocated so that as one person begins their 12 hours off duty, the other occupant is starting work on deck. The fresh food runs out in a few days and after that most provisions are frozen, canned or dried. Expedition general manager Fred Smits recognises that the cook has an essential role in ensuring the well-being of those onboard. ‘When you are at sea for so long,' he says, 'you think a lot about your next meal.'</p>
+
+    <h4>F</h4>
+    <p>Perhaps most controversially, one of the precious berths on the Tangaroa was taken up by cameraman Max Quinn, who filmed a documentary about the voyage. Quinn's inclusion wasn't welcomed at first. ‘Scientists by nature,' Livingston says, 'tend to be camera-shy and quiet. They're not into having cameras there, so it was difficult getting everyone's permission and agreement.' But in the end Quinn fitted in very well. ‘The trick,' he says, 'is to mostly film the scientists at work, in their professional roles ... rather than eating their breakfast.' He knows when not to intrude. The documentary is a window on a trip few people get to make and also a peek into what research really looks like. 'Science,' says Livingston, ‘is intrepid, more so than people realise. It's not necessarily examining dry samples in the laboratory, but can also mean braving the elements on deck. That's what the documentary captures, the sense of real people with real lives.'</p>
+    
+    <p><em>* katabatic wind: a wind caused by the local downward motion of cool air</em></p>
+    <p>&nbsp;</p> <!-- Final padding -->
+  </section>
+
+  <!-- Draggable Divider -->
+  <div id="divider" title="Drag to resize"></div>
+
+  <!-- Right Pane: Questions and Controls -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <a id="q14-anchor"></a>
+      <h4>Questions 14–17</h4>
+      <p>Which paragraph contains the following information?</p>
+      <div class="q-match-item"><span class="q-text"><strong>14</strong> details of some equipment used by the scientists</span><span class="dropzone" data-target="q14"></span></div>
+      <div class="q-match-item"><span class="q-text"><strong>15</strong> a description of the challenging sailing conditions in Antarctica</span><span class="dropzone" data-target="q15"></span></div>
+      <div class="q-match-item"><span class="q-text"><strong>16</strong> information about the composition of the scientific group</span><span class="dropzone" data-target="q16"></span></div>
+      <div class="q-match-item"><span class="q-text"><strong>17</strong> the identity of a potentially unpopular person on the ship</span><span class="dropzone" data-target="q17"></span></div>
+      <div class="option-pool" id="pool-paras">
+        <div class="card" draggable="true" data-value="A">A</div><div class="card" draggable="true" data-value="B">B</div><div class="card" draggable="true" data-value="C">C</div><div class="card" draggable="true" data-value="D">D</div><div class="card" draggable="true" data-value="E">E</div><div class="card" draggable="true" data-value="F">F</div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <a id="q18-anchor"></a>
+      <h4>Questions 18–23</h4>
+      <p>Complete the summary below. Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+      <h5>The expedition's findings</h5>
+      <p>Analysis continues of the expedition's remarkable discoveries, including a <strong>18</strong> <input class="blank" name="q18"> very notable for its unusual width. The reasons why creatures grow so large at great depths in Antarctica may include the highly oxygenated water, the temperature, or the small number of <strong>19</strong> <input class="blank" name="q19">. A further fascinating finding was the existence of canyons in the seabed caused by passing <strong>20</strong> <input class="blank" name="q20">. Many creatures living at great depth look very strange, such as tunicates, which seem to be made of <strong>21</strong> <input class="blank" name="q21">. One frightening-looking fish species is characterised by loss of its <strong>22</strong> <input class="blank" name="q22"> and the fact that it spawns only once. Another fish has something like a length of string attached to its <strong>23</strong> <input class="blank" name="q23"> that assists with hunting.</p>
+    </div>
+
+    <div class="group">
+      <a id="q24-anchor"></a>
+      <h4>Questions 24–26</h4>
+      <p>Match each person with the correct opinion, A–G.</p>
+      <div class="q-match-item"><span class="q-text"><strong>24</strong> Mary Livingston</span><span class="dropzone" data-target="q24"></span></div>
+      <div class="q-match-item"><span class="q-text"><strong>25</strong> Stu Hanchet</span><span class="dropzone" data-target="q25"></span></div>
+      <div class="q-match-item"><span class="q-text"><strong>26</strong> Max Quinn</span><span class="dropzone" data-target="q26"></span></div>
+      <div class="option-pool" id="pool-opinions">
+        <div class="card" draggable="true" data-value="A">A The repetitive food was one of the hardships of the voyage.</div>
+        <div class="card" draggable="true" data-value="B">B Respecting your subjects' privacy gets the best results.</div>
+        <div class="card" draggable="true" data-value="C">C The summer is the best time to sail these waters.</div>
+        <div class="card" draggable="true" data-value="D">D The kitchen is one of the most important parts of the ship.</div>
+        <div class="card" draggable="true" data-value="E">E Being separated from family was difficult.</div>
+        <div class="card" draggable="true" data-value="F">F The nature of scientific work may surprise some people.</div>
+        <div class="card" draggable="true" data-value="G">G More applications to join the group were received than there were places.</div>
+      </div>
+    </div>
+
+    <!-- Controls and Results -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<!-- 3. UI Helper Elements -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// --- MASTER JAVASCRIPT TEMPLATE ---
+
+// 1. STATE & ANSWERS
+const answers = {
+    q14: "d", q15: "b", q16: "a", q17: "f",
+    q18: "starfish", q19: "predators", q20: "icebergs", q21: "glass",
+    q22: "teeth", q23: "chin",
+    q24: "f", q25: "g", q26: "b"
+};
+
+// 2. UI & INTERACTIVITY
+let timerSeconds = 0, isTimerPaused = false;
+const timerEl = document.getElementById('timer');
+
+function toggleTimer() { isTimerPaused = !isTimerPaused; timerEl.classList.toggle('paused', isTimerPaused); showToast(isTimerPaused ? 'Timer paused' : 'Timer resumed'); }
+setInterval(() => { if (!isTimerPaused) { timerSeconds++; const m = String(Math.floor(timerSeconds / 60)).padStart(2, '0'); const s = String(timerSeconds % 60).padStart(2, '0'); timerEl.textContent = `${m}:${s}`; } }, 1000);
+function toggleDarkMode() { document.body.classList.toggle('dark'); const isDark = document.body.classList.contains('dark'); localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled'); document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️'; }
+function scrollToElement(id) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+function showToast(msg) { const toastEl = document.getElementById('toast'); toastEl.textContent = msg; toastEl.style.display = 'block'; setTimeout(() => { toastEl.style.display = 'none'; }, 1500); }
+
+// 3. HIGHLIGHT AND NOTES FUNCTIONALITY
+const selbar = document.getElementById('selbar');
+let lastRange = null;
+function handleTextSelection() { setTimeout(() => { const sel = window.getSelection(); if (sel.toString().trim().length > 0) { lastRange = sel.getRangeAt(0).cloneRange(); const rect = lastRange.getBoundingClientRect(); selbar.style.top = `${window.scrollY + rect.top - selbar.offsetHeight - 5}px`; selbar.style.left = `${window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2}px`; selbar.style.display = 'flex'; } else { selbar.style.display = 'none'; } }, 10); }
+['left', 'right'].forEach(id => document.getElementById(id).addEventListener('mouseup', handleTextSelection));
+document.addEventListener('mousedown', (e) => { if (!selbar.contains(e.target)) selbar.style.display = 'none'; });
+document.getElementById('btnHL').addEventListener('click', () => { if (lastRange) { const span = document.createElement('span'); span.className = 'hl'; try { lastRange.surroundContents(span); } catch(e) { console.error(e); } selbar.style.display = 'none'; window.getSelection().removeAllRanges(); } });
+document.getElementById('btnUH').addEventListener('click', () => { if (lastRange) { let container = lastRange.commonAncestorContainer; if (container.nodeType !== 1) container = container.parentElement; const highlights = container.querySelectorAll('.hl'); highlights.forEach(hl => { if (window.getSelection().containsNode(hl, true)) { const parent = hl.parentNode; while (hl.firstChild) parent.insertBefore(hl.firstChild, hl); parent.removeChild(hl); parent.normalize(); } }); selbar.style.display = 'none'; window.getSelection().removeAllRanges(); } });
+document.getElementById('btnNote').addEventListener('click', () => { const text = window.getSelection().toString().trim(); if (text) { const noteArea = document.getElementById('noteArea'); noteArea.value += (noteArea.value ? '\n\n' : '') + `> ${text}`; toggleNotes(); noteArea.scrollTop = noteArea.scrollHeight; } selbar.style.display = 'none'; });
+function toggleNotes() { const notePad = document.getElementById('notes'); notePad.style.display = notePad.style.display === 'flex' ? 'none' : 'flex'; }
+document.getElementById('btnClose').addEventListener('click', toggleNotes);
+document.getElementById('btnCopy').addEventListener('click', () => { navigator.clipboard.writeText(document.getElementById('noteArea').value); showToast('Notes copied'); });
+
+// 4. DRAG AND DROP LOGIC
+document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', e.target.id); setTimeout(() => e.target.classList.add('ghost'), 0); });
+    card.addEventListener('dragend', e => e.target.classList.remove('ghost'));
+});
+document.querySelectorAll('.dropzone').forEach(zone => {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault(); zone.classList.remove('over');
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        if (!draggedCard) return;
+        const cardToDrop = draggedCard.dataset.clone === 'true' ? draggedCard.cloneNode(true) : draggedCard;
+        cardToDrop.classList.remove('ghost');
+        if (zone.children.length > 0) {
+            const existingCard = zone.children[0];
+            if (existingCard.dataset.clone !== 'true') {
+                const itsOriginPool = document.getElementById(existingCard.dataset.originPool);
+                if (itsOriginPool) itsOriginPool.appendChild(existingCard);
+            }
+        }
+        zone.innerHTML = '';
+        zone.appendChild(cardToDrop);
+        updateAnswerStatus();
+    });
+});
+
+// 5. GRADING & STATE MANAGEMENT
+function grade() {
+    let total = 0, correct = 0, lines = [];
+    const push = (q, ok, user, correctAns) => { total++; if(ok) correct++; const displayAns = String(correctAns).toUpperCase(); lines.push(`${q.toUpperCase().replace('Q','')}: ${user || 'None'} ${ok ? '✅' : `❌ (Ans: ${displayAns})`}`); };
+    Object.keys(answers).forEach(qKey => {
+        const correctAns = answers[qKey];
+        let userAnswer = null;
+        const textInput = document.querySelector(`input[name="${qKey}"]`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qKey}"]`);
+        if (textInput) userAnswer = textInput.value.trim() || null;
+        else if (dropzone) userAnswer = dropzone.querySelector('.card')?.dataset.value || null;
+        const isCorrect = userAnswer !== null && userAnswer.toLowerCase() === String(correctAns).toLowerCase();
+        push(qKey, isCorrect, userAnswer, correctAns);
+    });
+    const acc = total ? Math.round(100 * correct / total) : 0;
+    document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p><pre>${lines.join('\n')}</pre>`;
+    document.getElementById('answerContent').innerHTML = `<ol start="14">${Object.entries(answers).map(([key, val]) => `<li><strong>${key.replace('q','')}:</strong> ${String(val).toUpperCase()}</li>`).join('')}</ol>`;
+    document.querySelector('#answerBox .badge').textContent = 'tap to view';
+    document.getElementById('answerBox').open = true;
+}
+
+function resetForm() {
+    document.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
+    document.querySelectorAll('.dropzone').forEach(zone => {
+        if (zone.children.length > 0) {
+            const card = zone.children[0];
+            if (card.dataset.clone !== 'true') {
+                const originPool = document.getElementById(card.dataset.originPool);
+                if (originPool) originPool.appendChild(card);
+            }
+        }
+        zone.innerHTML = '';
+    });
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('answerContent').innerHTML = '';
+    document.querySelector('#answerBox .badge').textContent = 'hidden';
+    document.getElementById('answerBox').open = false;
+    updateAnswerStatus();
+    showToast('Form has been reset');
+}
+
+function updateAnswerStatus() {
+    document.querySelectorAll('.q-item').forEach(item => {
+        const qNum = item.id.replace('-nav', '');
+        let answered = false;
+        const textInput = document.querySelector(`input[name="${qNum}"]`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qNum}"]`);
+        if (textInput) answered = textInput.value.trim() !== '';
+        else if (dropzone) answered = !!dropzone.querySelector('.card');
+        item.classList.toggle('answered', answered);
+    });
+}
+
+// 6. INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        toggleDarkMode();
+        document.querySelector('.theme-toggle').textContent = '🌙';
+    }
+    document.querySelectorAll('input[type="text"]').forEach(el => el.addEventListener('input', updateAnswerStatus));
+    document.querySelectorAll('.card').forEach((card, index) => {
+        if (!card.id) card.id = `card-${index}`;
+        if (card.parentElement.classList.contains('option-pool')) {
+            card.dataset.originPool = card.parentElement.id;
+            card.parentElement.addEventListener('dragover', e => e.preventDefault());
+            card.parentElement.addEventListener('drop', e => {
+                e.preventDefault();
+                const cardId = e.dataTransfer.getData('text/plain');
+                const dragged = document.getElementById(cardId);
+                if (dragged && dragged.parentElement.classList.contains('dropzone')) {
+                    dragged.parentElement.innerHTML = '';
+                    if (dragged.dataset.clone !== 'true') e.currentTarget.appendChild(dragged);
+                    updateAnswerStatus();
+                }
+            });
+        }
+    });
+});
+</script>
+
+<!-- Practice page enhancer integration -->
+<script>
+  if (!window.practicePageEnhancer) {
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = () => console.log('Enhancer loaded.');
+    script.onerror = () => { console.error('Enhancer failed to load'); loadInlineEnhancer(); };
+    document.head.appendChild(script);
+  }
+  function loadInlineEnhancer() { if (window.practicePageEnhancer) return; window.practicePageEnhancer = { initialize: function () { this.setupCommunication(); this.setupAnswerListeners(); this.interceptSubmit(); }, setupCommunication: function () { this.parentWindow = window.opener || window.parent; window.addEventListener('message', (e) => { if (e.data?.type === 'INIT_SESSION') { this.sessionId = e.data.data.sessionId; this.sendMessage('SESSION_READY', { pageType: this.detectPageType(), url: window.location.href }); } }); }, detectPageType: () => { const t = document.title || ''; if (t.includes('P1')) return 'P1'; if (t.includes('P2')) return 'P2'; if (t.includes('P3')) return 'P3'; return 'unknown'; }, setupAnswerListeners: function () { this.answers = {}; this.startTime = Date.now(); document.addEventListener('input', (e) => { if (e.target.name) this.answers[e.target.name] = e.target.value; }); const observer = new MutationObserver(mutations => { mutations.forEach(mutation => { if (mutation.type === 'childList' && mutation.target.classList.contains('dropzone')) { const zone = mutation.target; const qName = zone.dataset.target; const card = zone.querySelector('.card'); this.answers[qName] = card ? card.dataset.value : ''; } }); }); document.querySelectorAll('.dropzone').forEach(zone => observer.observe(zone, { childList: true })); }, interceptSubmit: function () { if (typeof window.grade === 'function') { const originalGrade = window.grade; window.grade = () => { originalGrade(); setTimeout(() => this.handleSubmit(), 200); }; } }, handleSubmit: function () { const results = { sessionId: this.sessionId, startTime: this.startTime, endTime: Date.now(), duration: Math.round((Date.now() - this.startTime) / 1000), answers: this.answers, scoreInfo: this.extractScore(), pageType: this.detectPageType(), url: window.location.href }; this.sendMessage('PRACTICE_COMPLETE', results); }, extractScore: () => { const el = document.getElementById('results'); if (!el) return null; const text = el.textContent || ''; const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i); if (scoreMatch) { const correct = parseInt(scoreMatch[1]), total = parseInt(scoreMatch[2]); return { correct, total, accuracy: total > 0 ? correct / total : 0, percentage: Math.round((correct / total) * 100), source: 'inline_extraction' }; } return null; }, sendMessage: function (type, data) { if (this.parentWindow) this.parentWindow.postMessage({ type, data, source: 'practice_page' }, '*'); } }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => window.practicePageEnhancer.initialize()); else window.practicePageEnhancer.initialize(); }
+</script>
+
+</body>
+</html>

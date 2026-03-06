@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P2 – A mechanical friend for children</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+:root { 
+  --line: #e5e7eb; --bg: #f6f7fb; --panel: #fff; --accent: #3b82f6; 
+  --muted: #6b7280; --shadow: 0 6px 20px rgba(0,0,0,.12); 
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { 
+  margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+  background: var(--bg); padding-bottom: 70px; 
+}
+.shell { display: flex; height: 100vh; width: 100%; }
+.pane { background: var(--panel); overflow: auto; padding: 20px; }
+#left { flex: 0 0 50%; min-width: 280px; position: relative; }
+#right { flex: 1 1 auto; min-width: 320px; background: #fbfbff; border-left: 1px solid var(--line); position: relative; }
+#divider { flex: 0 0 8px; background: linear-gradient(90deg, #e5e7eb, #d1d5db); cursor: ew-resize; position: relative; z-index: 5; user-select: none; }
+h2, h3, h4 { margin: 0 0 10px; }
+#left p { margin: 0 0 12px; line-height: 1.6; }
+.group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+.blank { border:none; border-bottom:1px solid #9ca3af; padding:4px 2px; font-size:1em; background:transparent; width: 120px; margin: 0 4px; }
+.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+button { padding: 8px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+button:hover { background: #f8fafc; border-color: #cbd5e1; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.primary:hover { background: #2563eb; }
+.practice-nav { background: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 5px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+.practice-nav .title { font-weight: 600; color: var(--muted); }
+.practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; }
+.practice-nav .q-item:hover { background: #f1f5f9; border-color: var(--accent); }
+.practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+.practice-nav .q-item.active { background: var(--accent); color: #fff; }
+.practice-nav .controls { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+#timer { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.2s; min-width: 70px; text-align: center; font-size: 14px; font-weight: bold; }
+#timer:hover { background: #f1f5f9; border-color: var(--accent); }
+#timer.paused { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+.theme-toggle { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; width: 32px; height: 32px; font-size: 16px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+.theme-toggle:hover { background: var(--accent); color: #fff; border-color: var(--accent); transform: scale(1.05); }
+#selbar { position: absolute; display: none; z-index: 2000; background: #111; color: #fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+#selbar button { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+#selbar button:hover { border-color: #fff; }
+#notes { position: fixed; right: 12px; bottom: 85px; width: 320px; height: 42vh; background: #fff; border: 1px solid var(--line); border-radius: 12px; display: none; flex-direction: column; z-index: 1500; box-shadow: var(--shadow); }
+#notes header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+#notes textarea { flex: 1; border: 0; padding: 10px; resize: none; font-size: 14px; line-height: 1.5; background-color: inherit; color: inherit; }
+#toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 3000; font-size: 14px; }
+#results { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 16px 0; font-family: monospace; white-space: pre-wrap; }
+#results p { margin: 0 0 8px; }
+details.answerbox { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+details.answerbox summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+details.answerbox summary::-webkit-details-marker { display: none; }
+#answerContent { margin-top: 10px; }
+#answerContent ol { margin: 0; padding-left: 20px; }
+.hl { background: #fff3a3; }
+.cardpool { background:#f1f5f9; border-radius:10px; padding:12px; display:flex; flex-wrap:wrap; gap:8px; margin-top: 12px; min-height: 48px; }
+.card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 12px; display:inline-flex; align-items:center; cursor:grab; box-shadow:0 2px 4px rgba(0,0,0,.05); user-select:none; }
+.card.ghost { opacity: 0.4; }
+.dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:42px; padding:4px; display:inline-flex; align-items:center; justify-content:center; width:100%; min-width: 60px; vertical-align:middle; margin-right: 8px; transition: all 0.2s; box-sizing: border-box; }
+.dropzone.over { outline: 2px solid var(--accent); background: #eff6ff; }
+.dropzone .card { box-shadow: none; margin: 0; width: 100%; box-sizing: border-box; }
+body.dark { --bg: #0f172a; --panel: #1e293b; --line: #334155; --muted: #94a3b8; color: #e2e8f0; }
+body.dark .pane, body.dark #right { background: var(--panel); }
+body.dark #right { background: #131c2d; }
+body.dark button, body.dark .theme-toggle { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark button:hover { background: #475569; }
+body.dark .group, body.dark #results, body.dark details.answerbox, body.dark .list-box, body.dark #notes { background: #1e293b; border-color: #334155; }
+body.dark .practice-nav { background: #1e293b; border-top-color: #334155; }
+body.dark .q-item { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark .q-item:hover { background: #475569; }
+body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+body.dark #timer { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark #timer.paused { background: #402323; color: #f87171; border-color: #7f1d1d; }
+body.dark .blank { color: #e2e8f0; border-bottom-color: #64748b; }
+body.dark .hl { background: #b45309; }
+body.dark .cardpool { background:#0f172a; }
+body.dark .card { background: #334155; border-color: #475569; }
+body.dark .dropzone { border-color: #475569; background: #131c2d; }
+body.dark .dropzone.over { background: #1e293b; }
+body.dark #notes textarea { background: #1e293b; color: #e2e8f0; }
+@media (max-width: 768px) {
+  .shell { flex-direction: column; }
+  #divider { display: none; }
+  #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+}
+/* Watermark Style - Increased opacity and z-index */
+#watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 2em; color: rgba(100, 100, 100, 0.25); pointer-events: none; z-index: 9999; white-space: nowrap; font-style: italic; user-select: none; }
+/* Override specific to this page */
+.info-box { border: 1px solid var(--line); background: #fafafa; padding: 10px; margin-bottom: 15px; border-radius: 6px; font-size: 0.9em; }
+.info-box ul { padding-left: 20px; margin: 5px 0; }
+.match-row { display: flex; align-items: center; margin-bottom: 10px; }
+.match-row span.label { width: 40px; font-weight: bold; margin-right: 10px; text-align: right; }
+.question-block { margin-bottom: 20px; }
+body.dark .info-box { background: #1e293b; border-color: #334155; }
+/* Style for footer note in answer box */
+.footer-note { margin-top: 15px; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 0.85em; color: var(--muted); text-align: center; }
+/* Drag & Drop specific fix for full width */
+.pool-vertical { display: flex; flex-direction: column; gap: 8px; }
+.card { width: 100%; box-sizing: border-box; text-align: left; }
+.dropzone { width: 100%; box-sizing: border-box; }
+</style>
+</head>
+<body>
+
+<!-- Watermark -->
+<div id="watermark">本机考版本为免费发放，如果您被收费请立即退款并举报</div>
+
+<!-- 1. Bottom Navigation Bar -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <!-- Group 1 -->
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <!-- Group 2 -->
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <!-- Group 3 -->
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<!-- 2. Main Content Shell -->
+<div class="shell">
+  <!-- Left Pane: Reading Passage -->
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2</h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    
+    <h3>A mechanical friend for children</h3>
+  
+    <h4>A</h4>
+    <p>The development of robots that interact socially with people and assist them in everyday life has been an elusive goal of modern science. Despite impressive advances in the mechanical aspects of this problem, producing robots that bond and socialize with people for sustained periods of time has proven difficult. The most successful robots so far have been storytellers, but they have only been able to maintain human interest for a limited time and typically rely on the robot telling stories that change over time. In practice, commercially available robots seldom cross the 10-hour barrier (i.e., individual users tend to spend less than a combined total of 10 hours with the robots before losing interest). This observation is in sharp contrast to the long-term interactions and bonding that commonly develop between humans and their pets.</p>
+
+    <h4>B</h4>
+    <p>In a recent study, researchers from the Institute for Neural Computation in California introduced a state-of-the-art social robot into a classroom of 18-to-24-month-olds for five months as a way of studying human/robot interactions. The researchers, including Fumihide Tanaka and Javier R. Movellan, introduced a toddler-sized humanoid robot into a classroom at a childhood education center. One of the QRIO series of robots, the 58 cm machine, was originally developed by Sony. ‘Children of toddler age were chosen because they have no preconceived notions of robots,’ according to Tanaka. One of the goals of the study was to establish whether it was possible for social robots to maintain the interest of children beyond the 10-hour barrier.</p>
+
+    <h4>C</h4>
+    <p>The researchers sent instructions to the robot about every two minutes to do things like giggle, dance, sit down, fall down, or walk in a certain direction. The 45 sessions were videotaped, and interactions between toddlers and the robot were later analyzed. The results showed that the quality of those interactions improved steadily over 27 sessions. The interactions deteriorated quickly over the next 15 sessions, when the robot was ordered to behave in a more limited, predictable manner. Finally, the human/robot relations improved in the last three sessions, after the robot had been instructed to display its full range of behaviors.</p>
+
+    <h4>D</h4>
+    <p>‘Initially, the children treated the robot very differently from the way they treated each other,’ Tanaka said. ‘Early in the study, some children cried when QRIO fell. But a month into the study, the toddlers helped QRIO stand up by pushing its back or pulling its hands.’ ‘The most important aspect of interaction was touch,’ Tanaka said. ‘At first, the toddlers would touch the robot on its face, but later on they would touch it only on its hands and arms, like they would with other humans. Another robot-like toy named Robby, which resembled QRIO but did not move, was used as a control in the study. While hugging of QRIO increased, hugging of Robby decreased throughout the study. Furthermore, when QRIO laid down on the floor, caretaking behaviors were frequently observed toward QRIO but seldom toward Robby.’</p>
+
+    <h4>E</h4>
+    <p>The study concluded that after 45 days of immersion in a childcare center over a period of five months, long-term bonding and socialization occurred between toddlers and a state-of-the-art social robot. Overall, the interaction between children and the robot improved over time and the children progressively treated it more as a peer than a plaything. ‘To my knowledge, this is the first long-term study of this sort,’ said Ronald Arkin, a roboticist at the Georgia Institute of Technology in the US.</p>
+
+    <h4>F</h4>
+    <p>Tanaka and Movellan are now developing autonomous robots for the toddler classroom. ‘It could have great potential in educational settings, assisting teachers and enriching the classroom environment,’ Tanaka said. The researchers hope that more advanced versions of robots like QRIO could become personalized tutors to assist teachers in classrooms. A robotic tutor could react on the spot to social cues and approximate social skills like facial expression and eye gaze, they said. ‘It is becoming clear that, to achieve this goal, we are going to endow machines with something similar to emotion, not just traditional forms of intelligence,’ said Movellan.</p>
+
+    <h4>G</h4>
+    <p>Associate Professor David Powers, an expert in artificial intelligence and cognitive science at Flinders University in South Australia, commented, ‘In this study, it is clearly demonstrated that a limited range of robot behaviors, however impressive, is nowhere near as important to human/robot interaction as being able to make appropriate responses from a broad repertoire of behaviors.’ Ronald Arkin was not surprised by the affection demonstrated by the toddlers toward the robot. ‘Humans have a tremendous propensity to bond with artifacts, whether it be a car, a doll, or a robot,’ he said. But he also cautioned that researchers do not yet understand the consequences of increased human/robot interaction. ‘Studying how robots and humans work together can give us insight into whether this is a good thing or a bad thing for society,’ Arkin said. ‘We need to find out what the consequences are of introducing a robot into a cadre of children. How will that enhance, or potentially interfere with, their social development? Do we really understand the long-term impact of having a robot as a childhood friend?’</p>
+    
+    <p>&nbsp;</p> <!-- Final padding -->
+  </section>
+
+  <!-- Draggable Divider -->
+  <div id="divider" title="Drag to resize"></div>
+
+  <!-- Right Pane: Questions and Controls -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- QUESTION GROUP 1: PARAGRAPH MATCHING (DRAG & DROP) -->
+    <div class="group">
+      <h4>Questions 14–18</h4>
+      <p>Reading Passage 2 has seven paragraphs, <strong>A–G</strong>.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p><em>Drag the correct paragraph letter (A-G) to the box next to the statement.</em></p>
+
+      <!-- Draggable Options Pool (Cloneable) -->
+      <div class="cardpool pool-vertical" id="pool-paragraphs">
+        <div class="card" draggable="true" id="c-a" data-value="A" data-clone="true"><strong>A</strong></div>
+        <div class="card" draggable="true" id="c-b" data-value="B" data-clone="true"><strong>B</strong></div>
+        <div class="card" draggable="true" id="c-c" data-value="C" data-clone="true"><strong>C</strong></div>
+        <div class="card" draggable="true" id="c-d" data-value="D" data-clone="true"><strong>D</strong></div>
+        <div class="card" draggable="true" id="c-e" data-value="E" data-clone="true"><strong>E</strong></div>
+        <div class="card" draggable="true" id="c-f" data-value="F" data-clone="true"><strong>F</strong></div>
+        <div class="card" draggable="true" id="c-g" data-value="G" data-clone="true"><strong>G</strong></div>
+      </div>
+
+      <hr style="border:0; border-top:1px dashed var(--line); margin:20px 0;">
+
+      <div class="question-block">
+        <p><a id="q14-anchor"></a><strong>14</strong> a comparison of children’s reactions towards different robots</p>
+        <span class="dropzone" data-target="q14"></span>
+      </div>
+      <div class="question-block">
+        <p><a id="q15-anchor"></a><strong>15</strong> a speculation about ways robots may be able to communicate</p>
+        <span class="dropzone" data-target="q15"></span>
+      </div>
+      <div class="question-block">
+        <p><a id="q16-anchor"></a><strong>16</strong> a description of changes in the way the children physically handled a robot</p>
+        <span class="dropzone" data-target="q16"></span>
+      </div>
+      <div class="question-block">
+        <p><a id="q17-anchor"></a><strong>17</strong> a comparison between people’s connections with animals and their connections with robots</p>
+        <span class="dropzone" data-target="q17"></span>
+      </div>
+      <div class="question-block">
+        <p><a id="q18-anchor"></a><strong>18</strong> an account of the way one robot was programmed</p>
+        <span class="dropzone" data-target="q18"></span>
+      </div>
+    </div>
+
+    <!-- QUESTION GROUP 2: PEOPLE MATCHING (DRAG & DROP) -->
+    <div class="group">
+      <h4>Questions 19–23</h4>
+      <p>Look at the following statements (Questions 19–23) and the list of people below.</p>
+      <p>Match each statement with the correct person, <strong>A-D</strong>.</p>
+      <p><em>Drag the correct person block to the box below each statement.</em></p>
+
+      <div class="info-box">
+        <strong>List of People</strong>
+        <ul style="list-style:none; padding-left:10px;">
+          <li><strong>A</strong> Fumihide Tanaka</li>
+          <li><strong>B</strong> Javier R. Movellan</li>
+          <li><strong>C</strong> Ronald Arkin</li>
+          <li><strong>D</strong> David Powers</li>
+        </ul>
+      </div>
+
+      <!-- Draggable Options Pool (Cloneable) -->
+      <div class="cardpool pool-vertical" id="pool-people">
+        <div class="card" draggable="true" id="res-A" data-value="A" data-clone="true"><strong>A</strong> Fumihide Tanaka</div>
+        <div class="card" draggable="true" id="res-B" data-value="B" data-clone="true"><strong>B</strong> Javier R. Movellan</div>
+        <div class="card" draggable="true" id="res-C" data-value="C" data-clone="true"><strong>C</strong> Ronald Arkin</div>
+        <div class="card" draggable="true" id="res-D" data-value="D" data-clone="true"><strong>D</strong> David Powers</div>
+      </div>
+
+      <hr style="border:0; border-top:1px dashed var(--line); margin:20px 0;">
+
+      <div class="question-block">
+        <p><a id="q19-anchor"></a><strong>19</strong> In future, robots will not only have to think, but also to show feelings.</p>
+        <span class="dropzone" data-target="q19"></span>
+      </div>
+      <div class="question-block">
+        <p><a id="q20-anchor"></a><strong>20</strong> It is uncertain whether more contact between people and robots will be beneficial.</p>
+        <span class="dropzone" data-target="q20"></span>
+      </div>
+      <div class="question-block">
+        <p><a id="q21-anchor"></a><strong>21</strong> Very young children have not yet developed ideas about robots.</p>
+        <span class="dropzone" data-target="q21"></span>
+      </div>
+      <div class="question-block">
+        <p><a id="q22-anchor"></a><strong>22</strong> Robots need to perform a wide variety of actions for people to relate to them.</p>
+        <span class="dropzone" data-target="q22"></span>
+      </div>
+      <div class="question-block">
+        <p><a id="q23-anchor"></a><strong>23</strong> Using robots as an aid in schools may have many benefits.</p>
+        <span class="dropzone" data-target="q23"></span>
+      </div>
+    </div>
+
+    <!-- QUESTION GROUP 3: SENTENCE COMPLETION -->
+    <div class="group">
+      <h4>Questions 24–26</h4>
+      <p>Complete the sentences below.</p>
+      <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+      
+      <p>24 Until recently, robots that were best at holding people’s attention were those that acted as <a id="q24-anchor"></a><input class="blank" type="text" name="q24">.</p>
+      <p>25 The children responded to the QRIO robot as a friend or a <a id="q25-anchor"></a><input class="blank" type="text" name="q25"> rather than as a toy.</p>
+      <p>26 Arkin expected that the children would show <a id="q26-anchor"></a><input class="blank" type="text" name="q26"> towards the QRIO robot.</p>
+    </div>
+
+    <!-- Controls and Results -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+      <div class="footer-note">本机考版本完全免费，小红书账号276752989获取</div>
+    </details>
+  </section>
+</div>
+
+<!-- 3. UI Helper Elements -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// --- MASTER JAVASCRIPT TEMPLATE ---
+
+// 1. STATE & ANSWERS
+const answers = {
+    q14: "d",
+    q15: "f",
+    q16: "d",
+    q17: "a",
+    q18: "c",
+    q19: "b",
+    q20: "c",
+    q21: "a",
+    q22: "d",
+    q23: "a",
+    q24: "storytellers",
+    q25: "peer",
+    q26: "affection"
+};
+
+// 2. UI & INTERACTIVITY
+let timerSeconds = 0, timerInterval;
+let isTimerPaused = false;
+const timerEl = document.getElementById('timer');
+
+function toggleTimer() {
+    isTimerPaused = !isTimerPaused;
+    timerEl.classList.toggle('paused', isTimerPaused);
+    showToast(isTimerPaused ? 'Timer paused' : 'Timer resumed');
+}
+
+setInterval(() => {
+    if (!isTimerPaused) {
+        timerSeconds++;
+        const minutes = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+        const seconds = String(timerSeconds % 60).padStart(2, '0');
+        timerEl.textContent = `${minutes}:${seconds}`;
+    }
+}, 1000);
+
+function toggleDarkMode() {
+    document.body.classList.toggle('dark-mode');
+    document.body.classList.toggle('dark');
+    const isDark = document.body.classList.contains('dark-mode');
+    localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
+    document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️';
+}
+
+function scrollToElement(id) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function showToast(msg) {
+    const toastEl = document.getElementById('toast');
+    toastEl.textContent = msg;
+    toastEl.style.display = 'block';
+    setTimeout(() => { toastEl.style.display = 'none'; }, 1500);
+}
+
+// 3. HIGHLIGHTING & NOTE TAKING LOGIC
+const selbar = document.getElementById('selbar');
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+
+// Handle Text Selection - Works in both left (passage) and right (questions) panes
+document.addEventListener('mouseup', (e) => {
+    const sel = window.getSelection();
+    // Allow highlighting in both panes by checking if selection is within .shell
+    if (sel.toString().length > 0 && document.querySelector('.shell').contains(sel.anchorNode)) {
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        selbar.style.top = `${rect.top + window.scrollY - 40}px`;
+        selbar.style.left = `${rect.left + rect.width / 2}px`;
+        selbar.style.display = 'flex';
+    } else if (!selbar.contains(e.target)) {
+        selbar.style.display = 'none';
+    }
+});
+
+document.getElementById('btnHL').onclick = () => {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const span = document.createElement('span');
+    span.className = 'hl';
+    try {
+        range.surroundContents(span);
+        sel.removeAllRanges();
+        selbar.style.display = 'none';
+    } catch (e) {
+        showToast("Cannot highlight across different blocks.");
+    }
+};
+
+document.getElementById('btnUH').onclick = () => {
+    const sel = window.getSelection();
+    if (sel.anchorNode.parentElement.classList.contains('hl')) {
+        const parent = sel.anchorNode.parentElement;
+        const text = document.createTextNode(parent.textContent);
+        parent.parentNode.replaceChild(text, parent);
+        sel.removeAllRanges();
+        selbar.style.display = 'none';
+    } else {
+        showToast("Select a highlighted area to remove.");
+    }
+};
+
+document.getElementById('btnNote').onclick = () => {
+    toggleNotes();
+    selbar.style.display = 'none';
+};
+
+function toggleNotes() {
+    notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+
+document.getElementById('btnClose').onclick = toggleNotes;
+document.getElementById('btnCopy').onclick = () => {
+    noteArea.select();
+    document.execCommand('copy');
+    showToast('Notes copied to clipboard');
+};
+
+// 4. DRAG AND DROP LOGIC
+document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', card.id);
+        setTimeout(() => card.classList.add('ghost'), 0);
+    });
+    card.addEventListener('dragend', () => card.classList.remove('ghost'));
+});
+
+document.querySelectorAll('.dropzone').forEach(zone => {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('over');
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        
+        if (!draggedCard) return;
+
+        const originPool = document.getElementById(draggedCard.dataset.originPool);
+        const cardToDrop = draggedCard.dataset.clone === 'true' ? draggedCard.cloneNode(true) : draggedCard;
+        
+        // Return existing card to its pool if it's unique (not cloned)
+        if (zone.children.length > 0 && zone.children[0].classList.contains('card')) {
+            const existingCard = zone.children[0];
+            const itsOriginPool = document.getElementById(existingCard.dataset.originPool);
+            if (itsOriginPool && existingCard.dataset.clone !== 'true') {
+                itsOriginPool.appendChild(existingCard);
+            } else {
+                existingCard.remove(); // Just remove if it was a clone
+            }
+        }
+
+        // Re-attach drag events for cloned cards
+        if (draggedCard.dataset.clone === 'true') {
+            cardToDrop.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', cardToDrop.id);
+                setTimeout(() => cardToDrop.classList.add('ghost'), 0);
+            });
+            cardToDrop.addEventListener('dragend', () => cardToDrop.classList.remove('ghost'));
+            cardToDrop.id = 'clone-' + Math.random().toString(36).substr(2, 9);
+            cardToDrop.dataset.originPool = draggedCard.dataset.originPool;
+        }
+
+        zone.innerHTML = '';
+        zone.appendChild(cardToDrop);
+        updateAnswerStatus();
+    });
+});
+
+document.querySelectorAll('.cardpool').forEach(pool => {
+    pool.addEventListener('dragover', e => e.preventDefault());
+    pool.addEventListener('drop', e => {
+        e.preventDefault();
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        if (draggedCard && draggedCard.parentElement.classList.contains('dropzone')) {
+            const oldZone = draggedCard.parentElement;
+            
+            if (draggedCard.dataset.clone === 'true') {
+                draggedCard.remove();
+            } else {
+                pool.appendChild(draggedCard);
+            }
+            
+            oldZone.innerHTML = ''; // Clear the dropzone
+            updateAnswerStatus();
+        }
+    });
+});
+
+// 5. GRADING & STATE MANAGEMENT
+function grade() {
+    let total = 0, correct = 0, lines = [];
+    
+    Object.keys(answers).forEach(qKey => {
+        const textInput = document.querySelector(`input[name="${qKey}"][type="text"]`);
+        const radioInput = document.querySelector(`input[name="${qKey}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qKey}"]`);
+        let userAnswer = '';
+        
+        if (textInput) {
+            userAnswer = textInput.value.trim();
+        } else if (radioInput) {
+            userAnswer = radioInput.value;
+        } else if (dropzone) {
+            const card = dropzone.querySelector('.card');
+            userAnswer = card ? card.dataset.value : '';
+        }
+        
+        const isCorrect = userAnswer.toLowerCase() === answers[qKey].toLowerCase();
+        
+        total++;
+        if (isCorrect) correct++;
+        
+        let resultLine = `${qKey.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : `❌ (Correct: ${answers[qKey]})`}`;
+        lines.push(resultLine);
+    });
+
+    const acc = total ? Math.round(100 * correct / total) : 0;
+    document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p><pre>${lines.join('\n')}</pre>`;
+    document.getElementById('answerContent').innerHTML = `<ol start="14">${Object.entries(answers).map(([key, val]) => `<li><strong>${key.replace('q','')}:</strong> ${val}</li>`).join('')}</ol>`;
+    document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+
+function resetForm() {
+    document.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
+    document.querySelectorAll('input[type="radio"]').forEach(input => input.checked = false);
+    document.querySelectorAll('.dropzone').forEach(zone => {
+        if (zone.children.length > 0) {
+            const card = zone.children[0];
+            const originPool = document.getElementById(card.dataset.originPool);
+            if (originPool && card.dataset.clone !== 'true') {
+                originPool.appendChild(card);
+            } else {
+                card.remove(); 
+            }
+        }
+        zone.innerHTML = '';
+    });
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('answerContent').innerHTML = '';
+    document.querySelector('#answerBox .badge').textContent = 'hidden';
+    updateAnswerStatus();
+    showToast('Form has been reset');
+}
+
+function updateAnswerStatus() {
+    document.querySelectorAll('.q-item').forEach(item => {
+        const qNum = item.id.replace('-nav', '');
+        const textInput = document.querySelector(`input[name="${qNum}"][type="text"]`);
+        const radioInput = document.querySelector(`input[name="${qNum}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qNum}"]`);
+        let answered = false;
+        
+        if (textInput) answered = textInput.value.trim() !== '';
+        if (radioInput) answered = true;
+        if (dropzone) answered = !!dropzone.querySelector('.card');
+        
+        item.classList.toggle('answered', answered);
+    });
+}
+
+// 6. INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        toggleDarkMode();
+    }
+    document.querySelectorAll('input, .dropzone').forEach(el => {
+        el.addEventListener('input', updateAnswerStatus);
+        el.addEventListener('change', updateAnswerStatus);
+        el.addEventListener('drop', updateAnswerStatus);
+    });
+    
+    // Setup origin pool data for cards
+    document.querySelectorAll('.card').forEach(card => {
+        if (card.parentElement.classList.contains('cardpool')) {
+            card.dataset.originPool = card.parentElement.id;
+        }
+    });
+
+    // Load LMS script
+    if (!window.practicePageEnhancer) {
+        const script = document.createElement('script');
+        script.src = '../../js/practice-page-enhancer.js';
+        script.onload = () => console.log('Enhancer loaded.');
+        script.onerror = () => console.error('Failed to load enhancer.');
+        document.head.appendChild(script);
+    }
+});
+</script>
+
+</body>
+</html>

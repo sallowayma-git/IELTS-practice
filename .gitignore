@@ -23,6 +23,10 @@
 /ielts-writing-assistant/
 /BACKUP/
 
+# 三月 folder rules: ignore all pdfs, but don't ignore the folder itself
+/三月/**/*.pdf
+
+
 package-lock.json
 # 忽略可能的系统文件
 .DS_Store

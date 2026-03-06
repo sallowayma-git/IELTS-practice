@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Solving the Problem of Waste Disposal - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    /* 字体大小变量 - 基础regular，逐级放大 */
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px; /* 比regular大1号 */
+    --font-size-large: 20px;    /* 比moderate大1号 */
+  }
+  /* 字体大小类 - 所有元素继承 */
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    font-size: inherit; /* 所有元素继承父级字体大小 */
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular); /* 默认regular */
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: static; 
+    display: inline-block; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:#fff;
+    cursor:pointer;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:100vh; 
+    width:100%; 
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: normal; 
+    hyphens: none; 
+  }
+  .paragraph-label {
+    font-weight: 600;
+    color: var(--accent);
+    margin-right: 8px;
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 24px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+  }
+  .answer-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin:4px 0 8px;
+  }
+  .answer-option label {
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:4px;
+  }
+  .heading-match-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:6px 0;
+  }
+  .heading-match-option label {
+    cursor:pointer;
+    padding:4px 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    transition: all 0.2s;
+  }
+  .heading-match-option label:hover {
+    background:#f1f5f9;
+    border-color:var(--accent);
+  }
+  .person-idea-option {
+    display:flex;
+    flex-direction: column;
+    gap:6px;
+    margin:6px 0;
+  }
+  .person-idea-option label {
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  input.blank {
+    width: 120px; /* 适配单字填空长度 */
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  body { 
+    padding-bottom: 82px; 
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-bottom:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    border-bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  /* 列表样式：移除默认黑点，替换为短横线，按行排列 */
+  ul {
+    list-style-type: none;
+    padding-left: 20px;
+    margin: 8px 0;
+  }
+  ul li::before {
+    content: "- ";
+    color: inherit;
+    font-weight: 500;
+  }
+  .heading-list {
+    margin: 10px 0;
+  }
+  .heading-list li {
+    margin-bottom: 8px;
+  }
+  .landfill-note {
+    font-style: italic;
+    color: var(--muted);
+    margin: 8px 0;
+  }
+</style>
+</head>
+<body class="font-regular">
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+</div>
+<!-- 字体设置模态框 -->
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (Default - 16px)</div>
+  <div class="font-option" data-size="moderate">Moderate (Larger - 18px)</div>
+  <div class="font-option" data-size="large">Large (Largest - 20px)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2 
+      <div id="timer-container">
+        <span id="timer">00:00</span>
+        <button id="settingsBtn" onclick="openSettingsModal()">Settings</button>
+      </div>
+    </h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    
+    <h3>Solving the Problem of Waste Disposal</h3>
+    <p>With the amount of rubbish being produced around the world increasing, Mark Rowe asks whether a new generation of incineration plants can help to solve the problem</p>
+    
+    <p><span class="paragraph-label">A</span> For many years, burning rubbish has been portrayed as the lazy option when it comes to dealing with the problem of waste disposal, since it sends toxic fumes into the air and appears to support a consumerist, throwaway society. Norway, however, appears to be burning its way through a sizeable chunk of Europe’s municipal waste, using the heat created by this process to warm and power homes in many of its cities. Norway isn’t alone: Germany, Sweden, Belgium and the Netherlands all burn significant quantities of rubbish, and across Europe there are 420 plants burning municipal waste. With Europe dumping 150 million tonnes of rubbish into landfill* every year, there would seem to be a limitless supply.</p>
+    
+    <p><span class="paragraph-label">B</span> Those who support burning waste say that a new generation of incinerators has made it a more attractive option. Filters and scrubbing mechanisms now capture harmful substances such as mercury, hydrochloric acid and heavy metals. According to Ted Michaels, president of the US-based Energy Recovery Centre, ‘There has been constant evolution in combustion engineering and emissions-control technology, and the output from these facilities is now minuscule.’ Above all, however, supporters say that incineration is the only way of preventing the long-term impacts of landfill. In ten years’ time, says the World Bank, humans will be generating 2.2 billion tonnes of solid waste per year. Advocates see incineration as a practical way to deal swiftly with an immediate problem.</p>
+    
+    <p><span class="paragraph-label">C</span> Levels of waste generation vary hugely around the world. ‘It’s a problem for the developed nations,’ says Joergen Fenhann, a senior scientist working with the UN Environment Programme in Denmark. ‘The more you develop, the more you produce, buy and throw away.’ But the growth of incineration hasn’t been universally welcomed. Lars Haltbrekken, chairman of Friends of the Earth in Norway, is concerned that incineration plants appear to generate demand for their services. ‘The problem in Norway,’ he explains, ‘is that we have built too many waste-burning factories. So we’ve ended up importing waste from other countries. If you look at this in a very small perspective, it is, of course, better for the climate to burn rubbish from the UK rather than leave it in landfill there,’ he continues. ‘But in a broader perspective, it’s a lazy way of getting rid of waste; you don’t stimulate the goals of reducing, reusing and recycling.’</p>
+    
+    <p class="landfill-note">*landfill: a method of disposing of waste material by burying it</p>
+    
+    <p><span class="paragraph-label">D</span> Incineration is also at odds with EU policy, which promotes a ‘recycling hierarchy’: ideally, we simply produce less waste in the first place; failing that, we reuse objects more; the next step is recycling; only then should we consider incineration, while dumping in landfill is the last resort. Dealing with the problem of waste disposal involves tracing the whole process that took the material from its inception to landfill. We used to call this the ‘cradle to grave’ life cycle; now, the talk is of ‘cradle to cradle’ and an even more comprehensive concept known as ‘zero waste’. ‘The philosophy of cradle to cradle is about designing products that are actually good for the environment at the end of their life,’ says Joan Marc Simon, European spokesman for the environmental movement GAIA. ‘You design a bottle that contains no toxins, is fully recyclable and requires the minimum amount of energy to be produced.’ As Simon points out, however, without the right mechanisms in place ‘nothing guarantees that this bottle will end up being properly collected and treated in the appropriate recycling facility’.</p>
+    
+    <p><span class="paragraph-label">E</span> Tim Burns, policy manager at Keep Britain Tidy, says, ‘In the UK alone, people waste £10 billion of food every year. You can argue about composting that, or not buying it in the first place - if you do that, then that’s money the retailers don’t get, so it’s not always clear-cut.’ The implications of zero waste are that we’re going to have to take a good long look at those well-stocked supermarket shelves, too. ‘Supermarkets keep their shelves stocked even when demand isn’t there, which means they have to pay to dispose of a lot of food,’ says Burns. ‘But that cost is less to them than the cost in brand damage of having empty shelves.’</p>
+    
+    <p><span class="paragraph-label">F</span> Recent history and changes in trends in recycling suggest that we should be prepared for unexpected developments. ‘If someone back in the 1980s had suggested what waste would be like now, they would be completely wrong,’ says Richard Fisher, a PhD researcher at Cranfield University. ‘Consumerism has developed at a pace we never expected. Nobody would have said there would be so much electronic waste. But recycling has grown, too - ten years ago nobody would have predicted today’s levels of recycling.’ But he points out that the need to reduce waste is still a difficult message to sell to consumers. He suggests that what people are really concerned about is their loved ones and the future they face. ‘Perhaps we can align the environmental message to these deep-seated values,’ he says. ‘We need to look at whether it’s business that drives consumers or the other way around. You need government to play a leadership role, whereas countries such as the UK seem to be stepping away from the environment in pursuit of short-term economic goals.’</p>
+    
+    <!-- 多加空白行防止加载不完全 -->
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- Questions 14-19: Paragraph Headings Matching -->
+    <div class="group">
+      <h4>Questions 14–19</h4>
+      <p>Reading Passage 2 has six paragraphs, A–F.</p>
+      <p>Choose the correct heading for each paragraph from the list of headings below.</p>
+      <p>Write the correct number, i–vii, in boxes 14–19 on your answer sheet.</p>
+      
+      <h5>List of Headings</h5>
+      <ul class="heading-list">
+        <li>i New terminology reflecting changing attitudes to waste disposal</li>
+        <li>ii Fundamental changes in behaviour in the past and future</li>
+        <li>iii Ways of rewarding the public for recycling</li>
+        <li>iv A surprising approach to waste disposal by several countries</li>
+        <li>v Difficult choices for individuals and businesses</li>
+        <li>vi Arguments against incineration from a country that uses it</li>
+        <li>vii A number of justifications for the use of incineration</li>
+      </ul>
+      
+      <a id="q14-anchor"></a>
+      <div id="q14-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">14.</span> Paragraph A</p>
+        <div class="heading-match-option">
+          <label><input name="q14" type="radio" value="i"> i</label>
+          <label><input name="q14" type="radio" value="ii"> ii</label>
+          <label><input name="q14" type="radio" value="iii"> iii</label>
+          <label><input name="q14" type="radio" value="iv"> iv</label>
+          <label><input name="q14" type="radio" value="v"> v</label>
+          <label><input name="q14" type="radio" value="vi"> vi</label>
+          <label><input name="q14" type="radio" value="vii"> vii</label>
+        </div>
+      </div>
+      
+      <a id="q15-anchor"></a>
+      <div id="q15-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">15.</span> Paragraph B</p>
+        <div class="heading-match-option">
+          <label><input name="q15" type="radio" value="i"> i</label>
+          <label><input name="q15" type="radio" value="ii"> ii</label>
+          <label><input name="q15" type="radio" value="iii"> iii</label>
+          <label><input name="q15" type="radio" value="iv"> iv</label>
+          <label><input name="q15" type="radio" value="v"> v</label>
+          <label><input name="q15" type="radio" value="vi"> vi</label>
+          <label><input name="q15" type="radio" value="vii"> vii</label>
+        </div>
+      </div>
+      
+      <a id="q16-anchor"></a>
+      <div id="q16-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">16.</span> Paragraph C</p>
+        <div class="heading-match-option">
+          <label><input name="q16" type="radio" value="i"> i</label>
+          <label><input name="q16" type="radio" value="ii"> ii</label>
+          <label><input name="q16" type="radio" value="iii"> iii</label>
+          <label><input name="q16" type="radio" value="iv"> iv</label>
+          <label><input name="q16" type="radio" value="v"> v</label>
+          <label><input name="q16" type="radio" value="vi"> vi</label>
+          <label><input name="q16" type="radio" value="vii"> vii</label>
+        </div>
+      </div>
+      
+      <a id="q17-anchor"></a>
+      <div id="q17-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">17.</span> Paragraph D</p>
+        <div class="heading-match-option">
+          <label><input name="q17" type="radio" value="i"> i</label>
+          <label><input name="q17" type="radio" value="ii"> ii</label>
+          <label><input name="q17" type="radio" value="iii"> iii</label>
+          <label><input name="q17" type="radio" value="iv"> iv</label>
+          <label><input name="q17" type="radio" value="v"> v</label>
+          <label><input name="q17" type="radio" value="vi"> vi</label>
+          <label><input name="q17" type="radio" value="vii"> vii</label>
+        </div>
+      </div>
+      
+      <a id="q18-anchor"></a>
+      <div id="q18-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">18.</span> Paragraph E</p>
+        <div class="heading-match-option">
+          <label><input name="q18" type="radio" value="i"> i</label>
+          <label><input name="q18" type="radio" value="ii"> ii</label>
+          <label><input name="q18" type="radio" value="iii"> iii</label>
+          <label><input name="q18" type="radio" value="iv"> iv</label>
+          <label><input name="q18" type="radio" value="v"> v</label>
+          <label><input name="q18" type="radio" value="vi"> vi</label>
+          <label><input name="q18" type="radio" value="vii"> vii</label>
+        </div>
+      </div>
+      
+      <a id="q19-anchor"></a>
+      <div id="q19-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">19.</span> Paragraph F</p>
+        <div class="heading-match-option">
+          <label><input name="q19" type="radio" value="i"> i</label>
+          <label><input name="q19" type="radio" value="ii"> ii</label>
+          <label><input name="q19" type="radio" value="iii"> iii</label>
+          <label><input name="q19" type="radio" value="iv"> iv</label>
+          <label><input name="q19" type="radio" value="v"> v</label>
+          <label><input name="q19" type="radio" value="vi"> vi</label>
+          <label><input name="q19" type="radio" value="vii"> vii</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Questions 20-23: People & Ideas Matching -->
+    <div class="group">
+      <h4>Questions 20–23</h4>
+      <p>Look at the following people (Questions 20–23) and the list of opinions below.</p>
+      <p>Match each person with the correct opinion, A–G.</p>
+      <p>Write the correct letter, A–G, in boxes 20–23 on your answer sheet.</p>
+      
+      <h5>List of Opinions</h5>
+      <ul>
+        <li>A Incineration does not encourage responsible attitudes to waste disposal.</li>
+        <li>B Recycling can sometimes create serious problems for the future.</li>
+        <li>C Greater consumerism leads to higher levels of waste.</li>
+        <li>D Proper systems are needed for the recycling of environmentally-friendly products.</li>
+        <li>E Landfill is better for the environment than incineration.</li>
+        <li>F Incineration of waste is now relatively harmless to the environment.</li>
+        <li>G Efforts to reduce waste may affect profits for some types of companies.</li>
+      </ul>
+      
+      <a id="q20-anchor"></a>
+      <div id="q20-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">20.</span> Ted Michaels</p>
+        <div class="person-idea-option">
+          <label><input name="q20" type="radio" value="A"> A</label>
+          <label><input name="q20" type="radio" value="B"> B</label>
+          <label><input name="q20" type="radio" value="C"> C</label>
+          <label><input name="q20" type="radio" value="D"> D</label>
+          <label><input name="q20" type="radio" value="E"> E</label>
+          <label><input name="q20" type="radio" value="F"> F</label>
+          <label><input name="q20" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q21-anchor"></a>
+      <div id="q21-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">21.</span> Joergen Fenhann</p>
+        <div class="person-idea-option">
+          <label><input name="q21" type="radio" value="A"> A</label>
+          <label><input name="q21" type="radio" value="B"> B</label>
+          <label><input name="q21" type="radio" value="C"> C</label>
+          <label><input name="q21" type="radio" value="D"> D</label>
+          <label><input name="q21" type="radio" value="E"> E</label>
+          <label><input name="q21" type="radio" value="F"> F</label>
+          <label><input name="q21" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q22-anchor"></a>
+      <div id="q22-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">22.</span> Joan Marc Simon</p>
+        <div class="person-idea-option">
+          <label><input name="q22" type="radio" value="A"> A</label>
+          <label><input name="q22" type="radio" value="B"> B</label>
+          <label><input name="q22" type="radio" value="C"> C</label>
+          <label><input name="q22" type="radio" value="D"> D</label>
+          <label><input name="q22" type="radio" value="E"> E</label>
+          <label><input name="q22" type="radio" value="F"> F</label>
+          <label><input name="q22" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q23-anchor"></a>
+      <div id="q23-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">23.</span> Tim Burns</p>
+        <div class="person-idea-option">
+          <label><input name="q23" type="radio" value="A"> A</label>
+          <label><input name="q23" type="radio" value="B"> B</label>
+          <label><input name="q23" type="radio" value="C"> C</label>
+          <label><input name="q23" type="radio" value="D"> D</label>
+          <label><input name="q23" type="radio" value="E"> E</label>
+          <label><input name="q23" type="radio" value="F"> F</label>
+          <label><input name="q23" type="radio" value="G"> G</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Questions 24-26: Summary Completion -->
+    <div class="group">
+      <h4>Questions 24–26</h4>
+      <p>Complete the summary below.</p>
+      <p>Choose ONE WORD ONLY from the passage for each answer.</p>
+      <p>Write your answers in boxes 24–26 on your answer sheet.</p>
+      
+      <h5>What recent history tells us about recycling</h5>
+      <p class="summary-text">
+        Richard Fisher, a researcher from Cranfield University, points out that the pace of consumerism has increased more quickly than was predicted in the 1980s. There has, for example, been unexpected growth in waste from <span class="question-number"><a id="q24-anchor"></a>24.</span> <input type="text" class="blank" id="q24"> products. He suggests that the need to protect the environment should be linked to basic values, and adds that it might be better if consumers had more influence over <span class="question-number"><a id="q25-anchor"></a>25.</span> <input type="text" class="blank" id="q25"> and more direction was provided by <span class="question-number"><a id="q26-anchor"></a>26.</span> <input type="text" class="blank" id="q26">.
+      </p>
+    </div>
+    
+    <!-- Submit & Reset Buttons -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <!-- Results & Answer Key -->
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>14</td>
+            <td>iv</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Paragraph A的标题，A段先指出“焚烧垃圾曾被视为懒惰的处理方式”，随后转折提到“挪威、德国、瑞典等多国大量焚烧垃圾”，属于“多个国家采用的出人意料的垃圾处理方式”，对应iv。</p>
+              <p class="explanation-original">原文：Norway, however, appears to be burning its way through a sizeable chunk of Europe’s municipal waste... Germany, Sweden, Belgium and the Netherlands all burn significant quantities of rubbish. (Paragraph A)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>15</td>
+            <td>vii</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Paragraph B的标题，B段从“新一代焚烧炉技术改进（过滤有害物）、排放极低、避免填埋长期影响”三个方面论证支持焚烧的理由，对应vii“支持焚烧的多条依据”。</p>
+              <p class="explanation-original">原文：Filters and scrubbing mechanisms now capture harmful substances... the output from these facilities is now minuscule... incineration is the only way of preventing the long-term impacts of landfill. (Paragraph B)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>16</td>
+            <td>vi</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Paragraph C的标题，C段中挪威环保人士（Friends of the Earth）指出“挪威因焚烧厂过多而进口垃圾，焚烧不利于减废、再利用和回收”，属于“使用焚烧的国家对焚烧的反对观点”，对应vi。</p>
+              <p class="explanation-original">原文：Lars Haltbrekken, chairman of Friends of the Earth in Norway... it’s a lazy way of getting rid of waste; you don’t stimulate the goals of reducing, reusing and recycling. (Paragraph C)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>17</td>
+            <td>i</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Paragraph D的标题，D段提到“欧盟‘回收层级’理念、术语从‘摇篮到坟墓’变为‘摇篮到摇篮’‘零废弃’”，体现“反映垃圾处理态度变化的新术语”，对应i。</p>
+              <p class="explanation-original">原文：We used to call this the ‘cradle to grave’ life cycle; now, the talk is of ‘cradle to cradle’ and an even more comprehensive concept known as ‘zero waste’. (Paragraph D)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>18</td>
+            <td>v</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Paragraph E的标题，E段讨论“个人减少购买会影响零售商收入、超市为避免空货架需承担浪费成本”，属于“个人与企业的艰难选择”，对应v。</p>
+              <p class="explanation-original">...not buying it in the first place - that’s money the retailers don’t get... Supermarkets... pay to dispose of a lot of food, but that cost is less than the cost in brand damage of having empty shelves. (Paragraph E)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>19</td>
+            <td>ii</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Paragraph F的标题，F段回顾“1980年代未预料到如今的消费主义和电子垃圾增长，回收也随之发展”，并展望“需结合价值观、明确消费与商业的驱动关系”，对应ii“过去与未来的行为重大变化”。</p>
+              <p class="explanation-original">If someone back in the 1980s had suggested what waste would be like now, they would be completely wrong... Consumerism has developed at a pace we never expected... We need to look at whether it’s business that drives consumers or the other way around. (Paragraph F)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>20</td>
+            <td>F</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Ted Michaels的观点，B段他指出“焚烧技术和排放控制持续发展，排放现已极低”，即“焚烧如今对环境相对无害”，对应F。</p>
+              <p class="explanation-original">According to Ted Michaels... There has been constant evolution in combustion engineering and emissions-control technology, and the output from these facilities is now minuscule. (Paragraph B)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>21</td>
+            <td>C</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Joergen Fenhann的观点，C段他提到“发展程度越高，生产、购买和丢弃的越多”，即“消费主义越强，垃圾量越高”，对应C。</p>
+              <p class="explanation-original">Joergen Fenhann... The more you develop, the more you produce, buy and throw away. (Paragraph C)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>22</td>
+            <td>D</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Joan Marc Simon的观点，D段他指出“设计环保可回收产品的同时，需恰当的系统确保其被正确回收处理”，对应D“环保产品回收需完善系统”。</p>
+              <p class="explanation-original">Joan Marc Simon... without the right mechanisms in place ‘nothing guarantees that this bottle will end up being properly collected and treated in the appropriate recycling facility’. (Paragraph D)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>23</td>
+            <td>G</td>
+            <td>
+              <p class="explanation-text">题干要求匹配Tim Burns的观点，E段他提到“个人减少购买会让零售商损失收入，超市需平衡浪费成本与品牌损失”，即“减废努力可能影响部分企业利润”，对应G。</p>
+              <p class="explanation-original">Tim Burns... not buying it in the first place - that’s money the retailers don’t get... Supermarkets... pay to dispose of a lot of food, but that cost is less than the cost in brand damage. (Paragraph E)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>24</td>
+            <td>electronic</td>
+            <td>
+              <p class="explanation-text">题干要求填“垃圾增长意外的产品类型”，F段明确提到“没人预料到会有如此多的电子垃圾（electronic waste）”，对应“electronic”。</p>
+              <p class="explanation-original">Nobody would have said there would be so much electronic waste. (Paragraph F)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>25</td>
+            <td>business</td>
+            <td>
+              <p class="explanation-text">题干要求填“消费者应更有影响力的对象”，F段提到“需思考是商业驱动消费者还是反之”，即“消费者对商业（business）更有影响力会更好”，对应“business”。</p>
+              <p class="explanation-original">We need to look at whether it’s business that drives consumers or the other way around. (Paragraph F)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>26</td>
+            <td>government</td>
+            <td>
+              <p class="explanation-text">题干要求填“应提供更多指导的主体”，F段指出“需要政府（government）发挥领导作用”，对应“government”。</p>
+              <p class="explanation-original">You need government to play a leadership role. (Paragraph F)</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<!-- 文本选择工具栏 -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<!-- 笔记面板 -->
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<!-- 提示框 -->
+<div id="toast"></div>
+<script>
+// 计时器核心功能
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; // 计时器间隔ID，用于后续停止
+// 启动计时器
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+// 页面加载时启动计时器
+window.onload = startTimer;
+// 拖拽分隔线调整左右面板宽度
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isDragging = false;
+divider.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.clientX - containerRect.left;
+  // 限制最小宽度，防止面板过窄
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+});
+window.addEventListener('mouseup', () => {
+  if (isDragging) {
+    isDragging = false;
+    document.body.style.cursor = '';
+  }
+});
+// 触摸设备支持
+divider.addEventListener('touchstart', (e) => {
+  isDragging = true;
+  e.preventDefault();
+}, { passive: false });
+window.addEventListener('touchmove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.touches[0].clientX - containerRect.left;
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+}, { passive: false });
+window.addEventListener('touchend', () => {
+  isDragging = false;
+});
+// 文本高亮功能
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+// 定位选择工具栏
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    // 确保工具栏不超出视口
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+// 更新工具栏状态
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+// 监听文本选择事件
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+// 滚动时重新定位工具栏
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+// 点击高亮文本时显示工具栏
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+// 执行高亮
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    // 处理跨元素选择的情况
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+// 移除高亮
+function removeHighlight() {
+  if (currentHlNode) {
+    // 移除单个高亮元素
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize(); // 合并相邻文本节点
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  // 移除选择范围内的所有高亮
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      // 判断节点是否在选择范围内
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+// 绑定高亮按钮事件
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// 笔记功能
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+// 切换笔记面板显示
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+// 关闭笔记面板
+btnCloseNotes.addEventListener('click', toggleNotes);
+// 复制笔记
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+// 选中文本添加到笔记
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    // 滚动到笔记底部
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+// 提示框功能
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+// 字体设置功能
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+// 打开字体设置模态框
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+// 关闭字体设置模态框
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+// 点击模态框外部关闭
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+// 切换字体大小（影响所有元素）
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    // 移除所有字体类，添加选中的类
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    // 显示提示
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+  });
+});
+// 答案与评分功能（Submit后停止计时器）
+const answers = {
+  q14: 'iv',
+  q15: 'vii',
+  q16: 'vi',
+  q17: 'i',
+  q18: 'v',
+  q19: 'ii',
+  q20: 'F',
+  q21: 'C',
+  q22: 'D',
+  q23: 'G',
+  q24: 'electronic',
+  q25: 'business',
+  q26: 'government'
+};
+// 评分函数（Submit后执行，包含停止计时器）
+function grade() {
+  // 1. 停止计时器
+  clearInterval(timerInterval);
+  
+  // 2. 计算得分
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  // 检查14-26题（所有题型）
+  for (let i = 14; i <= 26; i++) {
+    const qName = `q${i}`;
+    let selected, userAns, isCorrect;
+    
+    // 处理单选类型题目（14-23）
+    if (i <= 23) {
+      selected = document.querySelector(`input[name="${qName}"]:checked`);
+      userAns = selected ? selected.value : 'No answer';
+      const correctAns = answers[qName];
+      isCorrect = userAns === correctAns;
+      if (isCorrect) correct++;
+      resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+    } 
+    // 处理填空类型题目（24-26）
+    else {
+      const input = document.getElementById(qName);
+      userAns = input ? input.value.trim().toLowerCase() : 'No answer';
+      const correctAns = answers[qName].toLowerCase();
+      isCorrect = userAns === correctAns;
+      if (isCorrect) correct++;
+      resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers[qName]})`}`);
+    }
+  }
+  
+  // 3. 显示结果
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  // 4. 展开答案面板
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  // 5. 标记所有题目为已回答
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+// 重置功能（重置计时器、选项、高亮等）
+function resetForm() {
+  // 1. 重置计时器
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  // 2. 重置所有单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 3. 重置填空输入框
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 4. 重置结果和答案面板
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  // 5. 重置导航栏已回答状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  // 6. 重置笔记
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  // 7. 移除所有高亮
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+}
+// 滚动到指定题目
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  // 高亮导航项
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+// 监听输入，标记题目为已回答
+(function() {
+  // 监听单选按钮（14-23）
+  for (let i = 14; i <= 23; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+  
+  // 监听填空题（24-26）
+  for (let i = 24; i <= 26; i++) {
+    const input = document.getElementById(`q${i}`);
+    input.addEventListener('input', () => {
+      if (input.value.trim()) {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      } else {
+        document.getElementById(`q${i}-nav`).classList.remove('answered');
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

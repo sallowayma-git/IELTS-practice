@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>What Lucy Taught Us - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    /* 字体大小变量 - 基础regular，逐级放大 */
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px; /* 比regular大1号 */
+    --font-size-large: 20px;    /* 比moderate大1号 */
+  }
+  /* 字体大小类 - 所有元素继承 */
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    font-size: inherit; /* 所有元素继承父级字体大小 */
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular); /* 默认regular */
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: static; 
+    display: inline-block; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:#fff;
+    cursor:pointer;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:100vh; 
+    width:100%; 
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: normal; 
+    hyphens: none; 
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 24px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+  }
+  .answer-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin:4px 0 8px;
+  }
+  .answer-option label {
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:4px;
+  }
+  input.blank {
+    width: 30%; /* 缩小填空长度 */
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  body { 
+    padding-bottom: 82px; 
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-bottom:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    border-bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  /* 移除列表符号 */
+  .question-list, .question-list ul {
+    list-style-type: none;
+    padding-left: 20px;
+    margin: 0;
+  }
+  .question-list > li {
+    margin-bottom: 10px;
+  }
+  .question-list ul li {
+    margin-bottom: 5px;
+  }
+</style>
+</head>
+<body class="font-regular">
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q3-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q4-anchor')">4</div>
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q5-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q7-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q9-anchor')">9</div>
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q10-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q11-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
+  </div>
+</div>
+<!-- 字体设置模态框 -->
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (Default - 16px)</div>
+  <div class="font-option" data-size="moderate">Moderate (Larger - 18px)</div>
+  <div class="font-option" data-size="large">Large (Largest - 20px)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 1 
+      <div id="timer-container">
+        <span id="timer">00:00</span>
+        <button id="settingsBtn" onclick="openSettingsModal()">Settings</button>
+      </div>
+    </h2>
+    <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
+    
+    <h3>What Lucy Taught Us</h3>
+    <p>A scientific finding in east Africa has changed our understanding of how humans have developed</p>
+    
+    <p>On a Sunday morning in late November 1974, a team of scientists were digging in an isolated spot in the Afar region of Ethiopia. Surveying the area, palaeoanthropologist Donald Johanson spotted a small piece of bone. Straight away, he recognised that it came from the elbow of a human ancestor. And there were plenty more. “As I looked up the slopes to my left, I saw bits of the skull, a chunk of jaw, a couple of vertebrae,” says Johanson.</p>
+    
+    <p>It was immediately obvious that the skeleton was a significant find, because the sediments at the site were known to be 3.5 million years old. “I realised this was part of a skeleton that was older than three million years,” says Johanson. It was the most ancient early human ever found. Later it became apparent that it was also the most complete – 40% of the skeleton had been preserved.</p>
+    
+    <p>At the group’s campsite that night, Johanson played a Beatles song called “Lucy in the Sky with Diamonds”, and, as the feeling was that the skeleton was female due to its size, someone suggested calling it Lucy. The name stuck and Johanson says, “All of a sudden, she became a person. But the morning after the discovery, the discussion was dominated by questions. How old was Lucy when she died? Did she have children? And might she be our direct ancestor?” Nowadays, we’re starting to get the answers to some of these questions.</p>
+    
+    <p>According to Johanson, Lucy had an incredible combination of primitive and derived features, which had not been seen before. Her skull and jaws were more ape-like than those of other groups of early humans. Her braincase was also very small, no bigger than that of a chimpanzee.</p>
+    
+    <p>For Johanson, it was immediately apparent that Lucy walked upright. That’s because the shape and positioning of her pelvis reflected a fully upright gait. Lucy’s knee and ankle were also preserved and seemed to reflect bipedal walking. Later studies of feet offer even more evidence. As an upright walker, Lucy strengthened the idea that walking was one of the selective pressures driving human evolution forwards. Early humans did not need bigger brains to take defining steps away from apes. Extra brainpower only came over a million years later with the arrival of the species Homo erectus, meaning upright man. Though big brains would clearly be important later, walking remains one of the traits that makes us uniquely human.</p>
+    
+    <p>She may have walked like a human, but Lucy spent at least some of her time up in the trees, as chimpanzees and orangutans still do today. It may be that upright walking evolved in the trees, as a way to walk along branches that would otherwise be too flexible. It’s not clear why Lucy left the safety of the trees. It is thought that savannahs were gradually opening up, so trees were spaced further apart. But hunting for food may have been the real reason for heading to the ground, says Chris Stringer of the Natural History Museum in London. In line with this idea, recent evidence suggests that the diet of early humans was changing at that time.</p>
+    
+    <p>Studies of the remains of food trapped on preserved human teeth indicate that several species, including Lucy’s, were expanding their diet around 3.5 million years ago. Instead of mostly eating fruit from trees, they began to include grasses and possibly meat. This change in diet may have allowed them to range more widely, and to travel around more efficiently in a changing environment. Fossilised crocodile and turtle eggs were found near her skeleton, suggesting that Lucy died while foraging for them in a nearby lake.</p>
+    
+    <p>How did early humans process all these new foods? Later species, like Homo erectus, are known to have used simple stone tools, but no tools have ever been found from this far back. However, in 2010 archaeologists uncovered animal bones with scratches that seem to have been made by stone tools. This suggests that Lucy and her relatives used stone tools to eat meat. There have since been heated debates over whether or not the marks were really made by tools. But if they were, it is not surprising, says Fred Spoor of the Max Planck Institute for Evolutionary Anthropology in Leipzig, Germany.</p>
+    
+    <p>It also seems that Lucy’s childhood was much briefer than ours and that she had to fend for herself from a young age. We know that Lucy was a full-grown adult because she had wisdom teeth and her bones had fused. But unlike modern humans, she seems to have grown to full size very quickly, and the time of death was when she was around 12 years old. In line with that, a recent study of a 3-year-old early human suggested that their brains matured much earlier than ours do.</p>
+    
+    <!-- 多加空白行防止加载不完全 -->
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- Questions 1-5: TRUE/FALSE/NOT GIVEN -->
+    <div class="group">
+      <h4>Questions 1–5</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 1?</p>
+      <p>In boxes 1–5 on your answer sheet, write</p>
+      <table>
+        <tr>
+          <th>TRUE</th>
+          <td>if the statement agrees with the information</td>
+        </tr>
+        <tr>
+          <th>FALSE</th>
+          <td>if the statement contradicts the information</td>
+        </tr>
+        <tr>
+          <th>NOT GIVEN</th>
+          <td>if there is no information on this</td>
+        </tr>
+      </table>
+      
+      <a id="q1-anchor"></a>
+      <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>1. Donald Johanson was uncertain about the nature of the elbow bone he found in Afar.</p>
+        <div class="answer-option">
+          <label><input name="q1" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q1" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q2-anchor"></a>
+      <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>2. Several bones were found by Donald Johanson at the same site in Afar.</p>
+        <div class="answer-option">
+          <label><input name="q2" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q2" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q3-anchor"></a>
+      <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>3. The experts realised the importance of the discovery at Afar.</p>
+        <div class="answer-option">
+          <label><input name="q3" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q3" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q4-anchor"></a>
+      <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>4. It was the upper part of the skeleton that had suffered the least damage.</p>
+        <div class="answer-option">
+          <label><input name="q4" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q4" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q5-anchor"></a>
+      <div id="q5-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>5. The skeleton’s measurements helped Johanson’s team to decide if it was male or female.</p>
+        <div class="answer-option">
+          <label><input name="q5" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q5" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Questions 6-13: Note Completion -->
+    <div class="group">
+      <h4>Questions 6–13</h4>
+      <p>Complete the notes below.</p>
+      <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+      <p>Write your answers in boxes 6–13 on your answer sheet.</p>
+      
+      <h4>Lucy</h4>
+      
+      <ul class="question-list">
+        <li><strong>Physical features</strong>
+          <ul>
+            <li>jaws and skull like those of an ape</li>
+            <li>braincase similar in size to that of a chimp</li>
+            <li>long arms</li>
+          </ul>
+        </li>
+        <li><strong>Movement</strong>
+          <ul>
+            <li>the positioning and shape of her pelvis made it clear that she walked like a human</li>
+            <li>upright movement possibly started among the <span class="question-number">6.</span><a id="q6-anchor"></a><input type="text" class="blank" id="q6"> of trees</li>
+            <li>probably moved to the <span class="question-number">7.</span><a id="q7-anchor"></a><input type="text" class="blank" id="q7"> in search of food</li>
+          </ul>
+        </li>
+        <li><strong>Diet and eating habits</strong>
+          <ul>
+            <li>analysis of food in the <span class="question-number">8.</span><a id="q8-anchor"></a><input type="text" class="blank" id="q8"> of the skeletons of early humans shows changes in their diet</li>
+            <li>it is likely that meat and grasses were substituted for <span class="question-number">9.</span><a id="q9-anchor"></a><input type="text" class="blank" id="q9"></li>
+            <li><span class="question-number">10.</span><a id="q10-anchor"></a><input type="text" class="blank" id="q10"> that were located close to Lucy suggest these were also part of her diet</li>
+            <li><span class="question-number">11.</span><a id="q11-anchor"></a><input type="text" class="blank" id="q11"> that were found had marks on them, possibly made by tools used for eating</li>
+          </ul>
+        </li>
+        <li><strong>Comparisons with modern-day humans</strong>
+          <ul>
+            <li>modern-day humans have a longer <span class="question-number">12.</span><a id="q12-anchor"></a><input type="text" class="blank" id="q12"> than Lucy did</li>
+            <li>the <span class="question-number">13.</span><a id="q13-anchor"></a><input type="text" class="blank" id="q13"> of modern-day humans appear to develop later than Lucy’s did</li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+    
+    <!-- Submit & Reset Buttons -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <!-- Results & Answer Key -->
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>1</td>
+            <td>FALSE</td>
+            <td>
+              <p class="explanation-text">题干称Johanson对肘骨性质“不确定”，但原文明确提到他“立刻认出”这是人类祖先的肘骨，二者矛盾。</p>
+              <p class="explanation-original">原文：Straight away, he recognised that it came from the elbow of a human ancestor. (第1段)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>TRUE</td>
+            <td>
+              <p class="explanation-text">题干称Johanson在同一地点发现多块骨骼，原文提到他看到“头骨碎片、下颌骨块、几块椎骨”，信息一致。</p>
+              <p class="explanation-original">原文：As I looked up the slopes to my left, I saw bits of the skull, a chunk of jaw, a couple of vertebrae. (第1段)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>TRUE</td>
+            <td>
+              <p class="explanation-text">题干称专家意识到该发现的重要性，原文提到“该骨架是重大发现”这一点“立刻显而易见”，含义一致。</p>
+              <p class="explanation-original">原文：It was immediately obvious that the skeleton was a significant find. (第2段)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>NOT GIVEN</td>
+            <td>
+              <p class="explanation-text">原文仅提到骨架“40%被保存下来”，以及膝盖、脚踝等部位被保存，未提及“上半身受损最少”，无相关信息。</p>
+              <p class="explanation-original">原文：Later it became apparent that it was also the most complete – 40% of the skeleton had been preserved. (第2段); Lucy’s knee and ankle were also preserved. (第5段)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>TRUE</td>
+            <td>
+              <p class="explanation-text">题干称骨架的尺寸帮助团队判断性别，原文明确提到“因体型原因认为该骨架为雌性”，“size”与“measurements”含义一致。</p>
+              <p class="explanation-original">原文：as the feeling was that the skeleton was female due to its size. (第3段)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>branches</td>
+            <td>
+              <p class="explanation-text">题干问直立行走可能起源于树的什么部位，原文提到“直立行走可能在树上进化，作为沿树枝行走的方式”，故答案为branches。</p>
+              <p class="explanation-original">原文：It may be that upright walking evolved in the trees, as a way to walk along branches that would otherwise be too flexible. (第6段)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>ground</td>
+            <td>
+              <p class="explanation-text">题干问为寻找食物可能迁移到哪里，原文提到“寻找食物可能是下到地面的真正原因”，故答案为ground。</p>
+              <p class="explanation-original">原文：hunting for food may have been the real reason for heading to the ground. (第6段)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>teeth</td>
+            <td>
+              <p class="explanation-text">题干问分析早期人类骨骼中哪个部位的食物残留可显示饮食变化，原文提到“研究保存在人类牙齿上的食物残留”，故答案为teeth。</p>
+              <p class="explanation-original">原文：Studies of the remains of food trapped on preserved human teeth indicate that several species... were expanding their diet. (第7段)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>fruit</td>
+            <td>
+              <p class="explanation-text">题干问肉和草可能替代了什么食物，原文提到“不再主要吃树上的水果，而是开始吃草和可能的肉”，故答案为fruit。</p>
+              <p class="explanation-original">原文：Instead of mostly eating fruit from trees, they began to include grasses and possibly meat. (第7段)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td>eggs</td>
+            <td>
+              <p class="explanation-text">题干问在Lucy附近发现的什么东西提示是她的食物，原文提到“鳄鱼和乌龟的蛋化石在她的骨架附近被发现”，故答案为eggs。</p>
+              <p class="explanation-original">原文：Fossilised crocodile and turtle eggs were found near her skeleton, suggesting that Lucy died while foraging for them. (第7段)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>11</td>
+            <td>bones</td>
+            <td>
+              <p class="explanation-text">题干问发现的什么东西上有痕迹（可能由取食工具造成），原文提到“考古学家发现带有划痕的动物骨骼，划痕似乎由石器造成”，故答案为bones。</p>
+              <p class="explanation-original">原文：archaeologists uncovered animal bones with scratches that seem to have been made by stone tools. (第8段)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>12</td>
+            <td>childhood</td>
+            <td>
+              <p class="explanation-text">题干问现代人比Lucy有更长的什么，原文提到“Lucy的童年比我们的短暂得多”，故答案为childhood。</p>
+              <p class="explanation-original">原文：It also seems that Lucy’s childhood was much briefer than ours. (第9段)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>13</td>
+            <td>brains</td>
+            <td>
+              <p class="explanation-text">题干问现代人的什么发育比Lucy的晚，原文提到“早期人类的大脑成熟比我们的早得多”，故答案为brains。</p>
+              <p class="explanation-original">原文：a recent study of a 3-year-old early human suggested that their brains matured much earlier than ours do. (第9段)</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<!-- 文本选择工具栏 -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<!-- 笔记面板 -->
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<!-- 提示框 -->
+<div id="toast"></div>
+<script>
+// 计时器核心功能
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; // 计时器间隔ID，用于后续停止
+// 启动计时器
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+// 页面加载时启动计时器
+window.onload = startTimer;
+// 拖拽分隔线调整左右面板宽度
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isDragging = false;
+divider.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.clientX - containerRect.left;
+  // 限制最小宽度，防止面板过窄
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+});
+window.addEventListener('mouseup', () => {
+  if (isDragging) {
+    isDragging = false;
+    document.body.style.cursor = '';
+  }
+});
+// 触摸设备支持
+divider.addEventListener('touchstart', (e) => {
+  isDragging = true;
+  e.preventDefault();
+}, { passive: false });
+window.addEventListener('touchmove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.touches[0].clientX - containerRect.left;
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+}, { passive: false });
+window.addEventListener('touchend', () => {
+  isDragging = false;
+});
+// 文本高亮功能
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+// 定位选择工具栏
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    // 确保工具栏不超出视口
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+// 更新工具栏状态
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+// 监听文本选择事件
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+// 滚动时重新定位工具栏
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+// 点击高亮文本时显示工具栏
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+// 执行高亮
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    // 处理跨元素选择的情况
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+// 移除高亮
+function removeHighlight() {
+  if (currentHlNode) {
+    // 移除单个高亮元素
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize(); // 合并相邻文本节点
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  // 移除选择范围内的所有高亮
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      // 判断节点是否在选择范围内
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+// 绑定高亮按钮事件
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// 笔记功能
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+// 切换笔记面板显示
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+// 关闭笔记面板
+btnCloseNotes.addEventListener('click', toggleNotes);
+// 复制笔记
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+// 选中文本添加到笔记
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    // 滚动到笔记底部
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+// 提示框功能
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+// 字体设置功能
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+// 打开字体设置模态框
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+// 关闭字体设置模态框
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+// 点击模态框外部关闭
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+// 切换字体大小（影响所有元素）
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    // 移除所有字体类，添加选中的类
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    // 显示提示
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+  });
+});
+// 答案与评分功能（Submit后停止计时器）
+const answers = {
+  q1: 'FALSE',
+  q2: 'TRUE',
+  q3: 'TRUE',
+  q4: 'NOT GIVEN',
+  q5: 'TRUE',
+  q6: 'branches',
+  q7: 'ground',
+  q8: 'teeth',
+  q9: 'fruit',
+  q10: 'eggs',
+  q11: 'bones',
+  q12: 'childhood',
+  q13: 'brains'
+};
+// 评分函数（Submit后执行，包含停止计时器）
+function grade() {
+  // 1. 停止计时器
+  clearInterval(timerInterval);
+  
+  // 2. 计算得分
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  // 检查1-5题（TRUE/FALSE/NOT GIVEN）
+  for (let i = 1; i <= 5; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 检查6-13题（填空题，忽略大小写）
+  for (let i = 6; i <= 13; i++) {
+    const qName = `q${i}`;
+    const input = document.getElementById(qName);
+    const userAns = input ? input.value.trim().toLowerCase() : 'No answer';
+    const correctAns = answers[qName].toLowerCase();
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers[qName]})`}`);
+  }
+  
+  // 3. 显示结果
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  // 4. 展开答案面板
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  // 5. 标记所有题目为已回答
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+// 重置功能（重置计时器、选项、高亮等）
+function resetForm() {
+  // 1. 重置计时器
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  // 2. 重置1-5题单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 3. 重置6-13题填空题
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 4. 重置结果和答案面板
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  // 5. 重置导航栏已回答状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  // 6. 重置笔记
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  // 7. 移除所有高亮
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+}
+// 滚动到指定题目
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  // 高亮导航项
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+// 监听输入，标记题目为已回答
+(function() {
+  // 监听单选按钮（1-5题）
+  for (let i = 1; i <= 5; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+  
+  // 监听填空题（6-13题）
+  for (let i = 6; i <= 13; i++) {
+    const input = document.getElementById(`q${i}`);
+    input.addEventListener('input', () => {
+      if (input.value.trim()) {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      } else {
+        document.getElementById(`q${i}-nav`).classList.remove('answered');
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

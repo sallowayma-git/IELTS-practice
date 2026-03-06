@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Jellyfish - The Dominant Species - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    /* 字体大小变量 - 基础regular，逐级放大 */
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px; /* 比regular大1号 */
+    --font-size-large: 20px;    /* 比moderate大1号 */
+  }
+  /* 字体大小类 - 所有元素继承 */
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    font-size: inherit; /* 所有元素继承父级字体大小 */
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular); /* 默认regular */
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: static; 
+    display: inline-block; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:#fff;
+    cursor:pointer;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:100vh; 
+    width:100%; 
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: normal; 
+    hyphens: none; 
+  }
+  .paragraph-label {
+    font-weight: 600;
+    color: var(--accent);
+    margin-right: 8px;
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 24px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+  }
+  .answer-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin:4px 0 8px;
+  }
+  .answer-option label {
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:4px;
+  }
+  .para-match-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:6px 0;
+  }
+  .para-match-option label {
+    cursor:pointer;
+    padding:4px 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    transition: all 0.2s;
+  }
+  .para-match-option label:hover {
+    background:#f1f5f9;
+    border-color:var(--accent);
+  }
+  input.blank {
+    width: 120px; /* 适配填空长度 */
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  body { 
+    padding-bottom: 82px; 
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-bottom:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    border-bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  /* 列表样式：移除默认黑点，替换为短横线 */
+  ul {
+    list-style-type: none;
+    padding-left: 20px;
+    margin: 8px 0;
+  }
+  ul li::before {
+    content: "- ";
+    color: inherit;
+    font-weight: 500;
+  }
+  .summary-text {
+    line-height: 1.6;
+    margin: 8px 0;
+  }
+</style>
+</head>
+<body class="font-regular">
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+</div>
+<!-- 字体设置模态框 -->
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (Default - 16px)</div>
+  <div class="font-option" data-size="moderate">Moderate (Larger - 18px)</div>
+  <div class="font-option" data-size="large">Large (Largest - 20px)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2 
+      <div id="timer-container">
+        <span id="timer">00:00</span>
+        <button id="settingsBtn" onclick="openSettingsModal()">Settings</button>
+      </div>
+    </h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    
+    <h3>Jellyfish - The Dominant Species</h3>
+    
+    <p><span class="paragraph-label">A</span> Jellyfish have become the curse of beach holidays, permeating every ocean on the globe, thriving in the Arctic and the tropics. In an ever-changing world where other species struggle to endure, jellyfish populations are on the rise. To the untrained eye, these creatures drift aimlessly on the oceans' currents and appear benign. In addition, they lack sharp claws, piercing teeth or even a brain. Despite this, they are armed with an amazing arsenal of weapons, especially the stinging power of their tentacles. As a result, jellyfish are among the most-feared, least-understood creatures in the seas.</p>
+    
+    <p><span class="paragraph-label">B</span> According to Dr Monty Graham, a jellyfish scientist at the University of South Alabama, US, 'Jellyfish are a pretty good group of animals to track coastal ecosystems. When you start to see jellyfish numbers grow, that usually indicates a stressed system.' While populations appear to be down this year, Dr Graham sees 'a statistically solid increase' over the longer term. This increase first gained attention in the 1980s when a huge number of jellyfish, Atlantic Ocean natives named Mnemiopsis leidyi, devastated the Black Sea, an ecosystem already weakened by overfishing of anchovies. Scientists believe that this species of jellyfish came in on the bottom of a ship and then rapidly multiplied, feeding on anchovy eggs and the plankton that young fish rely on.</p>
+    
+    <p><span class="paragraph-label">C</span> Dense jellyfish aggregations can be a natural feature of healthy ocean ecosystems, but a clear picture is now emerging of more severe and frequent jellyfish outbreaks worldwide. Dr Anthony Richardson, from the University of Queensland, Australia, explains that once jellyfish gain a foothold, if conditions are right, they can establish a massive population at the expense of other ocean life. The problem is that parts of the ocean might switch from being dominated by fish to being dominated by jellyfish.</p>
+    
+    <p><span class="paragraph-label">D</span> A study done by Richardson and his colleagues explores the causes behind jellyfish infestation, and the need for swift, decisive action to stem the jellyfish takeover. Jellyfish outbreaks are linked directly to human actions, including overfishing, the input of fertilizer and sewage into the ocean, and climate change. Overfishing has removed fish from marine ecosystems at astounding rates. According to Richardson, this has made it possible for jellyfish to take their place. 'This is because small fish appear to keep jellyfish in check by predation (on jellyfish when they are very small) and competition (when feeding). So, once we remove fish, jellyfish can proliferate.' Eutrophication is another human-caused change in the ocean that has likely contributed to jellyfish explosions. Eutrophication is an increase in nitrogen and phosphorus in the ocean, largely caused by fertilizer and waste run-off. This leads to algae blooms, which lower oxygen in the marine ecosystem, creating so-called 'dead zones', which have been increasing dramatically around the world. According to Richardson, these low-oxygen waters give jellyfish the advantage. 'Fish avoid low-oxygen waters but jellyfish, having lower oxygen demands, not only survive but can thrive in these conditions as there is less predation and competition from fish.'</p>
+    
+    <p><span class="paragraph-label">E</span> Furthermore, Richardson and his colleagues speculate that climate change may expand the traditional geographical range of jellyfish. 'As water warms, tropical species are moving towards the poles. Many venomous jellyfish species are tropical and could move into more densely populated subtropical and temperate regions.'</p>
+    
+    <p><span class="paragraph-label">F</span> Once jellyfish appear en masse in an ecosystem, they can make it very difficult for fish to stage a comeback. By feeding on fish, the jellyfish successfully prevent fish from returning to their normal population numbers, says Richardson. 'One can thus think of two alternate states with each being stable: one dominated by fish and the other by jellyfish. Unfortunately, where there is a jellyfish-dominated state then this does not support the nutritional needs of other fish, marine mammals, and seabirds.' In other words, an ecosystem that loses fish also loses the species that depend on fish for survival. This state has been defined as a 'monoculture of jellyfish', an apt analogy since the situation shares similarities with other monocultures. When the rich biodiversity of tropical forests is replaced by plantations growing a single species of tree, an area of rich variety becomes a desert in terms of biodiversity, as do ocean ecosystems when jellyfish become the dominant species. One result of large jellyfish populations is the economic effect it has had on the fishing industry. In the Gulf of Mexico, shrimp fishermen are struggling with a jellyfish boom that fills nets, causing them to break and resulting in millions of dollars in losses.</p>
+    
+    <p><span class="paragraph-label">G</span> Experts say that a greater understanding of jellyfish, including their ideal water temperature and feeding habits, is necessary to determine with certainty what is causing the recent massive invasion and to come up with ways to combat it. Due to the difficulty of turning ecosystems around once jellyfish have become dominant, Richardson and his colleagues propose focusing on 'prevention rather than cure'. They recommend a halt to overfishing small fish that are vital to keeping jellyfish in check, reducing the amount of fertilizer and sewage running off into the oceans, and finally, if possible, confronting climate change.</p>
+    
+    <!-- 多加空白行防止加载不完全 -->
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- Questions 14-17: Paragraph Matching -->
+    <div class="group">
+      <h4>Questions 14–17</h4>
+      <p>Reading Passage 2 has seven sections, A–G.</p>
+      <p>Which paragraph contains the following information?</p>
+      <p>Write the correct letter A–G in boxes 14–17 on your answer sheet.</p>
+      
+      <a id="q14-anchor"></a>
+      <div id="q14-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">14.</span> a prediction as to the direction in which the jellyfish population may spread</p>
+        <div class="para-match-option">
+          <label><input name="q14" type="radio" value="A"> A</label>
+          <label><input name="q14" type="radio" value="B"> B</label>
+          <label><input name="q14" type="radio" value="C"> C</label>
+          <label><input name="q14" type="radio" value="D"> D</label>
+          <label><input name="q14" type="radio" value="E"> E</label>
+          <label><input name="q14" type="radio" value="F"> F</label>
+          <label><input name="q14" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q15-anchor"></a>
+      <div id="q15-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">15.</span> a description of some physical characteristics of jellyfish</p>
+        <div class="para-match-option">
+          <label><input name="q15" type="radio" value="A"> A</label>
+          <label><input name="q15" type="radio" value="B"> B</label>
+          <label><input name="q15" type="radio" value="C"> C</label>
+          <label><input name="q15" type="radio" value="D"> D</label>
+          <label><input name="q15" type="radio" value="E"> E</label>
+          <label><input name="q15" type="radio" value="F"> F</label>
+          <label><input name="q15" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q16-anchor"></a>
+      <div id="q16-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">16.</span> an account of the consequences of jellyfish as lone survivors</p>
+        <div class="para-match-option">
+          <label><input name="q16" type="radio" value="A"> A</label>
+          <label><input name="q16" type="radio" value="B"> B</label>
+          <label><input name="q16" type="radio" value="C"> C</label>
+          <label><input name="q16" type="radio" value="D"> D</label>
+          <label><input name="q16" type="radio" value="E"> E</label>
+          <label><input name="q16" type="radio" value="F"> F</label>
+          <label><input name="q16" type="radio" value="G"> G</label>
+        </div>
+      </div>
+      
+      <a id="q17-anchor"></a>
+      <div id="q17-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">17.</span> suggestions on how to avoid further jellyfish invasions</p>
+        <div class="para-match-option">
+          <label><input name="q17" type="radio" value="A"> A</label>
+          <label><input name="q17" type="radio" value="B"> B</label>
+          <label><input name="q17" type="radio" value="C"> C</label>
+          <label><input name="q17" type="radio" value="D"> D</label>
+          <label><input name="q17" type="radio" value="E"> E</label>
+          <label><input name="q17" type="radio" value="F"> F</label>
+          <label><input name="q17" type="radio" value="G"> G</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Questions 18-19: Multiple Choice (Two Answers) -->
+    <div class="group">
+      <h4>Questions 18 and 19</h4>
+      <p>Choose TWO letters, A–E.</p>
+      <p>Write the correct letters in boxes 18 and 19 on your answer sheet.</p>
+      <p><span class="question-number"><a id="q18-anchor"></a><a id="q19-anchor"></a></span> The list below gives some effects that jellyfish have had on the world. Which TWO of these effects are mentioned by the writer of the text?</p>
+      <div class="answer-option" style="flex-direction: column; gap:6px;">
+        <label><input name="q18-19" type="checkbox" value="A"> A. They have damaged the tourism industry in some areas.</label>
+        <label><input name="q18-19" type="checkbox" value="B"> B. They have led to a reduction in the oceans' oxygen levels.</label>
+        <label><input name="q18-19" type="checkbox" value="C"> C. They have contributed to the decline in the Black Sea anchovy population.</label>
+        <label><input name="q18-19" type="checkbox" value="D"> D. They have caused the shrimp business in the Gulf of Mexico to shut down.</label>
+        <label><input name="q18-19" type="checkbox" value="E"> E. They have created financial hardship in the fishing industry.</label>
+      </div>
+      <p style="color:var(--muted); font-size: 0.9em;">Note: Choose TWO options. Both must be correct to score marks.</p>
+    </div>
+    
+    <!-- Questions 20-21: Multiple Choice (Two Answers) -->
+    <div class="group">
+      <h4>Questions 20 and 21</h4>
+      <p>Choose TWO letters, A–E.</p>
+      <p>Write the correct letters in boxes 20 and 21 on your answer sheet.</p>
+      <p><span class="question-number"><a id="q20-anchor"></a><a id="q21-anchor"></a></span> Which TWO of the following are possible causes of an increase in jellyfish numbers?</p>
+      <div class="answer-option" style="flex-direction: column; gap:6px;">
+        <label><input name="q20-21" type="checkbox" value="A"> A. a shortage of small fish in the oceans</label>
+        <label><input name="q20-21" type="checkbox" value="B"> B. the dumping of chemicals into the oceans</label>
+        <label><input name="q20-21" type="checkbox" value="C"> C. a decline in biodiversity in the oceans</label>
+        <label><input name="q20-21" type="checkbox" value="D"> D. more competition among other fish in the oceans</label>
+        <label><input name="q20-21" type="checkbox" value="E"> E. a decrease in seabird populations</label>
+      </div>
+      <p style="color:var(--muted); font-size: 0.9em;">Note: Choose TWO options. Both must be correct to score marks.</p>
+    </div>
+    
+    <!-- Questions 22-26: Summary Completion -->
+    <div class="group">
+      <h4>Questions 22–26</h4>
+      <p>Complete the sentences below.</p>
+      <p>Write ONE WORD ONLY from the passage for each answer.</p>
+      <p>Write your answers in boxes 22–26 on your answer sheet.</p>
+      
+      <div class="summary-text">
+        <p><span class="question-number"><a id="q22-anchor"></a>22.</span> Some fish in the oceans may be unable to sustain their population as the jellyfish eat their <input type="text" class="blank" id="q22"></p>
+        <p><span class="question-number"><a id="q23-anchor"></a>23.</span> The state of jellyfish becoming the main ocean species has been named <input type="text" class="blank" id="q23"></p>
+        <p><span class="question-number"><a id="q24-anchor"></a>24.</span> Increasing numbers of jellyfish can damage <input type="text" class="blank" id="q24"> used for commercial fishing.</p>
+        <p><span class="question-number"><a id="q25-anchor"></a>25.</span> Understanding basic facts about jellyfish, such as the <input type="text" class="blank" id="q25"> of the ocean which suits them best, may help control their numbers.</p>
+        <p><span class="question-number"><a id="q26-anchor"></a>26.</span> Richardson believes it is better to direct attention to <input type="text" class="blank" id="q26">, instead of just trying to solve existing problems.</p>
+      </div>
+    </div>
+    
+    <!-- Submit & Reset Buttons -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <!-- Results & Answer Key -->
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>14</td>
+            <td>E</td>
+            <td>
+              <p class="explanation-text">题干要求找"预言水母种群可能向哪个方向扩散"，E段明确提到"As water warms, tropical species are moving towards the poles..."，即随着水温升高，热带物种向两极移动，符合"prediction"和"direction"。</p>
+              <p class="explanation-original">原文：As water warms, tropical species are moving towards the poles. Many venomous jellyfish species are tropical and could move into more densely populated subtropical and temperate regions. (Paragraph E)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>15</td>
+            <td>A</td>
+            <td>
+              <p class="explanation-text">题干要求找"对水母若干外形/生理特征的描述"，A段描述了水母"lack sharp claws, piercing teeth or even a brain"以及"the stinging power of their tentacles"，符合"physical characteristics"。</p>
+              <p class="explanation-original">原文：they lack sharp claws, piercing teeth or even a brain... the stinging power of their tentacles. (Paragraph A)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>16</td>
+            <td>F</td>
+            <td>
+              <p class="explanation-text">题干要求找"当水母几乎成了'唯一幸存者'时的后果"，F段描述了水母主导的生态系统"does not support the nutritional needs of other fish, marine mammals, and seabirds"，并定义了"monoculture of jellyfish"，符合"consequences"。</p>
+              <p class="explanation-original">原文：Unfortunately, where there is a jellyfish-dominated state then this does not support the nutritional needs of other fish, marine mammals, and seabirds. This state has been defined as a 'monoculture of jellyfish'. (Paragraph F)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>17</td>
+            <td>G</td>
+            <td>
+              <p class="explanation-text">题干要求找"如何避免进一步水母入侵的建议"，G段明确提出了"prevention rather than cure"的建议，包括停止过度捕捞小鱼、减少化肥和污水流入海洋、应对气候变化，符合"suggestions"。</p>
+              <p class="explanation-original">原文：focusing on 'prevention rather than cure'... a halt to overfishing small fish... reducing the amount of fertilizer and sewage running off into the oceans... confronting climate change. (Paragraph G)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>18-19</td>
+            <td>C, E</td>
+            <td>
+              <p class="explanation-text">C项正确：B段提到水母入侵导致黑海凤尾鱼种群受打击；E项正确：F段提到墨西哥湾虾渔民因水母爆发遭受数百万美元损失，即对渔业造成财务困境。A项不选：文中暗示度假体验变差但未明确旅游业受损；B项不选：氧气下降由富营养化导致，并非水母直接导致；D项不选：文中说渔业困难/损失但未写"关停"。</p>
+              <p class="explanation-original">原文：Mnemiopsis leidyi... devastated the Black Sea... feeding on anchovy eggs (Paragraph B); shrimp fishermen are struggling with a jellyfish boom... millions of dollars in losses (Paragraph F)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>20-21</td>
+            <td>A, B</td>
+            <td>
+              <p class="explanation-text">A项正确：D段提到过度捕捞导致小鱼减少，水母失去制衡而数量上升；B项正确：D段提到富营养化（化肥/污水排放）导致低氧区，有利于水母繁殖。C项不选：文中"单一水母文化"是结果而非原因；D项不选：竞争增强会压制水母而非导致增加；E项不选：文中未提及。</p>
+              <p class="explanation-original">原文：Overfishing... small fish appear to keep jellyfish in check... once we remove fish, jellyfish can proliferate. (Paragraph D); Eutrophication... increase of nitrogen and phosphorus... fertilizer and waste run-off... jellyfish... thrive. (Paragraph D)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>22</td>
+            <td>eggs</td>
+            <td>
+              <p class="explanation-text">题干要求填"水母吃掉了鱼类的什么导致它们无法维持种群"，B段明确提到水母"feeding on anchovy eggs"，故填"eggs"。</p>
+              <p class="explanation-original">原文：feeding on anchovy eggs and the plankton that young fish rely on. (Paragraph B)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>23</td>
+            <td>monoculture</td>
+            <td>
+              <p class="explanation-text">题干要求填"水母成为海洋主导物种的状态被称为什么"，F段明确提到"This state has been defined as a 'monoculture of jellyfish'"，故填"monoculture"。</p>
+              <p class="explanation-original">原文：This state has been defined as a 'monoculture of jellyfish'. (Paragraph F)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>24</td>
+            <td>nets</td>
+            <td>
+              <p class="explanation-text">题干要求填"水母增多会损坏用于商业捕捞的什么"，F段提到"jellyfish boom that fills nets, causing them to break"，故填"nets"。</p>
+              <p class="explanation-original">原文：jellyfish boom that fills nets, causing them to break. (Paragraph F)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>25</td>
+            <td>temperature</td>
+            <td>
+              <p class="explanation-text">题干要求填"了解如最适合水母的海洋什么有助于控制其数量"，G段提到"a greater understanding of jellyfish, including their ideal water temperature"，故填"temperature"。</p>
+              <p class="explanation-original">原文：a greater understanding of jellyfish, including their ideal water temperature and feeding habits. (Paragraph G)</p>
+            </td>
+          </tr>
+          <tr>
+            <td>26</td>
+            <td>prevention</td>
+            <td>
+              <p class="explanation-text">题干要求填"Richardson认为应把注意力放在什么而不是头痛医头"，G段明确提到"focusing on 'prevention rather than cure'"，故填"prevention"。</p>
+              <p class="explanation-original">原文：focusing on 'prevention rather than cure'. (Paragraph G)</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<!-- 文本选择工具栏 -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<!-- 笔记面板 -->
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<!-- 提示框 -->
+<div id="toast"></div>
+<script>
+// 计时器核心功能
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; // 计时器间隔ID，用于后续停止
+// 启动计时器
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+// 页面加载时启动计时器
+window.onload = startTimer;
+// 拖拽分隔线调整左右面板宽度
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isDragging = false;
+divider.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.clientX - containerRect.left;
+  // 限制最小宽度，防止面板过窄
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+});
+window.addEventListener('mouseup', () => {
+  if (isDragging) {
+    isDragging = false;
+    document.body.style.cursor = '';
+  }
+});
+// 触摸设备支持
+divider.addEventListener('touchstart', (e) => {
+  isDragging = true;
+  e.preventDefault();
+}, { passive: false });
+window.addEventListener('touchmove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.touches[0].clientX - containerRect.left;
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+}, { passive: false });
+window.addEventListener('touchend', () => {
+  isDragging = false;
+});
+// 文本高亮功能
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+// 定位选择工具栏
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    // 确保工具栏不超出视口
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+// 更新工具栏状态
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+// 监听文本选择事件
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+// 滚动时重新定位工具栏
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+// 点击高亮文本时显示工具栏
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+// 执行高亮
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    // 处理跨元素选择的情况
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+// 移除高亮
+function removeHighlight() {
+  if (currentHlNode) {
+    // 移除单个高亮元素
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize(); // 合并相邻文本节点
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  // 移除选择范围内的所有高亮
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      // 判断节点是否在选择范围内
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+// 绑定高亮按钮事件
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// 笔记功能
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+// 切换笔记面板显示
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+// 关闭笔记面板
+btnCloseNotes.addEventListener('click', toggleNotes);
+// 复制笔记
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+// 选中文本添加到笔记
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    // 滚动到笔记底部
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+// 提示框功能
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+// 字体设置功能
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+// 打开字体设置模态框
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+// 关闭字体设置模态框
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+// 点击模态框外部关闭
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+// 切换字体大小（影响所有元素）
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    // 移除所有字体类，添加选中的类
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    // 显示提示
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+  });
+});
+// 答案与评分功能（Submit后停止计时器）
+const answers = {
+  q14: 'E',
+  q15: 'A',
+  q16: 'F',
+  q17: 'G',
+  q18: 'C',
+  q19: 'E',
+  q20: 'A',
+  q21: 'B',
+  q22: 'eggs',
+  q23: 'monoculture',
+  q24: 'nets',
+  q25: 'temperature',
+  q26: 'prevention'
+};
+// 评分函数（Submit后执行，包含停止计时器）
+function grade() {
+  // 1. 停止计时器
+  clearInterval(timerInterval);
+  
+  // 2. 计算得分
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  // 检查14-17题（段落匹配）
+  for (let i = 14; i <= 17; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 检查18-19题（多选题，需选对2个）
+  const checkedOptions18 = Array.from(document.querySelectorAll('input[name="q18-19"]:checked')).map(el => el.value);
+  const correctMulti18 = ['C', 'E'];
+  const multiCorrect18 = checkedOptions18.sort().join(',') === correctMulti18.sort().join(',');
+  if (multiCorrect18) {
+    correct += 2; // 18-19题共2分
+    resultLines.push(`Q18-Q19: ${checkedOptions18.join(', ')} ✅ Correct (Correct: ${correctMulti18.join(', ')})`);
+  } else {
+    resultLines.push(`Q18-Q19: ${checkedOptions18.join(', ') || 'No answer'} ❌ Incorrect (Correct: ${correctMulti18.join(', ')})`);
+  }
+  
+  // 检查20-21题（多选题，需选对2个）
+  const checkedOptions20 = Array.from(document.querySelectorAll('input[name="q20-21"]:checked')).map(el => el.value);
+  const correctMulti20 = ['A', 'B'];
+  const multiCorrect20 = checkedOptions20.sort().join(',') === correctMulti20.sort().join(',');
+  if (multiCorrect20) {
+    correct += 2; // 20-21题共2分
+    resultLines.push(`Q20-Q21: ${checkedOptions20.join(', ')} ✅ Correct (Correct: ${correctMulti20.join(', ')})`);
+  } else {
+    resultLines.push(`Q20-Q21: ${checkedOptions20.join(', ') || 'No answer'} ❌ Incorrect (Correct: ${correctMulti20.join(', ')})`);
+  }
+  
+  // 检查22-26题（填空题，忽略大小写）
+  for (let i = 22; i <= 26; i++) {
+    const qName = `q${i}`;
+    const input = document.getElementById(qName);
+    const userAns = input ? input.value.trim().toLowerCase() : 'No answer';
+    const correctAns = answers[qName].toLowerCase();
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers[qName]})`}`);
+  }
+  
+  // 3. 显示结果
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  // 4. 展开答案面板
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  // 5. 标记所有题目为已回答
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+// 重置功能（重置计时器、选项、高亮等）
+function resetForm() {
+  // 1. 重置计时器
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  // 2. 重置14-17题单选按钮
+  document.querySelectorAll('input[name^="q14"], input[name^="q15"], input[name^="q16"], input[name^="q17"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 3. 重置18-19题复选框
+  document.querySelectorAll('input[name="q18-19"]').forEach(checkbox => {
+    checkbox.checked = false;
+  });
+  
+  // 4. 重置20-21题复选框
+  document.querySelectorAll('input[name="q20-21"]').forEach(checkbox => {
+    checkbox.checked = false;
+  });
+  
+  // 5. 重置22-26题填空题
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 6. 重置结果和答案面板
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  // 7. 重置导航栏已回答状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  // 8. 重置笔记
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  // 9. 移除所有高亮
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+}
+// 滚动到指定题目
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  // 高亮导航项
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+// 监听输入，标记题目为已回答
+(function() {
+  // 监听14-17题单选按钮
+  for (let i = 14; i <= 17; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+  
+  // 监听18-19题复选框
+  document.querySelectorAll('input[name="q18-19"]').forEach(checkbox => {
+    checkbox.addEventListener('change', () => {
+      document.getElementById('q18-nav').classList.add('answered');
+      document.getElementById('q19-nav').classList.add('answered');
+    });
+  });
+  
+  // 监听20-21题复选框
+  document.querySelectorAll('input[name="q20-21"]').forEach(checkbox => {
+    checkbox.addEventListener('change', () => {
+      document.getElementById('q20-nav').classList.add('answered');
+      document.getElementById('q21-nav').classList.add('answered');
+    });
+  });
+  
+  // 监听22-26题填空题
+  for (let i = 22; i <= 26; i++) {
+    const input = document.getElementById(`q${i}`);
+    input.addEventListener('input', () => {
+      if (input.value.trim()) {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      } else {
+        document.getElementById(`q${i}-nav`).classList.remove('answered');
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>
