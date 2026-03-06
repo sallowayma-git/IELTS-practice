@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Fishbourne Roman Palace - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+   .custom-br {
+    display: block;
+    margin-bottom: 1300px;
+    content: "";
+  }
+  * {
+    line-height: 30px;
+    font-size: inherit; /* 所有元素继承字体大小 */
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    color: #111827; /* 统一所有元素的字体颜色 */
+  }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    /* 字体大小变量：regular(16px)、moderate(18px)、large(20px) */
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px; /* 比regular大1号 */
+    --font-size-large: 20px;    /* 比moderate大1号 */
+  }
+  /* 字体大小类 - 所有元素继承 */
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular); /* 默认regular */
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+  }
+  /* 顶部控制栏 */
+  .top-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: absolute; 
+    left:50%;
+    top: 10px;
+    display: inline-block; 
+    background:var(--panel); 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--panel);
+    cursor:pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+	position: absolute;
+	right: 10px;
+	top: 10px;
+  }
+  /* 字体设置模态框 */
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+    min-width: 280px;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+    font-size: inherit;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff; /* 保持按钮文字为白色以确保可读性 */
+    cursor:pointer;
+  }
+  /* 主容器和面板 */
+  .shell { 
+    display:flex; 
+    height:calc(100vh - 82px); /* 减去底部导航高度 */
+    width:100%; 
+    overflow: hidden;
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+    -webkit-overflow-scrolling: touch;
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4,h5 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+    font-size: inherit;
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: break-word; 
+    hyphens: auto; 
+  }
+  .paragraph-label {
+    font-weight: 600;
+    color: var(--accent); /* 保留段落标签的强调色 */
+    margin-right: 8px;
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+    font-size: inherit;
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition: all 0.2s ease;
+    font-size: inherit;
+  }
+  button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; /* 保持主要按钮文字为白色以确保可读性 */
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  /* 高亮样式 */
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+    transition: filter 0.2s ease;
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  /* 文本选择工具栏 */
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; /* 工具栏文字为白色以确保可读性 */
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow:var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; /* 工具栏按钮文字为白色 */
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+    transform: none;
+    box-shadow: none;
+  }
+  /* 笔记面板 */
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 94px; 
+    width: 320px; 
+    max-width: calc(100% - 24px); 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow:var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+    background: transparent;
+    font-size: inherit;
+  }
+  #notes textarea:focus {
+    outline: none;
+  }
+  /* 提示框 */
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 94px; 
+    background:#111; 
+    color:#fff; /* 提示框文字为白色以确保可读性 */
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+    animation: fadeIn 0.3s, fadeOut 0.3s 1.2s;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translate(-50%, 20px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+  }
+  @keyframes fadeOut {
+    from { opacity: 1; transform: translate(-50%, 0); }
+    to { opacity: 0; transform: translate(-50%, 20px); }
+  }
+  /* 题目选项样式 */
+  .tf-option, .company-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:6px 0;
+  }
+  .tf-option label, .company-option label {
+    cursor:pointer;
+    padding:4px 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    transition: all 0.2s;
+    font-size: inherit;
+  }
+  .tf-option label:hover, .company-option label:hover {
+    background:#f1f5f9;
+    border-color:var(--accent);
+    color:var(--accent); /* 悬停时选项文字变为强调色 */
+  }
+  input.blank {
+    width: 140px;
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    font-size: inherit;
+  }
+  input.blank:focus {
+    outline: none;
+    border-color:var(--accent);
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  .word-limit {
+    color: var(--muted); /* 保留字数限制的柔和颜色 */
+    font-size: 0.9em;
+    margin: 4px 0 8px;
+  }
+  /* 底部导航 */
+  .practice-nav { 
+    background:#fff; 
+    border-top:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); /* 保留导航标题的柔和颜色 */
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+    overflow-x: auto;
+    padding-bottom: 4px;
+    max-width: calc(100% - 80px);
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+    flex-shrink:0;
+    font-size: inherit;
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+    color:var(--accent); /* 悬停时导航项文字变为强调色 */
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); /* 已回答导航项文字为强调色 */
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; /* 激活状态导航项文字为白色 */
+    border-color:var(--accent); 
+  }
+  /* 答案详情 */
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: inherit;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; /* 徽章文字颜色 */
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+    font-size: inherit;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555; /* 保留原文引用的稍暗颜色 */
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  /* 列表样式 */
+  ul {
+    list-style-type: none;
+    padding-left: 20px;
+    margin: 8px 0;
+    font-size: inherit;
+  }
+  ul li::before {
+    content: "- ";
+    font-weight: 500;
+  }
+  /* 移动端适配 */
+  @media (max-width: 768px) {
+    .shell {
+      flex-direction: column;
+      height: auto;
+      min-height: calc(100vh - 82px);
+    }
+    #left, #right {
+      flex: none;
+      width: 100%;
+      min-width: auto;
+      max-height: 50vh;
+    }
+    #divider {
+      flex: none;
+      height: 8px;
+      width: 100%;
+      cursor: ns-resize;
+      background: linear-gradient(0deg,var(--line),#d1d5db);
+    }
+    .practice-nav .questions {
+      max-width: calc(100% - 60px);
+    }
+    .top-controls {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    #timer-container {
+      align-self: flex-end;
+      margin-top: -28px;
+    }
+    input.blank {
+      width: 100px;
+    }
+  }
+</style>
+</head>
+<body class="font-regular">
+<!-- 底部导航 -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q3-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q4-anchor')">4</div>
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q5-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q7-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q9-anchor')">9</div>
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q10-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q11-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
+  </div>
+</div>
+<!-- 字体设置模态框 -->
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (16px - Default)</div>
+  <div class="font-option" data-size="moderate">Moderate (18px - Larger)</div>
+  <div class="font-option" data-size="large">Large (20px - Largest)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+	<div id="top" class="top" style="background-color: #bb5252; width: 100%; height: 60px;">
+        <h3 style="font-size: 23px;line-height: 55px;margin-left: 10px;">Fishbourne Roman Palace</h3>
+		 <div id="timer-container" >
+        <div id="timer" style="margin: 0px auto;">00:00</div>
+        <button id="settingsBtn" onclick="openSettingsModal()">
+          Settings
+        </button>
+      </div>
+	</div>
+<!-- 主容器 -->
+<div class="shell">
+  <!-- 左面板：文章 -->
+  <section class="pane" id="left">
+    You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</br><p></p><p></p>
+    <h3 >Fishbourne Roman Palace</h3>
+   
+    <span class="paragraph-label">A</span> Fishbourne Roman Palace is in the village of Fishbourne in West Sussex, England. This large palace was built in the 1st century AD, around thirty years after the Roman conquest of Britain, on the site of Roman army grain stores that had been established after the invasion during the reign of the Roman Emperor Claudius in 43 AD. The rectangular palace was built around formal gardens, the northern half of which has been reconstructed. There were extensive alterations in the 2nd and 3rd centuries AD, with many of the original black-and-white mosaic floors being overlaid with more sophisticated coloured ones, including a perfectly preserved mosaic of a dolphin in the north wing. More alterations were in progress when the palace burnt down in around 270 AD, after which it was abandoned.</br><p></p>
+    
+    <span class="paragraph-label">B</span> Local people had long believed that a Roman palace once existed in the area. However, it was not until 1960 that the archaeologist Barry Cunliffe of Oxford University first systematically excavated the site, after workmen had accidentally uncovered a wall while they were laying a water main. The Roman villa excavated by Cunliffe’s team was so grand that it became known as Fishbourne Roman Palace, and a museum was erected to preserve some of the remains. This is administered by the Sussex Archaeological Society.</br><p></p>
+    
+    <span class="paragraph-label">C</span> In its day, the completed palace would have comprised four large wings with colonnaded fronts. The north and east wings consisted of suites of private rooms built around courtyards, with a monumental entrance in the middle of the east wing. In the north-east corner there was an assembly hall. The west wing contained state rooms, a large ceremonial reception room and a gallery. The south wing contained the owner’s private apartments. The palace included as many as fifty mosaic floors, under-floor central heating and a bathhouse. In size, Fishbourne Palace would have been approximately equivalent to some of the great Roman palaces of Italy, and was by far the largest known Roman residence north of the European Alps, at about 500 feet (150 m) square. A team of volunteers and professional archaeologists is involved in an ongoing archaeological excavation on the site of nearby, possibly military, buildings.</br><p></p>
+    
+    <span class="paragraph-label">D</span> The first buildings to be erected on the site were constructed in the early part of the conquest in 43 AD. Later, two timber buildings were constructed, one with clay-and-mortar floors and plaster walls, which appears to have been a house of some comfort. These buildings were demolished in the 60s AD and replaced by a substantial stone house, which included colonnades and a bath suite. It has been suggested that the palace itself, incorporating the previous house in its south-east corner, was constructed around 73–75 AD. However, Dr Miles Russell of Bournemouth University re-interpreted the ground plan and the collection of objects found, and has suggested that, given the extremely close parallels with the imperial palace of Domitian in Rome, its construction may more plausibly date to after 92 AD.</br><p></p>
+    
+    <span class="paragraph-label">E</span> With regard to who lived in Fishbourne Palace, there are a number of theories. For example, one proposed by Professor Cunliffe is that, in its early phase, the palace was the residence of Tiberius Claudius Cogidubnus, a local chieftain who supported the Romans and who may have been installed as king of a number of territories following the first stage of the conquest. Cogidubnus is known from a reference to his loyalty in Agricola, a work by the Roman writer Tacitus, and from an inscription commemorating a temple dedicated to the gods Neptune and Minerva found in the nearby city of Chichester. Another theory is that it was built for Sallustius Lucullus, a Roman governor of Britain in the late 1st century, who may have been the son of the British prince Adminius. Two inscriptions recording the presence of Lucullus have been found in Chichester, and the redating by Miles Russell suggests that, if the palace was designed for Lucullus, then it may have been in use for only a few years, as the Roman historian Suetonius records that Lucullus was executed by the Emperor Domitian in or shortly after 93 AD.</br><p></p>
+    
+    <span class="paragraph-label">F</span> Additional theories suggest that either Verica, a British king of the Roman Empire in the years preceding the Claudian invasion, was the owner of the palace, or Tiberius Claudius Catuarus, following the recent discovery of a gold ring belonging to him. The palace outlasted the original owner, whoever he was, and was extensively re-planned early in the 2nd century AD and subdivided into a series of smaller apartments. Further redevelopment was begun in the late 3rd century AD, but these alterations were incomplete when the north wing was destroyed in a fire in around 270 AD. The damage was too great to repair, and the palace was abandoned and later dismantled.</br><p></p>
+    
+    <span class="paragraph-label">G</span> A modern museum has been built by the Sussex Archaeological Society, incorporating most of the visible remains, including one wing of the palace. The gardens have been replanted using authentic plants from the Roman period.</br><p></p>
+    
+    <!-- 多加空白行防止加载不完全 -->
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+  </section>
+  
+  <!-- 分隔线 -->
+  <div id="divider" title="Drag to resize"></div>
+  
+  <!-- 右面板：题目和答案 -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- 1-6题：TRUE/FALSE/NOT GIVEN -->
+    <div class="group">
+      <h4>Questions 1–6</h4>
+      Do the following statements agree with the information given in Reading Passage 1?</br><p></p>
+      In boxes 1–6 on your answer sheet, write</br><p></p>
+      <table>
+        <tr>
+          <th>TRUE</th>
+          <th>if the statement agrees with the information</th>
+        </tr>
+        <tr>
+          <th>FALSE</th>
+          <th>if the statement contradicts the information</th>
+        </tr>
+        <tr>
+          <th>NOT GIVEN</th>
+          <th>if there is no information on this</th>
+        </tr>
+      </table>
+      
+      <a id="q1-anchor"></a>
+      <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">1.</span> Fishbourne Palace was the first structure to be built on its site.</br><p></p>
+        <div class="tf-option">
+          <label><input type="radio" name="q1" value="TRUE"> TRUE</label>
+          <label><input type="radio" name="q1" value="FALSE"> FALSE</label>
+          <label><input type="radio" name="q1" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q2-anchor"></a>
+      <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">2.</span> Fishbourne Palace was renovated more than once.</br><p></p>
+        <div class="tf-option">
+          <label><input type="radio" name="q2" value="TRUE"> TRUE</label>
+          <label><input type="radio" name="q2" value="FALSE"> FALSE</label>
+          <label><input type="radio" name="q2" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q3-anchor"></a>
+      <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">3.</span> Fishbourne Palace was large in comparison with Roman palaces in Italy.</br><p></p>
+        <div class="tf-option">
+          <label><input type="radio" name="q3" value="TRUE"> TRUE</label>
+          <label><input type="radio" name="q3" value="FALSE"> FALSE</label>
+          <label><input type="radio" name="q3" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q4-anchor"></a>
+      <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">4.</span> Research is continuing in the area close to Fishbourne Palace.</br><p></p>
+        <div class="tf-option">
+          <label><input type="radio" name="q4" value="TRUE"> TRUE</label>
+          <label><input type="radio" name="q4" value="FALSE"> FALSE</label>
+          <label><input type="radio" name="q4" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q5-anchor"></a>
+      <div id="q5-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">5.</span> Researchers agree on the identity of the person for whom Fishbourne Palace was constructed.</br><p></p>
+        <div class="tf-option">
+          <label><input type="radio" name="q5" value="TRUE"> TRUE</label>
+          <label><input type="radio" name="q5" value="FALSE"> FALSE</label>
+          <label><input type="radio" name="q5" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q6-anchor"></a>
+      <div id="q6-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">6.</span> Fishbourne Palace was burnt down by local people.</br><p></p>
+        <div class="tf-option">
+          <label><input type="radio" name="q6" value="TRUE"> TRUE</label>
+          <label><input type="radio" name="q6" value="FALSE"> FALSE</label>
+          <label><input type="radio" name="q6" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 7-13题：填空题 -->
+    <div class="group">
+      <h4>Questions 7–13</h4>
+      Complete the notes below.<br><p></p>
+      Choose <strong>NO MORE THAN TWO WORDS AND/OR A NUMBER</strong> from the passage for each answer.<br><p></p>
+      <span class="word-limit">Write your answers in boxes 7–13 on your answer sheet.<br><p></p>
+      
+      <h5>Fishbourne Palace</h5>
+      <span class="summary-text">
+        <strong>Construction</strong><br><p></p>
+        The first buildings on the site contained food for the <span class="question-number"><a id="q7-anchor"></a>7.</span> <input type="text" class="blank" id="q7" name="q7"><br><p></p>
+        The palace building surrounded <span class="question-number"><a id="q8-anchor"></a>8.</span> <input type="text" class="blank" id="q8" name="q8"><br><p></p>
+        In the 2nd and 3rd centuries colour was added to the <span class="question-number"><a id="q9-anchor"></a>9.</span> <input type="text" class="blank" id="q9" name="q9"> of the palace.<br><p></p>
+        
+        <strong>Discovery</strong><br><p></p>
+        The first part of the palace to be found was part of a <span class="question-number"><a id="q10-anchor"></a>10.</span> <input type="text" class="blank" id="q10" name="q10"><br><p></p>
+        
+        <strong>Possible inhabitants</strong><br><p></p>
+        Cogidubnus - he is named in several writings.<br><p></p>
+        Sallustius Lucullus - he may have lived there until approximately <span class="question-number"><a id="q11-anchor"></a>11.</span> <input type="text" class="blank" id="q11" name="q11"> AD.<br><p></p>
+        Verica - a British king.<br><p></p>
+        Catuarus - his <span class="question-number"><a id="q12-anchor"></a>12.</span> <input type="text" class="blank" id="q12" name="q12"> was found there.<br><p></p>
+        
+        <strong>Present Day</strong><br><p></p>
+        A <span class="question-number"><a id="q13-anchor"></a>13.</span> <input type="text" class="blank" id="q13" name="q13"> has been built on the site to help protect it.<br><p></p>
+      </span>
+    </div>
+    
+    <!-- 提交和重置按钮 -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <!-- 结果显示 -->
+    <div id="results"></div>
+    
+    <!-- 答案面板 -->
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>1</td>
+            <td>FALSE</td>
+            <td>
+              <span class="explanation-text">第一段指出宫殿“建在罗马军队粮仓（Roman army grain stores）旧址上”，第四段进一步提到早期曾有木结构建筑和石结构房屋，说明宫殿并非该遗址上的第一个建筑。</br><p></p>
+              <span class="explanation-original">原文：on the site of Roman army grain stores... (Paragraph A); The first buildings to be erected on the site were constructed in the early part of the conquest in 43 AD... (Paragraph D)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>TRUE</td>
+            <td>
+              <span class="explanation-text">第一段提到2、3世纪曾进行“大幅改建（extensive alterations）”，倒数第二段又指出2世纪初“全面重新规划（extensively re-planned）”和3世纪晚期“进一步重建（Further redevelopment）”，至少经历两次翻新。</br><p></p>
+              <span class="explanation-original">原文：There were extensive alterations in the 2nd and 3rd centuries AD... (Paragraph A); was extensively re-planned early in the 2nd century AD... Further redevelopment was begun in the late 3rd century AD... (Paragraph F)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>FALSE</td>
+            <td>
+              <span class="explanation-text">第三段明确说明“Fishbourne Palace在规模上与意大利的一些宏伟罗马宫殿大致相当（approximately equivalent）”，并非“更大（large in comparison）”。</br><p></p>
+              <span class="explanation-original">原文：In size, Fishbourne Palace would have been approximately equivalent to some of the great Roman palaces of Italy... (Paragraph C)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>TRUE</td>
+            <td>
+              <span class="explanation-text">第三段提到“一组志愿者和专业考古学家正在附近可能为军事建筑的遗址进行持续的考古挖掘（ongoing archaeological excavation）”，说明相关研究仍在继续。</br><p></p>
+              <span class="explanation-original">原文：A team of volunteers and professional archaeologists is involved in an ongoing archaeological excavation on the site of nearby, possibly military, buildings. (Paragraph C)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>FALSE</td>
+            <td>
+              <span class="explanation-text">文章第五、六段列出多种居住者假设（Cogidubnus、Lucullus、Verica、Catuarus），明确说明身份尚无定论，研究者未达成一致。</br><p></p>
+              <span class="explanation-original">原文：With regard to who lived in Fishbourne Palace, there are a number of theories... (Paragraph E); Additional theories suggest that either Verica... or Tiberius Claudius Catuarus... (Paragraph F)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>NOT GIVEN</td>
+            <td>
+              <span class="explanation-text">文章仅提及宫殿“约公元270年焚毁（burnt down in around 270 AD）”，未说明纵火者或起火原因，无法判断是否为当地人所为。</br><p></p>
+              <span class="explanation-original">原文：More alterations were in progress when the palace burnt down in around 270 AD... (Paragraph A)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>Roman army</td>
+            <td>
+              <span class="explanation-text">第一段指出遗址最初是“罗马军队粮仓（Roman army grain stores）”，即储存的食物供罗马军队使用。</br><p></p>
+              <span class="explanation-original">原文：on the site of Roman army grain stores that had been established after the invasion... (Paragraph A)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>formal gardens</td>
+            <td>
+              <span class="explanation-text">第一段明确提到“这座矩形宫殿围绕着正式花园而建（The rectangular palace was built around formal gardens）”。</br><p></p>
+              <span class="explanation-original">原文：The rectangular palace was built around formal gardens, the northern half of which has been reconstructed. (Paragraph A)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>mosaic floors</td>
+            <td>
+              <span class="explanation-text">第一段提到2、3世纪改建时，“许多原始的黑白马赛克地板被更复杂的彩色马赛克覆盖（original black-and-white mosaic floors being overlaid with more sophisticated coloured ones）”，即给马赛克地板添加颜色。</br><p></p>
+              <span class="explanation-original">原文：with many of the original black-and-white mosaic floors being overlaid with more sophisticated coloured ones... (Paragraph A)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td>wall</td>
+            <td>
+              <span class="explanation-text">第二段说明工人“铺设水管时意外发现了一堵墙（accidentally uncovered a wall while they were laying a water main）”，这是宫殿最早被发现的部分。</br><p></p>
+              <span class="explanation-original">原文：after workmen had accidentally uncovered a wall while they were laying a water main. (Paragraph B)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>11</td>
+            <td>93</td>
+            <td>
+              <span class="explanation-text">第五段提到“Lucullus于公元93年或之后不久被处决（executed by the Emperor Domitian in or shortly after 93 AD）”，其居住时间极可能止于公元93年。</br><p></p>
+              <span class="explanation-original">原文：as the Roman historian Suetonius records that Lucullus was executed by the Emperor Domitian in or shortly after 93 AD. (Paragraph E)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>12</td>
+            <td>ring</td>
+            <td>
+              <span class="explanation-text">第六段提到“最近发现了属于Catuarus的金戒指（recent discovery of a gold ring belonging to him）”，即他的戒指被发现。</br><p></p>
+              <span class="explanation-original">原文：or Tiberius Claudius Catuarus, following the recent discovery of a gold ring belonging to him. (Paragraph F)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>13</td>
+            <td>museum</td>
+            <td>
+              <span class="explanation-text">最后一段指出“苏塞克斯考古学会建造了一座现代博物馆（A modern museum has been built by the Sussex Archaeological Society）”以保护遗址遗迹。</br><p></p>
+              <span class="explanation-original">原文：A modern museum has been built by the Sussex Archaeological Society, incorporating most of the visible remains... (Paragraph G)</br><p></p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<!-- 文本选择工具栏 -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<!-- 笔记面板 -->
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<!-- 提示框 -->
+<div id="toast"></div>
+<script>
+// 计时器核心功能
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; // 计时器间隔ID，用于submit后停止
+// 启动计时器
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+// 页面加载时启动计时器
+window.onload = startTimer;
+// 字体设置功能
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+// 打开字体设置模态框
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+// 关闭字体设置模态框
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+// 点击模态框外部关闭
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+// 切换字体大小（影响所有元素）
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    // 移除所有字体类，添加选中的类
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    // 显示提示
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+    // 保存字体偏好到本地存储
+    localStorage.setItem('fontSize', size);
+  });
+});
+// 页面加载时应用保存的字体偏好
+document.addEventListener('DOMContentLoaded', function() {
+  const savedFontSize = localStorage.getItem('fontSize');
+  if (savedFontSize) {
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${savedFontSize}`);
+  }
+});
+// 高亮功能
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+// 定位选择工具栏
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    // 确保工具栏不超出视口
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+// 更新工具栏状态
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+// 监听文本选择事件
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+// 滚动时重新定位工具栏
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+// 点击高亮文本时显示工具栏
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+// 执行高亮
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    // 处理跨元素选择的情况
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+// 移除高亮
+function removeHighlight() {
+  if (currentHlNode) {
+    // 移除单个高亮元素
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize(); // 合并相邻文本节点
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  // 移除选择范围内的所有高亮
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      // 判断节点是否在选择范围内
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+// 绑定高亮按钮事件
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// 笔记功能
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+// 切换笔记面板显示
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+  if (notesPanel.style.display === 'flex') {
+    noteArea.focus();
+  }
+}
+// 关闭笔记面板
+btnCloseNotes.addEventListener('click', toggleNotes);
+// 复制笔记
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+// 选中文本添加到笔记
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+// 提示框功能
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+// 答案与评分功能（Submit后停止计时器）
+const answers = {
+  q1: 'FALSE',
+  q2: 'TRUE',
+  q3: 'FALSE',
+  q4: 'TRUE',
+  q5: 'FALSE',
+  q6: 'NOT GIVEN',
+  q7: 'Roman army',
+  q8: 'formal gardens',
+  q9: 'mosaic floors',
+  q10: 'wall',
+  q11: '93',
+  q12: 'ring',
+  q13: 'museum'
+};
+// 评分函数
+function grade() {
+  // 1. 停止计时器
+  clearInterval(timerInterval);
+  
+  // 2. 计算得分
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  // 处理1-6题（TRUE/FALSE/NOT GIVEN）
+  for (let i = 1; i <= 6; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 处理7-13题（填空题）
+  for (let i = 7; i <= 13; i++) {
+    const qName = `q${i}`;
+    const input = document.getElementById(qName);
+    const userAns = input ? input.value.trim().replace(/\s+/g, ' ') : 'No answer'; // 处理多余空格
+    const correctAns = answers[qName].trim();
+    const isCorrect = userAns.toLowerCase() === correctAns.toLowerCase(); // 忽略大小写
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 3. 显示结果
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</br><p></p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  // 4. 展开答案面板
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  // 5. 标记所有题目为已回答
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+// 重置功能
+function resetForm() {
+  // 1. 重置计时器
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  // 2. 重置所有单选按钮和输入框
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 3. 重置结果和答案面板
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  // 4. 重置导航栏状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  // 5. 重置笔记
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  // 6. 移除所有高亮
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+  
+  showToast('Practice reset');
+}
+// 滚动到指定题目
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  // 高亮导航项
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+// 监听输入，标记题目为已回答
+(function() {
+  // 处理1-6题（单选按钮）
+  for (let i = 1; i <= 6; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+  
+  // 处理7-13题（填空题）
+  for (let i = 7; i <= 13; i++) {
+    const input = document.getElementById(`q${i}`);
+    input.addEventListener('input', () => {
+      if (input.value.trim()) {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      } else {
+        document.getElementById(`q${i}-nav`).classList.remove('answered');
+      }
+    });
+  }
+})();
+// 拖拽分隔线调整面板宽度
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isResizing = false;
+// 开始拖拽
+divider.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  document.body.style.cursor = 'ew-resize';
+  // 阻止事件冒泡和默认行为
+  e.preventDefault();
+  e.stopPropagation();
+});
+// 处理拖拽
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  
+  // 计算左右面板的总宽度
+  const containerWidth = leftPane.parentElement.offsetWidth;
+  // 计算鼠标在容器中的位置百分比
+  const mousePosition = e.clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const leftWidthPercent = (mousePosition / containerWidth) * 100;
+  
+  // 限制最小宽度为280px
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+});
+// 结束拖拽
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    document.body.style.cursor = '';
+  }
+});
+// 移动端触摸支持
+divider.addEventListener('touchstart', (e) => {
+  isResizing = true;
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.addEventListener('touchmove', (e) => {
+  if (!isResizing) return;
+  
+  const containerWidth = leftPane.parentElement.offsetWidth;
+  const touch = e.touches[0];
+  const touchPosition = touch.clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const leftWidthPercent = (touchPosition / containerWidth) * 100;
+  
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+  
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.addEventListener('touchend', () => {
+  if (isResizing) {
+    isResizing = false;
+  }
+});
+</script>
+</body>
+</html>

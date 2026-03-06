@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Risk taking · 交互阅读</title>
+  <style>
+    :root { 
+      --line:#e5e7eb; 
+      --bg:#f6f7fb; 
+      --panel:#fff; 
+      --accent:#3b82f6; 
+      --muted:#6b7280; 
+      --shadow:0 6px 20px rgba(0,0,0,.12); 
+      --font-size-regular: 16px;
+      --font-size-moderate: 18px;
+      --font-size-large: 20px;
+    }
+    .font-regular { font-size: var(--font-size-regular) !important; }
+    .font-moderate { font-size: var(--font-size-moderate) !important; }
+    .font-large { font-size: var(--font-size-large) !important; }
+    * { box-sizing: border-box; font-size: inherit; }
+    html, body { height:100%; font-size: var(--font-size-regular); }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); padding-bottom: 82px; }
+    
+    #timer-container { display: inline-flex; align-items: center; gap: 8px; }
+    #timer { display: inline-block; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; }
+    #settingsBtn { padding:2px 8px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+    #settingsModal {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px;
+      box-shadow:var(--shadow); z-index: 1000; display: none;
+    }
+    #settingsModal h4 { margin-top:0; font-weight: 600; }
+    .font-option { margin:8px 0; cursor:pointer; padding:4px 8px; border-radius:6px; }
+    .font-option:hover { background:#f1f5f9; }
+    .close-modal { margin-top:12px; padding:6px 12px; border:1px solid var(--line); border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; }
+    
+    .shell { display:flex; height:100vh; width:100%; }
+    .pane { background:var(--panel); overflow:auto; padding:20px; }
+    #left { flex: 0 0 50%; min-width: 280px; }
+    #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+    #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; user-select:none; }
+    
+    h2, h3, h4 { margin:0 0 10px; font-weight: 600; }
+    #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; }
+    .section-heading { font-weight: 600; margin-top: 20px; margin-bottom: 8px; color: var(--accent); }
+    .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+    table { border-collapse: collapse; width:100%; margin: 10px 0; }
+    th, td { border:1px solid var(--line); padding:6px; text-align:left; }
+    th { background-color: #f1f5f9; font-weight: 600; }
+    button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+    button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+    #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:14px; }
+    .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+    .hl:hover { filter: brightness(0.98); }
+    #selbar { position: absolute; display:none; z-index: 6000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+    #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+    #selbar button:hover { border-color:#fff; }
+    #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+    #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+    #notes textarea { flex:1; border:0; padding:10px; resize:none; line-height:1.5; }
+    #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+    .answer-option { display:flex; flex-wrap:wrap; gap:10px; margin:4px 0 8px; }
+    .match-option { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+    .match-option label { cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; }
+    .mcq-option { margin: 6px 0; padding: 4px; cursor: pointer; }
+    .mcq-option input { margin-right: 8px; }
+    .question-number { font-weight: 600; }
+    .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); z-index:4000; }
+    .practice-nav .title { font-weight:600; color:var(--muted); }
+    .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; transition:all 0.2s; min-width:36px; text-align:center; }
+    .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+    .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+    .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+    details.answerbox summary { cursor: pointer; user-select:none; list-style: none; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+    details.answerbox summary::before { content: "▼"; font-size: 12px; transition: transform 0.2s; }
+    details.answerbox[open] summary::before { transform: rotate(180deg); }
+    details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; margin-bottom:14px; }
+    .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+    .explanation-text { margin-bottom: 4px; }
+    .explanation-original { font-style: italic; color: #555; font-size: 0.9em; margin-top: 0; }
+    .conditions-list { margin: 10px 0; padding-left: 20px; }
+    .option-pool { background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin: 12px 0; font-size: 0.95em; }
+    .option-pool li { margin: 4px 0; }
+    hr { border: 0.5px solid var(--line); margin: 16px 0; }
+    .match-option label { min-width: 40px; justify-content: center; }
+  </style>
+</head>
+<body class="font-regular">
+  <div class="practice-nav">
+    <div class="title">Questions</div>
+    <div class="questions">
+      <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+      <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+      <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+      <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+      <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+      <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+      <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+      <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+      <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+      <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+      <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+      <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+      <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+      <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+    </div>
+  </div>
+  <div id="settingsModal">
+    <h4>Font Size Settings</h4>
+    <div class="font-option" data-size="regular">Regular (Default - 16px)</div>
+    <div class="font-option" data-size="moderate">Moderate (Larger - 18px)</div>
+    <div class="font-option" data-size="large">Large (Largest - 20px)</div>
+    <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+  </div>
+  <div class="shell">
+    <!-- 左侧文章 -->
+    <section class="pane" id="left">
+      <h2>READING PASSAGE 3 
+        <div id="timer-container">
+          <span id="timer">00:00</span>
+          <button id="settingsBtn" onclick="openSettingsModal()">Settings</button>
+        </div>
+      </h2>
+      <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+      <h3>Risk taking</h3>
+      <p><strong>A</strong> We run risks. Most of the time we ignore them; sometimes we stop and decide how to deal with them. That's life. Risks arise in sports, in business, in personal relationships; they are present in the laboratory, in political calculations, everywhere. Acting individually, we often prefer to gain some benefit by accepting some danger. Acting collectively, we make similar trade-offs.</p>
+      <p><strong>B</strong> When society must assess risks, and those risks can be clarified, at least in part, by science, technology or mathematics, the responsibility of the research community is to be clear and complete. But that is not always so easy. Furthermore, too few people pay full attention to the best evidence, much less modify their behaviors as a result. Even when the evidence of high risk is clear - about smoking, for instance - many will deny the risk, or dispute it, or accept that it exists and still go ahead. As a former cigarette smoker, I understand denial.</p>
+      <p><strong>C</strong> Perhaps more important than the basic facts of risk are the varied perception of it. Hearing the prediction of 60% chance of rain, or recognizing the minuscule likelihood of becoming ill from a flu shot, most people understand the right responses: take your umbrella and get your flu shot. But some, fearfully but irrationally, go to the extreme and stay at home and avoid all contact with other people. Irrational decisions occasionally affect us all. When it comes to risks the best odds do not always influence people to make the correct decision.</p>
+      <p><strong>D</strong> In her book, The Universe and the Teacup, the science writer K. C. Cole reminds us that the risks of losing something and gaining something appear to be calculated in our minds according to quite different scales. People will risk a lot to prevent a loss, she notes; some people will rush into a burning building to save a pet. But they will usually risk very little if the only perceived outcome is a possible gain; many people won't even risk pursuing an exciting job, if the current job, though unfulfilling, remains comfortable. That psychological mechanism, a desire to maintain the status quo, helps explain the high hurdles that any rational risk assessment must confront.</p>
+      <p><strong>E</strong> Organizations face the same hurdles whenever they must cope with major shifts in policy. In his classic examination of the character of high-tech industry, Only the Paranoid Survive, Andrew S. Grove gives a perceptive account of a crisis that took place during his tenure as Chairman of the Intel Corporation. The business environment for Intel and its competitors was transformed by a flood of low-cost memory chips from Japan, and Intel made the difficult decision to abandon its chip-making business. Such a period of change in the outside world is filled with danger, Grove notes, precisely because it is so easy for executives to try to disregard it or misinterpret the mounting evidence showing the profound risks of not making change at the very core. The distinction Cole cites is instructive here: one reason management and staff may not act is that they tend to focus on the potential gains of risking change (which they characterize as small), rather than on the catastrophic losses that risking change could prevent. The period becomes critical for a company, according to Grove, and deadly when unattended to.</p>
+      <p><strong>F</strong> Likewise, at the national level, and even the global one, institutions tend to be more willing to take a risk if it means avoiding a loss, than they are if it might confer a gain. Almost everyone, for instance, sees the signs of ecological decay. Reid J. Lifest's article, 'Full Accounting', describes newly developed techniques for clarifying which critical decision would have the highest pay-offs for the environment. Once these 'leverage points' as he calls them, are located, many environmental organizations will be willing to risk the resources needed to prevent further deterioration.</p>
+      <p><strong>G</strong> More complicated are decisions by nations to invest broadly in educational research. Some governmental leaders are oblivious to the risks posed by social underinvestment, because the urgent needs of the present take precedence over actions that would give rise to even more substantial gains in the future. Their attitude is that today's risks must be manageable, and that tomorrow's gains are at the very least difficult to measure. Better consideration and decision making for what lies ahead is essential.</p>
+      <p><strong>H</strong> Nevertheless, I confess to being an optimist. My glass is generally half full - though that may not help me handle risk. Whether one's temperament is optimistic or pessimistic, everyone in our scientific and engineering community has a social responsibility: measure with care and portray with honesty the level of risk involved in any action or decision.</p>
+      <p>&nbsp;</p><p>&nbsp;</p>
+    </section>
+    <div id="divider"></div>
+    <!-- 右侧题目 -->
+    <section class="pane" id="right">
+      <h3>Questions</h3>
+      <!-- 27-30 句子补全 -->
+      <div class="group">
+        <h4>Questions 27–30</h4>
+        <p>Complete each sentence with the correct ending, A–G, below.</p>
+        <p>Write the correct letter, A–G, in boxes 27–30 on your answer sheet.</p>
+        <div class="option-pool">
+          <strong>List of endings:</strong>
+          <ul style="margin:5px 0 0; padding-left:20px;">
+            <li>A planning for the future.</li>
+            <li>B predicting their errors.</li>
+            <li>C continuing in the present situation.</li>
+            <li>D recent findings on the most effective solutions to problems.</li>
+            <li>E achieving a gain.</li>
+            <li>F changes occurring externally.</li>
+            <li>G a high level of agreement.</li>
+          </ul>
+        </div>
+
+        <a id="q27-anchor"></a>
+        <div style="padding:8px 0; border-top:1px dashed var(--line);">
+          <p>27. K. C. Cole points out that avoiding a loss seems more important to people than ______.</p>
+          <div class="match-option" style="gap:6px;">
+            <label><input type="radio" name="q27" value="A"> A</label>
+            <label><input type="radio" name="q27" value="B"> B</label>
+            <label><input type="radio" name="q27" value="C"> C</label>
+            <label><input type="radio" name="q27" value="D"> D</label>
+            <label><input type="radio" name="q27" value="E"> E</label>
+            <label><input type="radio" name="q27" value="F"> F</label>
+            <label><input type="radio" name="q27" value="G"> G</label>
+          </div>
+        </div>
+        <a id="q28-anchor"></a>
+        <div style="padding:8px 0; border-top:1px dashed var(--line);">
+          <p>28. According to Andrew S. Grove, it can be very dangerous for companies to ignore ______.</p>
+          <div class="match-option" style="gap:6px;">
+            <label><input type="radio" name="q28" value="A"> A</label><label><input type="radio" name="q28" value="B"> B</label><label><input type="radio" name="q28" value="C"> C</label><label><input type="radio" name="q28" value="D"> D</label><label><input type="radio" name="q28" value="E"> E</label><label><input type="radio" name="q28" value="F"> F</label><label><input type="radio" name="q28" value="G"> G</label>
+          </div>
+        </div>
+        <a id="q29-anchor"></a>
+        <div style="padding:8px 0; border-top:1px dashed var(--line);">
+          <p>29. Reid J. Lifset argues that environmental agencies can benefit from ______.</p>
+          <div class="match-option" style="gap:6px;">
+            <label><input type="radio" name="q29" value="A"> A</label><label><input type="radio" name="q29" value="B"> B</label><label><input type="radio" name="q29" value="C"> C</label><label><input type="radio" name="q29" value="D"> D</label><label><input type="radio" name="q29" value="E"> E</label><label><input type="radio" name="q29" value="F"> F</label><label><input type="radio" name="q29" value="G"> G</label>
+          </div>
+        </div>
+        <a id="q30-anchor"></a>
+        <div style="padding:8px 0; border-top:1px dashed var(--line);">
+          <p>30. The writer suggests that government leaders need to focus more on ______.</p>
+          <div class="match-option" style="gap:6px;">
+            <label><input type="radio" name="q30" value="A"> A</label><label><input type="radio" name="q30" value="B"> B</label><label><input type="radio" name="q30" value="C"> C</label><label><input type="radio" name="q30" value="D"> D</label><label><input type="radio" name="q30" value="E"> E</label><label><input type="radio" name="q30" value="F"> F</label><label><input type="radio" name="q30" value="G"> G</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 31-39 段落匹配 A-H -->
+      <div class="group">
+        <h4>Questions 31–39</h4>
+        <p>The reading passage has eight paragraphs, <strong>A–H</strong>.</p>
+        <p>Which paragraph contains the following information?</p>
+        <p>Write the correct letter, <strong>A–H</strong>, in boxes 31–39 on your answer sheet.</p>
+        <p><em>NB You may use any letter more than once.</em></p>
+
+        <a id="q31-anchor"></a><div style="padding:6px 0;"><span class="question-number">31.</span> the areas of study that help us understand risk
+          <div class="match-option"><label>A<input type="radio" name="q31" value="A"></label><label>B<input type="radio" name="q31" value="B"></label><label>C<input type="radio" name="q31" value="C"></label><label>D<input type="radio" name="q31" value="D"></label><label>E<input type="radio" name="q31" value="E"></label><label>F<input type="radio" name="q31" value="F"></label><label>G<input type="radio" name="q31" value="G"></label><label>H<input type="radio" name="q31" value="H"></label></div>
+        </div>
+        <a id="q32-anchor"></a><div style="padding:6px 0;"><span class="question-number">32.</span> reference to key actions that might benefit the world
+          <div class="match-option"><label>A<input type="radio" name="q32" value="A"></label><label>B<input type="radio" name="q32" value="B"></label><label>C<input type="radio" name="q32" value="C"></label><label>D<input type="radio" name="q32" value="D"></label><label>E<input type="radio" name="q32" value="E"></label><label>F<input type="radio" name="q32" value="F"></label><label>G<input type="radio" name="q32" value="G"></label><label>H<input type="radio" name="q32" value="H"></label></div>
+        </div>
+        <a id="q33-anchor"></a><div style="padding:6px 0;"><span class="question-number">33.</span> examples of statistical predictions that the majority of the public react to in the same way
+          <div class="match-option"><label>A<input type="radio" name="q33" value="A"></label><label>B<input type="radio" name="q33" value="B"></label><label>C<input type="radio" name="q33" value="C"></label><label>D<input type="radio" name="q33" value="D"></label><label>E<input type="radio" name="q33" value="E"></label><label>F<input type="radio" name="q33" value="F"></label><label>G<input type="radio" name="q33" value="G"></label><label>H<input type="radio" name="q33" value="H"></label></div>
+        </div>
+        <a id="q34-anchor"></a><div style="padding:6px 0;"><span class="question-number">34.</span> the variety of contexts in which risk occurs
+          <div class="match-option"><label>A<input type="radio" name="q34" value="A"></label><label>B<input type="radio" name="q34" value="B"></label><label>C<input type="radio" name="q34" value="C"></label><label>D<input type="radio" name="q34" value="D"></label><label>E<input type="radio" name="q34" value="E"></label><label>F<input type="radio" name="q34" value="F"></label><label>G<input type="radio" name="q34" value="G"></label><label>H<input type="radio" name="q34" value="H"></label></div>
+        </div>
+        <a id="q35-anchor"></a><div style="padding:6px 0;"><span class="question-number">35.</span> mention of a habit that has been proved to be very risky
+          <div class="match-option"><label>A<input type="radio" name="q35" value="A"></label><label>B<input type="radio" name="q35" value="B"></label><label>C<input type="radio" name="q35" value="C"></label><label>D<input type="radio" name="q35" value="D"></label><label>E<input type="radio" name="q35" value="E"></label><label>F<input type="radio" name="q35" value="F"></label><label>G<input type="radio" name="q35" value="G"></label><label>H<input type="radio" name="q35" value="H"></label></div>
+        </div>
+        <a id="q36-anchor"></a><div style="padding:6px 0;"><span class="question-number">36.</span> reference to market forces motivating change
+          <div class="match-option"><label>A<input type="radio" name="q36" value="A"></label><label>B<input type="radio" name="q36" value="B"></label><label>C<input type="radio" name="q36" value="C"></label><label>D<input type="radio" name="q36" value="D"></label><label>E<input type="radio" name="q36" value="E"></label><label>F<input type="radio" name="q36" value="F"></label><label>G<input type="radio" name="q36" value="G"></label><label>H<input type="radio" name="q36" value="H"></label></div>
+        </div>
+        <a id="q37-anchor"></a><div style="padding:6px 0;"><span class="question-number">37.</span> the writer's current attitude towards risk
+          <div class="match-option"><label>A<input type="radio" name="q37" value="A"></label><label>B<input type="radio" name="q37" value="B"></label><label>C<input type="radio" name="q37" value="C"></label><label>D<input type="radio" name="q37" value="D"></label><label>E<input type="radio" name="q37" value="E"></label><label>F<input type="radio" name="q37" value="F"></label><label>G<input type="radio" name="q37" value="G"></label><label>H<input type="radio" name="q37" value="H"></label></div>
+        </div>
+        <a id="q38-anchor"></a><div style="padding:6px 0;"><span class="question-number">38.</span> a reason why some individuals avoid making a career change
+          <div class="match-option"><label>A<input type="radio" name="q38" value="A"></label><label>B<input type="radio" name="q38" value="B"></label><label>C<input type="radio" name="q38" value="C"></label><label>D<input type="radio" name="q38" value="D"></label><label>E<input type="radio" name="q38" value="E"></label><label>F<input type="radio" name="q38" value="F"></label><label>G<input type="radio" name="q38" value="G"></label><label>H<input type="radio" name="q38" value="H"></label></div>
+        </div>
+        <a id="q39-anchor"></a><div style="padding:6px 0;"><span class="question-number">39.</span> how some people over-react to information about risk
+          <div class="match-option"><label>A<input type="radio" name="q39" value="A"></label><label>B<input type="radio" name="q39" value="B"></label><label>C<input type="radio" name="q39" value="C"></label><label>D<input type="radio" name="q39" value="D"></label><label>E<input type="radio" name="q39" value="E"></label><label>F<input type="radio" name="q39" value="F"></label><label>G<input type="radio" name="q39" value="G"></label><label>H<input type="radio" name="q39" value="H"></label></div>
+        </div>
+      </div>
+
+      <!-- 40 单选题 -->
+      <div class="group">
+        <h4>Question 40</h4>
+        <p>Choose the correct letter, A, B, C or D.</p>
+        <a id="q40-anchor"></a>
+        <div><p>40. At the end of the passage the writer concludes that</p>
+          <div class="mcq-options">
+            <div class="mcq-option"><label><input type="radio" name="q40" value="A"> A. risk is something we must try to avoid.</label></div>
+            <div class="mcq-option"><label><input type="radio" name="q40" value="B"> B. experts should be truthful about risk to the public.</label></div>
+            <div class="mcq-option"><label><input type="radio" name="q40" value="C"> C. optimists are better able to deal with risk than pessimists.</label></div>
+            <div class="mcq-option"><label><input type="radio" name="q40" value="D"> D. it is important to take risks in order to fulfil social obligations.</label></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin:10px 0;">
+        <button class="primary" onclick="grade()">Submit</button>
+        <button onclick="resetForm()">Reset</button>
+        <button onclick="toggleNotes()">Notes</button>
+      </div>
+      <div id="results"></div>
+      <details class="answerbox" id="answerBox">
+        <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+        <div id="answerContent">
+          <h4>正确答案及解析</h4>
+          <table>
+            <tr><th>题号</th><th>答案</th><th>解析与原文依据</th></tr>
+            <tr><td>27</td><td>E</td><td><p class="explanation-text">D段: Cole指出人们为避免损失愿冒大险，但若只是可能获益则不愿冒险。即避免损失比获得收益更重要。对应E achieving a gain.</p><p class="explanation-original">原文：People will risk a lot to prevent a loss … they will usually risk very little if the only perceived outcome is a possible gain.</p></td></tr>
+            <tr><td>28</td><td>F</td><td><p class="explanation-text">E段: Grove认为外部世界变化时期充满危险，因为管理者容易忽视这种变化。对应F changes occurring externally.</p><p class="explanation-original">原文：Such a period of change in the outside world is filled with danger … because it is so easy for executives to try to disregard it.</p></td></tr>
+            <tr><td>29</td><td>D</td><td><p class="explanation-text">F段: Lifset的新技术帮助找出回报最高的关键决策(杠杆点)，环保机构因此获益。对应D recent findings on the most effective solutions.</p><p class="explanation-original">原文：describes newly developed techniques for clarifying which critical decision would have the highest pay-offs … Once these 'leverage points' … are located, many environmental organizations will be willing to risk the resources.</p></td></tr>
+            <tr><td>30</td><td>A</td><td><p class="explanation-text">G段: 领导者只顾眼前，忽视未来收益和风险，作者强调必须更好考量未来。对应A planning for the future.</p><p class="explanation-original">原文：Better consideration and decision making for what lies ahead is essential.</p></td></tr>
+            <tr><td>31</td><td>B</td><td><p class="explanation-text">B段提及科学、技术、数学(研究领域)可帮助澄清风险。对应areas of study.</p><p class="explanation-original">B段: When society must assess risks … clarified by science, technology or mathematics …</p></td></tr>
+            <tr><td>32</td><td>F</td><td><p class="explanation-text">F段: Lifset的关键决策(杠杆点)可使环境受益，即key actions that benefit the world.</p><p class="explanation-original">F段: … clarify which critical decision would have the highest pay-offs for the environment.</p></td></tr>
+            <tr><td>33</td><td>C</td><td><p class="explanation-text">C段: 60%下雨概率、打流感疫苗极小风险，多数人正确反应，即统计预测公众反应一致。</p><p class="explanation-original">C段: Hearing the prediction of 60% chance … most people understand the right responses.</p></td></tr>
+            <tr><td>34</td><td>A</td><td><p class="explanation-text">A段列举风险出现的多种情境：体育、商业、人际关系等。对应variety of contexts.</p><p class="explanation-original">A段: Risks arise in sports, in business, in personal relationships … everywhere.</p></td></tr>
+            <tr><td>35</td><td>B</td><td><p class="explanation-text">B段以吸烟为例，明确高风险证据但仍有人继续。对应habit proved very risky.</p><p class="explanation-original">B段: Even when the evidence of high risk is clear - about smoking, for instance …</p></td></tr>
+            <tr><td>36</td><td>E</td><td><p class="explanation-text">E段: 日本低价芯片冲击(市场力量)迫使英特尔转型。对应market forces motivating change.</p><p class="explanation-original">E段: business environment … transformed by a flood of low-cost memory chips from Japan, and Intel made the difficult decision to abandon its chip-making business.</p></td></tr>
+            <tr><td>37</td><td>H</td><td><p class="explanation-text">H段: 作者自认乐观主义者(半杯水)，即current attitude.</p><p class="explanation-original">H段: I confess to being an optimist. My glass is generally half full …</p></td></tr>
+            <tr><td>38</td><td>D</td><td><p class="explanation-text">D段: 许多人因满足现状而不愿换工作，维持现状偏好。对应reason avoid career change.</p><p class="explanation-original">D段: many people won't even risk pursuing an exciting job, if the current job … remains comfortable. That … desire to maintain the status quo …</p></td></tr>
+            <tr><td>39</td><td>C</td><td><p class="explanation-text">C段: 有些人恐惧且不理性，走向极端(待在家避免接触)，即over-react.</p><p class="explanation-original">C段: But some, fearfully but irrationally, go to the extreme and stay at home and avoid all contact.</p></td></tr>
+            <tr><td>40</td><td>B</td><td><p class="explanation-text">H段结尾: 科学工程界有社会责任：诚实呈现风险水平。对应experts truthful about risk.</p><p class="explanation-original">原文: everyone … has a social responsibility: … portray with honesty the level of risk involved.</p></td></tr>
+          </table>
+        </div>
+      </details>
+    </section>
+  </div>
+
+  <!-- 浮动工具栏、笔记、toast -->
+  <div id="selbar" role="toolbar">
+    <button id="btnHL">Highlight</button>
+    <button id="btnUH">Remove Highlight</button>
+    <button id="btnNote">Add to Notes</button>
+  </div>
+  <div id="notes">
+    <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
+    <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+  </div>
+  <div id="toast"></div>
+
+  <script>
+    (function() {
+      // 计时器
+      let _t = 0; 
+      const _timerEl = document.getElementById('timer');
+      let timerInterval;
+      function startTimer() { timerInterval = setInterval(() => { _t++; const m = String(Math.floor(_t/60)).padStart(2,'0'); const s = String(_t%60).padStart(2,'0'); _timerEl.textContent = `${m}:${s}`; }, 1000); }
+      window.onload = startTimer;
+
+      // 分割线拖拽
+      const divider = document.getElementById('divider');
+      const leftPane = document.getElementById('left');
+      const rightPane = document.getElementById('right');
+      let isDragging = false;
+      divider.addEventListener('mousedown', (e) => { isDragging = true; document.body.style.cursor = 'ew-resize'; e.preventDefault(); });
+      window.addEventListener('mousemove', (e) => { if (!isDragging) return; const containerRect = document.querySelector('.shell').getBoundingClientRect(); let x = e.clientX - containerRect.left; x = Math.max(280, Math.min(containerRect.width - 320, x)); leftPane.style.flex = `0 0 ${x}px`; });
+      window.addEventListener('mouseup', () => { isDragging = false; document.body.style.cursor = ''; });
+      divider.addEventListener('touchstart', (e) => { isDragging = true; e.preventDefault(); }, { passive: false });
+      window.addEventListener('touchmove', (e) => { if (!isDragging) return; const containerRect = document.querySelector('.shell').getBoundingClientRect(); let x = e.touches[0].clientX - containerRect.left; x = Math.max(280, Math.min(containerRect.width - 320, x)); leftPane.style.flex = `0 0 ${x}px`; }, { passive: false });
+      window.addEventListener('touchend', () => { isDragging = false; });
+
+      // 高亮功能 (基于原版)
+      const selbar = document.getElementById('selbar');
+      const btnHL = document.getElementById('btnHL');
+      const btnUH = document.getElementById('btnUH');
+      const btnNote = document.getElementById('btnNote');
+      let lastRange = null;
+      let currentHlNode = null;
+      let keepToolbar = false;
+      function positionSelbar(rect) { selbar.style.display = 'flex'; requestAnimationFrame(() => { const top = window.scrollY + rect.top - selbar.offsetHeight - 8; const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2; selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px'; selbar.style.left = Math.max(8, leftPos) + 'px'; }); }
+      function updateSelbar() { const selection = window.getSelection(); if (!selection || selection.rangeCount === 0 || selection.isCollapsed) { if (!keepToolbar) selbar.style.display = 'none'; currentHlNode = null; return; } const range = selection.getRangeAt(0); lastRange = range.cloneRange(); currentHlNode = null; positionSelbar(range.getBoundingClientRect()); }
+      document.getElementById('left').addEventListener('mouseup', updateSelbar);
+      document.getElementById('right').addEventListener('mouseup', updateSelbar);
+      document.addEventListener('selectionchange', () => { const s = window.getSelection(); if (!s || s.rangeCount === 0 || s.isCollapsed) { if (!keepToolbar && !currentHlNode) selbar.style.display = 'none'; } });
+      document.addEventListener('scroll', () => { if (selbar.style.display === 'flex') updateSelbar(); });
+      document.addEventListener('mousedown', (e) => { keepToolbar = e.target.classList?.contains('hl') || false; }, true);
+      document.addEventListener('click', (e) => { if (e.target.classList?.contains('hl')) { currentHlNode = e.target; lastRange = null; positionSelbar(e.target.getBoundingClientRect()); window.getSelection()?.removeAllRanges(); setTimeout(() => keepToolbar = false, 0); } }, true);
+      btnHL.addEventListener('click', () => { if (currentHlNode || !lastRange || lastRange.collapsed) return; const span = document.createElement('span'); span.className = 'hl'; try { lastRange.surroundContents(span); } catch { const wrap = document.createElement('span'); wrap.className = 'hl'; wrap.appendChild(lastRange.cloneContents()); lastRange.deleteContents(); lastRange.insertNode(wrap); } selbar.style.display = 'none'; showToast('Text highlighted'); });
+      btnUH.addEventListener('click', () => { if (currentHlNode) { const parent = currentHlNode.parentNode; while (currentHlNode.firstChild) parent.insertBefore(currentHlNode.firstChild, currentHlNode); parent.removeChild(currentHlNode); parent.normalize(); currentHlNode = null; selbar.style.display = 'none'; showToast('Highlight removed'); return; } if (!lastRange) return; const selRect = lastRange.getBoundingClientRect(); const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT); const toRemove = []; let node; while (node = walker.nextNode()) { if (node.classList?.contains('hl')) { const r = node.getBoundingClientRect(); if (!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(node); } } toRemove.forEach(el => { const p = el.parentNode; while (el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); }); selbar.style.display = 'none'; showToast('Highlights removed'); });
+      // 笔记
+      const notesPanel = document.getElementById('notes'); const noteArea = document.getElementById('noteArea');
+      window.toggleNotes = function() { notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex'; };
+      document.getElementById('btnClose').addEventListener('click', toggleNotes);
+      document.getElementById('btnCopy').addEventListener('click', async () => { await navigator.clipboard.writeText(noteArea.value || ''); showToast('Notes copied'); });
+      btnNote.addEventListener('click', () => { let selected = ''; if (currentHlNode) selected = currentHlNode.textContent.trim(); else if (lastRange) selected = lastRange.cloneContents().textContent.trim(); toggleNotes(); if (selected) { noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selected}\n` : `> ${selected}\n`; noteArea.scrollTop = noteArea.scrollHeight; } selbar.style.display = 'none'; });
+      function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 1500); }
+
+      // 字体设置
+      window.openSettingsModal = function() { document.getElementById('settingsModal').style.display = 'block'; };
+      window.closeSettingsModal = function() { document.getElementById('settingsModal').style.display = 'none'; };
+      document.querySelectorAll('.font-option').forEach(opt => opt.addEventListener('click', (e) => { const size = e.target.dataset.size; document.body.classList.remove('font-regular', 'font-moderate', 'font-large'); document.body.classList.add(`font-${size}`); showToast(`Font size: ${size}`); closeSettingsModal(); }));
+      window.addEventListener('click', (e) => { if (e.target === document.getElementById('settingsModal')) closeSettingsModal(); });
+
+      // 答案及评分
+      const answers = { q27:'E', q28:'F', q29:'D', q30:'A', q31:'B', q32:'F', q33:'C', q34:'A', q35:'B', q36:'E', q37:'H', q38:'D', q39:'C', q40:'B' };
+      window.grade = function() {
+        clearInterval(timerInterval); // 停止计时
+        let total = 14, correct = 0;
+        const res = [];
+        // 27-30
+        for (let i=27; i<=30; i++) { let q = `q${i}`; let sel = document.querySelector(`input[name="${q}"]:checked`); let u = sel ? sel.value : 'No answer'; let c = answers[q]; if (u===c) correct++; res.push(`${q}: ${u} ${u===c?'✅':'❌'} (正确: ${c})`); }
+        // 31-39
+        for (let i=31; i<=39; i++) { let q = `q${i}`; let sel = document.querySelector(`input[name="${q}"]:checked`); let u = sel ? sel.value : 'No answer'; let c = answers[q]; if (u===c) correct++; res.push(`${q}: ${u} ${u===c?'✅':'❌'} (正确: ${c})`); }
+        // 40
+        let q40 = `q40`; let sel40 = document.querySelector(`input[name="q40"]:checked`); let u40 = sel40 ? sel40.value : 'No answer'; if (u40===answers.q40) correct++; res.push(`q40: ${u40} ${u40===answers.q40?'✅':'❌'} (正确: ${answers.q40})`);
+        document.getElementById('results').innerHTML = `<p><strong>得分: ${correct}/${total} (${Math.round(correct/total*100)}%)</strong></p><pre>${res.join('\n')}</pre>`;
+        document.getElementById('answerBox').open = true; document.querySelector('#answerBox .badge').textContent = 'Visible';
+        document.querySelectorAll('.q-item').forEach(item => item.classList.add('answered'));
+      };
+
+      window.resetForm = function() {
+        clearInterval(timerInterval); _t = 0; _timerEl.textContent = '00:00'; startTimer();
+        document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+        document.querySelectorAll('input.blank').forEach(i => i.value = '');
+        document.getElementById('results').innerHTML = '';
+        document.getElementById('answerBox').open = false; document.querySelector('#answerBox .badge').textContent = 'Hidden';
+        document.querySelectorAll('.q-item').forEach(item => item.classList.remove('answered'));
+        noteArea.value = ''; notesPanel.style.display = 'none';
+        document.querySelectorAll('.hl').forEach(hl => { let p = hl.parentNode; while (hl.firstChild) p.insertBefore(hl.firstChild, hl); p.removeChild(hl); p.normalize(); });
+      };
+
+      window.scrollToElement = function(id) {
+        document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.querySelectorAll('.q-item').forEach(i => i.classList.remove('active'));
+        let nav = document.getElementById(id.replace('-anchor','-nav')); if (nav) { nav.classList.add('active'); setTimeout(()=>nav.classList.remove('active'),800); }
+      };
+
+      // 监听答题标记
+      for (let i=27; i<=40; i++) { 
+        if (i>=31 && i<=39) {
+          document.querySelectorAll(`input[name="q${i}"]`).forEach(r => r.addEventListener('change', ()=> document.getElementById(`q${i}-nav`)?.classList.add('answered')));
+        } else if (i===40) {
+          document.querySelectorAll(`input[name="q40"]`).forEach(r => r.addEventListener('change', ()=> document.getElementById(`q40-nav`)?.classList.add('answered')));
+        } else {
+          document.querySelectorAll(`input[name="q${i}"]`).forEach(r => r.addEventListener('change', ()=> document.getElementById(`q${i}-nav`)?.classList.add('answered')));
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

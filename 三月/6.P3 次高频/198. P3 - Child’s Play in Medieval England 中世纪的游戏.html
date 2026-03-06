@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P3 – Child's Play in Medieval England</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root { 
+    --line: #e5e7eb; --bg: #f6f7fb; --panel: #fff; --accent: #3b82f6; 
+    --muted: #6b7280; --shadow: 0 6px 20px rgba(0,0,0,.12); 
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { 
+    margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background: var(--bg); padding-bottom: 70px; color: #111827;
+  }
+  .shell { display: flex; height: 100vh; width: 100%; }
+  .pane { background: var(--panel); overflow: auto; padding: 20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background: #fbfbff; border-left: 1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg, #e5e7eb, #d1d5db); cursor: ew-resize; position: relative; z-index: 5; user-select: none; }
+  h2, h3, h4 { margin: 0 0 10px; }
+  #left p, #right p, #right li { margin: 0 0 12px; line-height: 1.6; }
+  .group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+  .q-block { margin-bottom: 16px; }
+  .options { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .options-col label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .q-match-item { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
+  .q-match-item .q-text { flex-grow: 1; }
+  .dropzone { 
+    border: 2px dashed #cbd5e1; background: #f8fafc; border-radius: 10px; 
+    min-height: 42px; padding: 6px; display: flex; align-items: center; justify-content: center; 
+    flex-shrink: 0; width: 60px;
+    transition: background-color 0.2s, outline 0.2s; 
+  }
+  .dropzone.over { outline: 2px solid var(--accent); background: #eff6ff; }
+  .dropzone .card { box-shadow: none; cursor: default; }
+  .option-pool { background:#f9fafb; border: 1px solid var(--line); border-radius: 8px; padding: 12px; display:flex; flex-wrap:wrap; gap:8px; margin-top: 12px; min-height: 48px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 12px; display:inline-flex; align-items:center; cursor:grab; box-shadow:0 2px 4px rgba(0,0,0,.05); user-select:none; transition: box-shadow 0.2s; white-space: normal; }
+  .card:active { cursor: grabbing; box-shadow: var(--shadow); }
+  .card.ghost { opacity: 0.4; }
+  button { padding: 8px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+  button:hover { background: #f8fafc; border-color: #cbd5e1; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: #2563eb; }
+  .practice-nav { background: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 5px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+  .practice-nav .title { font-weight: 600; color: var(--muted); }
+  .practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; }
+  .practice-nav .q-item:hover { background: #f1f5f9; border-color: var(--accent); }
+  .practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+  .practice-nav .controls { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+  #timer { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.2s; min-width: 70px; text-align: center; font-size: 14px; font-weight: bold; }
+  #timer:hover { background: #f1f5f9; border-color: var(--accent); }
+  #timer.paused { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+  .theme-toggle { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; width: 32px; height: 32px; font-size: 16px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+  #selbar { position: absolute; display: none; z-index: 2000; background: #111; color: #fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+  #selbar button { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+  #notes { position: fixed; right: 12px; bottom: 85px; width: 320px; height: 42vh; background: #fff; border: 1px solid var(--line); border-radius: 12px; display: none; flex-direction: column; z-index: 1500; box-shadow: var(--shadow); }
+  #notes header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  #notes textarea { flex: 1; border: 0; padding: 10px; resize: none; font-size: 14px; line-height: 1.5; background-color: inherit; color: inherit; }
+  #toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 3000; font-size: 14px; }
+  #results { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 16px 0; }
+  #results p { margin: 0 0 8px; }
+  #results pre { font-family: monospace; white-space: pre-wrap; margin: 0; }
+  .badge { background: #eef2ff; color: #4338ca; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 500; }
+  details.answerbox { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+  details.answerbox summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+  details.answerbox summary::-webkit-details-marker { display: none; }
+  #answerContent { margin-top: 10px; }
+  #answerContent ol { margin: 0; padding-left: 20px; }
+  .hl { background: #fff3a3; }
+  body.dark { --bg: #0f172a; --panel: #1e293b; --line: #334155; --muted: #94a3b8; color: #e2e8f0; }
+  body.dark .pane, body.dark #right { background: var(--panel); }
+  body.dark #right { background: #131c2d; }
+  body.dark button, body.dark .theme-toggle { background: #334155; color: #e2e8f0; border-color: #475569; }
+  body.dark .group, body.dark #results, body.dark details.answerbox, body.dark #notes { background: #1e293b; border-color: #334155; }
+  body.dark .practice-nav { background: #1e293b; border-top-color: #334155; }
+  body.dark .q-item { background: #334155; color: #e2e8f0; border-color: #475569; }
+  body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+  body.dark #timer.paused { background: #402323; color: #f87171; border-color: #7f1d1d; }
+  body.dark .hl { background: #b45309; }
+  body.dark .option-pool { background:#0f172a; border-color: var(--line); }
+  body.dark .card { background: #334155; border-color: #475569; }
+  body.dark .dropzone { border-color: #475569; background: #131c2d; }
+  body.dark .dropzone.over { background: #1e293b; }
+  body.dark .badge { background: #312e81; color: #a5b4fc; }
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; height: auto; }
+    #left, #right { min-height: 50vh; }
+    #divider { display: none; }
+    #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+    .q-match-item { flex-direction: column; align-items: stretch; }
+    .dropzone { flex-basis: 42px; width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 1. Bottom Navigation Bar -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q27-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q27-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q27-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q27-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q32-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q32-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q32-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q36-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q36-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q36-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q36-anchor')">40</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<!-- 2. Main Content Shell -->
+<div class="shell">
+  <!-- Left Pane: Reading Passage -->
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 3</h2>
+    <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+    
+    <h3>Child's Play in Medieval England</h3>
+    <p><em>Professor Nicholas Orme investigates childhood in the Middle Ages</em></p>
+    
+    <h4>A</h4>
+    <p>'Play up! Play up! And play the game!' The ringing chorus of Sir Henry Newbolt's celebrated cricket poem ‘Vitai Lampada' (1908) sums up views about play in 19th- and early 20th-century Britain. Children's play was important, and adults should regulate and direct it. Games promoted endurance, self-discipline and team spirit – qualities needed for the health of society and government. Newbolt was one in a long line of people who thought in this way. The notion that children's play should be used for educational and social purposes goes back at least to the ancient Greeks and the toys and games of medieval England tell us much about how adults then saw childhood. But they also reveal a good deal about children themselves, and cast light on what has recently become a controversial issue.</p>
+    
+    <h4>B</h4>
+    <p>Forty years ago, the French historian Philippe Aries argued, in Centuries of Childhood, that childhood in the Middle Ages did not exist in its modern sense. Children were regarded by adults with relatively little affection and followed a way of life not very different from that of their elders. More recent historians have disputed this, pointing to plentiful signs of parental affection and arguing that childhood, by its very nature, must always have been much the same.</p>
+    
+    <h4>C</h4>
+    <p>In this debate play is crucial. Did adults encourage it? If so, did they see it as recreational (by providing toys, for example) or as educational (making children play in particular ways)? Did children play as their elders told them, or did they invent their own games, away from adults and even against their wishes? These questions can be answered from a rich body of evidence including actual toys of the period, pictures of children's activities in contemporary manuscripts and literary sources such as religious works and dictionaries. We know not only how medieval English children played but what their elders thought on the subject.</p>
+    
+    <h4>D</h4>
+    <p>We know, for example, that adults gave children toys from infancy onwards. In 1398 the writer John Trevisa describes babies playing with 'a child's brooch', an object similar in function to the bright plastic toys given to babies today to bite and handle. William Horman, 16th-century author of a Latin textbook, talks of buying a rattle to stop a baby crying. Indeed, by 1300 it appears there was a toy industry in England. Boys' toys often took military forms, such as the two metal soldiers of that date, found in London, and made from a mould. Girls had dolls, known before the 17th century as 'poppets' or puppets, commercially manufactured, imported and, in 1582, taxed at a halfpenny each. Not that children were by any means dependent on things that were bought for them. Gerald of Wales recalls how he and his brothers built towns, palaces, churches and monasteries from sand at Manorbier Castle in about 1150 (perhaps on the nearby beach).</p>
+    
+    <h4>E</h4>
+    <p>Active games were universal. In his English-to-Latin dictionary of 1440, a mysterious recluse known as Geoffrey mentions children playing ‘tennis' and swinging on what he calls a 'totter' or 'merrytotter'. Children chased each other, swam and played ball games. Boys in the later Middle Ages shot arrows with bows, and archery is an example of a sport encouraged by adults, who wanted boys to grow up to play their part in what was, for most men, a warrior society.</p>
+    
+    <h4>F</h4>
+    <p>However, by no means all children's military activity was directed by adults. In 1400, six months after King Richard II had been overthrown by Henry IV, the children of London gathered together and chose themselves kings. Adam of Usk tells us they congregated 'in thousands ... and made war upon each other ... whereby many died'. The new king had to order their parents and masters to stop them.</p>
+    
+    <h4>G</h4>
+    <p>This willingness of children to take the initiative in play, not just to wait for adults to direct them, is evident in the way they observed the calendar. Medieval life was regulated by light, weather, crops and the Church's cycle of fasts and festivals. Children shared in the adult round of religious festivals, but had their own observances as well, semi-detached from their elders. In the 1200s, the priest Thomas Docking remarked that in spring a child 'follows the ploughman; in autumn he accompanies the grape-gatherers'. In 1518, the poet Alexander Barclay records children playing with tops in March, looking for fruit in summer and making footballs by filling pigs' bladders with dried peas in autumn.</p>
+    
+    <h4>H</h4>
+    <p>It is clear from this evidence that the relationship between adults and children in medieval society was, in major respects, a modern one. Parents took an indulgent interest in their children, providing them with toys and giving them time to play. Children played in a wide variety of ways – imaginatively, skilfully, athletically and violently – developing their minds, bodies and social skills. Adults tried at times to direct play – partly to keep children in order, partly to give them skills for adult life – but children gravitated to one another and formed a culture of their own. We can answer Aries's thesis, then, with a resounding ‘No!’. Childhood has always been much the same.</p>
+    
+    <p>&nbsp;</p> <!-- Final padding -->
+  </section>
+
+  <!-- Draggable Divider -->
+  <div id="divider" title="Drag to resize"></div>
+
+  <!-- Right Pane: Questions and Controls -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <a id="q27-anchor"></a>
+      <h4>Questions 27–31</h4>
+      <p>Which paragraph contains the following information?</p>
+      <div class="q-block"><p><strong>27</strong> economic evidence for play in medieval England</p><div class="options"><label><input type="radio" name="q27" value="A"> A</label><label><input type="radio" name="q27" value="B"> B</label><label><input type="radio" name="q27" value="C"> C</label><label><input type="radio" name="q27" value="D"> D</label><label><input type="radio" name="q27" value="E"> E</label><label><input type="radio" name="q27" value="F"> F</label><label><input type="radio" name="q27" value="G"> G</label><label><input type="radio" name="q27" value="H"> H</label></div></div>
+      <div class="q-block"><p><strong>28</strong> an example of how children created their own toys</p><div class="options"><label><input type="radio" name="q28" value="A"> A</label><label><input type="radio" name="q28" value="B"> B</label><label><input type="radio" name="q28" value="C"> C</label><label><input type="radio" name="q28" value="D"> D</label><label><input type="radio" name="q28" value="E"> E</label><label><input type="radio" name="q28" value="F"> F</label><label><input type="radio" name="q28" value="G"> G</label><label><input type="radio" name="q28" value="H"> H</label></div></div>
+      <div class="q-block"><p><strong>29</strong> an example of warlike play approved by grown-ups</p><div class="options"><label><input type="radio" name="q29" value="A"> A</label><label><input type="radio" name="q29" value="B"> B</label><label><input type="radio" name="q29" value="C"> C</label><label><input type="radio" name="q29" value="D"> D</label><label><input type="radio" name="q29" value="E"> E</label><label><input type="radio" name="q29" value="F"> F</label><label><input type="radio" name="q29" value="G"> G</label><label><input type="radio" name="q29" value="H"> H</label></div></div>
+      <div class="q-block"><p><strong>30</strong> a political event mirrored in children's play</p><div class="options"><label><input type="radio" name="q30" value="A"> A</label><label><input type="radio" name="q30" value="B"> B</label><label><input type="radio" name="q30" value="C"> C</label><label><input type="radio" name="q30" value="D"> D</label><label><input type="radio" name="q30" value="E"> E</label><label><input type="radio" name="q30" value="F"> F</label><label><input type="radio" name="q30" value="G"> G</label><label><input type="radio" name="q30" value="H"> H</label></div></div>
+      <div class="q-block"><p><strong>31</strong> the origin of an academic debate about medieval life</p><div class="options"><label><input type="radio" name="q31" value="A"> A</label><label><input type="radio" name="q31" value="B"> B</label><label><input type="radio" name="q31" value="C"> C</label><label><input type="radio" name="q31" value="D"> D</label><label><input type="radio" name="q31" value="E"> E</label><label><input type="radio" name="q31" value="F"> F</label><label><input type="radio" name="q31" value="G"> G</label><label><input type="radio" name="q31" value="H"> H</label></div></div>
+    </div>
+    
+    <div class="group">
+      <a id="q32-anchor"></a>
+      <h4>Questions 32–35</h4>
+      <p>Match each date with the correct event, A–J.</p>
+      <div class="q-match-item"><span class="q-text"><strong>32</strong> 1400</span><span class="dropzone" data-target="q32"></span></div>
+      <div class="q-match-item"><span class="q-text"><strong>33</strong> 1518</span><span class="dropzone" data-target="q33"></span></div>
+      <div class="q-match-item"><span class="q-text"><strong>34</strong> 1582</span><span class="dropzone" data-target="q34"></span></div>
+      <div class="q-match-item"><span class="q-text"><strong>35</strong> 1908</span><span class="dropzone" data-target="q35"></span></div>
+      <div class="option-pool" id="pool-events">
+        <div class="card" draggable="true" data-value="A"><strong>A</strong> invention of cricket</div><div class="card" draggable="true" data-value="B"><strong>B</strong> children picking grapes</div><div class="card" draggable="true" data-value="C"><strong>C</strong> poem about value of games</div><div class="card" draggable="true" data-value="D"><strong>D</strong> early toy manufacturing in England</div><div class="card" draggable="true" data-value="E"><strong>E</strong> puppets first imported into England</div><div class="card" draggable="true" data-value="F"><strong>F</strong> dolls taxed in England</div><div class="card" draggable="true" data-value="G"><strong>G</strong> death of Adam of Usk</div><div class="card" draggable="true" data-value="H"><strong>H</strong> children playing tennis</div><div class="card" draggable="true" data-value="I"><strong>I</strong> children's gang warfare</div><div class="card" draggable="true" data-value="J"><strong>J</strong> a description of seasonal activities</div>
+      </div>
+    </div>
+
+    <div class="group">
+      <a id="q36-anchor"></a>
+      <h4>Questions 36–40</h4>
+      <p>Do the following statements agree with the views of the writer in Reading Passage 3?</p>
+      <div class="q-block"><p><strong>36</strong> Little is known about adult attitudes to children's play in the Middle Ages.</p><div class="options-col"><label><input type="radio" name="q36" value="yes"> YES</label><label><input type="radio" name="q36" value="no"> NO</label><label><input type="radio" name="q36" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>37</strong> Most toys were imported into England before 1300.</p><div class="options-col"><label><input type="radio" name="q37" value="yes"> YES</label><label><input type="radio" name="q37" value="no"> NO</label><label><input type="radio" name="q37" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>38</strong> Medieval children celebrated the seasons in their own ways.</p><div class="options-col"><label><input type="radio" name="q38" value="yes"> YES</label><label><input type="radio" name="q38" value="no"> NO</label><label><input type="radio" name="q38" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>39</strong> Medieval children made presents for their parents on special occasions.</p><div class="options-col"><label><input type="radio" name="q39" value="yes"> YES</label><label><input type="radio" name="q39" value="no"> NO</label><label><input type="radio" name="q39" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>40</strong> Parents and children in the Middle Ages behaved much as they do today.</p><div class="options-col"><label><input type="radio" name="q40" value="yes"> YES</label><label><input type="radio" name="q40" value="no"> NO</label><label><input type="radio" name="q40" value="not given"> NOT GIVEN</label></div></div>
+    </div>
+
+    <!-- Controls and Results -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<!-- 3. UI Helper Elements -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// --- MASTER JAVASCRIPT TEMPLATE ---
+
+// 1. STATE & ANSWERS
+const answers = {
+    q27: "d", q28: "g", q29: "e", q30: "f", q31: "b",
+    q32: "i", q33: "j", q34: "f", q35: "c",
+    q36: "no", q37: "not given", q38: "true", q39: "not given", q40: "true"
+};
+
+// 2. UI & INTERACTIVITY
+let timerSeconds = 0, isTimerPaused = false;
+const timerEl = document.getElementById('timer');
+
+function toggleTimer() { isTimerPaused = !isTimerPaused; timerEl.classList.toggle('paused', isTimerPaused); showToast(isTimerPaused ? 'Timer paused' : 'Timer resumed'); }
+setInterval(() => { if (!isTimerPaused) { timerSeconds++; const m = String(Math.floor(timerSeconds / 60)).padStart(2, '0'); const s = String(timerSeconds % 60).padStart(2, '0'); timerEl.textContent = `${m}:${s}`; } }, 1000);
+function toggleDarkMode() { document.body.classList.toggle('dark'); const isDark = document.body.classList.contains('dark'); localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled'); document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️'; }
+function scrollToElement(id) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+function showToast(msg) { const toastEl = document.getElementById('toast'); toastEl.textContent = msg; toastEl.style.display = 'block'; setTimeout(() => { toastEl.style.display = 'none'; }, 1500); }
+
+// 3. HIGHLIGHT AND NOTES FUNCTIONALITY
+const selbar = document.getElementById('selbar');
+let lastRange = null;
+function handleTextSelection() { setTimeout(() => { const sel = window.getSelection(); if (sel.toString().trim().length > 0) { lastRange = sel.getRangeAt(0).cloneRange(); const rect = lastRange.getBoundingClientRect(); selbar.style.top = `${window.scrollY + rect.top - selbar.offsetHeight - 5}px`; selbar.style.left = `${window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2}px`; selbar.style.display = 'flex'; } else { selbar.style.display = 'none'; } }, 10); }
+['left', 'right'].forEach(id => document.getElementById(id).addEventListener('mouseup', handleTextSelection));
+document.addEventListener('mousedown', (e) => { if (!selbar.contains(e.target)) selbar.style.display = 'none'; });
+document.getElementById('btnHL').addEventListener('click', () => { if (lastRange) { const span = document.createElement('span'); span.className = 'hl'; try { lastRange.surroundContents(span); } catch(e) { console.error(e); } selbar.style.display = 'none'; window.getSelection().removeAllRanges(); } });
+document.getElementById('btnUH').addEventListener('click', () => { if (lastRange) { let container = lastRange.commonAncestorContainer; if (container.nodeType !== 1) container = container.parentElement; const highlights = container.querySelectorAll('.hl'); highlights.forEach(hl => { if (window.getSelection().containsNode(hl, true)) { const parent = hl.parentNode; while (hl.firstChild) parent.insertBefore(hl.firstChild, hl); parent.removeChild(hl); parent.normalize(); } }); selbar.style.display = 'none'; window.getSelection().removeAllRanges(); } });
+document.getElementById('btnNote').addEventListener('click', () => { const text = window.getSelection().toString().trim(); if (text) { const noteArea = document.getElementById('noteArea'); noteArea.value += (noteArea.value ? '\n\n' : '') + `> ${text}`; toggleNotes(); noteArea.scrollTop = noteArea.scrollHeight; } selbar.style.display = 'none'; });
+function toggleNotes() { const notePad = document.getElementById('notes'); notePad.style.display = notePad.style.display === 'flex' ? 'none' : 'flex'; }
+document.getElementById('btnClose').addEventListener('click', toggleNotes);
+document.getElementById('btnCopy').addEventListener('click', () => { navigator.clipboard.writeText(document.getElementById('noteArea').value); showToast('Notes copied'); });
+
+// 4. DRAG AND DROP LOGIC
+document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', e.target.id); setTimeout(() => e.target.classList.add('ghost'), 0); });
+    card.addEventListener('dragend', e => e.target.classList.remove('ghost'));
+});
+document.querySelectorAll('.dropzone').forEach(zone => {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault(); zone.classList.remove('over');
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        if (!draggedCard) return;
+        const cardToDrop = draggedCard.dataset.clone === 'true' ? draggedCard.cloneNode(true) : draggedCard;
+        cardToDrop.classList.remove('ghost');
+        if (zone.children.length > 0) {
+            const existingCard = zone.children[0];
+            if (existingCard.dataset.clone !== 'true') {
+                const itsOriginPool = document.getElementById(existingCard.dataset.originPool);
+                if (itsOriginPool) itsOriginPool.appendChild(existingCard);
+            }
+        }
+        zone.innerHTML = '';
+        zone.appendChild(cardToDrop);
+        updateAnswerStatus();
+    });
+});
+
+// 5. GRADING & STATE MANAGEMENT
+function grade() {
+    let total = 0, correct = 0, lines = [];
+    const push = (q, ok, user, correctAns) => { total++; if(ok) correct++; const displayAns = String(correctAns).toUpperCase(); lines.push(`${q.toUpperCase().replace('Q','')}: ${user || 'None'} ${ok ? '✅' : `❌ (Ans: ${displayAns})`}`); };
+    Object.keys(answers).forEach(qKey => {
+        const correctAns = answers[qKey];
+        let userAnswer = null;
+        const radio = document.querySelector(`input[name="${qKey}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qKey}"]`);
+        if (radio) userAnswer = radio.value;
+        else if (dropzone) userAnswer = dropzone.querySelector('.card')?.dataset.value || null;
+        const isCorrect = userAnswer !== null && userAnswer.toLowerCase() === String(correctAns).toLowerCase();
+        push(qKey, isCorrect, userAnswer, correctAns);
+    });
+    const acc = total ? Math.round(100 * correct / total) : 0;
+    document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p><pre>${lines.join('\n')}</pre>`;
+    document.getElementById('answerContent').innerHTML = `<ol start="27">${Object.entries(answers).map(([key, val]) => `<li><strong>${key.replace('q','').replace('-','–')}:</strong> ${String(val).toUpperCase()}</li>`).join('')}</ol>`;
+    document.querySelector('#answerBox .badge').textContent = 'tap to view';
+    document.getElementById('answerBox').open = true;
+}
+
+function resetForm() {
+    document.querySelectorAll('input[type="radio"]').forEach(radio => radio.checked = false);
+    document.querySelectorAll('.dropzone').forEach(zone => {
+        if (zone.children.length > 0) {
+            const card = zone.children[0];
+            if (card.dataset.clone !== 'true') {
+                const originPool = document.getElementById(card.dataset.originPool);
+                if (originPool) originPool.appendChild(card);
+            }
+        }
+        zone.innerHTML = '';
+    });
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('answerContent').innerHTML = '';
+    document.querySelector('#answerBox .badge').textContent = 'hidden';
+    document.getElementById('answerBox').open = false;
+    updateAnswerStatus();
+    showToast('Form has been reset');
+}
+
+function updateAnswerStatus() {
+    document.querySelectorAll('.q-item').forEach(item => {
+        const qNum = item.id.replace('-nav', '');
+        let answered = false;
+        const radio = document.querySelector(`input[name="${qNum}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qNum}"]`);
+        if (radio) answered = true;
+        else if (dropzone) answered = !!dropzone.querySelector('.card');
+        item.classList.toggle('answered', answered);
+    });
+}
+
+// 6. INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        toggleDarkMode();
+        document.querySelector('.theme-toggle').textContent = '🌙';
+    }
+    document.querySelectorAll('input[type="radio"]').forEach(el => el.addEventListener('change', updateAnswerStatus));
+    document.querySelectorAll('.card').forEach((card, index) => {
+        if (!card.id) card.id = `card-${index}`;
+        if (card.parentElement.classList.contains('option-pool')) {
+            card.dataset.originPool = card.parentElement.id;
+            card.parentElement.addEventListener('dragover', e => e.preventDefault());
+            card.parentElement.addEventListener('drop', e => {
+                e.preventDefault();
+                const cardId = e.dataTransfer.getData('text/plain');
+                const dragged = document.getElementById(cardId);
+                if (dragged && dragged.parentElement.classList.contains('dropzone')) {
+                    dragged.parentElement.innerHTML = '';
+                    if (dragged.dataset.clone !== 'true') e.currentTarget.appendChild(dragged);
+                    updateAnswerStatus();
+                }
+            });
+        }
+    });
+});
+</script>
+
+<!-- Practice page enhancer integration -->
+<script>
+  if (!window.practicePageEnhancer) {
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = () => console.log('Enhancer loaded.');
+    script.onerror = () => { console.error('Enhancer failed to load'); loadInlineEnhancer(); };
+    document.head.appendChild(script);
+  }
+  function loadInlineEnhancer() { if (window.practicePageEnhancer) return; window.practicePageEnhancer = { initialize: function () { this.setupCommunication(); this.setupAnswerListeners(); this.interceptSubmit(); }, setupCommunication: function () { this.parentWindow = window.opener || window.parent; window.addEventListener('message', (e) => { if (e.data?.type === 'INIT_SESSION') { this.sessionId = e.data.data.sessionId; this.sendMessage('SESSION_READY', { pageType: this.detectPageType(), url: window.location.href }); } }); }, detectPageType: () => { const t = document.title || ''; if (t.includes('P1')) return 'P1'; if (t.includes('P2')) return 'P2'; if (t.includes('P3')) return 'P3'; return 'unknown'; }, setupAnswerListeners: function () { this.answers = {}; this.startTime = Date.now(); document.addEventListener('change', (e) => { if (e.target.name) this.answers[e.target.name] = e.target.value; }); const observer = new MutationObserver(mutations => { mutations.forEach(mutation => { if (mutation.type === 'childList' && mutation.target.classList.contains('dropzone')) { const zone = mutation.target; const qName = zone.dataset.target; const card = zone.querySelector('.card'); this.answers[qName] = card ? card.dataset.value : ''; } }); }); document.querySelectorAll('.dropzone').forEach(zone => observer.observe(zone, { childList: true })); }, interceptSubmit: function () { if (typeof window.grade === 'function') { const originalGrade = window.grade; window.grade = () => { originalGrade(); setTimeout(() => this.handleSubmit(), 200); }; } }, handleSubmit: function () { const results = { sessionId: this.sessionId, startTime: this.startTime, endTime: Date.now(), duration: Math.round((Date.now() - this.startTime) / 1000), answers: this.answers, scoreInfo: this.extractScore(), pageType: this.detectPageType(), url: window.location.href }; this.sendMessage('PRACTICE_COMPLETE', results); }, extractScore: () => { const el = document.getElementById('results'); if (!el) return null; const text = el.textContent || ''; const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i); if (scoreMatch) { const correct = parseInt(scoreMatch[1]), total = parseInt(scoreMatch[2]); return { correct, total, accuracy: total > 0 ? correct / total : 0, percentage: Math.round((correct / total) * 100), source: 'inline_extraction' }; } return null; }, sendMessage: function (type, data) { if (this.parentWindow) this.parentWindow.postMessage({ type, data, source: 'practice_page' }, '*'); } }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => window.practicePageEnhancer.initialize()); else window.practicePageEnhancer.initialize(); }
+</script>
+
+</body>
+</html>

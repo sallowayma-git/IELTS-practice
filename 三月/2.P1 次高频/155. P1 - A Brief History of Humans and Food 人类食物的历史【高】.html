@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>A Brief History of Humans and Food - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    /* 字体大小变量 - 基础regular，逐级放大 */
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px; /* 比regular大1号 */
+    --font-size-large: 20px;    /* 比moderate大1号 */
+  }
+  /* 字体大小类 - 所有元素继承 */
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    font-size: inherit; /* 所有元素继承父级字体大小 */
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular); /* 默认regular */
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: static; 
+    display: inline-block; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:#fff;
+    cursor:pointer;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:100vh; 
+    width:100%; 
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: normal; 
+    hyphens: none; 
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 24px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+  }
+  .answer-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin:4px 0 8px;
+  }
+  .answer-option label {
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:4px;
+  }
+  input.blank {
+    width: 120px; /* 调整为固定宽度，更接近PDF样式 */
+    padding: 6px;
+    margin: 0 5px;
+    border:1px solid var(--line);
+    border-radius:4px;
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  body { 
+    padding-bottom: 82px; 
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-bottom:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    border-bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  /* 调整笔记填空题样式 */
+  .completion-notes {
+    margin: 15px 0;
+    line-height: 1.8;
+  }
+  .completion-notes p {
+    margin: 10px 0;
+  }
+  .main-point {
+    margin: 12px 0;
+    font-weight: 500;
+  }
+  .sub-point {
+    margin: 8px 0 8px 20px;
+  }
+  .sub-sub-point {
+    margin: 6px 0 6px 40px;
+  }
+</style>
+</head>
+<body class="font-regular">
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q3-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q4-anchor')">4</div>
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q5-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q7-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q9-anchor')">9</div>
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q10-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q11-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
+  </div>
+</div>
+<!-- 字体设置模态框 -->
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (Default - 16px)</div>
+  <div class="font-option" data-size="moderate">Moderate (Larger - 18px)</div>
+  <div class="font-option" data-size="large">Large (Largest - 20px)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 1 
+      <div id="timer-container">
+        <span id="timer">00:00</span>
+        <button id="settingsBtn" onclick="openSettingsModal()">Settings</button>
+      </div>
+    </h2>
+    <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
+    
+    <h3>A Brief History of Humans and Food</h3>
+    <p>During the journey from our hunter-gatherer ancestors to the present day, there have been three seismic changes that have impacted the food we eat: the discovery of cooking, the emergence of agriculture, and the invention of methods of preserving food.</p>
+    
+    <p>The 19th-century scientist Charles Darwin thought that cooking, after language, was the greatest discovery made by man. All of us eat some raw food, such as fruit and vegetables, but the great majority of food we consume is cooked. Cooking can turn plants that are inedible into edible food by destroying toxic chemicals that plants often manufacture to protect themselves against attack by insects or other herbivorous animals. These toxic chemicals are referred to as “plant secondary compounds” because they are not directly involved in the plant’s normal growth, development, and reproduction, and are produced purely as chemical defenses. They give many of the plants we consume, such as coffee or Brussels sprouts, their bitter taste.</p>
+    
+    <p>Cooked food is often more digestible because heat breaks down tough cellulose cell walls in plants or tough connective tissue in animals. Chewing raw turnip, a plate of uncooked rice, or a raw leg of lamb is much harder work than eating the cooked equivalent. The energy expended in chewing to break down the tough material is replaced by energy from the fuel used in cooking the food, so the ratio of energy gained to energy expended by the body is greater when food is cooked.</p>
+    
+    <p>Until the development of agriculture, hunter-gatherers spent up to seven hours a day gathering food. This all began to change around 10,500 years ago with the advent of farming, which led to dramatic changes in human societies. People began to create a variety of new tools to aid survival, and in turn, populations increased in size. These changes led to the possibility of specialization of different tasks within society. Around this time, writing became more sophisticated and allowed people to maintain records of the harvest and taxes. Eventually, formalized structures of government were established as people settled in one area.</p>
+    
+    <p>The arrival of agriculture meant that, for the first time, our ancestors had more food than they could eat immediately. This, combined with the seasonality of production, led them to discover methods of preserving food: smoking, drying, adding acid by fermentation, or adding salt. These four methods all share one feature in common-they make the food a more hostile environment for bacteria that can cause it to spoil. They also tend to slow down natural chemical reactions in the food that would cause decay.</p>
+    
+    <p>Although foods today are still preserved in these ancient ways, two more recent methods of preserving food have become more common: canning and freezing. Canning was invented by a Frenchman, Nicolas Appert, in the early 19th century. He sealed food in bottles fabricated from glass and then heated them in boiling water to cook the contents. Appert’s method had great advantages over older methods of food preservation: it could be applied to a wide range of foods, and the flavor and texture were similar to freshly cooked products. His idea was soon copied by an Englishman, Peter Durand. Until this point, containers had been too heavy to be widely used, but Durand produced the first ones which were lightweight and resistant to damage. Two years later, in 1812, two Englishmen, Bryan Donkin and John Hall, started the commercial canning of food, although the real rise in popularity of canning had to wait until the invention of the can opener in 1855. Until then, cans were opened with a chisel and hammer. Canning is an extremely effective way of preserving food: one can containing meat, dating back to 1824, was opened in 1939, and the contents were still in good condition.</p>
+    
+    <p>In the 21st century, the dominance of canning as a method of food preservation has been overtaken by freezing. Chilling food to keep it fresh is an old idea. The earliest mentions of icehouses, thick-walled buildings, half underground, date back to 1700 BC in northwest Iran. In early 16th-century Italy, water was mixed with chemicals to lower its freezing point to -18 degrees Celsius. Several centuries later, frozen fish and other goods were transported by ship from Australia to England. However, the modern frozen food industry was started in the 1920s by an American, Clarence Birdseye. While on a fishing trip with the Inuit in the Canadian Arctic, Birdseye observed that rapid freezing creates smaller ice crystals and therefore causes less damage to food-a discovery he had not expected. Nevertheless, the major growth in demand for frozen food came with the arrival of freezers in ordinary people’s homes. The advantages of frozen over canned food include the fact that the flavor and consistency are often identical to the fresh product, and freezing can be used to preserve a wide variety of foods.</p>
+    
+    <!-- 多加空白行防止加载不完全 -->
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- Questions 1-5: TRUE/FALSE/NOT GIVEN -->
+    <div class="group">
+      <h4>Questions 1–5</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 1?</p>
+      <p>In boxes 1–5 on your answer sheet, write</p>
+      <table>
+        <tr>
+          <th>TRUE</th>
+          <td>if the statement agrees with the information</td>
+        </tr>
+        <tr>
+          <th>FALSE</th>
+          <td>if the statement contradicts the information</td>
+        </tr>
+        <tr>
+          <th>NOT GIVEN</th>
+          <td>if there is no information on this</td>
+        </tr>
+      </table>
+      
+      <a id="q1-anchor"></a>
+      <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>1. According to Darwin, cooking was the most significant development in human history.</p>
+        <div class="answer-option">
+          <label><input name="q1" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q1" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q2-anchor"></a>
+      <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>2. The process of cooking gets rid of some plant poisons.</p>
+        <div class="answer-option">
+          <label><input name="q2" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q2" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q3-anchor"></a>
+      <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>3. Eating cooked food is more energy efficient than eating raw food.</p>
+        <div class="answer-option">
+          <label><input name="q3" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q3" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q4-anchor"></a>
+      <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>4. Clarence Birdseye had previously worked in the Australian food industry.</p>
+        <div class="answer-option">
+          <label><input name="q4" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q4" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q5-anchor"></a>
+      <div id="q5-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>5. Birdseye’s trip with the Inuit confirmed what he already believed about rapid freezing.</p>
+        <div class="answer-option">
+          <label><input name="q5" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q5" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Questions 6-13: Note Completion (修改后的格式) -->
+    <div class="group">
+      <h4>Questions 6–13</h4>
+      <p>Complete the notes below.</p>
+      <p>Choose ONE WORD ONLY from the passage for each answer.</p>
+      <p>Write your answers in boxes 6–13 on your answer sheet.</p>
+      
+      <h4>The Development of Agriculture and Food Preservation</h4>
+      
+      <div class="completion-notes">
+        <p class="main-point">The changes agriculture brought about were:</p>
+        <p class="sub-point">• the development of equipment and larger <span class="question-number">6.</span><a id="q6-anchor"></a> <input type="text" class="blank" id="q6"></p>
+        <p class="sub-point">• the ability to keep <span class="question-number">7.</span><a id="q7-anchor"></a> <input type="text" class="blank" id="q7"> as writing developed</p>
+        <p class="sub-point">• the setting up of organised government</p>
+        
+        <p class="main-point"><strong>Food preservation</strong></p>
+        <p class="sub-point">• early methods of food preservation included: smoking, drying and combining food with acid or <span class="question-number">8.</span><a id="q8-anchor"></a> <input type="text" class="blank" id="q8"></p>
+        
+        <p class="sub-point">• canning</p>
+        <p class="sub-sub-point">– Nicolas Appert put food into containers made of <span class="question-number">9.</span><a id="q9-anchor"></a> <input type="text" class="blank" id="q9"></p>
+        <p class="sub-sub-point">– Appert’s method resulted in preserved food that had the same taste and <span class="question-number">10.</span><a id="q10-anchor"></a> <input type="text" class="blank" id="q10"> as fresh food</p>
+        <p class="sub-sub-point">– Peter Durand introduced cans which had the advantage of being <span class="question-number">11.</span><a id="q11-anchor"></a> <input type="text" class="blank" id="q11"> and hard to break</p>
+        <p class="sub-sub-point">– In 1855, the metal can opener replaced the <span class="question-number">12.</span><a id="q12-anchor"></a> <input type="text" class="blank" id="q12"> which had been used with a hammer to open cans</p>
+        <p class="sub-sub-point">– some food was still found to be edible after more than a hundred years, e.g. an old can of <span class="question-number">13.</span><a id="q13-anchor"></a> <input type="text" class="blank" id="q13"></p>
+        
+        <p class="sub-point">• freezing</p>
+      </div>
+    </div>
+    
+    <!-- Submit & Reset Buttons -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <!-- Results & Answer Key -->
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>1</td>
+            <td>FALSE</td>
+            <td>
+              <p class="explanation-text">达尔文认为烹饪是“仅次于语言”的最伟大发现，而非“人类历史上最重要的发展”，题干“the most significant”与原文“after language”矛盾。</p>
+              <p class="explanation-original">原文：The 19th-century scientist Charles Darwin thought that cooking, after language, was the greatest discovery made by man.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>TRUE</td>
+            <td>
+              <p class="explanation-text">文中明确提到烹饪可通过破坏植物产生的有毒化学物质，将不可食用植物变为可食用，“destroying toxic chemicals”即“去除部分植物毒素”，与题干一致。</p>
+              <p class="explanation-original">原文：Cooking can turn plants that are inedible into edible food by destroying toxic chemicals that plants often manufacture...</p>
+            </td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>TRUE</td>
+            <td>
+              <p class="explanation-text">文中指出烹饪后食物的“能量获取与消耗比值更高”，即“更节能”，题干“more energy efficient”与原文“the ratio of energy gained to energy expended... is greater”同义。</p>
+              <p class="explanation-original">原文：...so the ratio of energy gained to energy expended by the body is greater when food is cooked.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>NOT GIVEN</td>
+            <td>
+              <p class="explanation-text">文章仅提及“冷冻鱼从澳大利亚运往英国”，未提及Clarence Birdseye曾在澳大利亚食品业工作，题干信息无原文依据。</p>
+              <p class="explanation-original">原文：Several centuries later, frozen fish and other goods were transported by ship from Australia to England. However, the modern frozen food industry was started in the 1920s by an American, Clarence Birdseye.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>FALSE</td>
+            <td>
+              <p class="explanation-text">文中明确提到Birdseye关于快速冷冻的发现是“未曾预料到的”，而非“证实了他已相信的观点”，题干与原文“a discovery he had not expected”矛盾。</p>
+              <p class="explanation-original">原文：While on a fishing trip with the Inuit in the Canadian Arctic, Birdseye observed that rapid freezing creates smaller ice crystals and therefore causes less damage to food-a discovery he had not expected.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>populations</td>
+            <td>
+              <p class="explanation-text">农业发展使人们创造新工具，进而“人口规模扩大”，题干“larger”对应原文“populations increased in size”，空缺处为名词“populations”。</p>
+              <p class="explanation-original">原文：People began to create a variety of new tools to aid survival, and in turn, populations increased in size.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>records</td>
+            <td>
+              <p class="explanation-text">文字发展后，人们能够“保存收成和税收的记录”，题干“keep”对应原文“maintain”，空缺处为“records”。</p>
+              <p class="explanation-original">原文：Around this time, writing became more sophisticated and allowed people to maintain records of the harvest and taxes.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>salt</td>
+            <td>
+              <p class="explanation-text">早期食物保存方法包括“烟熏、干燥、发酵加酸或加盐”，题干“combining food with acid or”对应原文“adding acid by fermentation, or adding salt”，空缺处为“salt”。</p>
+              <p class="explanation-original">原文：...led them to discover methods of preserving food: smoking, drying, adding acid by fermentation, or adding salt.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>glass</td>
+            <td>
+              <p class="explanation-text">Nicolas Appert将食物密封在“玻璃制成的瓶子”中，题干“containers made of”对应原文“bottles fabricated from glass”，空缺处为“glass”。</p>
+              <p class="explanation-original">原文：He sealed food in bottles fabricated from glass and then heated them in boiling water to cook the contents.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td>texture</td>
+            <td>
+              <p class="explanation-text">Appert的方法使保存的食物“风味和质地与新鲜烹饪的产品相似”，题干“taste”对应原文“flavor”，空缺处为“texture”。</p>
+              <p class="explanation-original">原文：...the flavor and texture were similar to freshly cooked products.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>11</td>
+            <td>lightweight</td>
+            <td>
+              <p class="explanation-text">Peter Durand制作的容器“轻便且耐损坏”，题干“hard to break”对应“resistant to damage”，空缺处为“lightweight”。</p>
+              <p class="explanation-original">原文：Until this point, containers had been too heavy to be widely used, but Durand produced the first ones which were lightweight and resistant to damage.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>12</td>
+            <td>chisel</td>
+            <td>
+              <p class="explanation-text">1855年前，人们用“凿子和锤子”开罐头，开罐器取代了“凿子”，题干“replaced the”对应原文“opened with a chisel and hammer”，空缺处为“chisel”。</p>
+              <p class="explanation-original">原文：Until then, cans were opened with a chisel and hammer.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>13</td>
+            <td>meat</td>
+            <td>
+              <p class="explanation-text">1824年的“肉类罐头”在1939年打开时仍可食用，题干“an old can of”对应原文“one can containing meat”，空缺处为“meat”。</p>
+              <p class="explanation-original">原文：Canning is an extremely effective way of preserving food: one can containing meat, dating back to 1824, was opened in 1939, and the contents were still in good condition.</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<!-- 文本选择工具栏 -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<!-- 笔记面板 -->
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<!-- 提示框 -->
+<div id="toast"></div>
+<script>
+// 计时器核心功能
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; // 计时器间隔ID，用于后续停止
+// 启动计时器
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+// 页面加载时启动计时器
+window.onload = startTimer;
+// 拖拽分隔线调整左右面板宽度
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isDragging = false;
+divider.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.clientX - containerRect.left;
+  // 限制最小宽度，防止面板过窄
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+});
+window.addEventListener('mouseup', () => {
+  if (isDragging) {
+    isDragging = false;
+    document.body.style.cursor = '';
+  }
+});
+// 触摸设备支持
+divider.addEventListener('touchstart', (e) => {
+  isDragging = true;
+  e.preventDefault();
+}, { passive: false });
+window.addEventListener('touchmove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.touches[0].clientX - containerRect.left;
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+}, { passive: false });
+window.addEventListener('touchend', () => {
+  isDragging = false;
+});
+// 文本高亮功能
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+// 定位选择工具栏
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    // 确保工具栏不超出视口
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+// 更新工具栏状态
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+// 监听文本选择事件
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+// 滚动时重新定位工具栏
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+// 点击高亮文本时显示工具栏
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+// 执行高亮
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    // 处理跨元素选择的情况
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+// 移除高亮
+function removeHighlight() {
+  if (currentHlNode) {
+    // 移除单个高亮元素
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize(); // 合并相邻文本节点
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  // 移除选择范围内的所有高亮
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      // 判断节点是否在选择范围内
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+// 绑定高亮按钮事件
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// 笔记功能
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+// 切换笔记面板显示
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+// 关闭笔记面板
+btnCloseNotes.addEventListener('click', toggleNotes);
+// 复制笔记
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+// 选中文本添加到笔记
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    // 滚动到笔记底部
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+// 提示框功能
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+// 字体设置功能
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+// 打开字体设置模态框
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+// 关闭字体设置模态框
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+// 点击模态框外部关闭
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+// 切换字体大小（影响所有元素）
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    // 移除所有字体类，添加选中的类
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    // 显示提示
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+  });
+});
+// 答案与评分功能（Submit后停止计时器）
+const answers = {
+  q1: 'FALSE',
+  q2: 'TRUE',
+  q3: 'TRUE',
+  q4: 'NOT GIVEN',
+  q5: 'FALSE',
+  q6: 'populations',
+  q7: 'records',
+  q8: 'salt',
+  q9: 'glass',
+  q10: 'texture',
+  q11: 'lightweight',
+  q12: 'chisel',
+  q13: 'meat'
+};
+// 评分函数（Submit后执行，包含停止计时器）
+function grade() {
+  // 1. 停止计时器
+  clearInterval(timerInterval);
+  
+  // 2. 计算得分
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  // 检查1-5题（TRUE/FALSE/NOT GIVEN）
+  for (let i = 1; i <= 5; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 检查6-13题（填空题，忽略大小写）
+  for (let i = 6; i <= 13; i++) {
+    const qName = `q${i}`;
+    const input = document.getElementById(qName);
+    const userAns = input ? input.value.trim().toLowerCase() : 'No answer';
+    const correctAns = answers[qName].toLowerCase();
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers[qName]})`}`);
+  }
+  
+  // 3. 显示结果
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  // 4. 展开答案面板
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  // 5. 标记所有题目为已回答
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+// 重置功能（重置计时器、选项、高亮等）
+function resetForm() {
+  // 1. 重置计时器
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  // 2. 重置1-5题单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 3. 重置6-13题填空题
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 4. 重置结果和答案面板
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  // 5. 重置导航栏已回答状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  // 6. 重置笔记
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  // 7. 移除所有高亮
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+}
+// 滚动到指定题目
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  // 高亮导航项
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+// 监听输入，标记题目为已回答
+(function() {
+  // 监听单选按钮（1-5题）
+  for (let i = 1; i <= 5; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+  
+  // 监听填空题（6-13题）
+  for (let i = 6; i <= 13; i++) {
+    const input = document.getElementById(`q${i}`);
+    input.addEventListener('input', () => {
+      if (input.value.trim()) {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      } else {
+        document.getElementById(`q${i}-nav`).classList.remove('answered');
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

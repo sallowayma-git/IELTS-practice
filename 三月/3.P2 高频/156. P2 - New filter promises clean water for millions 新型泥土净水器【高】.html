@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P2 – New filter promises clean water for millions</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root { 
+    --line: #e5e7eb; --bg: #f6f7fb; --panel: #fff; --accent: #3b82f6; 
+    --muted: #6b7280; --shadow: 0 6px 20px rgba(0,0,0,.12); 
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { 
+    margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background: var(--bg); padding-bottom: 70px; color: #111827;
+  }
+  .shell { display: flex; height: 100vh; width: 100%; }
+  .pane { background: var(--panel); overflow: auto; padding: 20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background: #fbfbff; border-left: 1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg, #e5e7eb, #d1d5db); cursor: ew-resize; position: relative; z-index: 5; user-select: none; }
+  h2, h3, h4 { margin: 0 0 10px; }
+  #left p, #right p, #right li { margin: 0 0 12px; line-height: 1.6; }
+  .group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+  .q-block { margin-bottom: 16px; }
+  .options { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .options label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .blank { border:none; border-bottom:1px solid #9ca3af; padding:4px 2px; font-size:1em; background:transparent; width: 120px; }
+  .blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  .flow-chart { text-align: center; }
+  .flow-box { border: 1px solid var(--line); padding: 10px; border-radius: 6px; margin-bottom: 8px; background: #fff; }
+  .flow-arrow { font-size: 24px; color: var(--muted); line-height: 1; margin-bottom: 8px; }
+  button { padding: 8px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+  button:hover { background: #f8fafc; border-color: #cbd5e1; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: #2563eb; }
+  .practice-nav { background: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 5px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+  .practice-nav .title { font-weight: 600; color: var(--muted); }
+  .practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; }
+  .practice-nav .q-item:hover { background: #f1f5f9; border-color: var(--accent); }
+  .practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+  .practice-nav .controls { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+  #timer { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.2s; min-width: 70px; text-align: center; font-size: 14px; font-weight: bold; }
+  #timer:hover { background: #f1f5f9; border-color: var(--accent); }
+  #timer.paused { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+  .theme-toggle { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; width: 32px; height: 32px; font-size: 16px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+  #selbar { position: absolute; display: none; z-index: 2000; background: #111; color: #fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+  #selbar button { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+  #notes { position: fixed; right: 12px; bottom: 85px; width: 320px; height: 42vh; background: #fff; border: 1px solid var(--line); border-radius: 12px; display: none; flex-direction: column; z-index: 1500; box-shadow: var(--shadow); }
+  #notes header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  #notes textarea { flex: 1; border: 0; padding: 10px; resize: none; font-size: 14px; line-height: 1.5; background-color: inherit; color: inherit; }
+  #toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 3000; font-size: 14px; }
+  #results { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 16px 0; }
+  #results p { margin: 0 0 8px; }
+  #results pre { font-family: monospace; white-space: pre-wrap; margin: 0; }
+  .badge { background: #eef2ff; color: #4338ca; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 500; }
+  details.answerbox { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+  details.answerbox summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+  details.answerbox summary::-webkit-details-marker { display: none; }
+  #answerContent { margin-top: 10px; }
+  #answerContent ol { margin: 0; padding-left: 20px; }
+  .hl { background: #fff3a3; }
+  body.dark { --bg: #0f172a; --panel: #1e293b; --line: #334155; --muted: #94a3b8; color: #e2e8f0; }
+  body.dark .pane, body.dark #right { background: var(--panel); }
+  body.dark #right { background: #131c2d; }
+  body.dark button, body.dark .theme-toggle { background: #334155; color: #e2e8f0; border-color: #475569; }
+  body.dark .group, body.dark #results, body.dark details.answerbox, body.dark #notes { background: #1e293b; border-color: #334155; }
+  body.dark .practice-nav { background: #1e293b; border-top-color: #334155; }
+  body.dark .q-item { background: #334155; color: #e2e8f0; border-color: #475569; }
+  body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+  body.dark #timer.paused { background: #402323; color: #f87171; border-color: #7f1d1d; }
+  body.dark .blank { color: #e2e8f0; border-bottom-color: #64748b; }
+  body.dark .hl { background: #b45309; }
+  body.dark .badge { background: #312e81; color: #a5b4fc; }
+  body.dark .flow-box { background: #1e293b; border-color: var(--line); }
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; height: auto; }
+    #left, #right { min-height: 50vh; }
+    #divider { display: none; }
+    #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 1. Bottom Navigation Bar -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q14-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q14-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q14-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q14-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q14-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q20-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q20-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q20-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q24-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q24-anchor')">26</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<!-- 2. Main Content Shell -->
+<div class="shell">
+  <!-- Left Pane: Reading Passage -->
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2</h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    
+    <h3>New filter promises clean water for millions</h3>
+    <p><em>An ingenious invention is set to bring clean water to developing countries, and while the science may be cutting edge, the materials are extremely down to earth.</em></p>
+  
+    <p>A handful of clay, yesterday's coffee grounds and some cow manure are the ingredients that could bring clean, safe drinking water to many developing countries. The simple new technology, developed by Australian National University (ANU) materials scientist and potter Tony Flynn, allows water filters to be made from commonly available materials and fired (or baked) using cow manure as the source of heat, without the need for a kiln (an oven for baking or drying pottery). The filters have been tested and shown to remove common pathogens (disease-producing organisms) including E. coli.</p>
+    <p>The invention was born out of a project involving the Manatuto community in East Timor. A charity operating there wanted to help set up a small industrial site manufacturing water filters, but initial research found the local clay to be too fine — a problem solved by the addition of organic material. While the problems of producing a working ceramic filter in East Timor were overcome, the solution was kiln-based and particular to that community's materials and couldn't be applied elsewhere. Flynn's technique for manure firing, with no requirement for a kiln, has made this zero-technology approach available anywhere it is needed.</p>
+    <p>Other commercial clay filters do exist, but, even if available, with prices starting at US$5 each, they are often outside the budgets of most people in the developing world. Unlike other water filtering devices, Flynn's filters are inexpensive and simple to produce. Take a handful of clay, mix it with a handful of organic material such as used tea leaves, coffee grounds or rice hulls, add water in a sufficient quantity to make a stiff mixture and form a cylindrical pot that has one end closed, then dry it in the sun. According to Flynn, used coffee grounds have given the best results to date. The walls of the filter can be measured using the width of an adult finger as the standard. Next, surround the pots with straw, put them in a mound of cow manure, light the straw and then top up the burning manure as required. The filters are finished in 45 to 60 minutes.</p>
+    <p>The properties of cow manure are vital, as the fuel can reach a temperature of 700 degrees in half an hour, and will be up to 950 degrees after another 20 to 30 minutes. The manure makes a good fuel because it is very high in organic material that burns readily and quickly. The manure has to be dry and is best used exactly as found in the field; there is no need to break it up or process it any further. In contrast, a potter's kiln is an expensive item and can take up to four or five hours to get up to 800 degrees. It needs expensive, scarce fuel, such as gas or wood to heat it, and experience to use it. With no technology, no insulation and nothing other than a pile of cow manure and a match, none of these requirements apply.</p>
+    <p>It is also helpful that, like clay and organic material, cow manure is freely available across the developing world. A cow is a natural fuel factory. Manure is a mixture of vegetable materials of different sizes, and cow manure as a fuel is the same wherever it is found.</p>
+    <p>Just as using manure as a fuel for domestic use is not a new idea, the fact that liquid can pass through clay objects is something that potters have always known, and clay's porous nature is something that, as a former ceramics lecturer in the ANU School of Art, Flynn is well aware of. The difference is that, rather than viewing the porous nature of the material as a problem — after all, not many people want a pot that won't hold water — his filters capitalize on this property.</p>
+    <p>The filtration process is simple, but effective. The basic principle is that there are passages through the filter that are wide enough for water droplets to pass through, but too narrow for pathogens. Tests with the deadly E. coli bacterium have seen the filters remove 96.4 to 99.8 per cent of the pathogen — well within safe levels. The thickness of the clay container needs to be the same thickness as an adult finger for the process to be effective. If this is the case, using only one filter, a liter of water can be obtained in two hours.</p>
+    <p>The use of organic material, which burns away leaving cavities after firing, helps produce the structure in which pathogens will become trapped. It overcomes the potential problems of finer clays that may not let water through and also means that cracks are soon halted. And like clay and cow manure, organic material is universally available in the developing communities that need the most assistance, as tea, coffee and rice are grown in these areas.</p>
+    <p>With all the components being widely available, Flynn says there is no reason the technology couldn't be applied throughout the developing world. He has no plans to exploit his idea financially by registering ownership through a patent. If he did, any commercial copying would legally entitle him to a share in any profits made. Without a patent, there will be no illegality in it being adopted in any community that needs it. “Everyone has a right to clean water, and these filters have the potential to enable anyone in the world to drink water safely," says Flynn.</p>
+    
+    <p>&nbsp;</p> <!-- Final padding -->
+  </section>
+
+  <!-- Draggable Divider -->
+  <div id="divider" title="Drag to resize"></div>
+
+  <!-- Right Pane: Questions and Controls -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <a id="q14-anchor"></a>
+      <h4>Questions 14–19</h4>
+      <p>Complete the flow-chart below. Write <strong>NO MORE THAN TWO WORDS AND/OR A NUMBER</strong> from the passage for each answer.</p>
+      <div class="flow-chart">
+        <h5>Step-by-step guide to making Flynn's water filters</h5>
+        <div class="flow-box">Make the mixture for the filter from organic material (e.g., tea, coffee, rice), <strong>14</strong> <input class="blank" name="q14"> and <strong>15</strong> <input class="blank" name="q15"></div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-box">Shape into pots and place them in a fire made from <strong>16</strong> <input class="blank" name="q16"> and <strong>17</strong> <input class="blank" name="q17"></div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-box">Fuel the fire to reach a maximum temperature of <strong>18</strong> <input class="blank" name="q18"></div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-box">Remove the filters from the fire.</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-box">Bake the filters in the fire for a maximum period of <strong>19</strong> <input class="blank" name="q19"></div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <a id="q20-anchor"></a>
+      <h4>Questions 20–23</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 2?</p>
+      <div class="q-block"><p><strong>20</strong> The clay in the Manatuto project was initially unsuitable for the purpose of the project.</p><div class="options"><label><input type="radio" name="q20" value="true"> TRUE</label><label><input type="radio" name="q20" value="false"> FALSE</label><label><input type="radio" name="q20" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>21</strong> Coffee grounds produce filters that are twice as efficient as those using other organic materials.</p><div class="options"><label><input type="radio" name="q21" value="true"> TRUE</label><label><input type="radio" name="q21" value="false"> FALSE</label><label><input type="radio" name="q21" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>22</strong> It takes half an hour for a cow manure fire to reach 950 degrees.</p><div class="options"><label><input type="radio" name="q22" value="true"> TRUE</label><label><input type="radio" name="q22" value="false"> FALSE</label><label><input type="radio" name="q22" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>23</strong> E. coli is the most difficult bacterium to remove from water by filtration.</p><div class="options"><label><input type="radio" name="q23" value="true"> TRUE</label><label><input type="radio" name="q23" value="false"> FALSE</label><label><input type="radio" name="q23" value="not given"> NOT GIVEN</label></div></div>
+    </div>
+
+    <div class="group">
+      <a id="q24-anchor"></a>
+      <h4>Questions 24–26</h4>
+      <p>Choose the correct letter, A, B, C or D.</p>
+      <div class="q-block"><p><strong>24</strong> The Manatuto project aimed to set up a</p><div class="options"><label><input type="radio" name="q24" value="A"> A charitable trust.</label><label><input type="radio" name="q24" value="B"> B filtration experiment.</label><label><input type="radio" name="q24" value="C"> C water filter factory.</label><label><input type="radio" name="q24" value="D"> D community kiln.</label></div></div>
+      <div class="q-block"><p><strong>25</strong> To be effective, the Flynn filters must</p><div class="options"><label><input type="radio" name="q25" value="A"> A remove all dangerous pathogens.</label><label><input type="radio" name="q25" value="B"> B be a particular thickness.</label><label><input type="radio" name="q25" value="C"> C filter water as quickly as possible.</label><label><input type="radio" name="q25" value="D"> D be made from 100 per cent clay.</label></div></div>
+      <div class="q-block"><p><strong>26</strong> Flynn does not intend to patent his filter because he</p><div class="options"><label><input type="radio" name="q26" value="A"> A wants it to be freely available.</label><label><input type="radio" name="q26" value="B"> B has produced a very simple design.</label><label><input type="radio" name="q26" value="C"> C cannot make a profit in poor countries.</label><label><input type="radio" name="q26" value="D"> D has already given the idea to a charity.</label></div></div>
+    </div>
+
+    <!-- Controls and Results -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<!-- 3. UI Helper Elements -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// --- MASTER JAVASCRIPT TEMPLATE ---
+
+// 1. STATE & ANSWERS
+const answers = {
+    q14: "clay", q15: "water", q16: "straw", q17: "cow manure", q18: "950 degrees",
+    q19: "60 minutes", q20: "true", q21: "not given", q22: "false", q23: "not given",
+    q24: "c", q25: "b", q26: "a"
+};
+
+// 2. UI & INTERACTIVITY
+let timerSeconds = 0, isTimerPaused = false;
+const timerEl = document.getElementById('timer');
+
+function toggleTimer() { isTimerPaused = !isTimerPaused; timerEl.classList.toggle('paused', isTimerPaused); showToast(isTimerPaused ? 'Timer paused' : 'Timer resumed'); }
+setInterval(() => { if (!isTimerPaused) { timerSeconds++; const m = String(Math.floor(timerSeconds / 60)).padStart(2, '0'); const s = String(timerSeconds % 60).padStart(2, '0'); timerEl.textContent = `${m}:${s}`; } }, 1000);
+function toggleDarkMode() { document.body.classList.toggle('dark'); const isDark = document.body.classList.contains('dark'); localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled'); document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️'; }
+function scrollToElement(id) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+function showToast(msg) { const toastEl = document.getElementById('toast'); toastEl.textContent = msg; toastEl.style.display = 'block'; setTimeout(() => { toastEl.style.display = 'none'; }, 1500); }
+
+// 3. HIGHLIGHT AND NOTES FUNCTIONALITY
+const selbar = document.getElementById('selbar');
+let lastRange = null;
+function handleTextSelection() { setTimeout(() => { const sel = window.getSelection(); if (sel.toString().trim().length > 0) { lastRange = sel.getRangeAt(0).cloneRange(); const rect = lastRange.getBoundingClientRect(); selbar.style.top = `${window.scrollY + rect.top - selbar.offsetHeight - 5}px`; selbar.style.left = `${window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2}px`; selbar.style.display = 'flex'; } else { selbar.style.display = 'none'; } }, 10); }
+['left', 'right'].forEach(id => document.getElementById(id).addEventListener('mouseup', handleTextSelection));
+document.addEventListener('mousedown', (e) => { if (!selbar.contains(e.target)) selbar.style.display = 'none'; });
+document.getElementById('btnHL').addEventListener('click', () => { if (lastRange) { const span = document.createElement('span'); span.className = 'hl'; try { lastRange.surroundContents(span); } catch(e) { console.error(e); } selbar.style.display = 'none'; window.getSelection().removeAllRanges(); } });
+document.getElementById('btnUH').addEventListener('click', () => { if (lastRange) { let container = lastRange.commonAncestorContainer; if (container.nodeType !== 1) container = container.parentElement; const highlights = container.querySelectorAll('.hl'); highlights.forEach(hl => { if (window.getSelection().containsNode(hl, true)) { const parent = hl.parentNode; while (hl.firstChild) parent.insertBefore(hl.firstChild, hl); parent.removeChild(hl); parent.normalize(); } }); selbar.style.display = 'none'; window.getSelection().removeAllRanges(); } });
+document.getElementById('btnNote').addEventListener('click', () => { const text = window.getSelection().toString().trim(); if (text) { const noteArea = document.getElementById('noteArea'); noteArea.value += (noteArea.value ? '\n\n' : '') + `> ${text}`; toggleNotes(); noteArea.scrollTop = noteArea.scrollHeight; } selbar.style.display = 'none'; });
+function toggleNotes() { const notePad = document.getElementById('notes'); notePad.style.display = notePad.style.display === 'flex' ? 'none' : 'flex'; }
+document.getElementById('btnClose').addEventListener('click', toggleNotes);
+document.getElementById('btnCopy').addEventListener('click', () => { navigator.clipboard.writeText(document.getElementById('noteArea').value); showToast('Notes copied'); });
+
+// 4. GRADING & STATE MANAGEMENT
+function grade() {
+    let total = 0, correct = 0, lines = [];
+    const push = (q, ok, user, correctAns) => { total++; if(ok) correct++; const displayAns = String(correctAns).charAt(0).toUpperCase() + String(correctAns).slice(1); lines.push(`${q.toUpperCase().replace('Q','')}: ${user || 'None'} ${ok ? '✅' : `❌ (Ans: ${displayAns})`}`); };
+    Object.keys(answers).forEach(qKey => {
+        const correctAns = answers[qKey];
+        let userAnswer = null;
+        const radio = document.querySelector(`input[name="${qKey}"]:checked`);
+        const textInput = document.querySelector(`input[name="${qKey}"]`);
+        if (radio) userAnswer = radio.value;
+        else if (textInput) userAnswer = textInput.value.trim() || null;
+        const isCorrect = userAnswer !== null && userAnswer.toLowerCase() === String(correctAns).toLowerCase();
+        push(qKey, isCorrect, userAnswer, correctAns);
+    });
+    const acc = total ? Math.round(100 * correct / total) : 0;
+    document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p><pre>${lines.join('\n')}</pre>`;
+    document.getElementById('answerContent').innerHTML = `<ol start="14">${Object.entries(answers).map(([key, val]) => `<li><strong>${key.replace('q','')}:</strong> ${String(val).charAt(0).toUpperCase() + String(val).slice(1)}</li>`).join('')}</ol>`;
+    document.querySelector('#answerBox .badge').textContent = 'tap to view';
+    document.getElementById('answerBox').open = true;
+}
+
+function resetForm() {
+    document.querySelectorAll('input[type="radio"], input[type="text"]').forEach(el => {
+        if (el.type === 'radio') el.checked = false;
+        else el.value = '';
+    });
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('answerContent').innerHTML = '';
+    document.querySelector('#answerBox .badge').textContent = 'hidden';
+    document.getElementById('answerBox').open = false;
+    updateAnswerStatus();
+    showToast('Form has been reset');
+}
+
+function updateAnswerStatus() {
+    document.querySelectorAll('.q-item').forEach(item => {
+        const qNum = item.id.replace('-nav', '');
+        let answered = false;
+        const radio = document.querySelector(`input[name="${qNum}"]:checked`);
+        const textInput = document.querySelector(`input[name="${qNum}"]`);
+        if (radio) answered = true;
+        else if (textInput) answered = textInput.value.trim() !== '';
+        item.classList.toggle('answered', answered);
+    });
+}
+
+// 5. INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        toggleDarkMode();
+        document.querySelector('.theme-toggle').textContent = '🌙';
+    }
+    document.querySelectorAll('input[type="radio"], input[type="text"]').forEach(el => {
+        el.addEventListener('input', updateAnswerStatus);
+        el.addEventListener('change', updateAnswerStatus);
+    });
+});
+</script>
+
+<!-- Practice page enhancer integration -->
+<script>
+  if (!window.practicePageEnhancer) {
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = () => console.log('Enhancer loaded.');
+    script.onerror = () => { console.error('Enhancer failed to load'); loadInlineEnhancer(); };
+    document.head.appendChild(script);
+  }
+  function loadInlineEnhancer() { if (window.practicePageEnhancer) return; window.practicePageEnhancer = { initialize: function () { this.setupCommunication(); this.setupAnswerListeners(); this.interceptSubmit(); }, setupCommunication: function () { this.parentWindow = window.opener || window.parent; window.addEventListener('message', (e) => { if (e.data?.type === 'INIT_SESSION') { this.sessionId = e.data.data.sessionId; this.sendMessage('SESSION_READY', { pageType: this.detectPageType(), url: window.location.href }); } }); }, detectPageType: () => { const t = document.title || ''; if (t.includes('P1')) return 'P1'; if (t.includes('P2')) return 'P2'; if (t.includes('P3')) return 'P3'; return 'unknown'; }, setupAnswerListeners: function () { this.answers = {}; this.startTime = Date.now(); document.addEventListener('input', (e) => { if (e.target.name) this.answers[e.target.name] = e.target.value; }); document.addEventListener('change', (e) => { if (e.target.name) this.answers[e.target.name] = e.target.value; }); }, interceptSubmit: function () { if (typeof window.grade === 'function') { const originalGrade = window.grade; window.grade = () => { originalGrade(); setTimeout(() => this.handleSubmit(), 200); }; } }, handleSubmit: function () { const results = { sessionId: this.sessionId, startTime: this.startTime, endTime: Date.now(), duration: Math.round((Date.now() - this.startTime) / 1000), answers: this.answers, scoreInfo: this.extractScore(), pageType: this.detectPageType(), url: window.location.href }; this.sendMessage('PRACTICE_COMPLETE', results); }, extractScore: () => { const el = document.getElementById('results'); if (!el) return null; const text = el.textContent || ''; const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i); if (scoreMatch) { const correct = parseInt(scoreMatch[1]), total = parseInt(scoreMatch[2]); return { correct, total, accuracy: total > 0 ? correct / total : 0, percentage: Math.round((correct / total) * 100), source: 'inline_extraction' }; } return null; }, sendMessage: function (type, data) { if (this.parentWindow) this.parentWindow.postMessage({ type, data, source: 'practice_page' }, '*'); } }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => window.practicePageEnhancer.initialize()); else window.practicePageEnhancer.initialize(); }
+</script>
+
+</body>
+</html>

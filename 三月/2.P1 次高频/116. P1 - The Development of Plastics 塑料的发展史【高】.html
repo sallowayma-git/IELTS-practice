@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>The Development of Plastics - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    /* 字体大小变量 - 基础regular，逐级放大 */
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px; /* 比regular大1号 */
+    --font-size-large: 20px;    /* 比moderate大1号 */
+  }
+  /* 字体大小类 - 所有元素继承 */
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    font-size: inherit; /* 所有元素继承父级字体大小 */
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular); /* 默认regular */
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: static; 
+    display: inline-block; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:#fff;
+    cursor:pointer;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:100vh; 
+    width:100%; 
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: normal; 
+    hyphens: none; 
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 24px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+  }
+  .answer-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin:4px 0 8px;
+  }
+  .answer-option label {
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:4px;
+  }
+  input.blank {
+    width: 30%; /* 适配表格填空长度 */
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  body { 
+    padding-bottom: 82px; 
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-bottom:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    border-bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  .table-question td {
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body class="font-regular">
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q3-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q4-anchor')">4</div>
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q5-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q7-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q9-anchor')">9</div>
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q10-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q11-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
+  </div>
+</div>
+<!-- 字体设置模态框 -->
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (Default - 16px)</div>
+  <div class="font-option" data-size="moderate">Moderate (Larger - 18px)</div>
+  <div class="font-option" data-size="large">Large (Largest - 20px)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 1 
+      <div id="timer-container">
+        <span id="timer">00:00</span>
+        <button id="settingsBtn" onclick="openSettingsModal()">Settings</button>
+      </div>
+    </h2>
+    <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>
+    
+    <h3>The Development of Plastics</h3>
+    <p>When rubber was first commercially produced in Europe during the nineteenth century, it rapidly became a very important commodity, particularly in the fields of transportation and electricity. However, during the twentieth century a number of new synthetic materials, called plastics, superseded natural rubber in all but a few applications. Rubber is a polymer—a compound containing large molecules that are formed by the bonding of many smaller, simpler units, repeated over and over again. The same bonding principle—polymerization—underlies the creation of a huge range of plastics by the chemical industry.</p>
+    <p>The first plastic was developed as a result of a competition in the USA. In the 1860s, $10,000 was offered to anybody who could replace ivory—supplies of which were declining—with something equally good as a material for making billiard balls. The prize was won by John Wesley Hyatt with a material called celluloid. Celluloid was made by dissolving cellulose, a carbohydrate derived from plants, in a solution of camphor dissolved in ethanol. This new material rapidly found uses in the manufacture of products such as knife handles, detachable collars and cuffs, spectacle frames and photographic film. Without celluloid, the film industry could never have got off the ground at the end of the 19th century.</p>
+    <p>Celluloid can be repeatedly softened and reshaped by heat, and is known as a thermoplastic. In 1907, Leo Baekeland, a Belgian chemist working in the USA, invented a different kind of plastic, by causing phenol and formaldehyde to react together. Baekeland called the material Bakelite, and it was the first of the thermosets—plastics that can be cast and moulded while hot, but cannot be softened by heat and reshaped once they have set. Bakelite was a good insulator, and was resistant to water, acids and moderate heat. With these properties it was soon being used in the manufacture of switches, household items such as knife handles, and electrical components for cars.</p>
+    <p>Soon chemists began looking for other small molecules that could be strung together to make polymers. In the 1930s British chemists discovered that the gas ethylene would polymerize under heat and pressure to form a thermoplastic they called polythene. Polypropylene followed in the 1950s. Both were used to make bottles, pipes and plastic bags. A small change in the starting material—replacing a hydrogen atom in ethylene with a chlorine atom—produced PVC (polyvinyl chloride), a hard, fireproof plastic suitable for drains and gutters. And by adding certain chemicals, a soft form of PVC could be produced, suitable as a substitute for rubber in items such as waterproof clothing. A closely related plastic was Teflon, or PTFE (polytetrafluoroethylene). This had a very low coefficient of friction, making it ideal for bearings, rollers, and non-stick frying pans. Polystyrene, developed during the 1930s in Germany, was a clear, glass-like material, used in food containers, domestic appliances and toys. Expanded polystyrene—a white, rigid foam—was widely used in packaging and insulation. Polyurethanes, also developed in Germany, found uses as adhesives, coatings, and—in the form of rigid foams—as insulation materials. They are all produced from chemicals derived from crude oil, which contains exactly the same elements—carbon and hydrogen—as many plastics.</p>
+    <p>The first of the man-made fibres, nylon, was also created in the 1930s. Its inventor was a chemist called Wallace Carothers, who worked for the Du Pont company in the USA. He found that under the right conditions, two chemicals—hexamethylenediamine and adipic acid—would form a polymer that could be pumped out through holes and then stretched to form long glossy threads that could be woven like silk. Its first use was to make parachutes for the US armed forces in World War II. In the post-war years nylon completely replaced silk in the manufacture of stockings. Subsequently many other synthetic fibres joined nylon, including Orlon, Acrilan and Terylene. Today most garments are made of a blend of natural fibres, such as cotton and wool, and man-made fibres that make fabrics easier to look after.</p>
+    <p>The great strength of plastic is its indestructibility. However, this quality is also something of a drawback: beaches all over the world, even on the remotest islands, are littered with plastic bottles that nothing can destroy. Nor is it very easy to recycle plastics, as different types of plastic are often used in the same items and call for different treatments. Plastics can be made biodegradable by incorporating into their structure a material such as starch, which is attacked by bacteria and causes the plastic to fall apart. Other materials can be incorporated that gradually decay in sunlight—although bottles made of such materials have to be stored in the dark, to ensure that they do not disintegrate before they have been used.</p>
+    
+    <!-- 多加空白行防止加载不完全 -->
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- Questions 1-7: Table Completion -->
+    <div class="group">
+      <h4>Questions 1–7</h4>
+      <p>Complete the table below.</p>
+      <p>Choose NO MORE THAN THREE WORDS from the passage for each answer.</p>
+      <p>Write your answers in boxes 1–7 on your answer sheet.</p>
+      
+      <table class="table-question">
+        <tr>
+          <th>Name of plastic</th>
+          <th>Date of invention</th>
+          <th>Original region</th>
+          <th>Property</th>
+          <th>Common use</th>
+        </tr>
+        <tr>
+          <td>Celluloid</td>
+          <td>1860s</td>
+          <td>US</td>
+          <td>Thermoplastic (can be softened and reshaped by heat)</td>
+          <td>Knife handles, spectacle frames, <a id="q1-anchor"></a><span class="question-number">1.</span> <input type="text" class="blank" id="q1" placeholder=""/></td>
+        </tr>
+        <tr>
+          <td><a id="q2-anchor"></a><span class="question-number">2.</span> <input type="text" class="blank" id="q2" placeholder=""/></td>
+          <td>1907</td>
+          <td>US</td>
+          <td>Can be cast and moulded but cannot be softened by heat</td>
+          <td><a id="q3-anchor"></a><span class="question-number">3.</span> <input type="text" class="blank" id="q3" placeholder=""/>, household items, car parts</td>
+        </tr>
+        <tr>
+          <td>Polythene</td>
+          <td>1930s</td>
+          <td><a id="q4-anchor"></a><span class="question-number">4.</span> <input type="text" class="blank" id="q4" placeholder=""/></td>
+          <td>Thermoplastic</td>
+          <td>Bottles, pipes, plastic bags</td>
+        </tr>
+        <tr>
+          <td>Rigid PVC</td>
+          <td>1930s</td>
+          <td>Not specified</td>
+          <td>Hard, <a id="q5-anchor"></a><span class="question-number">5.</span> <input type="text" class="blank" id="q5" placeholder=""/></td>
+          <td>Drains, gutters</td>
+        </tr>
+        <tr>
+          <td>Polystyrene</td>
+          <td>1930s</td>
+          <td>Germany</td>
+          <td><a id="q6-anchor"></a><span class="question-number">6.</span> <input type="text" class="blank" id="q6" placeholder=""/></td>
+          <td>Food containers, domestic appliances</td>
+        </tr>
+        <tr>
+          <td>Polyurethanes</td>
+          <td>1930s</td>
+          <td>Germany</td>
+          <td>In the form of <a id="q7-anchor"></a><span class="question-number">7.</span> <input type="text" class="blank" id="q7" placeholder=""/> foams</td>
+          <td>Adhesives, coatings, insulation</td>
+        </tr>
+      </table>
+    </div>
+    
+    <!-- Questions 8-13: TRUE/FALSE/NOT GIVEN -->
+    <div class="group">
+      <h4>Questions 8–13</h4>
+      <p>Do the following statements agree with the information in Reading Passage 1?</p>
+      <p>In boxes 8–13 on your answer sheet, write</p>
+      <table>
+        <tr>
+          <th>TRUE</th>
+          <td>if the statement agrees with the information</td>
+        </tr>
+        <tr>
+          <th>FALSE</th>
+          <td>if the statement contradicts the information</td>
+        </tr>
+        <tr>
+          <th>NOT GIVEN</th>
+          <td>if there is no information about this</td>
+        </tr>
+      </table>
+      
+      <a id="q8-anchor"></a>
+      <div id="q8-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>8. The chemical structure of plastic is very different from that of rubber.</p>
+        <div class="answer-option">
+          <label><input name="q8" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q8" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q8" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q9-anchor"></a>
+      <div id="q9-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>9. John Wesley was a famous chemist.</p>
+        <div class="answer-option">
+          <label><input name="q9" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q9" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q9" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q10-anchor"></a>
+      <div id="q10-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>10. Celluloid and Bakelite react to heat in the same way.</p>
+        <div class="answer-option">
+          <label><input name="q10" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q10" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q10" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q11-anchor"></a>
+      <div id="q11-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>11. The mix of different varieties of plastic can make recycling more difficult.</p>
+        <div class="answer-option">
+          <label><input name="q11" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q11" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q11" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q12-anchor"></a>
+      <div id="q12-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>12. Adding starch to plastic can make plastic more durable.</p>
+        <div class="answer-option">
+          <label><input name="q12" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q12" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q12" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q13-anchor"></a>
+      <div id="q13-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>13. Some plastic containers have to be preserved in special conditions.</p>
+        <div class="answer-option">
+          <label><input name="q13" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q13" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q13" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Submit & Reset Buttons -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <!-- Results & Answer Key -->
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>1</td>
+            <td>photographic film</td>
+            <td>
+              <p class="explanation-text">题干要求填写Celluloid的常见用途，原文明确提到其用途包括“刀柄、可拆卸衣领和袖口、眼镜框以及胶片（photographic film）”，故填此。</p>
+              <p class="explanation-original">原文：This new material rapidly found uses in the manufacture of products such as knife handles, detachable collars and cuffs, spectacle frames and photographic film.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>Bakelite</td>
+            <td>
+              <p class="explanation-text">题干给出“1907年、美国、可铸造模塑但加热后无法软化重塑”的关键信息，原文对应1907年Leo Baekeland发明的Bakelite，其属于热固性塑料，符合该性质描述。</p>
+              <p class="explanation-original">原文：In 1907, Leo Baekeland... invented a different kind of plastic... called the material Bakelite, and it was the first of the thermosets—plastics that can be cast and moulded while hot, but cannot be softened by heat and reshaped once they have set.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>switches</td>
+            <td>
+              <p class="explanation-text">题干要求填写Bakelite的常见用途（已有“家居用品、汽车部件”），原文提到其用途包括“开关（switches）、家居用品（如刀柄）以及汽车电气部件”，故填此。</p>
+              <p class="explanation-original">原文：With these properties it was soon being used in the manufacture of switches, household items such as knife handles, and electrical components for cars.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>British</td>
+            <td>
+              <p class="explanation-text">题干要求填写Polythene的起源地区，原文明确提到“20世纪30年代英国化学家（British chemists）发现乙烯在加热加压下聚合形成聚乙烯（polythene）”，故填此。</p>
+              <p class="explanation-original">原文：In the 1930s British chemists discovered that the gas ethylene would polymerize under heat and pressure to form a thermoplastic they called polythene.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>fireproof</td>
+            <td>
+              <p class="explanation-text">题干要求填写硬质PVC的特性，原文提到“将乙烯中的氢原子替换为氯原子可生成PVC，这是一种坚硬、防火（fireproof）的塑料，适用于排水管和排水沟”，核心特性为防火，故填此。</p>
+              <p class="explanation-original">原文：A small change in the starting material—replacing a hydrogen atom in ethylene with a chlorine atom—produced PVC (polyvinyl chloride), a hard, fireproof plastic suitable for drains and gutters.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>clear and glass-like</td>
+            <td>
+              <p class="explanation-text">题干要求填写Polystyrene的特性，原文明确描述其为“20世纪30年代德国研发的透明、类似玻璃（clear, glass-like）的材料”，故填此。</p>
+              <p class="explanation-original">原文：Polystyrene, developed during the 1930s in Germany, was a clear, glass-like material, used in food containers, domestic appliances and toys.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>rigid</td>
+            <td>
+              <p class="explanation-text">题干要求填写Polyurethanes泡沫的类型，原文提到“聚氨酯（Polyurethanes）以硬质泡沫（rigid foams）形式用作绝缘材料”，故填此。</p>
+              <p class="explanation-original">原文：Polyurethanes, also developed in Germany, found uses as adhesives, coatings, and—in the form of rigid foams—as insulation materials.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>FALSE</td>
+            <td>
+              <p class="explanation-text">题干称“塑料与橡胶的化学结构非常不同”，但原文指出“橡胶是聚合物，而塑料的制造同样基于聚合（polymerization）这一成键原理”，二者化学结构原理一致，故为FALSE。</p>
+              <p class="explanation-original">原文：Rubber is a polymer... The same bonding principle—polymerization—underlies the creation of a huge range of plastics by the chemical industry.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>NOT GIVEN</td>
+            <td>
+              <p class="explanation-text">题干称“John Wesley是著名化学家”，原文仅提到“John Wesley Hyatt发明赛璐珞并获奖”，未提及他是否为“著名”化学家或是否具备“化学家”身份，故为NOT GIVEN。</p>
+              <p class="explanation-original">原文：The prize was won by John Wesley Hyatt with a material called celluloid.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td>FALSE</td>
+            <td>
+              <p class="explanation-text">题干称“赛璐珞与酚醛塑料对热的反应相同”，但原文指出“赛璐珞是热塑性塑料，可反复加热软化重塑；酚醛塑料是热固性塑料，固化后加热无法软化重塑”，二者反应完全相反，故为FALSE。</p>
+              <p class="explanation-original">原文：Celluloid can be repeatedly softened and reshaped by heat, and is known as a thermoplastic... Bakelite... cannot be softened by heat and reshaped once they have set.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>11</td>
+            <td>TRUE</td>
+            <td>
+              <p class="explanation-text">题干称“不同种类塑料混合会使回收更困难”，原文提到“回收塑料并非易事，因为同一物品中常使用不同类型的塑料，需要不同的处理方式”，与题干表述一致，故为TRUE。</p>
+              <p class="explanation-original">原文：Nor is it very easy to recycle plastics, as different types of plastic are often used in the same items and call for different treatments.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>12</td>
+            <td>FALSE</td>
+            <td>
+              <p class="explanation-text">题干称“向塑料中添加淀粉可使其更耐用”，但原文指出“添加淀粉可使塑料可生物降解，淀粉会被细菌分解并导致塑料碎裂”，即耐用性下降，与题干矛盾，故为FALSE。</p>
+              <p class="explanation-original">原文：Plastics can be made biodegradable by incorporating into their structure a material such as starch, which is attacked by bacteria and causes the plastic to fall apart.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>13</td>
+            <td>TRUE</td>
+            <td>
+              <p class="explanation-text">题干称“部分塑料容器需在特殊条件下保存”，原文提到“添加了遇光降解材料的塑料瓶必须存放在暗处（特殊条件），以防使用前解体”，与题干表述一致，故为TRUE。</p>
+              <p class="explanation-original">原文：Other materials can be incorporated that gradually decay in sunlight—although bottles made of such materials have to be stored in the dark, to ensure that they do not disintegrate before they have been used.</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<!-- 文本选择工具栏 -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<!-- 笔记面板 -->
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<!-- 提示框 -->
+<div id="toast"></div>
+<script>
+// 计时器核心功能
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; // 计时器间隔ID，用于后续停止
+// 启动计时器
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+// 页面加载时启动计时器
+window.onload = startTimer;
+// 拖拽分隔线调整左右面板宽度
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isDragging = false;
+divider.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.clientX - containerRect.left;
+  // 限制最小宽度，防止面板过窄
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+});
+window.addEventListener('mouseup', () => {
+  if (isDragging) {
+    isDragging = false;
+    document.body.style.cursor = '';
+  }
+});
+// 触摸设备支持
+divider.addEventListener('touchstart', (e) => {
+  isDragging = true;
+  e.preventDefault();
+}, { passive: false });
+window.addEventListener('touchmove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.touches[0].clientX - containerRect.left;
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+}, { passive: false });
+window.addEventListener('touchend', () => {
+  isDragging = false;
+});
+// 文本高亮功能
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+// 定位选择工具栏
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    // 确保工具栏不超出视口
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+// 更新工具栏状态
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+// 监听文本选择事件
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+// 滚动时重新定位工具栏
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+// 点击高亮文本时显示工具栏
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+// 执行高亮
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    // 处理跨元素选择的情况
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+// 移除高亮
+function removeHighlight() {
+  if (currentHlNode) {
+    // 移除单个高亮元素
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize(); // 合并相邻文本节点
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  // 移除选择范围内的所有高亮
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      // 判断节点是否在选择范围内
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+// 绑定高亮按钮事件
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// 笔记功能
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+// 切换笔记面板显示
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+// 关闭笔记面板
+btnCloseNotes.addEventListener('click', toggleNotes);
+// 复制笔记
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+// 选中文本添加到笔记
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    // 滚动到笔记底部
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+// 提示框功能
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+// 字体设置功能
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+// 打开字体设置模态框
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+// 关闭字体设置模态框
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+// 点击模态框外部关闭
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+// 切换字体大小（影响所有元素）
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    // 移除所有字体类，添加选中的类
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    // 显示提示
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+  });
+});
+// 答案与评分功能（Submit后停止计时器）
+const answers = {
+  q1: 'photographic film',
+  q2: 'Bakelite',
+  q3: 'switches',
+  q4: 'British',
+  q5: 'fireproof',
+  q6: 'clear and glass-like',
+  q7: 'rigid',
+  q8: 'FALSE',
+  q9: 'NOT GIVEN',
+  q10: 'FALSE',
+  q11: 'TRUE',
+  q12: 'FALSE',
+  q13: 'TRUE'
+};
+// 评分函数（Submit后执行，包含停止计时器）
+function grade() {
+  // 1. 停止计时器
+  clearInterval(timerInterval);
+  
+  // 2. 计算得分
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  // 检查1-7题（表格填空，忽略大小写和空格差异）
+  for (let i = 1; i <= 7; i++) {
+    const qName = `q${i}`;
+    const input = document.getElementById(qName);
+    const userAns = input ? input.value.trim().toLowerCase().replace(/\s+/g, ' ') : 'No answer';
+    const correctAns = answers[qName].toLowerCase().replace(/\s+/g, ' ');
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers[qName]})`}`);
+  }
+  
+  // 检查8-13题（TRUE/FALSE/NOT GIVEN）
+  for (let i = 8; i <= 13; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 3. 显示结果
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  // 4. 展开答案面板
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  // 5. 标记所有题目为已回答
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+// 重置功能（重置计时器、选项、高亮等）
+function resetForm() {
+  // 1. 重置计时器
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  // 2. 重置1-7题填空题
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 3. 重置8-13题单选按钮
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 4. 重置结果和答案面板
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  // 5. 重置导航栏已回答状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  // 6. 重置笔记
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  // 7. 移除所有高亮
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+}
+// 滚动到指定题目
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  // 高亮导航项
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+// 监听输入，标记题目为已回答
+(function() {
+  // 监听填空题（1-7题）
+  for (let i = 1; i <= 7; i++) {
+    const input = document.getElementById(`q${i}`);
+    input.addEventListener('input', () => {
+      if (input.value.trim()) {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      } else {
+        document.getElementById(`q${i}-nav`).classList.remove('answered');
+      }
+    });
+  }
+  
+  // 监听单选按钮（8-13题）
+  for (let i = 8; i <= 13; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+})();
+</script>
+</body>
+</html>
