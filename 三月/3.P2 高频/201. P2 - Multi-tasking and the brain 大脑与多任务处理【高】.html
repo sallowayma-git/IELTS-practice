@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P2 – Multi-tasking and the brain</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+:root { 
+  --line: #e5e7eb; --bg: #f6f7fb; --panel: #fff; --accent: #3b82f6; 
+  --muted: #6b7280; --shadow: 0 6px 20px rgba(0,0,0,.12); 
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { 
+  margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+  background: var(--bg); padding-bottom: 70px; 
+}
+.shell { display: flex; height: 100vh; width: 100%; }
+.pane { background: var(--panel); overflow: auto; padding: 20px; }
+#left { flex: 0 0 50%; min-width: 280px; }
+#right { flex: 1 1 auto; min-width: 320px; background: #fbfbff; border-left: 1px solid var(--line); }
+#divider { flex: 0 0 8px; background: linear-gradient(90deg, #e5e7eb, #d1d5db); cursor: ew-resize; position: relative; z-index: 5; user-select: none; }
+h2, h3, h4 { margin: 0 0 10px; }
+#left p { margin: 0 0 12px; line-height: 1.6; }
+.group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+.blank { border:none; border-bottom:1px solid #9ca3af; padding:4px 2px; font-size:1em; background:transparent; width: 120px; margin: 0 4px; }
+.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+button { padding: 8px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+button:hover { background: #f8fafc; border-color: #cbd5e1; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.primary:hover { background: #2563eb; }
+.practice-nav { background: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 5px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+.practice-nav .title { font-weight: 600; color: var(--muted); }
+.practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; }
+.practice-nav .q-item:hover { background: #f1f5f9; border-color: var(--accent); }
+.practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+.practice-nav .q-item.active { background: var(--accent); color: #fff; }
+.practice-nav .controls { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+#timer { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.2s; min-width: 70px; text-align: center; font-size: 14px; font-weight: bold; }
+#timer:hover { background: #f1f5f9; border-color: var(--accent); }
+#timer.paused { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+.theme-toggle { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; width: 32px; height: 32px; font-size: 16px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+.theme-toggle:hover { background: var(--accent); color: #fff; border-color: var(--accent); transform: scale(1.05); }
+#selbar { position: absolute; display: none; z-index: 2000; background: #111; color: #fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+#selbar button { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+#selbar button:hover { border-color: #fff; }
+#notes { position: fixed; right: 12px; bottom: 85px; width: 320px; height: 42vh; background: #fff; border: 1px solid var(--line); border-radius: 12px; display: none; flex-direction: column; z-index: 1500; box-shadow: var(--shadow); }
+#notes header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+#notes textarea { flex: 1; border: 0; padding: 10px; resize: none; font-size: 14px; line-height: 1.5; background-color: inherit; color: inherit; }
+#toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 3000; font-size: 14px; }
+#results { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 16px 0; font-family: monospace; white-space: pre-wrap; }
+#results p { margin: 0 0 8px; }
+details.answerbox { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+details.answerbox summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+details.answerbox summary::-webkit-details-marker { display: none; }
+#answerContent { margin-top: 10px; }
+#answerContent ol { margin: 0; padding-left: 20px; }
+.hl { background: #fff3a3; }
+
+/* REVISED DRAG & DROP STYLES */
+.cardpool { background:#f1f5f9; border-radius:10px; padding:12px; margin-top: 12px; min-height: 48px; }
+
+/* New: Vertical Pool for long text options */
+.pool-vertical { display: flex; flex-direction: column; gap: 8px; }
+
+/* New: Full Text Card Style */
+.card { 
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; 
+    padding: 10px 14px; display: block; cursor: grab; 
+    box-shadow: 0 1px 3px rgba(0,0,0,.05); user-select: none;
+    font-size: 14px; line-height: 1.4; width: 100%;
+    text-align: left;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+.card:hover { border-color: var(--accent); background: #fcfcfc; }
+.card:active { cursor: grabbing; }
+.card.ghost { opacity: 0.5; background: #e2e8f0; }
+.card strong { color: var(--accent); margin-right: 6px; font-weight: 700; }
+
+/* New: Wide Dropzone Area */
+.dropzone { 
+    border: 2px dashed #cbd5e1; background: #f8fafc; border-radius: 8px; 
+    min-height: 50px; padding: 4px; 
+    display: flex; align-items: center; justify-content: center; 
+    width: 100%; margin-top: 6px;
+    transition: all 0.2s;
+}
+.dropzone.over { outline: 2px solid var(--accent); background: #eff6ff; border-color: var(--accent); }
+.dropzone .card { margin: 0; width: 100%; border: 1px solid var(--accent); box-shadow: none; background: #fff; }
+
+.match-row { margin-bottom: 20px; }
+.match-row .label { font-weight: 600; display: block; margin-bottom: 4px; color: #374151; }
+
+body.dark { --bg: #0f172a; --panel: #1e293b; --line: #334155; --muted: #94a3b8; color: #e2e8f0; }
+body.dark .pane, body.dark #right { background: var(--panel); }
+body.dark #right { background: #131c2d; }
+body.dark button, body.dark .theme-toggle { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark button:hover { background: #475569; }
+body.dark .group, body.dark #results, body.dark details.answerbox, body.dark .list-box, body.dark #notes { background: #1e293b; border-color: #334155; }
+body.dark .practice-nav { background: #1e293b; border-top-color: #334155; }
+body.dark .q-item { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark .q-item:hover { background: #475569; }
+body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+body.dark #timer { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark #timer.paused { background: #402323; color: #f87171; border-color: #7f1d1d; }
+body.dark .blank { color: #e2e8f0; border-bottom-color: #64748b; }
+body.dark .hl { background: #b45309; }
+body.dark .cardpool { background:#0f172a; }
+body.dark .card { background: #334155; border-color: #475569; color: #e2e8f0; }
+body.dark .dropzone { border-color: #475569; background: #131c2d; }
+body.dark .dropzone.over { background: #1e293b; }
+body.dark #notes textarea { background: #1e293b; color: #e2e8f0; }
+@media (max-width: 768px) {
+  .shell { flex-direction: column; }
+  #divider { display: none; }
+  #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- 1. Bottom Navigation Bar -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<!-- 2. Main Content Shell -->
+<div class="shell">
+  <!-- Left Pane: Reading Passage -->
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2</h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    
+    <h3>Multi-tasking and the brain</h3>
+  
+    <h4>A</h4>
+    <p>Do you think you're a master of multi-tasking? Think again. Unless you are one of the three percent of super-taskers in the population, research shows that your brain isn't capable of paying close attention to more than one complex task at a time. Researchers who study attention say that effective multi-tasking is beyond most of us. Psychiatrist Edward M Hallowell even describes multi-tasking as 'a mythical activity in which people believe they can perform two or more tasks simultaneously as effectively as they can perform one'.</p>
+
+    <h4>B</h4>
+    <p>It is true that you can check your email while eating your lunch, or listen to music while walking. But innate activities like walking, chewing, and breathing do not require you to pay attention, whereas activities such as reading, tapping out a text message, or driving a car do require attention. Why is paying attention to two things at once difficult? 'The brain can perform simultaneous tasks, but attention has capacity limitations,' says Associate Professor Paul E Dux, a cognitive neuroscientist at the University of Queensland in Australia. When you do only one thing at a time, you're better at that task than when you're doing multiple things concurrently.</p>
+    <p>Take the classic multi-tasking scenario of talking on a mobile phone while driving - an ill-advised activity that many people believe they have mastered. When David Strayer, Professor of Psychology at the University of Utah in the US, and his team observed 56,000 drivers as they approached an intersection, the majority of drivers who were talking on their phone failed to stop in accordance with traffic laws. And it did not matter if the driver was using a handheld or hands-free device. Even with both eyes on the road and both hands on the wheel, drivers' performance was impaired. Strayer's research shows that performance deteriorates drastically when attention is split between tasks: more mistakes are made and it takes longer to complete each activity.</p>
+
+    <h4>C</h4>
+    <p>The prefrontal cortex is the brain region responsible for choosing what to pay attention to, and for coordinating inputs from other brain areas. By scanning the prefrontal cortex of people while they multi-tasked, scientists at the French Institute of Health and Medical Research in Paris (INSERM) found that when people focused on a single thing, the right and left sides of the prefrontal cortex work together. But when people attempt to perform two things at once, the sides work independently. Neuroscientist Etienne Koechlin says his study demonstrates that while the brain can switch back and forth between two tasks, we might be in great trouble when we try to juggle more than two tasks, simply because we have only two frontal lobes'.</p>
+
+    <h4>D</h4>
+    <p>To the question of whether there is a difference between the sexes, Koechlin's imaging studies uncovered no differences in the ability to switch between tasks in the prefrontal cortices of men or women. But other researchers studying real life scenarios such as finding lost keys, believe there might be some truth to the claim that women are superior multi-taskers. Women have a much better strategy for finding the keys, whereas men tend to jump to it and be far less organised and thorough. 'It's as if they don't stop to reflect and plan for a moment,' says Professor Keith Laws from the University of Hertfordshire in England. But while the ability to develop strategies for coping with the numerous tasks in everyday life could give women an advantage, 'nobody can juggle two, never mind three, "complex" tasks at the same time.'</p>
+
+    <h4>E</h4>
+    <p>However, David Strayer's research uncovered that some rare people possess extraordinary multi-tasking ability. These so-called 'super-taskers' exhibit different patterns of brain activity when multi-tasking compared to ordinary people: they show less activity in the prefrontal cortex during multi-tasking, suggesting their brains are functioning with a high level of efficiency. Strayer thinks that pilots of high-performance aircraft, high-end chefs who can cook several meals at the same time to perfection, and elite doctors in hospital emergency rooms might all be more likely to be super-taskers. "All other things being equal, we suspect that super-taskers will rise to a top position in any occupation that places a high demand on juggling various tasks that demand attention at the same time.'</p>
+
+    <h4>F</h4>
+    <p>The ability to multi-task probably comes down to the DNA you inherit from your parents to a large extent, says Strayer. 'You are either born with the neural structure that allows you to overcome the usual multi-tasking challenges, or you aren't. Super-taskers' brains are doing something we can't do.' All in all, these findings may have very real consequences on our lives.</p>
+    
+    <p>&nbsp;</p> <!-- Final padding -->
+  </section>
+
+  <!-- Draggable Divider -->
+  <div id="divider" title="Drag to resize"></div>
+
+  <!-- Right Pane: Questions and Controls -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- QUESTION GROUP 1: Headings -->
+    <div class="group">
+      <h4>Questions 14–19</h4>
+      <p>Reading Passage 2 has six sections, <strong>A–F</strong>.</p>
+      <p>Choose the correct heading for each section from the list of headings below.</p>
+      <p><em>Drag the correct heading block to the box below each section label.</em></p>
+
+      <!-- Draggable Full Text Options -->
+      <div class="cardpool pool-vertical" id="pool-headings">
+        <div class="card" draggable="true" id="c-i" data-value="i"><strong>i</strong> Professions in which super-taskers are likely to be found</div>
+        <div class="card" draggable="true" id="c-ii" data-value="ii"><strong>ii</strong> The effects of multi-tasking on neurological structure</div>
+        <div class="card" draggable="true" id="c-iii" data-value="iii"><strong>iii</strong> A distinction between situations when people can and can’t multi-task</div>
+        <div class="card" draggable="true" id="c-iv" data-value="iv"><strong>iv</strong> Real multi-tasking is nearly impossible</div>
+        <div class="card" draggable="true" id="c-v" data-value="v"><strong>v</strong> Multi-tasking and gender</div>
+        <div class="card" draggable="true" id="c-vi" data-value="vi"><strong>vi</strong> The neurological reasons for struggling to manage more things</div>
+        <div class="card" draggable="true" id="c-vii" data-value="vii"><strong>vii</strong> The ability to multi-task is determined by people’s genes</div>
+        <div class="card" draggable="true" id="c-viii" data-value="viii"><strong>viii</strong> Gender and the structure of the brain</div>
+      </div>
+
+      <hr style="border:0; border-top:1px dashed var(--line); margin:20px 0;">
+
+      <div class="match-row">
+        <span class="label"><a id="q14-anchor"></a>14 Section A</span>
+        <span class="dropzone" data-target="q14"></span>
+      </div>
+      <div class="match-row">
+        <span class="label"><a id="q15-anchor"></a>15 Section B</span>
+        <span class="dropzone" data-target="q15"></span>
+      </div>
+      <div class="match-row">
+        <span class="label"><a id="q16-anchor"></a>16 Section C</span>
+        <span class="dropzone" data-target="q16"></span>
+      </div>
+      <div class="match-row">
+        <span class="label"><a id="q17-anchor"></a>17 Section D</span>
+        <span class="dropzone" data-target="q17"></span>
+      </div>
+      <div class="match-row">
+        <span class="label"><a id="q18-anchor"></a>18 Section E</span>
+        <span class="dropzone" data-target="q18"></span>
+      </div>
+      <div class="match-row">
+        <span class="label"><a id="q19-anchor"></a>19 Section F</span>
+        <span class="dropzone" data-target="q19"></span>
+      </div>
+    </div>
+
+    <!-- QUESTION GROUP 2: Researchers -->
+    <div class="group">
+      <h4>Questions 20–23</h4>
+      <p>Look at the following statements (Questions 20–23) and the list of researchers below.</p>
+      <p>Match each statement with the correct researcher, <strong>A–E</strong>.</p>
+      <p><em>NB You may use any researcher more than once.</em></p>
+
+      <!-- Draggable Full Text Options (Cloneable) -->
+      <div class="cardpool pool-vertical" id="pool-researchers">
+        <div class="card" draggable="true" id="card-A" data-value="A" data-clone="true"><strong>A</strong> Edward M Hallowell</div>
+        <div class="card" draggable="true" id="card-B" data-value="B" data-clone="true"><strong>B</strong> Paul E Dux</div>
+        <div class="card" draggable="true" id="card-C" data-value="C" data-clone="true"><strong>C</strong> David Strayer</div>
+        <div class="card" draggable="true" id="card-D" data-value="D" data-clone="true"><strong>D</strong> Etienne Koechlin</div>
+        <div class="card" draggable="true" id="card-E" data-value="E" data-clone="true"><strong>E</strong> Keith Laws</div>
+      </div>
+
+      <hr style="border:0; border-top:1px dashed var(--line); margin:20px 0;">
+
+      <div class="match-row">
+        <span class="label"><a id="q20-anchor"></a>20 The brain of a good multi-tasker works differently from other people’s.</span>
+        <span class="dropzone" data-target="q20"></span>
+      </div>
+      <div class="match-row">
+        <span class="label"><a id="q21-anchor"></a>21 The rate of error is considerably higher when people multi-task.</span>
+        <span class="dropzone" data-target="q21"></span>
+      </div>
+      <div class="match-row">
+        <span class="label"><a id="q22-anchor"></a>22 People are mistaken in their assumption that they can multi-task.</span>
+        <span class="dropzone" data-target="q22"></span>
+      </div>
+      <div class="match-row">
+        <span class="label"><a id="q23-anchor"></a>23 One gender does not seem to pause to consider before taking action.</span>
+        <span class="dropzone" data-target="q23"></span>
+      </div>
+    </div>
+
+    <!-- QUESTION GROUP 3: Summary -->
+    <div class="group">
+      <h4>Questions 24–26</h4>
+      <p>Complete the summary below.</p>
+      <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+      
+      <h3>Super-taskers</h3>
+      <p>Super-taskers are those of us who possess special multi-tasking ability. They can be found in all professions. People who are pilots, chefs and doctors are often super-taskers, and super-taskers are most likely to achieve a <a id="q24-anchor"></a><strong>24</strong> <input class="blank" type="text" name="q24"> that is high on the career ladder.</p>
+      
+      <p>Super-taskers typically have to undertake many tasks simultaneously that need their <a id="q25-anchor"></a><strong>25</strong> <input class="blank" type="text" name="q25">.</p>
+      
+      <p>Genes play an important role in having this capability: these people have a special brain <a id="q26-anchor"></a><strong>26</strong> <input class="blank" type="text" name="q26">, which helps them do what we cannot.</p>
+    </div>
+
+    <!-- Controls and Results -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<!-- 3. UI Helper Elements -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// --- MASTER JAVASCRIPT TEMPLATE ---
+
+// 1. STATE & ANSWERS
+const answers = {
+    q14: "iv",
+    q15: "iii",
+    q16: "vi",
+    q17: "v",
+    q18: "i",
+    q19: "vii",
+    q20: "c",
+    q21: "c",
+    q22: "a",
+    q23: "e",
+    q24: "position",
+    q25: "attention",
+    q26: "structure"
+};
+
+// 2. UI & INTERACTIVITY
+let timerSeconds = 0, timerInterval;
+let isTimerPaused = false;
+const timerEl = document.getElementById('timer');
+
+function toggleTimer() {
+    isTimerPaused = !isTimerPaused;
+    timerEl.classList.toggle('paused', isTimerPaused);
+    showToast(isTimerPaused ? 'Timer paused' : 'Timer resumed');
+}
+
+setInterval(() => {
+    if (!isTimerPaused) {
+        timerSeconds++;
+        const minutes = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+        const seconds = String(timerSeconds % 60).padStart(2, '0');
+        timerEl.textContent = `${minutes}:${seconds}`;
+    }
+}, 1000);
+
+function toggleDarkMode() {
+    document.body.classList.toggle('dark-mode');
+    document.body.classList.toggle('dark');
+    const isDark = document.body.classList.contains('dark-mode');
+    localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
+    document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️';
+}
+
+function scrollToElement(id) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function showToast(msg) {
+    const toastEl = document.getElementById('toast');
+    toastEl.textContent = msg;
+    toastEl.style.display = 'block';
+    setTimeout(() => { toastEl.style.display = 'none'; }, 1500);
+}
+
+// 3. DRAG AND DROP LOGIC
+document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', card.id);
+        setTimeout(() => card.classList.add('ghost'), 0);
+    });
+    card.addEventListener('dragend', () => card.classList.remove('ghost'));
+});
+
+document.querySelectorAll('.dropzone').forEach(zone => {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('over');
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        
+        if (!draggedCard) return;
+
+        const originPool = document.getElementById(draggedCard.dataset.originPool);
+        const cardToDrop = draggedCard.dataset.clone === 'true' ? draggedCard.cloneNode(true) : draggedCard;
+        
+        // Return existing card to its pool
+        if (zone.children.length > 0 && zone.children[0].classList.contains('card')) {
+            const existingCard = zone.children[0];
+            const itsOriginPool = document.getElementById(existingCard.dataset.originPool);
+            if (itsOriginPool) itsOriginPool.appendChild(existingCard);
+        }
+
+        zone.innerHTML = '';
+        zone.appendChild(cardToDrop);
+        
+        // Re-attach drag events for cloned cards
+        if (draggedCard.dataset.clone === 'true') {
+            cardToDrop.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', cardToDrop.id);
+                setTimeout(() => cardToDrop.classList.add('ghost'), 0);
+            });
+            cardToDrop.addEventListener('dragend', () => cardToDrop.classList.remove('ghost'));
+            
+            // Generate unique ID for the clone
+            cardToDrop.id = 'clone-' + Math.random().toString(36).substr(2, 9);
+            cardToDrop.dataset.originPool = draggedCard.dataset.originPool;
+        }
+
+        updateAnswerStatus();
+    });
+});
+
+document.querySelectorAll('.cardpool').forEach(pool => {
+    pool.addEventListener('dragover', e => e.preventDefault());
+    pool.addEventListener('drop', e => {
+        e.preventDefault();
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        if (draggedCard && draggedCard.parentElement.classList.contains('dropzone')) {
+            const oldZone = draggedCard.parentElement;
+            
+            // Logic: if it's a clone, destroy it. If it's unique, append back to pool.
+            if (draggedCard.dataset.clone === 'true') {
+                draggedCard.remove();
+            } else {
+                pool.appendChild(draggedCard);
+                // Optional: sort logic could go here to keep pool in order
+            }
+            
+            oldZone.innerHTML = ''; // Clear the dropzone
+            updateAnswerStatus();
+        }
+    });
+});
+
+// 4. GRADING & STATE MANAGEMENT
+function grade() {
+    let total = 0, correct = 0, lines = [];
+    
+    Object.keys(answers).forEach(qKey => {
+        const textInput = document.querySelector(`input[name="${qKey}"][type="text"]`);
+        const radioInput = document.querySelector(`input[name="${qKey}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qKey}"]`);
+        let userAnswer = '';
+        
+        if (textInput) {
+            userAnswer = textInput.value.trim();
+        } else if (radioInput) {
+            userAnswer = radioInput.value;
+        } else if (dropzone) {
+            const card = dropzone.querySelector('.card');
+            userAnswer = card ? card.dataset.value : '';
+        }
+        
+        const isCorrect = userAnswer.toLowerCase() === answers[qKey].toLowerCase();
+        
+        total++;
+        if (isCorrect) correct++;
+        
+        let resultLine = `${qKey.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : `❌ (Correct: ${answers[qKey]})`}`;
+        lines.push(resultLine);
+    });
+
+    const acc = total ? Math.round(100 * correct / total) : 0;
+    document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p><pre>${lines.join('\n')}</pre>`;
+    document.getElementById('answerContent').innerHTML = `<ol start="14">${Object.entries(answers).map(([key, val]) => `<li><strong>${key.replace('q','')}:</strong> ${val}</li>`).join('')}</ol>`;
+    document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+
+function resetForm() {
+    document.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
+    document.querySelectorAll('input[type="radio"]').forEach(input => input.checked = false);
+    document.querySelectorAll('.dropzone').forEach(zone => {
+        if (zone.children.length > 0) {
+            const card = zone.children[0];
+            const originPool = document.getElementById(card.dataset.originPool);
+            if (originPool && card.dataset.clone !== 'true') {
+                originPool.appendChild(card);
+            } else {
+                card.remove(); // Remove clones
+            }
+        }
+        zone.innerHTML = '';
+    });
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('answerContent').innerHTML = '';
+    document.querySelector('#answerBox .badge').textContent = 'hidden';
+    updateAnswerStatus();
+    showToast('Form has been reset');
+}
+
+function updateAnswerStatus() {
+    document.querySelectorAll('.q-item').forEach(item => {
+        const qNum = item.id.replace('-nav', '');
+        const textInput = document.querySelector(`input[name="${qNum}"][type="text"]`);
+        const radioInput = document.querySelector(`input[name="${qNum}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qNum}"]`);
+        let answered = false;
+        
+        if (textInput) answered = textInput.value.trim() !== '';
+        if (radioInput) answered = true;
+        if (dropzone) answered = !!dropzone.querySelector('.card');
+        
+        item.classList.toggle('answered', answered);
+    });
+}
+
+// 5. INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        toggleDarkMode();
+    }
+    document.querySelectorAll('input, .dropzone').forEach(el => {
+        el.addEventListener('input', updateAnswerStatus);
+        el.addEventListener('change', updateAnswerStatus);
+        el.addEventListener('drop', updateAnswerStatus);
+    });
+    
+    // Setup origin pool data for cards
+    document.querySelectorAll('.card').forEach(card => {
+        if (card.parentElement.classList.contains('cardpool')) {
+            card.dataset.originPool = card.parentElement.id;
+        }
+    });
+
+    // Load LMS script
+    if (!window.practicePageEnhancer) {
+        const script = document.createElement('script');
+        script.src = '../../js/practice-page-enhancer.js';
+        script.onload = () => console.log('Enhancer loaded.');
+        script.onerror = () => console.error('Failed to load enhancer.');
+        document.head.appendChild(script);
+    }
+});
+</script>
+
+</body>
+</html>

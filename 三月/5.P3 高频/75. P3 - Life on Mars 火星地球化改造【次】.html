@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Life on Mars? - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+   .custom-br {
+    display: block;
+    margin-bottom: 1300px;
+    content: "";
+  }
+  * {
+    line-height: 30px;
+  }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px;
+    --font-size-large: 20px;
+  }
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    font-size: inherit;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular);
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    color: #111827;
+    padding-bottom: 82px; 
+  }
+  .top-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: absolute; 
+    left:50%;
+    top: 10px;
+    display: inline-block; 
+    background:var(--panel); 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--panel);
+    cursor:pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+	position: absolute;
+	right: 10px;
+	top: 10px;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+    min-width: 280px;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+    font-size: inherit;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:calc(100vh - 82px);
+    width:100%; 
+    overflow: hidden;
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+    -webkit-overflow-scrolling: touch;
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4,h5 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+    font-size: inherit;
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: break-word; 
+    hyphens: auto; 
+  }
+  .paragraph-label {
+    font-weight: 600;
+    color: var(--accent);
+    margin-right: 8px;
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+    font-size: inherit;
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition: all 0.2s ease;
+    font-size: inherit;
+  }
+  button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+    transition: filter 0.2s ease;
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow:var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+    transform: none;
+    box-shadow: none;
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 94px; 
+    width: 320px; 
+    max-width: calc(100% - 24px); 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow:var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+    background: transparent;
+    font-size: inherit;
+  }
+  #notes textarea:focus {
+    outline: none;
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 94px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+    animation: fadeIn 0.3s, fadeOut 0.3s 1.2s;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translate(-50%, 20px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+  }
+  @keyframes fadeOut {
+    from { opacity: 1; transform: translate(-50%, 0); }
+    to { opacity: 0; transform: translate(-50%, 20px); }
+  }
+  .heading-options, .true-false-options, .multiple-choice-options, .summary-options {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:6px 0;
+  }
+  /* 修改选择题选项为竖向排列 */
+  .multiple-choice-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 0;
+  }
+  .heading-options .heading-option, .true-false-options label, .multiple-choice-options label, .summary-options label {
+    cursor:pointer;
+    padding:4px 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    transition: all 0.2s;
+    font-size: inherit;
+  }
+  .multiple-choice-options label {
+    display: block;
+    padding: 6px 10px;
+    margin-bottom: 4px;
+  }
+  .heading-options .heading-option:hover, .true-false-options label:hover, .multiple-choice-options label:hover, .summary-options label:hover {
+    background:#f1f5f9;
+    border-color:var(--accent);
+    color:var(--accent);
+  }
+  input.blank {
+    width: 140px;
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    font-size: inherit;
+  }
+  input.blank:focus {
+    outline: none;
+    border-color:var(--accent);
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  .word-limit {
+    color: var(--muted);
+    font-size: 0.9em;
+    margin: 4px 0 8px;
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-top:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+    overflow-x: auto;
+    padding-bottom: 4px;
+    max-width: calc(100% - 80px);
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+    flex-shrink:0;
+    font-size: inherit;
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: inherit;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+    font-size: inherit;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  ul {
+    list-style-type: none;
+    padding-left: 20px;
+    margin: 8px 0;
+    font-size: inherit;
+  }
+  ul li::before {
+    content: "- ";
+    color: inherit;
+    font-weight: 500;
+  }
+  @media (max-width: 768px) {
+    .shell {
+      flex-direction: column;
+      height: auto;
+      min-height: calc(100vh - 82px);
+    }
+    #left, #right {
+      flex: none;
+      width: 100%;
+      min-width: auto;
+      max-height: 50vh;
+    }
+    #divider {
+      flex: none;
+      height: 8px;
+      width: 100%;
+      cursor: ns-resize;
+      background: linear-gradient(0deg,var(--line),#d1d5db);
+    }
+    .practice-nav .questions {
+      max-width: calc(100% - 60px);
+    }
+    .top-controls {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    #timer-container {
+      align-self: flex-end;
+      margin-top: -28px;
+    }
+    input.blank {
+      width: 100px;
+    }
+  }
+</style>
+</head>
+<body class="font-regular">
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+</div>
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (16px - Default)</div>
+  <div class="font-option" data-size="moderate">Moderate (18px - Larger)</div>
+  <div class="font-option" data-size="large">Large (20px - Largest)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+	<div id="top" class="top" style="background-color: #bb5252; width: 100%; height: 60px;">
+        <h3 style="font-size: 23px;line-height: 55px;margin-left: 10px;">Life on Mars?</h3>
+		 <div id="timer-container" >
+        <div id="timer" style="margin: 0px auto;">00:00</div>
+        <button id="settingsBtn" onclick="openSettingsModal()">
+          Settings
+        </button>
+      </div>
+	</div>
+<div class="shell">
+  <section class="pane" id="left">
+    You should spend about 20 minutes on Questions 27-40, which are based on Reading Passage 3 below.</br><p></p><p></p>
+    <h3>Life on Mars?</h3>
+    <p><i>Terraforming may sound like something out of science fiction, but some believe it is possible to turn that fiction into fact.</i></p>
+   
+    <span class="paragraph-label">A</span> As plans are slowly being drawn up for the first manned mission to Mars, many space-travel sceptics are asking one vital question: why go there? Mars is a barren, desolate planet, and with its thin atmosphere and bitterly cold climate, it would appear to be completely unsuitable for human life. Above all, it is a very distant place, and getting there would be an enormous challenge. However, the planet might just hold the key to long-term human survival. With the Earth's population currently at more than seven billion and climbing, we may eventually be forced to look elsewhere in the solar system for somewhere to live. It is just possible that, contrary to photographic evidence, Mars may be more promising than it appears.</br><p></p>
+    
+    <span class="paragraph-label">B</span> Today, Mars is a viciously cold, dry place. However, it does have some things in common with our own planet. For example, it has a daily rotation rate of 24 hours 37 minutes, compared with 23 hours 56 minutes on Earth. It also has an axial tilt of 24 degrees, which is just half a degree more than Earth's, and a gravitational pull one third of Earth's. Furthermore, it holds many of the elements that are required to support life, including carbon and oxygen (in the form of carbon dioxide), nitrogen, and frozen water at its polar ice caps. In fact, if you were to travel back in time several billion years, you would notice some remarkable parallels between the atmosphere on Earth then and Mars today. Back then, Earth was also a lifeless planet; until photosynthetic bacteria developed and began to produce enough oxygen to allow for the development of animal and plant life, our atmosphere also consisted entirely of carbon dioxide and nitrogen.</br><p></p>
+    
+    <span class="paragraph-label">C</span> It comes as no surprise to learn, therefore, that some scientists believe the same process which turned Earth's atmosphere from mostly carbon dioxide into breathable air could be repeated on Mars, but by using technology rather than by letting nature and evolution take its natural course. Terraforming, as this process is known, would initially create a greenhouse effect that would heat the planet, which in turn would create other conditions necessary to provide a suitable living environment for plants and animals. However, it would be a highly challenging undertaking, and the process of terraforming the entire planet into an Earth-like habitat could still take many thousands of years.</br><p></p>
+    
+    <span class="paragraph-label">D</span> Three terraforming methods have been suggested, with the first already under development, albeit for a different purpose. At present, the American space agency NASA is working on a system that will use large mirrors to capture the Sun's radiation. This radiation will be used to propel spacecraft through space, removing the need for heavy and expensive rocket fuel. With a few changes, it might be possible to use similar mirrors to reflect the Sun's radiation and heat the surface of Mars. Aimed at the planet from a distance of two hundred thousand miles, these enormous mirrors would raise the surface temperature by a few degrees. If they were concentrated on the polar ice caps, they would provide enough heat to melt the polar ice caps and release the carbon dioxide that is believed to be trapped there. Gradually, as the temperature rose, greenhouse gases would be released, and this would create a form of Martian global warming, the first stage in making the planet sustainable for life.</br><p></p>
+    
+    <span class="paragraph-label">E</span> The second method would be to set up greenhouse-gas 'factories' in order to raise the temperature of the planet. It is generally accepted that greenhouse gases produced by heavy industry are raising the Earth's temperature. Therefore, by building hundreds of greenhouse-gas-emitting factories on Mars, a similar effect could be achieved. Carbon dioxide, methane and other greenhouse gases would be pumped into the Martian atmosphere. The same factories would then produce oxygen by mimicking the natural process of plant photosynthesis: they would inhale the carbon dioxide they produce, and then emit oxygen. The process could be accelerated by 'sowing the planet's surface with photosynthetic bacteria', which would increase the rate at which oxygen is produced. Eventually, there would be enough oxygen on the planet for humans to breathe using only special apparatus similar to that used by mountain climbers.</br><p></p>
+    
+    <span class="paragraph-label">F</span> The third, and by far the most extreme, method has been proposed by space scientists Robert Zubrin and Christopher McKay. They believe that it would be possible to produce greenhouse gases and water by firing large, ammonia-bearing asteroids at the planet. Each asteroid would weigh about ten billion tons, and would be powered by huge rocket engines which would move it towards Mars at over 10,000 miles per hour. At this speed, it would take each asteroid about ten years to reach its destination. The energy produced by one asteroid slamming into Mars' surface, say Zubrin and McKay, would raise the temperature of the planet by three degrees Celsius and melt about one thousand billion tons of ice at the polar caps. They believe it would take many of these asteroids, and at least fifty years, in order to create a temperate climate and enough water to cover a quarter of the planet's surface.</br><p></p>
+    
+    <span class="paragraph-label">G</span> Terraforming Mars, if it is ever attempted, will be neither cheap nor easy. And it certainly won't be quick: although optimists like Zubrin and McKay say it could be achieved in five or six decades, the reality is that terraforming is more likely to take hundreds or even thousands of years. Furthermore, it will stretch human ingenuity to its limits, and will require levels of will and commitment that have rarely been seen before. The challenge of developing a habitable environment and bringing life to the cold, dry world of Mars is fraught with challenges, but it might just be one that saves the human race.</br><p></p>
+    
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+  </section>
+  
+  <div id="divider" title="Drag to resize"></div>
+  
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 27–31</h4>
+      Do the following statements agree with the views of the writer in the Reading passage 3?</br><p></p>
+      In boxes 27-31 on your answer sheet, write</br><p></p>
+      <strong>YES</strong> if the statement agrees with the writer's view</br><p></p>
+      <strong>NO</strong> if the statement contradicts the writer's view</br><p></p>
+      <strong>NOT GIVEN</strong> if it is impossible to say what the writer thinks about this</br><p></p>
+      
+      <a id="q27-anchor"></a>
+      <div id="q27-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">27.</span> Pictures of Mars suggest it might make a good place for people to settle.</br><p></p>
+        <div class="true-false-options">
+          <label><input name="q27" type="radio" value="YES"> YES</label>
+          <label><input name="q27" type="radio" value="NO"> NO</label>
+          <label><input name="q27" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q28-anchor"></a>
+      <div id="q28-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">28.</span> Modern Mars and ancient Earth looked remarkably similar.</br><p></p>
+        <div class="true-false-options">
+          <label><input name="q28" type="radio" value="YES"> YES</label>
+          <label><input name="q28" type="radio" value="NO"> NO</label>
+          <label><input name="q28" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q29-anchor"></a>
+      <div id="q29-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">29.</span> One method of terraforming could involve adapting technology that is already under development.</br><p></p>
+        <div class="true-false-options">
+          <label><input name="q29" type="radio" value="YES"> YES</label>
+          <label><input name="q29" type="radio" value="NO"> NO</label>
+          <label><input name="q29" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q30-anchor"></a>
+      <div id="q30-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">30.</span> Greenhouse-gas factories would provide enough oxygen for people to breathe without special equipment.</br><p></p>
+        <div class="true-false-options">
+          <label><input name="q30" type="radio" value="YES"> YES</label>
+          <label><input name="q30" type="radio" value="NO"> NO</label>
+          <label><input name="q30" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q31-anchor"></a>
+      <div id="q31-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">31.</span> Terraforming Mars would be an extreme test of human skill and intelligence.</br><p></p>
+        <div class="true-false-options">
+          <label><input name="q31" type="radio" value="YES"> YES</label>
+          <label><input name="q31" type="radio" value="NO"> NO</label>
+          <label><input name="q31" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 32–35</h4>
+      Choose the correct letter, A, B, C or D.</br><p></p>
+      Write the correct letter in boxes 32-35 on your answer sheet.</br><p></p>
+      
+      <a id="q32-anchor"></a>
+      <div id="q32-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">32.</span> Which one of these factors suggests that Mars might be a good place for people to settle?</br><p></p>
+        <div class="multiple-choice-options">
+          <label><input name="q32" type="radio" value="A"> A It is not too far from Earth.</label>
+          <label><input name="q32" type="radio" value="B"> B It has no other life forms living there.</label>
+          <label><input name="q32" type="radio" value="C"> C It has a cool, dry climate.</label>
+          <label><input name="q32" type="radio" value="D"> D It has some similarities with Earth.</label>
+        </div>
+      </div>
+      
+      <a id="q33-anchor"></a>
+      <div id="q33-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">33.</span> The first step in terraforming Mars would be to</br><p></p>
+        <div class="multiple-choice-options">
+          <label><input name="q33" type="radio" value="A"> A make the planet warmer.</label>
+          <label><input name="q33" type="radio" value="B"> B create a breathable atmosphere.</label>
+          <label><input name="q33" type="radio" value="C"> C find a suitable source of water.</label>
+          <label><input name="q33" type="radio" value="D"> D create a habitat for living organisms.</label>
+        </div>
+      </div>
+      
+      <a id="q34-anchor"></a>
+      <div id="q34-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">34.</span> Special factories on Mars could be used to</br><p></p>
+        <div class="multiple-choice-options">
+          <label><input name="q34" type="radio" value="A"> A control the level of greenhouse gases.</label>
+          <label><input name="q34" type="radio" value="B"> B absorb excess levels of carbon dioxide.</label>
+          <label><input name="q34" type="radio" value="C"> C produce oxygen in a manner similar to plants.</label>
+          <label><input name="q34" type="radio" value="D"> D help grow essential bacteria.</label>
+        </div>
+      </div>
+      
+      <a id="q35-anchor"></a>
+      <div id="q35-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">35.</span> What is the writer's main purpose in the passage?</br><p></p>
+        <div class="multiple-choice-options">
+          <label><input name="q35" type="radio" value="A"> A To explain why we need to terraform Mars.</label>
+          <label><input name="q35" type="radio" value="B"> B To illustrate the three processes required to terraform a planet like Mars.</label>
+          <label><input name="q35" type="radio" value="C"> C To consider how and why Mars might be terraformed.</label>
+          <label><input name="q35" type="radio" value="D"> D To demonstrate how straightforward it would be to terraform a planet.</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 36–40</h4>
+      Complete the summary using a word A–I from the box.</br><p></p>
+      Write the correct letter, A-I, in boxes 36-40 on your answer sheet.</br><p></p>
+      
+      <p>One method of terraforming Mars would be to <span class="question-number"><a id="q36-anchor"></a>36.</span> ______ asteroids at the planet.</p>
+      <p>Rockets attached to an enormous asteroid would propel it towards Mars, taking ten years to <span class="question-number"><a id="q37-anchor"></a>37.</span> ______ the enormous distances required.</p>
+      <p>The asteroid would <span class="question-number"><a id="q38-anchor"></a>38.</span> ______ the planet with incredible force and <span class="question-number"><a id="q39-anchor"></a>39.</span> ______ enough energy to <span class="question-number"><a id="q40-anchor"></a>40.</span> ______ the planet's temperature.</p>
+      <p>The result would be a temperate climate and lots of water from melting ice caps.</p>
+      
+      <div style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+        <strong>Word Bank:</strong>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px;">
+          <span style="padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px;">A cover</span>
+          <span style="padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px;">B create</span>
+          <span style="padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px;">C hit</span>
+          <span style="padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px;">D increase</span>
+          <span style="padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px;">E land</span>
+          <span style="padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px;">F drive</span>
+          <span style="padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px;">G power</span>
+          <span style="padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px;">H rise</span>
+          <span style="padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px;">I shoot</span>
+        </div>
+      </div>
+      
+      <div style="margin-top: 15px;">
+        <div style="margin-bottom: 10px;">
+          <span class="question-number">36.</span>
+          <div class="summary-options">
+            <label><input name="q36" type="radio" value="A"> A</label>
+            <label><input name="q36" type="radio" value="B"> B</label>
+            <label><input name="q36" type="radio" value="C"> C</label>
+            <label><input name="q36" type="radio" value="D"> D</label>
+            <label><input name="q36" type="radio" value="E"> E</label>
+            <label><input name="q36" type="radio" value="F"> F</label>
+            <label><input name="q36" type="radio" value="G"> G</label>
+            <label><input name="q36" type="radio" value="H"> H</label>
+            <label><input name="q36" type="radio" value="I"> I</label>
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 10px;">
+          <span class="question-number">37.</span>
+          <div class="summary-options">
+            <label><input name="q37" type="radio" value="A"> A</label>
+            <label><input name="q37" type="radio" value="B"> B</label>
+            <label><input name="q37" type="radio" value="C"> C</label>
+            <label><input name="q37" type="radio" value="D"> D</label>
+            <label><input name="q37" type="radio" value="E"> E</label>
+            <label><input name="q37" type="radio" value="F"> F</label>
+            <label><input name="q37" type="radio" value="G"> G</label>
+            <label><input name="q37" type="radio" value="H"> H</label>
+            <label><input name="q37" type="radio" value="I"> I</label>
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 10px;">
+          <span class="question-number">38.</span>
+          <div class="summary-options">
+            <label><input name="q38" type="radio" value="A"> A</label>
+            <label><input name="q38" type="radio" value="B"> B</label>
+            <label><input name="q38" type="radio" value="C"> C</label>
+            <label><input name="q38" type="radio" value="D"> D</label>
+            <label><input name="q38" type="radio" value="E"> E</label>
+            <label><input name="q38" type="radio" value="F"> F</label>
+            <label><input name="q38" type="radio" value="G"> G</label>
+            <label><input name="q38" type="radio" value="H"> H</label>
+            <label><input name="q38" type="radio" value="I"> I</label>
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 10px;">
+          <span class="question-number">39.</span>
+          <div class="summary-options">
+            <label><input name="q39" type="radio" value="A"> A</label>
+            <label><input name="q39" type="radio" value="B"> B</label>
+            <label><input name="q39" type="radio" value="C"> C</label>
+            <label><input name="q39" type="radio" value="D"> D</label>
+            <label><input name="q39" type="radio" value="E"> E</label>
+            <label><input name="q39" type="radio" value="F"> F</label>
+            <label><input name="q39" type="radio" value="G"> G</label>
+            <label><input name="q39" type="radio" value="H"> H</label>
+            <label><input name="q39" type="radio" value="I"> I</label>
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 10px;">
+          <span class="question-number">40.</span>
+          <div class="summary-options">
+            <label><input name="q40" type="radio" value="A"> A</label>
+            <label><input name="q40" type="radio" value="B"> B</label>
+            <label><input name="q40" type="radio" value="C"> C</label>
+            <label><input name="q40" type="radio" value="D"> D</label>
+            <label><input name="q40" type="radio" value="E"> E</label>
+            <label><input name="q40" type="radio" value="F"> F</label>
+            <label><input name="q40" type="radio" value="G"> G</label>
+            <label><input name="q40" type="radio" value="H"> H</label>
+            <label><input name="q40" type="radio" value="I"> I</label>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <div id="results"></div>
+    
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>27</td>
+            <td>NO</td>
+            <td>
+              <span class="explanation-text">题干"火星照片显示它可能是适合人类定居的好地方"，第1段末句明确说"与照片证据相反，火星可能比看起来更有前景"，说明照片显示不适合居住。</br><p></p>
+              <span class="explanation-original">原文：It is just possible that, contrary to photographic evidence, Mars may be more promising than it appears. (Paragraph A)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>28</td>
+            <td>NOT GIVEN</td>
+            <td>
+              <span class="explanation-text">题干"现代火星与远古地球看起来非常相似"，第2段提到大气层存在显著相似，但未提及整体外观相似，题干把"相似"泛化为整体外观，信息超出原文。</br><p></p>
+              <span class="explanation-original">原文：you would notice some remarkable parallels between the atmosphere on Earth then and Mars today. (Paragraph B)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>29</td>
+            <td>YES</td>
+            <td>
+              <span class="explanation-text">题干"一种地球化方法可能涉及改造已在开发中的技术"，第4段提到NASA正在开发大型镜子技术，经过改造可用于加热火星。</br><p></p>
+              <span class="explanation-original">原文：At present, NASA is working on a system that will use large mirrors... With a few changes, it might be possible to use similar mirrors to reflect the Sun's radiation and heat the surface of Mars. (Paragraph D)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>30</td>
+            <td>NO</td>
+            <td>
+              <span class="explanation-text">题干"温室气体工厂将提供足够氧气，无需特殊设备"，第5段明确说"最终，行星上将有足够氧气，但人类仍需类似登山者使用的专门装置"。</br><p></p>
+              <span class="explanation-original">原文：Eventually, there would be enough oxygen on the planet for humans to breathe using only special apparatus similar to that used by mountain climbers. (Paragraph E)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>31</td>
+            <td>YES</td>
+            <td>
+              <span class="explanation-text">题干"火星地球化将是对人类技能与智慧的极限考验"，第7段提到"将把人类创造力推向极限，需要前所未有的意志和承诺"。</br><p></p>
+              <span class="explanation-original">原文：It will stretch human ingenuity to its limits, and will require levels of will and commitment that have rarely been seen before. (Paragraph G)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>32</td>
+            <td>D</td>
+            <td>
+              <span class="explanation-text">题干"哪一因素表明火星可能适合人类定居"，第2段以"与地球的相似性"作为支持论点。</br><p></p>
+              <span class="explanation-original">原文：However, it does have some things in common with our own planet... (Paragraph B)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>33</td>
+            <td>A</td>
+            <td>
+              <span class="explanation-text">题干"火星地球化的第一步是"，第3段提到地球化"最初会产生温室效应使行星变暖"。</br><p></p>
+              <span class="explanation-original">原文：Terraforming... would initially create a greenhouse effect that would heat the planet. (Paragraph C)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>34</td>
+            <td>C</td>
+            <td>
+              <span class="explanation-text">题干"火星上的特殊工厂可用于"，第5段提到"工厂通过模拟植物光合作用的自然过程产生氧气"。</br><p></p>
+              <span class="explanation-original">原文：The same factories would then produce oxygen by mimicking the natural process of plant photosynthesis. (Paragraph E)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>35</td>
+            <td>C</td>
+            <td>
+              <span class="explanation-text">题干"作者在文章中的主要目的是"，文章提及"为什么可能需要"（人口、长期生存），也谈"怎么做"（三种方法），评估难度与代价。</br><p></p>
+              <span class="explanation-original">结合全文，特别是第1-3、7段的内容。</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>36</td>
+            <td>I</td>
+            <td>
+              <span class="explanation-text">对应第6段"by firing large, ammonia-bearing asteroids at the planet"，firing = shoot。</br><p></p>
+              <span class="explanation-original">原文：by firing large, ammonia-bearing asteroids at the planet. (Paragraph F)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>37</td>
+            <td>A</td>
+            <td>
+              <span class="explanation-text">"覆盖所需巨大距离"常规搭配 cover the distance。</br><p></p>
+              <span class="explanation-original">原文：At this speed, it would take each asteroid about ten years to reach its destination. (Paragraph F)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>38</td>
+            <td>C</td>
+            <td>
+              <span class="explanation-text">对应第6段"slam into"，意为 hit。</br><p></p>
+              <span class="explanation-original">原文：The energy produced by one asteroid slamming into Mars' surface... (Paragraph F)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>39</td>
+            <td>B</td>
+            <td>
+              <span class="explanation-text">"产生/创造能量"对应 create energy。</br><p></p>
+              <span class="explanation-original">原文：The energy produced by one asteroid slamming into Mars' surface... would raise the temperature... (Paragraph F)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>40</td>
+            <td>D</td>
+            <td>
+              <span class="explanation-text">"提高行星温度"对应 increase the planet's temperature。</br><p></p>
+              <span class="explanation-original">原文：The energy produced by one asteroid... would raise the temperature of the planet... (Paragraph F)</br><p></p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; 
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+window.onload = startTimer;
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+    localStorage.setItem('fontSize', size);
+  });
+});
+document.addEventListener('DOMContentLoaded', function() {
+  const savedFontSize = localStorage.getItem('fontSize');
+  if (savedFontSize) {
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${savedFontSize}`);
+  }
+});
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+  if (notesPanel.style.display === 'flex') {
+    noteArea.focus();
+  }
+}
+btnCloseNotes.addEventListener('click', toggleNotes);
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+const answers = {
+  q27: 'NO',
+  q28: 'NOT GIVEN',
+  q29: 'YES',
+  q30: 'NO',
+  q31: 'YES',
+  q32: 'D',
+  q33: 'A',
+  q34: 'C',
+  q35: 'C',
+  q36: 'I',
+  q37: 'A',
+  q38: 'C',
+  q39: 'B',
+  q40: 'D'
+};
+function grade() {
+  clearInterval(timerInterval);
+  
+  let total = 14;
+  let correct = 0;
+  const resultLines = [];
+  
+  for (let i = 27; i <= 31; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  for (let i = 32; i <= 35; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  for (let i = 36; i <= 40; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</br><p></p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+function resetForm() {
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+  
+  showToast('Practice reset');
+}
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+(function() {
+  for (let i = 27; i <= 40; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+})();
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isResizing = false;
+divider.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  
+  const containerWidth = leftPane.parentElement.offsetWidth;
+  const mousePosition = e.clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const leftWidthPercent = (mousePosition / containerWidth) * 100;
+  
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+});
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    document.body.style.cursor = '';
+  }
+});
+divider.addEventListener('touchstart', (e) => {
+  isResizing = true;
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.addEventListener('touchmove', (e) => {
+  if (!isResizing) return;
+  
+  const containerWidth = leftPane.parentElement.offsetWidth;
+  const touch = e.touches[0];
+  const touchPosition = touch.clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const leftWidthPercent = (touchPosition / containerWidth) * 100;
+  
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+  
+  e.preventDefault();
+  e.stopPropagation();
+});
+document.addEventListener('touchend', () => {
+  if (isResizing) {
+    isResizing = false;
+  }
+});
+</script>
+</body>
+</html>

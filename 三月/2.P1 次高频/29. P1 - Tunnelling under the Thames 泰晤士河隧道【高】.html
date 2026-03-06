@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Tunnelling under the Thames - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    /* 字体大小变量 - 基础regular，逐级放大 */
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px; /* 比regular大1号 */
+    --font-size-large: 20px;    /* 比moderate大1号 */
+  }
+  /* 字体大小类 - 所有元素继承 */
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    font-size: inherit; /* 所有元素继承父级字体大小 */
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular); /* 默认regular */
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: static; 
+    display: inline-block; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:#fff;
+    cursor:pointer;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:100vh; 
+    width:100%; 
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: normal; 
+    hyphens: none; 
+  }
+  .paragraph-label {
+    font-weight: 600;
+    color: var(--accent);
+    margin-right: 8px;
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow: var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 12px; 
+    width: 320px; 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow: var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 24px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+  }
+  .answer-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin:4px 0 8px;
+  }
+  .answer-option label {
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:4px;
+  }
+  .para-match-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:6px 0;
+  }
+  .para-match-option label {
+    cursor:pointer;
+    padding:4px 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    transition: all 0.2s;
+  }
+  .para-match-option label:hover {
+    background:#f1f5f9;
+    border-color:var(--accent);
+  }
+  input.blank {
+    width: 120px; /* 适配填空长度 */
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  body { 
+    padding-bottom: 82px; 
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-bottom:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    border-top:2px solid var(--line); 
+    border-bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  /* 判断题选项样式 */
+  .tf-option {
+    display:flex;
+    gap:12px;
+    margin:6px 0;
+  }
+  .tf-option label {
+    cursor:pointer;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    transition: all 0.2s;
+    min-width: 70px;
+    text-align:center;
+  }
+  .tf-option label:hover {
+    background:#f1f5f9;
+    border-color:var(--accent);
+  }
+  /* 列表样式：移除默认黑点，替换为短横线 */
+  ul {
+    list-style-type: none;
+    padding-left: 20px;
+    margin: 8px 0;
+  }
+  ul li::before {
+    content: "- ";
+    color: inherit;
+    font-weight: 500;
+  }
+  .summary-text {
+    line-height: 1.6;
+    margin: 8px 0;
+  }
+</style>
+</head>
+<body class="font-regular">
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" onclick="scrollToElement('q1-anchor')">1</div>
+    <div class="q-item" id="q2-nav" onclick="scrollToElement('q2-anchor')">2</div>
+    <div class="q-item" id="q3-nav" onclick="scrollToElement('q3-anchor')">3</div>
+    <div class="q-item" id="q4-nav" onclick="scrollToElement('q4-anchor')">4</div>
+    <div class="q-item" id="q5-nav" onclick="scrollToElement('q5-anchor')">5</div>
+    <div class="q-item" id="q6-nav" onclick="scrollToElement('q6-anchor')">6</div>
+    <div class="q-item" id="q7-nav" onclick="scrollToElement('q7-anchor')">7</div>
+    <div class="q-item" id="q8-nav" onclick="scrollToElement('q8-anchor')">8</div>
+    <div class="q-item" id="q9-nav" onclick="scrollToElement('q9-anchor')">9</div>
+    <div class="q-item" id="q10-nav" onclick="scrollToElement('q10-anchor')">10</div>
+    <div class="q-item" id="q11-nav" onclick="scrollToElement('q11-anchor')">11</div>
+    <div class="q-item" id="q12-nav" onclick="scrollToElement('q12-anchor')">12</div>
+    <div class="q-item" id="q13-nav" onclick="scrollToElement('q13-anchor')">13</div>
+  </div>
+</div>
+<!-- 字体设置模态框 -->
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (Default - 16px)</div>
+  <div class="font-option" data-size="moderate">Moderate (Larger - 18px)</div>
+  <div class="font-option" data-size="large">Large (Largest - 20px)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 1 
+      <div id="timer-container">
+        <span id="timer">00:00</span>
+        <button id="settingsBtn" onclick="openSettingsModal()">Settings</button>
+      </div>
+    </h2>
+    <p>You should spend about 20 minutes on Questions 1-13, which are based on Reading Passage 1 below.</p>
+    
+    <h3>Tunnelling under the Thames</h3>
+    
+    <p>The first tunnel ever to be built under a major river was the tunnel under London's River Thames.</p>
+    
+    <p>At the beginning of the 19th century, the port of London was the busiest in the world. Cargoes that had travelled thousands of miles and survived all the hazards of the sea were unloaded on the banks of the Thames, only for their owners to discover that the most frustrating portion of their journey lay ahead. Consignments intended for the southern parts of Britain had to be lifted onto horse carts, pulled through the docks and across London Bridge, built in the 12th century and as impractical as its early date implies. By 1820, London Bridge had become the centre of the world's largest traffic jam.</p>
+    
+    <p>It was an intolerable situation, and it was clear that if private enterprise could build another crossing closer to the docks, there would be good money to be made in tolls paid by users. Another bridge was out of the question, as this would deny sailing ships access to the city centre, and ambitious men turned their thoughts to tunnelling beneath the Thames instead. This was not such an obvious idea as it might appear. Although increasing demand for coal had meant a great many tunnels had been dug in mines in Britain, working methods remained primitive. Tunnels were dug by men with simple tools, by candlelight. However, in 1807, a group of businessmen got themselves up as the Thames Archway Company. Their ambition was to tunnel below the Thames, but there was little to guide them as there had been no previous attempt to do this. Their chief engineer was Richard Trevithick, designer of the world's first high-pressure steam engine. His men made progress at the beginning, but then things began to go disastrously wrong, with muddy soil pouring into the tunnel. Eventually the Thames Archway Company had had enough. Its funds were exhausted, Trevithick was sick from exposure to the river water, and its efforts had proved only that a passage under the river exceeded the limits of contemporary mining technology.</p>
+    
+    <p>At that time, the only machines used in mines were pumps. It took a man of genius to recognise that a different sort of machine was needed, a machine that could prevent the roof and walls of a tunnel from collapsing. This man was Marc Brunel, a Frenchman who had become one of the most prominent engineers in Britain. Not long after the failure of the Thames Archway Company, Brunel saw a rotten piece of wood lying on the river bank. Examining the wood through a magnifying glass, he observed it was infested with something that looked like a worm. Brunel realised that as it tunnelled through the wood, it would push chewed wood into its mouth and digest it, then excrete a hard substance that lined the new tunnel. Brunel realised that the worm's digging technique could be adapted to produce a new way of tunnelling. His realisation led him to invent a device that has been used in one form or another in most major tunnels built since: the tunnelling shield. It consisted of a series of iron frames that could be pressed against the tunnel face and supported on a set of horizontal wooden planks that would prevent the face from collapsing. It was a complex machine and not easy to use, but it seemed that it would protect the miners. Brunel's team examined earth samples taken from beneath the riverbed, and subsequently decided to dig the tunnel close to the muddy river bottom, where he could expect to find clay. This would be a more solid and safe substance to dig through than the sand that was found deeper down.</p>
+    
+    <p>Brunel began work on his tunnel in 1825, but the problems of such an operation soon became apparent. Although the shield itself worked well, water began to drip into the tunnel. This was more of an annoyance than a danger while the pump was working, but this machine proved unreliable and sometimes failed altogether, meaning that floods began to occur with increasing regularity. The miners often had to run for their lives. Even when Brunel's men were able to work, they complained of frequent headaches, because the air underground was dirty and contaminated due to the lack of an adequate ventilation system. There were other problems too. Illuminating the tunnels was a constant challenge. Lamps gave off only a weak glow, and there were a number of accidents because the miners could not see what they were doing. Lastly, a number of Brunel's miners walked off the job because they could not tolerate the excessive temperatures that developed in the cramped conditions underground.</p>
+    
+    <p>Despite all the setbacks, the tunnel finally emerged on the opposite river bank on August 12, 1841. Brunel's triumph, however, was only partial. The small payment of a penny per person made by the thousands of visitors hardly paid the interest on the government loan he had required to complete the project. As a result, there was never enough funding to make it accessible to horse-drawn vehicles, as intended. Instead, the passageways were filled with souvenir-sellers by day and the homeless at night, before it was finally closed.</p>
+    
+    <p>It was only when the underground railway came to London in the 1860s that the Thames Tunnel achieved a measure of real usefulness. It was bought in 1869 by the East London Railway, who found it to be in such excellent condition that it was immediately pressed into service as a route for passenger trains heading east. The tunnel became, and remains, part of the London Underground network.</p>
+    
+    <!-- 多加空白行防止加载不完全 -->
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- Questions 1-8: True/False/Not Given -->
+    <div class="group">
+      <h4>Questions 1-8</h4>
+      <p>Do the following statements agree with the information given in Reading Passage 1?</p>
+      <p>In boxes 1-8 on your answer sheet, write</p>
+      <p><strong>TRUE</strong> if the statement agrees with the information<br>
+         <strong>FALSE</strong> if the statement contradicts the information<br>
+         <strong>NOT GIVEN</strong> if there is no information on this</p>
+      
+      <a id="q1-anchor"></a>
+      <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">1.</span> In the early 19th century, the port of London was considered a safer destination than other ports.</p>
+        <div class="tf-option">
+          <label><input name="q1" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q1" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q1" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q2-anchor"></a>
+      <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">2.</span> London Bridge provided quick access for cargo being sent to southern Britain.</p>
+        <div class="tf-option">
+          <label><input name="q2" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q2" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q2" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q3-anchor"></a>
+      <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">3.</span> It was generally believed that a new river crossing would be profitable.</p>
+        <div class="tf-option">
+          <label><input name="q3" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q3" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q3" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q4-anchor"></a>
+      <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">4.</span> Building a second bridge crossing was initially considered to be the best solution.</p>
+        <div class="tf-option">
+          <label><input name="q4" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q4" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q4" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q5-anchor"></a>
+      <div id="q5-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">5.</span> It was believed that coal could be found under the River Thames.</p>
+        <div class="tf-option">
+          <label><input name="q5" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q5" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q5" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q6-anchor"></a>
+      <div id="q6-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">6.</span> The Thames Archway Company were the first group to try tunnelling below the Thames.</p>
+        <div class="tf-option">
+          <label><input name="q6" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q6" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q6" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q7-anchor"></a>
+      <div id="q7-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">7.</span> Some of Trevithick's men were injured during a mudslide at his tunnel.</p>
+        <div class="tf-option">
+          <label><input name="q7" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q7" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q7" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+      
+      <a id="q8-anchor"></a>
+      <div id="q8-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p><span class="question-number">8.</span> The Thames Archway Company ran out of money to finance the tunnel project.</p>
+        <div class="tf-option">
+          <label><input name="q8" type="radio" value="TRUE"> TRUE</label>
+          <label><input name="q8" type="radio" value="FALSE"> FALSE</label>
+          <label><input name="q8" type="radio" value="NOT GIVEN"> NOT GIVEN</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Questions 9-13: Summary Completion -->
+    <div class="group">
+      <h4>Questions 9-13</h4>
+      <p>Complete the notes below.</p>
+      <p>Choose ONE WORD ONLY from the passage for each answer.</p>
+      <p>Write your answers in boxes 9-13 on your answer sheet.</p>
+      
+      <h4>Marc Brunel's tunnel</h4>
+      <div class="summary-text">
+        <h5>Preparing to build the tunnel</h5>
+        <p>Brunel noticed how a kind of <span class="question-number"><a id="q9-anchor"></a>9.</span> <input type="text" class="blank" id="q9"> made its tunnels in wood.</p>
+        <p>Brunel created a device called a 'tunnelling shield' to protect people working under the river.</p>
+        <p>Brunel planned to build a shallow tunnel so the earth would have a higher content of <span class="question-number"><a id="q10-anchor"></a>10.</span> <input type="text" class="blank" id="q10"></p>
+        
+        <h5>Problems faced by miners</h5>
+        <p>There were frequent floods caused by mechanical breakdowns.</p>
+        <p>The miners suffered from <span class="question-number"><a id="q11-anchor"></a>11.</span> <input type="text" class="blank" id="q11"> because of pollution in the tunnels.</p>
+        <p>Lighting problems led to several <span class="question-number"><a id="q12-anchor"></a>12.</span> <input type="text" class="blank" id="q12"></p>
+        <p>Some workers quit because of the high temperatures in the tunnel.</p>
+        
+        <h5>After the tunnel was finished</h5>
+        <p>The tunnel was finally completed in 1841.</p>
+        <p>Brunel did not have enough money to repay his debt to the <span class="question-number"><a id="q13-anchor"></a>13.</span> <input type="text" class="blank" id="q13"></p>
+        <p>The tunnel was abandoned until the 1860s.</p>
+      </div>
+    </div>
+    
+    <!-- Submit & Reset Buttons -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <!-- Results & Answer Key -->
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>1</td>
+            <td>NOT GIVEN</td>
+            <td>
+              <p class="explanation-text">文章提到"the port of London was the busiest in the world"，但未与其他港口的安全性进行比较。文中只说货物经历了海上危险后到达伦敦，并未说伦敦港比其他港口更安全。</p>
+              <p class="explanation-original">原文：At the beginning of the 19th century, the port of London was the busiest in the world. Cargoes that had travelled thousands of miles and survived all the hazards of the sea were unloaded on the banks of the Thames...</p>
+            </td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>FALSE</td>
+            <td>
+              <p class="explanation-text">文章明确指出伦敦桥交通拥堵严重，货物运输缓慢，与"quick access"矛盾。文中说伦敦桥是"the centre of the world's largest traffic jam"，并且建于12世纪，非常"impractical"。</p>
+              <p class="explanation-original">原文：By 1820, London Bridge had become the centre of the world's largest traffic jam. ... built in the 12th century and as impractical as its early date implies.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>TRUE</td>
+            <td>
+              <p class="explanation-text">文章明确表示，如果私人企业在码头附近建造另一个过河通道，用户支付的通行费将带来可观的利润。</p>
+              <p class="explanation-original">原文：It was an intolerable situation, and it was clear that if private enterprise could build another crossing closer to the docks, there would be good money to be made in tolls paid by users.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>FALSE</td>
+            <td>
+              <p class="explanation-text">文章明确指出建造第二座桥"out of the question"，因为这会影响帆船进入市中心，所以建造桥梁并不是最初被认为的最佳解决方案。</p>
+              <p class="explanation-original">原文：Another bridge was out of the question, as this would deny sailing ships access to the city centre, and ambitious men turned their thoughts to tunnelling beneath the Thames instead.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>NOT GIVEN</td>
+            <td>
+              <p class="explanation-text">文章提到对煤炭的需求增加导致英国矿井挖掘了许多隧道，但并未提及人们认为泰晤士河下有煤炭。</p>
+              <p class="explanation-original">原文：Although increasing demand for coal had meant a great many tunnels had been dug in mines in Britain...</p>
+            </td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>TRUE</td>
+            <td>
+              <p class="explanation-text">文章明确指出泰晤士拱道公司是第一个尝试在泰晤士河下挖掘隧道的团体，之前没有人尝试过。</p>
+              <p class="explanation-original">原文：However, in 1807, a group of businessmen got themselves up as the Thames Archway Company. Their ambition was to tunnel below the Thames, but there was little to guide them as there had been no previous attempt to do this.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>NOT GIVEN</td>
+            <td>
+              <p class="explanation-text">文章提到"muddy soil pouring into the tunnel"，但未明确说明特雷维西克的工人是否因此受伤。只提到特雷维西克本人因接触河水而生病。</p>
+              <p class="explanation-original">原文：His men made progress at the beginning, but then things began to go disastrously wrong, with muddy soil pouring into the tunnel. ... Trevithick was sick from exposure to the river water...</p>
+            </td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>TRUE</td>
+            <td>
+              <p class="explanation-text">文章明确指出泰晤士拱道公司的资金已经耗尽，无法继续资助隧道项目。</p>
+              <p class="explanation-original">原文：Eventually the Thames Archway Company had had enough. Its funds were exhausted...</p>
+            </td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>worm</td>
+            <td>
+              <p class="explanation-text">文章提到布鲁内尔观察到木头被一种看起来像"worm"的东西侵蚀，这种虫在木头中挖掘隧道。</p>
+              <p class="explanation-original">原文：Examining the wood through a magnifying glass, he observed it was infested with something that looked like a worm.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td>clay</td>
+            <td>
+              <p class="explanation-text">文章提到布鲁内尔决定在靠近泥泞的河床处挖掘隧道，期望找到"clay"，这比更深处的沙子更坚固安全。</p>
+              <p class="explanation-original">原文：... decided to dig the tunnel close to the muddy river bottom, where he could expect to find clay. This would be a more solid and safe substance to dig through than the sand...</p>
+            </td>
+          </tr>
+          <tr>
+            <td>11</td>
+            <td>headaches</td>
+            <td>
+              <p class="explanation-text">文章提到矿工们抱怨频繁的"headaches"，因为地下空气被污染且通风系统不足。</p>
+              <p class="explanation-original">原文：... they complained of frequent headaches, because the air underground was dirty and contaminated due to the lack of an adequate ventilation system.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>12</td>
+            <td>accidents</td>
+            <td>
+              <p class="explanation-text">文章提到照明问题导致了一些"accidents"，因为矿工看不清他们在做什么。</p>
+              <p class="explanation-original">原文：... and there were a number of accidents because the miners could not see what they were doing.</p>
+            </td>
+          </tr>
+          <tr>
+            <td>13</td>
+            <td>government</td>
+            <td>
+              <p class="explanation-text">文章提到游客支付的一便士几乎无法支付布鲁内尔为完成项目所需的"government loan"的利息。</p>
+              <p class="explanation-original">原文：The small payment of a penny per person made by the thousands of visitors hardly paid the interest on the government loan he had required to complete the project.</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<!-- 文本选择工具栏 -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<!-- 笔记面板 -->
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<!-- 提示框 -->
+<div id="toast"></div>
+<script>
+// 计时器核心功能
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; // 计时器间隔ID，用于后续停止
+// 启动计时器
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+// 页面加载时启动计时器
+window.onload = startTimer;
+// 拖拽分隔线调整左右面板宽度
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isDragging = false;
+divider.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+});
+window.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.clientX - containerRect.left;
+  // 限制最小宽度，防止面板过窄
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+});
+window.addEventListener('mouseup', () => {
+  if (isDragging) {
+    isDragging = false;
+    document.body.style.cursor = '';
+  }
+});
+// 触摸设备支持
+divider.addEventListener('touchstart', (e) => {
+  isDragging = true;
+  e.preventDefault();
+}, { passive: false });
+window.addEventListener('touchmove', (e) => {
+  if (!isDragging) return;
+  const containerRect = document.querySelector('.shell').getBoundingClientRect();
+  let x = e.touches[0].clientX - containerRect.left;
+  x = Math.max(280, Math.min(containerRect.width - 320, x));
+  leftPane.style.flex = `0 0 ${x}px`;
+  rightPane.style.flex = '1 1 auto';
+}, { passive: false });
+window.addEventListener('touchend', () => {
+  isDragging = false;
+});
+// 文本高亮功能
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+// 定位选择工具栏
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    // 确保工具栏不超出视口
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+// 更新工具栏状态
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+// 监听文本选择事件
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+// 滚动时重新定位工具栏
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+// 点击高亮文本时显示工具栏
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+// 执行高亮
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    // 处理跨元素选择的情况
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+// 移除高亮
+function removeHighlight() {
+  if (currentHlNode) {
+    // 移除单个高亮元素
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize(); // 合并相邻文本节点
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  // 移除选择范围内的所有高亮
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      // 判断节点是否在选择范围内
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+// 绑定高亮按钮事件
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+// 笔记功能
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+// 切换笔记面板显示
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+// 关闭笔记面板
+btnCloseNotes.addEventListener('click', toggleNotes);
+// 复制笔记
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+// 选中文本添加到笔记
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    // 滚动到笔记底部
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+// 提示框功能
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+// 字体设置功能
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+// 打开字体设置模态框
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+// 关闭字体设置模态框
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+// 点击模态框外部关闭
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+// 切换字体大小（影响所有元素）
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    // 移除所有字体类，添加选中的类
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    // 显示提示
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+  });
+});
+// 答案与评分功能（Submit后停止计时器）
+const answers = {
+  q1: 'NOT GIVEN',
+  q2: 'FALSE',
+  q3: 'TRUE',
+  q4: 'FALSE',
+  q5: 'NOT GIVEN',
+  q6: 'TRUE',
+  q7: 'NOT GIVEN',
+  q8: 'TRUE',
+  q9: 'worm',
+  q10: 'clay',
+  q11: 'headaches',
+  q12: 'accidents',
+  q13: 'government'
+};
+// 评分函数（Submit后执行，包含停止计时器）
+function grade() {
+  // 1. 停止计时器
+  clearInterval(timerInterval);
+  
+  // 2. 计算得分
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  // 检查1-8题（判断题）
+  for (let i = 1; i <= 8; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 检查9-13题（填空题，忽略大小写）
+  for (let i = 9; i <= 13; i++) {
+    const qName = `q${i}`;
+    const input = document.getElementById(qName);
+    const userAns = input ? input.value.trim().toLowerCase() : 'No answer';
+    const correctAns = answers[qName].toLowerCase();
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers[qName]})`}`);
+  }
+  
+  // 3. 显示结果
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  // 4. 展开答案面板
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  // 5. 标记所有题目为已回答
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+// 重置功能（重置计时器、选项、高亮等）
+function resetForm() {
+  // 1. 重置计时器
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  // 2. 重置1-8题判断题单选按钮
+  for (let i = 1; i <= 8; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.checked = false;
+    });
+  }
+  
+  // 3. 重置9-13题填空题
+  for (let i = 9; i <= 13; i++) {
+    const input = document.getElementById(`q${i}`);
+    if (input) input.value = '';
+  }
+  
+  // 4. 重置结果和答案面板
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  // 5. 重置导航栏已回答状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  // 6. 重置笔记
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  // 7. 移除所有高亮
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+}
+// 滚动到指定题目
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  // 高亮导航项
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+// 监听输入，标记题目为已回答
+(function() {
+  // 监听1-8题判断题单选按钮
+  for (let i = 1; i <= 8; i++) {
+    document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById(`q${i}-nav`).classList.add('answered');
+      });
+    });
+  }
+  
+  // 监听9-13题填空题
+  for (let i = 9; i <= 13; i++) {
+    const input = document.getElementById(`q${i}`);
+    if (input) {
+      input.addEventListener('input', () => {
+        if (input.value.trim()) {
+          document.getElementById(`q${i}-nav`).classList.add('answered');
+        } else {
+          document.getElementById(`q${i}-nav`).classList.remove('answered');
+        }
+      });
+    }
+  }
+})();
+</script>
+</body>
+</html>

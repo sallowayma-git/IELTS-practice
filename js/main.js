@@ -220,7 +220,7 @@ function ensureExamListView() {
     if (window.browseController && typeof window.browseController.getExamListView === 'function') {
         instance = window.browseController.getExamListView();
     }
-    
+
     if (!instance && window.LegacyExamListView) {
         instance = new window.LegacyExamListView({
             domAdapter: window.DOMAdapter,
@@ -1027,7 +1027,7 @@ function resolveScriptPathRoot(type) {
         return manager.resolveScriptPathRoot(type);
     }
     return type === 'reading'
-        ? '睡着过项目组/2. 所有文章(11.20)[192篇]/'
+        ? ''
         : 'ListeningPractice/';
 }
 
@@ -1977,7 +1977,7 @@ function loadExamListFallback() {
             container.innerHTML = '<div class="exam-list-empty"><p>未找到匹配的题目</p></div>';
             return;
         }
-        
+
         const list = document.createElement('div');
         list.className = 'exam-list';
         filtered.forEach(function (exam) {
@@ -2032,24 +2032,24 @@ function displayExams(exams) {
         return window.ExamActions.displayExams(exams);
     }
     console.warn('[main.js] ExamActions.displayExams 未就绪，使用降级渲染');
-    
+
     // 立即降级渲染（displayExams 需要同步执行）
     try {
         const container = document.getElementById('exam-list-container');
         if (!container) return;
-        
+
         // 清除 loading 指示器（修复 P2 bug）
         const loadingEl = document.querySelector('#browse-view .loading');
         if (loadingEl) {
             loadingEl.style.display = 'none';
         }
-        
+
         const normalizedExams = Array.isArray(exams) ? exams : [];
         if (normalizedExams.length === 0) {
             container.innerHTML = '<div class="exam-list-empty"><p>未找到匹配的题目</p></div>';
             return;
         }
-        
+
         const list = document.createElement('div');
         list.className = 'exam-list';
         normalizedExams.forEach(function (exam) {
@@ -2125,7 +2125,7 @@ function encodePathSegments(path) {
 }
 
 function resolveExamBasePath(exam) {
-    const relativePath = exam && exam.path ? String(exam.path) : "";
+    const relativePath = exam && (exam.folder || exam.path) ? String(exam.folder || exam.path) : "";
     const normalizedRelative = relativePath.replace(/\\/g, '/').trim();
     if (normalizedRelative && isAbsolutePath(normalizedRelative)) {
         return ensureTrailingSlash(normalizedRelative);
@@ -2149,7 +2149,8 @@ function resolveExamBasePath(exam) {
             combined = normalizedRelative;
         }
 
-        const fallbackTopRoot = extractTopLevelRootSegment(fallback.root);
+        // 若 exam 已带有完整 folder 路径，跳过基于旧 DEFAULT_PATH_MAP 的 fallbackTopRoot 补齐
+        const fallbackTopRoot = exam && exam.folder ? '' : extractTopLevelRootSegment(fallback.root);
         if (fallbackTopRoot && !combined.replace(/\\/g, '/').startsWith(fallbackTopRoot)) {
             const normalizedCombined = combined.replace(/\\/g, '/').replace(/^\/+/, '');
             combined = fallbackTopRoot + normalizedCombined;
@@ -2175,7 +2176,7 @@ function extractTopLevelRootSegment(root) {
 
 // Path map definitions moved to LibraryManager; keep thin proxies for legacy callers
 const RAW_DEFAULT_PATH_MAP = (getLibraryManager && getLibraryManager() && getLibraryManager().RAW_DEFAULT_PATH_MAP) || {
-    reading: { root: '睡着过项目组/2. 所有文章(11.20)[192篇]/', exceptions: {} },
+    reading: { root: '', exceptions: {} },
     listening: { root: 'ListeningPractice/', exceptions: {} }
 };
 

@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>The Origin of Language - Reading Practice</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); }
+  #timer { position: static; display: inline-block; margin-left: 8px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:14px; vertical-align: middle; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  table { border-collapse: collapse; width:100%; }
+  th, td { border:1px solid var(--line); padding:6px; text-align:center; font-size:14px; }
+  th:first-child, td:first-child { width:92px; }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  .answer-input { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; margin-top: 4px; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  body { padding-bottom: 82px; }
+  .practice-nav { background:#fff; border-bottom:2px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:20px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); border-bottom:0; z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #selbar { z-index: 6000 !important; }
+  .question-note { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
+  .section-title { background: #f1f5f9; padding: 6px 10px; border-radius: 6px; margin-top: 16px; font-weight: 600; }
+  .blank { display: inline-block; width: 120px; border-bottom: 1px solid #000; margin: 0 5px; text-align: center; vertical-align: bottom; }
+  .blank-input { width: 120px; display: inline-block; border: 1px solid var(--line); border-radius: 4px; padding: 4px; margin: 0 5px; }
+  select { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font-size: 14px; }
+  .matching-option { margin: 4px 0; }
+  .checkbox-list { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+  .checkbox-list label { display: flex; align-items: center; gap: 8px; }
+  .checkbox-list input[type="checkbox"] { width: 18px; height: 18px; }
+</style>
+</head>
+<body>
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38-40</div>
+  </div>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 3 <span id="timer">00:00</span></h2>
+    <p>You should spend about 20 minutes on <strong>Questions 27-40</strong>, which are based on Reading Passage 3 below.</p>
+    <h3>The Origin of Language</h3>
+    
+    <p>The origin of language has been a major area of my research for many years. By 1859, when British scientist Charles Darwin published <em>The Origin of Species</em>, there was already a great deal of interest in this subject. However, the debate became plagued by strange theories, so much so that in 1866 the influential Societe de Linguistique de Paris banned all discussions about the origin of language. The ban lasted for more than a century, before a surge of research began during the 1990s. Linguists, psychologists, anthropologists and archaeologists now frequently debate the origin of language and have published many articles and books on this topic. And yet, despite almost frenzied activity, limited progress has been made.</p>
+    
+    <p>I believe there are four reasons for this. The first is an insufficient concern with the archaeological and fossil proof of the brains and behaviour of our human ancestors. Many theories to date rely on an assumed association between brain size and language abilities, without acknowledging the problem this creates: fossil evidence indicates that the Neanderthals had larger brains than modern humans, <em>Homo sapiens</em>, but archaeological evidence indicates that the Neanderthals lacked a capacity for language. So something is seriously amiss with those theories.</p>
+    
+    <p>That 'something' might relate to the second reason for limited progress: insufficient concern with the other major aural and vocal communication system of modern humans: music. Even though the Societe de Linguistique de Paris had nothing to say about studying the origin of music, academics appear to have had a self- imposed ban, with limited discussion of this issue during the 19th and 20th centuries. However, there are notable exceptions that should be acknowledged. One is the aforementioned Charles Darwin who, in his 1871 book on human evolution, <em>The Descent of Man</em>, devoted several pages to the development of music. Another is the renowned ethnomusicologist John Blacking, whose 1973 book, <em>How Musical is Man?</em>, broached the idea that music is an inherent and universal human quality.</p>
+    
+    <p>The origin of music deserves as much attention as that of language, as we cannot treat one without the other. Those writers who had evidently annoyed the Societe de Linguistique de Paris were quite aware of this. For them, music and language were intimately linked; the French writer and philosopher Jean- Jacques Rousseau's <em>On the Origin of Language</em> (1781) was a reflection on both music and language. In contrast, Morten Christiansen and Simon Kirby's book, <em>Language Evolution</em> (2000), which they conceived as 'a definitive book on the subject', failed to mention music in any of its 17 chapters. Those authors have an important lesson to learn from Rousseau and other writers of his time who addressed the origin of language.</p>
+    
+    <p>Music is a universal feature of human society and plays a significant role in the lives of all individuals. Indeed, music is perhaps in even greater need of study than language: the latter has a self- evident function—the transmission of information—and can be readily accepted as a product of evolution, even if its specific evolutionary history remains unclear. But what is the point of music?</p>
+    
+    <p>That question leads directly to a third reason for our lack of progress in understanding how language evolved, and indeed the human mind in general: an insufficient concern with emotion. If music is about anything, it is about expressing emotion. But while archaeologists have put significant effort into examining the intellectual capacities of our ancestors, their emotional lives have been sorely neglected. This has contributed to the neglect of music, which, in turn, has constrained our understanding of language.</p>
+    
+    <p>There is one further reason why progress has been limited: those who have been most influential regarding the evolution of language have simply got it wrong, and misled everyone else. Linguist Derek Bickerton has made an important contribution towards our understanding of the origin of language by bringing his profound knowledge of linguistics to the discussions that have occurred. But Bickerton's idea that the precursor of modern language consisted of words strung together with limited, if any, grammar is, I believe, fundamentally mistaken. Bickerton refers to this precursor as 'proto- language' and suggests that it was similar to the type of language spoken by young children today, and mastered by apes through the use of computer keyboards. This idea has dominated the field of language origins for the last two decades, and is one that I once found persuasive. But I now understand that it is not only flawed but has severely limited the progress that should have been made.</p>
+    
+    <p>My book therefore provides an alternative view, one that draws on the ideas of a linguist who has, I believe, identified the true nature of proto- language. Her name is Alison Wray. She argues that proto- language was 'holistic' rather than compositional in character. By this she means that the precursor to language was a communication system composed of 'messages' rather than words; each message was uniquely associated with an arbitrary meaning, as are the utterances of language today. But in Wray's proto- language, they were not composed out of smaller units of meaning (i.e. words) which could be combined together using a rule system (i.e. grammar) to make more complex messages with emergent meanings. For Wray, proto- language was semantically complex and grammatical. I believe this insight enables us to understand the origin of music as well as language, and to relate both to the emotional lives of our human ancestors.</p>
+    
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 27-31</h4>
+      <p class="question-note">Choose the correct letter, A, B, C or D.</p>
+      <p>Write the correct letter in boxes 27-31 on your answer sheet.</p>
+      
+      <a id="q27-anchor"></a>
+      <div id="q27-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>27. In the first paragraph, what does the writer suggest about the origin of language?</p>
+        <div style="display:flex; flex-direction: column; gap:8px; margin:4px 0;">
+          <label style="margin:0;"><input name="q27" type="radio" value="A"> A. Too many branches of science have been involved in its study.</label>
+          <label style="margin:0;"><input name="q27" type="radio" value="B"> B. The Societe de Linguistique de Paris instigated research in this area.</label>
+          <label style="margin:0;"><input name="q27" type="radio" value="C"> C. The lack of progress is surprising given the amount of work being done.</label>
+          <label style="margin:0;"><input name="q27" type="radio" value="D"> D. Most progress in the study of language was made between 1859 and 1866.</label>
+        </div>
+      </div>
+      
+      <a id="q28-anchor"></a>
+      <div id="q28-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>28. What is the 'problem' referred to in the second paragraph?</p>
+        <div style="display:flex; flex-direction: column; gap:8px; margin:4px 0;">
+          <label style="margin:0;"><input name="q28" type="radio" value="A"> A. Some current theories are based on conflicting evidence.</label>
+          <label style="margin:0;"><input name="q28" type="radio" value="B"> B. There is insufficient fossil evidence to reach a conclusion.</label>
+          <label style="margin:0;"><input name="q28" type="radio" value="C"> C. Fossil evidence suggests that Homo sapiens had larger brains than Neanderthals.</label>
+          <label style="margin:0;"><input name="q28" type="radio" value="D"> D. Archaeological evidence shows that Neanderthals were able to talk.</label>
+        </div>
+      </div>
+      
+      <a id="q29-anchor"></a>
+      <div id="q29-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>29. What does the writer suggest about Jean-Jacques Rousseau's work in 1781?</p>
+        <div style="display:flex; flex-direction: column; gap:8px; margin:4px 0;">
+          <label style="margin:0;"><input name="q29" type="radio" value="A"> A. Modern theorists should pay more attention to his approach.</label>
+          <label style="margin:0;"><input name="q29" type="radio" value="B"> B. His ideas supported those of the Societe de Linguistique de Paris.</label>
+          <label style="margin:0;"><input name="q29" type="radio" value="C"> C. His ideas were mirrored in a later book called Language Evolution.</label>
+          <label style="margin:0;"><input name="q29" type="radio" value="D"> D. His ideas are too outdated to be of any relevance today.</label>
+        </div>
+      </div>
+      
+      <a id="q30-anchor"></a>
+      <div id="q30-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>30. What is the writer's current view of Derek Bickerton's ideas?</p>
+        <div style="display:flex; flex-direction: column; gap:8px; margin:4px 0;">
+          <label style="margin:0;"><input name="q30" type="radio" value="A"> A. They have had little impact on the study of language.</label>
+          <label style="margin:0;"><input name="q30" type="radio" value="B"> B. They have helped the study of linguistics to progress.</label>
+          <label style="margin:0;"><input name="q30" type="radio" value="C"> C. They are not accepted by the majority of linguists.</label>
+          <label style="margin:0;"><input name="q30" type="radio" value="D"> D. The assumption behind them is wrong.</label>
+        </div>
+      </div>
+      
+      <a id="q31-anchor"></a>
+      <div id="q31-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <p>31. In the final paragraph, the writer concludes that Alison Wray's ideas will help establish a link between</p>
+        <div style="display:flex; flex-direction: column; gap:8px; margin:4px 0;">
+          <label style="margin:0;"><input name="q31" type="radio" value="A"> A. grammar and meaning.</label>
+          <label style="margin:0;"><input name="q31" type="radio" value="B"> B. messages and proto-language.</label>
+          <label style="margin:0;"><input name="q31" type="radio" value="C"> C. language, music and emotions.</label>
+          <label style="margin:0;"><input name="q31" type="radio" value="D"> D. proto-language and modern semantics.</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 32-37</h4>
+      <p class="question-note">Look at the following statements (Questions 32-37) and the list of people/books below.</p>
+      <p>Match each statement with the correct person/book, A-H.</p>
+      <p>Write the correct letter, A-H, in boxes 32-37 on your answer sheet.</p>
+      
+      <div style="margin: 12px 0;">
+        <div class="matching-option"><strong>32.</strong> The Societe de Linguistique de Paris</div>
+        <select id="q32">
+          <option value="">Select option</option>
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+          <option value="D">D</option>
+          <option value="E">E</option>
+          <option value="F">F</option>
+          <option value="G">G</option>
+          <option value="H">H</option>
+        </select>
+      </div>
+      
+      <div class="matching-option"><strong>33.</strong> Charles Darwin</div>
+      <select id="q33">
+        <option value="">Select option</option>
+        <option value="A">A</option>
+        <option value="B">B</option>
+        <option value="C">C</option>
+        <option value="D">D</option>
+        <option value="E">E</option>
+        <option value="F">F</option>
+        <option value="G">G</option>
+        <option value="H">H</option>
+      </select>
+      
+      <div class="matching-option"><strong>34.</strong> John Blacking</div>
+      <select id="q34">
+        <option value="">Select option</option>
+        <option value="A">A</option>
+        <option value="B">B</option>
+        <option value="C">C</option>
+        <option value="D">D</option>
+        <option value="E">E</option>
+        <option value="F">F</option>
+        <option value="G">G</option>
+        <option value="H">H</option>
+      </select>
+      
+      <div class="matching-option"><strong>35.</strong> Christiansen and Kirby</div>
+      <select id="q35">
+        <option value="">Select option</option>
+        <option value="A">A</option>
+        <option value="B">B</option>
+        <option value="C">C</option>
+        <option value="D">D</option>
+        <option value="E">E</option>
+        <option value="F">F</option>
+        <option value="G">G</option>
+        <option value="H">H</option>
+      </select>
+      
+      <div class="matching-option"><strong>36.</strong> Derek Bickerton</div>
+      <select id="q36">
+        <option value="">Select option</option>
+        <option value="A">A</option>
+        <option value="B">B</option>
+        <option value="C">C</option>
+        <option value="D">D</option>
+        <option value="E">E</option>
+        <option value="F">F</option>
+        <option value="G">G</option>
+        <option value="H">H</option>
+      </select>
+      
+      <div class="matching-option"><strong>37.</strong> Alison Wray</div>
+      <select id="q37">
+        <option value="">Select option</option>
+        <option value="A">A</option>
+        <option value="B">B</option>
+        <option value="C">C</option>
+        <option value="D">D</option>
+        <option value="E">E</option>
+        <option value="F">F</option>
+        <option value="G">G</option>
+        <option value="H">H</option>
+      </select>
+      
+      <div style="margin-top: 16px; padding: 12px; background: #f8fafc; border-radius: 8px; font-size: 14px;">
+        <p><strong>List of people/books</strong></p>
+        <p>A. suggested music was an essential part of every individual</p>
+        <p>B. made no link between music and language in a comprehensive study</p>
+        <p>C. believes that early language was very musical</p>
+        <p>D. felt that the origin of language should not be debated</p>
+        <p>E. states that early language was made up of basic words used in an unsystematic way</p>
+        <p>F. devoted 17 chapters of a book to music</p>
+        <p>G. believes that proto-language had no individual words</p>
+        <p>H. referred to music in part of a book about the development of human beings</p>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 38-40</h4>
+      <a id="q38-anchor"></a>
+      <p class="question-note">Choose <strong>THREE</strong> letters, A-G.</p>
+      <p>Write the correct letters in boxes 38-40 on your answer sheet.</p>
+      
+      <p><strong>According to the writer, which THREE of the following areas have not been studied enough in order to understand the origin of language?</strong></p>
+      
+      <div class="checkbox-list">
+        <label>
+          <input type="checkbox" name="q38_40" value="A">
+          <span>A. evidence from prehistoric times</span>
+        </label>
+        <label>
+          <input type="checkbox" name="q38_40" value="B">
+          <span>B. intelligence</span>
+        </label>
+        <label>
+          <input type="checkbox" name="q38_40" value="C">
+          <span>C. individual sounds</span>
+        </label>
+        <label>
+          <input type="checkbox" name="q38_40" value="D">
+          <span>D. music</span>
+        </label>
+        <label>
+          <input type="checkbox" name="q38_40" value="E">
+          <span>E. emotions</span>
+        </label>
+        <label>
+          <input type="checkbox" name="q38_40" value="F">
+          <span>F. human intellect</span>
+        </label>
+        <label>
+          <input type="checkbox" name="q38_40" value="G">
+          <span>G. children's language</span>
+        </label>
+      </div>
+    </div>
+    
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// Timer
+let _t=0; 
+const _timerEl=document.getElementById('timer');
+setInterval(function(){ 
+  _t++; 
+  var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+  var s=String(_t%60).padStart(2,'0'); 
+  _timerEl.textContent=m+':'+s; 
+},1000);
+
+// Drag divider
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+
+function startDrag(e){ 
+  dragging=true; 
+  document.body.style.cursor='ew-resize'; 
+  if(e.preventDefault) e.preventDefault(); 
+}
+
+function endDrag(){ 
+  dragging=false; 
+  document.body.style.cursor=''; 
+}
+
+function onMove(clientX){
+  var container = document.querySelector('.shell').getBoundingClientRect();
+  var x = clientX - container.left;
+  x = Math.max(280, Math.min(container.width-320, x));
+  left.style.flex = '0 0 ' + x + 'px';
+  right.style.flex = '1 1 auto';
+}
+
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+</script>
+
+<script>
+// Highlight toolbar
+var selbar = document.getElementById('selbar');
+var btnHL = document.getElementById('btnHL');
+var btnUH = document.getElementById('btnUH');
+var btnNote = document.getElementById('btnNote');
+var lastRange=null;
+var currentHlNode=null;
+var keepToolbar=false;
+
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+
+function updateSelbar(){
+  var sel=window.getSelection();
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed) { 
+    selbar.style.display='none'; 
+    currentHlNode=null; 
+    return; 
+  }
+  var range = sel.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode=null;
+  positionSelbarForRect(range.getBoundingClientRect());
+}
+
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+
+document.addEventListener('selectionchange', function(){ 
+  var sel=window.getSelection(); 
+  if(!sel || sel.rangeCount===0 || sel.isCollapsed){ 
+    if(!keepToolbar && !currentHlNode){ 
+      selbar.style.display='none'; 
+    } 
+  } 
+});
+
+document.addEventListener('scroll', function(){ 
+  if(selbar.style.display==='flex') updateSelbar(); 
+});
+
+document.addEventListener('mousedown', function(e){
+  var t = e.target;
+  if(t.classList && t.classList.contains('hl')){
+    keepToolbar = true;
+  } else {
+    keepToolbar = false;
+  }
+}, true);
+
+document.addEventListener('click', function(e){
+  var target = e.target;
+  if(target.classList && target.classList.contains('hl')){
+    currentHlNode = target;
+    lastRange = null;
+    positionSelbarForRect(target.getBoundingClientRect());
+    var sel=window.getSelection();
+    if(sel) sel.removeAllRanges();
+    setTimeout(function(){ keepToolbar=false; }, 0);
+  }
+}, true);
+
+function doHighlight(){
+  if(currentHlNode) return;
+  if(!lastRange || lastRange.collapsed) return;
+  
+  // 处理简单选择（同一节点内）
+  if (lastRange.startContainer === lastRange.endContainer) {
+    try {
+      const span = document.createElement('span');
+      span.className = 'hl';
+      lastRange.surroundContents(span);
+      selbar.style.display = 'none';
+      showToast('Highlighted');
+      return;
+    } catch (e) {
+      // 处理边界情况
+    }
+  }
+  
+  // 处理复杂选择（跨多个节点）
+  const fragment = lastRange.cloneContents();
+  const div = document.createElement('div');
+  div.appendChild(fragment);
+  
+  // 递归处理所有文本节点并添加高亮
+  function processNode(node, parentHighlight) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (node.textContent.trim().length > 0) {
+        const span = document.createElement('span');
+        span.className = 'hl';
+        span.textContent = node.textContent;
+        return span;
+      }
+      return node;
+    }
+    
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      // 对于块级元素，创建新的块级高亮容器
+      const isBlock = window.getComputedStyle(node).display.includes('block') || 
+                     ['P', 'H1', 'H2', 'H3', 'H4', 'DIV'].includes(node.tagName);
+      
+      const wrapper = isBlock ? document.createElement(node.tagName.toLowerCase()) : document.createElement('span');
+      wrapper.className = isBlock ? node.className + ' hl' : 'hl';
+      
+      // 复制其他属性
+      Array.from(node.attributes).forEach(attr => {
+        wrapper.setAttribute(attr.name, attr.value);
+      });
+      
+      // 处理子节点
+      while (node.firstChild) {
+        const processedChild = processNode(node.firstChild, wrapper);
+        wrapper.appendChild(processedChild);
+      }
+      
+      return wrapper;
+    }
+    
+    return node;
+  }
+  
+  // 处理所有内容
+  const highlightedContent = processNode(div, null);
+  
+  // 清除原有内容并插入高亮内容
+  lastRange.deleteContents();
+  lastRange.insertNode(highlightedContent);
+  
+  selbar.style.display = 'none';
+  showToast('Highlighted');
+}
+
+function removeHighlight(){
+  if(currentHlNode){
+    // 移除单个高亮元素
+    const parent = currentHlNode.parentNode;
+    while(currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize(); // 合并相邻文本节点
+    currentHlNode = null;
+    selbar.style.display='none';
+    showToast('Highlight removed');
+    return;
+  }
+  
+  if(!lastRange) return;
+  
+  // 移除选区中的所有高亮
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  
+  while(walker.nextNode()){
+    const node = walker.currentNode;
+    if(node.classList && node.classList.contains('hl')) {
+      const rect = node.getBoundingClientRect();
+      // 检查节点是否与选区重叠
+      if(!(rect.right < selRect.left || rect.left > selRect.right || 
+          rect.bottom < selRect.top || rect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  
+  // 移除所有找到的高亮元素
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while(el.firstChild) {
+      parent.insertBefore(el.firstChild, el);
+    }
+    parent.removeChild(el);
+    parent.normalize(); // 合并相邻文本节点
+  });
+  
+  selbar.style.display='none';
+  showToast('Highlight removed');
+}
+
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+</script>
+
+<script>
+// Notes
+var notes = document.getElementById('notes');
+var noteArea = document.getElementById('noteArea');
+var btnCopy=document.getElementById('btnCopy');
+var btnClose=document.getElementById('btnClose');
+
+function toggleNotes(){ 
+  notes.style.display = (notes.style.display==='flex'?'none':'flex'); 
+}
+
+window.toggleNotes = toggleNotes;
+
+btnClose.addEventListener('click', toggleNotes);
+
+btnCopy.addEventListener('click', async function(){ 
+  await navigator.clipboard.writeText(noteArea.value||''); 
+  showToast('Copied'); 
+});
+
+btnNote.addEventListener('click', function(){
+  var text = '';
+  if(currentHlNode){ 
+    text = (currentHlNode.textContent||'').trim(); 
+  } else if(lastRange){ 
+    var frag = lastRange.cloneContents(); 
+    text = (frag.textContent||'').trim(); 
+  }
+  toggleNotes();
+  if(text) {
+    noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n';
+  }
+  selbar.style.display='none';
+});
+
+// Toast
+var toastEl=document.getElementById('toast');
+function showToast(msg){
+  toastEl.textContent=msg; 
+  toastEl.style.display='block';
+  setTimeout(function(){ toastEl.style.display='none'; }, 1200);
+}
+</script>
+
+<script>
+// Answer key and grading
+var answers = {
+  "q27": "C",
+  "q28": "A",
+  "q29": "A",
+  "q30": "D",
+  "q31": "C",
+  "q32": "D",
+  "q33": "H",
+  "q34": "A",
+  "q35": "B",
+  "q36": "E",
+  "q37": "G",
+  "q38_40": ["A", "D", "E"]  // Note: This is an array for multiple correct answers
+};
+
+function grade(){
+  var total=0, correct=0, lines=[];
+  
+  // 检查单选题 (27-31)
+  for(let n=27; n<=31; n++){
+    const q = `q${n}`;
+    total++;
+    const selected = document.querySelector(`input[name="${q}"]:checked`);
+    const userAnswer = selected ? selected.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+  }
+  
+  // 检查配对题 (32-37)
+  for(let n=32; n<=37; n++){
+    const q = `q${n}`;
+    total++;
+    const select = document.getElementById(q);
+    const userAnswer = select ? select.value : '';
+    const isCorrect = userAnswer === answers[q];
+    if (isCorrect) correct++;
+    lines.push(`${q.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✓' : '✗'}`);
+  }
+  
+  // 检查多选题 (38-40)
+  const q38_40_checkboxes = document.querySelectorAll('input[name="q38_40"]:checked');
+  const userAnswers = Array.from(q38_40_checkboxes).map(cb => cb.value);
+  const correctAnswers = answers["q38_40"];
+  
+  // 检查多选题：必须恰好选中三个且与正确答案一致
+  total += 1; // 多选题整体计为1题
+  let multiCorrect = false;
+  
+  if (userAnswers.length === 3) {
+    // 将用户答案和正确答案排序后比较
+    const sortedUser = userAnswers.slice().sort();
+    const sortedCorrect = correctAnswers.slice().sort();
+    
+    // 检查是否完全相同
+    let allMatch = true;
+    for (let i = 0; i < 3; i++) {
+      if (sortedUser[i] !== sortedCorrect[i]) {
+        allMatch = false;
+        break;
+      }
+    }
+    
+    if (allMatch) {
+      correct++;
+      multiCorrect = true;
+    }
+  }
+  
+  lines.push(`Q38-40: [${userAnswers.join(', ') || 'None'}] ${multiCorrect ? '✓' : '✗'}`);
+  
+  // 显示结果
+  const acc = Math.round(100 * correct / total);
+  document.getElementById('results').innerHTML = `
+    <p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p>
+    <pre>${lines.join('\n')}</pre>
+  `;
+  
+  // 显示答案
+  document.getElementById('answerContent').innerHTML = `
+    <ol>
+      <li>27 → C</li>
+      <li>28 → A</li>
+      <li>29 → A</li>
+      <li>30 → D</li>
+      <li>31 → C</li>
+      <li>32 → D (Societe de Linguistique de Paris - felt that the origin of language should not be debated)</li>
+      <li>33 → H (Charles Darwin - referred to music in part of a book about the development of human beings)</li>
+      <li>34 → A (John Blacking - suggested music was an essential part of every individual)</li>
+      <li>35 → B (Christiansen and Kirby - made no link between music and language in a comprehensive study)</li>
+      <li>36 → E (Derek Bickerton - states that early language was made up of basic words used in an unsystematic way)</li>
+      <li>37 → G (Alison Wray - believes that proto-language had no individual words)</li>
+      <li>38-40 → A, D, E (evidence from prehistoric times, music, emotions)</li>
+    </ol>
+  `;
+  document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+
+function resetForm(){
+  // 重置单选题
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  // 重置配对题
+  for(let n=32; n<=37; n++){
+    const select = document.getElementById(`q${n}`);
+    if(select) select.value = '';
+  }
+  
+  // 重置多选题
+  document.querySelectorAll('input[name="q38_40"]').forEach(cb => {
+    cb.checked = false;
+  });
+  
+  // 重置结果和答案
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('answerContent').innerHTML = '';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  
+  // 重置导航栏的已回答状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+}
+
+// 滚动到问题锚点
+function scrollToElement(id){
+  const el = document.getElementById(id);
+  if(el){ 
+    el.scrollIntoView({behavior:'smooth', block:'center'}); 
+  }
+  // 短暂高亮导航项
+  const navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  const btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ 
+    btn.classList.add('active'); 
+    setTimeout(() => btn.classList.remove('active'), 800); 
+  }
+}
+
+// 监听交互并标记已回答
+(function(){
+  function markAnswered(qn){
+    const nav = document.getElementById(`q${qn}-nav`);
+    if(!nav) return;
+    let answered = false;
+    
+    // 检查多选题 (38-40)
+    if(qn >=38 && qn <=40){
+      const checkboxes = document.querySelectorAll('input[name="q38_40"]:checked');
+      answered = checkboxes.length > 0;
+    } 
+    // 检查配对题 (32-37)
+    else if(qn >=32 && qn <=37){
+      const select = document.getElementById(`q${qn}`);
+      answered = select && select.value !== '';
+    }
+    // 检查单选题 (27-31)
+    else {
+      const radios = document.querySelectorAll(`input[name="q${qn}"]:checked`);
+      answered = radios.length > 0;
+    }
+    
+    if(answered) nav.classList.add('answered');
+    else nav.classList.remove('answered');
+  }
+  
+  // 监听配对题选择
+  for(let n=32; n<=37; n++){
+    const select = document.getElementById(`q${n}`);
+    if(select){
+      select.addEventListener('change', () => markAnswered(n));
+    }
+  }
+  
+  // 监听单选题
+  for(let n=27; n<=31; n++){
+    document.querySelectorAll(`input[name="q${n}"]`).forEach(radio => {
+      radio.addEventListener('change', () => markAnswered(n));
+    });
+  }
+  
+  // 监听多选题 (38-40共享一个导航按钮)
+  document.querySelectorAll('input[name="q38_40"]').forEach(cb => {
+    cb.addEventListener('change', () => markAnswered(38)); // 使用38代表整个多选题
+  });
+})();
+</script>
+</body>
+</html>

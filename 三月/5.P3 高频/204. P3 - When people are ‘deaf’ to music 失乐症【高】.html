@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P3 – When people are ‘deaf’ to music</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+:root { 
+  --line: #e5e7eb; --bg: #f6f7fb; --panel: #fff; --accent: #3b82f6; 
+  --muted: #6b7280; --shadow: 0 6px 20px rgba(0,0,0,.15); 
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { 
+  margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+  background: var(--bg); padding-bottom: 70px; 
+}
+.shell { display: flex; height: 100vh; width: 100%; }
+.pane { background: var(--panel); overflow: auto; padding: 20px; position: relative; }
+#left { flex: 0 0 50%; min-width: 280px; }
+#right { flex: 1 1 auto; min-width: 320px; background: #fbfbff; border-left: 1px solid var(--line); }
+#divider { flex: 0 0 8px; background: linear-gradient(90deg, #e5e7eb, #d1d5db); cursor: ew-resize; position: relative; z-index: 5; user-select: none; }
+h2, h3, h4 { margin: 0 0 10px; }
+#left p { margin: 0 0 12px; line-height: 1.6; }
+.group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+.blank { border:none; border-bottom:1px solid #9ca3af; padding:4px 2px; font-size:1em; background:transparent; width: 120px; margin: 0 4px; }
+.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+button { padding: 8px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+button:hover { background: #f8fafc; border-color: #cbd5e1; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.primary:hover { background: #2563eb; }
+
+/* Navigation Bar */
+.practice-nav { background: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 5px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+.practice-nav .title { font-weight: 600; color: var(--muted); }
+.practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; }
+.practice-nav .q-item:hover { background: #f1f5f9; border-color: var(--accent); }
+.practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+.practice-nav .q-item.active { background: var(--accent); color: #fff; }
+.practice-nav .controls { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+#timer { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.2s; min-width: 70px; text-align: center; font-size: 14px; font-weight: bold; }
+#timer:hover { background: #f1f5f9; border-color: var(--accent); }
+#timer.paused { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+.theme-toggle { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; width: 32px; height: 32px; font-size: 16px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+.theme-toggle:hover { background: var(--accent); color: #fff; border-color: var(--accent); transform: scale(1.05); }
+
+/* Highlight & Notes Tools */
+#selbar { position: absolute; display: none; z-index: 2000; background: #1f2937; color: #fff; border-radius: 6px; padding: 4px; box-shadow: var(--shadow); font-size: 13px; gap: 4px; align-items: center; transform: translateX(-50%); }
+#selbar::after { content: ''; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #1f2937 transparent transparent transparent; }
+#selbar button { background: transparent; color: #fff; border: 1px solid transparent; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+#selbar button:hover { background: rgba(255,255,255,0.2); }
+
+#notes { position: fixed; right: 20px; bottom: 80px; width: 300px; height: 300px; background: #fff; border: 1px solid var(--line); border-radius: 8px; display: none; flex-direction: column; z-index: 1500; box-shadow: var(--shadow); font-size: 14px; }
+#notes header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--line); background: #f9fafb; border-radius: 8px 8px 0 0; }
+#notes header strong { font-weight: 600; color: #374151; }
+#notes header div { display: flex; gap: 6px; }
+#notes textarea { flex: 1; border: 0; padding: 12px; resize: none; font-family: inherit; line-height: 1.5; outline: none; }
+#notes textarea:focus { background: #fefefe; }
+.hl { background-color: #fde047; cursor: pointer; border-bottom: 1px dashed #ca8a04; }
+
+#toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 3000; font-size: 14px; }
+#results { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 16px 0; font-family: monospace; white-space: pre-wrap; }
+#results p { margin: 0 0 8px; }
+details.answerbox { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+details.answerbox summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+details.answerbox summary::-webkit-details-marker { display: none; }
+#answerContent { margin-top: 10px; }
+#answerContent ol { margin: 0; padding-left: 20px; }
+
+/* DRAG & DROP STYLES */
+.cardpool { background:#f1f5f9; border-radius:10px; padding:12px; margin-top: 12px; min-height: 48px; }
+.pool-vertical { display: flex; flex-direction: column; gap: 8px; }
+.card { 
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; 
+    padding: 10px 14px; display: block; cursor: grab; 
+    box-shadow: 0 1px 3px rgba(0,0,0,.05); user-select: none;
+    font-size: 14px; line-height: 1.4; width: 100%;
+    text-align: left;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+.card:hover { border-color: var(--accent); background: #fcfcfc; }
+.card:active { cursor: grabbing; }
+.card.ghost { opacity: 0.5; background: #e2e8f0; }
+.card strong { color: var(--accent); margin-right: 6px; font-weight: 700; }
+.dropzone { 
+    border: 2px dashed #cbd5e1; background: #f8fafc; border-radius: 8px; 
+    min-height: 50px; padding: 4px; 
+    display: flex; align-items: center; justify-content: center; 
+    width: 100%; margin-top: 6px; margin-bottom: 12px;
+    transition: all 0.2s;
+}
+.dropzone.over { outline: 2px solid var(--accent); background: #eff6ff; border-color: var(--accent); }
+.dropzone .card { margin: 0; width: 100%; border: 1px solid var(--accent); box-shadow: none; background: #fff; }
+
+/* Question List Styles */
+.mcq-group { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.mcq-group label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 14px; line-height: 1.4; padding: 6px; border-radius: 6px; transition: background 0.1s; }
+.mcq-group label:hover { background: #f3f4f6; }
+.mcq-group input { margin-top: 3px; }
+
+.question-row { display: flex; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px dashed var(--line); padding-bottom: 12px; align-items: flex-start; }
+.question-text { flex: 1; margin-right: 15px; }
+.radio-group { display: flex; gap: 12px; flex-shrink: 0; }
+.radio-group label { font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+
+body.dark { --bg: #0f172a; --panel: #1e293b; --line: #334155; --muted: #94a3b8; color: #e2e8f0; }
+body.dark .pane, body.dark #right { background: var(--panel); }
+body.dark #right { background: #131c2d; }
+body.dark button, body.dark .theme-toggle { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark button:hover { background: #475569; }
+body.dark .group, body.dark #results, body.dark details.answerbox, body.dark .list-box, body.dark #notes, body.dark header { background: #1e293b; border-color: #334155; }
+body.dark .practice-nav { background: #1e293b; border-top-color: #334155; }
+body.dark .q-item { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark .q-item:hover { background: #475569; }
+body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+body.dark #timer { background: #334155; color: #e2e8f0; border-color: #475569; }
+body.dark #timer.paused { background: #402323; color: #f87171; border-color: #7f1d1d; }
+body.dark .hl { background-color: #a16207; border-bottom-color: #eab308; color: #fff; }
+body.dark .cardpool { background:#0f172a; }
+body.dark .card { background: #334155; border-color: #475569; color: #e2e8f0; }
+body.dark .dropzone { border-color: #475569; background: #131c2d; }
+body.dark .dropzone.over { background: #1e293b; }
+body.dark #notes textarea { background: #1e293b; color: #e2e8f0; }
+body.dark .mcq-group label:hover { background: #334155; }
+
+@media (max-width: 768px) {
+  .shell { flex-direction: column; }
+  #divider { display: none; }
+  #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- 1. Bottom Navigation Bar -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <!-- Group 1 -->
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <!-- Group 2 -->
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <!-- Group 3 -->
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<!-- 2. Main Content Shell -->
+<div class="shell">
+  <!-- Left Pane: Reading Passage -->
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 3</h2>
+    <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+    
+    <h3>When people are ‘deaf’ to music</h3>
+  
+    <p>Music has long been considered a uniquely human concept. In fact, most psychologists agree that music is a universal human instinct. Like any ability, however, there is great variation in people’s musical competence. For every brilliant pianist in the world, there are several people we refer to as ‘tone deaf’. It is not simply that people with tone deafness (or ‘amusia’) are unable to sing in tune, they are also unable to discriminate between tones or recognize familiar melodies. Such a ‘disorder’ can occur after some sort of brain damage, but recently research has been undertaken in an attempt to discover the cause of congenital amusia (when people are born with the condition), which is not associated with any brain damage, hearing problems, or lack of exposure to music.</p>
+
+    <p>According to the research of Dr. Isabelle Peretz of the University of Montreal, amusia is more complicated than the inability to distinguish pitches. An amusic (a person who has the condition of amusia) can distinguish between two pitches that are far apart, but cannot tell the difference between intervals smaller than a half step on the Western diatonic scale, while most people can easily distinguish differences smaller than that. When listening to melodies which have had a single note altered so that it is out of key with the rest of the melody, they do not notice a problem. As would be expected, amusics perform significantly worse at singing and tapping a rhythm along with a melody than do non-amusics.</p>
+
+    <p>The most fascinating aspect of amusia is how specific to music it is. Because of music’s close ties to language, it might be expected that a musical impairment may be caused by a language impairment. Studies suggest, however, that language and music ability are independent of one another. People with brain damage in areas critical to language are often still able to sing, despite being unable to communicate through speech. Moreover, while amusics show deficiencies in their recognition of pitch differences in melodies, they show no such deficiencies in tonal languages. Amusics who speak tonal languages, such as Chinese, do not report having any difficulty discriminating between words that differ only in their intonation. The linguistic cues inherent in speech make discrimination of meaning much easier for amusics. Amusics are also successful most of the time at detecting the mood of a melody, can identify a speaker based on his or her voice and can discriminate and identify environmental sounds.</p>
+
+    <p>Recent work has been focused on locating the part of the brain that is responsible for amusia. The temporal lobes of the brain, the location of the primary auditory cortex, have been considered. It has long been believed that the temporal lobes, especially the right temporal lobe, are most active when engaged in musical activity, so any musical disability should logically stem from here as well. Because it has been shown that there is no hearing deficit in amusia, researchers moved on to the temporal neocortex, which is where more sophisticated processing of musical cues was thought to take place. New studies, however, have suggested that the deficits in amusics are located outside the auditory cortex. Brain scans of amusics do not show any reaction at all to differences smaller than a half step. When changes in tones are large, their brains overreact, showing twice as much activity on the right side of the brain as a normal brain hearing the same thing. These differences do not occur in the auditory cortex, indicating again that the deficits of amusia lie not in hearing impairment, but in higher processing of melodies.</p>
+
+    <p>So what does this all mean? Looking only at the research of Peretz in the field of neuropsychology of music, it would appear that amusia is some sort of disorder. As a student of neurobiology, however, I am skeptical. Certainly the studies by Peretz that have found significant differences between the brains of so-called amusics and normal brains are legitimate. The more important question now becomes one of normality. Every trait from skin color to intelligence to mood exists on a continuum—there is a great deal of variation from one extreme to the other. Just because we recognize that basic musical ability is something that the vast majority of people have, this doesn’t mean that the lack of it is abnormal.</p>
+
+    <p>What makes an amusic worse off than a musical prodigy? Musical ability is culturally valued, and may have been a factor in survival at one point in human history, but it does not seem likely that it is being selected for on an evolutionary scale any longer. Darwin believed that music was adaptive as a way of finding a mate, but who needs to be able to sing to find a partner in an age when it is possible to express your emotions through a song on your iPod?</p>
+
+    <p>While the idea of amusia is interesting, it seems to be just one end of the continuum of innate musical ability. Comparing this ‘disorder’ to learning disorders like a specific language impairment seems to be going too far. Before amusia can be declared a disability, further research must be done to determine whether lack of musical ability is actually detrimental in any way. If no disadvantages can be found of having amusia, then it is no more a disability than having poor fashion sense or bad handwriting.</p>
+    
+    <p>&nbsp;</p> <!-- Final padding -->
+  </section>
+
+  <!-- Draggable Divider -->
+  <div id="divider" title="Drag to resize"></div>
+
+  <!-- Right Pane: Questions and Controls -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- QUESTION GROUP 1: MULTIPLE CHOICE -->
+    <div class="group">
+      <h4>Questions 27–31</h4>
+      <p>Choose the correct letter, <strong>A, B, C or D</strong>.</p>
+      
+      <div style="margin-bottom:16px;">
+        <p><a id="q27-anchor"></a><strong>27</strong> What does the writer tell us about people with tone deafness (amusia) in the first paragraph?</p>
+        <div class="mcq-group">
+          <label><input type="radio" name="q27" value="a"> A. They usually have hearing problems</label>
+          <label><input type="radio" name="q27" value="b"> B. Some can play a musical instrument very well</label>
+          <label><input type="radio" name="q27" value="c"> C. Some may be able to sing well-known melodies</label>
+          <label><input type="radio" name="q27" value="d"> D. They have several inabilities in regard to music</label>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <p><a id="q28-anchor"></a><strong>28</strong> What is the writer doing in the second paragraph?</p>
+        <div class="mcq-group">
+          <label><input type="radio" name="q28" value="a"> A. outlining some of the factors that cause amusia</label>
+          <label><input type="radio" name="q28" value="b"> B. summarising some findings about people with amusia</label>
+          <label><input type="radio" name="q28" value="c"> C. suggesting that people with amusia are disadvantaged</label>
+          <label><input type="radio" name="q28" value="d"> D. comparing the singing ability of amusics with their sense</label>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <p><a id="q29-anchor"></a><strong>29</strong> What does the writer say about the relationship between language ability and musical ability?</p>
+        <div class="mcq-group">
+          <label><input type="radio" name="q29" value="a"> A. People who are unable to speak can sometimes sing</label>
+          <label><input type="radio" name="q29" value="b"> B. People with amusia usually have language problems too</label>
+          <label><input type="radio" name="q29" value="c"> C. Speakers of tonal languages like Chinese rarely have amusia</label>
+          <label><input type="radio" name="q29" value="d"> D. People with amusia have difficulty recognizing people by their voices</label>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <p><a id="q30-anchor"></a><strong>30</strong> In the third paragraph, the writer notes that most amusics are able to</p>
+        <div class="mcq-group">
+          <label><input type="radio" name="q30" value="a"> A. learn how to sing in tune</label>
+          <label><input type="radio" name="q30" value="b"> B. identify a song by its tune</label>
+          <label><input type="radio" name="q30" value="c"> C. distinguish a sad tone from a happy tune</label>
+          <label><input type="radio" name="q30" value="d"> D. recognise when a singer is not singing in tune</label>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <p><a id="q31-anchor"></a><strong>31</strong> What is the writer doing in the fourth paragraph?</p>
+        <div class="mcq-group">
+          <label><input type="radio" name="q31" value="a"> A. claiming that amusics have problems in the auditory cortex</label>
+          <label><input type="radio" name="q31" value="b"> B. outlining progress in understanding the brains of amusics</label>
+          <label><input type="radio" name="q31" value="c"> C. proving that amusia is located in the temporal lobes</label>
+          <label><input type="radio" name="q31" value="d"> D. explaining why studies of hearing are difficult</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUESTION GROUP 2: YES/NO/NOT GIVEN -->
+    <div class="group">
+      <h4>Questions 32–36</h4>
+      <p>Do the following statements agree with the views of the writer in Reading Passage 3?</p>
+      <p><em>In boxes 32–36 on your answer sheet, write</em></p>
+      <ul style="list-style:none; padding-left:0; font-weight:bold; font-size:0.9em;">
+        <li>YES <span style="font-weight:normal; margin-left:45px;">if the statement agrees with the views of the writer</span></li>
+        <li>NO <span style="font-weight:normal; margin-left:52px;">if the statement contradicts the views of the writer</span></li>
+        <li>NOT GIVEN <span style="font-weight:normal; margin-left:8px;">if it is impossible to say what the writer thinks about this</span></li>
+      </ul>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q32-anchor"></a><b>32</b> Peretz’s research suggesting that amusia is a disorder is convincing.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q32" value="yes"> Yes</label>
+            <label><input type="radio" name="q32" value="no"> No</label>
+            <label><input type="radio" name="q32" value="not given"> NG</label>
+        </div>
+      </div>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q33-anchor"></a><b>33</b> People with musical ability are happier than those without this ability.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q33" value="yes"> Yes</label>
+            <label><input type="radio" name="q33" value="no"> No</label>
+            <label><input type="radio" name="q33" value="not given"> NG</label>
+        </div>
+      </div>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q34-anchor"></a><b>34</b> It is inappropriate to consider amusia as a real disorder.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q34" value="yes"> Yes</label>
+            <label><input type="radio" name="q34" value="no"> No</label>
+            <label><input type="radio" name="q34" value="not given"> NG</label>
+        </div>
+      </div>
+
+      <div class="question-row">
+        <div class="question-text"><a id="q35-anchor"></a><b>35</b> People with amusia often have bad handwriting.</div>
+        <div class="radio-group">
+            <label><input type="radio" name="q35" value="yes"> Yes</label>
+            <label><input type="radio" name="q35" value="no"> No</label>
+            <label><input type="radio" name="q35" value="not given"> NG</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUESTION GROUP 3: MATCHING ENDINGS -->
+    <div class="group">
+      <h4>Questions 36–40</h4>
+      <p>Complete each sentence with the correct ending, <strong>A–H</strong>, below.</p>
+      <p><em>Drag the correct ending block to the box below each sentence start.</em></p>
+
+      <!-- Draggable Full Text Options -->
+      <div class="cardpool pool-vertical" id="pool-endings">
+        <div class="card" draggable="true" id="c-a" data-value="A"><strong>A</strong> an inability to hear when spoken language rises and falls.</div>
+        <div class="card" draggable="true" id="c-b" data-value="B"><strong>B</strong> considered to be desirable.</div>
+        <div class="card" draggable="true" id="c-c" data-value="C"><strong>C</strong> an inability to follow the beat of music.</div>
+        <div class="card" draggable="true" id="c-d" data-value="D"><strong>D</strong> not a problem.</div>
+        <div class="card" draggable="true" id="c-e" data-value="E"><strong>E</strong> not yet well understood.</div>
+        <div class="card" draggable="true" id="c-f" data-value="F"><strong>F</strong> a result of injury to the mother.</div>
+        <div class="card" draggable="true" id="c-g" data-value="G"><strong>G</strong> more marked than with other people.</div>
+        <div class="card" draggable="true" id="c-h" data-value="H"><strong>H</strong> associated with intelligence.</div>
+      </div>
+
+      <hr style="border:0; border-top:1px dashed var(--line); margin:20px 0;">
+
+      <div>
+        <p><a id="q36-anchor"></a><strong>36</strong> The reason why some people are born with amusia is</p>
+        <span class="dropzone" data-target="q36"></span>
+      </div>
+      <div>
+        <p><a id="q37-anchor"></a><strong>37</strong> One of the difficulties amusics experience is</p>
+        <span class="dropzone" data-target="q37"></span>
+      </div>
+      <div>
+        <p><a id="q38-anchor"></a><strong>38</strong> For amusics, discrimination of meaning in speech is</p>
+        <span class="dropzone" data-target="q38"></span>
+      </div>
+      <div>
+        <p><a id="q39-anchor"></a><strong>39</strong> Certain reactions in the brain of an amusic are</p>
+        <span class="dropzone" data-target="q39"></span>
+      </div>
+      <div>
+        <p><a id="q40-anchor"></a><strong>40</strong> In most cultures, musical ability is</p>
+        <span class="dropzone" data-target="q40"></span>
+      </div>
+    </div>
+
+    <!-- Controls and Results -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<!-- 3. UI Helper Elements -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// --- MASTER JAVASCRIPT TEMPLATE ---
+
+// 1. STATE & ANSWERS
+const answers = {
+    q27: "d",
+    q28: "b",
+    q29: "a",
+    q30: "c",
+    q31: "b",
+    q32: "no",
+    q33: "not given",
+    q34: "yes",
+    q35: "not given",
+    q36: "e",
+    q37: "c",
+    q38: "d",
+    q39: "g",
+    q40: "b"
+};
+
+// 2. UI & INTERACTIVITY (Highlighter, Timer, Dark Mode)
+let timerSeconds = 0, timerInterval;
+let isTimerPaused = false;
+const timerEl = document.getElementById('timer');
+
+function toggleTimer() {
+    isTimerPaused = !isTimerPaused;
+    timerEl.classList.toggle('paused', isTimerPaused);
+    showToast(isTimerPaused ? 'Timer paused' : 'Timer resumed');
+}
+
+setInterval(() => {
+    if (!isTimerPaused) {
+        timerSeconds++;
+        const minutes = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+        const seconds = String(timerSeconds % 60).padStart(2, '0');
+        timerEl.textContent = `${minutes}:${seconds}`;
+    }
+}, 1000);
+
+function toggleDarkMode() {
+    document.body.classList.toggle('dark-mode');
+    document.body.classList.toggle('dark');
+    const isDark = document.body.classList.contains('dark-mode');
+    localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled');
+    document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️';
+}
+
+function scrollToElement(id) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function showToast(msg) {
+    const toastEl = document.getElementById('toast');
+    toastEl.textContent = msg;
+    toastEl.style.display = 'block';
+    setTimeout(() => { toastEl.style.display = 'none'; }, 1500);
+}
+
+// 3. HIGHLIGHTING & NOTE TAKING LOGIC
+const selbar = document.getElementById('selbar');
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+
+// Handle Text Selection
+document.addEventListener('mouseup', (e) => {
+    const sel = window.getSelection();
+    // Only show toolbar if text is selected within the reading pane (#left)
+    if (sel.toString().length > 0 && document.getElementById('left').contains(sel.anchorNode)) {
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        selbar.style.top = `${rect.top + window.scrollY - 40}px`;
+        selbar.style.left = `${rect.left + rect.width / 2}px`;
+        selbar.style.display = 'flex';
+    } else if (!selbar.contains(e.target)) {
+        selbar.style.display = 'none';
+    }
+});
+
+document.getElementById('btnHL').onclick = () => {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const span = document.createElement('span');
+    span.className = 'hl';
+    try {
+        range.surroundContents(span);
+        sel.removeAllRanges();
+        selbar.style.display = 'none';
+    } catch (e) {
+        showToast("Cannot highlight across different blocks.");
+    }
+};
+
+document.getElementById('btnUH').onclick = () => {
+    const sel = window.getSelection();
+    if (sel.anchorNode.parentElement.classList.contains('hl')) {
+        const parent = sel.anchorNode.parentElement;
+        const text = document.createTextNode(parent.textContent);
+        parent.parentNode.replaceChild(text, parent);
+        sel.removeAllRanges();
+        selbar.style.display = 'none';
+    } else {
+        showToast("Select a highlighted area to remove.");
+    }
+};
+
+document.getElementById('btnNote').onclick = () => {
+    toggleNotes();
+    selbar.style.display = 'none';
+};
+
+function toggleNotes() {
+    notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+}
+
+document.getElementById('btnClose').onclick = toggleNotes;
+document.getElementById('btnCopy').onclick = () => {
+    noteArea.select();
+    document.execCommand('copy');
+    showToast('Notes copied to clipboard');
+};
+
+// 4. DRAG AND DROP LOGIC
+document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', card.id);
+        setTimeout(() => card.classList.add('ghost'), 0);
+    });
+    card.addEventListener('dragend', () => card.classList.remove('ghost'));
+});
+
+document.querySelectorAll('.dropzone').forEach(zone => {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('over');
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        
+        if (!draggedCard) return;
+
+        const originPool = document.getElementById(draggedCard.dataset.originPool);
+        const cardToDrop = draggedCard.dataset.clone === 'true' ? draggedCard.cloneNode(true) : draggedCard;
+        
+        // Return existing card to its pool
+        if (zone.children.length > 0 && zone.children[0].classList.contains('card')) {
+            const existingCard = zone.children[0];
+            const itsOriginPool = document.getElementById(existingCard.dataset.originPool);
+            if (itsOriginPool) itsOriginPool.appendChild(existingCard);
+        }
+
+        zone.innerHTML = '';
+        zone.appendChild(cardToDrop);
+        updateAnswerStatus();
+    });
+});
+
+document.querySelectorAll('.cardpool').forEach(pool => {
+    pool.addEventListener('dragover', e => e.preventDefault());
+    pool.addEventListener('drop', e => {
+        e.preventDefault();
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        if (draggedCard && draggedCard.parentElement.classList.contains('dropzone')) {
+            const oldZone = draggedCard.parentElement;
+            
+            if (draggedCard.dataset.clone === 'true') {
+                draggedCard.remove();
+            } else {
+                pool.appendChild(draggedCard);
+            }
+            
+            oldZone.innerHTML = '';
+            updateAnswerStatus();
+        }
+    });
+});
+
+// 5. GRADING & STATE MANAGEMENT
+function grade() {
+    let total = 0, correct = 0, lines = [];
+    
+    Object.keys(answers).forEach(qKey => {
+        const textInput = document.querySelector(`input[name="${qKey}"][type="text"]`);
+        const radioInput = document.querySelector(`input[name="${qKey}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qKey}"]`);
+        let userAnswer = '';
+        
+        if (textInput) {
+            userAnswer = textInput.value.trim();
+        } else if (radioInput) {
+            userAnswer = radioInput.value;
+        } else if (dropzone) {
+            const card = dropzone.querySelector('.card');
+            userAnswer = card ? card.dataset.value : '';
+        }
+        
+        const isCorrect = userAnswer.toLowerCase() === answers[qKey].toLowerCase();
+        
+        total++;
+        if (isCorrect) correct++;
+        
+        let resultLine = `${qKey.toUpperCase()}: ${userAnswer || 'None'} ${isCorrect ? '✅' : `❌ (Correct: ${answers[qKey]})`}`;
+        lines.push(resultLine);
+    });
+
+    const acc = total ? Math.round(100 * correct / total) : 0;
+    document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p><pre>${lines.join('\n')}</pre>`;
+    document.getElementById('answerContent').innerHTML = `<ol start="27">${Object.entries(answers).map(([key, val]) => `<li><strong>${key.replace('q','')}:</strong> ${val}</li>`).join('')}</ol>`;
+    document.querySelector('#answerBox .badge').textContent = 'tap to view';
+}
+
+function resetForm() {
+    document.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
+    document.querySelectorAll('input[type="radio"]').forEach(input => input.checked = false);
+    document.querySelectorAll('.dropzone').forEach(zone => {
+        if (zone.children.length > 0) {
+            const card = zone.children[0];
+            const originPool = document.getElementById(card.dataset.originPool);
+            if (originPool && card.dataset.clone !== 'true') {
+                originPool.appendChild(card);
+            } else {
+                card.remove(); 
+            }
+        }
+        zone.innerHTML = '';
+    });
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('answerContent').innerHTML = '';
+    document.querySelector('#answerBox .badge').textContent = 'hidden';
+    updateAnswerStatus();
+    showToast('Form has been reset');
+}
+
+function updateAnswerStatus() {
+    document.querySelectorAll('.q-item').forEach(item => {
+        const qNum = item.id.replace('-nav', '');
+        const textInput = document.querySelector(`input[name="${qNum}"][type="text"]`);
+        const radioInput = document.querySelector(`input[name="${qNum}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qNum}"]`);
+        let answered = false;
+        
+        if (textInput) answered = textInput.value.trim() !== '';
+        if (radioInput) answered = true;
+        if (dropzone) answered = !!dropzone.querySelector('.card');
+        
+        item.classList.toggle('answered', answered);
+    });
+}
+
+// 6. INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        toggleDarkMode();
+    }
+    document.querySelectorAll('input, .dropzone').forEach(el => {
+        el.addEventListener('input', updateAnswerStatus);
+        el.addEventListener('change', updateAnswerStatus);
+        el.addEventListener('drop', updateAnswerStatus);
+    });
+    
+    // Setup origin pool data for cards
+    document.querySelectorAll('.card').forEach(card => {
+        if (card.parentElement.classList.contains('cardpool')) {
+            card.dataset.originPool = card.parentElement.id;
+        }
+    });
+
+    // Load LMS script
+    if (!window.practicePageEnhancer) {
+        const script = document.createElement('script');
+        script.src = '../../js/practice-page-enhancer.js';
+        script.onload = () => console.log('Enhancer loaded.');
+        script.onerror = () => console.error('Failed to load enhancer.');
+        document.head.appendChild(script);
+    }
+});
+</script>
+
+</body>
+</html>
