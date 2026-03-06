@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P3 – Australia's Megafauna Controversy</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root { 
+    --line: #e5e7eb; --bg: #f6f7fb; --panel: #fff; --accent: #3b82f6; 
+    --muted: #6b7280; --shadow: 0 6px 20px rgba(0,0,0,.12); 
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { 
+    margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background: var(--bg); padding-bottom: 70px; color: #111827;
+  }
+  .shell { display: flex; height: 100vh; width: 100%; }
+  .pane { background: var(--panel); overflow: auto; padding: 20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background: #fbfbff; border-left: 1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg, #e5e7eb, #d1d5db); cursor: ew-resize; position: relative; z-index: 5; user-select: none; }
+  h2, h3, h4 { margin: 0 0 10px; }
+  #left p, #right p, #right li { margin: 0 0 12px; line-height: 1.6; }
+  .group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+  .q-block { margin-bottom: 16px; }
+  .options { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .options label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .dropzone { 
+    border: 2px dashed #cbd5e1; background: #f8fafc; border-radius: 10px; 
+    min-height: 42px; padding: 6px; display: inline-flex; align-items: center; justify-content: center; 
+    width: 42px; vertical-align: middle;
+    transition: background-color 0.2s, outline 0.2s; 
+  }
+  .dropzone.over { outline: 2px solid var(--accent); background: #eff6ff; }
+  .dropzone .card { box-shadow: none; cursor: default; }
+  .option-pool { background:#f9fafb; border: 1px solid var(--line); border-radius: 8px; padding: 12px; display:flex; flex-wrap:wrap; gap:8px; margin-top: 12px; min-height: 48px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 12px; display:inline-flex; align-items:center; cursor:grab; box-shadow:0 2px 4px rgba(0,0,0,.05); user-select:none; transition: box-shadow 0.2s; }
+  .card:active { cursor: grabbing; box-shadow: var(--shadow); }
+  .card.ghost { opacity: 0.4; }
+  button { padding: 8px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+  button:hover { background: #f8fafc; border-color: #cbd5e1; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: #2563eb; }
+  .practice-nav { background: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 5px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+  .practice-nav .title { font-weight: 600; color: var(--muted); }
+  .practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; }
+  .practice-nav .q-item:hover { background: #f1f5f9; border-color: var(--accent); }
+  .practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+  .practice-nav .controls { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+  #timer { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.2s; min-width: 70px; text-align: center; font-size: 14px; font-weight: bold; }
+  #timer:hover { background: #f1f5f9; border-color: var(--accent); }
+  #timer.paused { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+  .theme-toggle { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; width: 32px; height: 32px; font-size: 16px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+  #selbar { position: absolute; display: none; z-index: 2000; background: #111; color: #fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+  #selbar button { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+  #notes { position: fixed; right: 12px; bottom: 85px; width: 320px; height: 42vh; background: #fff; border: 1px solid var(--line); border-radius: 12px; display: none; flex-direction: column; z-index: 1500; box-shadow: var(--shadow); }
+  #notes header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  #notes textarea { flex: 1; border: 0; padding: 10px; resize: none; font-size: 14px; line-height: 1.5; background-color: inherit; color: inherit; }
+  #toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 3000; font-size: 14px; }
+  #results { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 16px 0; }
+  #results p { margin: 0 0 8px; }
+  #results pre { font-family: monospace; white-space: pre-wrap; margin: 0; }
+  .badge { background: #eef2ff; color: #4338ca; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 500; }
+  details.answerbox { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+  details.answerbox summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+  details.answerbox summary::-webkit-details-marker { display: none; }
+  #answerContent { margin-top: 10px; }
+  #answerContent ol { margin: 0; padding-left: 20px; }
+  .hl { background: #fff3a3; }
+  body.dark { --bg: #0f172a; --panel: #1e293b; --line: #334155; --muted: #94a3b8; color: #e2e8f0; }
+  body.dark .pane, body.dark #right { background: var(--panel); }
+  body.dark #right { background: #131c2d; }
+  body.dark button, body.dark .theme-toggle { background: #334155; color: #e2e8f0; border-color: #475569; }
+  body.dark .group, body.dark #results, body.dark details.answerbox, body.dark #notes { background: #1e293b; border-color: #334155; }
+  body.dark .practice-nav { background: #1e293b; border-top-color: #334155; }
+  body.dark .q-item { background: #334155; color: #e2e8f0; border-color: #475569; }
+  body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+  body.dark #timer.paused { background: #402323; color: #f87171; border-color: #7f1d1d; }
+  body.dark .hl { background: #b45309; }
+  body.dark .option-pool { background:#0f172a; border-color: var(--line); }
+  body.dark .card { background: #334155; border-color: #475569; }
+  body.dark .dropzone { border-color: #475569; background: #131c2d; }
+  body.dark .dropzone.over { background: #1e293b; }
+  body.dark .badge { background: #312e81; color: #a5b4fc; }
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; height: auto; }
+    #left, #right { min-height: 50vh; }
+    #divider { display: none; }
+    #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 1. Bottom Navigation Bar -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q27-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q27-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q27-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q31-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q31-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q31-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q31-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q36-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q36-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q36-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q36-anchor')">40</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<!-- 2. Main Content Shell -->
+<div class="shell">
+  <!-- Left Pane: Reading Passage -->
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 3</h2>
+    <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>
+    
+    <h3>Australia's Megafauna Controversy</h3>
+    <p><em>Just how long did humans live side by side with megafauna in Australia? Barry Brook, Richard Gillespie and Paul Martin dispute previous claims of a lengthy coexistence.</em></p>
+  
+    <p>Over the past 50 millennia, Australia has witnessed the extinction of many species of large animals, including a rhinoceros-sized wombat and goannas the size of crocodiles. Debate about the possible cause of these extinctions has continued for more than 150 years, and one of the crucial questions raised is how long humans and megafauna coexisted in Australia. We need to know the overlap of time to make an informed choice between the two main theories regarding the causes of these extinctions. If humans and megafauna coexisted for a protracted period, then climate change is the more likely cause. However, if the megafauna became extinct shortly after the arrival of humans, then humans are the likely culprits.</p>
+    <p>The archaeological site at Cuddie Springs in eastern Australia appears to be well preserved. This dusty claypan holds within its sediments a rich cache of flaked stone and seed-grinding tools, and side by side with these clear signals of human culture are the bones of a dozen or more species of megafauna. Drs Judith Field and Stephen Wroe of the University of Sydney, who excavated the site, claim that it provides unequivocal evidence of a long overlap of humans and megafauna, and conclude that aridity leading up to the last Ice Age brought about their eventual demise. In the long-standing explanation of this site, artefacts such as stone tools and extinct animal remains were deposited over many thousands of years in an ephemeral lake – a body of water existing for a relatively short time – and remained in place and undisturbed until the present day.</p>
+    <p>There is no disputing the close association of bones and stones at Cuddie Springs, as both are found 1 to 1.7 metres below the modern surface. The dating of these layers is accurate: ages for the sediments were obtained through radiocarbon dating of charcoal fragments and luminescence dating of sand grains from the same levels (revealing when a sample was last exposed to sunlight). Intriguingly, some of the stone tools show surface features indicating their use for processing plants, and a few even have well-preserved blood and hair residues suggesting they were used in butchering animals.</p>
+    <p>But is the case proposed by Field and Wroe clear-cut? We carried out a reanalysis of the scientific data from Cuddie Springs that brings into question their conclusions. The amount of anthropological evidence found at the site is remarkable: we estimate there are more than 3 tonnes of charcoal and more than 300 tonnes of stone buried there. Field and Wroe estimate that there are approximately 20 million artefacts. This plethora of tools is hard to reconcile with a site that was only available for occupation when the lake was dry. Furthermore, no cultural features such as oven pits have been discovered. If the sediment layers have remained undisturbed since being laid down, as Field and Wroe contend, then the ages of those sediments should increase with depth. However, our analysis revealed a number of inconsistencies.</p>
+    <p>First, the charcoal samples are all roughly 36,000 years old. Second, sand in the two upper levels is considerably younger than charcoal from the same levels. Third, Field and Wroe say that the tools and seed-grinding stones used for plant and animal processing are ancient, yet they are very similar to implements found elsewhere that were in use only a few thousand years ago. Also of interest is the fact that a deep drill core made a mere 60 metres from the site recovered no stone artefacts or fossil bones whatsoever. These points suggest strongly that the sediments have been moved about and some of the old charcoal has been re-deposited in younger layers. Indeed, one sample of cow bone found 1 metre below the surface came from sediments where charcoal dated at 6,000 and 23,000 years old is mixed with 17,000-year-old sand. The megafauna bones themselves have not yet been dated, although new technological developments make this a possibility in the near future.</p>
+    <p>We propose that the archaeologists have actually been sampling the debris carried by ancient flood channels beneath the site, including charcoal transported from bushfires that intermittently occurred within the catchment. Flood events more likely explain the accumulation of megafauna remains, and could have mixed old bones with fresh deposits. European graziers also disturbed the site in 1876 by constructing a well to provide water for their cattle. Given the expense of well-digging, we speculate that the graziers made sure it was protected from the damage caused by cattle hooves by lining the surface with small stones collected from further afield, including prehistoric quarries. This idea is consistent with the thin layer of stones spread over a large area, with cattle occasionally breaking through the gravel surface and forcing the stone and even cattle bones deeper into the waterlogged soil.</p>
+    <p>The lack of conclusive evidence that humans and megafauna coexisted for a lengthy period casts doubt on Field and Wroe's assertion that climate change was responsible for the extinction of Australia's megafauna. However, we do not suggest that newly arrived, well-armed hunters systematically slaughtered all the large beasts they encountered. Recent studies based on the biology of modern-day large mammals, combined with observations of people who still practise a traditional hunter-gatherer lifestyle, reveal an unexpected paradox and suggest a further possible explanation as to what happened. Using a mathematical model, it was found that a group of 10 people killing only one juvenile Diprotodon each year would be sufficient to bring about the extinction of that species within 1,000 years. This suggests that here, as in other parts of the world, the arrival of humans in lands previously inhabited only by animals created a volatile combination in which large animals fared badly.</p>
+    
+    <p>&nbsp;</p> <!-- Final padding -->
+  </section>
+
+  <!-- Draggable Divider -->
+  <div id="divider" title="Drag to resize"></div>
+
+  <!-- Right Pane: Questions and Controls -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <a id="q27-anchor"></a>
+      <h4>Questions 27–30</h4>
+      <p>Do the following statements agree with the claims of the writer in Reading Passage 3?</p>
+      <div class="q-block"><p><strong>27</strong> Field and Wroe argue that findings at the Cuddie Springs site show that people lived in this area at the same time as megafauna.</p><div class="options"><label><input type="radio" name="q27" value="yes"> YES</label><label><input type="radio" name="q27" value="no"> NO</label><label><input type="radio" name="q27" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>28</strong> Field and Wroe believe it is likely that smaller megafauna species survived the last Ice Age.</p><div class="options"><label><input type="radio" name="q28" value="yes"> YES</label><label><input type="radio" name="q28" value="no"> NO</label><label><input type="radio" name="q28" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>29</strong> The writers believe that the dating of earth up to 1.7 m below the present surface at Cuddie Springs is unreliable.</p><div class="options"><label><input type="radio" name="q29" value="yes"> YES</label><label><input type="radio" name="q29" value="no"> NO</label><label><input type="radio" name="q29" value="not given"> NOT GIVEN</label></div></div>
+      <div class="q-block"><p><strong>30</strong> Some artefacts found at Cuddie Springs were preserved well enough to reveal their function.</p><div class="options"><label><input type="radio" name="q30" value="yes"> YES</label><label><input type="radio" name="q30" value="no"> NO</label><label><input type="radio" name="q30" value="not given"> NOT GIVEN</label></div></div>
+    </div>
+    
+    <div class="group">
+      <a id="q31-anchor"></a>
+      <h4>Questions 31–35</h4>
+      <p>Complete the summary using the list of words, A–I, below.</p>
+      <h5>The writers' arguments against Field and Wroe's analysis of the scientific data from Cuddie Springs</h5>
+      <p>One objection to Field and Wroe's interpretation is the large quantity of charcoal, <strong>31</strong> <span class="dropzone" data-target="q31"></span> and artefacts found at Cuddie Springs. Such large numbers of artefacts would be impossible if the area had been covered with <strong>32</strong> <span class="dropzone" data-target="q32"></span> for a period. There is also a complete lack of man-made structures, for instance those used for <strong>33</strong> <span class="dropzone" data-target="q33"></span>.</p>
+      <p>Other evidence that casts doubt on Field and Wroe's claim is the fact that while some material in the highest levels of sediment is 36,000 years old, the <strong>34</strong> <span class="dropzone" data-target="q34"></span> in the same levels is much more recent. The tools used to process plants and animals may also be newer than Field and Wroe believe. Further evidence against human occupation of the area is the absence of tools and <strong>35</strong> <span class="dropzone" data-target="q35"></span> just a short distance away.</p>
+      <div class="option-pool" id="pool-summary">
+        <div class="card" draggable="true" data-value="A"><strong>A</strong> seeds</div><div class="card" draggable="true" data-value="B"><strong>B</strong> stone</div><div class="card" draggable="true" data-value="C"><strong>C</strong> sand</div><div class="card" draggable="true" data-value="D"><strong>D</strong> cooking</div><div class="card" draggable="true" data-value="E"><strong>E</strong> deep drill core</div><div class="card" draggable="true" data-value="F"><strong>F</strong> water</div><div class="card" draggable="true" data-value="G"><strong>G</strong> fossil bones</div><div class="card" draggable="true" data-value="H"><strong>H</strong> sediment</div><div class="card" draggable="true" data-value="I"><strong>I</strong> storage</div>
+      </div>
+    </div>
+
+    <div class="group">
+        <a id="q36-anchor"></a>
+        <h4>Questions 36–40</h4>
+        <p>Choose the correct letter, A, B, C or D.</p>
+        <div class="q-block"><p><strong>36</strong> What conclusions did the writers reach about the inconsistencies in the data from Cuddie Springs?</p><div class="options"><label><input type="radio" name="q36" value="A"> A The different layers of sediment have been mixed over time.</label><label><input type="radio" name="q36" value="B"> B The sand evidence is unhelpful and should be disregarded.</label><label><input type="radio" name="q36" value="C"> C The area needs to be re-examined when technology improves.</label><label><input type="radio" name="q36" value="D"> D The charcoal found in the area cannot be dated.</label></div></div>
+        <div class="q-block"><p><strong>37</strong> According to the writers, what impact could a natural phenomenon have had on this site?</p><div class="options"><label><input type="radio" name="q37" value="A"> A Floods could have caused the death of the megafauna.</label><label><input type="radio" name="q37" value="B"> B Floods could have disturbed the archaeological evidence.</label><label><input type="radio" name="q37" value="C"> C Bushfires could have prevented humans from settling in the area for any length of time.</label><label><input type="radio" name="q37" value="D"> D Bushfires could have destroyed much of the evidence left by megafauna and humans.</label></div></div>
+        <div class="q-block"><p><strong>38</strong> What did the writers speculate about the people who lived at this site in 1876?</p><div class="options"><label><input type="radio" name="q38" value="A"> A They bred cattle whose bones could have been confused with megafauna.</label><label><input type="radio" name="q38" value="B"> B They found that the soil was too waterlogged for farming.</label><label><input type="radio" name="q38" value="C"> C They allowed cattle to move around freely at the site.</label><label><input type="radio" name="q38" value="D"> D They brought stones there from another area.</label></div></div>
+        <div class="q-block"><p><strong>39</strong> In the final paragraph, what suggestion do the writers make about Australia's megafauna?</p><div class="options"><label><input type="radio" name="q39" value="A"> A A rapid change in climate may have been responsible for the extinction of the megafauna.</label><label><input type="radio" name="q39" value="B"> B Megafauna could have died out as a result of small numbers being killed year after year.</label><label><input type="radio" name="q39" value="C"> C The population of humans at that time was probably insufficient to cause the extinction of the megafauna.</label><label><input type="radio" name="q39" value="D"> D The extinction of ancient animals should not be compared to that of modern-day species.</label></div></div>
+        <div class="q-block"><p><strong>40</strong> Which of the following best represents the writers' criticism of Field and Wroe?</p><div class="options"><label><input type="radio" name="q40" value="A"> A Their methods were not well thought out.</label><label><input type="radio" name="q40" value="B"> B The excavations did not go deep enough.</label><label><input type="radio" name="q40" value="C"> C Their technology failed to obtain precise data.</label><label><input type="radio" name="q40" value="D"> D Their conclusions were based on inconsistent data.</label></div></div>
+    </div>
+
+    <!-- Controls and Results -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<!-- 3. UI Helper Elements -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// --- MASTER JAVASCRIPT TEMPLATE ---
+
+// 1. STATE & ANSWERS
+const answers = {
+    q27: "yes", q28: "not given", q29: "no", q30: "yes",
+    q31: "b", q32: "f", q33: "d", q34: "c", q35: "g",
+    q36: "a", q37: "b", q38: "d", q39: "b", q40: "d"
+};
+
+// 2. UI & INTERACTIVITY
+let timerSeconds = 0, isTimerPaused = false;
+const timerEl = document.getElementById('timer');
+
+function toggleTimer() { isTimerPaused = !isTimerPaused; timerEl.classList.toggle('paused', isTimerPaused); showToast(isTimerPaused ? 'Timer paused' : 'Timer resumed'); }
+setInterval(() => { if (!isTimerPaused) { timerSeconds++; const m = String(Math.floor(timerSeconds / 60)).padStart(2, '0'); const s = String(timerSeconds % 60).padStart(2, '0'); timerEl.textContent = `${m}:${s}`; } }, 1000);
+function toggleDarkMode() { document.body.classList.toggle('dark'); const isDark = document.body.classList.contains('dark'); localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled'); document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️'; }
+function scrollToElement(id) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+function showToast(msg) { const toastEl = document.getElementById('toast'); toastEl.textContent = msg; toastEl.style.display = 'block'; setTimeout(() => { toastEl.style.display = 'none'; }, 1500); }
+
+// 3. HIGHLIGHT AND NOTES FUNCTIONALITY
+const selbar = document.getElementById('selbar');
+let lastRange = null;
+function handleTextSelection() { setTimeout(() => { const sel = window.getSelection(); if (sel.toString().trim().length > 0) { lastRange = sel.getRangeAt(0).cloneRange(); const rect = lastRange.getBoundingClientRect(); selbar.style.top = `${window.scrollY + rect.top - selbar.offsetHeight - 5}px`; selbar.style.left = `${window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2}px`; selbar.style.display = 'flex'; } else { selbar.style.display = 'none'; } }, 10); }
+['left', 'right'].forEach(id => document.getElementById(id).addEventListener('mouseup', handleTextSelection));
+document.addEventListener('mousedown', (e) => { if (!selbar.contains(e.target)) selbar.style.display = 'none'; });
+document.getElementById('btnHL').addEventListener('click', () => { if (lastRange) { const span = document.createElement('span'); span.className = 'hl'; try { lastRange.surroundContents(span); } catch(e) { console.error(e); } selbar.style.display = 'none'; window.getSelection().removeAllRanges(); } });
+document.getElementById('btnUH').addEventListener('click', () => { if (lastRange) { let container = lastRange.commonAncestorContainer; if (container.nodeType !== 1) container = container.parentElement; const highlights = container.querySelectorAll('.hl'); highlights.forEach(hl => { if (window.getSelection().containsNode(hl, true)) { const parent = hl.parentNode; while (hl.firstChild) parent.insertBefore(hl.firstChild, hl); parent.removeChild(hl); parent.normalize(); } }); selbar.style.display = 'none'; window.getSelection().removeAllRanges(); } });
+document.getElementById('btnNote').addEventListener('click', () => { const text = window.getSelection().toString().trim(); if (text) { const noteArea = document.getElementById('noteArea'); noteArea.value += (noteArea.value ? '\n\n' : '') + `> ${text}`; toggleNotes(); noteArea.scrollTop = noteArea.scrollHeight; } selbar.style.display = 'none'; });
+function toggleNotes() { const notePad = document.getElementById('notes'); notePad.style.display = notePad.style.display === 'flex' ? 'none' : 'flex'; }
+document.getElementById('btnClose').addEventListener('click', toggleNotes);
+document.getElementById('btnCopy').addEventListener('click', () => { navigator.clipboard.writeText(document.getElementById('noteArea').value); showToast('Notes copied'); });
+
+// 4. DRAG AND DROP LOGIC
+document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', e.target.id); setTimeout(() => e.target.classList.add('ghost'), 0); });
+    card.addEventListener('dragend', e => e.target.classList.remove('ghost'));
+});
+document.querySelectorAll('.dropzone').forEach(zone => {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault(); zone.classList.remove('over');
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        if (!draggedCard) return;
+        const cardToDrop = draggedCard.dataset.clone === 'true' ? draggedCard.cloneNode(true) : draggedCard;
+        cardToDrop.classList.remove('ghost');
+        if (zone.children.length > 0) {
+            const existingCard = zone.children[0];
+            if (existingCard.dataset.clone !== 'true') {
+                const itsOriginPool = document.getElementById(existingCard.dataset.originPool);
+                if (itsOriginPool) itsOriginPool.appendChild(existingCard);
+            }
+        }
+        zone.innerHTML = '';
+        zone.appendChild(cardToDrop);
+        updateAnswerStatus();
+    });
+});
+
+// 5. GRADING & STATE MANAGEMENT
+function grade() {
+    let total = 0, correct = 0, lines = [];
+    const push = (q, ok, user, correctAns) => { total++; if(ok) correct++; const displayAns = String(correctAns).toUpperCase(); lines.push(`${q.toUpperCase().replace('Q','')}: ${user || 'None'} ${ok ? '✅' : `❌ (Ans: ${displayAns})`}`); };
+    Object.keys(answers).forEach(qKey => {
+        const correctAns = answers[qKey];
+        let userAnswer = null;
+        const radio = document.querySelector(`input[name="${qKey}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qKey}"]`);
+        if (radio) userAnswer = radio.value;
+        else if (dropzone) userAnswer = dropzone.querySelector('.card')?.dataset.value || null;
+        const isCorrect = userAnswer !== null && userAnswer.toLowerCase() === String(correctAns).toLowerCase();
+        push(qKey, isCorrect, userAnswer, correctAns);
+    });
+    const acc = total ? Math.round(100 * correct / total) : 0;
+    document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p><pre>${lines.join('\n')}</pre>`;
+    document.getElementById('answerContent').innerHTML = `<ol start="27">${Object.entries(answers).map(([key, val]) => `<li><strong>${key.replace('q','').replace('-','–')}:</strong> ${String(val).toUpperCase()}</li>`).join('')}</ol>`;
+    document.querySelector('#answerBox .badge').textContent = 'tap to view';
+    document.getElementById('answerBox').open = true;
+}
+
+function resetForm() {
+    document.querySelectorAll('input[type="radio"]').forEach(radio => radio.checked = false);
+    document.querySelectorAll('.dropzone').forEach(zone => {
+        if (zone.children.length > 0) {
+            const card = zone.children[0];
+            if (card.dataset.clone !== 'true') {
+                const originPool = document.getElementById(card.dataset.originPool);
+                if (originPool) originPool.appendChild(card);
+            }
+        }
+        zone.innerHTML = '';
+    });
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('answerContent').innerHTML = '';
+    document.querySelector('#answerBox .badge').textContent = 'hidden';
+    document.getElementById('answerBox').open = false;
+    updateAnswerStatus();
+    showToast('Form has been reset');
+}
+
+function updateAnswerStatus() {
+    document.querySelectorAll('.q-item').forEach(item => {
+        const qNum = item.id.replace('-nav', '');
+        let answered = false;
+        const radio = document.querySelector(`input[name="${qNum}"]:checked`);
+        const dropzone = document.querySelector(`.dropzone[data-target="${qNum}"]`);
+        if (radio) answered = true;
+        else if (dropzone) answered = !!dropzone.querySelector('.card');
+        item.classList.toggle('answered', answered);
+    });
+}
+
+// 6. INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        toggleDarkMode();
+        document.querySelector('.theme-toggle').textContent = '🌙';
+    }
+    document.querySelectorAll('input[type="radio"]').forEach(el => el.addEventListener('change', updateAnswerStatus));
+    document.querySelectorAll('.card').forEach((card, index) => {
+        if (!card.id) card.id = `card-${index}`;
+        if (card.parentElement.classList.contains('option-pool')) {
+            card.dataset.originPool = card.parentElement.id;
+            card.parentElement.addEventListener('dragover', e => e.preventDefault());
+            card.parentElement.addEventListener('drop', e => {
+                e.preventDefault();
+                const cardId = e.dataTransfer.getData('text/plain');
+                const dragged = document.getElementById(cardId);
+                if (dragged && dragged.parentElement.classList.contains('dropzone')) {
+                    dragged.parentElement.innerHTML = '';
+                    if (dragged.dataset.clone !== 'true') e.currentTarget.appendChild(dragged);
+                    updateAnswerStatus();
+                }
+            });
+        }
+    });
+});
+</script>
+
+<!-- Practice page enhancer integration -->
+<script>
+  if (!window.practicePageEnhancer) {
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = () => console.log('Enhancer loaded.');
+    script.onerror = () => { console.error('Enhancer failed to load'); loadInlineEnhancer(); };
+    document.head.appendChild(script);
+  }
+  function loadInlineEnhancer() { if (window.practicePageEnhancer) return; window.practicePageEnhancer = { initialize: function () { this.setupCommunication(); this.setupAnswerListeners(); this.interceptSubmit(); }, setupCommunication: function () { this.parentWindow = window.opener || window.parent; window.addEventListener('message', (e) => { if (e.data?.type === 'INIT_SESSION') { this.sessionId = e.data.data.sessionId; this.sendMessage('SESSION_READY', { pageType: this.detectPageType(), url: window.location.href }); } }); }, detectPageType: () => { const t = document.title || ''; if (t.includes('P1')) return 'P1'; if (t.includes('P2')) return 'P2'; if (t.includes('P3')) return 'P3'; return 'unknown'; }, setupAnswerListeners: function () { this.answers = {}; this.startTime = Date.now(); document.addEventListener('change', (e) => { if (e.target.name) this.answers[e.target.name] = e.target.value; }); const observer = new MutationObserver(mutations => { mutations.forEach(mutation => { if (mutation.type === 'childList' && mutation.target.classList.contains('dropzone')) { const zone = mutation.target; const qName = zone.dataset.target; const card = zone.querySelector('.card'); this.answers[qName] = card ? card.dataset.value : ''; } }); }); document.querySelectorAll('.dropzone').forEach(zone => observer.observe(zone, { childList: true })); }, interceptSubmit: function () { if (typeof window.grade === 'function') { const originalGrade = window.grade; window.grade = () => { originalGrade(); setTimeout(() => this.handleSubmit(), 200); }; } }, handleSubmit: function () { const results = { sessionId: this.sessionId, startTime: this.startTime, endTime: Date.now(), duration: Math.round((Date.now() - this.startTime) / 1000), answers: this.answers, scoreInfo: this.extractScore(), pageType: this.detectPageType(), url: window.location.href }; this.sendMessage('PRACTICE_COMPLETE', results); }, extractScore: () => { const el = document.getElementById('results'); if (!el) return null; const text = el.textContent || ''; const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i); if (scoreMatch) { const correct = parseInt(scoreMatch[1]), total = parseInt(scoreMatch[2]); return { correct, total, accuracy: total > 0 ? correct / total : 0, percentage: Math.round((correct / total) * 100), source: 'inline_extraction' }; } return null; }, sendMessage: function (type, data) { if (this.parentWindow) this.parentWindow.postMessage({ type, data, source: 'practice_page' }, '*'); } }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => window.practicePageEnhancer.initialize()); else window.practicePageEnhancer.initialize(); }
+</script>
+
+</body>
+</html>

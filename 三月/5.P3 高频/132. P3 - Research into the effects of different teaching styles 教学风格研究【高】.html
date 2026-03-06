@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P3 – Research into the effects of different teaching styles</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); padding-bottom: 82px; }
+  .shell { display:flex; height:100vh; width:100%; }
+  .pane { background:var(--panel); overflow:auto; padding:20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+  h2,h3,h4 { margin:0 0 10px; }
+  #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+  .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+  input.blank { border:none; border-bottom:1px solid #9ca3af; padding:2px 4px; font-size:1em; background:transparent; text-align: center; }
+  input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+  #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+  .hl:hover { filter: brightness(0.98); }
+  #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+  #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+  #selbar button:hover { border-color:#fff; }
+  #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+  #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+  #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+  details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+  details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+  .practice-nav { background:#fff; padding:12px 20px; display:flex; align-items:center; gap:16px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); z-index:4000; }
+  .practice-nav .title { font-weight:600; color:var(--muted); }
+  .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+  .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+  .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+  .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .practice-nav .controls { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  #timer { display: inline-block; background:#fff; border:1px solid var(--line); border-radius:10px; padding:4px 10px; font-size:14px; vertical-align: middle; cursor: pointer; user-select: none;}
+  .theme-toggle { cursor: pointer; background: transparent; border: none; font-size: 18px; padding: 4px; }
+  #selbar { z-index: 6000 !important; }
+  .summary-box { border: 1px solid #ccc; padding: 12px; margin-top: 1em; border-radius: 8px;}
+  .word-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 12px; padding: 10px; background: #f9fafb; border-radius: 6px;}
+  .researcher-list { border: 1px solid #ccc; padding: 12px; margin-top: 1em; border-radius: 8px; background: #f9fafb;}
+  .researcher-list ul { list-style-type: none; padding: 0; }
+  .researcher-list li { margin: 4px 0; }
+
+  /* Dark Mode Styles */
+  body.dark-mode { --bg: #1a1a1a; --panel: #2a2a2a; --line: #4a4a4a; --muted: #999; color: #e0e0e0; }
+  body.dark-mode .pane, body.dark-mode #right { background: var(--panel); color: #e0e0e0; }
+  body.dark-mode #right { background: #222; }
+  body.dark-mode button, body.dark-mode .theme-toggle { background: #3a3a3a; color: #e0e0e0; border-color: #555; }
+  body.dark-mode button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  body.dark-mode input.blank { color: #e0e0e0; border-bottom-color: #666; }
+  body.dark-mode .group, body.dark-mode #results, body.dark-mode details.answerbox, body.dark-mode .summary-box, body.dark-mode .researcher-list { background: #2f2f2f; border-color: var(--line); }
+  body.dark-mode .practice-nav { background: #252525; border-top-color: #444; }
+  body.dark-mode .practice-nav .q-item { background: #3a3a3a; color: #ccc; border-color: #555; }
+  body.dark-mode .practice-nav .q-item:hover { background: #4a4a4a; border-color: var(--accent); }
+  body.dark-mode .practice-nav .q-item.answered { background: #3949ab; border-color: #5c6bc0; color: #e8eaf6; }
+  body.dark-mode .practice-nav .q-item.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  body.dark-mode #timer { background: #3a3a3a; color: #ccc; border-color: #555; }
+  body.dark-mode .hl { background-color: #5b21b6; color: #f5f3ff; }
+  body.dark-mode .word-list { background: #222; }
+</style>
+</head>
+<body>
+
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+    <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+    <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+    <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+    <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+    <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+    <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+    <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+    <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+    <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+    <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+    <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+    <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+    <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<div class="shell">
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 3</h2>
+    <p>You should spend about 20 minutes on Questions 27-40, which are based on Reading Passage 3 below.</p>
+    
+    <h3>Research into the effects of different teaching styles</h3>
+    
+    <h4>A</h4>
+    <p>Prior to 1960, most inquiries into pupils' learning skills explored the relationship between factors such as children's social background, personality or measured intelligence and their achievement in various school subjects. Studies of teachers were largely a quest for criteria of effectiveness, and numerous investigations sought links between personality or attitude and 'success' at teaching. By 1950, Domas and Tiedeman were able to survey 672 such studies of teacher effectiveness. Yet there was widespread disappointment with such research, partly because so little of value seemed to emerge. First of all, there was little agreement about what constituted 'good' teaching or who the good teachers were. Secondly, there were numerous conflicting and contradictory findings. No sooner had one investigator found a relationship which appeared to be significant, than another discovered the opposite effect.</p>
+    
+    <h4>B</h4>
+    <p>For example, in 1945, two American researchers, Rostker and Rolfe, both using standardized testing techniques and broad samples of teachers, reached exactly opposite conclusions. Rostker concluded that the intelligence of the teacher is the most important single factor conditioning teaching ability, and that there is no significant relationship between personality and teaching ability. Rolfe, however, found no correlation between intelligence and teaching efficiency: he claimed that the teacher's personality was what produced good teaching. Another American writer, Barr (1961), summarized a massive amount of American research and underlined the chaos in the research literature on effectiveness: "Some teachers were preferred by administrators, some were liked by the pupils, and some taught in classes where there were substantial pupil gains, and generally speaking these were not the same teachers.”</p>
+    
+    <h4>C</h4>
+    <p>One of the earliest pieces of research dates from 1912, when Stevens made 100 random observations of lessons in a variety of subject areas, in order to analyze the number and nature of questions being asked by teachers. Stevens's overall total was 64% teacher talk and 36% pupil talk, figures which are remarkably similar to a number of findings half a century later.</p>
+    
+    <h4>D</h4>
+    <p>For many years in the first half of the 20th century, so-called 'formal' teaching was the norm. Teachers taught their classes as a whole group, gave out information, asked questions which predominantly required factual recall, and frequently set a common written task for the children to complete in a prescribed period of time. It was hardly surprising, therefore, that one focus of classroom interaction research in the decades following Stevens's inquiry was on the phenomenon of 'attentiveness'. A number of studies in the 1920s and 1930s, by Morrison and others, sought relationships between the degree of attention being paid by children and the amount they subsequently appeared to have learnt. Such research was usually based on observing teachers at work, a technique which was also employed extensively by United States administrators in the 1920s and 1930s, in order to assess teachers' competence and allocate merit payments to so-called 'superior' teachers.</p>
+    
+    <h4>E</h4>
+    <p>As the 1930s came to an end, it was partly the emergence of totalitarian regimes in Europe which led to a shift in interest in the United States away from attentiveness, with its emphasis on the authority of the teacher, and towards a scrutiny of authoritarianism itself. A number of people began to feel that if dictatorship were to be avoided, children must learn in school how to handle democracy. Several investigators examined the processes taking place within small discussion groups, and tried to establish superiority for discussion groups over lecture classes, but with conflicting results. The movement towards what was becoming known as child-centred education was gathering momentum, and as interest in child development increased, investigators began to discover the usefulness of direct observation and the categorization of child behavior.</p>
+    
+    <h4>F</h4>
+    <p>This was when systematic observation of teacher-pupil interaction began in earnest. Anderson (1939) studied what he called 'domination' and 'integration' amongst kindergarten children. Dominative acts by children included blaming and snatching toys, and such acts by teachers included restricting children's activities; while children's integrative acts included sharing facilities and playing harmoniously, and those of teachers included expanding opportunities for self-direction and co-operation. Anderson then attempted to measure what is now commonly called 'classroom climate'.</p>
+    
+    <h4>G</h4>
+    <p>Lewin, Lippitt and White (1939 and 1943) studied the effects of different teaching styles. They arranged for three groups of five boys each to be taught in very different ways: these were labelled 'authoritarian', 'democratic' and 'laissez-faire'. The first two of these were similar to Anderson's concept of dominative and integrative teachers.</p>
+    
+    <h4>H</h4>
+    <p>Beginning with Withall's work in 1949, there was much greater interest in interaction within the classroom. Withall used the term 'social-emotional climate' to describe the emotional tone created as a result of face-to-face interaction in groups, and, like many who followed him, concentrated his analysis of this climate on the study of teachers' verbal behavior. Withall also made efforts towards increasing the reliability of analyses, and this important pioneering work in the development of classroom observation methodology was followed by many others during the 1950s.</p>
+    
+    <h4>I</h4>
+    <p>Partly because of the disappointing results of the teacher-effectiveness research, and partly because of the general neglect in earlier work of the variables of actual classroom behavior, the decade 1960–70 produced a large number of studies of classroom processes, based on observation of teachers at work.</p>
+    
+    <p>&nbsp;</p>
+  </section>
+  <div id="divider" title="Drag to resize"></div>
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+        <h4>Questions 27–33</h4>
+        <p>Complete the summary using the list of phrases, A–J, below.</p>
+        <div class="summary-box">
+            <h5 style="text-align:center; margin-top:0;">Research into classroom interaction: 1920–1970</h5>
+            <strong>1920–1939</strong>
+            <p>Research largely investigated the relationship between children's attentiveness and their 27 <a id="q27-anchor"></a><input name="q27" type="text" class="blank" maxlength="1" style="width: 30px;">. In addition, attentiveness was used to measure the 28 <a id="q28-anchor"></a><input name="q28" type="text" class="blank" maxlength="1" style="width: 30px;"> of the teachers.</p>
+            <strong>1939–49</strong>
+            <p>Research was influenced by a growing distrust of 29 <a id="q29-anchor"></a><input name="q29" type="text" class="blank" maxlength="1" style="width: 30px;">. The period saw the beginnings of systematic analysis of the 30 <a id="q30-anchor"></a><input name="q30" type="text" class="blank" maxlength="1" style="width: 30px;"> which occur in lecture classes and in small group discussions.</p>
+            <strong>1949–60</strong>
+            <p>Classroom transactions were analysed in more detail, often with a focus on the 31 <a id="q31-anchor"></a><input name="q31" type="text" class="blank" maxlength="1" style="width: 30px;"> of teachers. Researchers aimed to improve the 32 <a id="q32-anchor"></a><input name="q32" type="text" class="blank" maxlength="1" style="width: 30px;"> of their methods.</p>
+            <strong>1960–70</strong>
+            <p>The number of studies based on live 33 <a id="q33-anchor"></a><input name="q33" type="text" class="blank" maxlength="1" style="width: 30px;"> greatly increased.</p>
+        </div>
+        <div class="word-list">
+            <span><strong>A</strong> authoritarianism</span> <span><strong>B</strong> competence</span> <span><strong>C</strong> emergence</span> <span><strong>D</strong> learning</span> <span><strong>E</strong> observation</span> <span><strong>F</strong> personality</span> <span><strong>G</strong> processes</span> <span><strong>H</strong> reliability</span> <span><strong>I</strong> training</span> <span><strong>J</strong> verbal behavior</span>
+        </div>
+    </div>
+    
+    <div class="group">
+        <h4>Questions 34–37</h4>
+        <p>Look at the following descriptions (Questions 34–37) and the list of researchers below.</p>
+        <p>Match each description with the correct researcher(s), A–G.</p>
+        
+        <a id="q34-anchor"></a><p>34 claimed that the most important contribution to success in teaching is made by intelligence <input name="q34" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+        <a id="q35-anchor"></a><p>35 set up an experiment to discover how pupils responded to various types of teaching <input name="q35" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+        <a id="q36-anchor"></a><p>36 focused on the questions which teachers asked in the classroom <input name="q36" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+        <a id="q37-anchor"></a><p>37 discovered a connection between success in teaching and the personality of the teacher <input name="q37" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+        
+        <div class="researcher-list">
+            <h5>List of researchers</h5>
+            <ul>
+                <li><strong>A</strong> &nbsp; Domas and Tiedeman</li>
+                <li><strong>B</strong> &nbsp; Rostker</li>
+                <li><strong>C</strong> &nbsp; Rolfe</li>
+                <li><strong>D</strong> &nbsp; Barr</li>
+                <li><strong>E</strong> &nbsp; Stevens</li>
+                <li><strong>F</strong> &nbsp; Morrison</li>
+                <li><strong>G</strong> &nbsp; Lewin, Lippitt and White</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div class="group">
+        <h4>Questions 38–40</h4>
+        <p>Reading Passage 3 has nine paragraphs, A–I.</p>
+        <p>Which paragraph contains the following information?</p>
+        <p>Write the correct letter, A–I, in boxes 38–40 on your answer sheet.</p>
+        <a id="q38-anchor"></a><p>38 the influence of political events on research <input name="q38" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+        <a id="q39-anchor"></a><p>39 an example of how children's behavior was categorized for research purposes <input name="q39" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+        <a id="q40-anchor"></a><p>40 a reason for research into children's attention <input name="q40" type="text" class="blank" maxlength="1" style="width: 30px; text-align: center;"></p>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+let _t=0; let isTimerPaused = false; const _timerEl=document.getElementById('timer');
+const timerInterval = setInterval(function(){ 
+  if (!isTimerPaused) {
+    _t++; 
+    var m=String(Math.floor(_t/60)).padStart(2,'0'); 
+    var s=String(_t%60).padStart(2,'0'); 
+    _timerEl.textContent=m+':'+s; 
+  }
+},1000);
+function toggleTimer() {
+    isTimerPaused = !isTimerPaused;
+    _timerEl.style.color = isTimerPaused ? 'var(--muted)' : 'inherit';
+    _timerEl.style.borderColor = isTimerPaused ? 'var(--muted)' : 'var(--line)';
+}
+var divider = document.getElementById('divider');
+var left = document.getElementById('left');
+var right = document.getElementById('right');
+var dragging=false;
+function startDrag(e){ dragging=true; document.body.style.cursor='ew-resize'; if(e.preventDefault) e.preventDefault(); }
+function endDrag(){ dragging=false; document.body.style.cursor=''; }
+function onMove(clientX){ var container = document.querySelector('.shell').getBoundingClientRect(); var x = clientX - container.left; x = Math.max(280, Math.min(container.width-320, x)); left.style.flex = '0 0 ' + x + 'px'; right.style.flex = '1 1 auto'; }
+divider.addEventListener('mousedown', function(e){ startDrag(e); });
+window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+window.addEventListener('mouseup', endDrag);
+divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+window.addEventListener('touchend', endDrag);
+var selbar = document.getElementById('selbar');
+var lastRange=null, currentHlNode=null, keepToolbar=false;
+function positionSelbarForRect(rect){
+  selbar.style.display='flex';
+  requestAnimationFrame(function(){
+    var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+function updateSelbar(){ var sel=window.getSelection(); if(!sel || sel.rangeCount===0 || sel.isCollapsed) { selbar.style.display='none'; currentHlNode=null; return; } var range = sel.getRangeAt(0); lastRange = range.cloneRange(); currentHlNode=null; positionSelbarForRect(range.getBoundingClientRect()); }
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', function(){ var sel=window.getSelection(); if(!sel || sel.rangeCount===0 || sel.isCollapsed){ if(!keepToolbar && !currentHlNode){ selbar.style.display='none'; } } });
+document.addEventListener('scroll', function(){ if(selbar.style.display==='flex') updateSelbar(); });
+document.addEventListener('mousedown', function(e){ var t = e.target; if(t.classList && t.classList.contains('hl')){ keepToolbar = true; } else { keepToolbar = false; } }, true);
+document.addEventListener('click', function(e){ var target = e.target; if(target.classList && target.classList.contains('hl')){ currentHlNode = target; lastRange = null; positionSelbarForRect(target.getBoundingClientRect()); var sel=window.getSelection(); if(sel) sel.removeAllRanges(); setTimeout(function(){ keepToolbar=false; }, 0); } }, true);
+function doHighlight(){ if(currentHlNode) return; if(!lastRange || lastRange.collapsed) return; var span=document.createElement('span'); span.className='hl'; try { lastRange.surroundContents(span); } catch(e){ var wrap=document.createElement('span'); wrap.className='hl'; wrap.appendChild(lastRange.cloneContents()); lastRange.deleteContents(); lastRange.insertNode(wrap); } selbar.style.display='none'; showToast('Highlighted'); }
+function removeHighlight(){ if(currentHlNode){ var p = currentHlNode.parentNode; while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode); p.removeChild(currentHlNode); p.normalize(); currentHlNode = null; selbar.style.display='none'; showToast('Highlight removed'); return; } if(!lastRange) return; var selRect = lastRange.getBoundingClientRect(); var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT); var toRemove=[]; while(walker.nextNode()){ var n=walker.currentNode; if(n.classList && n.classList.contains('hl')) { var r = n.getBoundingClientRect(); if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n); } } toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); }); selbar.style.display='none'; showToast('Highlight removed'); }
+document.getElementById('btnHL').addEventListener('click', doHighlight);
+document.getElementById('btnUH').addEventListener('click', removeHighlight);
+var notes = document.getElementById('notes'); var noteArea = document.getElementById('noteArea'); function toggleNotes(){ notes.style.display = (notes.style.display==='flex'?'none':'flex'); }
+window.toggleNotes = toggleNotes;
+document.getElementById('btnClose').addEventListener('click', toggleNotes);
+document.getElementById('btnCopy').addEventListener('click', async function(){ await navigator.clipboard.writeText(noteArea.value||''); showToast('Copied'); });
+document.getElementById('btnNote').addEventListener('click', function(){ var text = ''; if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); } else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); } toggleNotes(); if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n'; selbar.style.display='none'; });
+var toastEl=document.getElementById('toast'); function showToast(msg){ toastEl.textContent=msg; toastEl.style.display='block'; setTimeout(function(){ toastEl.style.display='none'; }, 1200); }
+function toggleDarkMode() { document.body.classList.toggle('dark-mode'); const isDarkMode = document.body.classList.contains('dark-mode'); localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled'); document.querySelector('.theme-toggle').textContent = isDarkMode ? '🌙' : '☀️'; }
+if (localStorage.getItem('darkMode') === 'enabled') { document.body.classList.add('dark-mode'); document.querySelector('.theme-toggle').textContent = '🌙'; }
+var answers = { q27: "D", q28: "B", q29: "A", q30: "G", q31: "J", q32: "H", q33: "E", q34: "B", q35: "G", q36: "E", q37: "C", q38: "E", q39: "F", q40: "D" };
+function grade(){
+  var total=0, correct=0, lines=[];
+  function push(q, ok, user){ total++; if(ok) correct++; lines.push(q.toUpperCase()+": "+(user||'None')+" "+(ok?'✅':'❌')); }
+  for(var n=27; n<=40; n++){
+    var qName = 'q' + n;
+    var textInput = document.querySelector('input[name="'+qName+'"]');
+    var val = textInput.value.trim().toUpperCase();
+    push(qName, val === answers[qName], val);
+  }
+  var acc = (total? Math.round(100*correct/total):0);
+  var html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
+  html += '<pre>'+lines.join('\n')+'</pre>';
+  document.getElementById('results').innerHTML = html;
+  var ahtml = '<ol start="27">';
+  for(var i=27; i<=40; i++){ ahtml += '<li>' + answers['q'+i] + '</li>'; }
+  ahtml += '</ol>';
+  document.getElementById('answerContent').innerHTML = ahtml;
+  document.querySelector('#answerBox .badge').textContent='tap to view';
+}
+function resetForm(){
+  document.querySelectorAll('input[type="text"]').forEach(el => el.value="");
+  document.getElementById('results').innerHTML='';
+  document.getElementById('answerContent').innerHTML='';
+  document.querySelector('#answerBox .badge').textContent = 'hidden';
+  document.querySelectorAll('.q-item').forEach(item => item.classList.remove('answered'));
+}
+function scrollToElement(id){
+  var el = document.getElementById(id);
+  if(el){ el.scrollIntoView({behavior:'smooth', block:'center'}); }
+  var navs = document.querySelectorAll('.practice-nav .q-item');
+  navs.forEach(n => n.classList.remove('active'));
+  var btn = document.getElementById(id.replace('-anchor','-nav'));
+  if(btn){ btn.classList.add('active'); setTimeout(() => btn.classList.remove('active'), 800); }
+}
+(function(){
+  function mark(qn){
+    var nav = document.getElementById('q'+qn+'-nav');
+    if(!nav) return;
+    var answered = false;
+    var text = document.querySelector(`input[name="q${qn}"]`);
+    if (text) { answered = answered || (text.value && text.value.trim().length > 0); }
+    if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
+  }
+  for(var q=27;q<=40;q++){
+    (function(n){
+      var text = document.querySelector(`input[name="q${n}"]`);
+      if(text){ text.addEventListener('input', function(){ mark(n); }); }
+    })(q);
+  }
+})();
+</script>
+
+<!-- 练习页面数据传输增强脚本 -->
+<script>
+if (!window.practicePageEnhancer) {
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = function() { console.log('练习页面增强脚本已加载'); };
+    script.onerror = function() { console.error('练习页面增强脚本加载失败'); loadInlineEnhancer(); };
+    document.head.appendChild(script);
+}
+function loadInlineEnhancer() {
+    if (window.practicePageEnhancer) return;
+    window.practicePageEnhancer = {
+        initialize: function() { this.setupCommunication(); this.setupAnswerListeners(); this.interceptSubmit(); },
+        setupCommunication: function() {
+            this.parentWindow = window.opener || window.parent;
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'INIT_SESSION') {
+                    this.sessionId = event.data.data.sessionId;
+                    this.sendMessage('SESSION_READY', { pageType: this.detectPageType(), url: window.location.href });
+                }
+            });
+        },
+        detectPageType: function() { const title = document.title || ''; if (title.includes('P1')) return 'P1'; if (title.includes('P2')) return 'P2'; if (title.includes('P3')) return 'P3'; return 'unknown'; },
+        setupAnswerListeners: function() {
+            this.answers = {};
+            this.startTime = Date.now();
+            document.addEventListener('input', (e) => { if (e.target.name) this.answers[e.target.name] = e.target.value; });
+        },
+        interceptSubmit: function() {
+            if (typeof window.grade === 'function') {
+                const originalGrade = window.grade;
+                window.grade = () => { originalGrade(); setTimeout(() => this.handleSubmit(), 200); };
+            }
+        },
+        handleSubmit: function() {
+            const results = { sessionId: this.sessionId, startTime: this.startTime, endTime: Date.now(), duration: Math.round((Date.now() - this.startTime) / 1000), answers: this.answers, scoreInfo: this.extractScore(), pageType: this.detectPageType(), url: window.location.href };
+            this.sendMessage('PRACTICE_COMPLETE', results);
+        },
+        extractScore: function() {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl) return null;
+            const text = resultsEl.textContent || '';
+            const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i);
+            if (scoreMatch) {
+                const correct = parseInt(scoreMatch[1]);
+                const total = parseInt(scoreMatch[2]);
+                return { correct: correct, total: total, accuracy: total > 0 ? correct / total : 0, percentage: Math.round((correct / total) * 100), source: 'inline_extraction' };
+            }
+            return null;
+        },
+        sendMessage: function(type, data) { if (this.parentWindow) this.parentWindow.postMessage({ type: type, data: data, source: 'practice_page' }, '*'); }
+    };
+    if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', () => { window.practicePageEnhancer.initialize(); }); }
+    else { window.practicePageEnhancer.initialize(); }
+}
+</script>
+
+</body>
+</html>

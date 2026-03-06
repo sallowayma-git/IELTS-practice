@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>The Fashion Industry - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+   .custom-br {
+    display: block;
+    margin-bottom: 1300px;
+    content: "";
+  }
+  * {
+    line-height: 30px;
+  }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px;
+    --font-size-large: 20px;
+  }
+  .font-regular {
+    font-size: var(--font-size-regular) !important;
+  }
+  .font-moderate {
+    font-size: var(--font-size-moderate) !important;
+  }
+  .font-large {
+    font-size: var(--font-size-large) !important;
+  }
+  * { 
+    box-sizing: border-box; 
+    font-size: inherit;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+  html,body { 
+    height:100%; 
+    font-size: var(--font-size-regular);
+  }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    color: #111827;
+    padding-bottom: 82px; 
+  }
+  .top-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: absolute; 
+    left:50%;
+    top: 10px;
+    display: inline-block; 
+    background:var(--panel); 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--panel);
+    cursor:pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+	position: absolute;
+	right: 10px;
+	top: 10px;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+    min-width: 280px;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+    font-size: inherit;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:calc(100vh - 82px);
+    width:100%; 
+    overflow: hidden;
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+    -webkit-overflow-scrolling: touch;
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4,h5 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+    font-size: inherit;
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: break-word; 
+    hyphens: auto; 
+  }
+  .paragraph-label {
+    font-weight: 600;
+    color: var(--accent);
+    margin-right: 8px;
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+    font-size: inherit;
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition: all 0.2s ease;
+    font-size: inherit;
+  }
+  button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+    transition: filter 0.2s ease;
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; 
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow:var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; 
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+    transform: none;
+    box-shadow: none;
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 94px; 
+    width: 320px; 
+    max-width: calc(100% - 24px); 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow:var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+    background: transparent;
+    font-size: inherit;
+  }
+  #notes textarea:focus {
+    outline: none;
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 94px; 
+    background:#111; 
+    color:#fff; 
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+    animation: fadeIn 0.3s, fadeOut 0.3s 1.2s;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translate(-50%, 20px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+  }
+  @keyframes fadeOut {
+    from { opacity: 1; transform: translate(-50%, 0); }
+    to { opacity: 0; transform: translate(-50%, 20px); }
+  }
+  .heading-options, .company-option {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:6px 0;
+  }
+  .heading-options .heading-option, .company-option label {
+    cursor:pointer;
+    padding:4px 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    transition: all 0.2s;
+    font-size: inherit;
+  }
+  .heading-options .heading-option:hover, .company-option label:hover {
+    background:#f1f5f9;
+    border-color:var(--accent);
+    color:var(--accent);
+  }
+  input.blank {
+    width: 140px;
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    font-size: inherit;
+  }
+  input.blank:focus {
+    outline: none;
+    border-color:var(--accent);
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  .word-limit {
+    color: var(--muted);
+    font-size: 0.9em;
+    margin: 4px 0 8px;
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-top:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); 
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+    overflow-x: auto;
+    padding-bottom: 4px;
+    max-width: calc(100% - 80px);
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+    flex-shrink:0;
+    font-size: inherit;
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); 
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; 
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: inherit;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; 
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+    font-size: inherit;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555;
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  ul {
+    list-style-type: none;
+    padding-left: 20px;
+    margin: 8px 0;
+    font-size: inherit;
+  }
+  ul li::before {
+    content: "- ";
+    color: inherit;
+    font-weight: 500;
+  }
+  @media (max-width: 768px) {
+    .shell {
+      flex-direction: column;
+      height: auto;
+      min-height: calc(100vh - 82px);
+    }
+    #left, #right {
+      flex: none;
+      width: 100%;
+      min-width: auto;
+      max-height: 50vh;
+    }
+    #divider {
+      flex: none;
+      height: 8px;
+      width: 100%;
+      cursor: ns-resize;
+      background: linear-gradient(0deg,var(--line),#d1d5db);
+    }
+    .practice-nav .questions {
+      max-width: calc(100% - 60px);
+    }
+    .top-controls {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    #timer-container {
+      align-self: flex-end;
+      margin-top: -28px;
+    }
+    input.blank {
+      width: 100px;
+    }
+  }
+</style>
+</head>
+<body class="font-regular">
+<!-- 底部导航 -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+    <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+    <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+    <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+    <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+  </div>
+</div>
+
+<!-- 字体设置模态框 -->
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (16px - Default)</div>
+  <div class="font-option" data-size="moderate">Moderate (18px - Larger)</div>
+  <div class="font-option" data-size="large">Large (20px - Largest)</div>
+  <button class="close-modal" onclick="closeSettingsModal()">Close</button>
+</div>
+
+	<div id="top" class="top" style="background-color: #bb5252; width: 100%; height: 60px;">
+        <h3 style="font-size: 23px;line-height: 55px;margin-left: 10px;">The Fashion Industry</h3>
+		 <div id="timer-container" >
+        <div id="timer" style="margin: 0px auto;">00:00</div>
+        <button id="settingsBtn" onclick="openSettingsModal()">
+          Settings
+        </button>
+      </div>
+	</div>
+<!-- 主容器 -->
+<div class="shell">
+
+  <!-- 左面板：文章 -->
+  <section class="pane" id="left">
+    You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</br><p></p><p></p>
+    <h3 >The Fashion Industry</h3>
+   
+    <span class="paragraph-label">A</span> The fashion industry is a multibillion-dollar global enterprise devoted to the business of making and selling clothes. It encompasses all types of garments, from designer fashions to ordinary everyday clothing. Because data on the industry are typically reported for national economies and expressed in terms of its many separate sectors, total figures for world production of textiles and clothing are difficult to obtain. However, by any measure, the industry accounts for a significant share of world economic output.</br><p></p>
+    
+    <span class="paragraph-label">B</span> The fashion industry is a product of the modern age. Prior to the mid-19th century, virtually all clothing was handmade for individuals, either as home production or on order from dressmakers and tailors. By the beginning of the 20th century, with the development of new technologies such as the sewing machine, the factory system of production, and the growth of department stores and other retail outlets, clothing had increasingly come to be mass-produced in standard sizes and sold at fixed prices. Although the fashion industry developed first in Europe, today it is highly globalised, with garments often designed in one country, manufactured in another, and sold in a third. For example, an American fashion company might source fabric in China, have the clothes manufactured in Vietnam, finished in Italy, and shipped to a warehouse in the United States for distribution to retail outlets internationally.</br><p></p>
+    
+    <span class="paragraph-label">C</span> One of the first accomplishments of the Industrial Revolution in the 18th century was the partial automation of the spinning and weaving of wool, cotton, silk and other natural fibres. Today, these processes are highly automated and carried out by computer-controlled, high-speed machinery, and fabrics made from both natural fibres and synthetic fibres (such as nylon, acrylic and polyester) are produced. A growing interest in sustainable fashion (or 'eco-fashion') has led to greater use of environmentally friendly fibres, such as hemp. In addition, high-tech synthetic fabrics confer such properties as moisture absorption, stain resistance, retention or dissipation of body heat, and protection against fire, weapons, cold, ultraviolet radiation and other hazards. Fabrics are also produced with a wide range of visual effects through dyeing, weaving, printing and other processes. Together with fashion forecasters, fabric manufacturers work well in advance of the clothing production cycle to create fabrics with colours, textures and other qualities that anticipate consumer demand.</br><p></p>
+    
+    <span class="paragraph-label">D</span> Historically, very few fashion designers have become famous—brands such as Coco Chanel or Calvin Klein—who have been responsible for prestigious high-fashion collections. These designers are influential in the fashion world, but, contrary to popular belief, they do not dictate new fashions; rather, they endeavour to design clothes that will meet consumer demand. The vast majority of designers work anonymously for manufacturers, as part of design teams, adapting designs into marketable garments for average consumers. They draw inspiration from a wide range of sources, including film and television costumes, street clothing and active sportswear.</br><p></p>
+    
+    <span class="paragraph-label">E</span> The fashion industry's traditional design methods, such as paper sketches and the draping of fabric on mannequins, have been supplemented or replaced by computer-assisted design techniques. These allow designers to rapidly make changes to a proposed design and instantaneously share the proposed changes with colleagues—whether they are in the next room or on another continent.</br><p></p>
+    
+    <span class="paragraph-label">F</span> An important stage in garment production is the translation of the clothing design into templates, in a range of sizes, for cutting the cloth. Because the proportions of the human body change with increases or decreases in weight, templates cannot simply be scaled up or down. Template-making was traditionally a highly skilled profession. Today, despite innovations in computer programming, designs in larger sizes are difficult to adjust for every body shape. Whatever the size, the template—whether drawn on paper or programmed as a set of computer instructions—determines how fabric is cut into the pieces that will be joined to make a garment. For all but the most expensive clothing, fabric cutting is accomplished by computer-guided knives or high-intensity lasers that can cut many layers of fabric at once.</br><p></p>
+    
+    <span class="paragraph-label">G</span> The next stage of production is the assembly process. Some companies use their own production facilities for some or all of the manufacturing process, but the majority rely on separately owned manufacturing firms or contractors to produce garments to their specifications. In the field of women's clothing, manufacturers typically produce several product lines a year, which they deliver to retailers on predetermined dates. Technological innovation, including the development of computer-guided machinery, has resulted in the automation of some stages of assembly. Nevertheless, the fundamental process of sewing remains labour-intensive. In the late 20th century, China emerged as the world's largest producer of clothing because of its low labour costs and highly disciplined workforce. Assembled items then go through various processes collectively known as 'finishing'. These include the addition of decorative elements, fasteners, brand-name labels and other labels (often legally required) specifying fibre content, laundry instructions and country of manufacture. Finished items are then pressed and packed for shipment.</br><p></p>
+    
+    <span class="paragraph-label">H</span> For much of the period following World War II, trade in textiles and garments was strictly regulated by purchasing countries, which imposed quotas and tariffs. Since the 1980s, these protectionist measures, which were intended (ultimately without success) to prevent textile and clothing production from moving from high-wage to low-wage countries, have gradually been abandoned. They have been replaced by a free-trade approach, under the regulatory control of global organisations. The advent of metal shipping containers and relatively inexpensive air freight has also made it possible for production to be closely tied to market conditions, even across globe-spanning distances.</br><p></p>
+    
+    <!-- 多加空白行防止加载不完全 -->
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+  </section>
+  
+  <!-- 分隔线 -->
+  <div id="divider" title="Drag to resize"></div>
+  
+  <!-- 右面板：题目和答案 -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <!-- 14-20题：段落标题匹配 -->
+    <div class="group">
+      <h4>Questions 14–20</h4>
+      Reading Passage 2 has seven sections, A–G.</br><p></p>
+      Choose the correct heading for each section from the list of headings below.</br><p></p>
+      Write the correct number, i–viii, in boxes 14–20 on your answer sheet.</br><p></p>
+      <span class="word-limit">List of Headings</br><p></p>
+      <ul>
+        <span>-</span>i How new clothing styles are created</br><p></p>
+        <span>-</span>ii The rise of the fashion industry</br><p></p>
+        <span>-</span>iii Joining the garment pieces together</br><p></p>
+        <span>-</span>iv Producing materials with a range of features</br><p></p>
+        <span>-</span>v The importance of the fashion industry</br><p></p>
+        <span>-</span>vi Factors affecting international commerce</br><p></p>
+        <span>-</span>vii The attractions of becoming a fashion model</br><p></p>
+        <span>-</span>viii Making patterns for people with different figures</br><p></p>
+      </ul>
+      
+      <a id="q14-anchor"></a>
+      <div id="q14-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">14.</span> Section A</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q14" value="i"> i</div>
+          <div class="heading-option"><input type="radio" name="q14" value="ii"> ii</div>
+          <div class="heading-option"><input type="radio" name="q14" value="iii"> iii</div>
+          <div class="heading-option"><input type="radio" name="q14" value="iv"> iv</div>
+          <div class="heading-option"><input type="radio" name="q14" value="v"> v</div>
+          <div class="heading-option"><input type="radio" name="q14" value="vi"> vi</div>
+          <div class="heading-option"><input type="radio" name="q14" value="vii"> vii</div>
+          <div class="heading-option"><input type="radio" name="q14" value="viii"> viii</div>
+        </div>
+      </div>
+      
+      <a id="q15-anchor"></a>
+      <div id="q15-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">15.</span> Section B</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q15" value="i"> i</div>
+          <div class="heading-option"><input type="radio" name="q15" value="ii"> ii</div>
+          <div class="heading-option"><input type="radio" name="q15" value="iii"> iii</div>
+          <div class="heading-option"><input type="radio" name="q15" value="iv"> iv</div>
+          <div class="heading-option"><input type="radio" name="q15" value="v"> v</div>
+          <div class="heading-option"><input type="radio" name="q15" value="vi"> vi</div>
+          <div class="heading-option"><input type="radio" name="q15" value="vii"> vii</div>
+          <div class="heading-option"><input type="radio" name="q15" value="viii"> viii</div>
+        </div>
+      </div>
+      
+      <a id="q16-anchor"></a>
+      <div id="q16-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">16.</span> Section C</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q16" value="i"> i</div>
+          <div class="heading-option"><input type="radio" name="q16" value="ii"> ii</div>
+          <div class="heading-option"><input type="radio" name="q16" value="iii"> iii</div>
+          <div class="heading-option"><input type="radio" name="q16" value="iv"> iv</div>
+          <div class="heading-option"><input type="radio" name="q16" value="v"> v</div>
+          <div class="heading-option"><input type="radio" name="q16" value="vi"> vi</div>
+          <div class="heading-option"><input type="radio" name="q16" value="vii"> vii</div>
+          <div class="heading-option"><input type="radio" name="q16" value="viii"> viii</div>
+        </div>
+      </div>
+      
+      <a id="q17-anchor"></a>
+      <div id="q17-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">17.</span> Section D</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q17" value="i"> i</div>
+          <div class="heading-option"><input type="radio" name="q17" value="ii"> ii</div>
+          <div class="heading-option"><input type="radio" name="q17" value="iii"> iii</div>
+          <div class="heading-option"><input type="radio" name="q17" value="iv"> iv</div>
+          <div class="heading-option"><input type="radio" name="q17" value="v"> v</div>
+          <div class="heading-option"><input type="radio" name="q17" value="vi"> vi</div>
+          <div class="heading-option"><input type="radio" name="q17" value="vii"> vii</div>
+          <div class="heading-option"><input type="radio" name="q17" value="viii"> viii</div>
+        </div>
+      </div>
+      
+      <a id="q18-anchor"></a>
+      <div id="q18-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">18.</span> Section E</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q18" value="i"> i</div>
+          <div class="heading-option"><input type="radio" name="q18" value="ii"> ii</div>
+          <div class="heading-option"><input type="radio" name="q18" value="iii"> iii</div>
+          <div class="heading-option"><input type="radio" name="q18" value="iv"> iv</div>
+          <div class="heading-option"><input type="radio" name="q18" value="v"> v</div>
+          <div class="heading-option"><input type="radio" name="q18" value="vi"> vi</div>
+          <div class="heading-option"><input type="radio" name="q18" value="vii"> vii</div>
+          <div class="heading-option"><input type="radio" name="q18" value="viii"> viii</div>
+        </div>
+      </div>
+      
+      <a id="q19-anchor"></a>
+      <div id="q19-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">19.</span> Section F</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q19" value="i"> i</div>
+          <div class="heading-option"><input type="radio" name="q19" value="ii"> ii</div>
+          <div class="heading-option"><input type="radio" name="q19" value="iii"> iii</div>
+          <div class="heading-option"><input type="radio" name="q19" value="iv"> iv</div>
+          <div class="heading-option"><input type="radio" name="q19" value="v"> v</div>
+          <div class="heading-option"><input type="radio" name="q19" value="vi"> vi</div>
+          <div class="heading-option"><input type="radio" name="q19" value="vii"> vii</div>
+          <div class="heading-option"><input type="radio" name="q19" value="viii"> viii</div>
+        </div>
+      </div>
+      
+      <a id="q20-anchor"></a>
+      <div id="q20-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">20.</span> Section G</br><p></p>
+        <div class="heading-options">
+          <div class="heading-option"><input type="radio" name="q20" value="i"> i</div>
+          <div class="heading-option"><input type="radio" name="q20" value="ii"> ii</div>
+          <div class="heading-option"><input type="radio" name="q20" value="iii"> iii</div>
+          <div class="heading-option"><input type="radio" name="q20" value="iv"> iv</div>
+          <div class="heading-option"><input type="radio" name="q20" value="v"> v</div>
+          <div class="heading-option"><input type="radio" name="q20" value="vi"> vi</div>
+          <div class="heading-option"><input type="radio" name="q20" value="vii"> vii</div>
+          <div class="heading-option"><input type="radio" name="q20" value="viii"> viii</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 21-24题：摘要填空 -->
+    <div class="group">
+      <h4>Questions 21–24</h4>
+      Complete the summary below.</br><p></p>
+      Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</br><p></p>
+      <span class="word-limit">Write your answers in boxes 21–24 on your answer sheet.</br><p></p>
+      
+      <h5>The development of a modern fashion industry</h5>
+      <span class="summary-text">
+        Up until the middle of the 19th century, people generally wore handmade clothes. After that the situation changed, and by the 20th century many clothes were mass-produced. This development was partly due to inventions like the <span class="question-number"><a id="q21-anchor"></a>21.</span> <input type="text" class="blank" id="q21" name="q21">. It was also the result of general changes in manufacturing systems, as well as the spread of shops like <span class="question-number"><a id="q22-anchor"></a>22.</span> <input type="text" class="blank" id="q22" name="q22">. The changes also led to the standardisation of sizes and <span class="question-number"><a id="q23-anchor"></a>23.</span> <input type="text" class="blank" id="q23" name="q23">. Today, despite the fact that the fashion industry originated in <span class="question-number"><a id="q24-anchor"></a>24.</span> <input type="text" class="blank" id="q24" name="q24">, it has become a truly international enterprise.
+      </br><p></p>
+    </div>
+    
+    <!-- 25-26题：多选题 -->
+    <div class="group">
+      <h4>Questions 25 and 26</h4>
+      Choose <strong>TWO</strong> letters, A–E.</br><p></p>
+      Write the correct letters in boxes 25 and 26 on your answer sheet.</br><p></p>
+      <span class="word-limit">Which TWO of the following statements does the writer make about garment assembly?</br><p></p>
+      
+      <a id="q25-anchor"></a>
+      <div id="q25-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">25.</span> 
+        <div class="company-option">
+          <label><input name="q25" type="radio" value="A"> A The majority of sewing is done by computer-operated machines.</label></br><p></p>
+          <label><input name="q25" type="radio" value="B"> B Highly skilled workers are the most important requirement.</label></br><p></p>
+          <label><input name="q25" type="radio" value="C"> C Most businesses use other companies to manufacture their products.</label></br><p></p>
+          <label><input name="q25" type="radio" value="D"> D Fasteners and labels are attached after the clothes have been made up.</label></br><p></p>
+          <label><input name="q25" type="radio" value="E"> E Manufacturers usually produce one range of women's clothing annually.</label></br><p></p>
+        </div>
+      </div>
+      
+      <a id="q26-anchor"></a>
+      <div id="q26-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">26.</span> 
+        <div class="company-option">
+          <label><input name="q26" type="radio" value="A"> A The majority of sewing is done by computer-operated machines.</label></br><p></p>
+          <label><input name="q26" type="radio" value="B"> B Highly skilled workers are the most important requirement.</label></br><p></p>
+          <label><input name="q26" type="radio" value="C"> C Most businesses use other companies to manufacture their products.</label></br><p></p>
+          <label><input name="q26" type="radio" value="D"> D Fasteners and labels are attached after the clothes have been made up.</label></br><p></p>
+          <label><input name="q26" type="radio" value="E"> E Manufacturers usually produce one range of women's clothing annually.</label></br><p></p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 提交和重置按钮 -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    
+    <!-- 结果显示 -->
+    <div id="results"></div>
+    
+    <!-- 答案面板 -->
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>14</td>
+            <td>v</td>
+            <td>
+              <span class="explanation-text">段落标题匹配：A段整段强调时尚产业对全球经济的巨大贡献，因此选v "The importance of the fashion industry"。</br><p></p>
+              <span class="explanation-original">原文："the industry accounts for a significant share of world economic output." (第 A 段)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>15</td>
+            <td>ii</td>
+            <td>
+              <span class="explanation-text">段落标题匹配：B段回顾从19世纪中期到20世纪时尚产业是如何兴起并走向大规模生产，对应ii "The rise of the fashion industry"。</br><p></p>
+              <span class="explanation-original">原文："By the beginning of the 20th century...clothing had increasingly come to be mass-produced..." (第 B 段)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>16</td>
+            <td>iv</td>
+            <td>
+              <span class="explanation-text">段落标题匹配：C段重点描述各种功能与视觉效果的面料生产，符合iv "Producing materials with a range of features"。</br><p></p>
+              <span class="explanation-original">原文："fabrics are produced with a wide range of visual effects...Together with fashion forecasters, fabric manufacturers work well in advance..." (第 C 段)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>17</td>
+            <td>i</td>
+            <td>
+              <span class="explanation-text">段落标题匹配：D段聚焦于设计师如何创作新款式，选i "How new clothing styles are created"。</br><p></p>
+              <span class="explanation-original">原文："designers draw inspiration from...street clothing and active sportswear." + 介绍传统与计算机辅助设计方法 (第 D 段)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>18</td>
+            <td>viii</td>
+            <td>
+              <span class="explanation-text">段落标题匹配：E段讲模板制作并解决不同体型的问题，故选viii "Making patterns for people with different figures"。</br><p></p>
+              <span class="explanation-original">原文："templates, in a range of sizes, for cutting the cloth...difficult to adjust for every body shape." (第 E 段)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>19</td>
+            <td>iii</td>
+            <td>
+              <span class="explanation-text">段落标题匹配：F段描述把布片结合组装成衣服的全过程，选iii "Joining the garment pieces together"。</br><p></p>
+              <span class="explanation-original">原文："The next stage of production is the assembly process...sewing remains labour-intensive." (第 F 段)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>20</td>
+            <td>vi</td>
+            <td>
+              <span class="explanation-text">段落标题匹配：G段讨论贸易管制、关税与全球运输对行业的影响，对应vi "Factors affecting international commerce"。</br><p></p>
+              <span class="explanation-original">原文："quotas and tariffs...free-trade approach...Inexpensive air freight has made it possible for production to be closely tied to market conditions." (第 G 段)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>21</td>
+            <td>sewing machine</td>
+            <td>
+              <span class="explanation-text">摘要填空：题干"部分归因于像____这样的发明"，B段明确提到"缝纫机"是推动时尚产业发展的发明之一。</br><p></p>
+              <span class="explanation-original">原文："...partly due to inventions like the sewing machine." (第 B 段)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>22</td>
+            <td>department stores</td>
+            <td>
+              <span class="explanation-text">摘要填空：题干"百货商店等零售店的扩张"，B段提到"百货商店和其他零售店"的增长推动了时尚产业扩张。</br><p></p>
+              <span class="explanation-original">原文："...and the growth of department stores and other retail outlets..." (第 B 段)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>23</td>
+            <td>fixed prices</td>
+            <td>
+              <span class="explanation-text">摘要填空：题干"标准化导致尺寸和____的标准化"，B段提到"标准化尺寸和固定价格"。</br><p></p>
+              <span class="explanation-original">原文："...mass-produced in standard sizes and sold at fixed prices." (第 B 段)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>24</td>
+            <td>Europe</td>
+            <td>
+              <span class="explanation-text">摘要填空：题干"时尚产业起源于____"，B段明确指出时尚产业首先在欧洲发展。</br><p></p>
+              <span class="explanation-original">原文："Although the fashion industry developed first in Europe, today it is highly globalised..." (第 B 段)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>25</td>
+            <td>C</td>
+            <td>
+              <span class="explanation-text">多选题：选项C "大多数企业使用其他公司生产产品"与F段内容一致。</br><p></p>
+              <span class="explanation-original">原文："...the majority rely on separately owned manufacturing firms or contractors to produce garments..." (第 F 段)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>26</td>
+            <td>D</td>
+            <td>
+              <span class="explanation-text">多选题：选项D "扣件和标签是在衣服制作完成后添加的"与F段描述的"整理"过程一致。</br><p></p>
+              <span class="explanation-original">原文："Assembled items then go through various processes collectively known as 'finishing'. These include the addition of decorative elements, fasteners, brand-name labels..." (第 F 段)</br><p></p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+
+<!-- 文本选择工具栏 -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+
+<!-- 笔记面板 -->
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+
+<!-- 提示框 -->
+<div id="toast"></div>
+
+<script>
+// 计时器核心功能
+let _t = 0; 
+const _timerEl = document.getElementById('timer');
+let timerInterval; // 计时器间隔ID，用于submit后停止
+
+// 启动计时器
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    _t++; 
+    const m = String(Math.floor(_t/60)).padStart(2, '0'); 
+    const s = String(_t%60).padStart(2, '0'); 
+    _timerEl.textContent = `${m}:${s}`; 
+  }, 1000);
+}
+
+// 页面加载时启动计时器
+window.onload = startTimer;
+
+// 字体设置功能
+const settingsModal = document.getElementById('settingsModal');
+const body = document.body;
+
+// 打开字体设置模态框
+function openSettingsModal() {
+  settingsModal.style.display = 'block';
+}
+
+// 关闭字体设置模态框
+function closeSettingsModal() {
+  settingsModal.style.display = 'none';
+}
+
+// 点击模态框外部关闭
+window.addEventListener('click', (e) => {
+  if (e.target === settingsModal) closeSettingsModal();
+});
+
+// 切换字体大小（影响所有元素）
+document.querySelectorAll('.font-option').forEach(option => {
+  option.addEventListener('click', () => {
+    const size = option.dataset.size;
+    // 移除所有字体类，添加选中的类
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${size}`);
+    // 显示提示
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+    // 保存字体偏好到本地存储
+    localStorage.setItem('fontSize', size);
+  });
+});
+
+// 页面加载时应用保存的字体偏好
+document.addEventListener('DOMContentLoaded', function() {
+  const savedFontSize = localStorage.getItem('fontSize');
+  if (savedFontSize) {
+    body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    body.classList.add(`font-${savedFontSize}`);
+  }
+});
+
+// 高亮功能
+const selbar = document.getElementById('selbar');
+const btnHL = document.getElementById('btnHL');
+const btnUH = document.getElementById('btnUH');
+const btnNote = document.getElementById('btnNote');
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+
+// 定位选择工具栏
+function positionSelbar(rect) {
+  selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+    // 确保工具栏不超出视口
+    selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+
+// 更新工具栏状态
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+
+// 监听文本选择事件
+document.getElementById('left').addEventListener('mouseup', updateSelbar);
+document.getElementById('right').addEventListener('mouseup', updateSelbar);
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) selbar.style.display = 'none';
+  }
+});
+
+// 滚动时重新定位工具栏
+document.addEventListener('scroll', () => {
+  if (selbar.style.display === 'flex') updateSelbar();
+});
+
+// 点击高亮文本时显示工具栏
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+
+// 执行高亮
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    // 处理跨元素选择的情况
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+
+// 移除高亮
+function removeHighlight() {
+  if (currentHlNode) {
+    // 移除单个高亮元素
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize(); // 合并相邻文本节点
+    currentHlNode = null;
+    selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  if (!lastRange) return;
+  // 移除选择范围内的所有高亮
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      // 判断节点是否在选择范围内
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+
+// 绑定高亮按钮事件
+btnHL.addEventListener('click', doHighlight);
+btnUH.addEventListener('click', removeHighlight);
+
+// 笔记功能
+const notesPanel = document.getElementById('notes');
+const noteArea = document.getElementById('noteArea');
+const btnCopy = document.getElementById('btnCopy');
+const btnCloseNotes = document.getElementById('btnClose');
+
+// 切换笔记面板显示
+function toggleNotes() {
+  notesPanel.style.display = notesPanel.style.display === 'flex' ? 'none' : 'flex';
+  if (notesPanel.style.display === 'flex') {
+    noteArea.focus();
+  }
+}
+
+// 关闭笔记面板
+btnCloseNotes.addEventListener('click', toggleNotes);
+
+// 复制笔记
+btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+
+// 选中文本添加到笔记
+btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  toggleNotes();
+  if (selectedText) {
+    noteArea.value = noteArea.value ? `${noteArea.value}\n> ${selectedText}\n` : `> ${selectedText}\n`;
+    noteArea.scrollTop = noteArea.scrollHeight;
+  }
+  selbar.style.display = 'none';
+});
+
+// 提示框功能
+const toastEl = document.getElementById('toast');
+function showToast(message) {
+  toastEl.textContent = message;
+  toastEl.style.display = 'block';
+  setTimeout(() => toastEl.style.display = 'none', 1500);
+}
+
+// 答案与评分功能（Submit后停止计时器）
+const answers = {
+  q14: 'v',
+  q15: 'ii',
+  q16: 'iv',
+  q17: 'i',
+  q18: 'viii',
+  q19: 'iii',
+  q20: 'vi',
+  q21: 'sewing machine',
+  q22: 'department stores',
+  q23: 'fixed prices',
+  q24: 'Europe',
+  q25: 'C',
+  q26: 'D'
+};
+
+// 评分函数
+function grade() {
+  // 1. 停止计时器
+  clearInterval(timerInterval);
+  
+  // 2. 计算得分
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  // 处理14-20题（段落标题匹配）
+  for (let i = 14; i <= 20; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 处理21-24题（摘要填空）
+  for (let i = 21; i <= 24; i++) {
+    const qName = `q${i}`;
+    const input = document.getElementById(qName);
+    const userAns = input ? input.value.trim().toLowerCase() : 'No answer';
+    const correctAns = answers[qName].toLowerCase();
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers[qName]})`}`);
+  }
+  
+  // 处理25-26题（多选题）
+  for (let i = 25; i <= 26; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 3. 显示结果
+  const accuracy = Math.round((correct / total) * 100);
+  const resultsHTML = `
+    <strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</br><p></p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  document.getElementById('results').innerHTML = resultsHTML;
+  
+  // 4. 展开答案面板
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  // 5. 标记所有题目为已回答
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+
+// 重置功能
+function resetForm() {
+  // 1. 重置计时器
+  clearInterval(timerInterval);
+  _t = 0;
+  _timerEl.textContent = '00:00';
+  startTimer();
+  
+  // 2. 重置所有单选按钮和输入框
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  // 3. 重置结果和答案面板
+  document.getElementById('results').innerHTML = '';
+  const answerBox = document.getElementById('answerBox');
+  answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  // 4. 重置导航栏状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  // 5. 重置笔记
+  noteArea.value = '';
+  notesPanel.style.display = 'none';
+  
+  // 6. 移除所有高亮
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+  
+  showToast('Practice reset');
+}
+
+// 滚动到指定题目
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  // 高亮导航项
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  const navItem = document.getElementById(id.replace('-anchor', '-nav'));
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+
+// 监听输入，标记题目为已回答
+(function() {
+  // 监听段落标题匹配、填空和多选题（14-26）
+  for (let i = 14; i <= 26; i++) {
+    if (i >= 14 && i <= 20) {
+      document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+        radio.addEventListener('change', () => {
+          document.getElementById(`q${i}-nav`).classList.add('answered');
+        });
+      });
+    } else if (i >= 21 && i <= 24) {
+      const input = document.getElementById(`q${i}`);
+      input.addEventListener('input', () => {
+        if (input.value.trim()) {
+          document.getElementById(`q${i}-nav`).classList.add('answered');
+        } else {
+          document.getElementById(`q${i}-nav`).classList.remove('answered');
+        }
+      });
+    } else if (i >= 25 && i <= 26) {
+      document.querySelectorAll(`input[name="q${i}"]`).forEach(radio => {
+        radio.addEventListener('change', () => {
+          document.getElementById(`q${i}-nav`).classList.add('answered');
+        });
+      });
+    }
+  }
+})();
+
+// 拖拽分隔线调整面板宽度
+const divider = document.getElementById('divider');
+const leftPane = document.getElementById('left');
+const rightPane = document.getElementById('right');
+let isResizing = false;
+
+// 开始拖拽
+divider.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  document.body.style.cursor = 'ew-resize';
+  // 阻止事件冒泡和默认行为
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+// 处理拖拽
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  
+  // 计算左右面板的总宽度
+  const containerWidth = leftPane.parentElement.offsetWidth;
+  // 计算鼠标在容器中的位置百分比
+  const mousePosition = e.clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const leftWidthPercent = (mousePosition / containerWidth) * 100;
+  
+  // 限制最小宽度为280px
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+});
+
+// 结束拖拽
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    document.body.style.cursor = '';
+  }
+});
+
+// 移动端触摸支持
+divider.addEventListener('touchstart', (e) => {
+  isResizing = true;
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+document.addEventListener('touchmove', (e) => {
+  if (!isResizing) return;
+  
+  const containerWidth = leftPane.parentElement.offsetWidth;
+  const touch = e.touches[0];
+  const touchPosition = touch.clientX - leftPane.parentElement.getBoundingClientRect().left;
+  const leftWidthPercent = (touchPosition / containerWidth) * 100;
+  
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+  
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+document.addEventListener('touchend', () => {
+  if (isResizing) {
+    isResizing = false;
+  }
+});
+</script>
+</body>
+</html>

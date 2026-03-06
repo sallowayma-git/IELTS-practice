@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>社会史 · 阅读练习（高亮互动版）</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+        * { box-sizing: border-box; }
+        html,body { height:100%; }
+        body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); padding-bottom: 82px; }
+        .shell { display:flex; height:100vh; width:100%; }
+        .pane { background:var(--panel); overflow:auto; padding:20px; }
+        #left { flex: 0 0 50%; min-width: 280px; }
+        #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+        #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index: 5; user-select:none; }
+        h2,h3,h4 { margin:0 0 10px; }
+        #left p { margin: 0 0 12px; line-height: 1.6; word-break: normal; overflow-wrap: normal; hyphens: none; }
+        .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+        input.blank { border:none; border-bottom:1px solid #9ca3af; padding:2px 4px; font-size:1em; background:transparent; }
+        input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+        button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+        button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+        #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+        .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+        .hl:hover { filter: brightness(0.98); }
+        #selbar { position: absolute; display:none; z-index: 2000; background:#111; color:#fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap:6px; align-items: center; }
+        #selbar button { background: transparent; color:#fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor:pointer; }
+        #selbar button:hover { border-color:#fff; }
+        #notes { position: fixed; right: 12px; bottom: 12px; width: 320px; height: 42vh; background:#fff; border:1px solid var(--line); border-radius: 12px; display:none; flex-direction: column; z-index:1500; box-shadow: var(--shadow); }
+        #notes header { display:flex; align-items:center; justify-content: space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+        #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+        #toast { position: fixed; left:50%; transform: translateX(-50%); bottom: 24px; background:#111; color:#fff; padding:8px 12px; border-radius: 8px; display:none; z-index:2500; }
+        details.answerbox summary { cursor: pointer; user-select:none; list-style: none; }
+        details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+        .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+        .practice-nav { background:#fff; padding:12px 20px; display:flex; align-items:center; gap:16px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); z-index:4000; }
+        .practice-nav .title { font-weight:600; color:var(--muted); }
+        .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+        .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+        .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+        .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+        .practice-nav .controls { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+        #timer { display: inline-block; background:#fff; border:1px solid var(--line); border-radius:10px; padding:4px 10px; font-size:14px; vertical-align: middle; }
+        .theme-toggle { cursor: pointer; background: transparent; border: none; font-size: 18px; padding: 4px; }
+        .summary-box { border: 1px solid #ccc; padding: 12px; margin-top: 1em; border-radius: 8px; background:#f9fafc; }
+        .word-list-drag-drop { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding: 10px; background: #f9fafb; border-radius: 6px; min-height: 40px; }
+        .dropzone { border:2px dashed #cbd5e1; background:#f8fafc; border-radius:10px; min-height:40px; padding:4px 8px; display:inline-flex; align-items:center; justify-content:center; gap:8px; width: 140px; vertical-align: middle; margin:0 4px; }
+        .droplabel { color:#64748b; font-size:14px; }
+        .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 10px; display:inline-flex; gap:8px; align-items:center; cursor:grab; box-shadow:0 1px 0 rgba(0,0,0,.03); white-space: normal; max-width:160px; text-align:center; line-height:1.3; }
+        .card:active { cursor:grabbing; }
+        .ghost { opacity: .5; }
+        .over { outline:2px solid var(--accent); }
+        /* dark mode */
+        body.dark-mode { --bg: #1a1a1a; --panel: #2a2a2a; --line: #4a4a4a; --muted: #999; color: #e0e0e0; }
+        body.dark-mode .pane { background: var(--panel); color: #e0e0e0; }
+        body.dark-mode #right { background: #222; }
+        body.dark-mode button { background: #3a3a3a; color: #e0e0e0; border-color: #555; }
+        body.dark-mode button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+        body.dark-mode input.blank { color: #e0e0e0; border-bottom-color: #666; }
+        body.dark-mode .group, body.dark-mode #results, body.dark-mode details.answerbox { background: #2f2f2f; border-color: var(--line); }
+        body.dark-mode .practice-nav { background: #252525; border-top-color: #444; }
+        body.dark-mode .practice-nav .q-item { background: #3a3a3a; color: #ccc; border-color: #555; }
+        body.dark-mode .practice-nav .q-item:hover { background: #4a4a4a; border-color: var(--accent); }
+        body.dark-mode .practice-nav .q-item.answered { background: #3949ab; border-color: #5c6bc0; color: #e8eaf6; }
+        body.dark-mode .practice-nav .q-item.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        body.dark-mode #timer { background: #3a3a3a; color: #ccc; border-color: #555; }
+        body.dark-mode .summary-box, body.dark-mode .word-list-drag-drop { background: #222; border-color: var(--line); }
+        body.dark-mode .hl { background-color: #5b21b6; color: #f5f3ff; }
+        body.dark-mode .dropzone { background: #333; border-color: #555; }
+        body.dark-mode .card { background: #444; border-color: #666; }
+    </style>
+</head>
+<body>
+
+<div class="practice-nav">
+    <div class="title">Questions</div>
+    <div class="questions">
+        <div class="q-item" id="q27-nav" onclick="scrollToElement('q27-anchor')">27</div>
+        <div class="q-item" id="q28-nav" onclick="scrollToElement('q28-anchor')">28</div>
+        <div class="q-item" id="q29-nav" onclick="scrollToElement('q29-anchor')">29</div>
+        <div class="q-item" id="q30-nav" onclick="scrollToElement('q30-anchor')">30</div>
+        <div class="q-item" id="q31-nav" onclick="scrollToElement('q31-anchor')">31</div>
+        <div class="q-item" id="q32-nav" onclick="scrollToElement('q32-anchor')">32</div>
+        <div class="q-item" id="q33-nav" onclick="scrollToElement('q33-anchor')">33</div>
+        <div class="q-item" id="q34-nav" onclick="scrollToElement('q34-anchor')">34</div>
+        <div class="q-item" id="q35-nav" onclick="scrollToElement('q35-anchor')">35</div>
+        <div class="q-item" id="q36-nav" onclick="scrollToElement('q36-anchor')">36</div>
+        <div class="q-item" id="q37-nav" onclick="scrollToElement('q37-anchor')">37</div>
+        <div class="q-item" id="q38-nav" onclick="scrollToElement('q38-anchor')">38</div>
+        <div class="q-item" id="q39-nav" onclick="scrollToElement('q39-anchor')">39</div>
+        <div class="q-item" id="q40-nav" onclick="scrollToElement('q40-anchor')">40</div>
+    </div>
+    <div class="controls">
+        <span id="timer">00:00</span>
+        <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+    </div>
+</div>
+
+<div class="shell">
+    <!-- 左侧：社会史文章 -->
+    <section class="pane" id="left">
+        <h2>READING PASSAGE 3</h2>
+        <p>You should spend about 20 minutes on Questions 27-40, which are based on Reading Passage 3 below.</p>
+        <h3>What is social history?</h3>
+        <p>Ever since its elevation to the status of an academic discipline, history has been very largely concerned with problems of its own making. These may be gaps which the young researcher is advised by supervisors to fill; or established views which he or she is encouraged to challenge. In either case, the need for the researcher to provide new insights in order to gain professional advancement often counts for more than the intrinsic interest of the topic.</p>
+        <p>Social history is quite different. It touches on, and arguably helps to focus, major issues of public debate. It mobilises popular enthusiasm and engages popular passions. It prides itself on being concerned with everyday things rather than sensational events and is directed against the 'Great Man' theories that originally characterised history, and the tedious focus on bureaucratic issues that subsequently dominated the 1920s and 30s. This is also reflected in the way it is taught, through the adoption of multi-disciplinary perspectives rather than a narrow historical interpretation.</p>
+        <p>Social history emerged, both as a popular enthusiasm and as a scholarly practice, from the cultural revolution of the 1960s in North America and Europe, and reproduces its leading inspirations. The spirit of social history was pre-eminently a modernising one, as reflected in its choice of subject matter. Whereas traditional history had focused on the 12th to 17th centuries, social history was apt to make its historical homeland in the 19th century. Latterly, it has even begun to extend its inquiry up to contemporary events and movements.</p>
+        <p>The subject matter favoured by the new social history, with its move away from the aristocracy and the establishment, corresponds to other cultural manifestations of the 1960s, such as New Wave British cinema, with its working-class protagonists, or 'Pop art', with its use of everyday artefacts. Similarly, the anti-institutional bias of the new social history—the renewed determination to write the history of 'ordinary' people as against that of statecraft—could be said to echo a much more widespread collapse of social deference, and a questioning of authority figures of all kinds.</p>
+        <p>Another major 1960s influence on the new social history—very different in its origins and effects—was the 'nostalgia industry', which focused on the sale of memorabilia and artefacts from recent history. This emerged as a kind of negative counterpart to the otherwise dominant modernisation of the decade and reflected a disenchantment, no less apparent on the Left of the political spectrum than on the Right, with post-war social change.</p>
+        <p>Industrial archaeology, an invention of the 1960s, elevated disused factories and mills to the status of national monuments. Following in the same track, property restorers turned houses built for 19th-century factory workers—once emblems of poverty, overcrowding, and ill-health—into picturesque residences. In another sphere, one could point to the proliferation of folk clubs and the discovery of industrial folk songs, prefiguring one of the major themes of the new social history—the dignity of labour.</p>
+        <p>So far as historical work was concerned, by the 1970s the sense of disenchantment had crystallised into an idealised view of the past, fostering a nostalgic regard for disappearing communities. The restoration of vanished components of 'the world we have lost' became a major impetus in historical writing and research. The dignity of ordinary people could be said to be the unifying theme of this line of historical inquiry and retrieval—a celebration of everyday life, even, perhaps especially, when it involved hardship and suffering.</p>
+        <p>Despite the novelty of its subject matter, social history reproduces many of the characteristic biases of its predecessors. Social historians are good at amassing details on household artefacts, budgets, daily purchases, but at times the evidence is assumed to speak for itself, and the simple reproduction of fact masquerades as explanation. The facts accumulated may leave no conceptual space for the great absences, for the many areas where the documentary record is silent.</p>
+        <p>The indulgence which social historians extend towards their subjects, and the desire to establish 'empathy'—seeing the past in terms of its own values rather than those of today—can also serve to flatter our self-esteem, making history a field in which, at no great cost to ourselves, we can demonstrate our enlarged sympathies and benevolence. Recognising our kinship to people in the past, and tracing, or discovering, their likeness to ourselves, we are flattered in the belief that underneath we are all lovable; eccentric perhaps and even absurd, but large-hearted, generous and frank. This sense of integration with the past can thus serve as a comfortable alternative to critical awareness and self-questioning, allowing us to dignify the present by illegitimate association with the past.</p>
+        <p>Social history, if it is to fulfil its subversive potential, needs to be a great deal more disturbing. If it is to celebrate a common humanity, and to bring past and present closer together, far more weight needs to be given to the effects of insecurities and emergencies—the fears that shadow the growing up of children, the oppositions we encounter during our lives—experiences which may be hard for an individual to categorise but which nevertheless have a significance which goes beyond that individual.</p>
+        <p>Perhaps too we might recognise that there is a profound condescension in the notion of 'ordinary people'—that unified totality in which social historians are apt to deal. Implicitly it is a category from which we tend to exclude ourselves, although in fact we are exceptional only by our privilege of hindsight. 'There are ... no masses,' Raymond Williams wrote, 'only ways of seeing people as masses.' It is perhaps time for historians to scrutinise the term 'ordinary people' in the same way.</p>
+    </section>
+
+    <!-- 可拖拽分割条 -->
+    <div id="divider" title="Drag to resize"></div>
+
+    <!-- 右侧：全部题目（27-40） -->
+    <section class="pane" id="right">
+        <h3>Questions</h3>
+
+        <!-- 27-31 拖拽填空 -->
+        <div class="group">
+            <h4>Questions 27–31</h4>
+            <p>Complete the summary using the list of words, A–H, below. Drag the correct word into each gap.</p>
+            <div class="summary-box">
+                <p>
+                    Since it became an academic discipline, historical study has been too concerned with a search for 
+                    <span style="display:inline-block; vertical-align: middle;"><div class="dropzone" data-target="q27"><span class="droplabel">27</span></div></span> 
+                    by researchers who want to develop their careers. Social history, however, is more closely related to the 
+                    <span style="display:inline-block; vertical-align: middle;"><div class="dropzone" data-target="q28"><span class="droplabel">28</span></div></span> 
+                    of the public. It avoids history's traditional focus on 
+                    <span style="display:inline-block; vertical-align: middle;"><div class="dropzone" data-target="q29"><span class="droplabel">29</span></div></span>, 
+                    and its later concentration on 
+                    <span style="display:inline-block; vertical-align: middle;"><div class="dropzone" data-target="q30"><span class="droplabel">30</span></div></span>, 
+                    and it is also different from traditional history in its teaching 
+                    <span style="display:inline-block; vertical-align: middle;"><div class="dropzone" data-target="q31"><span class="droplabel">31</span></div></span>, 
+                    which is derived from different academic subjects.
+                </p>
+            </div>
+            <div class="word-list-drag-drop" id="card-pool">
+                <div class="card" draggable="true" data-value="A" id="card-A"><strong>A</strong> methodology</div>
+                <div class="card" draggable="true" data-value="B" id="card-B"><strong>B</strong> needs</div>
+                <div class="card" draggable="true" data-value="C" id="card-C"><strong>C</strong> originality</div>
+                <div class="card" draggable="true" data-value="D" id="card-D"><strong>D</strong> important people</div>
+                <div class="card" draggable="true" data-value="E" id="card-E"><strong>E</strong> accuracy</div>
+                <div class="card" draggable="true" data-value="F" id="card-F"><strong>F</strong> interests/feelings</div>
+                <div class="card" draggable="true" data-value="G" id="card-G"><strong>G</strong> explanation</div>
+                <div class="card" draggable="true" data-value="H" id="card-H"><strong>H</strong> organisational matters</div>
+            </div>
+        </div>
+
+        <!-- 32-35 YES/NO/NOT GIVEN -->
+        <div class="group">
+            <h4>Questions 32–35</h4>
+            <p>Do the following statements agree with the claims of the writer?<br>Answer <strong>YES</strong>, <strong>NO</strong> or <strong>NOT GIVEN</strong>.</p>
+            <a id="q32-anchor"></a><div style="padding:8px 0;border-top:1px dashed var(--line);"><p>32 The rise of social history led to the cultural revolution of the 1960s.</p>
+                <div style="display:flex; flex-wrap:wrap; gap:10px;"><label><input name="q32" type="radio" value="YES"> YES</label><label><input name="q32" type="radio" value="NO"> NO</label><label><input name="q32" type="radio" value="NOT GIVEN"> NOT GIVEN</label></div></div>
+            <a id="q33-anchor"></a><div style="padding:8px 0;border-top:1px dashed var(--line);"><p>33 Social historians tend to study a later period of history than traditional historians did.</p>
+                <div style="display:flex; flex-wrap:wrap; gap:10px;"><label><input name="q33" type="radio" value="YES"> YES</label><label><input name="q33" type="radio" value="NO"> NO</label><label><input name="q33" type="radio" value="NOT GIVEN"> NOT GIVEN</label></div></div>
+            <a id="q34-anchor"></a><div style="padding:8px 0;border-top:1px dashed var(--line);"><p>34 British cinema in the 1960s lacked any working-class characters.</p>
+                <div style="display:flex; flex-wrap:wrap; gap:10px;"><label><input name="q34" type="radio" value="YES"> YES</label><label><input name="q34" type="radio" value="NO"> NO</label><label><input name="q34" type="radio" value="NOT GIVEN"> NOT GIVEN</label></div></div>
+            <a id="q35-anchor"></a><div style="padding:8px 0;border-top:1px dashed var(--line);"><p>35 The loss of respect for authority in the 1960s was a leading cause of social problems.</p>
+                <div style="display:flex; flex-wrap:wrap; gap:10px;"><label><input name="q35" type="radio" value="YES"> YES</label><label><input name="q35" type="radio" value="NO"> NO</label><label><input name="q35" type="radio" value="NOT GIVEN"> NOT GIVEN</label></div></div>
+        </div>
+
+        <!-- 36-40 单选题 -->
+        <div class="group">
+            <h4>Questions 36–40</h4>
+            <p>Choose the correct letter, A, B, C, or D.</p>
+            <a id="q36-anchor"></a><div style="padding:8px 0;border-top:1px dashed var(--line);"><p>36 What point is made about the 'nostalgia industry'?</p>
+                <label style="display:block;"><input name="q36" type="radio" value="A"> A Its products were not always genuine historical items.</label>
+                <label style="display:block;"><input name="q36" type="radio" value="B"> B It led to the abandonment of modernisation.</label>
+                <label style="display:block;"><input name="q36" type="radio" value="C"> C Its origins were political rather than industrial.</label>
+                <label style="display:block;"><input name="q36" type="radio" value="D"> D It opposed the dominant trend of the time.</label></div>
+            <a id="q37-anchor"></a><div style="padding:8px 0;border-top:1px dashed var(--line);"><p>37 In the sixth paragraph, the writer makes the point that in the 1960s</p>
+                <label style="display:block;"><input name="q37" type="radio" value="A"> A construction workers gained greater status.</label>
+                <label style="display:block;"><input name="q37" type="radio" value="B"> B there was a new interest in traditional industrial buildings.</label>
+                <label style="display:block;"><input name="q37" type="radio" value="C"> C architects applied industrial techniques to home design.</label>
+                <label style="display:block;"><input name="q37" type="radio" value="D"> D many older homes were unsuitable as places of residence.</label></div>
+            <a id="q38-anchor"></a><div style="padding:8px 0;border-top:1px dashed var(--line);"><p>38 By the 1970s, historians had come to believe that</p>
+                <label style="display:block;"><input name="q38" type="radio" value="A"> A researchers should focus on the immediate past.</label>
+                <label style="display:block;"><input name="q38" type="radio" value="B"> B modern life is not necessarily an improvement on the past.</label>
+                <label style="display:block;"><input name="q38" type="radio" value="C"> C they should not overemphasise the difficulties of life in the past.</label>
+                <label style="display:block;"><input name="q38" type="radio" value="D"> D there was a need for more 'ordinary' people to do research into the past.</label></div>
+            <a id="q39-anchor"></a><div style="padding:8px 0;border-top:1px dashed var(--line);"><p>39 One problem related to the use of detail by social historians is that</p>
+                <label style="display:block;"><input name="q39" type="radio" value="A"> A the wrong types of facts are collected.</label>
+                <label style="display:block;"><input name="q39" type="radio" value="B"> B some information may be hard to categorise.</label>
+                <label style="display:block;"><input name="q39" type="radio" value="C"> C more important issues may be ignored.</label>
+                <label style="display:block;"><input name="q39" type="radio" value="D"> D some of the data may be incorrect.</label></div>
+            <a id="q40-anchor"></a><div style="padding:8px 0;border-top:1px dashed var(--line);"><p>40 The writer recommends that to be effective, social history must</p>
+                <label style="display:block;"><input name="q40" type="radio" value="A"> A explore the negative emotions that are part of daily life.</label>
+                <label style="display:block;"><input name="q40" type="radio" value="B"> B build on what has already been established by historians.</label>
+                <label style="display:block;"><input name="q40" type="radio" value="C"> C try to provide an objective view of the recent past.</label>
+                <label style="display:block;"><input name="q40" type="radio" value="D"> D offer solutions to the pressing problems of our day.</label></div>
+        </div>
+
+        <!-- 提交 / 重置 / 笔记按钮 -->
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <button class="primary" onclick="grade()">Submit</button>
+            <button onclick="resetForm()">Reset</button>
+            <button onclick="toggleNotes()">Notes</button>
+        </div>
+        <div id="results"></div>
+        <details class="answerbox" id="answerBox">
+            <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+            <div id="answerContent"></div>
+        </details>
+    </section>
+</div>
+
+<!-- 浮动高亮工具栏、笔记框、toast -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+    <button id="btnHL">Highlight</button>
+    <button id="btnUH">Remove</button>
+    <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+    <header>
+        <strong>Notes</strong>
+        <div>
+            <button id="btnCopy">Copy</button>
+            <button id="btnClose">Close</button>
+        </div>
+    </header>
+    <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+    // 计时器
+    let _t=0; const _timerEl=document.getElementById('timer');
+    setInterval(function(){ _t++; var m=String(Math.floor(_t/60)).padStart(2,'0'); var s=String(_t%60).padStart(2,'0'); _timerEl.textContent=m+':'+s; },1000);
+    
+    // 拖拽分割条
+    var divider = document.getElementById('divider');
+    var left = document.getElementById('left');
+    var right = document.getElementById('right');
+    var dragging=false;
+    function startDrag(e){ dragging=true; document.body.style.cursor='ew-resize'; if(e.preventDefault) e.preventDefault(); }
+    function endDrag(){ dragging=false; document.body.style.cursor=''; }
+    function onMove(clientX){ var container = document.querySelector('.shell').getBoundingClientRect(); var x = clientX - container.left; x = Math.max(280, Math.min(container.width-320, x)); left.style.flex = '0 0 ' + x + 'px'; right.style.flex = '1 1 auto'; }
+    divider.addEventListener('mousedown', function(e){ startDrag(e); });
+    window.addEventListener('mousemove', function(e){ if(dragging) onMove(e.clientX); });
+    window.addEventListener('mouseup', endDrag);
+    divider.addEventListener('touchstart', function(e){ startDrag(e.touches[0]); }, {passive:false});
+    window.addEventListener('touchmove', function(e){ if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+    window.addEventListener('touchend', endDrag);
+    
+    // 高亮相关（复用原逻辑，左右均可）
+    var selbar = document.getElementById('selbar');
+    var lastRange=null, currentHlNode=null, keepToolbar=false;
+    function positionSelbarForRect(rect){
+      selbar.style.display='flex';
+      requestAnimationFrame(function(){
+        var top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+        var leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+        selbar.style.top = ((top>0)?top:(window.scrollY + rect.bottom + 8)) + 'px';
+        selbar.style.left = Math.max(8, leftPos) + 'px';
+      });
+    }
+    function updateSelbar(){ var sel=window.getSelection(); if(!sel || sel.rangeCount===0 || sel.isCollapsed) { selbar.style.display='none'; currentHlNode=null; return; } var range = sel.getRangeAt(0); lastRange = range.cloneRange(); currentHlNode=null; positionSelbarForRect(range.getBoundingClientRect()); }
+    document.getElementById('left').addEventListener('mouseup', updateSelbar);
+    document.getElementById('right').addEventListener('mouseup', updateSelbar);
+    document.addEventListener('selectionchange', function(){ var sel=window.getSelection(); if(!sel || sel.rangeCount===0 || sel.isCollapsed){ if(!keepToolbar && !currentHlNode){ selbar.style.display='none'; } } });
+    document.addEventListener('scroll', function(){ if(selbar.style.display==='flex') updateSelbar(); });
+    document.addEventListener('mousedown', function(e){ var t = e.target; if(t.classList && t.classList.contains('hl')){ keepToolbar = true; } else { keepToolbar = false; } }, true);
+    document.addEventListener('click', function(e){ var target = e.target; if(target.classList && target.classList.contains('hl')){ currentHlNode = target; lastRange = null; positionSelbarForRect(target.getBoundingClientRect()); var sel=window.getSelection(); if(sel) sel.removeAllRanges(); setTimeout(function(){ keepToolbar=false; }, 0); } }, true);
+    function doHighlight(){ if(currentHlNode) return; if(!lastRange || lastRange.collapsed) return; var span=document.createElement('span'); span.className='hl'; try { lastRange.surroundContents(span); } catch(e){ var wrap=document.createElement('span'); wrap.className='hl'; wrap.appendChild(lastRange.cloneContents()); lastRange.deleteContents(); lastRange.insertNode(wrap); } selbar.style.display='none'; showToast('Highlighted'); }
+    function removeHighlight(){ if(currentHlNode){ var p = currentHlNode.parentNode; while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode); p.removeChild(currentHlNode); p.normalize(); currentHlNode = null; selbar.style.display='none'; showToast('Highlight removed'); return; } if(!lastRange) return; var selRect = lastRange.getBoundingClientRect(); var walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT); var toRemove=[]; while(walker.nextNode()){ var n=walker.currentNode; if(n.classList && n.classList.contains('hl')) { var r = n.getBoundingClientRect(); if(!(r.right < selRect.left || r.left > selRect.right || r.bottom < selRect.top || r.top > selRect.bottom)) toRemove.push(n); } } toRemove.forEach(function(el){ var p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); }); selbar.style.display='none'; showToast('Highlight removed'); }
+    document.getElementById('btnHL').addEventListener('click', doHighlight);
+    document.getElementById('btnUH').addEventListener('click', removeHighlight);
+    
+    // 笔记
+    var notes = document.getElementById('notes'); var noteArea = document.getElementById('noteArea'); 
+    window.toggleNotes = function(){ notes.style.display = (notes.style.display==='flex'?'none':'flex'); };
+    document.getElementById('btnClose').addEventListener('click', window.toggleNotes);
+    document.getElementById('btnCopy').addEventListener('click', async function(){ await navigator.clipboard.writeText(noteArea.value||''); showToast('Copied'); });
+    document.getElementById('btnNote').addEventListener('click', function(){ var text = ''; if(currentHlNode){ text = (currentHlNode.textContent||'').trim(); } else if(lastRange){ var frag = lastRange.cloneContents(); text = (frag.textContent||'').trim(); } window.toggleNotes(); if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n'; selbar.style.display='none'; });
+    var toastEl=document.getElementById('toast'); function showToast(msg){ toastEl.textContent=msg; toastEl.style.display='block'; setTimeout(function(){ toastEl.style.display='none'; }, 1200); }
+    
+    // 暗色模式
+    function toggleDarkMode() {
+      document.body.classList.toggle('dark-mode');
+      const isDarkMode = document.body.classList.contains('dark-mode');
+      localStorage.setItem('darkMode', isDarkMode ? 'enabled' : 'disabled');
+      document.querySelector('.theme-toggle').textContent = isDarkMode ? '🌙' : '☀️';
+    }
+    if (localStorage.getItem('darkMode') === 'enabled') {
+      document.body.classList.add('dark-mode');
+      document.querySelector('.theme-toggle').textContent = '🌙';
+    }
+    
+    // ---------- 评分答案 ----------
+    const answers = {
+        q27: "C", q28: "F", q29: "D", q30: "H", q31: "A",
+        q32: "NO", q33: "YES", q34: "NO", q35: "NOT GIVEN",
+        q36: "D", q37: "B", q38: "B", q39: "C", q40: "A"
+    };
+    
+    function grade(){
+        let total=0, correct=0, lines=[];
+        function push(q, ok, userVal){ total++; if(ok) correct++; lines.push(q.toUpperCase()+": "+(userVal||'None')+" "+(ok?'✅':'❌')); }
+        
+        // 27-31 拖拽
+        for(let n=27; n<=31; n++){
+            let qName = 'q'+n;
+            let zone = document.querySelector(`.dropzone[data-target="${qName}"]`);
+            let card = zone ? zone.querySelector('.card') : null;
+            let val = card ? card.dataset.value : '';
+            let isCorrect = val === answers[qName];
+            push(qName, isCorrect, val);
+        }
+        // 32-35 判断
+        for(let n=32; n<=35; n++){
+            let qName = 'q'+n;
+            let sel = document.querySelector(`input[name="${qName}"]:checked`);
+            let val = sel ? sel.value : '';
+            let isCorrect = val.toUpperCase() === answers[qName].toUpperCase();
+            push(qName, isCorrect, val);
+        }
+        // 36-40 单选
+        for(let n=36; n<=40; n++){
+            let qName = 'q'+n;
+            let sel = document.querySelector(`input[name="${qName}"]:checked`);
+            let val = sel ? sel.value : '';
+            let isCorrect = val.toUpperCase() === answers[qName].toUpperCase();
+            push(qName, isCorrect, val);
+        }
+        
+        let acc = (total? Math.round(100*correct/total):0);
+        let html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
+        html += '<pre>'+lines.join('\n')+'</pre>';
+        document.getElementById('results').innerHTML = html;
+        
+        let ahtml = '<ol start="27">';
+        for(let i=27; i<=40; i++){ ahtml += '<li>' + answers['q'+i] + '</li>'; }
+        ahtml += '</ol>';
+        document.getElementById('answerContent').innerHTML = ahtml;
+        document.querySelector('#answerBox .badge').textContent='tap to view';
+    }
+    
+    function resetForm(){
+        document.querySelectorAll('input[type="radio"]').forEach(el=>el.checked=false);
+        const pool = document.getElementById('card-pool');
+        document.querySelectorAll('.dropzone .card').forEach(card => { pool.appendChild(card); });
+        document.querySelectorAll('.dropzone').forEach((zone, idx) => {
+            let num = zone.dataset.target.replace('q','');
+            zone.innerHTML = `<span class="droplabel">${num}</span>`;
+        });
+        document.getElementById('results').innerHTML='';
+        document.getElementById('answerContent').innerHTML='';
+        document.querySelector('#answerBox .badge').textContent='hidden';
+        document.querySelectorAll('.q-item').forEach(item => item.classList.remove('answered'));
+    }
+    
+    function scrollToElement(id){
+      var el = document.getElementById(id);
+      if(el){ el.scrollIntoView({behavior:'smooth', block:'center'}); }
+      var navs = document.querySelectorAll('.practice-nav .q-item');
+      navs.forEach(n => n.classList.remove('active'));
+      var btn = document.getElementById(id.replace('-anchor','-nav'));
+      if(btn){ btn.classList.add('active'); setTimeout(() => btn.classList.remove('active'), 800); }
+    }
+    
+    // 标记已回答的导航点
+    (function(){
+        function mark(qn){
+            let nav = document.getElementById('q'+qn+'-nav');
+            if(!nav) return;
+            let answered = false;
+            if(qn>=27 && qn<=31){
+                let zone = document.querySelector(`.dropzone[data-target="q${qn}"]`);
+                answered = zone && zone.querySelector('.card') !== null;
+            } else if(qn>=32 && qn<=40){
+                let radios = document.querySelectorAll(`input[name="q${qn}"]`);
+                answered = Array.from(radios).some(r => r.checked);
+            }
+            if(answered) nav.classList.add('answered'); else nav.classList.remove('answered');
+        }
+        for(let q=27; q<=40; q++){
+            (function(n){
+                if(n>=32 && n<=40){
+                    document.querySelectorAll(`input[name="q${n}"]`).forEach(r => r.addEventListener('change', ()=>mark(n)));
+                }
+            })(q);
+        }
+        // 拖拽标记
+        const observer = new MutationObserver(() => { for(let q=27; q<=31; q++) mark(q); });
+        document.querySelectorAll('.dropzone').forEach(zone => observer.observe(zone, { childList: true, subtree: false }));
+        // 初始标记
+        setTimeout(()=>{ for(let q=27; q<=40; q++) mark(q); }, 200);
+    })();
+    
+    // 拖拽初始化 (让卡片可拖动，且dropzone接受)
+    const cards = document.querySelectorAll('.card');
+    const dropzones = document.querySelectorAll('.dropzone');
+    const cardPool = document.getElementById('card-pool');
+    let draggedCard = null;
+    cards.forEach(card => {
+        card.addEventListener('dragstart', (e) => { draggedCard = e.target; setTimeout(() => e.target.classList.add('ghost'), 0); });
+        card.addEventListener('dragend', (e) => { e.target.classList.remove('ghost'); });
+    });
+    dropzones.forEach(zone => {
+        zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+        zone.addEventListener('dragleave', () => { zone.classList.remove('over'); });
+        zone.addEventListener('drop', e => {
+            e.preventDefault(); zone.classList.remove('over');
+            if (draggedCard) {
+                if(zone.children.length > 0 && zone.children[0].classList.contains('card')) {
+                    cardPool.appendChild(zone.children[0]);
+                }
+                zone.innerHTML = '';
+                zone.appendChild(draggedCard);
+                let qName = zone.dataset.target;
+                if(qName) mark(parseInt(qName.substring(1)));
+                draggedCard = null;
+            }
+        });
+    });
+</script>
+<!-- 练习页面增强脚本（可选） -->
+<script>
+    if (!window.practicePageEnhancer) {
+        const script = document.createElement('script');
+        script.src = '../../js/practice-page-enhancer.js';
+        script.onerror = function(){ /* 静默失败 */ };
+        document.head.appendChild(script);
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>亲自然设计 · 阅读练习（高亮互动版）</title>
+    <style>
+        :root { --line:#e5e7eb; --bg:#f6f7fb; --panel:#fff; --accent:#3b82f6; --muted:#6b7280; --shadow:0 6px 20px rgba(0,0,0,.12); }
+        * { box-sizing: border-box; }
+        html,body { height:100%; }
+        body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); padding-bottom: 82px; }
+        .shell { display:flex; height:100vh; width:100%; }
+        .pane { background:var(--panel); overflow:auto; padding:20px; }
+        #left { flex: 0 0 50%; min-width: 280px; }
+        #right { flex: 1 1 auto; min-width: 320px; background:#fbfbff; border-left:1px solid var(--line); }
+        #divider { flex: 0 0 8px; background: linear-gradient(90deg,#e5e7eb,#d1d5db); cursor: ew-resize; position:relative; z-index:5; user-select:none; }
+        h2,h3,h4 { margin:0 0 10px; }
+        #left p { margin: 0 0 12px; line-height:1.6; }
+        .group { background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:14px; }
+        input.blank { border:none; border-bottom:1px solid #9ca3af; padding:2px 4px; font-size:1em; background:transparent; width:140px; }
+        input.blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+        select { padding:4px 6px; border-radius:6px; border:1px solid var(--line); background:white; }
+        button { padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+        button.primary { background:var(--accent); color:#fff; border-color:#3b82f6; }
+        #results { background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px; }
+        .hl { background:#fff3a3; box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); cursor: pointer; }
+        .hl:hover { filter: brightness(0.98); }
+        #selbar { position: absolute; display:none; z-index:2000; background:#111; color:#fff; border-radius:8px; padding:6px; box-shadow:var(--shadow); font-size:13px; gap:6px; align-items:center; }
+        #selbar button { background:transparent; color:#fff; border:1px solid rgba(255,255,255,.25); padding:4px 8px; border-radius:6px; cursor:pointer; }
+        #selbar button:hover { border-color:#fff; }
+        #notes { position:fixed; right:12px; bottom:12px; width:320px; height:42vh; background:#fff; border:1px solid var(--line); border-radius:12px; display:none; flex-direction:column; z-index:1500; box-shadow:var(--shadow); }
+        #notes header { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-bottom:1px solid var(--line); }
+        #notes textarea { flex:1; border:0; padding:10px; resize:none; font-size:14px; line-height:1.5; }
+        #toast { position:fixed; left:50%; transform:translateX(-50%); bottom:24px; background:#111; color:#fff; padding:8px 12px; border-radius:8px; display:none; z-index:2500; }
+        details.answerbox summary { cursor:pointer; user-select:none; list-style:none; }
+        details.answerbox { border:1px dashed var(--line); border-radius:10px; padding:8px 10px; background:#fff; }
+        .badge { display:inline-block; background:#eef2ff; color:#4338ca; padding:2px 8px; border-radius:999px; font-size:12px; margin-left:6px; }
+        .practice-nav { background:#fff; padding:12px 20px; display:flex; align-items:center; gap:16px; box-shadow:0 2px 4px rgba(0,0,0,.05); flex-wrap:wrap; position:fixed; left:0; right:0; bottom:0; border-top:2px solid var(--line); z-index:4000; }
+        .practice-nav .title { font-weight:600; color:var(--muted); }
+        .practice-nav .questions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        .practice-nav .q-item { padding:6px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; font-size:14px; transition:all 0.2s; min-width:36px; text-align:center; }
+        .practice-nav .q-item:hover { background:#f1f5f9; border-color:var(--accent); }
+        .practice-nav .q-item.answered { background:#e0e7ff; border-color:var(--accent); color:var(--accent); font-weight:500; }
+        .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+        .practice-nav .controls { margin-left:auto; display:flex; align-items:center; gap:12px; }
+        #timer { display:inline-block; background:#fff; border:1px solid var(--line); border-radius:10px; padding:4px 10px; font-size:14px; vertical-align:middle; }
+        .theme-toggle { cursor:pointer; background:transparent; border:none; font-size:18px; padding:4px; }
+        .match-item { margin-bottom:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+        .match-desc { flex:1; }
+        .checkbox-group { display:flex; flex-wrap:wrap; gap:15px; margin-top:5px; }
+        .checkbox-group label { display:inline-flex; align-items:center; gap:4px; }
+        body.dark-mode { --bg:#1a1a1a; --panel:#2a2a2a; --line:#4a4a4a; --muted:#999; color:#e0e0e0; }
+        body.dark-mode .pane { background:var(--panel); color:#e0e0e0; }
+        body.dark-mode #right { background:#222; }
+        body.dark-mode button { background:#3a3a3a; color:#e0e0e0; border-color:#555; }
+        body.dark-mode button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+        body.dark-mode input.blank, body.dark-mode select { background:#3a3a3a; color:#e0e0e0; border-color:#666; }
+        body.dark-mode .group, body.dark-mode #results, body.dark-mode details.answerbox { background:#2f2f2f; border-color:var(--line); }
+        body.dark-mode .practice-nav { background:#252525; border-top-color:#444; }
+        body.dark-mode .practice-nav .q-item { background:#3a3a3a; color:#ccc; border-color:#555; }
+        body.dark-mode .practice-nav .q-item:hover { background:#4a4a4a; border-color:var(--accent); }
+        body.dark-mode .practice-nav .q-item.answered { background:#3949ab; border-color:#5c6bc0; color:#e8eaf6; }
+        body.dark-mode .practice-nav .q-item.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+        body.dark-mode #timer { background:#3a3a3a; color:#ccc; border-color:#555; }
+        body.dark-mode .hl { background-color:#5b21b6; color:#f5f3ff; }
+    </style>
+</head>
+<body>
+
+<div class="practice-nav">
+    <div class="title">Questions</div>
+    <div class="questions">
+        <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+        <div class="q-item" id="q15-nav" onclick="scrollToElement('q15-anchor')">15</div>
+        <div class="q-item" id="q16-nav" onclick="scrollToElement('q16-anchor')">16</div>
+        <div class="q-item" id="q17-nav" onclick="scrollToElement('q17-anchor')">17</div>
+        <div class="q-item" id="q18-nav" onclick="scrollToElement('q18-anchor')">18</div>
+        <div class="q-item" id="q19-nav" onclick="scrollToElement('q19-anchor')">19</div>
+        <div class="q-item" id="q20-nav" onclick="scrollToElement('q20-anchor')">20</div>
+        <div class="q-item" id="q21-nav" onclick="scrollToElement('q21-anchor')">21</div>
+        <div class="q-item" id="q22-nav" onclick="scrollToElement('q22-anchor')">22</div>
+        <div class="q-item" id="q23-nav" onclick="scrollToElement('q23-anchor')">23</div>
+        <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+        <div class="q-item" id="q25-nav" onclick="scrollToElement('q25-anchor')">25</div>
+        <div class="q-item" id="q26-nav" onclick="scrollToElement('q26-anchor')">26</div>
+    </div>
+    <div class="controls">
+        <span id="timer">00:00</span>
+        <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+    </div>
+</div>
+
+<div class="shell">
+    <!-- 左侧文章：Biophilic Design -->
+    <section class="pane" id="left">
+        <h2>READING PASSAGE 2</h2>
+        <p>You should spend about 20 minutes on Questions 14-26, which are based on Reading Passage 2 below.</p>
+        <h3>Biophilic Design</h3>
+        <p><strong>A</strong> Biophilic design, a movement related to green architecture, has gained much momentum within the building community in recent years. The premise of biophilic design is to avoid or minimise harmful impacts on the natural environment and, equally importantly, to provide and restore beneficial contacts between people and nature in the built environment.</p>
+        <p><strong>B</strong> People have a psychologically developed need to commune with nature, but this has frequently been neglected. All too often, architects put creative originality before the needs of the people who must live and work in their futuristic constructions, with scant regard for emotional as well as practical considerations. Biophilic design does not advocate tree houses or cave-dwelling, but it does provide nature-based features that maximise human functioning and health. Though not technically a biophilic design, Fallingwater—the stunning house in rural Pennsylvania designed in the 1930s by Frank Lloyd Wright—arguably speaks to the human soul far more than the box-like blocks of flats designed by his contemporary Le Corbusier.</p>
+        <p><strong>C</strong> In the modern world, much of our built environment obstructs the age-old connection between humans and nature. The rate of technological progress far exceeds the rate of psychological evolution, leaving us ill-equipped to cope with our lifestyles, which in turn leads to increased stress. Because biophilia attempts to integrate basic and current needs, it can alleviate the difficulties caused by the brain's constant efforts to function in a modern environment it has not yet evolved to handle. For example, one crucial element of the natural landscape for human health is sunlight. We are evolutionarily programmed to respond positively to sunny areas over dark or overcast ones and sense that they will foster restoration, improve emotional well-being and promote health.</p>
+        <p><strong>D</strong> Because of its tremendous impact on human psychology, biophilic design plays a vital role in healthcare and its delivery. The current healthcare system contains many flaws, especially in its physical spaces. Hospitals, clinics and offices are high-stress environments for patients, visitors and healthcare professionals alike. One well-known study looked at the impact of nature on patients after surgery. One group had a view of a tree; the others had a window looking onto a brick wall. The first group had shorter hospital stays, received fewer negative comments from nurses, required fewer analgesics and had slightly fewer post-operative complications.</p>
+        <p><strong>E</strong> As a consequence of this and other studies, nature and nature-based design have been integrated into the physical design of many hospitals. For example, Dartmouth-Hitchcock Medical Center (DHMC) in New Hampshire boasts an atrium design illuminating the entire facility. Natural elements also permeate the building, including wood, stone and numerous live plants. While DHMC was built to incorporate these qualities, other hospitals have had biophilic features added to existing structures. The application of biophilic concepts to hospital interiors has increased substantially as administrators have witnessed patients' positive responses to nature.</p>
+        <p><strong>F</strong> Many existing buildings contain biophilic elements, but only a few have been built with the specific idea of biophilic design in mind. One such building is the Adam Joseph Lewis Center for Environmental Studies at Oberlin College in Ohio. The director of Oberlin's Environmental Studies Program, David Orr, explained that the building's goals were "to create not just a place for classes but rather a building that would help to redefine the relationship between humankind and the environment—one that would expand our sense of ecological possibilities". The Lewis Center is sustainable in a broader sense than in the typical application of the word. It harnesses solar power, utilises both active and passive air systems, and monitors the weather to adapt to conditions. The Centre's "Living Machine" treats wastewater by combining traditional wastewater technology with wetland ecosystems' purification processes, producing water that can be used in the toilets and for irrigation. In their design, Orr and his team of architects engineered a healthy and comfortable space for students while ensuring the surrounding environment was undamaged.</p>
+        <p><strong>G</strong> Another example is the University of Guelph-Humber building in Ontario, Canada. It contains a centrally located bio-wall, vertically spanning the building. The wall is covered in dense foliage which not only connects people to nature on the inside of the building, but also functions as a new filtration-system prototype. The wall purifies the air and has the potential to fulfil the building's fresh-air-intake requirements. These examples prove that the built environment need not interfere with biological human needs to commune with nature, nor with existing ecological systems.</p>
+        <p><strong>H</strong> Ancient architects built for their cultures, which were almost always more in touch with the earth than Western society is today. They mimicked nature's forms, producing magnificent structures that still awe us—though biophilic design is a novel concept, they certainly employed some of its recommendations. Today we can add another layer to this tradition and ensure maximal benefit for our planet and ourselves.</p>
+    </section>
+
+    <!-- 可拖拽分割条 -->
+    <div id="divider" title="Drag to resize"></div>
+
+    <!-- 右侧：所有题目 -->
+    <section class="pane" id="right">
+        <h3>Questions</h3>
+
+        <!-- 14-19 段落匹配 (下拉选择) -->
+        <div class="group">
+            <h4>Questions 14–19</h4>
+            <p>The reading passage has eight paragraphs, <strong>A–H</strong>. Which paragraph contains the following information? Write the correct letter in the dropdown next to each question.</p>
+            
+            <div class="match-item"><span class="match-desc">14 a description of how rapid change has a negative effect on people</span> <select id="q14" name="q14"><option value="">—</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option><option value="H">H</option></select> <a id="q14-anchor"></a></div>
+            <div class="match-item"><span class="match-desc">15 a reference to an architect whose designs were uncharacteristic of biophilia</span> <select id="q15" name="q15"><option value="">—</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option><option value="H">H</option></select> <a id="q15-anchor"></a></div>
+            <div class="match-item"><span class="match-desc">16 a definition of the two main aims of biophilia</span> <select id="q16" name="q16"><option value="">—</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option><option value="H">H</option></select> <a id="q16-anchor"></a></div>
+            <div class="match-item"><span class="match-desc">17 a positive claim about early forms of architecture</span> <select id="q17" name="q17"><option value="">—</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option><option value="H">H</option></select> <a id="q17-anchor"></a></div>
+            <div class="match-item"><span class="match-desc">18 a reference to the fact that many architects are too focused on innovation</span> <select id="q18" name="q18"><option value="">—</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option><option value="H">H</option></select> <a id="q18-anchor"></a></div>
+            <div class="match-item"><span class="match-desc">19 a description of features which conserve energy in a biophilic design</span> <select id="q19" name="q19"><option value="">—</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option><option value="F">F</option><option value="G">G</option><option value="H">H</option></select> <a id="q19-anchor"></a></div>
+        </div>
+
+        <!-- 20-24 填空 (一个词) -->
+        <div class="group">
+            <h4>Questions 20–24</h4>
+            <p>Complete the sentences below. Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+            <p>20 In the modern world, <input class="blank" id="q20" name="q20" type="text" placeholder="one word"> advancements are happening so quickly that humans are unable to adjust to them. <a id="q20-anchor"></a></p>
+            <p>21 Biophilia can help us deal with the <input class="blank" id="q21" name="q21" type="text" placeholder="one word"> caused by the difficulties of our current lifestyles. <a id="q21-anchor"></a></p>
+            <p>22 People instinctively feel more comfortable in places which have plenty of <input class="blank" id="q22" name="q22" type="text" placeholder="one word">, something which is necessary for health and well-being. <a id="q22-anchor"></a></p>
+            <p>23 An experiment designed to test the effect of nature on patient recovery times found that those who could see a <input class="blank" id="q23" name="q23" type="text" placeholder="one word"> made a faster recovery. <a id="q23-anchor"></a></p>
+            <p>24 There is a biophilic design feature in the University of Guelph-Humber building which improves the quality of the <input class="blank" id="q24" name="q24" type="text" placeholder="one word">. <a id="q24-anchor"></a></p>
+        </div>
+
+        <!-- 25-26 多选 (两个字母) -->
+        <div class="group">
+            <h4>Questions 25 and 26</h4>
+            <p>Choose <strong>TWO</strong> letters, A–E. Write the correct letters in boxes 25 and 26.</p>
+            <p>Which TWO of the following statements does the writer make about the Adam Joseph Lewis Center at Oberlin College?</p>
+            <div class="checkbox-group">
+                <label><input type="checkbox" id="q25A" value="A"> A It was the first educational establishment designed with biophilic principles.</label>
+                <label><input type="checkbox" id="q25B" value="B"> B It is beneficial for both students and the environment.</label>
+                <label><input type="checkbox" id="q25C" value="C"> C It has established new concepts for classroom design.</label>
+                <label><input type="checkbox" id="q25D" value="D"> D It aims to inspire new ways of thinking about the environment.</label>
+                <label><input type="checkbox" id="q25E" value="E"> E It provides solar power to other buildings in the surrounding area.</label>
+            </div>
+            <a id="q25-anchor"></a><a id="q26-anchor"></a>
+        </div>
+
+        <!-- 按钮区 -->
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <button class="primary" onclick="grade()">Submit</button>
+            <button onclick="resetForm()">Reset</button>
+            <button onclick="toggleNotes()">Notes</button>
+        </div>
+        <div id="results"></div>
+        <details class="answerbox" id="answerBox">
+            <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+            <div id="answerContent"></div>
+        </details>
+    </section>
+</div>
+
+<!-- 浮动工具栏、笔记、toast -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+    <button id="btnHL">Highlight</button>
+    <button id="btnUH">Remove</button>
+    <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+    <header>
+        <strong>Notes</strong>
+        <div>
+            <button id="btnCopy">Copy</button>
+            <button id="btnClose">Close</button>
+        </div>
+    </header>
+    <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+    // ---------- 计时器 ----------
+    let _t=0; const _timerEl=document.getElementById('timer');
+    setInterval(function(){ _t++; let m=String(Math.floor(_t/60)).padStart(2,'0'); let s=String(_t%60).padStart(2,'0'); _timerEl.textContent=m+':'+s; },1000);
+    
+    // ---------- 分割条拖动 ----------
+    const divider = document.getElementById('divider'), left = document.getElementById('left'), right = document.getElementById('right');
+    let dragging=false;
+    function startDrag(e){ dragging=true; document.body.style.cursor='ew-resize'; if(e.preventDefault) e.preventDefault(); }
+    function endDrag(){ dragging=false; document.body.style.cursor=''; }
+    function onMove(clientX){ let container = document.querySelector('.shell').getBoundingClientRect(); let x = clientX - container.left; x = Math.max(280, Math.min(container.width-320, x)); left.style.flex = '0 0 ' + x + 'px'; right.style.flex = '1 1 auto'; }
+    divider.addEventListener('mousedown', startDrag);
+    window.addEventListener('mousemove', e => { if(dragging) onMove(e.clientX); });
+    window.addEventListener('mouseup', endDrag);
+    divider.addEventListener('touchstart', e => { startDrag(e.touches[0]); }, {passive:false});
+    window.addEventListener('touchmove', e => { if(dragging) onMove(e.touches[0].clientX); }, {passive:false});
+    window.addEventListener('touchend', endDrag);
+
+    // ---------- 高亮功能 ----------
+    const selbar = document.getElementById('selbar');
+    let lastRange=null, currentHlNode=null, keepToolbar=false;
+    function positionSelbarForRect(rect){
+        selbar.style.display='flex';
+        requestAnimationFrame(()=>{
+            let top = window.scrollY + rect.top - selbar.offsetHeight - 8;
+            let leftPos = window.scrollX + rect.left + rect.width/2 - selbar.offsetWidth/2;
+            selbar.style.top = (top>0?top:(window.scrollY+rect.bottom+8))+'px';
+            selbar.style.left = Math.max(8, leftPos)+'px';
+        });
+    }
+    function updateSelbar(){ let sel=window.getSelection(); if(!sel || sel.rangeCount===0 || sel.isCollapsed) { selbar.style.display='none'; currentHlNode=null; return; } let range=sel.getRangeAt(0); lastRange=range.cloneRange(); currentHlNode=null; positionSelbarForRect(range.getBoundingClientRect()); }
+    document.getElementById('left').addEventListener('mouseup', updateSelbar);
+    document.getElementById('right').addEventListener('mouseup', updateSelbar);
+    document.addEventListener('selectionchange', ()=>{ let sel=window.getSelection(); if(!sel || sel.rangeCount===0 || sel.isCollapsed){ if(!keepToolbar && !currentHlNode) selbar.style.display='none'; } });
+    document.addEventListener('scroll', ()=>{ if(selbar.style.display==='flex') updateSelbar(); });
+    document.addEventListener('mousedown', e => { let t=e.target; keepToolbar = !!(t.classList && t.classList.contains('hl')); }, true);
+    document.addEventListener('click', e => { let target=e.target; if(target.classList && target.classList.contains('hl')){ currentHlNode=target; lastRange=null; positionSelbarForRect(target.getBoundingClientRect()); window.getSelection()?.removeAllRanges(); setTimeout(()=>{ keepToolbar=false; },0); } }, true);
+    function doHighlight(){ if(currentHlNode) return; if(!lastRange || lastRange.collapsed) return; let span=document.createElement('span'); span.className='hl'; try { lastRange.surroundContents(span); } catch(e){ let wrap=document.createElement('span'); wrap.className='hl'; wrap.appendChild(lastRange.cloneContents()); lastRange.deleteContents(); lastRange.insertNode(wrap); } selbar.style.display='none'; showToast('Highlighted'); }
+    function removeHighlight(){ if(currentHlNode){ let p=currentHlNode.parentNode; while(currentHlNode.firstChild) p.insertBefore(currentHlNode.firstChild, currentHlNode); p.removeChild(currentHlNode); p.normalize(); currentHlNode=null; selbar.style.display='none'; showToast('Highlight removed'); return; } if(!lastRange) return; let selRect=lastRange.getBoundingClientRect(); let walker=document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT); let toRemove=[]; while(walker.nextNode()){ let n=walker.currentNode; if(n.classList && n.classList.contains('hl')) { let r=n.getBoundingClientRect(); if(!(r.right<selRect.left || r.left>selRect.right || r.bottom<selRect.top || r.top>selRect.bottom)) toRemove.push(n); } } toRemove.forEach(el=>{ let p=el.parentNode; while(el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); p.normalize(); }); selbar.style.display='none'; showToast('Highlight removed'); }
+    document.getElementById('btnHL').addEventListener('click', doHighlight);
+    document.getElementById('btnUH').addEventListener('click', removeHighlight);
+
+    // ---------- 笔记 ----------
+    const notes = document.getElementById('notes'), noteArea = document.getElementById('noteArea');
+    window.toggleNotes = function(){ notes.style.display = (notes.style.display==='flex'?'none':'flex'); };
+    document.getElementById('btnClose').addEventListener('click', toggleNotes);
+    document.getElementById('btnCopy').addEventListener('click', async ()=>{ await navigator.clipboard.writeText(noteArea.value||''); showToast('Copied'); });
+    document.getElementById('btnNote').addEventListener('click', ()=>{ let text=''; if(currentHlNode) text=(currentHlNode.textContent||'').trim(); else if(lastRange){ let frag=lastRange.cloneContents(); text=(frag.textContent||'').trim(); } toggleNotes(); if(text) noteArea.value = (noteArea.value? noteArea.value+'\n':'') + '> ' + text + '\n'; selbar.style.display='none'; });
+    const toastEl=document.getElementById('toast'); function showToast(msg){ toastEl.textContent=msg; toastEl.style.display='block'; setTimeout(()=>{ toastEl.style.display='none'; },1200); }
+
+    // ---------- 暗色模式 ----------
+    function toggleDarkMode() {
+        document.body.classList.toggle('dark-mode');
+        localStorage.setItem('darkMode', document.body.classList.contains('dark-mode') ? 'enabled' : 'disabled');
+        document.querySelector('.theme-toggle').textContent = document.body.classList.contains('dark-mode') ? '🌙' : '☀️';
+    }
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        document.body.classList.add('dark-mode');
+        document.querySelector('.theme-toggle').textContent = '🌙';
+    }
+
+    // ---------- 标准答案 ----------
+    const answers = {
+        q14: "C", q15: "B", q16: "A", q17: "H", q18: "B", q19: "F",
+        q20: "technological", q21: "stress", q22: "sunlight", q23: "tree", q24: "air",
+        q25: ["B","D"], q26: ["B","D"]  // 多选，两个字母
+    };
+
+    // ---------- 评分函数 ----------
+    function grade() {
+        let total=0, correct=0, lines=[];
+
+        // 处理14-19 下拉选择
+        for (let i=14; i<=19; i++) {
+            let q = 'q'+i;
+            let sel = document.getElementById(q);
+            let val = sel ? sel.value : '';
+            let isCorrect = val.toUpperCase() === answers[q].toUpperCase();
+            total++; if(isCorrect) correct++;
+            lines.push(q.toUpperCase()+': '+ (val||'None') +' '+(isCorrect?'✅':'❌'));
+        }
+
+        // 20-24 填空（忽略大小写和前后空格）
+        for (let i=20; i<=24; i++) {
+            let q = 'q'+i;
+            let inp = document.getElementById(q);
+            let val = inp ? inp.value.trim().toLowerCase() : '';
+            let ans = answers[q].toLowerCase();
+            let isCorrect = (val === ans);
+            total++; if(isCorrect) correct++;
+            lines.push(q.toUpperCase()+': '+ (val||'None') +' '+(isCorrect?'✅':'❌'));
+        }
+
+        // 25-26 多选 (两个复选框)
+        let checkboxes = ['A','B','C','D','E'];
+        let selected = [];
+        checkboxes.forEach(ch => {
+            let cb = document.getElementById('q25'+ch);
+            if(cb && cb.checked) selected.push(ch);
+        });
+        // 正确答案是 B 和 D (顺序无关)
+        let correctSet = new Set(['B','D']);
+        let selectedSet = new Set(selected);
+        let isCorrect25 = selectedSet.size === 2 && selectedSet.has('B') && selectedSet.has('D');
+        // 我们为25和26各计一题，但两个复选框共同决定两道题的正确性。按常见处理：如果正确，两题都对；否则都错。
+        total+=2;
+        if(isCorrect25) correct+=2;
+        lines.push('q25: '+ (selected.includes('B')?'B':'') + (selected.includes('D')?'D':'') + (selected.length?selected.join(','):'None') +' '+(isCorrect25?'✅':'❌'));
+        lines.push('q26: same as q25');
+
+        let acc = Math.round(100*correct/total);
+        let html = '<p><strong>Score:</strong> '+correct+'/'+total+' <span class="badge">Accuracy '+acc+'%</span></p>';
+        html += '<pre>'+lines.join('\n')+'</pre>';
+        document.getElementById('results').innerHTML = html;
+
+        // 显示答案列表
+        let ahtml = '<ol start="14">';
+        for(let i=14; i<=26; i++) {
+            if(i===25) { ahtml += '<li>25 B, D</li><li>26 B, D</li>'; break; }
+            ahtml += '<li>' + answers['q'+i] + '</li>';
+        }
+        ahtml += '</ol>';
+        document.getElementById('answerContent').innerHTML = ahtml;
+        document.querySelector('#answerBox .badge').textContent = 'tap to view';
+    }
+
+    // ---------- 重置 ----------
+    function resetForm() {
+        // 下拉框重置
+        for(let i=14; i<=19; i++) {
+            let sel = document.getElementById('q'+i);
+            if(sel) sel.value = '';
+        }
+        // 填空重置
+        for(let i=20; i<=24; i++) {
+            let inp = document.getElementById('q'+i);
+            if(inp) inp.value = '';
+        }
+        // 复选框重置
+        ['A','B','C','D','E'].forEach(ch => {
+            let cb = document.getElementById('q25'+ch);
+            if(cb) cb.checked = false;
+        });
+        document.getElementById('results').innerHTML = '';
+        document.getElementById('answerContent').innerHTML = '';
+        document.querySelector('#answerBox .badge').textContent = 'hidden';
+        document.querySelectorAll('.q-item').forEach(item => item.classList.remove('answered'));
+    }
+
+    // ---------- 导航滚动 + 标记已回答 ----------
+    window.scrollToElement = function(id) {
+        let el = document.getElementById(id);
+        if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+        let navs = document.querySelectorAll('.practice-nav .q-item');
+        navs.forEach(n => n.classList.remove('active'));
+        let btn = document.getElementById(id.replace('-anchor','-nav'));
+        if(btn) { btn.classList.add('active'); setTimeout(() => btn.classList.remove('active'), 800); }
+    };
+
+    // 标记已回答（简单版：监听变化）
+    function markAnswered() {
+        for(let i=14; i<=19; i++) {
+            let sel = document.getElementById('q'+i);
+            let nav = document.getElementById('q'+i+'-nav');
+            if(sel && nav) {
+                if(sel.value) nav.classList.add('answered'); else nav.classList.remove('answered');
+            }
+        }
+        for(let i=20; i<=24; i++) {
+            let inp = document.getElementById('q'+i);
+            let nav = document.getElementById('q'+i+'-nav');
+            if(inp && nav) {
+                if(inp.value.trim() !== '') nav.classList.add('answered'); else nav.classList.remove('answered');
+            }
+        }
+        // 25-26 由复选框控制
+        let anyChecked = false;
+        ['A','B','C','D','E'].forEach(ch => {
+            let cb = document.getElementById('q25'+ch);
+            if(cb && cb.checked) anyChecked = true;
+        });
+        let nav25 = document.getElementById('q25-nav');
+        let nav26 = document.getElementById('q26-nav');
+        if(anyChecked) {
+            if(nav25) nav25.classList.add('answered');
+            if(nav26) nav26.classList.add('answered');
+        } else {
+            if(nav25) nav25.classList.remove('answered');
+            if(nav26) nav26.classList.remove('answered');
+        }
+    }
+
+    // 绑定事件
+    for(let i=14; i<=19; i++) {
+        document.getElementById('q'+i)?.addEventListener('change', markAnswered);
+    }
+    for(let i=20; i<=24; i++) {
+        document.getElementById('q'+i)?.addEventListener('input', markAnswered);
+    }
+    ['A','B','C','D','E'].forEach(ch => {
+        document.getElementById('q25'+ch)?.addEventListener('change', markAnswered);
+    });
+    // 初始标记
+    setTimeout(markAnswered, 200);
+</script>
+</body>
+</html>

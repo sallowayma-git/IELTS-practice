@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>P2 – Urban Regeneration: an award-winning redevelopment project in Berlin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root { 
+    --line: #e5e7eb; --bg: #f6f7fb; --panel: #fff; --accent: #3b82f6; 
+    --muted: #6b7280; --shadow: 0 6px 20px rgba(0,0,0,.12); 
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { 
+    margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background: var(--bg); padding-bottom: 70px; color: #111827;
+  }
+  .shell { display: flex; height: 100vh; width: 100%; }
+  .pane { background: var(--panel); overflow: auto; padding: 20px; }
+  #left { flex: 0 0 50%; min-width: 280px; }
+  #right { flex: 1 1 auto; min-width: 320px; background: #fbfbff; border-left: 1px solid var(--line); }
+  #divider { flex: 0 0 8px; background: linear-gradient(90deg, #e5e7eb, #d1d5db); cursor: ew-resize; position: relative; z-index: 5; user-select: none; }
+  h2, h3, h4 { margin: 0 0 10px; }
+  #left p, #right p, #right li { margin: 0 0 12px; line-height: 1.6; }
+  .group { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+  .q-block { margin-bottom: 16px; }
+  .options { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .options label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .q-match-item { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
+  .q-match-item .q-text { flex-grow: 1; }
+  .dropzone { 
+    border: 2px dashed #cbd5e1; background: #f8fafc; border-radius: 10px; 
+    min-height: 42px; padding: 6px; display: flex; align-items: center; justify-content: center; 
+    flex-shrink: 0; flex-basis: 60px;
+    transition: background-color 0.2s, outline 0.2s; 
+  }
+  .dropzone.over { outline: 2px solid var(--accent); background: #eff6ff; }
+  .dropzone .card { box-shadow: none; cursor: default; }
+  .option-pool { background:#f9fafb; border: 1px solid var(--line); border-radius: 8px; padding: 12px; display:flex; flex-wrap:wrap; gap:8px; margin-top: 12px; min-height: 48px; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px 12px; display:inline-flex; align-items:center; cursor:grab; box-shadow:0 2px 4px rgba(0,0,0,.05); user-select:none; transition: box-shadow 0.2s; }
+  .card:active { cursor: grabbing; box-shadow: var(--shadow); }
+  .card.ghost { opacity: 0.4; }
+  .blank { border:none; border-bottom:1px solid #9ca3af; padding:4px 2px; font-size:1em; background:transparent; width: 120px; }
+  .blank:focus { outline:none; border-bottom:2px solid var(--accent); }
+  button { padding: 8px 12px; border: 1px solid var(--line); background: #fff; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 14px; }
+  button:hover { background: #f8fafc; border-color: #cbd5e1; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: #2563eb; }
+  .practice-nav { background: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 -2px 5px rgba(0,0,0,.05); flex-wrap: wrap; position: fixed; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--line); z-index: 4000; }
+  .practice-nav .title { font-weight: 600; color: var(--muted); }
+  .practice-nav .questions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .practice-nav .q-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; transition: all 0.2s; min-width: 36px; text-align: center; }
+  .practice-nav .q-item:hover { background: #f1f5f9; border-color: var(--accent); }
+  .practice-nav .q-item.answered { background: #e0e7ff; border-color: var(--accent); color: var(--accent); font-weight: 500; }
+  .practice-nav .controls { display: flex; gap: 12px; margin-left: auto; align-items: center; }
+  #timer { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-family: 'Courier New', monospace; transition: all 0.2s; min-width: 70px; text-align: center; font-size: 14px; font-weight: bold; }
+  #timer:hover { background: #f1f5f9; border-color: var(--accent); }
+  #timer.paused { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+  .theme-toggle { background: #fff; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; width: 32px; height: 32px; font-size: 16px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+  #selbar { position: absolute; display: none; z-index: 2000; background: #111; color: #fff; border-radius: 8px; padding: 6px; box-shadow: var(--shadow); font-size: 13px; gap: 6px; align-items: center; }
+  #selbar button { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.25); padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+  #notes { position: fixed; right: 12px; bottom: 85px; width: 320px; height: 42vh; background: #fff; border: 1px solid var(--line); border-radius: 12px; display: none; flex-direction: column; z-index: 1500; box-shadow: var(--shadow); }
+  #notes header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  #notes textarea { flex: 1; border: 0; padding: 10px; resize: none; font-size: 14px; line-height: 1.5; background-color: inherit; color: inherit; }
+  #toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 3000; font-size: 14px; }
+  #results { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 16px 0; }
+  #results p { margin: 0 0 8px; }
+  #results pre { font-family: monospace; white-space: pre-wrap; margin: 0; }
+  .badge { background: #eef2ff; color: #4338ca; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 500; }
+  details.answerbox { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; }
+  details.answerbox summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+  details.answerbox summary::-webkit-details-marker { display: none; }
+  #answerContent { margin-top: 10px; }
+  #answerContent ol { margin: 0; padding-left: 20px; }
+  .hl { background: #fff3a3; }
+  body.dark { --bg: #0f172a; --panel: #1e293b; --line: #334155; --muted: #94a3b8; color: #e2e8f0; }
+  body.dark .pane, body.dark #right { background: var(--panel); }
+  body.dark #right { background: #131c2d; }
+  body.dark button, body.dark .theme-toggle { background: #334155; color: #e2e8f0; border-color: #475569; }
+  body.dark .group, body.dark #results, body.dark details.answerbox, body.dark #notes { background: #1e293b; border-color: #334155; }
+  body.dark .practice-nav { background: #1e293b; border-top-color: #334155; }
+  body.dark .q-item { background: #334155; color: #e2e8f0; border-color: #475569; }
+  body.dark .q-item.answered { background: #1e40af; border-color: var(--accent); color: #93c5fd; }
+  body.dark #timer.paused { background: #402323; color: #f87171; border-color: #7f1d1d; }
+  body.dark .hl { background: #b45309; }
+  body.dark .option-pool { background:#0f172a; border-color: var(--line); }
+  body.dark .card { background: #334155; border-color: #475569; }
+  body.dark .dropzone { border-color: #475569; background: #131c2d; }
+  body.dark .dropzone.over { background: #1e293b; }
+  body.dark .badge { background: #312e81; color: #a5b4fc; }
+  body.dark .blank { color: #e2e8f0; border-bottom-color: #64748b; }
+  @media (max-width: 768px) {
+    .shell { flex-direction: column; height: auto; }
+    #left, #right { min-height: 50vh; }
+    #divider { display: none; }
+    #notes { width: calc(100vw - 24px); right: 12px; left: 12px; }
+    .q-match-item { flex-direction: column; align-items: stretch; }
+    .dropzone { flex-basis: 42px; width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- 1. Bottom Navigation Bar -->
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q14-nav" onclick="scrollToElement('q14-anchor')">14</div>
+    <div class="q-item" id="q15-nav" onclick="scrollToElement('q14-anchor')">15</div>
+    <div class="q-item" id="q16-nav" onclick="scrollToElement('q14-anchor')">16</div>
+    <div class="q-item" id="q17-nav" onclick="scrollToElement('q14-anchor')">17</div>
+    <div class="q-item" id="q18-nav" onclick="scrollToElement('q14-anchor')">18</div>
+    <div class="q-item" id="q19-nav" onclick="scrollToElement('q14-anchor')">19</div>
+    <div class="q-item" id="q20-21-nav" onclick="scrollToElement('q20-anchor')">20-21</div>
+    <div class="q-item" id="q22-23-nav" onclick="scrollToElement('q22-anchor')">22-23</div>
+    <div class="q-item" id="q24-nav" onclick="scrollToElement('q24-anchor')">24</div>
+    <div class="q-item" id="q25-nav" onclick="scrollToElement('q24-anchor')">25</div>
+    <div class="q-item" id="q26-nav" onclick="scrollToElement('q24-anchor')">26</div>
+  </div>
+  <div class="controls">
+    <span id="timer" onclick="toggleTimer()">00:00</span>
+    <button class="theme-toggle" onclick="toggleDarkMode()" title="Toggle dark/light mode">☀️</button>
+  </div>
+</div>
+
+<!-- 2. Main Content Shell -->
+<div class="shell">
+  <!-- Left Pane: Reading Passage -->
+  <section class="pane" id="left">
+    <h2>READING PASSAGE 2</h2>
+    <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>
+    
+    <h3>Urban Regeneration: an award-winning redevelopment project in Berlin</h3>
+  
+    <h4>A</h4>
+    <p>Just over a kilometer south of Berlin's Potsdamer Platz, near the left bank of the Landwehr Canal, an extensive, triangular-shaped area of waste ground once separated the neighbourhoods of Kreuzberg to the east and Schöneberg to the west. Known as Gleisdreieck, meaning ‘triangle of rails', it was formed by the intersection of different railway lines built in the mid-nineteenth century that entered Berlin from the south. Tracks, sheds and warehouses belonging to three old railway stations – Dresdner Bahnhof (1875-1882), Potsdamer Bahnhof (1838-1944) and Anhalter Bahnhof (1839-1952) – are situated on a raised area some twenty hectares in size, at a height of four metres above the surrounding ground level.</p>
+    
+    <h4>B</h4>
+    <p>As the railway infrastructure gradually ceased to be used, the whole area of Gleisdreieck became increasingly run down and abandoned, to the point of being used as a rubbish tip after 1945. Meanwhile, vegetation took over, turning it into a surprising, natural haven in the middle of built-up areas. The closeness of the wall which divided the city of Berlin between 1961 and 1990 also contributed to the fact that Gleisdreieck was for decades clearly identified as no-man's-land. Only a station of the same name in Berlin's underground railway system testified to its existence. Shortly before the fall of the Berlin Wall, however, the German Museum of Technology was established there, attracting large numbers of visitors and giving visibility to the site. More importantly, the unification of the formerly divided city gave the zone more centrality, at which point it became imperative to identify a purpose for it.</p>
+    
+    <h4>C</h4>
+    <p>After 2006, the State of Berlin put forward the proposal of converting Gleisdreieck into a large urban park that would integrate the different urban zones which converged there. The decades-long isolation of the site, which had formerly presented a problem, now represented an opportunity for joining the southern area of Potsdamer Platz with Kreuzberg and Schöneberg. The creation of the park would trigger one of the biggest urban expansions inside Berlin, all within a framework of multiple uses and social characteristics. It was necessary to stimulate the development of sixteen new hectares of local amenities that would be capable of integrating different generations and social groups in a sustainable way, and in harmony with nature. Following intense discussion with local proprietors and residents, the need to reconcile these goals with the conservation of railway heritage also emerged.</p>
+
+    <h4>D</h4>
+    <p>Once the area had been subjected to a process of undergrowth clearance and decontamination, it was then organized around a combination of existing and added elements. The project as a whole was planned around a large central meadow, intersected from east to west by a concrete footpath, and from north to south by a pair of railway lines. Once a month, a train slowly travels along these lines from its parking shed to the German Museum of Technology. The concrete footpath, which is a continuation of one of the main Kreuzberg boulevards, starts in the east, bridges the four-metre difference in ground level by means of a stairway, and suddenly ends in the west on reaching the underground lines.</p>
+
+    <h4>E</h4>
+    <p>North of the meadow, there is a large concrete slab with rounded edges. Being south-facing, this functions as a big sunny terrace, full of benches complete with footrests. In the south, the meadow overlooks Yorckstrasse, an underpass crossed by more than fifteen former railway bridges. To the east of the meadow there is quite a dense forest of pre-existing maples, oaks and birches, as well as newly planted trees of the same species. In this area, a couple of large metal frames each hold two swings. The edges of the park are finished with a collection of distinctive, functional spaces, for example a nursery, sports fields, concave surfaces for skateboards, stages for dancing, community gardens, or simply areas covered in gravel obtained from the site itself.</p>
+
+    <h4>F</h4>
+    <p>Although initially the regeneration of Gleisdreieck Park was the subject of disagreement between those who were in favour of safeguarding the railway heritage and those who wanted to regenerate the adjacent neighbourhoods, it was opened to the public in September 2011. The heart of Berlin now has a new green lung, in which the atmosphere of various small, very different corners fits neatly into a large-scale, wide-ranging and robust general order. This has been possible precisely because the intervention was not limited to conserving industrial remains in order to promote railway history. And as a reminder of the six decades of human absence, during which nature took over, the park has been able to conserve to some extent the spirit of the non-place that preceded it.</p>
+    
+    <p>&nbsp;</p> <!-- Final padding -->
+  </section>
+
+  <!-- Draggable Divider -->
+  <div id="divider" title="Drag to resize"></div>
+
+  <!-- Right Pane: Questions and Controls -->
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <a id="q14-anchor"></a>
+      <h4>Questions 14–19</h4>
+      <p>Choose the correct heading for each paragraph from the list of headings below.</p>
+      <div class="q-match-item"><span class="q-text"><strong>14</strong> Paragraph A</span><span class="dropzone" data-target="q14"></span></div>
+      <div class="q-match-item"><span class="q-text"><strong>15</strong> Paragraph B</span><span class="dropzone" data-target="q15"></span></div>
+      <div class="q-match-item"><span class="q-text"><strong>16</strong> Paragraph C</span><span class="dropzone" data-target="q16"></span></div>
+      <div class="q-match-item"><span class="q-text"><strong>17</strong> Paragraph D</span><span class="dropzone" data-target="q17"></span></div>
+      <div class="q-match-item"><span class="q-text"><strong>18</strong> Paragraph E</span><span class="dropzone" data-target="q18"></span></div>
+      <div class="q-match-item"><span class="q-text"><strong>19</strong> Paragraph F</span><span class="dropzone" data-target="q19"></span></div>
+      <div class="option-pool" id="pool-headings">
+        <div class="card" draggable="true" data-value="i">i Objectives of the regeneration project</div>
+        <div class="card" draggable="true" data-value="ii">ii Architectural details of the station buildings</div>
+        <div class="card" draggable="true" data-value="iii">iii Features and facilities of the completed development</div>
+        <div class="card" draggable="true" data-value="iv">iv The remains of a railway system</div>
+        <div class="card" draggable="true" data-value="v">v A positive evaluation of the finished project</div>
+        <div class="card" draggable="true" data-value="vi">vi A way of controlling development costs</div>
+        <div class="card" draggable="true" data-value="vii">vii Ways of crossing the site</div>
+        <div class="card" draggable="true" data-value="viii">viii Reasons why the area had become neglected</div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <a id="q20-anchor"></a>
+      <h4>Questions 20–21</h4>
+      <p>Choose <strong>TWO</strong> letters, A–E. Which <strong>TWO</strong> reasons are given for the choice of Gleisdreieck as a site for a park?</p>
+      <div class="options">
+        <label><input type="checkbox" name="q20-21" value="A"> A It was a habitat for some rare wildlife species.</label>
+        <label><input type="checkbox" name="q20-21" value="B"> B It contained a particular tourist attraction.</label>
+        <label><input type="checkbox" name="q20-21" value="C"> C It lay at the heart of the reunited city.</label>
+        <label><input type="checkbox" name="q20-21" value="D"> D It was served by a major rail network.</label>
+        <label><input type="checkbox" name="q20-21" value="E"> E It contained buildings which could be easily converted.</label>
+      </div>
+    </div>
+
+    <div class="group">
+      <a id="q22-anchor"></a>
+      <h4>Questions 22–23</h4>
+      <p>Choose <strong>TWO</strong> letters, A–E. Which <strong>TWO</strong> things did the State of Berlin hope to achieve with the Gleisdreieck development?</p>
+      <div class="options">
+        <label><input type="checkbox" name="q22-23" value="A"> A to bring people of different ages together</label>
+        <label><input type="checkbox" name="q22-23" value="B"> B to encourage tourism</label>
+        <label><input type="checkbox" name="q22-23" value="C"> C to improve transport links</label>
+        <label><input type="checkbox" name="q22-23" value="D"> D to preserve industrial remains</label>
+        <label><input type="checkbox" name="q22-23" value="E"> E to generate income for the city</label>
+      </div>
+    </div>
+
+    <div class="group">
+        <a id="q24-anchor"></a>
+        <h4>Questions 24–26</h4>
+        <p>Complete the summary below. Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>
+        <p>In the middle of the new park is a <strong>24</strong> <input class="blank" name="q24">, where there is a path for pedestrians and two railway lines. A slow train uses these lines to make a regular journey between its base and a <strong>25</strong> <input class="blank" name="q25">. Benches have been provided on the north side, so that people can relax and enjoy the sunshine, and to the east is an area with mature trees of various kinds, as well as sets of swings. A range of sports and leisure areas are situated around the <strong>26</strong> <input class="blank" name="q26"> of the site.</p>
+    </div>
+
+    <!-- Controls and Results -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="primary" onclick="grade()">Submit</button>
+      <button onclick="resetForm()">Reset</button>
+      <button onclick="toggleNotes()">Notes</button>
+    </div>
+    <div id="results"></div>
+    <details class="answerbox" id="answerBox">
+      <summary>Show answers (click to toggle) <span class="badge">hidden</span></summary>
+      <div id="answerContent"></div>
+    </details>
+  </section>
+</div>
+
+<!-- 3. UI Helper Elements -->
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove</button>
+  <button id="btnNote">Note</button>
+</div>
+<div id="notes">
+  <header><strong>Notes</strong><div><button id="btnCopy">Copy</button><button id="btnClose">Close</button></div></header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+
+<script>
+// --- MASTER JAVASCRIPT TEMPLATE ---
+
+// 1. STATE & ANSWERS
+const answers = {
+    q14: "iv", q15: "viii", q16: "i", q17: "vii", q18: "iii", q19: "v",
+    "q20-21": ["b", "c"],
+    "q22-23": ["a", "d"],
+    q24: "meadow", q25: "museum", q26: "edges"
+};
+
+// 2. UI & INTERACTIVITY
+let timerSeconds = 0, isTimerPaused = false;
+const timerEl = document.getElementById('timer');
+
+function toggleTimer() { isTimerPaused = !isTimerPaused; timerEl.classList.toggle('paused', isTimerPaused); showToast(isTimerPaused ? 'Timer paused' : 'Timer resumed'); }
+setInterval(() => { if (!isTimerPaused) { timerSeconds++; const m = String(Math.floor(timerSeconds / 60)).padStart(2, '0'); const s = String(timerSeconds % 60).padStart(2, '0'); timerEl.textContent = `${m}:${s}`; } }, 1000);
+function toggleDarkMode() { document.body.classList.toggle('dark'); const isDark = document.body.classList.contains('dark'); localStorage.setItem('darkMode', isDark ? 'enabled' : 'disabled'); document.querySelector('.theme-toggle').textContent = isDark ? '🌙' : '☀️'; }
+function scrollToElement(id) { document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+function showToast(msg) { const toastEl = document.getElementById('toast'); toastEl.textContent = msg; toastEl.style.display = 'block'; setTimeout(() => { toastEl.style.display = 'none'; }, 1500); }
+
+// 3. HIGHLIGHT AND NOTES FUNCTIONALITY
+const selbar = document.getElementById('selbar');
+let lastRange = null;
+function handleTextSelection() { setTimeout(() => { const sel = window.getSelection(); if (sel.toString().trim().length > 0) { lastRange = sel.getRangeAt(0).cloneRange(); const rect = lastRange.getBoundingClientRect(); selbar.style.top = `${window.scrollY + rect.top - selbar.offsetHeight - 5}px`; selbar.style.left = `${window.scrollX + rect.left + rect.width / 2 - selbar.offsetWidth / 2}px`; selbar.style.display = 'flex'; } else { selbar.style.display = 'none'; } }, 10); }
+['left', 'right'].forEach(id => document.getElementById(id).addEventListener('mouseup', handleTextSelection));
+document.addEventListener('mousedown', (e) => { if (!selbar.contains(e.target)) selbar.style.display = 'none'; });
+document.getElementById('btnHL').addEventListener('click', () => { if (lastRange) { const span = document.createElement('span'); span.className = 'hl'; try { lastRange.surroundContents(span); } catch(e) { console.error(e); } selbar.style.display = 'none'; window.getSelection().removeAllRanges(); } });
+document.getElementById('btnUH').addEventListener('click', () => { if (lastRange) { let container = lastRange.commonAncestorContainer; if (container.nodeType !== 1) container = container.parentElement; const highlights = container.querySelectorAll('.hl'); highlights.forEach(hl => { if (window.getSelection().containsNode(hl, true)) { const parent = hl.parentNode; while (hl.firstChild) parent.insertBefore(hl.firstChild, hl); parent.removeChild(hl); parent.normalize(); } }); selbar.style.display = 'none'; window.getSelection().removeAllRanges(); } });
+document.getElementById('btnNote').addEventListener('click', () => { const text = window.getSelection().toString().trim(); if (text) { const noteArea = document.getElementById('noteArea'); noteArea.value += (noteArea.value ? '\n\n' : '') + `> ${text}`; toggleNotes(); noteArea.scrollTop = noteArea.scrollHeight; } selbar.style.display = 'none'; });
+function toggleNotes() { const notePad = document.getElementById('notes'); notePad.style.display = notePad.style.display === 'flex' ? 'none' : 'flex'; }
+document.getElementById('btnClose').addEventListener('click', toggleNotes);
+document.getElementById('btnCopy').addEventListener('click', () => { navigator.clipboard.writeText(document.getElementById('noteArea').value); showToast('Notes copied'); });
+
+// 4. DRAG AND DROP LOGIC
+document.querySelectorAll('.card').forEach(card => {
+    card.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', e.target.id); setTimeout(() => e.target.classList.add('ghost'), 0); });
+    card.addEventListener('dragend', e => e.target.classList.remove('ghost'));
+});
+document.querySelectorAll('.dropzone').forEach(zone => {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault(); zone.classList.remove('over');
+        const cardId = e.dataTransfer.getData('text/plain');
+        const draggedCard = document.getElementById(cardId);
+        if (!draggedCard) return;
+        const cardToDrop = draggedCard.dataset.clone === 'true' ? draggedCard.cloneNode(true) : draggedCard;
+        cardToDrop.classList.remove('ghost');
+        if (zone.children.length > 0) {
+            const existingCard = zone.children[0];
+            if (existingCard.dataset.clone !== 'true') {
+                const itsOriginPool = document.getElementById(existingCard.dataset.originPool);
+                if (itsOriginPool) itsOriginPool.appendChild(existingCard);
+            }
+        }
+        zone.innerHTML = '';
+        zone.appendChild(cardToDrop);
+        updateAnswerStatus();
+    });
+});
+
+// 5. GRADING & STATE MANAGEMENT
+function grade() {
+    let total = 0, correct = 0, lines = [];
+    const push = (q, ok, user, correctAns) => { total++; if(ok) correct++; const displayAns = Array.isArray(correctAns) ? correctAns.join(', ').toUpperCase() : String(correctAns).toUpperCase(); lines.push(`${q.toUpperCase().replace('Q','').replace('-', '–')}: ${user || 'None'} ${ok ? '✅' : `❌ (Ans: ${displayAns})`}`); };
+    Object.keys(answers).forEach(qKey => {
+        const correctAns = answers[qKey];
+        let userAnswer = null;
+        if (Array.isArray(correctAns)) {
+            const userAnswers = Array.from(document.querySelectorAll(`input[name="${qKey}"]:checked`)).map(cb => cb.value).sort();
+            userAnswer = userAnswers.join(', ');
+            const isCorrect = userAnswers.length === correctAns.length && userAnswers.every(val => correctAns.includes(val.toLowerCase()));
+            push(qKey, isCorrect, userAnswer, correctAns);
+        } else {
+            const textInput = document.querySelector(`input[name="${qKey}"]`);
+            const dropzone = document.querySelector(`.dropzone[data-target="${qKey}"]`);
+            if (textInput) userAnswer = textInput.value.trim() || null;
+            else if (dropzone) userAnswer = dropzone.querySelector('.card')?.dataset.value || null;
+            const isCorrect = userAnswer !== null && userAnswer.toLowerCase() === String(correctAns).toLowerCase();
+            push(qKey, isCorrect, userAnswer, correctAns);
+        }
+    });
+    const acc = total ? Math.round(100 * correct / total) : 0;
+    document.getElementById('results').innerHTML = `<p><strong>Score:</strong> ${correct}/${total} <span class="badge">Accuracy ${acc}%</span></p><pre>${lines.join('\n')}</pre>`;
+    document.getElementById('answerContent').innerHTML = `<ol start="14">${Object.entries(answers).map(([key, val]) => `<li><strong>${key.replace('q','').replace('-','–')}:</strong> ${Array.isArray(val) ? val.join(', ').toUpperCase() : String(val).toUpperCase()}</li>`).join('')}</ol>`;
+    document.querySelector('#answerBox .badge').textContent = 'tap to view';
+    document.getElementById('answerBox').open = true;
+}
+
+function resetForm() {
+    document.querySelectorAll('input[type="text"], input[type="checkbox"]').forEach(el => {
+        if (el.type === 'checkbox') el.checked = false;
+        else el.value = '';
+    });
+    document.querySelectorAll('.dropzone').forEach(zone => {
+        if (zone.children.length > 0) {
+            const card = zone.children[0];
+            if (card.dataset.clone !== 'true') {
+                const originPool = document.getElementById(card.dataset.originPool);
+                if (originPool) originPool.appendChild(card);
+            }
+        }
+        zone.innerHTML = '';
+    });
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('answerContent').innerHTML = '';
+    document.querySelector('#answerBox .badge').textContent = 'hidden';
+    document.getElementById('answerBox').open = false;
+    updateAnswerStatus();
+    showToast('Form has been reset');
+}
+
+function updateAnswerStatus() {
+    document.querySelectorAll('.q-item').forEach(item => {
+        const qId = item.id.replace('-nav', '');
+        let answered = false;
+        if (qId.includes('-')) { // Checkbox group
+            answered = document.querySelectorAll(`input[name="${qId}"]:checked`).length > 0;
+        } else {
+            const textInput = document.querySelector(`input[name="${qId}"]`);
+            const dropzone = document.querySelector(`.dropzone[data-target="${qId}"]`);
+            if (textInput) answered = textInput.value.trim() !== '';
+            else if (dropzone) answered = !!dropzone.querySelector('.card');
+        }
+        item.classList.toggle('answered', answered);
+    });
+}
+
+// 6. INITIALIZATION
+document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('darkMode') === 'enabled') {
+        toggleDarkMode();
+        document.querySelector('.theme-toggle').textContent = '🌙';
+    }
+    document.querySelectorAll('input[type="text"], input[type="checkbox"]').forEach(el => {
+        el.addEventListener('input', updateAnswerStatus);
+        el.addEventListener('change', updateAnswerStatus);
+    });
+    document.querySelectorAll('.card').forEach((card, index) => {
+        if (!card.id) card.id = `card-${index}`;
+        if (card.parentElement.classList.contains('option-pool')) {
+            card.dataset.originPool = card.parentElement.id;
+            card.parentElement.addEventListener('dragover', e => e.preventDefault());
+            card.parentElement.addEventListener('drop', e => {
+                e.preventDefault();
+                const cardId = e.dataTransfer.getData('text/plain');
+                const dragged = document.getElementById(cardId);
+                if (dragged && dragged.parentElement.classList.contains('dropzone')) {
+                    dragged.parentElement.innerHTML = '';
+                    if (dragged.dataset.clone !== 'true') e.currentTarget.appendChild(dragged);
+                    updateAnswerStatus();
+                }
+            });
+        }
+    });
+});
+</script>
+
+<!-- Practice page enhancer integration -->
+<script>
+  if (!window.practicePageEnhancer) {
+    const script = document.createElement('script');
+    script.src = '../../js/practice-page-enhancer.js';
+    script.onload = () => console.log('Enhancer loaded.');
+    script.onerror = () => { console.error('Enhancer failed to load'); loadInlineEnhancer(); };
+    document.head.appendChild(script);
+  }
+  function loadInlineEnhancer() { if (window.practicePageEnhancer) return; window.practicePageEnhancer = { initialize: function () { this.setupCommunication(); this.setupAnswerListeners(); this.interceptSubmit(); }, setupCommunication: function () { this.parentWindow = window.opener || window.parent; window.addEventListener('message', (e) => { if (e.data?.type === 'INIT_SESSION') { this.sessionId = e.data.data.sessionId; this.sendMessage('SESSION_READY', { pageType: this.detectPageType(), url: window.location.href }); } }); }, detectPageType: () => { const t = document.title || ''; if (t.includes('P1')) return 'P1'; if (t.includes('P2')) return 'P2'; if (t.includes('P3')) return 'P3'; return 'unknown'; }, setupAnswerListeners: function () { this.answers = {}; this.startTime = Date.now(); document.addEventListener('input', (e) => { if (e.target.name) this.answers[e.target.name] = e.target.value; }); document.addEventListener('change', (e) => { if (e.target.name) { if(e.target.type === 'checkbox') { this.answers[e.target.name] = Array.from(document.querySelectorAll(`input[name="${e.target.name}"]:checked`)).map(cb => cb.value); } else { this.answers[e.target.name] = e.target.value; } } }); const observer = new MutationObserver(mutations => { mutations.forEach(mutation => { if (mutation.type === 'childList' && mutation.target.classList.contains('dropzone')) { const zone = mutation.target; const qName = zone.dataset.target; const card = zone.querySelector('.card'); this.answers[qName] = card ? card.dataset.value : ''; } }); }); document.querySelectorAll('.dropzone').forEach(zone => observer.observe(zone, { childList: true })); }, interceptSubmit: function () { if (typeof window.grade === 'function') { const originalGrade = window.grade; window.grade = () => { originalGrade(); setTimeout(() => this.handleSubmit(), 200); }; } }, handleSubmit: function () { const results = { sessionId: this.sessionId, startTime: this.startTime, endTime: Date.now(), duration: Math.round((Date.now() - this.startTime) / 1000), answers: this.answers, scoreInfo: this.extractScore(), pageType: this.detectPageType(), url: window.location.href }; this.sendMessage('PRACTICE_COMPLETE', results); }, extractScore: () => { const el = document.getElementById('results'); if (!el) return null; const text = el.textContent || ''; const scoreMatch = text.match(/Score:\s*(\d+)\/(\d+)/i); if (scoreMatch) { const correct = parseInt(scoreMatch[1]), total = parseInt(scoreMatch[2]); return { correct, total, accuracy: total > 0 ? correct / total : 0, percentage: Math.round((correct / total) * 100), source: 'inline_extraction' }; } return null; }, sendMessage: function (type, data) { if (this.parentWindow) this.parentWindow.postMessage({ type, data, source: 'practice_page' }, '*'); } }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => window.practicePageEnhancer.initialize()); else window.practicePageEnhancer.initialize(); }
+</script>
+
+</body>
+</html>

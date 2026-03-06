@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Footprints in the Mud - Reading Passage</title>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<style>
+   .custom-br {
+    display: block;
+    margin-bottom: 1300px;
+    content: "";
+  }
+  * {
+    line-height: 30px;
+    font-size: inherit;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    color: #111827; /* 统一所有元素的基础字体颜色 */
+  }
+  :root { 
+    --line:#e5e7eb; 
+    --bg:#f6f7fb; 
+    --panel:#fff; 
+    --accent:#3b82f6; 
+    --muted:#6b7280; 
+    --shadow:0 6px 20px rgba(0,0,0,.12); 
+    --font-size-regular: 16px;
+    --font-size-moderate: 18px;
+    --font-size-large: 20px;
+  }
+  .font-regular { font-size: var(--font-size-regular) !important; }
+  .font-moderate { font-size: var(--font-size-moderate) !important; }
+  .font-large { font-size: var(--font-size-large) !important; }
+  * { box-sizing: border-box; }
+  html,body { height:100%; font-size: var(--font-size-regular); }
+  body { 
+    margin:0; 
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; 
+    background:var(--bg); 
+    padding-bottom: 82px; 
+  }
+  .top-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  #timer-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #timer { 
+    position: absolute; 
+    left:50%;
+    top: 10px;
+    transform: translateX(-50%);
+    display: inline-block; 
+    background:var(--panel); 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:2px 8px; 
+    vertical-align: middle; 
+  }
+  #settingsBtn {
+    padding:2px 8px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--panel);
+    cursor:pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+	position: absolute;
+	right: 10px;
+	top: 10px;
+  }
+  #settingsModal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px;
+    box-shadow:var(--shadow);
+    z-index: 1000;
+    display: none;
+    min-width: 280px;
+  }
+  #settingsModal h4 {
+    margin-top:0;
+    font-weight: 600;
+    font-size: inherit;
+  }
+  #settingsModal .font-option {
+    margin:8px 0;
+    cursor:pointer;
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  #settingsModal .font-option:hover {
+    background:#f1f5f9;
+  }
+  #settingsModal .close-modal {
+    margin-top:12px;
+    padding:6px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--accent);
+    color:#fff; /* 按钮文字为白色，特殊处理 */
+    cursor:pointer;
+  }
+  .shell { 
+    display:flex; 
+    height:calc(100vh - 82px);
+    width:100%; 
+    overflow: hidden;
+  }
+  .pane { 
+    background:var(--panel); 
+    overflow:auto; 
+    padding:20px; 
+    -webkit-overflow-scrolling: touch;
+  }
+  #left { 
+    flex: 0 0 50%; 
+    min-width: 280px; 
+  }
+  #right { 
+    flex: 1 1 auto; 
+    min-width: 320px; 
+    background:#fbfbff; 
+    border-left:1px solid var(--line); 
+  }
+  #divider { 
+    flex: 0 0 8px; 
+    background: linear-gradient(90deg,#e5e7eb,#d1d5db); 
+    cursor: ew-resize; 
+    position:relative; 
+    z-index: 5; 
+    user-select:none; 
+  }
+  h2,h3,h4,h5 { 
+    margin:0 0 10px; 
+    font-weight: 600; 
+    font-size: inherit;
+  }
+  #left p { 
+    margin: 0 0 12px; 
+    line-height: 1.6; 
+    word-break: normal; 
+    overflow-wrap: break-word; 
+    hyphens: auto; 
+  }
+  .paragraph-label {
+    font-weight: 600;
+    color: var(--accent); /* 段落标签使用强调色 */
+    margin-right: 8px;
+  }
+  .group { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:12px; 
+    margin-bottom:14px; 
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+  table { 
+    border-collapse: collapse; 
+    width:100%; 
+    margin: 10px 0;
+  }
+  th, td { 
+    border:1px solid var(--line); 
+    padding:6px; 
+    text-align:left; 
+    font-size: inherit;
+  }
+  th {
+    background-color: #f1f5f9;
+    font-weight: 600;
+  }
+  button { 
+    padding:8px 12px; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition: all 0.2s ease;
+    font-size: inherit;
+  }
+  button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  button.primary { 
+    background:var(--accent); 
+    color:#fff; /* 主要按钮文字为白色，特殊处理 */
+    border-color:#3b82f6; 
+  }
+  #results { 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px; 
+    padding:10px; 
+    margin-bottom:14px;
+  }
+  .hl { 
+    background:#fff3a3; 
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.05); 
+    cursor: pointer; 
+    transition: filter 0.2s ease;
+  }
+  .hl:hover { 
+    filter: brightness(0.98); 
+  }
+  #selbar { 
+    position: absolute; 
+    display:none; 
+    z-index: 6000; 
+    background:#111; 
+    color:#fff; /* 选择工具栏文字为白色，特殊处理 */
+    border-radius: 8px; 
+    padding: 6px; 
+    box-shadow:var(--shadow); 
+    font-size: 13px; 
+    gap:6px; 
+    align-items: center; 
+  }
+  #selbar button { 
+    background: transparent; 
+    color:#fff; /* 选择工具栏按钮文字为白色，特殊处理 */
+    border: 1px solid rgba(255,255,255,.25); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    cursor:pointer; 
+  }
+  #selbar button:hover { 
+    border-color:#fff; 
+    transform: none;
+    box-shadow: none;
+  }
+  #notes { 
+    position: fixed; 
+    right: 12px; 
+    bottom: 94px; 
+    width: 320px; 
+    max-width: calc(100% - 24px); 
+    height: 42vh; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius: 12px; 
+    display:none; 
+    flex-direction: column; 
+    z-index:1500; 
+    box-shadow:var(--shadow); 
+  }
+  #notes header { 
+    display:flex; 
+    align-items:center; 
+    justify-content: space-between; 
+    padding:8px 10px; 
+    border-bottom:1px solid var(--line); 
+  }
+  #notes textarea { 
+    flex:1; 
+    border:0; 
+    padding:10px; 
+    resize:none; 
+    line-height:1.5; 
+    background: transparent;
+    font-size: inherit;
+  }
+  #notes textarea:focus {
+    outline: none;
+  }
+  #toast { 
+    position: fixed; 
+    left:50%; 
+    transform: translateX(-50%); 
+    bottom: 94px; 
+    background:#111; 
+    color:#fff; /* 提示框文字为白色，特殊处理 */
+    padding:8px 12px; 
+    border-radius: 8px; 
+    display:none; 
+    z-index:2500; 
+    animation: fadeIn 0.3s, fadeOut 0.3s 1.2s;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translate(-50%, 20px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+  }
+  @keyframes fadeOut {
+    from { opacity: 1; transform: translate(-50%, 0); }
+    to { opacity: 0; transform: translate(-50%, 20px); }
+  }
+  .truefalse-options, .blank-options {
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:6px 0;
+  }
+  .truefalse-options .tf-option {
+    cursor:pointer;
+    padding:4px 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    transition: all 0.2s;
+    font-size: inherit;
+  }
+  .truefalse-options .tf-option:hover {
+    background:#f1f5f9;
+    border-color:var(--accent);
+    color:var(--accent); /* 悬停时使用强调色 */
+  }
+  input.blank {
+    width: 180px;
+    padding: 8px;
+    margin: 0 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    font-size: inherit;
+  }
+  input.blank:focus {
+    outline: none;
+    border-color:var(--accent);
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+  }
+  .question-number {
+    font-weight: 600;
+  }
+  .word-limit {
+    color: var(--muted); /* 字数限制提示使用次要文字色 */
+    font-size: 0.9em;
+    margin: 4px 0 8px;
+  }
+  .practice-nav { 
+    background:#fff; 
+    border-top:2px solid var(--line); 
+    padding:12px 20px; 
+    display:flex; 
+    align-items:center; 
+    gap:20px; 
+    box-shadow:0 2px 4px rgba(0,0,0,.05); 
+    flex-wrap:wrap; 
+    position:fixed; 
+    left:0; 
+    right:0; 
+    bottom:0; 
+    z-index:4000; 
+  }
+  .practice-nav .title { 
+    font-weight:600; 
+    color:var(--muted); /* 导航标题使用次要文字色 */
+  }
+  .practice-nav .questions { 
+    display:flex; 
+    gap:8px; 
+    align-items:center; 
+    flex-wrap:wrap; 
+    overflow-x: auto;
+    padding-bottom: 4px;
+    max-width: calc(100% - 80px);
+  }
+  .practice-nav .q-item { 
+    padding:6px 10px; 
+    border:1px solid var(--line); 
+    border-radius:6px; 
+    background:#fff; 
+    cursor:pointer; 
+    transition:all 0.2s; 
+    min-width:36px; 
+    text-align:center; 
+    flex-shrink:0;
+    font-size: inherit;
+  }
+  .practice-nav .q-item:hover { 
+    background:#f1f5f9; 
+    border-color:var(--accent); 
+    color:var(--accent); /* 悬停时使用强调色 */
+  }
+  .practice-nav .q-item.answered { 
+    background:#e0e7ff; 
+    border-color:var(--accent); 
+    color:var(--accent); /* 已回答使用强调色 */
+    font-weight:500; 
+  }
+  .practice-nav .q-item.active { 
+    background:var(--accent); 
+    color:#fff; /* 活动状态文字为白色，特殊处理 */
+    border-color:var(--accent); 
+  }
+  details.answerbox summary { 
+    cursor: pointer; 
+    user-select:none; 
+    list-style: none; 
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: inherit;
+  }
+  details.answerbox summary::before {
+    content: "▼";
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  details.answerbox[open] summary::before {
+    transform: rotate(180deg);
+  }
+  details.answerbox { 
+    border:1px dashed var(--line); 
+    border-radius:10px; 
+    padding:8px 10px; 
+    background:#fff; 
+    margin-bottom:14px;
+  }
+  .badge { 
+    display:inline-block; 
+    background:#eef2ff; 
+    color:#4338ca; /* 徽章使用特殊颜色 */
+    padding:2px 8px; 
+    border-radius:999px; 
+    font-size:12px; 
+    margin-left:6px; 
+  }
+  .explanation-text {
+    margin-bottom: 4px;
+    font-size: inherit;
+  }
+  .explanation-original {
+    font-style: italic;
+    color: #555; /* 原文引用使用特殊颜色 */
+    font-size: 0.9em;
+    margin-top: 0;
+  }
+  ul {
+    list-style-type: none;
+    padding-left: 20px;
+    margin: 8px 0;
+    font-size: inherit;
+  }
+  ul li::before {
+    content: "- ";
+    font-weight: 500;
+  }
+  @media (max-width: 768px) {
+    .shell {
+      flex-direction: column;
+      height: auto;
+      min-height: calc(100vh - 82px);
+    }
+    #left, #right {
+      flex: none;
+      width: 100%;
+      min-width: auto;
+      max-height: 50vh;
+    }
+    #divider {
+      flex: none;
+      height: 8px;
+      width: 100%;
+      cursor: ns-resize;
+      background: linear-gradient(0deg,var(--line),#d1d5db);
+    }
+    .practice-nav .questions {
+      max-width: calc(100% - 60px);
+    }
+    .top-controls {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    #timer-container {
+      align-self: flex-end;
+      margin-top: -28px;
+    }
+    input.blank {
+      width: 120px;
+    }
+  }
+</style>
+</head>
+<body class="font-regular">
+<div class="practice-nav">
+  <div class="title">Questions</div>
+  <div class="questions">
+    <div class="q-item" id="q1-nav" data-anchor="q1-anchor">1</div>
+    <div class="q-item" id="q2-nav" data-anchor="q2-anchor">2</div>
+    <div class="q-item" id="q3-nav" data-anchor="q3-anchor">3</div>
+    <div class="q-item" id="q4-nav" data-anchor="q4-anchor">4</div>
+    <div class="q-item" id="q5-nav" data-anchor="q5-anchor">5</div>
+    <div class="q-item" id="q6-nav" data-anchor="q6-anchor">6</div>
+    <div class="q-item" id="q7-nav" data-anchor="q7-anchor">7</div>
+    <div class="q-item" id="q8-nav" data-anchor="q8-anchor">8</div>
+    <div class="q-item" id="q9-nav" data-anchor="q9-anchor">9</div>
+    <div class="q-item" id="q10-nav" data-anchor="q10-anchor">10</div>
+    <div class="q-item" id="q11-nav" data-anchor="q11-anchor">11</div>
+    <div class="q-item" id="q12-nav" data-anchor="q12-anchor">12</div>
+    <div class="q-item" id="q13-nav" data-anchor="q13-anchor">13</div>
+  </div>
+</div>
+<div id="settingsModal">
+  <h4>Font Size Settings</h4>
+  <div class="font-option" data-size="regular">Regular (16px - Default)</div>
+  <div class="font-option" data-size="moderate">Moderate (18px - Larger)</div>
+  <div class="font-option" data-size="large">Large (20px - Largest)</div>
+  <button class="close-modal">Close</button>
+</div>
+<div id="top" class="top" style="background-color: #bb5252; width: 100%; height: 60px;">
+  <h3 style="font-size: 23px;line-height: 55px;margin-left: 10px;">Footprints in the Mud</h3>
+  <div id="timer-container" >
+    <div id="timer" style="margin: 0px auto;">00:00</div>
+    <button id="settingsBtn">
+      Settings
+    </button>
+  </div>
+</div>
+<div class="shell">
+  <section class="pane" id="left">
+    You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</br><p></p>
+    <h3>Footprints in the Mud</h3>
+    <p>The dinosaurs may have risen to power in as little as 10,000 years.</p>
+    <p>Everybody knows that the dinosaurs became extinct as a result of a large asteroid; something big hit the Earth 65 million years ago and, when the dust had fallen, so had the great reptiles. There is thus a nice, if ironic, symmetry in the idea that a similar impact brought about the dinosaurs’ rise. That is the thesis proposed by Paul Olsen of Columbia University.</p>
+    <p>Dinosaurs first appear in the fossil record 230 million years ago, during the Triassic period. But they were mostly small, and they shared the Earth with lots of other sorts of reptile. It was in the subsequent Jurassic period, which began 202 million years ago, that they overran the planet and turned into the monsters realistically depicted in modern books and movies. Dr Olsen and his colleagues are not the first to suggest that the dinosaurs inherited the Earth as the result of an asteroid strike. But they are the first to show that the takeover did, indeed, happen in a geological eye-blink.</p>
+    <p>Dinosaur skeletons are rare. Dinosaur footprints are, however, surprisingly abundant. And the size of the prints is as good an indication of the size of the beasts as are the skeletons themselves. Dr Olsen and his colleagues therefore concentrated on prints, not bones. The prints in question were made in Eastern North America, a part of the world then full of rift valleys similar to those in East Africa today. Like the modern African rift valleys, the Triassic/Jurassic American ones contained lakes, and these lakes grew and shrank at regular intervals because of climatic changes. Rocks from this place and period can be dated to within a few thousand years. As a bonus, squishy lake-edge sediments are just the things for recording the tracks of passing animals.</p>
+    <p>By dividing the labour between them, the research team were able to study such tracks at 80 sites and look at 18 so-called ‘ichnotaxa’. These are recognisable types of footprint that cannot be matched precisely within the species of animal that left them. But they can be matched with a general sort of animal, and thus act as an indicator of the fate of that group, even when there are no bones to tell the story.</p>
+    <p>Their findings show that five of the ichnotaxa disappear before the end of the Triassic, and four march confidently across the boundary into the Jurassic. Six, however, vanish at the boundary, or only just splutter across it; and three appear from nowhere, almost as soon as the Jurassic begins. That boundary itself is suggestive. The first geological indication of the impact that killed the dinosaurs was an unusually high level of iridium in rocks at the end of the Cretaceous period, when the beasts disappear from the fossil record. Iridium is normally rare at the Earth’s surface, but it is more abundant in meteorites. When people began to believe the impact theory, they started looking for other Cretaceous-end anomalies. One that turned up was a surprising abundance of fern spores in rocks just above the boundary layer – a phenomenon known as the ‘fern spike’.</p>
+    <p>That matched the theory nicely. Many modern ferns are opportunists. They cannot compete against plants with leaves, but if a piece of land is cleared by, say, a volcanic eruption, they are often the first things to set up shop there. An asteroid strike would have scoured much of the Earth of its vegetable cover, and provided a paradise for ferns. A fern spike in the rocks is thus a good indication that something terrible has happened.</p>
+    <p>The surprises are how rapidly the new ichnotaxa appeared and how quickly they increased in size. Dr Olsen and his colleagues suggest that the explanation for this may be a phenomenon called ecological release. This is seen today when reptiles (which in modern times tend to be small creatures) reach islands where they face no competitors. The most spectacular example is on the Indonesian island of Komodo, where local lizards have grown so large that they are often referred to as dragons. The dinosaurs, in other words, could flourish only when the competition had been knocked out.</p>
+    <p>That leaves the question of where the impact happened. No large hole in the Earth’s crust seems to be 202 million years old. It may, of course, have been overlooked. Old craters are eroded and buried, and not always easy to find. Alternatively, it may have vanished. Although continental crust is more or less permanent, the ocean floor is constantly recycled by the tectonic processes that bring about continental drift. There is no ocean floor left that is more than 200 million years old, so a crater that formed in the ocean would have been swallowed up by now.</p>
+    <p>There is a third possibility, however. This is that the crater is known, but has been misdated. The Manicouagan ‘structure’, a crater in Quebec, is thought to be 214 million years old. It is huge – some 100 kilometres across – and seems to be the largest of between three and five craters that formed within a few hours of each other as the lumps of disintegrated comet hit the Earth one by one. Such an impact would surely have had a perceptible effect on the world, but the rocks from 214 million years ago do not record one. It is possible, therefore, that Manicouagan has been misdated. That will be the next thing to check.</p>
+    
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+    &nbsp;</br><p></p>
+  </section>
+  
+  <div id="divider" title="Drag to resize"></div>
+  
+  <section class="pane" id="right">
+    <h3>Questions</h3>
+    
+    <div class="group">
+      <h4>Questions 1–6</h4>
+      Do the following statements agree with the information in Reading Passage 1?</br><p></p>
+      In boxes 1–6 on your answer sheet, write:</br><p></p>
+      <ul>
+        <li>TRUE if the statement agrees with the information</li>
+        <li>FALSE if the statement contradicts the information</li>
+        <li>NOT GIVEN if there is no information about this</li>
+      </ul>
+      
+      <a id="q1-anchor"></a>
+      <div id="q1-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">1.</span> There is still doubt about the theory that an asteroid strike killed the dinosaurs.</br><p></p>
+        <div class="truefalse-options">
+          <div class="tf-option"><input type="radio" name="q1" value="TRUE"> TRUE</div>
+          <div class="tf-option"><input type="radio" name="q1" value="FALSE"> FALSE</div>
+          <div class="tf-option"><input type="radio" name="q1" value="NOT GIVEN"> NOT GIVEN</div>
+        </div>
+      </div>
+      
+      <a id="q2-anchor"></a>
+      <div id="q2-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">2.</span> Books and the cinema have exaggerated the size of dinosaurs.</br><p></p>
+        <div class="truefalse-options">
+          <div class="tf-option"><input type="radio" name="q2" value="TRUE"> TRUE</div>
+          <div class="tf-option"><input type="radio" name="q2" value="FALSE"> FALSE</div>
+          <div class="tf-option"><input type="radio" name="q2" value="NOT GIVEN"> NOT GIVEN</div>
+        </div>
+      </div>
+      
+      <a id="q3-anchor"></a>
+      <div id="q3-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">3.</span> Other scientists have rejected Olsen’s idea of a sudden dinosaur occupation of the Earth.</br><p></p>
+        <div class="truefalse-options">
+          <div class="tf-option"><input type="radio" name="q3" value="TRUE"> TRUE</div>
+          <div class="tf-option"><input type="radio" name="q3" value="FALSE"> FALSE</div>
+          <div class="tf-option"><input type="radio" name="q3" value="NOT GIVEN"> NOT GIVEN</div>
+        </div>
+      </div>
+      
+      <a id="q4-anchor"></a>
+      <div id="q4-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">4.</span> Dinosaur footprints are found more frequently than dinosaur skeletons.</br><p></p>
+        <div class="truefalse-options">
+          <div class="tf-option"><input type="radio" name="q4" value="TRUE"> TRUE</div>
+          <div class="tf-option"><input type="radio" name="q4" value="FALSE"> FALSE</div>
+          <div class="tf-option"><input type="radio" name="q4" value="NOT GIVEN"> NOT GIVEN</div>
+        </div>
+      </div>
+      
+      <a id="q5-anchor"></a>
+      <div id="q5-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">5.</span> Ichnotaxa offer an exact identification of a dinosaur species.</br><p></p>
+        <div class="truefalse-options">
+          <div class="tf-option"><input type="radio" name="q5" value="TRUE"> TRUE</div>
+          <div class="tf-option"><input type="radio" name="q5" value="FALSE"> FALSE</div>
+          <div class="tf-option"><input type="radio" name="q5" value="NOT GIVEN"> NOT GIVEN</div>
+        </div>
+      </div>
+      
+      <a id="q6-anchor"></a>
+      <div id="q6-section" style="padding:8px 0;border-top:1px dashed var(--line);">
+        <span class="question-number">6.</span> There is evidence that some groups of dinosaurs survived from the Triassic period into the Jurassic period.</br><p></p>
+        <div class="truefalse-options">
+          <div class="tf-option"><input type="radio" name="q6" value="TRUE"> TRUE</div>
+          <div class="tf-option"><input type="radio" name="q6" value="FALSE"> FALSE</div>
+          <div class="tf-option"><input type="radio" name="q6" value="NOT GIVEN"> NOT GIVEN</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="group">
+      <h4>Questions 7–13</h4>
+      Complete the summary below.</br><p></p>
+      Choose <strong>NO MORE THAN THREE WORDS</strong> from the passage for each answer.</br><p></p>
+      <span class="word-limit">Write your answers in boxes 7–13 on your answer sheet.</br><p></p>
+      
+      <h5>Summary</h5>
+      <span class="summary-text">
+        Dr Olsen’s group believe that the sudden increase in the size of dinosaurs may have been due to something known as <span class="question-number"><a id="q7-anchor"></a>7.</span> <input type="text" class="blank" id="q7" name="q7">. A current example of this can be found on Komodo Island in Indonesia, where some of the lizards are commonly called <span class="question-number"><a id="q8-anchor"></a>8.</span> <input type="text" class="blank" id="q8" name="q8"> because of their size. Apparently, they have grown this big because they do not have any <span class="question-number"><a id="q9-anchor"></a>9.</span> <input type="text" class="blank" id="q9" name="q9">. </br><p></p>
+        The asteroid strike that may have cleared the way for dinosaurs to become the dominant group probably occurred 202 million years ago. According to the writer, there are three possible reasons why we have not found a large hole in the Earth’s crust dating back 202 million years. First, it may have been <span class="question-number"><a id="q10-anchor"></a>10.</span> <input type="text" class="blank" id="q10" name="q10"> by scientists, because craters are easily covered up. Or, it could have <span class="question-number"><a id="q11-anchor"></a>11.</span> <input type="text" class="blank" id="q11" name="q11">; for example, if the hole had been in the ocean, it would no longer exist because of the <span class="question-number"><a id="q12-anchor"></a>12.</span> <input type="text" class="blank" id="q12" name="q12"> that produce continental drift. Thirdly, the hole could still exist but have been <span class="question-number"><a id="q13-anchor"></a>13.</span> <input type="text" class="blank" id="q13" name="q13">.
+      </br><p></p>
+    </div>
+    
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <button class="primary" id="gradeBtn">Submit</button>
+      <button id="resetBtn">Reset</button>
+      <button id="toggleNotesBtn">Notes</button>
+    </div>
+    
+    <div id="results"></div>
+    
+    <details class="answerbox" id="answerBox">
+      <summary>Show Answers (Click to Toggle) <span class="badge">Hidden</span></summary>
+      <div id="answerContent">
+        <h4>正确答案及解析</h4>
+        <table>
+          <tr>
+            <th>题号</th>
+            <th>答案</th>
+            <th>解析与原文依据</th>
+          </tr>
+          <tr>
+            <td>1</td>
+            <td>FALSE</td>
+            <td>
+              <span class="explanation-text">题干“对小行星撞击导致恐龙灭绝的理论仍有疑问”与原文矛盾，原文明确“Everybody knows that the dinosaurs became extinct as a result of a large asteroid”，无质疑表述。</br><p></p>
+              <span class="explanation-original">原文：Everybody knows that the dinosaurs became extinct as a result of a large asteroid; something big hit the Earth 65 million years ago. (Paragraph 2)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>FALSE</td>
+            <td>
+              <span class="explanation-text">题干“书籍和电影夸大了恐龙体型”与原文矛盾，原文提到恐龙变成了“现代书籍和电影中真实描绘的怪物”，强调“真实描绘(realistically depicted)”。</br><p></p>
+              <span class="explanation-original">原文：it was in the subsequent Jurassic period... that they overran the planet and turned into the monsters realistically depicted in modern books and movies. (Paragraph 3)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>NOT GIVEN</td>
+            <td>
+              <span class="explanation-text">原文仅提到“Olsen博士及其同事并非首个提出小行星撞击导致恐龙占据地球的人，但却是首个证明这一过程极快的人”，未提及“其他科学家拒绝他的观点”。</br><p></p>
+              <span class="explanation-original">原文：Dr Olsen and his colleagues are not the first to suggest that the dinosaurs inherited the Earth as the result of an asteroid strike. But they are the first to show that the takeover did, indeed, happen in a geological eye-blink. (Paragraph 3)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>TRUE</td>
+            <td>
+              <span class="explanation-text">题干“恐龙足迹比骨架更常见”与原文一致，原文明确“Dinosaur skeletons are rare. Dinosaur footprints are, however, surprisingly abundant”。</br><p></p>
+              <span class="explanation-original">原文：Dinosaur skeletons are rare. Dinosaur footprints are, however, surprisingly abundant. (Paragraph 4)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>FALSE</td>
+            <td>
+              <span class="explanation-text">题干“足迹分类群(ichnotaxa)能精确鉴定恐龙物种”与原文矛盾，原文提到“这些足迹类型无法精确匹配留下足迹的动物物种”。</br><p></p>
+              <span class="explanation-original">原文：These [ichnotaxa] are recognisable types of footprint that cannot be matched precisely within the species of animal that left them. (Paragraph 5)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>TRUE</td>
+            <td>
+              <span class="explanation-text">题干“有证据表明部分恐龙类群从三叠纪存活到侏罗纪”与原文一致，原文提到“四类足迹分类群自信地跨越边界进入侏罗纪”。</br><p></p>
+              <span class="explanation-original">原文：five of the ichnotaxa disappear before the end of the Triassic, and four march confidently across the boundary into the Jurassic. (Paragraph 6)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>ecological release</td>
+            <td>
+              <span class="explanation-text">题干“恐龙体型骤增的原因”对应原文“解释可能是一种名为‘生态释放’的现象”，直接提取术语。</br><p></p>
+              <span class="explanation-original">原文：Dr Olsen and his colleagues suggest that the explanation for this may be a phenomenon called ecological release. (Paragraph 8)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>dragons</td>
+            <td>
+              <span class="explanation-text">题干“科莫多岛蜥蜴的俗称”对应原文“当地蜥蜴长得很大，常被称为‘龙’”。</br><p></p>
+              <span class="explanation-original">原文：the Indonesian island of Komodo, where local lizards have grown so large that they are often referred to as dragons. (Paragraph 8)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>competitors</td>
+            <td>
+              <span class="explanation-text">题干“蜥蜴长大的原因”对应原文“爬行动物到达没有竞争者的岛屿时会出现生态释放现象”。</br><p></p>
+              <span class="explanation-original">原文：this is seen today when reptiles... reach islands where they face no competitors. (Paragraph 8)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td>overlooked</td>
+            <td>
+              <span class="explanation-text">题干“未发现陨石坑的第一个原因”对应原文“它可能被忽略了，古老陨石坑易被侵蚀和掩埋”。</br><p></p>
+              <span class="explanation-original">原文：It may, of course, have been overlooked. Old craters are eroded and buried, and not always easy to find. (Paragraph 9)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>11</td>
+            <td>vanished</td>
+            <td>
+              <span class="explanation-text">题干“未发现陨石坑的第二个原因”对应原文“或者它可能已经消失了”。</br><p></p>
+              <span class="explanation-original">原文：Alternatively, it may have vanished. (Paragraph 9)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>12</td>
+            <td>tectonic processes</td>
+            <td>
+              <span class="explanation-text">题干“导致海底消失的过程”对应原文“海底被产生大陆漂移的板块构造过程不断循环利用”。</br><p></p>
+              <span class="explanation-original">原文：the ocean floor is constantly recycled by the tectonic processes that bring about continental drift. (Paragraph 9)</br><p></p>
+            </td>
+          </tr>
+          <tr>
+            <td>13</td>
+            <td>misdated</td>
+            <td>
+              <span class="explanation-text">题干“未发现陨石坑的第三个原因”对应原文“陨石坑已被发现，但年代测定错误”。</br><p></p>
+              <span class="explanation-original">原文：This is that the crater is known, but has been misdated. (Paragraph 10)</br><p></p>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </details>
+  </section>
+</div>
+<div aria-label="Selection tools" id="selbar" role="toolbar">
+  <button id="btnHL">Highlight</button>
+  <button id="btnUH">Remove Highlight</button>
+  <button id="btnNote">Add to Notes</button>
+</div>
+<div id="notes">
+  <header>
+    <strong>Notes</strong>
+    <div>
+      <button id="btnCopy">Copy</button>
+      <button id="btnClose">Close</button>
+    </div>
+  </header>
+  <textarea id="noteArea" placeholder="Type your notes here..."></textarea>
+</div>
+<div id="toast"></div>
+<script>
+// 性能优化：缓存DOM元素引用
+const elements = {
+  timer: document.getElementById('timer'),
+  settingsModal: document.getElementById('settingsModal'),
+  body: document.body,
+  leftPane: document.getElementById('left'),
+  rightPane: document.getElementById('right'),
+  divider: document.getElementById('divider'),
+  selbar: document.getElementById('selbar'),
+  btnHL: document.getElementById('btnHL'),
+  btnUH: document.getElementById('btnUH'),
+  btnNote: document.getElementById('btnNote'),
+  notesPanel: document.getElementById('notes'),
+  noteArea: document.getElementById('noteArea'),
+  btnCopy: document.getElementById('btnCopy'),
+  btnCloseNotes: document.getElementById('btnClose'),
+  toastEl: document.getElementById('toast'),
+  results: document.getElementById('results'),
+  answerBox: document.getElementById('answerBox'),
+  gradeBtn: document.getElementById('gradeBtn'),
+  resetBtn: document.getElementById('resetBtn'),
+  toggleNotesBtn: document.getElementById('toggleNotesBtn'),
+  settingsBtn: document.getElementById('settingsBtn')
+};
+
+// 工具函数：节流
+function throttle(func, limit) {
+  let lastCall = 0;
+  return function(...args) {
+    const now = Date.now();
+    if (now - lastCall >= limit) {
+      lastCall = now;
+      return func.apply(this, args);
+    }
+  };
+}
+
+// 计时器功能
+let timerSeconds = 0; 
+let timerInterval;
+
+function startTimer() {
+  timerInterval = setInterval(() => { 
+    timerSeconds++; 
+    const minutes = String(Math.floor(timerSeconds / 60)).padStart(2, '0'); 
+    const seconds = String(timerSeconds % 60).padStart(2, '0'); 
+    elements.timer.textContent = `${minutes}:${seconds}`; 
+  }, 1000);
+}
+
+// 字体设置功能
+function openSettingsModal() {
+  elements.settingsModal.style.display = 'block';
+}
+
+function closeSettingsModal() {
+  elements.settingsModal.style.display = 'none';
+}
+
+// 事件委托：处理字体设置
+elements.settingsModal.addEventListener('click', (e) => {
+  if (e.target.classList.contains('font-option')) {
+    const size = e.target.dataset.size;
+    elements.body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    elements.body.classList.add(`font-${size}`);
+    
+    const sizeName = size === 'regular' ? 'Regular (16px)' : 
+                     size === 'moderate' ? 'Moderate (18px)' : 'Large (20px)';
+    showToast(`Font size set to ${sizeName}`);
+    closeSettingsModal();
+    localStorage.setItem('fontSize', size);
+  } else if (e.target.classList.contains('close-modal')) {
+    closeSettingsModal();
+  }
+});
+
+// 页面加载时应用保存的字体偏好
+document.addEventListener('DOMContentLoaded', () => {
+  const savedFontSize = localStorage.getItem('fontSize');
+  if (savedFontSize) {
+    elements.body.classList.remove('font-regular', 'font-moderate', 'font-large');
+    elements.body.classList.add(`font-${savedFontSize}`);
+  }
+  startTimer();
+});
+
+// 高亮功能
+let lastRange = null;
+let currentHlNode = null;
+let keepToolbar = false;
+
+function positionSelbar(rect) {
+  elements.selbar.style.display = 'flex';
+  requestAnimationFrame(() => {
+    const top = window.scrollY + rect.top - elements.selbar.offsetHeight - 8;
+    const leftPos = window.scrollX + rect.left + rect.width/2 - elements.selbar.offsetWidth/2;
+    
+    elements.selbar.style.top = (top > 0 ? top : window.scrollY + rect.bottom + 8) + 'px';
+    elements.selbar.style.left = Math.max(8, leftPos) + 'px';
+  });
+}
+
+function updateSelbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    elements.selbar.style.display = 'none';
+    currentHlNode = null;
+    return;
+  }
+  
+  const range = selection.getRangeAt(0);
+  lastRange = range.cloneRange();
+  currentHlNode = null;
+  positionSelbar(range.getBoundingClientRect());
+}
+
+// 事件委托：处理文本选择
+document.addEventListener('mouseup', (e) => {
+  if (e.target.closest('#left') || e.target.closest('#right')) {
+    updateSelbar();
+  }
+});
+
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (!keepToolbar && !currentHlNode) {
+      elements.selbar.style.display = 'none';
+    }
+  }
+});
+
+// 节流处理滚动事件
+const throttledScrollHandler = throttle(() => {
+  if (elements.selbar.style.display === 'flex') {
+    updateSelbar();
+  }
+}, 100);
+
+document.addEventListener('scroll', throttledScrollHandler);
+
+document.addEventListener('mousedown', (e) => {
+  keepToolbar = e.target.classList?.contains('hl') || false;
+}, true);
+
+document.addEventListener('click', (e) => {
+  if (e.target.classList?.contains('hl')) {
+    currentHlNode = e.target;
+    lastRange = null;
+    positionSelbar(e.target.getBoundingClientRect());
+    const selection = window.getSelection();
+    if (selection) selection.removeAllRanges();
+    setTimeout(() => keepToolbar = false, 0);
+  }
+}, true);
+
+function doHighlight() {
+  if (currentHlNode || !lastRange || lastRange.collapsed) return;
+  
+  const highlightSpan = document.createElement('span');
+  highlightSpan.className = 'hl';
+  
+  try {
+    lastRange.surroundContents(highlightSpan);
+  } catch (e) {
+    const wrapSpan = document.createElement('span');
+    wrapSpan.className = 'hl';
+    wrapSpan.appendChild(lastRange.cloneContents());
+    lastRange.deleteContents();
+    lastRange.insertNode(wrapSpan);
+  }
+  
+  elements.selbar.style.display = 'none';
+  showToast('Text highlighted');
+}
+
+function removeHighlight() {
+  if (currentHlNode) {
+    const parent = currentHlNode.parentNode;
+    while (currentHlNode.firstChild) {
+      parent.insertBefore(currentHlNode.firstChild, currentHlNode);
+    }
+    parent.removeChild(currentHlNode);
+    parent.normalize();
+    currentHlNode = null;
+    elements.selbar.style.display = 'none';
+    showToast('Highlight removed');
+    return;
+  }
+  
+  if (!lastRange) return;
+  
+  const selRect = lastRange.getBoundingClientRect();
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+  const toRemove = [];
+  let node;
+  
+  while ((node = walker.nextNode())) {
+    if (node.classList?.contains('hl')) {
+      const nodeRect = node.getBoundingClientRect();
+      if (!(nodeRect.right < selRect.left || nodeRect.left > selRect.right || 
+            nodeRect.bottom < selRect.top || nodeRect.top > selRect.bottom)) {
+        toRemove.push(node);
+      }
+    }
+  }
+  
+  toRemove.forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+  
+  elements.selbar.style.display = 'none';
+  showToast('Highlights removed');
+}
+
+// 笔记功能
+function toggleNotes() {
+  elements.notesPanel.style.display = elements.notesPanel.style.display === 'flex' ? 'none' : 'flex';
+  if (elements.notesPanel.style.display === 'flex') {
+    elements.noteArea.focus();
+  }
+}
+
+elements.btnCloseNotes.addEventListener('click', toggleNotes);
+
+elements.btnCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(elements.noteArea.value || '');
+  showToast('Notes copied to clipboard');
+});
+
+elements.btnNote.addEventListener('click', () => {
+  let selectedText = '';
+  if (currentHlNode) {
+    selectedText = currentHlNode.textContent.trim();
+  } else if (lastRange) {
+    const frag = lastRange.cloneContents();
+    selectedText = frag.textContent.trim();
+  }
+  
+  toggleNotes();
+  if (selectedText) {
+    elements.noteArea.value = elements.noteArea.value ? 
+      `${elements.noteArea.value}\n> ${selectedText}\n` : 
+      `> ${selectedText}\n`;
+    elements.noteArea.scrollTop = elements.noteArea.scrollHeight;
+  }
+  elements.selbar.style.display = 'none';
+});
+
+// 提示框功能
+function showToast(message) {
+  elements.toastEl.textContent = message;
+  elements.toastEl.style.display = 'block';
+  // 使用一次性计时器避免内存泄漏
+  setTimeout(() => {
+    elements.toastEl.style.display = 'none';
+  }, 1500);
+}
+
+// 答案与评分功能
+const answers = {
+  q1: 'FALSE',
+  q2: 'FALSE',
+  q3: 'NOT GIVEN',
+  q4: 'TRUE',
+  q5: 'FALSE',
+  q6: 'TRUE',
+  q7: 'ecological release',
+  q8: 'dragons',
+  q9: 'competitors',
+  q10: 'overlooked',
+  q11: 'vanished',
+  q12: 'tectonic processes',
+  q13: 'misdated'
+};
+
+function grade() {
+  clearInterval(timerInterval);
+  
+  let total = 13;
+  let correct = 0;
+  const resultLines = [];
+  
+  // 处理1-6题（判断题）
+  for (let i = 1; i <= 6; i++) {
+    const qName = `q${i}`;
+    const selected = document.querySelector(`input[name="${qName}"]:checked`);
+    const userAns = selected ? selected.value : 'No answer';
+    const correctAns = answers[qName];
+    const isCorrect = userAns === correctAns;
+    
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${correctAns})`}`);
+  }
+  
+  // 处理7-13题（摘要填空）
+  for (let i = 7; i <= 13; i++) {
+    const qName = `q${i}`;
+    const input = document.getElementById(qName);
+    const userAns = input ? input.value.trim().toLowerCase() : 'No answer';
+    const correctAns = answers[qName].toLowerCase();
+    const isCorrect = userAns === correctAns;
+    
+    if (isCorrect) correct++;
+    resultLines.push(`${qName.toUpperCase()}: ${userAns || 'No answer'} ${isCorrect ? '✅ Correct' : `❌ Incorrect (Correct: ${answers[qName]})`}`);
+  }
+  
+  // 显示结果
+  const accuracy = Math.round((correct / total) * 100);
+  elements.results.innerHTML = `
+    <strong>Score:</strong> ${correct}/${total} (Accuracy: ${accuracy}%)</br><p></p>
+    <pre>${resultLines.join('\n')}</pre>
+  `;
+  
+  elements.answerBox.open = true;
+  document.querySelector('#answerBox .badge').textContent = 'Visible';
+  
+  // 标记所有题目为已回答
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.add('answered');
+  });
+}
+
+function resetForm() {
+  clearInterval(timerInterval);
+  timerSeconds = 0;
+  elements.timer.textContent = '00:00';
+  startTimer();
+  
+  // 重置表单元素
+  document.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.checked = false;
+  });
+  
+  document.querySelectorAll('input.blank').forEach(input => {
+    input.value = '';
+  });
+  
+  elements.results.innerHTML = '';
+  elements.answerBox.open = false;
+  document.querySelector('#answerBox .badge').textContent = 'Hidden';
+  
+  // 重置导航栏状态
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('answered');
+  });
+  
+  // 重置笔记
+  elements.noteArea.value = '';
+  elements.notesPanel.style.display = 'none';
+  
+  // 移除所有高亮
+  document.querySelectorAll('.hl').forEach(hl => {
+    const parent = hl.parentNode;
+    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+    parent.removeChild(hl);
+    parent.normalize();
+  });
+  
+  showToast('Practice reset');
+}
+
+// 事件委托：处理题目导航
+document.querySelector('.questions').addEventListener('click', (e) => {
+  const qItem = e.target.closest('.q-item');
+  if (qItem) {
+    const anchorId = qItem.dataset.anchor;
+    if (anchorId) {
+      scrollToElement(anchorId);
+    }
+  }
+});
+
+function scrollToElement(id) {
+  const element = document.getElementById(id);
+  if (element) {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  
+  // 高亮导航项
+  document.querySelectorAll('.q-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  
+  const navItem = document.querySelector(`.q-item[data-anchor="${id}"]`);
+  if (navItem) {
+    navItem.classList.add('active');
+    setTimeout(() => navItem.classList.remove('active'), 800);
+  }
+}
+
+// 事件委托：处理题目输入
+document.getElementById('right').addEventListener('change', (e) => {
+  if (e.target.type === 'radio') {
+    const qName = e.target.name;
+    document.getElementById(`${qName}-nav`).classList.add('answered');
+  }
+});
+
+document.getElementById('right').addEventListener('input', (e) => {
+  if (e.target.classList.contains('blank')) {
+    const qId = e.target.id;
+    const navItem = document.getElementById(`${qId}-nav`);
+    
+    if (e.target.value.trim()) {
+      navItem.classList.add('answered');
+    } else {
+      navItem.classList.remove('answered');
+    }
+  }
+});
+
+// 拖拽分隔线（使用节流优化）
+let isResizing = false;
+
+elements.divider.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  document.body.style.cursor = 'ew-resize';
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+// 节流处理拖拽事件
+const throttledResizeHandler = throttle((e) => {
+  if (!isResizing) return;
+  
+  const container = elements.leftPane.parentElement;
+  const containerWidth = container.offsetWidth;
+  const mousePosition = e.clientX - container.getBoundingClientRect().left;
+  const leftWidthPercent = (mousePosition / containerWidth) * 100;
+  
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    elements.leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    elements.rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+}, 16); // 约60fps
+
+document.addEventListener('mousemove', throttledResizeHandler);
+
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    document.body.style.cursor = '';
+  }
+});
+
+// 移动端触摸支持
+elements.divider.addEventListener('touchstart', (e) => {
+  isResizing = true;
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+const throttledTouchHandler = throttle((e) => {
+  if (!isResizing) return;
+  
+  const container = elements.leftPane.parentElement;
+  const containerWidth = container.offsetWidth;
+  const touch = e.touches[0];
+  const touchPosition = touch.clientX - container.getBoundingClientRect().left;
+  const leftWidthPercent = (touchPosition / containerWidth) * 100;
+  
+  const minWidth = 280;
+  const minWidthPercent = (minWidth / containerWidth) * 100;
+  
+  if (leftWidthPercent >= minWidthPercent && leftWidthPercent <= 100 - minWidthPercent) {
+    elements.leftPane.style.flex = `0 0 ${leftWidthPercent}%`;
+    elements.rightPane.style.flex = `1 1 ${100 - leftWidthPercent}%`;
+  }
+  
+  e.preventDefault();
+  e.stopPropagation();
+}, 16);
+
+document.addEventListener('touchmove', throttledTouchHandler);
+
+document.addEventListener('touchend', () => {
+  if (isResizing) {
+    isResizing = false;
+  }
+});
+
+// 绑定按钮事件
+elements.btnHL.addEventListener('click', doHighlight);
+elements.btnUH.addEventListener('click', removeHighlight);
+elements.gradeBtn.addEventListener('click', grade);
+elements.resetBtn.addEventListener('click', resetForm);
+elements.toggleNotesBtn.addEventListener('click', toggleNotes);
+elements.settingsBtn.addEventListener('click', openSettingsModal);
+
+// 点击模态框外部关闭
+window.addEventListener('click', (e) => {
+  if (e.target === elements.settingsModal) {
+    closeSettingsModal();
+  }
+});
+</script>
+</body>
+</html>
