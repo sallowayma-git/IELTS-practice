@@ -54,6 +54,12 @@
       if (normalized === 'practice' && window.AppActions && typeof window.AppActions.ensurePracticeSuite === 'function') {
         window.AppActions.ensurePracticeSuite();
       }
+      if (normalized === 'practice' && typeof window.startPracticeRecordsSyncInBackground === 'function') {
+        window.startPracticeRecordsSyncInBackground('practice-view');
+      }
+      if (normalized === 'practice' && typeof window.ensurePracticeRecordsSync === 'function') {
+        window.ensurePracticeRecordsSync('practice-view').catch(function () { });
+      }
       if (normalized === 'practice' && typeof window.updatePracticeView === 'function') window.updatePracticeView();
     };
   }
