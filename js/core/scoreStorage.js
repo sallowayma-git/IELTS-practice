@@ -22,6 +22,9 @@ class ScoreStorage {
         this.currentVersion = '1.0.0';
         this.maxRecords = 1000;
         this.storage = this.createStorageAdapter();
+        if (typeof window !== 'undefined') {
+            window.scoreStorage = this;
+        }
 
         this.ready = this.initialize()
             .catch((error) => {
@@ -366,7 +369,7 @@ class ScoreStorage {
             await this.initializeDataStructures();
 
             // 尝试迁移 legacy StorageManager 中的 practice_records 到统一仓库
-            await this.migrateLegacyPracticeRecords();
+            // Legacy migration now happens at PersistentStore bootstrap, not in runtime services.
 
             // 暂时禁用清理过期数据，避免误删新记录
             // await this.cleanupExpiredData();
