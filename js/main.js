@@ -2815,27 +2815,48 @@ async function clearPracticeData() {
 }
 
 async function clearCache() {
-    if (confirm('确定要清除所有缓存数据并清空练习记录吗？')) {
-        try {
-            // 清空命名空间下的练习记录
-            if (window.storage && typeof storage.set === 'function') {
-                await storage.set('practice_records', []);
-            } else {
-                try { localStorage.removeItem('exam_system_practice_records'); } catch (_) { }
-            }
-        } catch (e) { console.warn('[clearCache] failed to clear practice_records:', e); }
-
-        try { localStorage.clear(); } catch (_) { }
-        try { sessionStorage.clear(); } catch (_) { }
-
-        setPracticeRecordsState([]);
-        if (window.performanceOptimizer) {
-            // optional cleanup hook
-            // window.performanceOptimizer.cleanup();
-        }
-        showMessage('缓存与练习记录已清除', 'success');
-        setTimeout(() => { location.reload(); }, 1000);
+    const confirmMessage = '确定要清除所有缓存数据并清空练习记录吗？';
+    if (!confirm(confirmMessage)) {
+        return;
     }
+
+    const localLegacyKeys = [
+        'exam_system_practice_records',
+        'upgrade_v1_1_0_cleanup_done',
+        'browse_state',
+        'hasSeenGplLicense',
+        'theme',
+        'bloom-theme-mode',
+        'blue-theme-mode',
+        'hp.theme'
+    ];
+    const sessionLegacyKeys = ['hp.portal.pendingView'];
+
+    try {
+        if (window.storage && typeof storage.clear === 'function') {
+            await storage.clear();
+        } else if (window.storage && typeof storage.set === 'function') {
+            await storage.set('practice_records', []);
+        }
+    } catch (error) {
+        console.warn('[clearCache] failed to clear managed storage:', error);
+    }
+
+    localLegacyKeys.forEach((key) => {
+        try { localStorage.removeItem(key); } catch (_) { }
+    });
+    sessionLegacyKeys.forEach((key) => {
+        try { sessionStorage.removeItem(key); } catch (_) { }
+    });
+
+    setPracticeRecordsState([]);
+    processedSessions.clear();
+    if (window.performanceOptimizer && typeof window.performanceOptimizer.cleanup === 'function') {
+        window.performanceOptimizer.cleanup();
+    }
+
+    showMessage('缓存与练习记录已清除', 'success');
+    setTimeout(() => { location.reload(); }, 1000);
 }
 
 let libraryConfigViewInstance = null;
