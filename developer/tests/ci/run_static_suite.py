@@ -361,6 +361,21 @@ def _check_metadata_field(path: Path, keyword: str = "pathRoot") -> Tuple[bool, 
     return False, f"缺少 {keyword} 元数据"
 
 
+def _check_json_path_map(path: Path) -> Tuple[bool, str]:
+    if not path.exists():
+        return False, "路径映射文件缺失"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, f"读取失败：{exc}"
+
+    reading_root = (((payload or {}).get("reading") or {}).get("root"))
+    listening_root = (((payload or {}).get("listening") or {}).get("root"))
+    if isinstance(reading_root, str) and reading_root.strip() and isinstance(listening_root, str) and listening_root.strip():
+        return True, "检测到 reading/listening 路径映射"
+    return False, "路径映射缺少 reading/listening root"
+
+
 def _format_result(name: str, passed: bool, detail: str) -> dict:
     return {
         "name": name,
@@ -611,14 +626,26 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("resolveExamBasePath 路径组合逻辑", resolve_passed, resolve_detail))
         all_passed &= resolve_passed
 
-    metadata_targets = [
-        REPO_ROOT / "assets" / "scripts" / "complete-exam-data.js",
-        REPO_ROOT / "assets" / "scripts" / "listening-exam-data.js",
-    ]
-    for metadata_path in metadata_targets:
-        meta_passed, meta_detail = _check_metadata_field(metadata_path)
-        results.append(_format_result(f"{metadata_path.name} 根目录元数据", meta_passed, meta_detail))
-        all_passed &= meta_passed
+    complete_exam_data = REPO_ROOT / "assets" / "scripts" / "complete-exam-data.js"
+    complete_meta_passed, complete_meta_detail = _ensure_exists(complete_exam_data)
+    results.append(_format_result("complete-exam-data.js 存在性", complete_meta_passed, complete_meta_detail))
+    all_passed &= complete_meta_passed
+
+    path_map_path = REPO_ROOT / "assets" / "data" / "path-map.json"
+    path_map_passed, path_map_detail = _check_json_path_map(path_map_path)
+    results.append(_format_result("path-map.json 路径映射", path_map_passed, path_map_detail))
+    all_passed &= path_map_passed
+
+    lazy_loader_path = REPO_ROOT / "js" / "runtime" / "lazyLoader.js"
+    if lazy_loader_path.exists():
+        lazy_loader_source = lazy_loader_path.read_text(encoding="utf-8")
+        legacy_listening_ref_absent = "assets/scripts/listening-exam-data.js" not in lazy_loader_source
+        results.append(_format_result(
+            "lazyLoader 已移除 listening-exam-data.js 依赖",
+            legacy_listening_ref_absent,
+            "未检测到旧 listening 数据脚本引用" if legacy_listening_ref_absent else "仍检测到旧 listening 数据脚本引用",
+        ))
+        all_passed &= legacy_listening_ref_absent
 
     practice_fixture = REPO_ROOT / "templates" / "ci-practice-fixtures" / "analysis-of-fear.html"
     fixture_exists, fixture_detail = _ensure_exists(practice_fixture)
