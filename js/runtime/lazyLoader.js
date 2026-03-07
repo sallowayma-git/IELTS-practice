@@ -13,9 +13,9 @@
         ];
 
         manifest['state-core'] = [
+            'js/core/practiceCore.js',
+            'js/core/resourceCore.js',
             'js/app/state-service.js',
-            'js/services/GlobalStateService.js',
-            'js/runtime/legacy-state-adapter.js',
             'js/services/libraryManager.js'
         ];
 
@@ -27,9 +27,7 @@
             'js/components/practiceHistoryEnhancer.js',
             'js/core/scoreStorage.js',
             'js/utils/answerSanitizer.js',
-            'js/core/practiceRecorder.js',
-            'js/core/legacyStateBridge.js',
-            'js/utils/legacyStateAdapter.js'
+            'js/core/practiceRecorder.js'
         ];
 
         manifest['browse-runtime'] = [

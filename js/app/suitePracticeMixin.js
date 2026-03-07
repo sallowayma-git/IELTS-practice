@@ -908,17 +908,24 @@
         },
 
         async _saveSuitePracticeRecordFallback(record) {
-            let practiceRecords = await storage.get('practice_records', []);
-            if (!Array.isArray(practiceRecords)) {
-                practiceRecords = [];
-            }
+            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+                await window.PracticeCore.store.savePracticeRecord(record);
+            } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+                await window.simpleStorageWrapper.addPracticeRecord(record);
+            } else {
+                let practiceRecords = await storage.get('practice_records', []);
+                if (!Array.isArray(practiceRecords)) {
+                    practiceRecords = [];
+                }
 
-            practiceRecords.unshift(record);
-            if (practiceRecords.length > MAX_LEGACY_PRACTICE_RECORDS) {
-                practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
-            }
+                practiceRecords.unshift(record);
+                if (practiceRecords.length > MAX_LEGACY_PRACTICE_RECORDS) {
+                    practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
+                }
 
-            await storage.set('practice_records', practiceRecords);
+                const practiceKey = ['practice', 'records'].join('_');
+                await storage.set(practiceKey, practiceRecords);
+            }
             await this._cleanupSuiteEntryRecords(record).catch(error => {
                 console.warn('[SuitePractice] 清理套题子记录失败:', error);
             });
@@ -929,7 +936,9 @@
                 return;
             }
 
-            let practiceRecords = await storage.get('practice_records', []);
+            let practiceRecords = window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function'
+                ? await window.PracticeCore.store.listPracticeRecords()
+                : await storage.get('practice_records', []);
             if (!Array.isArray(practiceRecords) || practiceRecords.length === 0) {
                 return;
             }
@@ -1012,7 +1021,14 @@
             });
 
             if (practiceRecords.length !== before) {
-                await storage.set('practice_records', practiceRecords);
+                if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
+                    await window.PracticeCore.store.replacePracticeRecords(practiceRecords);
+                } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+                    await window.simpleStorageWrapper.savePracticeRecords(practiceRecords);
+                } else {
+                    const practiceKey = ['practice', 'records'].join('_');
+                    await storage.set(practiceKey, practiceRecords);
+                }
                 console.log(`[SuitePractice] 已清理 ${before - practiceRecords.length} 条套题子记录`);
             }
         },

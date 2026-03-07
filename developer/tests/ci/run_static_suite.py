@@ -576,17 +576,30 @@ def run_checks() -> Tuple[List[dict], bool]:
     all_passed &= synthetic_guard_ok
 
     main_js_path = REPO_ROOT / "js" / "main.js"
+    resource_core_path = REPO_ROOT / "js" / "core" / "resourceCore.js"
     main_js_exists, main_js_detail = _ensure_exists(main_js_path)
     results.append(_format_result("main.js 存在性", main_js_exists, main_js_detail))
     all_passed &= main_js_exists
 
+    resource_core_exists, resource_core_detail = _ensure_exists(resource_core_path)
+    results.append(_format_result("resourceCore.js 存在性", resource_core_exists, resource_core_detail))
+    all_passed &= resource_core_exists
+
     main_js_source: Optional[str] = None
+    resource_core_source: Optional[str] = None
     if main_js_exists:
         try:
             main_js_source = main_js_path.read_text(encoding="utf-8")
         except Exception as exc:  # pragma: no cover - defensive guard
             read_detail = f"读取失败：{exc}"
             results.append(_format_result("main.js 读取", False, read_detail))
+            all_passed = False
+    if resource_core_exists:
+        try:
+            resource_core_source = resource_core_path.read_text(encoding="utf-8")
+        except Exception as exc:  # pragma: no cover - defensive guard
+            read_detail = f"读取失败：{exc}"
+            results.append(_format_result("resourceCore.js 读取", False, read_detail))
             all_passed = False
 
     if main_js_source is not None:
@@ -602,13 +615,14 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("loadLibraryInternal 定义存在性", internal_passed, internal_detail))
         all_passed &= internal_passed
 
+    if resource_core_source is not None:
         for helper_name in ("buildOverridePathMap", "mergeRootWithFallback"):
-            helper_passed, helper_detail = _check_js_function_definition(main_js_source, helper_name)
-            results.append(_format_result(f"{helper_name} 定义存在性", helper_passed, helper_detail))
+            helper_passed, helper_detail = _check_js_function_definition(resource_core_source, helper_name)
+            results.append(_format_result(f"ResourceCore {helper_name} 定义存在性", helper_passed, helper_detail))
             all_passed &= helper_passed
 
-        resolve_passed, resolve_detail = _check_resolve_exam_base_path(main_js_source)
-        results.append(_format_result("resolveExamBasePath 路径组合逻辑", resolve_passed, resolve_detail))
+        resolve_passed, resolve_detail = _check_resolve_exam_base_path(resource_core_source)
+        results.append(_format_result("ResourceCore resolveExamBasePath 路径组合逻辑", resolve_passed, resolve_detail))
         all_passed &= resolve_passed
 
     metadata_targets = [
@@ -780,6 +794,64 @@ def run_checks() -> Tuple[List[dict], bool]:
         all_passed &= full_lib_passed
     else:
         results.append(_format_result("全量题库记录匹配测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    practice_core_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCore.test.js"
+    if practice_core_test.exists():
+        try:
+            completed_practice_core = subprocess.run(
+                ["node", str(practice_core_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            practice_core_passed = False
+            practice_core_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_practice_core_output = completed_practice_core.stdout.strip() or completed_practice_core.stderr.strip()
+            try:
+                practice_core_payload = json.loads(raw_practice_core_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_core_passed = False
+                practice_core_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_core_passed = practice_core_payload.get("status") == "pass"
+                practice_core_detail = practice_core_payload.get("detail", practice_core_payload)
+        results.append(_format_result("PracticeCore 单元测试", practice_core_passed, practice_core_detail))
+        all_passed &= practice_core_passed
+    else:
+        results.append(_format_result("PracticeCore 单元测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    practice_core_guard_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCore.guard.test.js"
+    if practice_core_guard_test.exists():
+        try:
+            completed_practice_core_guard = subprocess.run(
+                ["node", str(practice_core_guard_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            practice_core_guard_passed = False
+            practice_core_guard_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_guard_output = completed_practice_core_guard.stdout.strip() or completed_practice_core_guard.stderr.strip()
+            try:
+                practice_core_guard_payload = json.loads(raw_guard_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_core_guard_passed = False
+                practice_core_guard_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_core_guard_passed = practice_core_guard_payload.get("status") == "pass"
+                practice_core_guard_detail = practice_core_guard_payload.get("detail", practice_core_guard_payload)
+        results.append(_format_result("PracticeCore 静态守卫", practice_core_guard_passed, practice_core_guard_detail))
+        all_passed &= practice_core_guard_passed
+    else:
+        results.append(_format_result("PracticeCore 静态守卫", False, "测试脚本缺失"))
         all_passed = False
 
     # Integration tests
