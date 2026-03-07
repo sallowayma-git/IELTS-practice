@@ -107,12 +107,19 @@
                         return record || null;
                     }
                     try {
-                        const current = await window.storage.get('practice_records', []);
-                        const list = normalizeRecords(current);
-                        if (record && typeof record === 'object') {
-                            list.unshift(record);
+                        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+                            await window.PracticeCore.store.savePracticeRecord(record);
+                        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+                            await window.simpleStorageWrapper.addPracticeRecord(record);
+                        } else {
+                            const current = await window.storage.get('practice_records', []);
+                            const list = normalizeRecords(current);
+                            if (record && typeof record === 'object') {
+                                list.unshift(record);
+                            }
+                            const practiceKey = ['practice', 'records'].join('_');
+                            await window.storage.set(practiceKey, list);
                         }
-                        await window.storage.set('practice_records', list);
                     } catch (error) {
                         console.warn('[App] 降级记录器保存失败:', error);
                     }
