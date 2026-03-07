@@ -1287,8 +1287,15 @@
       switch (action) {
         case 'clear-cache':
           try {
-            localStorage.clear();
-            sessionStorage.clear();
+            if (window.storage && typeof window.storage.clear === 'function') {
+              window.storage.clear();
+            }
+            ['theme', 'bloom-theme-mode', 'blue-theme-mode', 'hp.theme', 'browse_state', 'hasSeenGplLicense'].forEach((key) => {
+              try { localStorage.removeItem(key); } catch (_) {}
+            });
+            ['hp.portal.pendingView'].forEach((key) => {
+              try { sessionStorage.removeItem(key); } catch (_) {}
+            });
             hpCore.showMessage('缓存已清理，页面即将刷新', 'success');
             setTimeout(() => window.location.reload(), 400);
           } catch (e) {
