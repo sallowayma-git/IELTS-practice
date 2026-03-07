@@ -9,9 +9,27 @@
         get backupRepo() { return this.repos.backups; }
         get metaRepo() { return this.repos.meta; }
 
-        async getPracticeRecords() { return await this.practiceRepo.list(); }
-        async savePracticeRecords(records) { await this.practiceRepo.overwrite(records); return true; }
-        async addPracticeRecord(record) { await this.practiceRepo.upsert(record); return true; }
+        async getPracticeRecords() {
+            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function') {
+                return await window.PracticeCore.store.listPracticeRecords();
+            }
+            return await this.practiceRepo.list();
+        }
+        async savePracticeRecords(records) {
+            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
+                return await window.PracticeCore.store.replacePracticeRecords(records, { maxRecords: this.practiceRepo.maxRecords || 1000 });
+            }
+            await this.practiceRepo.overwrite(records);
+            return true;
+        }
+        async addPracticeRecord(record) {
+            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+                await window.PracticeCore.store.savePracticeRecord(record, { maxRecords: this.practiceRepo.maxRecords || 1000 });
+                return true;
+            }
+            await this.practiceRepo.upsert(record);
+            return true;
+        }
         async getById(id) { return await this.practiceRepo.getById(id); }
         async update(id, updates) { return await this.practiceRepo.update(id, updates); }
         async delete(id) { const removed = await this.practiceRepo.removeById(id); return removed > 0; }

@@ -429,12 +429,20 @@ async def run() -> None:
         
     finally:
         duration = (datetime.now() - start_time).total_seconds()
+        deprecated_facade_logs = [
+            entry for entry in console_log
+            if "deprecated persistent write via storage facade" in entry.text
+        ]
+        if deprecated_facade_logs:
+            log_step("检测到 StorageFacade 噪音告警，视为失败", "ERROR")
+            test_passed = False
         
         # 生成测试报告
         report = {
             "generatedAt": datetime.now().isoformat(),
             "duration": duration,
             "status": "pass" if test_passed else "fail",
+            "deprecatedFacadeWarnings": len(deprecated_facade_logs),
             "consoleLogs": [
                 {
                     "type": entry.type,
@@ -464,6 +472,10 @@ async def run() -> None:
             if error_logs:
                 log_step("\n前 5 个错误:", "ERROR")
                 for entry in error_logs[:5]:
+                    log_step(f"  [{entry.type.upper()}] {entry.text}")
+            if deprecated_facade_logs:
+                log_step("\n检测到的 facade 噪音:", "ERROR")
+                for entry in deprecated_facade_logs[:5]:
                     log_step(f"  [{entry.type.upper()}] {entry.text}")
         else:
             log_step("无控制台消息捕获", "WARNING")
