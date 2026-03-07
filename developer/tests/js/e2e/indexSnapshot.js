@@ -357,10 +357,10 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!DOCTYPE html>
     </script>
 
     <!-- 加载核心组件 -->
+    <script src="js/core/practiceCore.js"></script>
+    <script src="js/core/resourceCore.js"></script>
     <script src="js/core/scoreStorage.js"></script>
     <script src="js/core/practiceRecorder.js"></script>
-    <script src="js/core/legacyStateBridge.js"></script>
-    <script src="js/utils/legacyStateAdapter.js"></script>
     <script src="js/components/PDFHandler.js"></script>
 
     <!-- 系统诊断组件 (已合并) -->
@@ -392,7 +392,6 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!DOCTYPE html>
     <script src="js/app/state-service.js"></script>
     <script src="js/presentation/message-center.js"></script>
     <script src="js/presentation/navigation-controller.js"></script>
-    <script src="js/runtime/legacy-state-adapter.js"></script>
 
     <!-- 加载主脚本 -->
     <script src="js/main.js"></script>

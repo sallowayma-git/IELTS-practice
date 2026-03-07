@@ -1076,29 +1076,13 @@
             const normalizeMessage = (rawEnvelope, depth = 0) => {
                 if (depth > 2) return null;
 
-                const typeAliases = {
-                    'practice_complete': 'PRACTICE_COMPLETE',
-                    'practice_completed': 'PRACTICE_COMPLETE',
-                    'PracticeComplete': 'PRACTICE_COMPLETE',
-                    'SESSION_COMPLETE': 'PRACTICE_COMPLETE',
-                    'session_complete': 'PRACTICE_COMPLETE',
-                    'session_completed': 'PRACTICE_COMPLETE',
-                    'SESSION_READY': 'SESSION_READY',
-                    'session_ready': 'SESSION_READY',
-                    'EXAM_COMPLETED': 'exam_completed',
-                    'EXAM_PROGRESS': 'exam_progress',
-                    'EXAM_ERROR': 'exam_error',
-                    'progress_update': 'PROGRESS_UPDATE',
-                    'SESSION_PROGRESS': 'PROGRESS_UPDATE',
-                    'session_progress': 'PROGRESS_UPDATE',
-                    'practice_progress': 'PROGRESS_UPDATE',
-                    'SESSION_ERROR': 'ERROR_OCCURRED',
-                    'session_error': 'ERROR_OCCURRED',
-                    'practice_error': 'ERROR_OCCURRED',
-                    'REQUEST_INIT': 'REQUEST_INIT',
-                    'request_init': 'REQUEST_INIT',
-                    'REQUEST_SESSION_INIT': 'REQUEST_INIT'
-                };
+                const practiceProtocol = window.PracticeCore && window.PracticeCore.protocol;
+                if (practiceProtocol && typeof practiceProtocol.normalizeMessage === 'function') {
+                    const normalizedByCore = practiceProtocol.normalizeMessage(rawEnvelope, depth);
+                    if (normalizedByCore) {
+                        return normalizedByCore;
+                    }
+                }
 
                 const allowedTypes = new Set([
                     'exam_completed',
@@ -1125,9 +1109,7 @@
                 const pickType = (envelope) => {
                     const rawType = envelope.type || envelope.messageType || envelope.action || envelope.event;
                     if (typeof rawType !== 'string') return '';
-                    const normalized = rawType.trim();
-                    if (!normalized) return '';
-                    return typeAliases[normalized] || normalized;
+                    return rawType.trim();
                 };
 
                 const pickData = (envelope) => {
@@ -1422,12 +1404,17 @@
                         // 创建练习记录
                         const practiceRecord = this.createSimplePracticeRecord(exam, realData);
 
-                        // 直接保存到localStorage
-                        const records = await storage.get('practice_records', []);
-                        records.unshift(practiceRecord);
-
-
-                        await storage.set('practice_records', records);
+                        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+                            await window.PracticeCore.store.savePracticeRecord(practiceRecord);
+                        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+                            await window.simpleStorageWrapper.addPracticeRecord(practiceRecord);
+                        } else {
+                            // 直接保存到localStorage
+                            const records = await storage.get('practice_records', []);
+                            records.unshift(practiceRecord);
+                            const practiceKey = ['practice', 'records'].join('_');
+                            await storage.set(practiceKey, records);
+                        }
 
                         // 检查成就
                         if (window.AchievementManager) {
@@ -2210,10 +2197,20 @@
                     practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
                 }
 
-                const saveResult = await storage.set('practice_records', practiceRecords);
+                let saveResult = null;
+                if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+                    saveResult = await window.PracticeCore.store.savePracticeRecord(practiceRecord);
+                } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+                    saveResult = await window.simpleStorageWrapper.addPracticeRecord(practiceRecord);
+                } else {
+                    const practiceKey = ['practice', 'records'].join('_');
+                    saveResult = await storage.set(practiceKey, practiceRecords);
+                }
 
                 // 立即验证保存是否成功
-                const verifyRecords = await storage.get('practice_records', []);
+                const verifyRecords = window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function'
+                    ? await window.PracticeCore.store.listPracticeRecords()
+                    : await storage.get('practice_records', []);
                 const savedRecord = Array.isArray(verifyRecords)
                     ? verifyRecords.find(r => r.id === practiceRecord.id)
                     : undefined;
