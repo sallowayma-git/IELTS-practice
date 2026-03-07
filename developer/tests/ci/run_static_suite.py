@@ -825,6 +825,35 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("PracticeCore 单元测试", False, "测试脚本缺失"))
         all_passed = False
 
+    resource_core_test = REPO_ROOT / "developer" / "tests" / "js" / "resourceCore.test.js"
+    if resource_core_test.exists():
+        try:
+            completed_resource_core = subprocess.run(
+                ["node", str(resource_core_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            resource_core_passed = False
+            resource_core_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_resource_core_output = completed_resource_core.stdout.strip() or completed_resource_core.stderr.strip()
+            try:
+                resource_core_payload = json.loads(raw_resource_core_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                resource_core_passed = False
+                resource_core_detail = f"输出解析失败: {parse_error}"
+            else:
+                resource_core_passed = resource_core_payload.get("status") == "pass"
+                resource_core_detail = resource_core_payload.get("detail", resource_core_payload)
+        results.append(_format_result("ResourceCore 单元测试", resource_core_passed, resource_core_detail))
+        all_passed &= resource_core_passed
+    else:
+        results.append(_format_result("ResourceCore 单元测试", False, "测试脚本缺失"))
+        all_passed = False
+
     practice_core_guard_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCore.guard.test.js"
     if practice_core_guard_test.exists():
         try:
