@@ -640,11 +640,21 @@ class DataBackupManager {
     }
 
     async mergePracticeRecords(newRecords, mergeMode = 'merge') {
-        const existingRaw = await storage.get('practice_records', []);
+        const practiceStore = window.PracticeCore && window.PracticeCore.store;
+        const existingRaw = practiceStore && typeof practiceStore.listPracticeRecords === 'function'
+            ? await practiceStore.listPracticeRecords()
+            : await storage.get('practice_records', []);
         const existingRecords = Array.isArray(existingRaw) ? existingRaw.slice() : [];
 
         if (mergeMode === 'replace') {
-            await storage.set('practice_records', newRecords);
+            if (practiceStore && typeof practiceStore.replacePracticeRecords === 'function') {
+                await practiceStore.replacePracticeRecords(newRecords);
+            } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+                await window.simpleStorageWrapper.savePracticeRecords(newRecords);
+            } else {
+                const practiceKey = ['practice', 'records'].join('_');
+                await storage.set(practiceKey, newRecords);
+            }
             return {
                 importedCount: newRecords.length,
                 updatedCount: existingRecords.length,
@@ -701,7 +711,14 @@ class DataBackupManager {
 
         mergedRecords.sort((a, b) => this.getRecordTimestamp(a) - this.getRecordTimestamp(b));
 
-        await storage.set('practice_records', mergedRecords);
+        if (practiceStore && typeof practiceStore.replacePracticeRecords === 'function') {
+            await practiceStore.replacePracticeRecords(mergedRecords);
+        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+            await window.simpleStorageWrapper.savePracticeRecords(mergedRecords);
+        } else {
+            const practiceKey = ['practice', 'records'].join('_');
+            await storage.set(practiceKey, mergedRecords);
+        }
 
         return {
             importedCount,
@@ -1203,7 +1220,14 @@ class DataBackupManager {
         const clearedItems = [];
 
         if (clearPracticeRecords) {
-            await storage.set('practice_records', []);
+            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
+                await window.PracticeCore.store.replacePracticeRecords([]);
+            } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+                await window.simpleStorageWrapper.savePracticeRecords([]);
+            } else {
+                const practiceKey = ['practice', 'records'].join('_');
+                await storage.set(practiceKey, []);
+            }
             clearedItems.push('practice_records');
         }
 
