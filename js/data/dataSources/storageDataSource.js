@@ -62,14 +62,14 @@
 
         async write(key, value) {
             return this._enqueue(async () => {
-                await this.storage.set(key, value, { skipScoreStorageRedirect: true });
+                await this.storage.set(key, value);
                 return true;
             });
         }
 
         async remove(key) {
             return this._enqueue(async () => {
-                await this.storage.remove(key, { skipScoreStorageRedirect: true });
+                await this.storage.remove(key);
                 return true;
             });
         }
