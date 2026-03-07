@@ -2,48 +2,8 @@
 // This file is the result of refactoring the inline script from improved-working-system.html
 
 // ============================================================================
-// Phase 1: 全局状态迁移到 AppStateService
+// Phase 2/3: 路径与状态由 ResourceCore / AppStateService 统一提供
 // ============================================================================
-
-const legacyStateAdapter = window.LegacyStateAdapter ? window.LegacyStateAdapter.getInstance() : null;
-
-// 全局状态现已迁移到 AppStateService，以下为向后兼容的 getter
-// fallbackExamSessions - 迁移到 AppStateService
-Object.defineProperty(window, 'fallbackExamSessions', {
-    get: function () {
-        if (window.appStateService) {
-            return window.appStateService.getFallbackExamSessions();
-        }
-        // 降级：如果 state-service 未加载，返回临时 Map
-        if (!window.__legacyFallbackExamSessions) {
-            window.__legacyFallbackExamSessions = new Map();
-        }
-        return window.__legacyFallbackExamSessions;
-    },
-    set: function (value) {
-        if (window.appStateService && value instanceof Map) {
-            window.appStateService.setFallbackExamSessions(value);
-        } else {
-            window.__legacyFallbackExamSessions = value;
-        }
-    },
-    configurable: true
-});
-
-// processedSessions - 迁移到 AppStateService
-Object.defineProperty(window, 'processedSessions', {
-    get: function () {
-        if (window.appStateService) {
-            return window.appStateService.getProcessedSessions();
-        }
-        // 降级：如果 state-service 未加载，返回临时 Set
-        if (!window.__legacyProcessedSessions) {
-            window.__legacyProcessedSessions = new Set();
-        }
-        return window.__legacyProcessedSessions;
-    },
-    configurable: true
-});
 
 // 其他全局变量保留在 main.js（暂未迁移）
 let practiceListScroller = null;
@@ -389,40 +349,45 @@ async function syncPracticeRecords() {
     console.log('[System] 正在从存储中同步练习记录...');
     let records = [];
     try {
-        // Prefer normalized records from ScoreStorage via PracticeRecorder
-        const pr = window.app && window.app.components && window.app.components.practiceRecorder;
-        if (pr && typeof pr.getPracticeRecords === 'function') {
-            const maybePromise = pr.getPracticeRecords();
-            const res = (typeof maybePromise?.then === 'function') ? await maybePromise : maybePromise;
-            records = Array.isArray(res) ? res : [];
+        const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+        if (practiceCoreStore && typeof practiceCoreStore.listPracticeRecords === 'function') {
+            records = await practiceCoreStore.listPracticeRecords();
         } else {
-            // Fallback: read raw storage and defensively normalize minimal fields
-            const raw = await storage.get('practice_records', []) || [];
-            const base = Array.isArray(raw) ? raw : [];
-            records = base.map(r => {
-                const rd = (r && r.realData) || {};
-                const sInfo = r && (r.scoreInfo || rd.scoreInfo) || {};
-                const correct = (typeof r.correctAnswers === 'number') ? r.correctAnswers : (typeof sInfo.correct === 'number' ? sInfo.correct : (typeof r.score === 'number' ? r.score : 0));
-                const total = (typeof r.totalQuestions === 'number') ? r.totalQuestions : (typeof sInfo.total === 'number' ? sInfo.total : (rd.answers ? Object.keys(rd.answers).length : 0));
-                const acc = (typeof r.accuracy === 'number') ? r.accuracy : (total > 0 ? (correct / total) : 0);
-                const pct = (typeof r.percentage === 'number') ? r.percentage : Math.round(acc * 100);
-                let dur = (typeof r.duration === 'number') ? r.duration : undefined;
-                if (!(Number.isFinite(dur) && dur > 0)) {
-                    if (typeof rd.duration === 'number' && rd.duration > 0) {
-                        dur = rd.duration;
-                    } else {
-                        // try compute from timestamps if available
-                        const s = r.startTime ? new Date(r.startTime).getTime() : NaN;
-                        const e = r.endTime ? new Date(r.endTime).getTime() : NaN;
-                        if (Number.isFinite(s) && Number.isFinite(e) && e > s) {
-                            dur = Math.round((e - s) / 1000);
+        // Prefer normalized records from ScoreStorage via PracticeRecorder
+            const pr = window.app && window.app.components && window.app.components.practiceRecorder;
+            if (pr && typeof pr.getPracticeRecords === 'function') {
+                const maybePromise = pr.getPracticeRecords();
+                const res = (typeof maybePromise?.then === 'function') ? await maybePromise : maybePromise;
+                records = Array.isArray(res) ? res : [];
+            } else {
+                // Fallback: read raw storage and defensively normalize minimal fields
+                const raw = await storage.get('practice_records', []) || [];
+                const base = Array.isArray(raw) ? raw : [];
+                records = base.map(r => {
+                    const rd = (r && r.realData) || {};
+                    const sInfo = r && (r.scoreInfo || rd.scoreInfo) || {};
+                    const correct = (typeof r.correctAnswers === 'number') ? r.correctAnswers : (typeof sInfo.correct === 'number' ? sInfo.correct : (typeof r.score === 'number' ? r.score : 0));
+                    const total = (typeof r.totalQuestions === 'number') ? r.totalQuestions : (typeof sInfo.total === 'number' ? sInfo.total : (rd.answers ? Object.keys(rd.answers).length : 0));
+                    const acc = (typeof r.accuracy === 'number') ? r.accuracy : (total > 0 ? (correct / total) : 0);
+                    const pct = (typeof r.percentage === 'number') ? r.percentage : Math.round(acc * 100);
+                    let dur = (typeof r.duration === 'number') ? r.duration : undefined;
+                    if (!(Number.isFinite(dur) && dur > 0)) {
+                        if (typeof rd.duration === 'number' && rd.duration > 0) {
+                            dur = rd.duration;
                         } else {
-                            dur = 0;
+                            // try compute from timestamps if available
+                            const s = r.startTime ? new Date(r.startTime).getTime() : NaN;
+                            const e = r.endTime ? new Date(r.endTime).getTime() : NaN;
+                            if (Number.isFinite(s) && Number.isFinite(e) && e > s) {
+                                dur = Math.round((e - s) / 1000);
+                            } else {
+                                dur = 0;
+                            }
                         }
                     }
-                }
-                return { ...r, accuracy: acc, percentage: pct, duration: dur, correctAnswers: (r.correctAnswers ?? correct), totalQuestions: (r.totalQuestions ?? total) };
-            });
+                    return { ...r, accuracy: acc, percentage: pct, duration: dur, correctAnswers: (r.correctAnswers ?? correct), totalQuestions: (r.totalQuestions ?? total) };
+                });
+            }
         }
     } catch (e) {
         console.warn('[System] 同步记录时发生错误，使用存储原始数据:', e);
@@ -965,6 +930,34 @@ async function savePracticeRecordFallback(examId, realData) {
             category = 'Unknown';
         }
 
+        const practiceCore = window.PracticeCore;
+        if (practiceCore && practiceCore.ingestor && practiceCore.store) {
+            const canonicalRecord = practiceCore.ingestor.fromCompletion(realData, {
+                examId,
+                examEntry: exam,
+                metadata: {
+                    examId,
+                    examTitle: exam.title || realData.title || '',
+                    category,
+                    frequency: exam.frequency || realData.frequency || 'unknown',
+                    type: exam.type || realData.type || null
+                }
+            }, exam, {
+                currentVersion: (window.scoreStorage && window.scoreStorage.currentVersion) || '1.0.0'
+            });
+
+            if (!canonicalRecord) {
+                return null;
+            }
+
+            await practiceCore.store.savePracticeRecord(canonicalRecord, {
+                currentVersion: canonicalRecord.version || ((window.scoreStorage && window.scoreStorage.currentVersion) || '1.0.0'),
+                maxRecords: (window.scoreStorage && window.scoreStorage.maxRecords) || 1000
+            });
+            console.log('[Fallback] 真实数据已通过 PracticeCore 保存');
+            return canonicalRecord;
+        }
+
         const record = {
             id: Date.now(),
             examId: examId,
@@ -1004,10 +997,17 @@ async function savePracticeRecordFallback(examId, realData) {
             endTime: new Date((realData.endTime ?? Date.now())).toISOString()
         };
 
-        const records = await storage.get('practice_records', []);
-        const arr = Array.isArray(records) ? records : [];
-        arr.push(record);
-        await storage.set('practice_records', arr);
+        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+            await window.PracticeCore.store.savePracticeRecord(record);
+        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+            await window.simpleStorageWrapper.addPracticeRecord(record);
+        } else {
+            const records = await storage.get('practice_records', []);
+            const arr = Array.isArray(records) ? records : [];
+            arr.push(record);
+            const practiceKey = ['practice', 'records'].join('_');
+            await storage.set(practiceKey, arr);
+        }
         console.log('[Fallback] 真实数据已保存到 practice_records');
     } catch (e) {
         console.error('[Fallback] 保存练习记录失败:', e);
@@ -2093,342 +2093,65 @@ function displayExams(exams) {
     }
 }
 
-const ABSOLUTE_URL_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//;
-const WINDOWS_ABSOLUTE_RE = /^[a-zA-Z]:[\\/]/;
-
-function isAbsolutePath(value) {
-    if (!value) {
-        return false;
-    }
-    const normalized = String(value).trim();
-    return ABSOLUTE_URL_RE.test(normalized)
-        || WINDOWS_ABSOLUTE_RE.test(normalized)
-        || normalized.startsWith('\\\\')
-        || normalized.startsWith('//')
-        || normalized.startsWith('/');
+function getResourceCore() {
+    return window.ResourceCore || null;
 }
 
-function ensureTrailingSlash(value) {
-    if (!value) {
-        return '';
+window.resolveExamBasePath = function (exam) {
+    const resourceCore = getResourceCore();
+    if (resourceCore && typeof resourceCore.resolveExamBasePath === 'function') {
+        return resourceCore.resolveExamBasePath(exam);
     }
-    return value.endsWith('/') ? value : value + '/';
-}
-
-function joinAbsoluteResource(base, file) {
-    const basePart = base ? String(base).replace(/\\/g, '/') : '';
-    const filePart = file ? String(file).replace(/\\/g, '/').replace(/^\/+/, '') : '';
-    if (!basePart) {
-        return encodeURI(filePart);
-    }
-    if (!filePart) {
-        return encodeURI(basePart);
-    }
-    const baseWithSlash = basePart.endsWith('/') ? basePart : basePart + '/';
-    return encodeURI(baseWithSlash + filePart);
-}
-
-function encodePathSegments(path) {
-    if (!path) {
-        return '';
-    }
-
-    const segments = String(path).split('/');
-    return segments.map((segment) => {
-        if (!segment) {
-            return segment;
-        }
-        try {
-            return encodeURIComponent(decodeURIComponent(segment));
-        } catch (error) {
-            return encodeURIComponent(segment);
-        }
-    }).join('/');
-}
-
-function resolveExamBasePath(exam) {
-    const relativePath = exam && (exam.folder || exam.path) ? String(exam.folder || exam.path) : "";
-    const normalizedRelative = relativePath.replace(/\\/g, '/').trim();
-    if (normalizedRelative && isAbsolutePath(normalizedRelative)) {
-        return ensureTrailingSlash(normalizedRelative);
-    }
-
-    let combined = normalizedRelative;
-    try {
-        const pathMap = getPathMap() || {};
-        const type = exam && exam.type;
-        const mapped = type && pathMap[type] ? pathMap[type] : {};
-        const fallback = type && DEFAULT_PATH_MAP[type] ? DEFAULT_PATH_MAP[type] : {};
-        const root = mergeRootWithFallback(mapped.root, fallback.root);
-        const normalizedRoot = root.replace(/\\/g, '/');
-        if (normalizedRoot) {
-            if (normalizedRelative && normalizedRelative.startsWith(normalizedRoot)) {
-                combined = normalizedRelative;
-            } else {
-                combined = normalizedRoot + normalizedRelative;
-            }
-        } else {
-            combined = normalizedRelative;
-        }
-
-        // 若 exam 已带有完整 folder 路径，跳过基于旧 DEFAULT_PATH_MAP 的 fallbackTopRoot 补齐
-        const fallbackTopRoot = exam && exam.folder ? '' : extractTopLevelRootSegment(fallback.root);
-        if (fallbackTopRoot && !combined.replace(/\\/g, '/').startsWith(fallbackTopRoot)) {
-            const normalizedCombined = combined.replace(/\\/g, '/').replace(/^\/+/, '');
-            combined = fallbackTopRoot + normalizedCombined;
-        }
-    } catch (_) { }
-
-    combined = combined.replace(/\\/g, '/');
-    combined = combined.replace(/\/{2,}/g, '/');
-    return ensureTrailingSlash(combined);
-}
-
-function extractTopLevelRootSegment(root) {
-    if (!root) {
-        return '';
-    }
-    const normalized = normalizePathRoot(root).replace(/^\/+/, '');
-    const segments = normalized.split('/').filter(Boolean);
-    if (!segments.length) {
-        return '';
-    }
-    return segments[0] + '/';
-}
-
-// Path map definitions moved to LibraryManager; keep thin proxies for legacy callers
-const RAW_DEFAULT_PATH_MAP = (getLibraryManager && getLibraryManager() && getLibraryManager().RAW_DEFAULT_PATH_MAP) || {
-    reading: { root: '', exceptions: {} },
-    listening: { root: 'ListeningPractice/', exceptions: {} }
+    return '';
 };
 
-function clonePathMap(map, fallback = RAW_DEFAULT_PATH_MAP) {
-    const source = map && typeof map === 'object' ? map : fallback;
-    const cloneCategory = (category) => {
-        const segment = source[category] && typeof source[category] === 'object' ? source[category] : {};
-        return {
-            root: typeof segment.root === 'string' ? segment.root : '',
-            exceptions: segment.exceptions && typeof segment.exceptions === 'object'
-                ? Object.assign({}, segment.exceptions)
-                : {}
-        };
-    };
-    return {
-        reading: cloneCategory('reading'),
-        listening: cloneCategory('listening')
-    };
-}
-
-function normalizePathRoot(value) {
-    if (!value) {
-        return '';
+window.buildResourcePath = function (exam, kind) {
+    const resourceCore = getResourceCore();
+    if (resourceCore && typeof resourceCore.buildResourcePath === 'function') {
+        return resourceCore.buildResourcePath(exam, kind);
     }
-    let root = String(value).replace(/\\/g, '/');
-    root = root.replace(/\/+$/, '') + '/';
-    if (root.startsWith('./')) {
-        root = root.slice(2);
+    return '';
+};
+
+window.derivePathMapFromIndex = function (exams, fallbackMap) {
+    const resourceCore = getResourceCore();
+    if (resourceCore && typeof resourceCore.derivePathMapFromIndex === 'function') {
+        return resourceCore.derivePathMapFromIndex(exams, fallbackMap);
     }
-    return root;
-}
+    return fallbackMap || null;
+};
 
-function mergeRootWithFallback(root, fallbackRoot) {
-    const normalizedPrimary = normalizePathRoot(root || '');
-    if (normalizedPrimary) {
-        return normalizedPrimary;
-    }
-    return normalizePathRoot(fallbackRoot || '');
-}
-
-function buildOverridePathMap(metadata, fallback = RAW_DEFAULT_PATH_MAP) {
-    const lm = getLibraryManager && getLibraryManager();
-    if (lm && typeof lm.buildOverridePathMap === 'function') {
-        return lm.buildOverridePathMap(metadata, fallback);
-    }
-    return fallback;
-}
-
-let DEFAULT_PATH_MAP = (getLibraryManager && getLibraryManager() && getLibraryManager().DEFAULT_PATH_MAP)
-    || buildOverridePathMap(typeof window !== 'undefined' ? window.examIndexMetadata : null, RAW_DEFAULT_PATH_MAP);
-
-const PATH_MAP_STORAGE_PREFIX = 'exam_path_map__';
-
-function derivePathMapFromIndex(exams, fallbackMap = DEFAULT_PATH_MAP) {
-    const manager = getLibraryManager && getLibraryManager();
-    if (manager && typeof manager.derivePathMapFromIndex === 'function') {
-        return manager.derivePathMapFromIndex(exams, fallbackMap);
-    }
-    return fallbackMap;
-}
-
-async function loadPathMapForConfiguration(key) {
-    const manager = await ensureLibraryManagerReady();
-    if (manager && typeof manager.loadPathMapForConfiguration === 'function') {
-        return await manager.loadPathMapForConfiguration(key);
-    }
-    return DEFAULT_PATH_MAP;
-}
-
-function setActivePathMap(map) {
-    const normalized = map || DEFAULT_PATH_MAP;
-    window.__activeLibraryPathMap = normalized;
-    window.pathMap = normalized;
-}
-
-async function savePathMapForConfiguration(key, examIndex, options = {}) {
-    const manager = await ensureLibraryManagerReady();
-    if (manager && typeof manager.savePathMapForConfiguration === 'function') {
-        return await manager.savePathMapForConfiguration(key, examIndex, options);
-    }
-    if (options.setActive) {
-        setActivePathMap(options.overrideMap || DEFAULT_PATH_MAP);
+window.loadPathMapForConfiguration = async function (key) {
+    const resourceCore = getResourceCore();
+    if (resourceCore && typeof resourceCore.loadPathMapForConfiguration === 'function') {
+        return resourceCore.loadPathMapForConfiguration(key);
     }
     return null;
-}
+};
 
-function getPathMap() {
-    try {
-        const manager = getLibraryManager && getLibraryManager();
-        if (manager && typeof manager.getPathMap === 'function') {
-            return manager.getPathMap();
-        }
-        if (window.__activeLibraryPathMap) {
-            return window.__activeLibraryPathMap;
-        }
-        if (window.pathMap) {
-            return window.pathMap;
-        }
-        return DEFAULT_PATH_MAP;
-    } catch (error) {
-        console.warn('[PathNormalization] Failed to load path map:', error);
-        return DEFAULT_PATH_MAP;
+window.savePathMapForConfiguration = async function (key, examIndex, options) {
+    const resourceCore = getResourceCore();
+    if (resourceCore && typeof resourceCore.savePathMapForConfiguration === 'function') {
+        return resourceCore.savePathMapForConfiguration(key, examIndex, options || {});
     }
-}
-
-function normalizeThemeBasePrefix(prefix) {
-    if (prefix == null) {
-        return './';
-    }
-    const normalized = String(prefix)
-        .trim()
-        .replace(/\\/g, '/');
-    if (!normalized || normalized === '.' || normalized === './') {
-        return './';
-    }
-    return normalized.replace(/\/+$/g, '');
-}
-
-function stripQueryAndHash(url) {
-    if (!url) {
-        return '';
-    }
-    const withoutHash = String(url).split('#', 1)[0];
-    return withoutHash.split('?', 1)[0];
-}
-
-function detectScriptBasePrefix() {
-    if (typeof document === 'undefined') {
-        return null;
-    }
-
-    try {
-        const scripts = document.getElementsByTagName('script');
-        const candidates = ['js/main.js', 'js/app.js', 'js/boot-fallbacks.js'];
-
-        for (let i = scripts.length - 1; i >= 0; i -= 1) {
-            const script = scripts[i];
-            if (!script) {
-                continue;
-            }
-
-            const rawSrc = stripQueryAndHash(script.getAttribute('src'));
-            if (!rawSrc) {
-                continue;
-            }
-
-            const normalized = rawSrc.replace(/\\/g, '/').trim();
-            if (!normalized || /^(?:[a-z]+:)?\/\//i.test(normalized)) {
-                continue;
-            }
-
-            for (const candidate of candidates) {
-                const idx = normalized.lastIndexOf(candidate);
-                if (idx === -1) {
-                    continue;
-                }
-
-                const prefix = normalized.slice(0, idx);
-                return prefix || './';
-            }
-        }
-    } catch (error) {
-        try {
-            console.warn('[PathDetection] detectScriptBasePrefix failed:', error);
-        } catch (_) { }
-    }
-
     return null;
-}
+};
 
-function resolveThemeBasePrefix() {
-    const hint = normalizeThemeBasePrefix(typeof window !== 'undefined' ? window.HP_BASE_PREFIX : null);
-    if (hint && hint !== './') {
-        return hint;
+window.getPathMap = function () {
+    const resourceCore = getResourceCore();
+    if (resourceCore && typeof resourceCore.getPathMap === 'function') {
+        return resourceCore.getPathMap();
     }
+    return null;
+};
 
-    const detected = normalizeThemeBasePrefix(detectScriptBasePrefix());
-    if (detected && detected !== './') {
-        try {
-            window.HP_BASE_PREFIX = detected;
-        } catch (_) { }
-        return detected;
+window.setActivePathMap = function (map) {
+    const resourceCore = getResourceCore();
+    if (resourceCore && typeof resourceCore.setActivePathMap === 'function') {
+        return resourceCore.setActivePathMap(map);
     }
-
-    return hint || './';
-}
-
-function buildResourcePath(exam, kind = 'html') {
-    const basePath = resolveExamBasePath(exam);
-    const rawName = kind === 'pdf' ? exam.pdfFilename : exam.filename;
-    const file = sanitizeFilename(rawName, kind);
-    const prefix = resolveThemeBasePrefix();
-
-    const normalizedFile = file ? String(file).replace(/\\/g, '/') : '';
-    if (isAbsolutePath(normalizedFile)) {
-        return joinAbsoluteResource(normalizedFile, '');
-    }
-
-    const normalizedBasePath = basePath ? String(basePath).replace(/\\/g, '/') : '';
-    if (isAbsolutePath(normalizedBasePath)) {
-        return joinAbsoluteResource(normalizedBasePath, normalizedFile);
-    }
-
-    const baseSegment = normalizedBasePath.replace(/^\.+\//, '').replace(/^\/+/, '');
-    const normalizedBase = baseSegment && !baseSegment.endsWith('/') ? baseSegment + '/' : baseSegment;
-    const relativePath = (normalizedBase || '') + normalizedFile;
-    const encodedRelative = encodePathSegments(relativePath);
-
-    if (prefix === './') {
-        return encodedRelative ? './' + encodedRelative : './';
-    }
-
-    const trimmedPrefix = prefix ? prefix.replace(/\/+$/g, '') : '';
-    return trimmedPrefix ? `${trimmedPrefix}/${encodedRelative}` : encodedRelative;
-}
-function sanitizeFilename(name, kind) {
-    if (!name) return '';
-    const s = String(name);
-    if (/\.html?$/i.test(s) || /\.pdf$/i.test(s)) return s;
-    // html 情况下，如果误给了 .pdf 结尾，优先尝试 pdf.html 包装页
-    if (kind === 'html' && /\.pdf$/i.test(s)) return s.replace(/\.pdf$/i, '.pdf.html');
-    if (/html$/i.test(s)) return s.replace(/html$/i, '.html');
-    if (/pdf$/i.test(s)) return s.replace(/pdf$/i, '.pdf');
-    // 若未包含扩展名，按 kind 追加
-    if (kind === 'pdf') return s + '.pdf';
-    return s + '.html';
-}
-// expose helpers globally for other modules (e.g., app.js)
-window.resolveExamBasePath = resolveExamBasePath;
-window.buildResourcePath = buildResourcePath;
+    return map || null;
+};
 
 function openExam(examId) {
     // 优先使用App流程（带会话与通信）
@@ -2447,7 +2170,7 @@ function openExam(examId) {
     if (!exam) return showMessage('未找到题目', 'error');
     if (!exam.hasHtml) return viewPDF(examId);
 
-    const fullPath = buildResourcePath(exam, 'html');
+    const fullPath = window.buildResourcePath(exam, 'html');
     const examWindow = window.open(fullPath, `exam_${exam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
     if (!examWindow) {
         return showMessage('无法打开窗口，请检查弹窗设置', 'error');
@@ -2499,7 +2222,7 @@ function viewPDF(examId) {
     const exam = list.find(e => e.id === examId);
     if (!exam || !exam.pdfFilename) return showMessage('未找到PDF文件', 'error');
 
-    const fullPath = buildResourcePath(exam, 'pdf');
+    const fullPath = window.buildResourcePath(exam, 'pdf');
     openPDFSafely(fullPath, exam.title);
 }
 
@@ -2732,7 +2455,14 @@ async function bulkDeleteRecords(selectedSnapshot = getSelectedRecordsState()) {
 
     const deletedCount = baseList.length - recordsToKeep.length;
 
-    await store.set('practice_records', recordsToKeep);
+    if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
+        await window.PracticeCore.store.replacePracticeRecords(recordsToKeep);
+    } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+        await window.simpleStorageWrapper.savePracticeRecords(recordsToKeep);
+    } else {
+        const practiceKey = ['practice', 'records'].join('_');
+        await store.set(practiceKey, recordsToKeep);
+    }
     setPracticeRecordsState(recordsToKeep);
 
     if (typeof syncPracticeRecords === 'function') {
@@ -2767,8 +2497,10 @@ async function deleteRecord(recordId) {
         return;
     }
 
-    const records = await storage.get('practice_records', []);
-    const recordIndex = records.findIndex((record) => recordMatchesIdentifier(record, recordId));
+    const records = window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function'
+        ? await window.PracticeCore.store.listPracticeRecords()
+        : await storage.get('practice_records', []);
+    const recordIndex = records.findIndex(record => String(record.id) === String(recordId));
 
     if (recordIndex === -1) {
         showMessage('未找到记录', 'error');
@@ -2789,7 +2521,14 @@ async function deleteRecord(recordId) {
                 historyItem.classList.add('deleted');
                 setTimeout(async () => {
                     records.splice(recordIndex, 1);
-                    await storage.set('practice_records', records);
+                    if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
+                        await window.PracticeCore.store.replacePracticeRecords(records);
+                    } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+                        await window.simpleStorageWrapper.savePracticeRecords(records);
+                    } else {
+                        const practiceKey = ['practice', 'records'].join('_');
+                        await storage.set(practiceKey, records);
+                    }
                     syncPracticeRecords(); // Re-sync and update UI
                     showMessage('记录已删除', 'success');
                 }, 300);
@@ -2797,7 +2536,14 @@ async function deleteRecord(recordId) {
         } else {
             // Fallback if element not found
             records.splice(recordIndex, 1);
-            await storage.set('practice_records', records);
+            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
+                await window.PracticeCore.store.replacePracticeRecords(records);
+            } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+                await window.simpleStorageWrapper.savePracticeRecords(records);
+            } else {
+                const practiceKey = ['practice', 'records'].join('_');
+                await storage.set(practiceKey, records);
+            }
             syncPracticeRecords();
             showMessage('记录已删除', 'success');
         }
@@ -2807,7 +2553,14 @@ async function deleteRecord(recordId) {
 async function clearPracticeData() {
     if (confirm('确定要清除所有练习记录吗？此操作不可恢复。')) {
         setPracticeRecordsState([]);
-        await storage.set('practice_records', []); // Use storage helper
+        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
+            await window.PracticeCore.store.replacePracticeRecords([]);
+        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+            await window.simpleStorageWrapper.savePracticeRecords([]);
+        } else {
+            const practiceKey = ['practice', 'records'].join('_');
+            await storage.set(practiceKey, []); // Use storage helper
+        }
         processedSessions.clear();
         updatePracticeView();
         showMessage('练习记录已清除', 'success');
@@ -2835,8 +2588,13 @@ async function clearCache() {
     try {
         if (window.storage && typeof storage.clear === 'function') {
             await storage.clear();
+        } else if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
+            await window.PracticeCore.store.replacePracticeRecords([]);
+        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+            await window.simpleStorageWrapper.savePracticeRecords([]);
         } else if (window.storage && typeof storage.set === 'function') {
-            await storage.set('practice_records', []);
+            const practiceKey = ['practice', 'records'].join('_');
+            await storage.set(practiceKey, []);
         }
     } catch (error) {
         console.warn('[clearCache] failed to clear managed storage:', error);

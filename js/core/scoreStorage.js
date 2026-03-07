@@ -50,6 +50,10 @@ class ScoreStorage {
     }
 
     normalizePracticeType(rawType) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.normalizePracticeType === 'function') {
+            return coreContracts.normalizePracticeType(rawType);
+        }
         if (!rawType) return null;
         const normalized = String(rawType).toLowerCase();
         if (normalized.includes('listen')) return 'listening';
@@ -58,6 +62,10 @@ class ScoreStorage {
     }
 
     inferPracticeType(recordData = {}) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.inferPracticeType === 'function') {
+            return coreContracts.inferPracticeType(recordData);
+        }
         const metadata = recordData.metadata || {};
         const normalized = this.normalizePracticeType(
             recordData.type
@@ -69,6 +77,10 @@ class ScoreStorage {
     }
 
     resolveRecordDate(recordData = {}, now = new Date().toISOString()) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.resolveRecordDate === 'function') {
+            return coreContracts.resolveRecordDate(recordData, now);
+        }
         const candidates = [
             recordData.metadata?.date,
             recordData.date,
@@ -115,6 +127,10 @@ class ScoreStorage {
     }
 
     buildMetadata(recordData = {}, type) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.buildMetadata === 'function') {
+            return coreContracts.buildMetadata(recordData, type);
+        }
         const metadata = { ...(recordData.metadata || {}) };
         const examId = recordData.examId;
         const fallbackTitle = recordData.title || recordData.examTitle || examId || 'Unknown Exam';
@@ -579,6 +595,17 @@ class ScoreStorage {
             
             // 验证记录数据
             this.validateRecord(standardizedRecord);
+
+            const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+            if (practiceCoreStore && typeof practiceCoreStore.savePracticeRecord === 'function') {
+                const savedRecord = await practiceCoreStore.savePracticeRecord(standardizedRecord, {
+                    currentVersion: this.currentVersion,
+                    maxRecords: this.maxRecords
+                });
+                await this.updateUserStats(savedRecord);
+                console.log('Practice record saved:', savedRecord.id);
+                return savedRecord;
+            }
             
             // 获取现有记录
             let records = await this.storage.get(this.storageKeys.practiceRecords, []);
@@ -789,6 +816,13 @@ class ScoreStorage {
      * 标准化记录格式
      */
     standardizeRecord(recordData) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.standardizeRecord === 'function') {
+            return coreContracts.standardizeRecord(recordData, {
+                currentVersion: this.currentVersion,
+                generateRecordId: () => this.generateRecordId()
+            });
+        }
         const now = new Date().toISOString();
         const type = this.inferPracticeType(recordData);
         const recordDate = this.resolveRecordDate(recordData, now);
@@ -939,6 +973,10 @@ class ScoreStorage {
      * 标准化答案格式
      */
     standardizeAnswers(answers) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.buildAnswerArray === 'function') {
+            return coreContracts.buildAnswerArray(answers);
+        }
         if (!Array.isArray(answers)) {
             if (answers && typeof answers === 'object') {
                 answers = Object.entries(answers).map(([questionId, value]) => ({
@@ -1049,6 +1087,10 @@ class ScoreStorage {
     }
 
     deriveCorrectMapFromDetails(details) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.deriveCorrectMapFromDetails === 'function') {
+            return coreContracts.deriveCorrectMapFromDetails(details);
+        }
         if (!details || typeof details !== 'object') {
             return {};
         }
@@ -1068,6 +1110,10 @@ class ScoreStorage {
     }
 
     buildAnswerDetailsFromMaps(answerMap = {}, correctMap = {}) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.buildAnswerDetails === 'function') {
+            return coreContracts.buildAnswerDetails(answerMap, correctMap);
+        }
         const details = {};
         const keys = new Set([
             ...Object.keys(answerMap || {}),
