@@ -405,18 +405,6 @@
         return normalized;
     }
 
-    function extractTopLevelRootSegment(root) {
-        if (!root) {
-            return '';
-        }
-        const normalized = normalizePathRoot(root).replace(/^\/+/, '');
-        const segments = normalized.split('/').filter(Boolean);
-        if (!segments.length) {
-            return '';
-        }
-        return segments[0] + '/';
-    }
-
     function resolveExamBasePath(exam) {
         const relativePath = exam && exam.path ? String(exam.path) : '';
         const normalizedRelative = relativePath.replace(/\\/g, '/').trim();
@@ -438,12 +426,6 @@
                 } else {
                     combined = normalizedRoot + normalizedRelative;
                 }
-            }
-
-            const fallbackTopRoot = extractTopLevelRootSegment(fallback.root);
-            if (fallbackTopRoot && !combined.replace(/\\/g, '/').startsWith(fallbackTopRoot)) {
-                const normalizedCombined = combined.replace(/\\/g, '/').replace(/^\/+/, '');
-                combined = fallbackTopRoot + normalizedCombined;
             }
         } catch (_) { }
 
