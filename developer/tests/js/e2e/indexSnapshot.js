@@ -58,7 +58,10 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!DOCTYPE html>
             </div>
 
             <div class="search-box">
-                <input type="text" class="search-input" placeholder="搜索题目..." onkeyup="searchExams(this.value)">
+                <input type="text" class="search-input" id="exam-search-input" placeholder="搜索题目..." aria-label="搜索题目" onkeyup="searchExams(this.value)">
+                <button type="button" class="search-clear-btn" id="search-clear-btn" aria-label="清除搜索" hidden onclick="clearSearch()">
+                    ×
+                </button>
             </div>
 
             <div id="exam-list-container"></div>

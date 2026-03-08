@@ -854,6 +854,35 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("ResourceCore 单元测试", False, "测试脚本缺失"))
         all_passed = False
 
+    on_demand_entry_test = REPO_ROOT / "developer" / "tests" / "js" / "onDemandEntrypoints.test.js"
+    if on_demand_entry_test.exists():
+        try:
+            completed_on_demand = subprocess.run(
+                ["node", str(on_demand_entry_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            on_demand_passed = False
+            on_demand_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_on_demand_output = completed_on_demand.stdout.strip() or completed_on_demand.stderr.strip()
+            try:
+                on_demand_payload = json.loads(raw_on_demand_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                on_demand_passed = False
+                on_demand_detail = f"输出解析失败: {parse_error}"
+            else:
+                on_demand_passed = on_demand_payload.get("status") == "pass"
+                on_demand_detail = on_demand_payload.get("detail", on_demand_payload)
+        results.append(_format_result("按需入口回归测试", on_demand_passed, on_demand_detail))
+        all_passed &= on_demand_passed
+    else:
+        results.append(_format_result("按需入口回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
     practice_core_guard_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCore.guard.test.js"
     if practice_core_guard_test.exists():
         try:
