@@ -1,0 +1,121 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-medium-182", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-medium-182",
+  "meta": {
+    "title": "Listening to the Ocean 海洋探测",
+    "category": "P1",
+    "frequency": "medium",
+    "pdfFilename": "9. P1 - Listening to the Ocean 海洋探测【次】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/9. P1 - Listening to the Ocean 海洋探测【次】/",
+    "legacyFilename": "9. P1 - Listening to the Ocean 海洋探测【次】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>Listening to the Ocean</h3>\n            <h4>The results of some recent research answer some long-standing questions</h4>\n            \n            <p><strong>A</strong> The oceans cover more than 70 per cent of the planet's surface, yet until quite recently we knew less about their depths than about the surface of the Moon. The Moon has been far more accessible to study because astronomers have long been able to look at its surface, first with the naked eye and then with the telescope, both instruments that focus light. Until the twentieth century, however, no instruments were available for the study of Earth's oceans: light, which can travel trillions of kilometres through the vast vacuum of space, cannot penetrate very far in seawater.</p>\n            <p><strong>B</strong> It turns out that for penetrating water the best instrument is sound. Curious investigators have long been fascinated by sound and the way it travels in water. As early as 1490, the artist and scientist Leonardo da Vinci observed: ‘If you cause your ship to stop and place the head of a long tube in the water and place the outer extremity to your ear, you will hear ships at a great distance from you.' It was not until 1826 that two scientists, Colladon and Sturm, accurately measured the speed of sound in water. Using a long tube to listen under water (as da Vinci had suggested), they recorded how fast the sound of a submerged bell travelled across Lake Geneva in Switzerland. What these investigators demonstrated was that water is an excellent medium for sound, transmitting it almost five times faster than its speed in air.</p>\n            <p><strong>C</strong> A number of factors influence how far sound travels under water and how long it lasts, including particles, salinity, temperature and pressure. Particles in seawater can reflect, scatter and absorb certain frequencies of sound, just as certain wavelengths of light may be reflected, scattered and absorbed by specific types of particles in the atmosphere. In 1943, Maurice Ewing and J. L. Worzel conducted an experiment to test the theory that low-frequency waves, which are less vulnerable than higher frequencies to scattering and absorption, should be able to travel great distances, if the sound source is placed correctly. The researchers set off an underwater explosion and learned that it was detected easily by receivers 3,200 kilometres away. In analysing the results of this test, they discovered a kind of ‘sound pipeline', known as the ‘deep sound channel'. Sound introduced into this channel of water could travel thousands of kilometres with minimal loss of signal.</p>\n            <p><strong>D</strong> The US Navy was quick to appreciate the usefulness of low-frequency sound and the deep sound channel. They developed the Sound Surveillance System (SOSUS), which involved underwater microphones, called hydrophones, that were placed on the ocean bottom and connected by cables to on-shore processing centres. It was Christopher Clark of Cornell University who soon realised that SOSUS could be used to listen to whales. Using a SOSUS receiver in the West Indies, he could hear whales that were 1,770 kilometres away.</p>\n            <p><strong>E</strong> Whales are the biggest of Earth's creatures, yet these animals are also remarkably elusive. Scientists wishing to observe blue whales must simply wait in their ships for the whales to surface. A few whales have been tracked briefly in the wild in this way but not for very great distances, and much about them remains unknown. But by using SOSUS, scientists can track the whales and position them on a map. Moreover, they can track not just one whale at a time, but many creatures simultaneously. They can also learn to distinguish whale calls; researchers have detected changes in the calls of finback whales as the seasons change, and have found that blue whales in different regions of the Pacific Ocean have different calls.</p>\n            <p><strong>F</strong> SOSUS has also proved instrumental in obtaining information crucial to our understanding of climate. The system has enabled researchers to begin making ocean-temperature measurements on a global scale, measurements that are key to understanding the workings of heat transfer between the ocean and the atmosphere. The ocean plays an enormous role in determining air temperature — the heat capacity in only the upper few metres of ocean is thought to be equal to all of the heat in the entire atmosphere. For sound waves travelling horizontally in the ocean, speed is largely a function of temperature. Thus, the travel time of a wave of sound between two points is a sensitive indicator of the average temperature along its path. Transmitting sound in numerous directions through the deep sound channel can give scientists measurements spanning vast areas of the globe. Thousands of sound paths in the ocean can be pieced together into a map of global ocean temperatures, and by repeating measurements along the same paths over time, scientists can track changes in temperature over months or years.</p>\n            <p><strong>G</strong> Researchers are also using other acoustic techniques to monitor climate. Oceanographer Jeff Nystuen, for example, has explored the use of sound to measure rainfall over the ocean. Monitoring changing global rainfall patterns will contribute to understanding major climate change as well as the weather phenomenon known as El Niño. Since 1985, Nystuen has used hydrophones to listen to rain over the ocean, acoustically measuring not only the rainfall rate but also the rainfall type, ranging from drizzle to thunderstorms. By using the sound of rain under water as a 'natural' rain gauge, the measurement of rainfall over the oceans will become available to climatologists. In this way, modern society continues to benefit from the investigations of those who, like Leonardo da Vinci, pursued the answers to some basic questions of nature.</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-anchor\">\n                <h4>Questions 1–4</h4>\n                <p>Do the following statements agree with the information given in Reading Passage 1?</p>\n                <p>In boxes 1–4 on your answer sheet, write:</p>\n                <ul>\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information on this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>1</strong> In the past, it was easier for scientists to study the Moon than the oceans.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q1\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>2</strong> Techniques for investigating the Moon are the same as techniques for researching the ocean.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q2\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>3</strong> Measuring temperature changes in the ocean using sound is more time-consuming than other methods.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q3\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>4</strong> Hydrophones can distinguish different kinds of rain.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q4\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q5",
+        "q6",
+        "q7",
+        "q8"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-anchor\">\n                <h4>Questions 5–8</h4>\n                <p>Reading Passage 1 has seven paragraphs, <strong>A–G</strong>.</p>\n                <p>Which paragraph contains the following information?</p>\n                <p>Write the correct letter, <strong>A–G</strong>, in boxes 5–8 on your answer sheet.</p>\n                <p><strong>NB</strong> You may use any letter more than once.</p>\n\n                <div class=\"question-item\">\n                    <p><strong>5</strong> examples of things that affect the distance sound can travel in water<input type=\"text\" id=\"q5_input\"></p>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>6</strong> details of the connection between ocean temperatures and climate<input type=\"text\" id=\"q6_input\"></p>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>7</strong> details of ways in which light and sound are similar<input type=\"text\" id=\"q7_input\"></p>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>8</strong> a reference to a long-term study of different types of weather<input type=\"text\" id=\"q8_input\"></p>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "single_choice",
+      "questionIds": [
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q9-10-11-12-13-anchor\">\n                <h4>Questions 9–13</h4>\n                <p>Choose the correct letter, <strong>A, B, C</strong> or <strong>D</strong>.</p>\n                \n                <div class=\"question-item\">\n                    <p><strong>9</strong> According to the passage, who conducted research into the rate at which sound travels in water?</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q9\" type=\"radio\" value=\"A\"> A Leonardo da Vinci</label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"B\"> B Colladon and Sturm</label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"C\"> C Ewing and Worzel</label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"D\"> D Jeff Nystuen</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>10</strong> According to the passage, who conducted research into the distances certain types of sound waves travel in water?</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q10\" type=\"radio\" value=\"A\"> A Leonardo da Vinci</label>\n                        <label><input name=\"q10\" type=\"radio\" value=\"B\"> B Colladon and Sturm</label>\n                        <label><input name=\"q10\" type=\"radio\" value=\"C\"> C Ewing and Worzel</label>\n                        <label><input name=\"q10\" type=\"radio\" value=\"D\"> D Christopher Clark</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>11</strong> SOSUS allows whale researchers to</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q11\" type=\"radio\" value=\"A\"> A follow a number of whales at the same time.</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"B\"> B protect whales as they migrate.</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"C\"> C imitate whale calls of different species.</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"D\"> D change the whales' direction of travel.</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>12</strong> Finback whale calls change</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q12\" type=\"radio\" value=\"A\"> A when scientists track them.</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"B\"> B at different times of year.</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"C\"> C when whales communicate with other species.</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"D\"> D when whales come to the surface.</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>13</strong> SOSUS allows scientists to</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q13\" type=\"radio\" value=\"A\"> A make accurate maps of the ocean floor.</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"B\"> B measure water-level changes.</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"C\"> C investigate ocean currents.</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"D\"> D measure variations in temperature.</label>\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "TRUE",
+    "q2": "FALSE",
+    "q3": "NOT GIVEN",
+    "q4": "TRUE",
+    "q5": "C",
+    "q6": "F",
+    "q7": "C",
+    "q8": "G",
+    "q9": "B",
+    "q10": "C",
+    "q11": "A",
+    "q12": "B",
+    "q13": "D"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/9. P1 - Listening to the Ocean 海洋探测【次】/9. P1 - Listening to the Ocean 海洋探测【次】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/9. P1 - Listening to the Ocean 海洋探测【次】/9. P1 - Listening to the Ocean 海洋探测【次】.pdf",
+    "ieltsHtml": "IELTS/P1/Listening to the Ocean.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.812Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

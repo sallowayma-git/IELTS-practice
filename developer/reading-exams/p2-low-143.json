@@ -1,0 +1,122 @@
+{
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-low-143",
+  "meta": {
+    "title": "The impact of invasive species 入侵物种的影响",
+    "category": "P2",
+    "frequency": "low",
+    "pdfFilename": "54. P2 - The impact of invasive species 入侵物种的影响.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/54. P2 - The impact of invasive species 入侵物种的影响/",
+    "legacyFilename": "54. P2 - The impact of invasive species 入侵物种的影响.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 2</h2>\n            <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>\n            \n            <h3>The impact of invasive species</h3>\n            \n            <p><strong>A</strong> Invasive species are among the leading threats to the native wildlife of most countries, with approximately 42 percent of endangered species at risk from them. Invasive species can be any kind of organism – for example, a mammal, amphibian, fish, insect or plant – that is not native to an ecosystem. Often they reproduce and spread with great speed. Contrary to popular belief, a plant or animal classified as an invasive species does not necessarily originate in another country. For example, lake trout are native to the Great Lakes of North America, but are considered to be an invasive species in Yellowstone Lake in Wyoming because they compete with native cutthroat trout for habitat.</p>\n            <p><strong>B</strong> When a new species is introduced into an ecosystem, native wildlife may struggle to compete with it for food and other resources. Invasive species can change the food web in an ecosystem by destroying or replacing native food sources, while providing little or no food for local wildlife. In extreme cases, the invader may prey on the native species. Above all, invasive species threaten biodiversity in many habitats. For instance, the climbing plant species kudzu (which is native to East Asia) can easily replace a habitat that had a wide range of plants with a monoculture consisting solely of kudzu, as has started to happen in the south-east of the USA.</p>\n            <p><strong>C</strong> The phenomenon is not an exclusively modern one. Humans have always transferred a variety of species from one region to another, but the development of rapid means of transportation has increased the frequency of such introductions. Aquatic organisms can be shipped across the oceans, while insects can easily get into the wooden crates that are transported around the world in this way. In addition, climate change has enabled some invasive plant species to colonise new areas. Other invasive species include pets such as snakes or turtles which are intentionally set free into the wild.</p>\n            <p><strong>D</strong> Invasive species do not all present the same level of threat to native ecosystems and can be classified into three types. The first of these may be introduced species which can maintain themselves in a limited range of habitats without upsetting the ecological equilibrium of the area. Some scientists have even argued that in these cases the introduction enhances the diversity of animal and plant life in that specific area. A second group of invaders present a greater threat because their spread is at the expense of one native species. The North American grey squirrel, for example, was introduced to the UK in 1876 largely because wealthy landowners thought it would be a fashionable and attractive addition to the local wildlife on their estates. It spread widely, leading directly to the dramatic decline in the population of the native red squirrel. However, it would appear that this is the only definite negative impact of the grey squirrel.</p>\n            <p><strong>E</strong> There is a third level of threat in which the dominance of the introduced species has an extremely destructive effect on the entire ecosystem. One of the most damaging examples involved a species of comb jellyfish. Native to estuaries along the western Atlantic coast from the northern United States to the Valdés Peninsula in Argentina, this species was released from a ship into the Black Sea in Eastern Europe in 1982, almost certainly by accident. The Black Sea has levels of industrial waste which are by international standards exceptionally high. Despite this, fishing boats were still able to catch healthy numbers of fish. But when the invading jellyfish underwent a population explosion in the space of just six years, the entire marine ecosystem was transformed, and fish numbers declined dramatically because they were in competition with the jellyfish, preying on exactly the same microscopic creatures. The jellyfish had a more serious impact on the ecosystem than the heavily polluted water.</p>\n            <p><strong>F</strong> More than a century after its introduction outside its native range on the Amazon River in South America, a plant known as a water hyacinth can be found in tropical lakes, streams, and rivers around the world. Its beauty attracted botanists seeking exotic plants for botanical gardens and they imported it to a horticultural exhibition in New Orleans in 1884. Visitors were so impressed they planted it in many locations during the 1880s and 1890s, resulting in the aquatic ecosystems of the south-eastern United States being progressively colonised by vast, floating, dense carpets of water hyacinth. Today it is present around the globe, damaging boat engines and even blocking cooling pipes for power plants, occasionally leading to massive blackouts. The impact of the water hyacinth on native water plants is largely unstudied, as is unfortunately the case for most ecosystems invaded by new plant species.</p>\n            <p><strong>G</strong> In the United States, more than 7,000 introduced species have established themselves, of which at least 15 percent cause ecological damage. As the number of invasive species expands, legislation to deal with this problem is rare or non-existent in the majority of countries. Unfortunately, ordinary people outside the scientific community have a very limited understanding of the threat posed by invasive species, which means that other environmental threats receive considerably more media attention. The introduction of new species can initially seem highly desirable, but the full extent of their impact is consistently underestimated.</p>\n            <p><strong>H</strong> Although ultimately measures need to be taken at an international level, limited action is possible by individuals. One way is for people to plant native plants in their gardens rather than species from abroad. It is also useful to learn to identify invasive species, and report any sightings to wildlife organisations. Regularly cleaning clothing, boots, boats, tyres, and any other equipment regularly used outdoors can remove insects and plant parts that may introduce invasive species into new locations.</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "table_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 14–19</h4>\n                <p>Reading Passage 2 has eight paragraphs, <strong>A–H</strong>.</p>\n                <p>Which paragraph contains the following information?</p>\n                <p><em>Write the correct letter, <strong>A–H</strong>, in boxes 14–19 on your answer sheet.</em></p>\n                <div style=\"overflow-x: auto;\">\n                    <table class=\"matching-table\">\n                        <thead>\n                            <tr>\n                                <th></th>\n                                <th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>H</th>\n                            </tr>\n                        </thead>\n                        <tbody>\n                            <tr>\n                                <td><strong>14</strong> a suggestion that people have moved numerous species across the globe throughout history</td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"A\"></td><td><input type=\"radio\" name=\"q1\" value=\"B\"></td><td><input type=\"radio\" name=\"q1\" value=\"C\"></td><td><input type=\"radio\" name=\"q1\" value=\"D\"></td><td><input type=\"radio\" name=\"q1\" value=\"E\"></td><td><input type=\"radio\" name=\"q1\" value=\"F\"></td><td><input type=\"radio\" name=\"q1\" value=\"G\"></td><td><input type=\"radio\" name=\"q1\" value=\"H\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>15</strong> an example of how an ecosystem can be damaged very rapidly</td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"A\"></td><td><input type=\"radio\" name=\"q2\" value=\"B\"></td><td><input type=\"radio\" name=\"q2\" value=\"C\"></td><td><input type=\"radio\" name=\"q2\" value=\"D\"></td><td><input type=\"radio\" name=\"q2\" value=\"E\"></td><td><input type=\"radio\" name=\"q2\" value=\"F\"></td><td><input type=\"radio\" name=\"q2\" value=\"G\"></td><td><input type=\"radio\" name=\"q2\" value=\"H\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>16</strong> a description of what can be done to restrict the spread of invasive species</td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"A\"></td><td><input type=\"radio\" name=\"q3\" value=\"B\"></td><td><input type=\"radio\" name=\"q3\" value=\"C\"></td><td><input type=\"radio\" name=\"q3\" value=\"D\"></td><td><input type=\"radio\" name=\"q3\" value=\"E\"></td><td><input type=\"radio\" name=\"q3\" value=\"F\"></td><td><input type=\"radio\" name=\"q3\" value=\"G\"></td><td><input type=\"radio\" name=\"q3\" value=\"H\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>17</strong> a reference to the lack of research on the effects of some invasive species</td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"A\"></td><td><input type=\"radio\" name=\"q4\" value=\"B\"></td><td><input type=\"radio\" name=\"q4\" value=\"C\"></td><td><input type=\"radio\" name=\"q4\" value=\"D\"></td><td><input type=\"radio\" name=\"q4\" value=\"E\"></td><td><input type=\"radio\" name=\"q4\" value=\"F\"></td><td><input type=\"radio\" name=\"q4\" value=\"G\"></td><td><input type=\"radio\" name=\"q4\" value=\"H\"></td>\n                            </tr>\n                             <tr>\n                                <td><strong>18</strong> a mention of a current lack of public awareness of the problem of invasive species</td>\n                                <td><input type=\"radio\" name=\"q5\" value=\"A\"></td><td><input type=\"radio\" name=\"q5\" value=\"B\"></td><td><input type=\"radio\" name=\"q5\" value=\"C\"></td><td><input type=\"radio\" name=\"q5\" value=\"D\"></td><td><input type=\"radio\" name=\"q5\" value=\"E\"></td><td><input type=\"radio\" name=\"q5\" value=\"F\"></td><td><input type=\"radio\" name=\"q5\" value=\"G\"></td><td><input type=\"radio\" name=\"q5\" value=\"H\"></td>\n                            </tr>\n                             <tr>\n                                <td><strong>19</strong> an indication that an introduced species may benefit a specific ecosystem</td>\n                                <td><input type=\"radio\" name=\"q6\" value=\"A\"></td><td><input type=\"radio\" name=\"q6\" value=\"B\"></td><td><input type=\"radio\" name=\"q6\" value=\"C\"></td><td><input type=\"radio\" name=\"q6\" value=\"D\"></td><td><input type=\"radio\" name=\"q6\" value=\"E\"></td><td><input type=\"radio\" name=\"q6\" value=\"F\"></td><td><input type=\"radio\" name=\"q6\" value=\"G\"></td><td><input type=\"radio\" name=\"q6\" value=\"H\"></td>\n                            </tr>\n                        </tbody>\n                    </table>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "multi_choice",
+      "questionIds": [
+        "q7",
+        "q8"
+      ],
+      "bodyHtml": "<div class=\"group checkbox-question\" id=\"q7-8-anchor\">\n                <h4>Questions 20-21</h4>\n                <p>Choose <strong>TWO</strong> letters, <strong>A–E</strong>.</p>\n                <p>Which <strong>TWO</strong> reasons for the spread of invasive species are mentioned in the text?</p>\n                <div class=\"options\">\n                    <label><input type=\"checkbox\" name=\"q7_8\" value=\"A\"> A the wish to eliminate undesirable native species</label>\n                    <label><input type=\"checkbox\" name=\"q7_8\" value=\"B\"> B the recent expansion of international trade in agricultural products</label>\n                    <label><input type=\"checkbox\" name=\"q7_8\" value=\"C\"> C a lack of checks on some of the cargo on board ships</label>\n                    <label><input type=\"checkbox\" name=\"q7_8\" value=\"D\"> D the deliberate release of non-native animals</label>\n                    <label><input type=\"checkbox\" name=\"q7_8\" value=\"E\"> E an extension of their geographical range as a result of global warming</label>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "multi_choice",
+      "questionIds": [
+        "q9",
+        "q10"
+      ],
+      "bodyHtml": "<div class=\"group checkbox-question\" id=\"q9-10-anchor\">\n                <h4>Questions 22-23</h4>\n                <p>Choose <strong>TWO</strong> letters, <strong>A–E</strong>.</p>\n                <p>Which <strong>TWO</strong> statements does the writer make about the water hyacinth?</p>\n                <div class=\"options\">\n                    <label><input type=\"checkbox\" name=\"q9_10\" value=\"A\"> A It is native to almost every region of the world.</label>\n                    <label><input type=\"checkbox\" name=\"q9_10\" value=\"B\"> B It was brought to North America in the late nineteenth century.</label>\n                    <label><input type=\"checkbox\" name=\"q9_10\" value=\"C\"> C Its beauty has led people to ignore the negative effects it has.</label>\n                    <label><input type=\"checkbox\" name=\"q9_10\" value=\"D\"> D Its spread has caused some practical problems in recent years.</label>\n                    <label><input type=\"checkbox\" name=\"q9_10\" value=\"E\"> E Scientists recommended its introduction to the USA.</label>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-4",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                 <h4>Questions 24–26</h4>\n                <p>Complete the sentences below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"sentence-completion\">\n                    <p>\n                    <strong>24</strong> Kudzu has reduced the <input type=\"text\" id=\"q24_input\"> of certain areas in the south-east of the USA.\n                    </p>\n                    <p>\n                    <strong>25</strong> Some introduced species present a low level of threat if they remain within a small area and do not disturb the <input type=\"text\" id=\"q25_input\"> of the surrounding ecosystem.\n                    </p>\n                    <p>\n                    <strong>26</strong> The effect of invasive jellyfish in the Black Sea was greater than that from <input type=\"text\" id=\"q26_input\"> factories.\n                    </p>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "C",
+    "q2": "E",
+    "q3": "H",
+    "q4": "F",
+    "q5": "G",
+    "q6": "D",
+    "q7": "D",
+    "q8": "E",
+    "q9": "B",
+    "q10": "D",
+    "q11": "biodiversity",
+    "q12": "equilibrium",
+    "q13": "waste"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/54. P2 - The impact of invasive species 入侵物种的影响/54. P2 - The impact of invasive species 入侵物种的影响.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/54. P2 - The impact of invasive species 入侵物种的影响/54. P2 - The impact of invasive species 入侵物种的影响.pdf",
+    "ieltsHtml": null
+  },
+  "audit": {
+    "matchStatus": "shui_only",
+    "matchConfidence": 0,
+    "verifiedAt": "2026-03-08T16:24:30.756Z",
+    "notes": "signature:radio,checkbox,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "14",
+    "q2": "15",
+    "q3": "16",
+    "q4": "17",
+    "q5": "18",
+    "q6": "19",
+    "q7": "20",
+    "q8": "21",
+    "q9": "22",
+    "q10": "23",
+    "q11": "24",
+    "q12": "25",
+    "q13": "26"
+  }
+}
