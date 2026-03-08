@@ -2338,6 +2338,7 @@ function handleFolderSelection(event) { /* legacy stub - replaced by modal-speci
 
 
 function searchExams(query) {
+    toggleSearchClearButton(query);
     if (window.performanceOptimizer && typeof window.performanceOptimizer.debounce === 'function') {
         const debouncedSearch = window.performanceOptimizer.debounce(performSearch, 300, 'exam_search');
         debouncedSearch(query);
@@ -2345,6 +2346,30 @@ function searchExams(query) {
         // Fallback: direct call if optimizer not available
         performSearch(query);
     }
+}
+
+function toggleSearchClearButton(query) {
+    const clearButton = document.getElementById('search-clear-btn');
+    if (!clearButton) {
+        return;
+    }
+    const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+    clearButton.hidden = normalizedQuery.length === 0;
+}
+
+function clearSearch() {
+    const searchInput = document.getElementById('exam-search-input') || document.querySelector('.search-input');
+    if (searchInput) {
+        searchInput.value = '';
+        try {
+            searchInput.focus();
+        } catch (_) { }
+    }
+    if (window.browseStateManager && typeof window.browseStateManager.clearSearchState === 'function') {
+        try { window.browseStateManager.clearSearchState(); } catch (_) { }
+    }
+    toggleSearchClearButton('');
+    searchExams('');
 }
 
 function performSearch(query) {
