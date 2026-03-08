@@ -1,0 +1,125 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p3-high-178", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p3-high-178",
+  "meta": {
+    "title": "The benefits of learning an instrument 学乐器的好处",
+    "category": "P3",
+    "frequency": "high",
+    "pdfFilename": "86. P3 - The benefits of learning an instrument 学乐器的好处【高】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/86. P3 - The benefits of learning an instrument 学乐器的好处【高】/",
+    "legacyFilename": "86. P3 - The benefits of learning an instrument 学乐器的好处【高】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 3</h2>\n            <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>\n            \n            <h3>The benefits of learning an instrument</h3>\n            <h4>Studies show that learning a musical instrument can bring about significant improvements in your brain.</h4>\n            \n            <p>Are music lessons the way to get smarter? That's what a lot of parents and experts believe: studying an instrument gives children an advantage in the development of their intellectual, perceptual, and cognitive skills. This may, however, turn out to be wishful thinking. Two highly convincing trials carried out recently have found no evidence to support this idea; the IQs of pre-school children who attended several weeks of music classes as part of these studies did not differ significantly from the IQs of those who had not.</p>\n            <p>But that does not mean that the advantages of learning to play music are limited to expressing yourself, impressing friends, or just having fun. A growing number of studies show that learning an instrument in childhood can do something perhaps more valuable for the brain: it can provide benefits as we age, in the form of an added defence against memory loss, cognitive decline, and impaired hearing. Not only that, you may well get those benefits even if you haven't picked up your instrument in years, or decide to take up music for the first time in mid-life or beyond. According to neuropsychologist Brenda Hanna-Pladdy of Emory University in Atlanta, the time spent learning and practising specific types of motor control and coordination—each finger on each hand doing something different, and for wind and brass instruments, also using your mouth and breathing—contributes to the brain boost that shows up later in life.</p>\n            <p>You can even map the impact of musical training on the brain itself. In one study, Harvard neurologist Gottfried Schlaug found that the brains of adult professional musicians had a larger volume of grey matter than the brains of non-musicians had. Schlaug and colleagues also found that after 15 months of musical training in early childhood, structural brain changes associated with motor and auditory improvements begin to appear. ‘What's unique about playing an instrument is that it requires a wide array of brain regions and cognitive functions to work together simultaneously, in both the right and left hemispheres of the brain,' says Alison Balbag of the University of Southern California. ‘Playing music may be an efficient way to stimulate the brain,' she says, 'cutting across a broad swath of its regions and cognitive functions, and with ripple effects through the decades.'</p>\n            <p>More research is showing this might well be the case. In her first study on the subject, Hanna-Pladdy divided 70 healthy adults between the ages of 60 and 83 into three groups: musicians who had studied an instrument for at least ten years, those who had played between one and nine years, and a control group who had never learned an instrument. The group who had studied for at least ten years scored the highest when tested in such areas as non-verbal and visuo-spatial memory, naming objects, and taking in and adapting new information. Her follow-up study a year later confirmed those findings and further suggested that starting musical training before the age of nine and keeping at it for ten years or more may yield the greatest benefits. Interestingly, it was the group who had the lowest level of general education which showed the greatest gap in scores between those who had studied an instrument in childhood and those who had not. Hanna-Pladdy suspects that musical training could have made up for the lack of cognitive stimulation these people had.</p>\n            <p>Neuroscientist Nina Kraus of Northwestern University in Chicago has found still more positive effects of early musical training. She measured the electrical activity in the auditory brainstem of adults, aged 55 to 70, as they responded to the synthesised speech syllable 'da'. Although none of the subjects had played a musical instrument in 40 years, those who had trained the longest—between four and fourteen years—responded the fastest. ‘That's significant,' says Kraus, ‘because hearing tends to decline as we age, including the ability to quickly and accurately discern consonants, a skill crucial to understanding and participating in conversation. If your nervous system is not keeping up with the timing necessary for encoding consonants, you will lose out on the flow and meaning of the conversation, and that can potentially create a downward spiral leading to a sense of social isolation,' says Kraus. In addition, the fact that musical training appears to enhance auditory working memory might help reinforce in later life the memory capacity that facilitates verbal interaction.</p>\n            <p>In another study at the University of South Florida, assistant professor of music education Jennifer Bugos studied the impact of elementary piano instruction on adults between the ages of 60 and 85. After six months, those who had received piano lessons showed more robust gains in memory, verbal fluency, the speed at which they processed information, planning ability, and other cognitive functions compared with those who had not received the lessons. Bugos believes that playing an instrument has beneficial effects, regardless of how old the person is when he or she begins. 'Musical training contains all the components of a cognitive training programme that sometimes are overlooked,' she says. ‘And just as we work out our bodies, we should work out our minds.'</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "yes_no_not_given",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-anchor\">\n                <h4>Questions 27–30</h4>\n                <p>Do the following statements agree with the claims of the writer in Reading Passage 3?</p>\n                <p>In boxes 27–30 on your answer sheet, write:</p>\n                <ul>\n                    <li><strong>YES</strong> if the statement agrees with the claims of the writer</li>\n                    <li><strong>NO</strong> if the statement contradicts the claims of the writer</li>\n                    <li><strong>NOT GIVEN</strong> if it is impossible to say what the writer thinks about this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>27</strong> Many parents indicate that their children struggle to learn a musical instrument.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q1\" type=\"radio\" value=\"YES\"> YES</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NO\"> NO</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>28</strong> The findings of the recent research into pre-school children's IQs are unreliable.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q2\" type=\"radio\" value=\"YES\"> YES</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NO\"> NO</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>29</strong> The main reasons people take up an instrument are that they enjoy playing music and being creative.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q3\" type=\"radio\" value=\"YES\"> YES</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NO\"> NO</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>30</strong> Evidence about the long-term advantages of learning an instrument is increasing.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q4\" type=\"radio\" value=\"YES\"> YES</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NO\"> NO</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "single_choice",
+      "questionIds": [
+        "q5",
+        "q6",
+        "q7",
+        "q8",
+        "q9"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-9-anchor\">\n                <h4>Questions 31–35</h4>\n                <p>Choose the correct letter, <strong>A, B, C</strong> or <strong>D</strong>.</p>\n                \n                <div class=\"question-item\">\n                    <p><strong>31</strong> The studies mentioned in the first paragraph</p>\n                    <ul class=\"mcq-options\">\n                        <li><label><input name=\"q5\" type=\"radio\" value=\"A\"> A confirm a link between musical training and intelligence.</label></li>\n                        <li><label><input name=\"q5\" type=\"radio\" value=\"B\"> B present misleading information about the value of learning an instrument.</label></li>\n                        <li><label><input name=\"q5\" type=\"radio\" value=\"C\"> C suggest that there are undiscovered benefits to studying music.</label></li>\n                        <li><label><input name=\"q5\" type=\"radio\" value=\"D\"> D cast doubt on a belief about the effects of taking music lessons.</label></li>\n                    </ul>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>32</strong> According to the second paragraph, there may be many benefits to studying music,</p>\n                    <ul class=\"mcq-options\">\n                        <li><label><input name=\"q6\" type=\"radio\" value=\"A\"> A even for those who begin learning in adulthood.</label></li>\n                        <li><label><input name=\"q6\" type=\"radio\" value=\"B\"> B providing the person learns the correct techniques.</label></li>\n                        <li><label><input name=\"q6\" type=\"radio\" value=\"C\"> C especially if the person practises on a regular basis.</label></li>\n                        <li><label><input name=\"q6\" type=\"radio\" value=\"D\"> D particularly if the person plays a range of different instruments.</label></li>\n                    </ul>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>33</strong> The phrase ‘this might well be the case' in the fourth paragraph suggests that</p>\n                    <ul class=\"mcq-options\">\n                        <li><label><input name=\"q7\" type=\"radio\" value=\"A\"> A music lessons and long-term physical well-being may be connected.</label></li>\n                        <li><label><input name=\"q7\" type=\"radio\" value=\"B\"> B the ability to learn music may depend on neurological features.</label></li>\n                        <li><label><input name=\"q7\" type=\"radio\" value=\"C\"> C learning an instrument may have a lasting impact on brain function.</label></li>\n                        <li><label><input name=\"q7\" type=\"radio\" value=\"D\"> D older people's brains may be better suited to studying music than those of children.</label></li>\n                    </ul>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>34</strong> Which aspect of playing an instrument was included in Hanna-Pladdy's follow-up study but not in her first study?</p>\n                    <ul class=\"mcq-options\">\n                        <li><label><input name=\"q8\" type=\"radio\" value=\"A\"> A the number of years that the person had played</label></li>\n                        <li><label><input name=\"q8\" type=\"radio\" value=\"B\"> B at which age the person began having lessons</label></li>\n                        <li><label><input name=\"q8\" type=\"radio\" value=\"C\"> C the length of time since the person last played</label></li>\n                        <li><label><input name=\"q8\" type=\"radio\" value=\"D\"> D how the person had practised as a child</label></li>\n                    </ul>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>35</strong> What do Hanna-Pladdy's studies suggest about people's general education?</p>\n                     <ul class=\"mcq-options\">\n                        <li><label><input name=\"q9\" type=\"radio\" value=\"A\"> A Studying music compensates for an otherwise limited level of education.</label></li>\n                        <li><label><input name=\"q9\" type=\"radio\" value=\"B\"> B Learning to play an instrument improves educational performance.</label></li>\n                        <li><label><input name=\"q9\" type=\"radio\" value=\"C\"> C Highly educated people are more likely to benefit from music training.</label></li>\n                        <li><label><input name=\"q9\" type=\"radio\" value=\"D\"> D Level of education makes no difference to a person's musical ability.</label></li>\n                    </ul>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q10",
+        "q11",
+        "q12",
+        "q13",
+        "q14"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q10-11-12-13-14-anchor\">\n                 <h4>Questions 36–40</h4>\n                <p>Complete each sentence with the correct ending, <strong>A–F</strong>, below.</p>\n                <p><em>Write the correct letter, <strong>A-F</strong>, in boxes 36-40 on your answer sheet.</em></p>\n                \n                <div class=\"question-item\"><strong>36</strong> Brenda Hanna-Pladdy believes the cognitive benefits of music lessons are a result of <input type=\"text\" id=\"q36_input\" maxlength=\"1\"></div>\n                <div class=\"question-item\"><strong>37</strong> The research undertaken by Gottfried Schlaug focused on <input type=\"text\" id=\"q37_input\" maxlength=\"1\"></div>\n                <div class=\"question-item\"><strong>38</strong> According to Alison Balbag, playing an instrument is a unique experience because it involves <input type=\"text\" id=\"q38_input\" maxlength=\"1\"></div>\n                <div class=\"question-item\"><strong>39</strong> Nina Kraus believes there is a link between better hearing in later life and the experience of <input type=\"text\" id=\"q39_input\" maxlength=\"1\"></div>\n                <div class=\"question-item\"><strong>40</strong> Jennifer Bugos's study involved <input type=\"text\" id=\"q40_input\" maxlength=\"1\"></div>\n\n                <ul class=\"sentence-ending-options\">\n                    <li>comparing the brains of people who had never played an instrument with those who played for a living.</li>\n                    <li>activating many different parts of the brain at the same time.</li>\n                    <li>teaching a group of older people to play an instrument.</li>\n                    <li>acquiring the particular set of physical skills needed to play an instrument.</li>\n                    <li>discovering which group of people becomes the best musicians.</li>\n                    <li>having played an instrument for a considerable length of time.</li>\n                </ul>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "NOT GIVEN",
+    "q2": "NO",
+    "q3": "NOT GIVEN",
+    "q4": "YES",
+    "q5": "D",
+    "q6": "A",
+    "q7": "C",
+    "q8": "B",
+    "q9": "A",
+    "q10": "D",
+    "q11": "A",
+    "q12": "B",
+    "q13": "F",
+    "q14": "C"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/86. P3 - The benefits of learning an instrument 学乐器的好处【高】/86. P3 - The benefits of learning an instrument 学乐器的好处【高】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/86. P3 - The benefits of learning an instrument 学乐器的好处【高】/86. P3 - The benefits of learning an instrument 学乐器的好处【高】.pdf",
+    "ieltsHtml": "IELTS/P3/The benefits of learning an instrument.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.807Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13",
+    "q14"
+  ],
+  "questionDisplayMap": {
+    "q1": "27",
+    "q2": "28",
+    "q3": "29",
+    "q4": "30",
+    "q5": "31",
+    "q6": "32",
+    "q7": "33",
+    "q8": "34",
+    "q9": "35",
+    "q10": "36",
+    "q11": "37",
+    "q12": "38",
+    "q13": "39",
+    "q14": "40"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

@@ -1,0 +1,117 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p3-low-76", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p3-low-76",
+  "meta": {
+    "title": "Sign, Baby, Sign! 美国手语",
+    "category": "P3",
+    "frequency": "low",
+    "pdfFilename": "167. P3 - Sign, Baby, Sign! 美国手语.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/167. P3 - Sign, Baby, Sign! 美国手语/",
+    "legacyFilename": "167. P3 - Sign, Baby, Sign! 美国手语.html",
+    "questionIntroHtml": ""
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>Sign, Baby, Sign!</h2>\n            \n            <p><strong>A</strong> Language is a powerful tool that humans use for a wide variety of purposes—from expressing emotions and sharing ideas to passing down cultural values and acquiring knowledge. It is not limited to spoken words; gestures, facial expressions, and even posture all contribute to how we communicate. Language, whether signed or spoken, plays a vital role in how we engage with the world around us.</p>\n            <p><strong>B</strong> In recent years, many American schools have begun to recognize American Sign Language (ASL) as a valid foreign language credit, just like Spanish or French. This change has opened the door for hearing students to choose ASL as an academic subject, which not only gives them a practical skill but also increases their awareness of and empathy toward the Deaf community. Some educators believe this early exposure may even influence students to pursue careers in special education, speech therapy, or interpreting.</p>\n            <p><strong>C</strong> One clear benefit of learning ASL for hearing children is the opportunity for broader social interaction. Children who understand ASL can communicate with deaf peers, making their social circles more inclusive. Additionally, they may find it easier to express complex ideas or emotions non-verbally, which is helpful in noisy environments or when verbal speech isn't possible.</p>\n            <p><strong>D</strong> Dr. Marilyn Daniels, a researcher and advocate for baby sign language, has spent over two decades studying the impact of signing on early communication. While she promotes the use of sign language with infants, she emphasizes that there is no need for parents to invent their own signs. Instead, she suggests that parents use ASL or another standardized system to ensure consistency and eventual recognition by others.</p>\n            <p><strong>E</strong> Very young children often develop motor skills before verbal skills. Dr. Daniels notes that even babies as young as six months can learn to use simple signs like “milk” or “more” with their hands, long before they can articulate those words. This early form of communication can reduce frustration—for both babies and their parents—and may even accelerate speech development.</p>\n            <p><strong>F</strong> Studies have shown that hearing children exposed to sign language from an early age tend to have stronger reading skills by the time they enter primary school. It is believed that learning sign language can strengthen understanding of symbolic representation and grammar, both of which are foundational to literacy. These cognitive advantages suggest that signing benefits not only communication but academic success as well.</p>\n            <p><strong>G</strong> There remains some debate about the best approach to language instruction for deaf children. Some educators argue that speech and lip-reading should come first, while others advocate for immediate exposure to sign language. Dr. Daniels believes the latter is more effective and less frustrating for the child. She calls the idea that children must learn to lip-read before learning sign language “an outdated notion.” She, along with other advocates, stresses that deaf children have a right to a full, accessible language from birth—and that language is often sign.</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "table_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6",
+        "q7"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-anchor\">\n                <h4>Questions 27–33</h4>\n                <p>Reading Passage 3 has seven paragraphs, <strong>A–G</strong>.</p>\n                <p>Which paragraph contains the following information?</p>\n                <p><em>Write the correct letter, <strong>A–G</strong>, in boxes 27–33 on your answer sheet. <br><strong>NB</strong> You may use any letter more than once.</em></p>\n                <div style=\"overflow-x: auto;\">\n                    <table class=\"matching-table\">\n                        <thead>\n                            <tr>\n                                <th></th>\n                                <th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th>\n                            </tr>\n                        </thead>\n                        <tbody>\n                            <tr>\n                                <td><strong>27</strong> A statement about the different things people use language for</td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"A\"></td><td><input type=\"radio\" name=\"q1\" value=\"B\"></td><td><input type=\"radio\" name=\"q1\" value=\"C\"></td><td><input type=\"radio\" name=\"q1\" value=\"D\"></td><td><input type=\"radio\" name=\"q1\" value=\"E\"></td><td><input type=\"radio\" name=\"q1\" value=\"F\"></td><td><input type=\"radio\" name=\"q1\" value=\"G\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>28</strong> How knowing ASL may benefit students in their future subject choices</td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"A\"></td><td><input type=\"radio\" name=\"q2\" value=\"B\"></td><td><input type=\"radio\" name=\"q2\" value=\"C\"></td><td><input type=\"radio\" name=\"q2\" value=\"D\"></td><td><input type=\"radio\" name=\"q2\" value=\"E\"></td><td><input type=\"radio\" name=\"q2\" value=\"F\"></td><td><input type=\"radio\" name=\"q2\" value=\"G\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>29</strong> An assertion that deaf children have a right to be taught a sign language</td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"A\"></td><td><input type=\"radio\" name=\"q3\" value=\"B\"></td><td><input type=\"radio\" name=\"q3\" value=\"C\"></td><td><input type=\"radio\" name=\"q3\" value=\"D\"></td><td><input type=\"radio\" name=\"q3\" value=\"E\"></td><td><input type=\"radio\" name=\"q3\" value=\"F\"></td><td><input type=\"radio\" name=\"q3\" value=\"G\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>30</strong> An observation regarding the ability of small children to use their hands</td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"A\"></td><td><input type=\"radio\" name=\"q4\" value=\"B\"></td><td><input type=\"radio\" name=\"q4\" value=\"C\"></td><td><input type=\"radio\" name=\"q4\" value=\"D\"></td><td><input type=\"radio\" name=\"q4\" value=\"E\"></td><td><input type=\"radio\" name=\"q4\" value=\"F\"></td><td><input type=\"radio\" name=\"q4\" value=\"G\"></td>\n                            </tr>\n                             <tr>\n                                <td><strong>31</strong> The advantage for hearing children of knowing ASL for wider social interaction</td>\n                                <td><input type=\"radio\" name=\"q5\" value=\"A\"></td><td><input type=\"radio\" name=\"q5\" value=\"B\"></td><td><input type=\"radio\" name=\"q5\" value=\"C\"></td><td><input type=\"radio\" name=\"q5\" value=\"D\"></td><td><input type=\"radio\" name=\"q5\" value=\"E\"></td><td><input type=\"radio\" name=\"q5\" value=\"F\"></td><td><input type=\"radio\" name=\"q5\" value=\"G\"></td>\n                            </tr>\n                             <tr>\n                                <td><strong>32</strong> Different views on when deaf children should be taught to speak</td>\n                                <td><input type=\"radio\" name=\"q6\" value=\"A\"></td><td><input type=\"radio\" name=\"q6\" value=\"B\"></td><td><input type=\"radio\" name=\"q6\" value=\"C\"></td><td><input type=\"radio\" name=\"q6\" value=\"D\"></td><td><input type=\"radio\" name=\"q6\" value=\"E\"></td><td><input type=\"radio\" name=\"q6\" value=\"F\"></td><td><input type=\"radio\" name=\"q6\" value=\"G\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>33</strong> An observation about the reading ability of primary-school-age hearing children who have been taught ASL</td>\n                                <td><input type=\"radio\" name=\"q7\" value=\"A\"></td><td><input type=\"radio\" name=\"q7\" value=\"B\"></td><td><input type=\"radio\" name=\"q7\" value=\"C\"></td><td><input type=\"radio\" name=\"q7\" value=\"D\"></td><td><input type=\"radio\" name=\"q7\" value=\"E\"></td><td><input type=\"radio\" name=\"q7\" value=\"F\"></td><td><input type=\"radio\" name=\"q7\" value=\"G\"></td>\n                            </tr>\n                        </tbody>\n                    </table>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13",
+        "q14"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q8-9-10-11-12-13-14-anchor\">\n                <h4>Questions 34–40</h4>\n                <p>Do the following statements agree with the information given in Reading Passage 3?</p>\n                <ul style=\"list-style: none; padding-left: 0;\">\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information on this</li>\n                </ul>\n                <div class=\"question-item\">\n                    <p><strong>34</strong> Dr. Daniels believes that parents should make up their own gestures to communicate with their babies.</p>\n                    <div class=\"radio-options\" style=\"flex-direction: row; gap: 16px;\">\n                        <label><input name=\"q8\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>35</strong> American Sign Language is the most widely used sign language in the world.</p>\n                     <div class=\"radio-options\" style=\"flex-direction: row; gap: 16px;\">\n                        <label><input name=\"q9\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>36</strong> For hearing children in America, learning American Sign Language is an equivalent option to learning a foreign language.</p>\n                     <div class=\"radio-options\" style=\"flex-direction: row; gap: 16px;\">\n                        <label><input name=\"q10\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q10\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q10\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>37</strong> Brain research indicates that vocabulary is more easily learned than grammar.</p>\n                     <div class=\"radio-options\" style=\"flex-direction: row; gap: 16px;\">\n                        <label><input name=\"q11\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>38</strong> First and second languages are stored on different sides of the brain.</p>\n                     <div class=\"radio-options\" style=\"flex-direction: row; gap: 16px;\">\n                        <label><input name=\"q12\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>39</strong> Children have less difficulty learning to make signs than learning to make sounds.</p>\n                     <div class=\"radio-options\" style=\"flex-direction: row; gap: 16px;\">\n                        <label><input name=\"q13\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>40</strong> According to Dr. Daniels, the view that deaf children must learn lip-reading before sign language is old-fashioned.</p>\n                     <div class=\"radio-options\" style=\"flex-direction: row; gap: 16px;\">\n                        <label><input name=\"q14\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q14\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q14\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "A",
+    "q2": "B",
+    "q3": "G",
+    "q4": "E",
+    "q5": "C",
+    "q6": "G",
+    "q7": "F",
+    "q8": "FALSE",
+    "q9": "NOT GIVEN",
+    "q10": "TRUE",
+    "q11": "NOT GIVEN",
+    "q12": "NOT GIVEN",
+    "q13": "TRUE",
+    "q14": "TRUE"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/167. P3 - Sign, Baby, Sign! 美国手语/167. P3 - Sign, Baby, Sign! 美国手语.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/167. P3 - Sign, Baby, Sign! 美国手语/167. P3 - Sign, Baby, Sign! 美国手语.pdf",
+    "ieltsHtml": "IELTS/P3/Sign, Baby, Sign!.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.643Z",
+    "notes": "signature:radio,textarea,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13",
+    "q14"
+  ],
+  "questionDisplayMap": {
+    "q1": "27",
+    "q2": "28",
+    "q3": "29",
+    "q4": "30",
+    "q5": "31",
+    "q6": "32",
+    "q7": "33",
+    "q8": "34",
+    "q9": "35",
+    "q10": "36",
+    "q11": "37",
+    "q12": "38",
+    "q13": "39",
+    "q14": "40"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

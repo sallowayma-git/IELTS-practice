@@ -1,0 +1,121 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p2-high-136", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-high-136",
+  "meta": {
+    "title": "Solving the problem of waste disposal 垃圾处理",
+    "category": "P2",
+    "frequency": "high",
+    "pdfFilename": "48. P2 - Solving the problem of waste disposal 垃圾处理【高】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/48. P2 - Solving the problem of waste disposal 垃圾处理【高】/",
+    "legacyFilename": "48. P2 - Solving the problem of waste disposal 垃圾处理【高】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 2</h2>\n            <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 on the following pages.</p>\n            \n            <h3>Solving the problem of waste disposal</h3>\n            <p><em>With the amount of rubbish being produced around the world increasing, Mark Rowe asks whether a new generation of incineration plants can help to solve the problem</em></p>\n            \n            <p><strong>A</strong> For many years, burning rubbish has been portrayed as the lazy option when it comes to dealing with the problem of waste disposal, since it sends toxic fumes into the air and appears to support a consumerist, throwaway society. Norway, however, appears to be burning its way through a sizeable chunk of Europe's municipal waste, using the heat created by this process to warm and power homes in many of its cities. Norway isn't alone: Germany, Sweden, Belgium and the Netherlands all burn significant quantities of rubbish, and across Europe there are 420 plants burning municipal waste. With Europe dumping 150 million tonnes of rubbish into landfill* every year, there would seem to be a limitless supply.</p>\n\n            <p><strong>B</strong> Those who support burning waste say that a new generation of incinerators has made it a more attractive option. Filters and scrubbing mechanisms now capture harmful substances such as mercury, hydrochloric acid and heavy metals. According to Ted Michaels, president of the US-based Energy Recovery Centre, 'There has been constant evolution in combustion engineering and emissions-control technology, and the output from these facilities is now minuscule.' Above all, however, supporters say that incineration is the only way of preventing the long-term impacts of landfill. In ten years' time, says the World Bank, humans will be generating 2.2 billion tonnes of solid waste per year. Advocates see incineration as a practical way to deal swiftly with an immediate problem.</p>\n\n            <p><strong>C</strong> Levels of waste generation vary hugely around the world. ‘It's a problem for the developed nations,' says Joergen Fenhann, a senior scientist working with the UN Environment Programme in Denmark. ‘The more you develop, the more you produce, buy and throw away.' But the growth of incineration hasn't been universally welcomed. Lars Haltbrekken, chairman of Friends of the Earth in Norway, is concerned that incineration plants appear to generate demand for their services. ‘The problem in Norway,' he explains, 'is that we have built too many waste-burning factories. So we've ended up importing waste from other countries. If you look at this in a very small perspective, it is, of course, better for the climate to burn rubbish from the UK rather than leave it in landfill there,' he continues. ‘But in a broader perspective, it's a lazy way of getting rid of waste; you don't stimulate the goals of reducing, reusing and recycling.'</p>\n\n            <p><strong>D</strong> Incineration is also at odds with EU policy, which promotes a ‘recycling hierarchy': ideally, we simply produce less waste in the first place; failing that, we reuse objects more; the next step is recycling; only then should we consider incineration, while dumping in landfill is the last resort. Dealing with the problem of waste disposal involves tracing the whole process that took the material from its inception to landfill. We used to call this the 'cradle to grave' life cycle; now, the talk is of ‘cradle to cradle' and an even more comprehensive concept known as ‘zero waste’. ‘The philosophy of cradle to cradle is about designing products that are actually good for the environment at the end of their life,' says Joan Marc Simon, European spokesman for the environmental movement GAIA. ‘You design a bottle that contains no toxins, is fully recyclable and requires the minimum amount of energy to be produced.' As Simon points out, however, without the right mechanisms in place 'nothing guarantees that this bottle will end up being properly collected and treated in the appropriate recycling facility'.</p>\n\n            <p><strong>E</strong> Tim Burns, policy manager at Keep Britain Tidy, says, 'In the UK alone, people waste £10 billion of food every year. You can argue about composting that, or not buying it in the first place - if you do that, then that's money the retailers don't get, so it's not always clear-cut.' The implications of zero waste are that we're going to have to take a good long look at those well-stocked supermarket shelves, too. ‘Supermarkets keep their shelves stocked even when demand isn't there, which means they have to pay to dispose of a lot of food,' says Burns. ‘But that cost is less to them than the cost in brand damage of having empty shelves.'</p>\n\n            <p><strong>F</strong> Recent history and changes in trends in recycling suggest that we should be prepared for unexpected developments. ‘If someone back in the 1980s had suggested what waste would be like now, they would be completely wrong,' says Richard Fisher, a PhD researcher at Cranfield University. ‘Consumerism has developed at a pace we never expected. Nobody would have said there would be so much electronic waste. But recycling has grown, too — ten years ago nobody would have predicted today's levels of recycling.' But he points out that the need to reduce waste is still a difficult message to sell to consumers. He suggests that what people are really concerned about is their loved ones and the future they face. 'Perhaps we can align the environmental message to these deep-seated values,' he says. ‘We need to look at whether it's business that drives consumers or the other way around. You need government to play a leadership role, whereas countries such as the UK seem to be stepping away from the environment in pursuit of short-term economic goals.'</p>\n            \n            <p><small>*landfill: a method of disposing of waste material by burying it</small></p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 14–19</h4>\n                <p>Reading Passage 2 has six paragraphs, <strong>A–F</strong>.</p>\n                <p>Choose the correct heading for each paragraph from the list of headings below.</p>\n                <p><em>Write the correct number, <strong>i-vii</strong>, in boxes 14–19 on your answer sheet.</em></p>\n                \n                <div class=\"matching-headings-list\">\n                    <h5>List of headings</h5>\n                    <ol type=\"i\">\n                        <li>New terminology reflecting changing attitudes to waste disposal</li>\n                        <li>Fundamental changes in behaviour in the past and future</li>\n                        <li>Ways of rewarding the public for recycling</li>\n                        <li>A surprising approach to waste disposal by several countries</li>\n                        <li>Difficult choices for individuals and businesses</li>\n                        <li>Arguments against incineration from a country that uses it</li>\n                        <li>A number of justifications for the use of incineration</li>\n                    </ol>\n                </div>\n                \n                <div class=\"matching-headings-questions\">\n                    <div class=\"question-item\">\n                        <label for=\"q14_input\"><strong>14</strong> Paragraph A</label>\n                        <input type=\"text\" id=\"q14_input\">\n                    </div>\n                    <div class=\"question-item\">\n                        <label for=\"q15_input\"><strong>15</strong> Paragraph B</label>\n                        <input type=\"text\" id=\"q15_input\">\n                    </div>\n                    <div class=\"question-item\">\n                        <label for=\"q16_input\"><strong>16</strong> Paragraph C</label>\n                        <input type=\"text\" id=\"q16_input\">\n                    </div>\n                    <div class=\"question-item\">\n                        <label for=\"q17_input\"><strong>17</strong> Paragraph D</label>\n                        <input type=\"text\" id=\"q17_input\">\n                    </div>\n                    <div class=\"question-item\">\n                        <label for=\"q18_input\"><strong>18</strong> Paragraph E</label>\n                        <input type=\"text\" id=\"q18_input\">\n                    </div>\n                     <div class=\"question-item\">\n                        <label for=\"q19_input\"><strong>19</strong> Paragraph F</label>\n                        <input type=\"text\" id=\"q19_input\">\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "matching",
+      "questionIds": [
+        "q7",
+        "q8",
+        "q9",
+        "q10"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q7-8-9-10-anchor\">\n                <h4>Questions 20–23</h4>\n                <p>Look at the following people (Questions 20–23) and the list of opinions below.</p>\n                <p>Match each person with the correct opinion, <strong>A–G</strong>.</p>\n                <p><em>Write the correct letter, <strong>A–G</strong>, in boxes 20–23 on your answer sheet.</em></p>\n                \n                <div class=\"match-question-item\">\n                    <p><strong>20</strong> Ted Michaels</p>\n                    <div class=\"match-dropzone\" data-question=\"q7\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>21</strong> Joergen Fenhann</p>\n                    <div class=\"match-dropzone\" data-question=\"q8\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                     <p><strong>22</strong> Joan Marc Simon</p>\n                    <div class=\"match-dropzone\" data-question=\"q9\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                    <p><strong>23</strong> Tim Burns</p>\n                    <div class=\"match-dropzone\" data-question=\"q10\"></div>\n                </div>\n\n                <div class=\"options-pool\" id=\"opinions-pool\">\n                    <strong>List of Opinions</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"A\">A Incineration does not encourage responsible attitudes to waste disposal.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"B\">B Recycling can sometimes create serious problems for the future.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"C\">C Greater consumerism leads to higher levels of waste.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"D\">D Proper systems are needed for the recycling of environmentally-friendly products.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"E\">E Landfill is better for the environment than incineration.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"F\">F Incineration of waste is now relatively harmless to the environment.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"G\">G Efforts to reduce waste may affect profits for some types of companies.</div>\n                    </div>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "summary_completion",
+      "questionIds": [
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                 <h4>Questions 24–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h5>What recent history tells us about recycling</h5>\n                    <p>\n                    Richard Fisher, a researcher from Cranfield University, points out that the pace of consumerism has increased more quickly than was predicted in the 1980s. There has, for example, been unexpected growth in waste from <strong>24</strong> <input type=\"text\" id=\"q24_input\"> products. He suggests that the need to protect the environment should be linked to basic values, and adds that it might be better if consumers had more influence over <strong>25</strong> <input type=\"text\" id=\"q25_input\"> and more direction was provided by <strong>26</strong> <input type=\"text\" id=\"q26_input\">.\n                    </p>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "iv",
+    "q2": "vii",
+    "q3": "vi",
+    "q4": "i",
+    "q5": "v",
+    "q6": "ii",
+    "q7": "F",
+    "q8": "C",
+    "q9": "D",
+    "q10": "G",
+    "q11": "electronic",
+    "q12": "business",
+    "q13": "government"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/48. P2 - Solving the problem of waste disposal 垃圾处理【高】/48. P2 - Solving the problem of waste disposal 垃圾处理【高】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/48. P2 - Solving the problem of waste disposal 垃圾处理【高】/48. P2 - Solving the problem of waste disposal 垃圾处理【高】.pdf",
+    "ieltsHtml": "IELTS/P2/Solving the problem of waste disposal.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.745Z",
+    "notes": "signature:text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "14",
+    "q2": "15",
+    "q3": "16",
+    "q4": "17",
+    "q5": "18",
+    "q6": "19",
+    "q7": "20",
+    "q8": "21",
+    "q9": "22",
+    "q10": "23",
+    "q11": "24",
+    "q12": "25",
+    "q13": "26"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

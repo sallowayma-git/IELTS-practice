@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IELTS 阅读练习</title>
+    <style>
+        :root {
+            --line: #d7dde5;
+            --panel: #ffffff;
+            --panel-alt: #edf2f9;
+            --text: #1f2937;
+            --muted: #64748b;
+            --accent: #2563eb;
+            --success: #15803d;
+            --danger: #b91c1c;
+            --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { font-size: 16px; }
+        body {
+            font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+            background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            padding-bottom: 72px;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 22px;
+            background: rgba(255, 255, 255, 0.94);
+            border-bottom: 1px solid var(--line);
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+
+        .header h1 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            line-height: 1.4;
+        }
+
+        .header p {
+            font-size: 0.92rem;
+            color: var(--muted);
+        }
+
+        .header-content {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        #timer,
+        .header-btn {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--panel);
+            padding: 8px 12px;
+            font-size: 0.92rem;
+            color: var(--text);
+        }
+
+        .header-btn {
+            cursor: pointer;
+        }
+
+        .shell {
+            display: flex;
+            height: calc(100vh - 67px - 72px);
+            width: 100%;
+        }
+
+        .pane {
+            overflow: auto;
+            background: var(--panel);
+            padding: 22px;
+        }
+
+        #left {
+            width: 50%;
+            min-width: 320px;
+        }
+
+        #divider {
+            flex: 0 0 8px;
+            background: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
+            border-left: 1px solid var(--line);
+            border-right: 1px solid var(--line);
+            cursor: ew-resize;
+        }
+
+        #right {
+            flex: 1;
+            min-width: 320px;
+            background: var(--panel-alt);
+        }
+
+        #left p,
+        #right p {
+            line-height: 1.7;
+            margin: 0 0 14px;
+        }
+
+        .group,
+        .unified-group {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            padding: 18px;
+            margin-bottom: 18px;
+        }
+
+        .question-item,
+        .match-question-item,
+        .choice-item {
+            margin-bottom: 12px;
+        }
+
+        .paragraph-dropzone,
+        .match-dropzone {
+            min-height: 40px;
+            border: 2px dashed #93c5fd;
+            border-radius: 10px;
+            background: #eff6ff;
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        .paragraph-dropzone.drag-over,
+        .match-dropzone.drag-over {
+            border-color: var(--accent);
+            background: #dbeafe;
+        }
+
+        .paragraph-dropzone.dropzone-filled,
+        .match-dropzone.dropzone-filled {
+            border-style: solid;
+        }
+
+        .paragraph-label {
+            font-size: 0.9rem;
+            color: var(--muted);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .pool-items,
+        .dropped-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .pool-items {
+            min-height: 40px;
+        }
+
+        .pool-items.drag-over {
+            border-color: var(--accent);
+            background: rgba(37, 99, 235, 0.08);
+        }
+
+        .dropped-items:empty::after {
+            content: "拖到这里";
+            font-size: 0.82rem;
+            color: #7b8a98;
+            letter-spacing: 0.02em;
+        }
+
+        .drag-item {
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            background: #eff6ff;
+            padding: 6px 10px;
+            cursor: grab;
+            font-size: 0.9rem;
+            user-select: none;
+        }
+
+        .drag-item.dragging {
+            opacity: 0.55;
+        }
+
+        .drag-item--assigned {
+            border-style: solid;
+        }
+
+        .drag-item[draggable="false"] {
+            cursor: pointer;
+            border-style: solid;
+        }
+
+        .practice-nav {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 18px;
+            background: rgba(255, 255, 255, 0.96);
+            border-top: 1px solid var(--line);
+            box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.06);
+            z-index: 2000;
+        }
+
+        .practice-nav .title {
+            font-weight: 700;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .practice-nav .questions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .q-item,
+        .practice-nav .controls button {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--panel);
+            padding: 8px 12px;
+            cursor: pointer;
+            min-width: 42px;
+        }
+
+        .q-item.answered { border-color: var(--accent); color: var(--accent); }
+        .q-item.correct { border-color: #86efac; color: var(--success); background: #f0fdf4; }
+        .q-item.incorrect { border-color: #fca5a5; color: var(--danger); background: #fef2f2; }
+
+        .practice-nav .controls {
+            margin-left: auto;
+            display: flex;
+            gap: 10px;
+        }
+
+        .practice-nav .controls .primary {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+
+        #results {
+            display: none;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            padding: 18px;
+            margin-top: 18px;
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            font-size: 0.92rem;
+        }
+
+        .results-table th,
+        .results-table td {
+            border: 1px solid var(--line);
+            padding: 8px 10px;
+            text-align: center;
+        }
+
+        .result-correct { color: var(--success); font-weight: 700; }
+        .result-incorrect { color: var(--danger); font-weight: 700; }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.12);
+            z-index: 800;
+        }
+
+        #settings-panel,
+        #notes-panel,
+        #selbar {
+            display: none;
+        }
+
+        @media (max-width: 980px) {
+            body {
+                overflow: auto;
+                padding-bottom: 112px;
+            }
+
+            .shell {
+                display: block;
+                height: auto;
+            }
+
+            #left,
+            #right {
+                width: 100%;
+                min-width: 0;
+            }
+
+            #divider {
+                display: none;
+            }
+
+            .practice-nav {
+                flex-wrap: wrap;
+                align-items: flex-start;
+            }
+
+            .practice-nav .controls {
+                margin-left: 0;
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1 id="exam-title">IELTS 阅读练习</h1>
+            <p id="exam-subtitle">统一阅读页</p>
+        </div>
+        <div class="header-controls">
+            <div id="timer">00:00</div>
+            <button class="header-btn" id="size-btn" type="button">字号</button>
+            <button class="header-btn" id="color-btn" type="button">颜色</button>
+            <button class="header-btn" id="note-btn" type="button">笔记</button>
+        </div>
+    </header>
+
+    <div id="settings-panel"></div>
+    <div id="notes-panel"><header><h3>Notes</h3><button id="close-note" type="button">Close</button></header><textarea></textarea></div>
+    <div class="overlay"></div>
+
+    <div class="shell">
+        <section class="pane" id="left"></section>
+        <div id="divider"></div>
+        <section class="pane" id="right">
+            <div id="question-groups"></div>
+            <div id="results"></div>
+        </section>
+    </div>
+
+    <div id="selbar">
+        <button type="button" data-role="highlight">Highlight</button>
+        <button type="button" data-role="remove-highlight">Remove</button>
+    </div>
+
+    <div class="practice-nav">
+        <div class="title">题目导航</div>
+        <div class="questions" id="question-nav"></div>
+        <div class="controls">
+            <button id="pause-btn" type="button">暂停</button>
+            <button id="reset-btn" type="button">重置</button>
+            <button id="submit-btn" class="primary" type="button">提交</button>
+        </div>
+    </div>
+
+    <script src="../js/runtime/readingExamRegistry.js"></script>
+    <script src="../assets/generated/reading-exams/manifest.js"></script>
+    <script src="../js/practice-page-ui.js"></script>
+    <script src="../js/runtime/unifiedReadingPage.js"></script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p2-medium-126", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-medium-126",
+  "meta": {
+    "title": "How are deserts formed 沙漠成因",
+    "category": "P2",
+    "frequency": "medium",
+    "pdfFilename": "39. P2 - How are deserts formed 沙漠成因【次】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/39. P2 - How are deserts formed 沙漠成因【次】/",
+    "legacyFilename": "39. P2 - How are deserts formed 沙漠成因【次】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 2</h2>\n            <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>\n            \n            <h3>How are deserts formed</h3>\n            \n            <p><strong>A</strong> A desert refers to a barren section of land, mainly in arid and semi-arid areas, where there is almost no precipitation and the environment is hostile for any creature to inhabit. Deserts have been classified in a number of ways, generally combining total precipitation, how many days the rainfall occurs, temperature, humidity, and sometimes additional factors. In some places, deserts have clear boundaries marked by rivers, mountains or other landforms, while in other places there are no clear-cut borders between deserts and other landscape features.</p>\n            <p><strong>B</strong> In arid areas where there is no covering of vegetation to protect the land, sand and dust storms frequently take place. This phenomenon often occurs along the desert margins rather than within the deserts, where there is already no finer material left. When a steady wind starts to blow, fine particles on the open ground begin vibrating. As the wind picks up, some of the particles are lifted into the air. When they fall onto the ground, they hit other particles, which are then jerked into the air in their turn, initiating a chain reaction.</p>\n            <p><strong>C</strong> There has been a great deal of publicity about how severe desertification can be, but the academic circle has never agreed on its causes. A common misunderstanding is that a shortage of precipitation causes desertification—yet land in some barren areas will soon recover after rain falls. In fact, more often than not, human activities are responsible. It is widely accepted that the explosion in world population, especially in developing countries, is the primary cause of soil degradation and desertification. As populations become denser, the cultivation of crops has expanded into progressively drier areas. These regions are especially likely to go through periods of severe drought, which explains why crop failures are common. The raising of most crops requires the natural vegetation cover to be removed first; when crop failures occur, extensive tracts of land are left devoid of plant cover and thus susceptible to wind and water erosion. Throughout the 1990s, dry-land areas experienced a population growth of 18.5 per cent, mostly in severely impoverished developing countries.</p>\n            <p><strong>D</strong> Livestock farming in semi-arid areas accelerates soil erosion and becomes one of the reasons for advancing desertification. In such areas, where the vegetation is dominated by grasses, the breeding of livestock is a major economic activity. Grasses are necessary for anchoring barren topsoil in a dry-land area. When a specific field is used to graze an excessive herd, it loses vegetation cover, and the soil is trampled as well as pulverised, leaving the topsoil exposed to destructive forces such as wind and unexpected thunderstorms. For centuries, nomads have grazed their flocks and herds wherever pasture could be found, and oases have offered opportunities for a more settled way of living. For some nomads, wherever they move, the desert follows.</p>\n            <p><strong>E</strong> Trees are of great importance when it comes to maintaining topsoil and slowing down wind speed. In many Asian countries, firewood is the chief fuel used for cooking and heating, which has caused uncontrolled clear-cutting of forests in dry-land ecosystems. When too many trees are cut down, windstorms and dust storms tend to occur.</p>\n            <p><strong>F</strong> What is worse, political conflicts and wars can also contribute to desertification. To escape invading enemies, refugees often move into some of the most vulnerable ecosystems on the planet. They bring along their traditional cultivation practices, which may not be suitable for their new settlements.</p>\n            <p><strong>G</strong> In the 20th century, one state in the United States had a large section of farmland that turned into desert. Since then, measures have been enforced so that such a phenomenon will not happen again. To avoid the recurrence of desertification, people must find livelihoods that do not rely on traditional land uses, are less demanding on local natural resources, yet can still generate viable income. Such livelihoods include, but are not limited to, dry-land aquaculture for the raising of fish, crustaceans and industrial compounds derived from micro-algae, greenhouse agriculture, and activities related to tourism. Another way to prevent desertification is to create economic prospects in the city centres of dry-lands and in areas outside them. Changing the wider economic and institutional structures so that people have new ways to support themselves would help alleviate the pressures that drive desertification.</p>\n            <p><strong>H</strong> In today's society, new technologies are being used to address the problems brought about by desertification. Satellites, for example, have been utilised to investigate the influence that people and livestock have on our planet. However, this does not mean that alternative technologies are not needed to help tackle the processes of desertification.</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "table_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6",
+        "q7"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-anchor\">\n                <h4>Questions 14–20</h4>\n                <p>Reading Passage 2 has eight paragraphs, <strong>A–H</strong>.</p>\n                <p>Which paragraph contains the following information?</p>\n                <p><em>Write the correct letter, <strong>A–H</strong>, in boxes 14–20 on your answer sheet.</em></p>\n                <p><strong>NB</strong> You may use any letter more than once.</p>\n                <div style=\"overflow-x: auto;\">\n                    <table class=\"matching-table\">\n                        <thead>\n                            <tr>\n                                <th style=\"min-width: 250px;\"></th>\n                                <th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>H</th>\n                            </tr>\n                        </thead>\n                        <tbody>\n                            <tr>\n                                <td><strong>14</strong> a reference to the irregular movement of particles</td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"A\"></td><td><input type=\"radio\" name=\"q1\" value=\"B\"></td><td><input type=\"radio\" name=\"q1\" value=\"C\"></td><td><input type=\"radio\" name=\"q1\" value=\"D\"></td><td><input type=\"radio\" name=\"q1\" value=\"E\"></td><td><input type=\"radio\" name=\"q1\" value=\"F\"></td><td><input type=\"radio\" name=\"q1\" value=\"G\"></td><td><input type=\"radio\" name=\"q1\" value=\"H\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>15</strong> mention of productive land turning into desert in the 20th century</td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"A\"></td><td><input type=\"radio\" name=\"q2\" value=\"B\"></td><td><input type=\"radio\" name=\"q2\" value=\"C\"></td><td><input type=\"radio\" name=\"q2\" value=\"D\"></td><td><input type=\"radio\" name=\"q2\" value=\"E\"></td><td><input type=\"radio\" name=\"q2\" value=\"F\"></td><td><input type=\"radio\" name=\"q2\" value=\"G\"></td><td><input type=\"radio\" name=\"q2\" value=\"H\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>16</strong> types of deserts</td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"A\"></td><td><input type=\"radio\" name=\"q3\" value=\"B\"></td><td><input type=\"radio\" name=\"q3\" value=\"C\"></td><td><input type=\"radio\" name=\"q3\" value=\"D\"></td><td><input type=\"radio\" name=\"q3\" value=\"E\"></td><td><input type=\"radio\" name=\"q3\" value=\"F\"></td><td><input type=\"radio\" name=\"q3\" value=\"G\"></td><td><input type=\"radio\" name=\"q3\" value=\"H\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>17</strong> mention of technical methods used to tackle the problems of deserts</td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"A\"></td><td><input type=\"radio\" name=\"q4\" value=\"B\"></td><td><input type=\"radio\" name=\"q4\" value=\"C\"></td><td><input type=\"radio\" name=\"q4\" value=\"D\"></td><td><input type=\"radio\" name=\"q4\" value=\"E\"></td><td><input type=\"radio\" name=\"q4\" value=\"F\"></td><td><input type=\"radio\" name=\"q4\" value=\"G\"></td><td><input type=\"radio\" name=\"q4\" value=\"H\"></td>\n                            </tr>\n                             <tr>\n                                <td><strong>18</strong> the influence of migration on desertification</td>\n                                <td><input type=\"radio\" name=\"q5\" value=\"A\"></td><td><input type=\"radio\" name=\"q5\" value=\"B\"></td><td><input type=\"radio\" name=\"q5\" value=\"C\"></td><td><input type=\"radio\" name=\"q5\" value=\"D\"></td><td><input type=\"radio\" name=\"q5\" value=\"E\"></td><td><input type=\"radio\" name=\"q5\" value=\"F\"></td><td><input type=\"radio\" name=\"q5\" value=\"G\"></td><td><input type=\"radio\" name=\"q5\" value=\"H\"></td>\n                            </tr>\n                             <tr>\n                                <td><strong>19</strong> lack of agreement among scientists about the causes of desertification</td>\n                                <td><input type=\"radio\" name=\"q6\" value=\"A\"></td><td><input type=\"radio\" name=\"q6\" value=\"B\"></td><td><input type=\"radio\" name=\"q6\" value=\"C\"></td><td><input type=\"radio\" name=\"q6\" value=\"D\"></td><td><input type=\"radio\" name=\"q6\" value=\"E\"></td><td><input type=\"radio\" name=\"q6\" value=\"F\"></td><td><input type=\"radio\" name=\"q6\" value=\"G\"></td><td><input type=\"radio\" name=\"q6\" value=\"H\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>20</strong> a description of the harmful effects of farming practices</td>\n                                <td><input type=\"radio\" name=\"q7\" value=\"A\"></td><td><input type=\"radio\" name=\"q7\" value=\"B\"></td><td><input type=\"radio\" name=\"q7\" value=\"C\"></td><td><input type=\"radio\" name=\"q7\" value=\"D\"></td><td><input type=\"radio\" name=\"q7\" value=\"E\"></td><td><input type=\"radio\" name=\"q7\" value=\"F\"></td><td><input type=\"radio\" name=\"q7\" value=\"G\"></td><td><input type=\"radio\" name=\"q7\" value=\"H\"></td>\n                            </tr>\n                        </tbody>\n                    </table>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q8-9-10-11-12-13-anchor\">\n                <h4>Questions 21–26</h4>\n                <p>Do the following statements agree with the information given in Reading Passage 2?</p>\n                <p><em>In boxes 21–26 on your answer sheet, write</em></p>\n                <ul style=\"list-style-type: none; padding-left: 0; line-height: 1.6;\">\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information on this</li>\n                </ul>\n\n                <div class=\"tfng-question\">\n                    <p><strong>21</strong> It is difficult to ascertain where deserts end in some areas.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q8\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q8\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q8\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"tfng-question\">\n                    <p><strong>22</strong> The media is uninterested in the problems of desertification.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q9\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q9\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q9\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"tfng-question\">\n                    <p><strong>23</strong> The most common cause of desertification is a lack of rainfall.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q10\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q10\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q10\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"tfng-question\">\n                    <p><strong>24</strong> Farming animals in semi-arid areas will increase soil erosion.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q11\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q11\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q11\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"tfng-question\">\n                    <p><strong>25</strong> People in Asian countries no longer use firewood as their chief fuel.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q12\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q12\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q12\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"tfng-question\">\n                    <p><strong>26</strong> Technology for studying the relationship between people, livestock and desertification has not yet been invented.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q13\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q13\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q13\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "B",
+    "q2": "G",
+    "q3": "A",
+    "q4": "H",
+    "q5": "F",
+    "q6": "C",
+    "q7": "D",
+    "q8": "TRUE",
+    "q9": "FALSE",
+    "q10": "FALSE",
+    "q11": "TRUE",
+    "q12": "FALSE",
+    "q13": "FALSE"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/39. P2 - How are deserts formed 沙漠成因【次】/39. P2 - How are deserts formed 沙漠成因【次】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/39. P2 - How are deserts formed 沙漠成因【次】/39. P2 - How are deserts formed 沙漠成因【次】.pdf",
+    "ieltsHtml": "IELTS/P2/How are deserts formed.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.726Z",
+    "notes": "signature:radio,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "14",
+    "q2": "15",
+    "q3": "16",
+    "q4": "17",
+    "q5": "18",
+    "q6": "19",
+    "q7": "20",
+    "q8": "21",
+    "q9": "22",
+    "q10": "23",
+    "q11": "24",
+    "q12": "25",
+    "q13": "26"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

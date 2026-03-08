@@ -1,0 +1,115 @@
+{
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-medium-146",
+  "meta": {
+    "title": "The Tasmanian Tiger 袋狼",
+    "category": "P2",
+    "frequency": "medium",
+    "pdfFilename": "57. P2 - The Tasmanian Tiger 袋狼【次】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/57. P2 - The Tasmanian Tiger 袋狼【次】/",
+    "legacyFilename": "57. P2 - The Tasmanian Tiger 袋狼【次】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 2</h2>\n            <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>\n            \n            <h3>The Tasmanian Tiger</h3>\n            \n            <p>The Tasmanian tiger, or thylacine, was a carnivorous marsupial (a meat-eating mammal which carries its young in a pouch). It was given the name ‘tiger' because it had striped fur, and because it was ferocious. Between 24 million and 15 million years ago, many types of thylacine roamed across Australia, their powerful jaws playing a role in maintaining a balance in the ecosystems of their day. Some species were fox-sized, while others were barely the size of kittens.</p>\n            <p>But when a period of climate change cooled Australia about 12 million years ago, the numbers of these ancient thylacines began to decline. By about 3 million years ago, only one species was left. About 4,000 years ago, these vanished completely from the Australian mainland, so that Tasmania, a large island to the south of Australia, became the last remaining place where thylacines existed. They ruled the island's animal life unchallenged until Europeans—with sheep, dogs and a great indifference to native flora and fauna—seem to have brought about their extinction. In 1936, the last captive Tasmanian tiger died in Hobart Zoo. Since then, many expeditions have searched for tigers in the Tasmanian bush, but no definitive evidence has been found. Despite this, there are many who keep searching.</p>\n            <p>In 1981, Dutch-born zoologist Hans Naarding was in Tasmania conducting a survey of Latham's snipe, a species of endangered bird. One night, he saw an animal in the light from the searchlight mounted on his vehicle. He described it as about the size of a large dog, but with slightly sloping hindquarters and a fairly thick tail continuing straight on from its backbone. He said that it had 12 distinct stripes on its back, running down to the point where the tail began. He reported the sighting to the Director of Tasmania's National Parks. “When the news broke,” said Naarding, “I was besieged by television crews, including four or five from Japan, and others from the United Kingdom, Germany, New Zealand and South America.\"</p>\n            <p>Government and private search parties combed the region, but no further sightings were made. The tiger, as always, had escaped to its lair—a place that many insist exists only in the imagination. Others disagree: there have been more than 4,000 claimed sightings of the animal since it supposedly died out, and the average number of claims reported to the authorities each year is now 150. So is it out there? Even experts differ in opinion.</p>\n            <p>Randolph Rose, Associate Professor of Zoology at the University of Tasmania, says that he once dreamed of seeing a thylacine, but is now convinced that his dream will go unfulfilled. The consensus among conservationists is that any animal with a population base of less than 1,000 is headed for extinction within 60 years. “Sixty years ago,” he says, “there was only one thylacine that we know of, and that was in Hobart Zoo. Take it from me, the tiger is gone.\" But Dr David Pemberton, curator of zoology at the Tasmanian Museum, states that, despite scientific thinking that a relatively large population is required to sustain a species, \"the Florida panther is down to a dozen or so animals, and, while it does have some inbreeding problems, it's still ticking along! After all, animals can be notoriously elusive. The strange fish known as the coelacanth, with its 'proto legs,' was thought to have died out with the dinosaurs 700 million years ago, until a specimen was dragged to the surface in a shark net off the coast of South Africa in 1938.\"</p>\n            <p>Wildlife biologist Nick Mooney has the unenviable task of investigating all so-called sightings of the tiger. It was Mooney who was first consulted in late February 2005 about the authenticity of new digital photographic images of a thylacine allegedly taken by a tourist. \"On face value,” Mooney says, “this particular account of a sighting and the photographs submitted as proof amount to one of the most convincing cases for the species' survival that I have seen.” Many other ‘sightings' have been hoaxes, and many sincere seekers are victims of obsession. “It is a blind optimism that something is, rather than cynicism that something isn't,” Mooney says. “If something crosses the road, it's not a case of 'I wonder what that was?' Rather, it is a case of ‘That's a thylacine!\"</p>\n            <p>However, Mooney treats all sightings at face value. “I never try to embarrass people,” he says, \"but the fact that I don't pack the car immediately after they telephone can often be taken as ridicule. Obsessive characters get angry that someone in my position is not out there when they think the thylacine is there.”</p>\n            <p>Hans Naarding, whose sighting of a striped animal two decades ago was the highlight of a lifetime of animal spotting, remains puzzled by the time and money people waste on tiger searches. He says resources would be better applied to saving another endangered animal, the Tasmanian devil, and helping declining migratory bird populations. Could the thylacine still be out there? “Sure,” Naarding says. “I know the vast south-west wilderness of Tasmania well. They could survive ... [But] if this is the case, it will not be long before they do disappear completely.” Naarding believes that any discovery of surviving thylacines would be \"rather pointless.” “How do you bring a species back from extinction?” he asks. \"What could you do with it? If there are thylacines out there, they are better off right where they are.\"</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "summary_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Questions 14–18</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS AND/OR A NUMBER</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <p>\n                    The thylacine was a dog-like animal which had a <strong>14</strong> <input type=\"text\" id=\"q14_input\"> coat and was carnivorous. It was originally spread widely throughout the mainland of <strong>15</strong> <input type=\"text\" id=\"q15_input\">. However, the number of thylacine decreased in that area around <strong>16</strong> <input type=\"text\" id=\"q16_input\"> ago because of climate change.\n                    </p>\n                    <p>\n                    In the end, thylacines were found only on the island of <strong>17</strong> <input type=\"text\" id=\"q17_input\">, until the arrival of <strong>18</strong> <input type=\"text\" id=\"q18_input\"> with their farming practices brought about a drastic reduction in thylacine numbers. The last one is thought to have died in Hobart Zoo in 1936.\n                    </p>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "single_choice",
+      "questionIds": [
+        "q6",
+        "q7",
+        "q8",
+        "q9",
+        "q10",
+        "q11"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q6-7-8-9-10-11-anchor\">\n                 <h4>Questions 19–24</h4>\n                <p>Look at the following statements (Questions 19–24) and the list of people below.</p>\n                <p>Match each statement with the correct person, <strong>A, B, C</strong> or <strong>D</strong>.</p>\n                <p><em>NB You may use any letter more than once.</em></p>\n                \n                <ul class=\"people-list\">\n                    <li><strong>List of People</strong></li>\n                    <li><strong>A</strong> &nbsp; Hans Naarding</li>\n                    <li><strong>B</strong> &nbsp; Randolph Rose</li>\n                    <li><strong>C</strong> &nbsp; David Pemberton</li>\n                    <li><strong>D</strong> &nbsp; Nick Mooney</li>\n                </ul>\n\n                <div class=\"matching-question-item\">\n                    <p><strong>19</strong> There is no longer any hope of finding a surviving Tasmanian tiger.</p>\n                    <div class=\"matching-options\">\n                        <label><input type=\"radio\" name=\"q6\" value=\"A\"> A</label>\n                        <label><input type=\"radio\" name=\"q6\" value=\"B\"> B</label>\n                        <label><input type=\"radio\" name=\"q6\" value=\"C\"> C</label>\n                        <label><input type=\"radio\" name=\"q6\" value=\"D\"> D</label>\n                    </div>\n                </div>\n                <div class=\"matching-question-item\">\n                    <p><strong>20</strong> It would be preferable not to disturb any surviving Tasmanian tigers.</p>\n                     <div class=\"matching-options\">\n                        <label><input type=\"radio\" name=\"q7\" value=\"A\"> A</label>\n                        <label><input type=\"radio\" name=\"q7\" value=\"B\"> B</label>\n                        <label><input type=\"radio\" name=\"q7\" value=\"C\"> C</label>\n                        <label><input type=\"radio\" name=\"q7\" value=\"D\"> D</label>\n                    </div>\n                </div>\n                <div class=\"matching-question-item\">\n                    <p><strong>21</strong> Many who claim to have seen Tasmanian tigers are not objective witnesses.</p>\n                     <div class=\"matching-options\">\n                        <label><input type=\"radio\" name=\"q8\" value=\"A\"> A</label>\n                        <label><input type=\"radio\" name=\"q8\" value=\"B\"> B</label>\n                        <label><input type=\"radio\" name=\"q8\" value=\"C\"> C</label>\n                        <label><input type=\"radio\" name=\"q8\" value=\"D\"> D</label>\n                    </div>\n                </div>\n                <div class=\"matching-question-item\">\n                    <p><strong>22</strong> Expert estimates of numbers needed to ensure species survival may be inaccurate.</p>\n                     <div class=\"matching-options\">\n                        <label><input type=\"radio\" name=\"q9\" value=\"A\"> A</label>\n                        <label><input type=\"radio\" name=\"q9\" value=\"B\"> B</label>\n                        <label><input type=\"radio\" name=\"q9\" value=\"C\"> C</label>\n                        <label><input type=\"radio\" name=\"q9\" value=\"D\"> D</label>\n                    </div>\n                </div>\n                <div class=\"matching-question-item\">\n                    <p><strong>23</strong> There is a great deal of international interest in Tasmanian tiger stories.</p>\n                     <div class=\"matching-options\">\n                        <label><input type=\"radio\" name=\"q10\" value=\"A\"> A</label>\n                        <label><input type=\"radio\" name=\"q10\" value=\"B\"> B</label>\n                        <label><input type=\"radio\" name=\"q10\" value=\"C\"> C</label>\n                        <label><input type=\"radio\" name=\"q10\" value=\"D\"> D</label>\n                    </div>\n                </div>\n                <div class=\"matching-question-item\">\n                    <p><strong>24</strong> Some fresh evidence provided by a visitor to Tasmania seems credible.</p>\n                     <div class=\"matching-options\">\n                        <label><input type=\"radio\" name=\"q11\" value=\"A\"> A</label>\n                        <label><input type=\"radio\" name=\"q11\" value=\"B\"> B</label>\n                        <label><input type=\"radio\" name=\"q11\" value=\"C\"> C</label>\n                        <label><input type=\"radio\" name=\"q11\" value=\"D\"> D</label>\n                    </div>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "single_choice",
+      "questionIds": [
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q12-13-anchor\">\n                <h4>Questions 25 and 26</h4>\n                <p>Choose the correct letter, <strong>A, B, C</strong> or <strong>D</strong>.</p>\n\n                <div class=\"matching-question-item\">\n                    <p><strong>25</strong> Has Naarding's sighting of a Tasmanian tiger resulted in</p>\n                    <div class=\"multiple-choice-options\">\n                        <label><input type=\"radio\" name=\"q12\" value=\"A\"> <strong>A</strong> the capture of the tiger.</label>\n                        <label><input type=\"radio\" name=\"q12\" value=\"B\"> <strong>B</strong> an extensive follow-up.</label>\n                        <label><input type=\"radio\" name=\"q12\" value=\"C\"> <strong>C</strong> many other sightings.</label>\n                        <label><input type=\"radio\" name=\"q12\" value=\"D\"> <strong>D</strong> the death of the tiger.</label>\n                    </div>\n                </div>\n                <div class=\"matching-question-item\">\n                    <p><strong>26</strong> The example of the coelacanth is used to show that</p>\n                    <div class=\"multiple-choice-options\">\n                        <label><input type=\"radio\" name=\"q13\" value=\"A\"> <strong>A</strong> new animal species are still evolving.</label>\n                        <label><input type=\"radio\" name=\"q13\" value=\"B\"> <strong>B</strong> animals can possess surprising physical characteristics.</label>\n                        <label><input type=\"radio\" name=\"q13\" value=\"C\"> <strong>C</strong> species of sea animals can be saved from extinction.</label>\n                        <label><input type=\"radio\" name=\"q13\" value=\"D\"> <strong>D</strong> opinions regarding the extinction of animal species can be mistaken.</label>\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "striped",
+    "q2": "australia",
+    "q3": "12 million years",
+    "q4": "tasmania",
+    "q5": "europeans",
+    "q6": "B",
+    "q7": "A",
+    "q8": "D",
+    "q9": "C",
+    "q10": "A",
+    "q11": "D",
+    "q12": "B",
+    "q13": "D"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/57. P2 - The Tasmanian Tiger 袋狼【次】/57. P2 - The Tasmanian Tiger 袋狼【次】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/57. P2 - The Tasmanian Tiger 袋狼【次】/57. P2 - The Tasmanian Tiger 袋狼【次】.pdf",
+    "ieltsHtml": "IELTS/P2/The Tasmanian Tiger.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.761Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "14",
+    "q2": "15",
+    "q3": "16",
+    "q4": "17",
+    "q5": "18",
+    "q6": "19",
+    "q7": "20",
+    "q8": "21",
+    "q9": "22",
+    "q10": "23",
+    "q11": "24",
+    "q12": "25",
+    "q13": "26"
+  }
+}

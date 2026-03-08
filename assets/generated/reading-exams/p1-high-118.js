@@ -1,0 +1,121 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-high-118", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-high-118",
+  "meta": {
+    "title": "William Gilbert and Magnetism 电磁学之父",
+    "category": "P1",
+    "frequency": "high",
+    "pdfFilename": "31. P1 - William Gilbert and Magnetism 电磁学之父【高】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/31. P1 - William Gilbert and Magnetism 电磁学之父【高】/",
+    "legacyFilename": "31. P1 - William Gilbert and Magnetism 电磁学之父【高】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>William Gilbert and Magnetism</h3>\n            \n            <div class=\"paragraph-wrapper\" id=\"q1-anchor\">\n                <div class=\"paragraph-dropzone\" data-paragraph=\"A\">\n                    <span class=\"paragraph-label\">Paragraph A (Q1):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>A</strong> The 16th and 17th centuries saw two great pioneers of modern science: Galileo and Gilbert. The impact of their findings is eminent. Gilbert was the first modern scientist, the accredited father of the science of electricity and magnetism, an Englishman of learning and a physician at the court of Elizabeth. Prior to him, all that was known of electricity and magnetism was what the ancients knew: nothing more than that the lodestone possessed magnetic properties and that amber and jet, when rubbed, would attract bits of paper or other substances of small specific gravity. However, he is less well known than he deserves.</p>\n            </div>\n            <div class=\"paragraph-wrapper\" id=\"q2-anchor\">\n                <div class=\"paragraph-dropzone\" data-paragraph=\"B\">\n                    <span class=\"paragraph-label\">Paragraph B (Q2):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>B</strong> Gilbert's birth predated Galileo's. Born into an eminent local family in Colchester, Essex, on 24 May 1544, he went to grammar school and then studied medicine at St John's College, Cambridge, graduating in 1573. Later he travelled on the Continent and eventually settled in London.</p>\n            </div>\n            <div class=\"paragraph-wrapper\" id=\"q3-anchor\">\n                 <div class=\"paragraph-dropzone\" data-paragraph=\"C\">\n                    <span class=\"paragraph-label\">Paragraph C (Q3):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>C</strong> He was a very successful and eminent doctor. All this culminated in his election as president of the Royal Society. He was also appointed personal physician to Queen Elizabeth I and was later knighted by her. He faithfully served her until her death. However, he did not outlive the Queen for long and died on 30 November 1603, only a few months after his appointment as personal physician to King James.</p>\n            </div>\n            <div class=\"paragraph-wrapper\" id=\"q4-anchor\">\n                <div class=\"paragraph-dropzone\" data-paragraph=\"D\">\n                    <span class=\"paragraph-label\">Paragraph D (Q4):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>D</strong> Gilbert was first interested in chemistry but later changed his focus because alchemy contained too great a portion of mysticism (such as the transmutation of metals). He gradually developed an interest in physics, inspired by the great minds of the ancients, particularly the knowledge the ancient Greeks had about lodestones—strange minerals with the power to attract iron. In the meantime, Britain became a major seafaring nation in 1588 when the Spanish Armada was defeated, opening the way to British settlement of America. British ships depended on the magnetic compass, yet no one understood why it worked. Did the Pole Star attract it, as Columbus once speculated; or was there a magnetic mountain at the pole, as described in the Odyssey, which ships would never approach because the sailors thought its pull would yank out all their iron nails and fittings? For nearly 20 years, William Gilbert conducted ingenious experiments to understand magnetism. His works include On the Magnet, Magnetic Bodies, and The Great Magnet of the Earth.</p>\n            </div>\n             <div class=\"paragraph-wrapper\" id=\"q5-anchor\">\n                 <div class=\"paragraph-dropzone\" data-paragraph=\"E\">\n                    <span class=\"paragraph-label\">Paragraph E (Q5):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>E</strong> Gilbert's discoveries were of great importance to modern physics. He investigated the nature of magnetism and electricity, and he even coined the word “electric\". Early beliefs about magnetism were largely entangled with superstitions—for instance, sailors believed that rubbing garlic on a lodestone could neutralise its magnetism and that even the smell of garlic would interfere with the action of a compass, which is why helmsmen were forbidden to eat it near a ship's compass. Gilbert also found that metals can be magnetised by rubbing materials such as fur on them. He named the ends of a magnet the “north pole” and “south pole”. The magnetic poles can attract or repel, depending on polarity; ordinary iron, however, is always attracted to a magnet. Though he began to study the relationship between magnetism and electricity, he did not complete this work. His research into static electricity using amber and jet only demonstrated that objects with electrical charges can attract small pieces of paper and the like. It was a French scientist named du Fay who later discovered that there are actually two electrical charges—positive and negative.</p>\n            </div>\n            <div class=\"paragraph-wrapper\" id=\"q6-anchor\">\n                 <div class=\"paragraph-dropzone\" data-paragraph=\"F\">\n                    <span class=\"paragraph-label\">Paragraph F (Q6):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>F</strong> He also questioned traditional astronomical beliefs. Though a Copernican, he did not state explicitly whether the Earth is at the centre of the universe or in orbit around the Sun. However, he believed that stars are not equidistant from the Earth but have their own Earth-like planets orbiting around them. The Earth itself is like a giant magnet, which is also why compasses always point north: they align with the planet's polarity. He likened the polarity of a magnet to the polarity of the Earth and built an entire magnetic philosophy on this analogy. In his explanation, magnetism is the soul of the Earth. Thus a perfectly spherical lodestone, when aligned with the Earth's poles, would wobble all by itself in 24 hours. Further, he believed that the Sun and other stars wobble just as the Earth does around a crystal core, and he speculated that the Moon might also be a magnet caused to orbit by its magnetic attraction to the Earth. This was perhaps the first proposal that a force might cause a heavenly orbit.</p>\n            </div>\n            <div class=\"paragraph-wrapper\" id=\"q7-anchor\">\n                 <div class=\"paragraph-dropzone\" data-paragraph=\"G\">\n                    <span class=\"paragraph-label\">Paragraph G (Q7):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>G</strong> His research method was revolutionary in that he used experiments rather than pure logic and reasoning, as the ancient Greek philosophers had done. This represented a new attitude towards scientific investigation; until then, systematic experiments were not in fashion. Because of this scientific attitude, together with his contribution to our knowledge of magnetism, a unit of magnetomotive force—also known as magnetic potential-was named the gilbert in his honour. His approach of careful observation and experimentation, rather than reliance on authoritative opinion or deductive philosophy, laid the very foundation for modern science.</p>\n            </div>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "matching",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6",
+        "q7"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-anchor\">\n                <h4>Questions 1–7</h4>\n                <p>Reading Passage 1 has seven paragraphs <strong>A–G</strong>.</p>\n                <p>Choose the correct heading for each paragraph from the list of headings below.</p>\n                <p><em>Drag a heading from the list and drop it onto the correct paragraph's answer box on the left.</em></p>\n                \n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i. Early years of Gilbert</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii. What was new about his scientific research method</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii. The development of chemistry</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv. Questioning traditional astronomy</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v. Pioneers of early science</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi. Professional and social recognition</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii. Becoming the president of the Royal Society</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii. The great works of Gilbert</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ix\">ix. His discovery about magnetism</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"x\">x. His change of focus</div>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q8",
+        "q9",
+        "q10"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q8-9-10-anchor\">\n                <h4>Questions 8–10</h4>\n                <p>Do the following statements agree with the information given in Reading Passage 1?</p>\n                \n                <div class=\"question-item\">\n                     <p><strong>8</strong> Gilbert is less famous than he should be.</p>\n                     <div class=\"options\">\n                        <label><input type=\"radio\" name=\"q8\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q8\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q8\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                     </div>\n                </div>\n                <div class=\"question-item\">\n                     <p><strong>9</strong> Gilbert was famous as a doctor before he was employed by the Queen.</p>\n                     <div class=\"options\">\n                        <label><input type=\"radio\" name=\"q9\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q9\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q9\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                     </div>\n                </div>\n                <div class=\"question-item\">\n                     <p><strong>10</strong> Gilbert lost faith in the medical theories of his time.</p>\n                     <div class=\"options\">\n                        <label><input type=\"radio\" name=\"q10\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q10\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q10\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                     </div>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "multi_choice",
+      "questionIds": [
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                <h4>Questions 11–13</h4>\n                <p>Choose <strong>THREE</strong> letters, <strong>A–F</strong>.</p>\n                <p>Which <strong>THREE</strong> of the following are parts of Gilbert's discovery?</p>\n\n                <div class=\"question-item\">\n                    <div class=\"options\">\n                        <label><input type=\"checkbox\" name=\"q11-12-13\" value=\"A\"> A. Metal can be transformed into another.</label>\n                        <label><input type=\"checkbox\" name=\"q11-12-13\" value=\"B\"> B. Garlic can remove magnetism.</label>\n                        <label><input type=\"checkbox\" name=\"q11-12-13\" value=\"C\"> C. Metals can be magnetised.</label>\n                        <label><input type=\"checkbox\" name=\"q11-12-13\" value=\"D\"> D. Stars are at different distances from the Earth.</label>\n                        <label><input type=\"checkbox\" name=\"q11-12-13\" value=\"E\"> E. The Earth wobbles on its axis.</label>\n                        <label><input type=\"checkbox\" name=\"q11-12-13\" value=\"F\"> F. There are two charges of electricity.</label>\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "v",
+    "q2": "i",
+    "q3": "vi",
+    "q4": "x",
+    "q5": "ix",
+    "q6": "iv",
+    "q7": "ii",
+    "q8": "TRUE",
+    "q9": "TRUE",
+    "q10": "NOT GIVEN",
+    "q11": "C",
+    "q12": "D",
+    "q13": "E"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/31. P1 - William Gilbert and Magnetism 电磁学之父【高】/31. P1 - William Gilbert and Magnetism 电磁学之父【高】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/31. P1 - William Gilbert and Magnetism 电磁学之父【高】/31. P1 - William Gilbert and Magnetism 电磁学之父【高】.pdf",
+    "ieltsHtml": "IELTS/P1/William Gilbert and Magnetism.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.711Z",
+    "notes": "signature:radio,checkbox,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);
