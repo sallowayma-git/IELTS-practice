@@ -1,0 +1,114 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-low-52", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-low-52",
+  "meta": {
+    "title": "Caral an ancient South American city 卡拉尔古城",
+    "category": "P1",
+    "frequency": "low",
+    "pdfFilename": "145. P1 - Caral an ancient South American city 卡拉尔古城.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/145. P1 - Caral an ancient South American city 卡拉尔古城/",
+    "legacyFilename": "145. P1 - Caral an ancient South American city 卡拉尔古城.html",
+    "questionIntroHtml": "<h3>Questions 1–6</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>Caral: an ancient South American city</h3>\n            \n            <p>Huge earth and rock mounds rise out of the desert of the Supe Valley near the coast of Peru in South America. These immense mounds appear simply to be part of the geographical landscape in this arid region squeezed between the Pacific Ocean and the Andes mountains. But looks deceive. These are actually human-made pyramids. Strong evidence indicates they are the remains of a city known as Caral that flourished nearly 5,000 years ago. If true, it would be the oldest known urban center in the Americas and among the most ancient in the world.</p>\n            <p>Research undertaken by Peruvian archaeologist Ruth Shady suggests that the 150-acre complex of pyramids, plazas and residential buildings was a thriving metropolis when Egypt's great pyramids were still being built. Though discovered in 1905, for years Caral attracted little attention, largely because archaeologists believed the structures were fairly recent. But the monumental scale of the pyramids had long interested Shady, who began excavations at the site in 1996, about 22 kilometers from the coast and 190 kilometers north of Peru's capital city of Lima.</p>\n            <p>Shady and her crew searched for broken remains of the pots and containers that most such sites contain. Not finding any only made her more excited; it meant Caral could be what archaeologists term pre-ceramic, that is, existing before the advent in the area of pot-firing techniques. Shady's team undertook the task of excavating Piramide Mayor, the largest of the pyramids. After carefully clearing away many hundreds of years' worth of rubble and sand, they identified staircases, walls covered with remnants of colored woven bags and brickwork. In the foundations, they found the remains of grass-like reeds woven into bags. The original workers, she surmised, must have filled these bags with stones from a nearby quarry and laid them atop one another inside retaining walls, gradually giving rise to the pyramid's immense structure. Shady had samples of the reeds subjected to radiocarbon dating and found that the reeds were 4,600 years old. This evidence indicated that Caral was, in fact, more than 1,000 years older than what had previously been thought to be the oldest urban center in the Americas.</p>\n            <p>What amazed archaeologists was not just the age, but the complexity and scope of Caral. Piramide Mayor alone covers an area nearly the size of four football fields and is 18 meters tall. A nine-meter-wide staircase rises from a circular plaza at the foot of the pyramid, passing over three terraced levels until it reaches the top. Thousands of manual laborers would have been needed to build such a project, not counting the many architects, craftsmen, and managers. Shady's team found the remains of a large amphitheater, containing almost 70 musical instruments made of bird and deer bones. Clearly, music played an important role in Caral's society. Around the perimeter of Caral are a series of smaller mounds and various buildings. These indicate a hierarchy of living arrangements: large, well-kept rooms atop pyramids for the elite, ground-level quarters for craftsmen, and shabbier outlying dwellings for workers.</p>\n            <p>But why had Caral been built in the first place? Her excavations convinced Shady that Caral once served as a trade center for the region, which extends from the rainforests of the Amazon to the high forests of the Andes. Shady found evidence of a rich trading environment, including seeds of the cocoa bush and necklaces of shells, neither of which was native to the immediate Caral area. This environment gave rise to people who did not take part in the production of food, allowing them to become priests and planners, builders and designers. Thus occupational specialization, elemental to an urban society, emerged.</p>\n            <p>But what sustained such a trading center and drew travelers to it? Was it food? Shady and her team found the bones of small edible fish, which must have come from the Pacific coast to the west, in the excavations. But they also found evidence of squash, sweet potatoes and beans having been grown locally. Shady theorized that Caral's early farmers diverted the area's rivers into canals, which still cross the Supe Valley today, to irrigate their fields. But because she found no traces of maize, which can be traded or stored and used in times of crop failure, she concluded that Caral's trade leverage was not based on stockpiling food supplies.</p>\n            <p>It was evidence of another crop in the excavations that gave Shady the best clue to Caral's success. In nearly every excavated building, her team discovered evidence of cotton—seeds, fibers and textiles. Her theory fell into place when a large fishing net made of those fibers, unearthed in an unrelated dig on Peru's coast, turned out to be as old as Caral. \"The farmers of Caral grew the cotton that the fishermen needed to make their nets,” Shady speculates. “And the fishermen gave them shellfish and dried fish in exchange for these nets.\" In essence, the people of Caral enabled fishermen to work with larger and more effective nets, which made the resources of the sea more readily available, and the fishermen probably used dried squash grown by the Caral people as flotation devices for their nets.</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <p>Do the following statements agree with the information given in Reading Passage 1?</p>\n                <p>In boxes 1–6 on your answer sheet, write</p>\n                <ul style=\"list-style-type: none; padding-left: 0;\">\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information on this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>1</strong> Caral was built at the same time as the construction of the Egyptian pyramids.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q1\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>2</strong> The absence of pottery at the archaeological dig gave Shady a significant clue to the age of the site.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q2\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>3</strong> The stones used to build Piramide Mayor came from a location far away.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q3\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>4</strong> The huge and complicated structures of Piramide Mayor suggest that its construction required an organised team of builders.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q4\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>5</strong> Archaeological evidence shows that the residents of Caral were highly skilled musicians.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q5\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>6</strong> The remains of housing areas at Caral suggest that there were no class distinctions in residential areas.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q6\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions 1–6</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q7",
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q7-8-9-10-11-12-13-anchor\">\n                <p>Complete the notes below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"notes-completion\">\n                    <h4>Caral as a trading centre</h4>\n                    <p><strong>Items discovered at Caral but not naturally occurring in the area</strong></p>\n                    <ul>\n                        <li>the <strong>7</strong> <input type=\"text\" id=\"q7_input\" maxlength=\"20\"> of a certain plant</li>\n                        <li><strong>8</strong> <input type=\"text\" id=\"q8_input\" maxlength=\"20\"> used to make jewellery</li>\n                        <li>the remains of certain food such as <strong>9</strong> <input type=\"text\" id=\"q9_input\" maxlength=\"20\"></li>\n                    </ul>\n\n                    <p><strong>Clues to farming around Caral</strong></p>\n                    <ul>\n                         <li><strong>10</strong> <input type=\"text\" id=\"q10_input\" maxlength=\"20\"> still in existence today indicate water diverted from rivers</li>\n                         <li>no evidence that <strong>11</strong> <input type=\"text\" id=\"q11_input\" maxlength=\"20\"> was grown</li>\n                    </ul>\n\n                    <p><strong>Evidence of relationship with fishing communities</strong></p>\n                    <ul>\n                         <li>the excavation findings and fishing nets found on the coast suggest Caral farmers traded <strong>12</strong> <input type=\"text\" id=\"q12_input\" maxlength=\"20\"></li>\n                         <li>dried squash may have been used to aid <strong>13</strong> <input type=\"text\" id=\"q13_input\" maxlength=\"20\"> of fishing nets</li>\n                    </ul>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "FALSE",
+    "q2": "TRUE",
+    "q3": "FALSE",
+    "q4": "TRUE",
+    "q5": "NOT GIVEN",
+    "q6": "FALSE",
+    "q7": "seeds",
+    "q8": "shells",
+    "q9": "fish",
+    "q10": "canals",
+    "q11": "maize",
+    "q12": "cotton",
+    "q13": "flotation"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/145. P1 - Caral an ancient South American city 卡拉尔古城/145. P1 - Caral an ancient South American city 卡拉尔古城.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/145. P1 - Caral an ancient South American city 卡拉尔古城/145. P1 - Caral an ancient South American city 卡拉尔古城.pdf",
+    "ieltsHtml": null
+  },
+  "audit": {
+    "matchStatus": "shui_only",
+    "matchConfidence": 0,
+    "verifiedAt": "2026-03-08T16:24:30.600Z",
+    "notes": "signature:radio,text,textarea,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

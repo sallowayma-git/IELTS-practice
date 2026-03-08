@@ -1,0 +1,121 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-low-34", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-low-34",
+  "meta": {
+    "title": "The Slow Food Organization 慢食运动组织",
+    "category": "P1",
+    "frequency": "low",
+    "pdfFilename": "129. P1 - The Slow Food Organization 慢食运动组织.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/129. P1 - The Slow Food Organization 慢食运动组织/",
+    "legacyFilename": "129. P1 - The Slow Food Organization 慢食运动组织.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>The Slow Food Organization</h3>\n            <h4>Taking time with food</h4>\n            \n            <p>Slow Food began when Carlo Petrini, an Italian journalist, was dismayed by the opening of a fast food restaurant on the famous Piazza di Spagna in Rome. He decided it was time to celebrate the fast-disappearing virtues of the slow production, preparation and eating of food. What he had in mind when he began the Slow Food organization were local foods which were prepared in their traditional manner and eaten at leisurely meals with family and friends. Slow Food is the antithesis of everything fast food stands for, and it is now a thriving international organization with members in 45 countries, a successful publishing operation and a biannual trade show. In addition, Slow Food has launched a project called the 'Ark of Taste' and a concept called ‘virtuous globalization'.</p>\n            <p>The Ark of Taste is the catalog of endangered food plant and animal species that Slow Food has resolved to protect against the rising global tide of fast food. Some examples of the biodiversity promoted by the Ark of Taste include Iroquois white corn and the Narragansett turkey, both of which are old, or heritage, foods in North America. Biodiversity is a term commonly associated with discussions of threats to wild species, but according to Slow Food the biodiversity of the domesticated species people have depended on for centuries is no less important. For example, when the latest patented hybrid variety of plant proves unable to withstand fungal or bacterial disease, plant breeders will need the disease-resistant genes which can be obtained from heritage plant varieties. If Iroquois white corn had fallen out of production, as it very nearly did two decades ago due to the commercial launch of a new hybrid corn, irreplaceable and possibly crucial sets of corn genes would have been lost forever.</p>\n            <p>For some time, plant-saver groups have been preserving heritage plant varieties, but Slow Food takes that project a step further. The movement understands that all the food and plant species in its Ark of Taste carry not only information about genetic traits but they also embody a set of social practices, and in some cases even a way of life of previous generations. Slow Food teaches that when a variety of food or breed of animal disappears, something greater also disappears: a specific, irreplaceable mode of life that a particular people have devised for living in a particular part of the Earth. An example of this is the Iroquois white corn. By working to find new markets for this ancient variety of corn, Slow Food is ensuring a source of income for the Native Americans who grow, roast, and grind this corn and, at the same time, helping to preserve the specific cookery and religious uses that the corn has been selected to support over hundreds of years.</p>\n            <p>Slow Food has moved away from the traditional locations for preserving rare animal and plant species. For example, instead of zoos for rare animals and botanic gardens for rare plants, Slow Food maintains that its plants and animals are best preserved on the dishes and plates of discerning customers. To this end, Slow Food has introduced the concept of virtuous globalization, which recognizes that the best way to ensure a safe future for distinctive local products and practices is to find a global market for them. In this way, local producers will be able to continue producing the food which for many years has been a defining factor of their cultural identity. The characteristics of the virtuous globalization of Slow Foods show how different the concept is from the globalization of fast foods. Whereas global fast food companies aim to sell food that has an unchanging taste wherever in the world it is eaten, the taste of a recognized Slow Food is unique to that food. Another aspect is the quantities sold of these two types of food. In the case of fast food, these are enormous, but the quantities of Slow Food products which are available for selling are limited, due to the rarity of the plants or animals. The customers of virtuous globalization Slow Foods are affluent people who value novelty and are undeterred by the costs, which are high when compared to fast food.</p>\n            <p>Some years ago, a network of farmers in the USA volunteered to take part in a national Slow Food project. The project was for the farmers to raise a total of 5,000 turkeys from eggs which had been selected from four varieties of endangered turkey. The farmers had to begin by hatching the eggs they had been supplied with, then raising the young turkeys to adults. They were promised a guaranteed price per pound for the adult turkeys. The object of the enterprise was to raise heritage turkeys for the North American holiday of Thanksgiving. Although chefs in some restaurants where the turkeys were on the menu complained that the Slow Food turkeys were smaller than industrially produced turkeys, the distinctive flavors were very well received by consumers. By the following year, the world population of these turkeys had nearly doubled.</p>\n            <p>It may seem strange that taking pleasure in eating could be a strategy for preserving biodiversity because pleasure is not normally associated with environmentalism. However, pleasure is part of what Slow Food aims to bring back, by demonstrating that, at least when it comes to the politics of food, the best choice is often the one that provides the most enjoyment.</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 1–6</h4>\n                <p>Do the following statements agree with the information in Reading Passage 1?</p>\n                <p>In boxes 1–6 on your answer sheet, write:</p>\n                <ul>\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information about this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>1</strong> The Ark of Taste lists food plant and animal species in danger of extinction.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q1\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>2</strong> Slow Food considers that the term ‘biodiversity’ should be restricted to wild species.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q2\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>3</strong> The genes of heritage plants may be of vital importance to modern plant breeders.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q3\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>4</strong> Countries can sell the genes of their heritage plant varieties internationally.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q4\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>5</strong> Slow Food maintains that food and culture exist independently of each other.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q5\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>6</strong> Some Native Americans are now giving cookery classes featuring Iroquois white corn.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q6\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "table_completion",
+      "questionIds": [
+        "q7",
+        "q8",
+        "q9"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q7-8-9-anchor\">\n                <h4>Questions 7–9</h4>\n                <p>Complete the table below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <table class=\"completion-table\">\n                    <thead>\n                        <tr>\n                            <th></th>\n                            <th>Taste</th>\n                            <th>Quantities sold</th>\n                            <th>Cost</th>\n                        </tr>\n                    </thead>\n                    <tbody>\n                        <tr>\n                            <td><strong>Slow food</strong></td>\n                            <td><strong>7 </strong> <input type=\"text\" id=\"q7_input\"></td>\n                            <td><strong>8 </strong> <input type=\"text\" id=\"q8_input\"></td>\n                            <td>high</td>\n                        </tr>\n                        <tr>\n                            <td><strong>Fast food</strong></td>\n                            <td><strong>9 </strong> <input type=\"text\" id=\"q9_input\"></td>\n                            <td>enormous</td>\n                            <td>low</td>\n                        </tr>\n                    </tbody>\n                </table>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q10-11-12-13-anchor\">\n                <h4>Questions 10–13</h4>\n                <p>Answer the questions below.</p>\n                <p>Choose <strong>ONE WORD AND/OR A NUMBER</strong> from the passage for each answer.</p>\n                \n                <div class=\"question-item\">\n                    <p><strong>10</strong> What were farmers in the USA given so that they could raise endangered turkeys?</p>\n                    <input type=\"text\" id=\"q10_input\">\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>11</strong> How many varieties of endangered turkey benefited from the project?</p>\n                    <input type=\"text\" id=\"q11_input\">\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>12</strong> Who was not happy with the size of the turkeys?</p>\n                    <input type=\"text\" id=\"q12_input\">\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>13</strong> Who liked the taste of the endangered turkeys?</p>\n                    <input type=\"text\" id=\"q13_input\">\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "TRUE",
+    "q2": "FALSE",
+    "q3": "TRUE",
+    "q4": "NOT GIVEN",
+    "q5": "FALSE",
+    "q6": "NOT GIVEN",
+    "q7": "unique",
+    "q8": "limited",
+    "q9": "unchanging",
+    "q10": "eggs",
+    "q11": "4/four",
+    "q12": "chefs",
+    "q13": "consumers"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/129. P1 - The Slow Food Organization 慢食运动组织/129. P1 - The Slow Food Organization 慢食运动组织.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/129. P1 - The Slow Food Organization 慢食运动组织/129. P1 - The Slow Food Organization 慢食运动组织.pdf",
+    "ieltsHtml": "IELTS/P1/The Slow Food Organization.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.564Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

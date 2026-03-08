@@ -164,7 +164,7 @@
 
                 // 再进行会话记录与脚本注入
                 await this.startPracticeSession(examId);
-                this.injectDataCollectionScript(examWindow, examId);
+                this.injectDataCollectionScript(examWindow, examId, exam);
                 this.setupExamWindowManagement(examWindow, examId, exam, options);
 
                 if (options && options.suiteSessionId) {
@@ -187,6 +187,10 @@
          * 构造题目URL
          */
         buildExamUrl(exam) {
+            if (this._isUnifiedReadingExam(exam)) {
+                return this._buildUnifiedReadingUrl(exam);
+            }
+
             // 使用全局的路径构建器以确保阅读/听力路径正确
             if (typeof window.buildResourcePath === 'function') {
                 return window.buildResourcePath(exam, 'html');
@@ -198,6 +202,41 @@
                 examPath += '/';
             }
             return examPath + exam.filename;
+        },
+
+        _getUnifiedReadingManifestEntry(exam) {
+            if (!exam || typeof exam !== 'object' || !exam.id) {
+                return null;
+            }
+            const manifest = (typeof window !== 'undefined' && window.__READING_EXAM_MANIFEST__)
+                ? window.__READING_EXAM_MANIFEST__
+                : null;
+            const manifestEntry = manifest && exam.id ? manifest[exam.id] : null;
+            if (!manifestEntry || !(manifestEntry.dataKey || manifestEntry.examId)) {
+                return null;
+            }
+            return manifestEntry;
+        },
+
+        _isUnifiedReadingExam(exam) {
+            return !!this._getUnifiedReadingManifestEntry(exam);
+        },
+
+        _buildUnifiedReadingUrl(exam) {
+            const manifestEntry = this._getUnifiedReadingManifestEntry(exam);
+            const params = new URLSearchParams();
+            if (exam && exam.id) {
+                params.set('examId', String(exam.id));
+            }
+            const resolvedDataKey = manifestEntry?.dataKey || exam?.id;
+            if (resolvedDataKey) {
+                params.set('dataKey', String(resolvedDataKey));
+            }
+            const query = params.toString();
+            const url = query
+                ? `templates/reading-practice-unified.html?${query}`
+                : 'templates/reading-practice-unified.html';
+            return this._ensureAbsoluteUrl(url);
         },
 
         /**
@@ -483,7 +522,11 @@
         /**
          * 注入数据采集脚本到练习页面
          */
-        injectDataCollectionScript(examWindow, examId) {
+        injectDataCollectionScript(examWindow, examId, exam = null) {
+            if (this._isUnifiedReadingExam(exam)) {
+                return;
+            }
+
             const ensureScriptUrl = () => {
                 const resolved = this._ensureAbsoluteUrl(PRACTICE_ENHANCER_SCRIPT_PATH);
                 if (!resolved) {

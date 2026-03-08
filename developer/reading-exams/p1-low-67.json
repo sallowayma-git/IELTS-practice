@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-low-67",
+  "meta": {
+    "title": "Scented Plants 植物的味道",
+    "category": "P1",
+    "frequency": "low",
+    "pdfFilename": "159. P1 - Scented Plants 植物的味道.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/159. P1 - Scented Plants 植物的味道/",
+    "legacyFilename": "159. P1 - Scented Plants 植物的味道.html",
+    "questionIntroHtml": ""
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>Scented Plants</h2>\n            \n            <p><strong>A</strong> Many plants emit a smell. This may come from the flower of the plant, from the leaves, stem, or even, in some cases, from the root. What humans may perceive as a fragrant perfume is actually a tool used by plants to entice pollinators, discourage bacteria, or fend off predators. Fragrances consist of small organic particles with high vapor pressures, so that a scent compound evaporates easily if exposed to the air; chemicals which evaporate in this way are described as ‘volatile compounds'.</p>\n            <p><strong>B</strong> Although we generally think of plant odors as pleasant, many volatile compounds in plants are toxic when eaten. These compounds are used by plants to protect themselves from bacterial attack. Humans have recognized and taken advantage of these plant-derived antibacterials since antiquity, when they were used to slow the spoilage of food. For example, the spice clove could be used in baked goods and prepared meats to slow the growth of mould and bacteria, because a small amount was not dangerous to humans. Before the development of modern food preservation techniques, European civilization was heavily dependent on cloves and other tropical spices to ensure a long-lasting supply of food. However, the long distance from Europe to South-east Asia made these spices extremely expensive and was part of the motivation behind the search for a shorter route to Asia, which resulted in the discovery of the Americas.</p>\n            <p><strong>C</strong> Although volatile compounds in plants probably originally evolved to repel herbivorous (plant-eating) animals of all kinds, they now perform a remarkable range of functions. An important one common to many plants is to attract animals which will spread that plant's pollen. Insects are the most common animals to interact with plants in this way, and most insects detect volatile compounds through the extremely sensitive antennae on their heads. Some antennae can detect an airborne volatile compound at concentrations of just a few parts per billion.</p>\n            <p><strong>D</strong> Other plants emit volatile compounds which function as toxins against invading insects, and still others emit such compounds when they have been injured, in order to deter insects from laying eggs on them and thus injuring them further. Volatile compounds released by plants in response to herbivore egg-laying, for example, can attract parasites of the eggs, thereby preventing them from hatching. In this way the plant can avoid the attack of the hungry young herbivores that would have emerged from the eggs.</p>\n            <p><strong>E</strong> Volatile compounds in plants can also be used as a kind of currency in some very indirect defensive systems. In the rainforest tree Leonardoxa africana, for example, ants of the species Petalomyrmex phylax are attracted to young leaves because they emit high levels of the volatile compound methyl salicylate, a substance that ants need to use as an antiseptic in their nests; coincidentally, the ants attack any herbivorous insects that they encounter. It appears that methyl salicylate both attracts ants and rewards them for performing their valuable role in deterring herbivores. The web of interactions among plants and animals can become so complicated that it is difficult to detect what the outcome of the release of volatile compounds is. But it is clear that the system can have a defensive purpose, as many experiments have shown that the deactivation of a plant's volatile emission system makes it more vulnerable to herbivores.</p>\n            <p><strong>F</strong> Floral scent has a strong impact on the economic success of many agricultural crops that rely on insect pollinators, including fruit trees such as the bee-pollinated cherry, apple, apricot, and peach, as well as vegetables and tropical plants such as the papaya. A decrease in fragrance emission, due to crossbreeding for fruit size or other characteristics, reduces the ability of plants to attract pollinators and may result in considerable losses for growers. This problem has been made worse in the United States by recent epidemics that have infected and killed many honeybees, the major insect pollinator.</p>\n            <p><strong>G</strong> Some plant breeders have tried to solve this pollination problem by spraying scent compounds on orchard trees to enhance honeybee foraging, but this approach was costly and, in the end, proved to be inefficient. One of the reasons for its ineffectiveness was that general spraying of the crop could not tell insects exactly where the blossoms were. Clearly, a more refined strategy is needed; genetic manipulation of scents, for example, would allow growers to regulate the types of insect pollinators and the frequency of their visits.</p>\n            <p><strong>H</strong> Such manipulation of scent will also benefit people who grow flowers commercially. Cut flowers and potted plants play an important aesthetic part in human life. Unfortunately, traditional breeding has produced varieties with improved vase life, color, and shape, while perfume has been sacrificed. The loss of scent among ornamental flowers, which have a worldwide annual value of more than US$30 billion, makes them important targets for the genetic manipulation of flower fragrance. Some preliminary experiments have already been carried out, but for technical reasons the scent was present in every part of the plant, rather than being localized in the flower, and the level of intensity of fragrance was below the threshold of detection for the human nose. The next generation of experiments, already in progress, will include more sophisticated schemes that target the expression of scent specifically to flowers or other organs, such as special glands that can store antibacterial or herbivore-repellent compounds.</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "table_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-anchor\">\n                <h4>Questions 1–4</h4>\n                <p>Reading Passage 1 has eight paragraphs, <strong>A–H</strong>.</p>\n                <p>Which paragraph contains the following information?</p>\n                <p><em>Write the correct letter, <strong>A–H</strong>, in boxes 1–4 on your answer sheet.</em></p>\n                <div style=\"overflow-x: auto;\">\n                    <table class=\"matching-table\">\n                        <thead>\n                            <tr>\n                                <th></th>\n                                <th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>H</th>\n                            </tr>\n                        </thead>\n                        <tbody>\n                            <tr>\n                                <td><strong>1</strong> a list of food plants which need insects to make them productive</td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"A\"></td><td><input type=\"radio\" name=\"q1\" value=\"B\"></td><td><input type=\"radio\" name=\"q1\" value=\"C\"></td><td><input type=\"radio\" name=\"q1\" value=\"D\"></td><td><input type=\"radio\" name=\"q1\" value=\"E\"></td><td><input type=\"radio\" name=\"q1\" value=\"F\"></td><td><input type=\"radio\" name=\"q1\" value=\"G\"></td><td><input type=\"radio\" name=\"q1\" value=\"H\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>2</strong> an explanation of why a genetic experiment may assist plant reproduction</td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"A\"></td><td><input type=\"radio\" name=\"q2\" value=\"B\"></td><td><input type=\"radio\" name=\"q2\" value=\"C\"></td><td><input type=\"radio\" name=\"q2\" value=\"D\"></td><td><input type=\"radio\" name=\"q2\" value=\"E\"></td><td><input type=\"radio\" name=\"q2\" value=\"F\"></td><td><input type=\"radio\" name=\"q2\" value=\"G\"></td><td><input type=\"radio\" name=\"q2\" value=\"H\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>3</strong> a description of current research with advantages for the flower industry</td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"A\"></td><td><input type=\"radio\" name=\"q3\" value=\"B\"></td><td><input type=\"radio\" name=\"q3\" value=\"C\"></td><td><input type=\"radio\" name=\"q3\" value=\"D\"></td><td><input type=\"radio\" name=\"q3\" value=\"E\"></td><td><input type=\"radio\" name=\"q3\" value=\"F\"></td><td><input type=\"radio\" name=\"q3\" value=\"G\"></td><td><input type=\"radio\" name=\"q3\" value=\"H\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>4</strong> an explanation of how insects perceive volatile compounds in plants</td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"A\"></td><td><input type=\"radio\" name=\"q4\" value=\"B\"></td><td><input type=\"radio\" name=\"q4\" value=\"C\"></td><td><input type=\"radio\" name=\"q4\" value=\"D\"></td><td><input type=\"radio\" name=\"q4\" value=\"E\"></td><td><input type=\"radio\" name=\"q4\" value=\"F\"></td><td><input type=\"radio\" name=\"q4\" value=\"G\"></td><td><input type=\"radio\" name=\"q4\" value=\"H\"></td>\n                            </tr>\n                        </tbody>\n                    </table>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "single_choice",
+      "questionIds": [
+        "q5",
+        "q6",
+        "q7",
+        "q8",
+        "q9"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-9-anchor\">\n                <h4>Questions 5–9</h4>\n                <p>Choose the correct letter, <strong>A, B, C</strong> or <strong>D</strong>.</p>\n                <div class=\"question-item\">\n                    <p><strong>5</strong> According to the passage, spices were used in the past to</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q5\" type=\"radio\" value=\"A\"><span>A keep insects away from food.</span></label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"B\"><span>B improve the taste of food.</span></label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"C\"><span>C prevent the decay of food.</span></label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"D\"><span>D make food smell more attractive.</span></label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>6</strong> The Leonardoxa africana tree protects itself by</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q6\" type=\"radio\" value=\"A\"><span>A emitting a scent that repels plant-eating insects.</span></label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"B\"><span>B attracting and poisoning herbivorous insects.</span></label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"C\"><span>C chemically destroying the eggs of parasites.</span></label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"D\"><span>D attracting an enemy of herbivorous insects.</span></label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>7</strong> Which of the following statements about methyl salicylate is NOT true according to the passage?</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q7\" type=\"radio\" value=\"A\"><span>A It helps ants to protect their nests.</span></label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"B\"><span>B It helps herbivorous insects to find food.</span></label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"C\"><span>C It helps a rainforest tree to attract ants.</span></label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"D\"><span>D It helps a rainforest tree to avoid being eaten.</span></label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>8</strong> Which factor has made the problems of US fruit growers more serious?</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q8\" type=\"radio\" value=\"A\"><span>A Bees found an alternative source of food.</span></label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"B\"><span>B Chemicals were killing too many bees.</span></label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"C\"><span>C Fruit was decreasing in quality.</span></label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"D\"><span>D Bees have had their numbers reduced by disease.</span></label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>9</strong> Experiments in genetically manipulating the fragrance of ornamental flowers have</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q9\" type=\"radio\" value=\"A\"><span>A cost US$30 billion.</span></label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"B\"><span>B made the flowers more attractive to insects.</span></label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"C\"><span>C failed to produce a strong enough scent.</span></label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"D\"><span>D reduced production on flower farms.</span></label>\n                    </div>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q10-11-12-13-anchor\">\n                <h4>Questions 10–13</h4>\n                <p>Do the following statements agree with the information given in Reading Passage 1?</p>\n                <ul style=\"list-style: none; padding-left: 0;\">\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information on this</li>\n                </ul>\n                <div class=\"question-item\">\n                    <p><strong>10</strong> The theory that plants defend themselves with smells is untested.</p>\n                    <div class=\"radio-options\" style=\"flex-direction: row; gap: 16px;\">\n                        <label><input name=\"q10\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q10\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q10\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>11</strong> The smell from fruit-tree flowers is important to farmers.</p>\n                     <div class=\"radio-options\" style=\"flex-direction: row; gap: 16px;\">\n                        <label><input name=\"q11\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>12</strong> The population of honeybees in Europe has declined.</p>\n                     <div class=\"radio-options\" style=\"flex-direction: row; gap: 16px;\">\n                        <label><input name=\"q12\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>13</strong> Applying perfume to orchard trees is accepted as a good method of increasing pollination.</p>\n                     <div class=\"radio-options\" style=\"flex-direction: row; gap: 16px;\">\n                        <label><input name=\"q13\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "F",
+    "q2": "G",
+    "q3": "H",
+    "q4": "C",
+    "q5": "C",
+    "q6": "D",
+    "q7": "B",
+    "q8": "D",
+    "q9": "C",
+    "q10": "FALSE",
+    "q11": "TRUE",
+    "q12": "NOT GIVEN",
+    "q13": "FALSE"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/159. P1 - Scented Plants 植物的味道/159. P1 - Scented Plants 植物的味道.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/159. P1 - Scented Plants 植物的味道/159. P1 - Scented Plants 植物的味道.pdf",
+    "ieltsHtml": null
+  },
+  "audit": {
+    "matchStatus": "shui_only",
+    "matchConfidence": 0,
+    "verifiedAt": "2026-03-08T16:24:30.627Z",
+    "notes": "signature:radio,textarea,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+}

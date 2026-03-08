@@ -1,0 +1,114 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-low-99", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-low-99",
+  "meta": {
+    "title": "The history of the bar code 条形码的历史",
+    "category": "P1",
+    "frequency": "low",
+    "pdfFilename": "188. P1 - The history of the bar code 条形码的历史.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/188. P1 - The history of the bar code 条形码的历史/",
+    "legacyFilename": "188. P1 - The history of the bar code 条形码的历史.html",
+    "questionIntroHtml": "<h3>Questions 1–8</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>The history of the bar code</h3>\n            \n            <p>The first step toward today's bar codes came in 1948, when Bernard Silver, a graduate student in the USA, overheard a conversation in the halls of Philadelphia's Drexel Institute of Technology. The president of a food chain was pleading with a professor to undertake research on a method of capturing product information automatically at store checkouts. The professor turned down the request, but Bernard Silver mentioned the conversation to his friend Norman Woodland, a twenty-seven-year-old teacher at Drexel.</p>\n            <p>The problem fascinated the two friends, and they set about thinking of a solution. Their first idea was to use patterns printed with an ink that would glow under ultraviolet light, and they built a device to test the concept. It worked, but the printing costs were high and the patterns faded over time. Nonetheless, they were convinced they had a workable idea. After several months of work they came up with the linear bar code, using elements from two established technologies: Morse code, in which letters and numbers are coded into a system of dots and dashes, and the method used to record soundtracks in movies. Silver and Woodland patented the idea in 1952, describing their invention as ‘article classification... through the medium of identifying patterns'. But the cost, together with the fact that their scanning equipment was rather unreliable, made the idea a non-starter at that time.</p>\n            <p>Scanning systems made little progress until the 1970s, when lasers became affordable. Following this, various systems came into use around the world in stores, libraries, factories, and the like, each with its own proprietary code, but there was no standardization. A consortium of grocery manufacturers and retailers therefore set up a committee to look into bar codes, and to standardize what became known formally as the Universal Product Code (UPC). At the heart of the committee's guidelines were a few basic principles. To make life easier for the cashier, bar codes would have to be readable from almost any angle and at a range of distances. Because they would be reproduced by the million, the labels would have to be cheap and easy to print. And to be affordable, automated checkout systems would have to pay for themselves in two and a half years.</p>\n            <p>The committee considered more than a dozen versions of bar codes, including one based on multi-colored dots and another using a circular bull's-eye design with lines radiating from a central point. On April 1, 1973, they unanimously agreed on a standardized UPC, a combination of black and white lines and numbers, based on Woodland and Silver's idea but developed by George Laurer at IBM. Alan Haberman, who headed the subcommittee as president of First National Stores, described the bar code as a kind of world language that worked for everyone. He recalls proudly, ‘We showed that it could be done on a massive scale, that cooperation... was possible for the common good, and that business didn't need the government to shove them in the right direction.'</p>\n            <p>The investment involved in the bar-code revolution was huge. Each of the tens of thousands of grocery outlets in the US had to spend at least $200,000 on new scanning equipment. Chains had to install new data processing centers and retrain their employees. Printers had to develop the new types of ink, plates, and other technology to reproduce the code with the exact tolerances it requires, and manufacturers had to spend millions of dollars a year on the labels.</p>\n            <p>On June 26, 1974, all the tests were done, all the proposals were complete, all the standards were set, and at a supermarket in Ohio, a single pack of Juicy Fruit chewing gum became the first retail product sold with the help of a bar code scanner. Decades of schemes and billions of dollars in investment now became a practical reality. The bar code on any product could be read and understood in every suitably equipped store.</p>\n            <p>The advantages of the system were not clear immediately, as wholesalers, retailers and customers remained suspicious. Some customers believed bar codes were a form of surveillance. During the early weeks, Business Week magazine ran the headline 'The Supermarket Scanner That Failed'. However, the benefits eventually became apparent. 'It turns out there were massive savings in labor and other areas,' Haberman says. These included checking out items at twice the speed compared to using traditional equipment, which meant shorter lines. And it did not take supermarkets too long to see that, as well as vastly improving customer service, the bar code could hugely reduce the amount of time spent checking inventory.</p>\n            <p>Now, every day more than 5 billion bar codes are scanned in retail outlets throughout the world. Passengers' luggage is tagged with bar codes by airlines. Staff attach them to babies to ensure the right babies go home from hospitals with the right mothers. Runners in major marathons set off with bar codes on their vests, and librarians rely on them. Tiny bar codes have even been mounted on bees by researchers to track their movements.</p>\n            <p>As for that original pack of Juicy Fruit, it is now, unchewed and unopened, in the Smithsonian Institution National Museum of American History in Washington.</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6",
+        "q7",
+        "q8"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-8-anchor\">\n                <h4>Complete the notes below.</h4>\n                <p>Write <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"notes-completion\">\n                    <h4>History of the bar code</h4>\n                    <p><strong>1948–1952</strong></p>\n                    <p>Methods of recording information automatically were developed by Silver and Woodland.</p>\n                    <p><strong>1st system:</strong></p>\n                    <ul>\n                        <li>used ultraviolet light and a special type of <strong>1</strong> <input type=\"text\" id=\"q1_input\" maxlength=\"20\"></li>\n                        <li>problems: expensive and not permanent</li>\n                    </ul>\n                    <p><strong>2nd system:</strong></p>\n                    <ul>\n                        <li>based on technology used in Morse code and also for the <strong>2</strong> <input type=\"text\" id=\"q2_input\" maxlength=\"20\"> of films</li>\n                        <li>problems: <strong>3</strong> <input type=\"text\" id=\"q3_input\" maxlength=\"20\"> and expensive</li>\n                    </ul>\n\n                    <p><strong>1970s</strong></p>\n                    <ul>\n                        <li>Availability of cheaper <strong>4</strong> <input type=\"text\" id=\"q4_input\" maxlength=\"20\"> meant scanning technology spread more widely</li>\n                        <li>Problem: lack of <strong>5</strong> <input type=\"text\" id=\"q5_input\" maxlength=\"20\"> in code systems</li>\n                        <li>April 1973: committee agreed on one universal product code (UPC)</li>\n                        <li>June 1974: pack of Juicy Fruit chewing gum sold with bar code scanner</li>\n                        <li>Advantages of bar code system:\n                            <ul>\n                                <li>supermarkets needed to spend less on labour</li>\n                                <li>the <strong>6</strong> <input type=\"text\" id=\"q6_input\" maxlength=\"20\"> of checkouts increased</li>\n                                <li>doing inventories was much cheaper</li>\n                            </ul>\n                        </li>\n                    </ul>\n                    \n                    <p><strong>Present day</strong></p>\n                    <p>Users of bar codes include:</p>\n                     <ul>\n                        <li>retail companies</li>\n                        <li>airlines</li>\n                        <li>staff in hospitals</li>\n                        <li>participants in <strong>7</strong> <input type=\"text\" id=\"q7_input\" maxlength=\"20\"></li>\n                        <li>scientists studying <strong>8</strong> <input type=\"text\" id=\"q8_input\" maxlength=\"20\"></li>\n                    </ul>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions 1–8</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q9-10-11-12-13-anchor\">\n                <h4>Do the following statements agree with the information given in Reading Passage 1?</h4>\n                <p>In boxes 9–13 on your answer sheet, write:</p>\n                <ul style=\"list-style-position: inside; padding-left: 0; margin-bottom: 1rem;\">\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information on this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>9</strong> Bernard Silver was invited to develop a system for capturing product information by the president of a food chain.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q9\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>10</strong> A committee set up in the 1970s said bar codes should be easy to use and not too expensive.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q10\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q10\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q10\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>11</strong> Alan Haberman disagreed with government policies on business matters.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q11\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>12</strong> Many grocery outlets were unable to afford the necessary scanning equipment.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q12\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>13</strong> The advantages of the new bar code scanner took some time to be accepted by users.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q13\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "ink",
+    "q2": "soundtracks",
+    "q3": "unreliable",
+    "q4": "lasers",
+    "q5": "standardization",
+    "q6": "speed",
+    "q7": "marathons",
+    "q8": "bees",
+    "q9": "FALSE",
+    "q10": "TRUE",
+    "q11": "NOT GIVEN",
+    "q12": "NOT GIVEN",
+    "q13": "TRUE"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/188. P1 - The history of the bar code 条形码的历史/188. P1 - The history of the bar code 条形码的历史.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/188. P1 - The history of the bar code 条形码的历史/188. P1 - The history of the bar code 条形码的历史.pdf",
+    "ieltsHtml": "IELTS/P1/The history of the bar code.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.675Z",
+    "notes": "signature:radio,text,textarea,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);
