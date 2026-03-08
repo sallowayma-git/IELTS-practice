@@ -249,6 +249,46 @@
         }
     });
 
+    ensureGlobalFunctionAfterGroup('openExam', BROWSE_GROUP, function (examId, options) {
+        if (global.app && typeof global.app.openExam === 'function') {
+            return global.app.openExam(examId, options);
+        }
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('题目模块未就绪', 'warning');
+        }
+        return undefined;
+    });
+
+    ensureGlobalFunctionAfterGroup('viewPDF', BROWSE_GROUP, function (examId) {
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('PDF 模块未就绪', 'warning');
+        }
+        return examId;
+    });
+
+    ensureGlobalFunctionAfterGroup('searchExams', BROWSE_GROUP, function (query) {
+        var input = document.getElementById('exam-search-input') || document.querySelector('.search-input');
+        if (input && typeof query === 'string') {
+            input.value = query;
+        }
+        return query;
+    });
+
+    ensureGlobalFunctionAfterGroup('clearSearch', BROWSE_GROUP, function () {
+        var input = document.getElementById('exam-search-input') || document.querySelector('.search-input');
+        var clearButton = document.getElementById('search-clear-btn');
+        if (input) {
+            input.value = '';
+        }
+        if (clearButton) {
+            clearButton.hidden = true;
+        }
+        if (typeof global.searchExams === 'function') {
+            return global.searchExams('');
+        }
+        return undefined;
+    });
+
     ensureGlobalFunctionAfterGroup('toggleBulkDelete', BROWSE_GROUP, function () {
         if (typeof global.showMessage === 'function') {
             global.showMessage('批量删除模块未就绪', 'warning');
