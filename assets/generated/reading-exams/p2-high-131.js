@@ -1,0 +1,121 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p2-high-131", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-high-131",
+  "meta": {
+    "title": "Learning from the Romans 罗马混凝土",
+    "category": "P2",
+    "frequency": "high",
+    "pdfFilename": "43. P2 - Learning from the Romans 罗马混凝土【高】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/43. P2 - Learning from the Romans 罗马混凝土【高】/",
+    "legacyFilename": "43. P2 - Learning from the Romans 罗马混凝土【高】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 2</h2>\n            <p>You should spend about 20 minutes on Questions 14-26, which are based on Reading Passage 2 below.</p>\n            \n            <h3>Learning from the Romans</h3>\n            <h4>How an ancient building material is influencing modern construction</h4>\n            \n            <div id=\"para-A-anchor\">\n                <p><strong>A</strong> In a quest to make concrete more durable and sustainable, an international team of geologists and engineers has found inspiration in the concrete used by the ancient Romans. The chemical secrets of Roman concrete have been uncovered in samples taken from a concrete Roman breakwater. A breakwater is a barrier that is built out into the sea to protect coasts and harbors from the force of waves. This particular breakwater has spent the last 2,000 years submerged in seawater. The international team of researchers that collected the samples was led by Paulo Monteiro, a professor of civil and environmental engineering at the University of California, Berkeley. Analysis of samples from the ancient underwater site in Pozzuoli Bay near Naples in Italy, and pinpointed why the best Roman concrete was superior to most modern concrete.</p>\n            </div>\n            <div id=\"para-B-anchor\">\n                <p><strong>B</strong> Concrete was the Roman Empire's construction material of choice. It was used in land monuments such as the Pantheon in Rome, as well as in underwater and partially underwater coastal and harbor structures. Monteiro and his team were particularly interested in how the coastal and harbor structures endured the unforgiving saltwater environment. Chemical analysis of Roman concrete showed that it differs from the modern kind in several ways. One is the content of the cement that binds the material in the concrete. The most commonly used cement in recent decades has been Portland cement. Portland cement is a compound of calcium, silicates, and hydrates (C-S-H). However, analysis of Roman concrete shows that it contains a significantly different cement. Roman cement contains aluminum, which is not found in Portland cement, and less silicon than is found in Portland cement. The resulting calcium-aluminum-silicate-hydrate (C-A-S-H) is an exceptionally stable cement.</p>\n            </div>\n            <div id=\"para-C-anchor\">\n                <p><strong>C</strong> The recipe for the contents of Roman concrete was first described around 30 BC by Vitruvius, an engineer for the Roman Emperor Augustus. Volcanic ash was one of the ingredients, and it is now understood that this is crucial, as it is volcanic ash that contains the aluminum that ultimately gives Roman concrete its great durability. The Romans devised an efficient method of making concrete for coastal structures. They combined volcanic ash with lime, which added the calcium to the mix. This was then packed, together with stones and chunks of rock, into wooden molds, which were then immersed in seawater. The seawater instantly triggered a hot chemical reaction. The lime was hydrated by the seawater, which means that it incorporated water molecules into its structure, and reacted with the volcanic ash to cement the whole mixture together. This reaction formed the concrete that was used to build some of the most enduring structures in Western civilization.</p>\n            </div>\n            <div id=\"para-D-anchor\">\n                <p><strong>D</strong> According to Marie Jackson, a member of the research team, Roman concrete is one of the most durable construction materials on the planet, and that was no accident. Shipping was the lifeline of political, economic, and military stability for the Roman Empire, so constructing harbors that would last was critical. ‘Over time, the Romans used less and less concrete.' ‘As the Roman Empire declined, and shipping declined, the need for the seawater concrete declined,' said Jackson. ‘You could also argue that the original structures were built so well that, once they were in place, they didn't need to be replaced,' she added.</p>\n            </div>\n            <div id=\"para-E-anchor\">\n                <p><strong>E</strong> Producing Roman concrete also left a smaller carbon footprint than its modern counterpart. 'It's not that modern concrete isn't good—it's so good we use 19 billion tons of it a year,' says Monteiro. ‘The problem is that manufacturing Portland cement accounts for seven percent of the carbon dioxide that industry puts into the air.' Portland cement holds most modern concrete together. However, making Portland cement releases carbon dioxide into the atmosphere from burning fuel in order to heat a mix of limestone and clays to 1,450 degrees Celsius. The production of Roman concrete, however, was much cleaner, as less heat was needed. A temperature that was a third lower than that required for making Portland cement was sufficient for making Roman concrete.</p>\n            </div>\n            <div id=\"para-F-anchor\">\n                <p><strong>F</strong> Some modern concrete no longer contains Portland cement; instead, fly ash is used, which causes fewer greenhouse gas emissions. Fly ash is a waste product from burning coal, and the researchers are investigating whether volcanic ash would be a good, large-volume replacement in countries that cannot access fly ash easily. ‘There is not enough fly ash in this world to replace half of the Portland cement being used,' said Monteiro. 'Many countries don't have fly ash, so the idea is to find alternative local materials that will work, including the kind of volcanic ash that Romans used. Using these alternatives could replace 40 percent of the world's demand for Portland cement.'</p>\n            </div>\n            <div id=\"para-G-anchor\">\n                <p><strong>G</strong> Cutting greenhouse gas emissions is one powerful incentive for finding a better way to provide the concrete the world needs; another is the need for stronger, longer-lasting buildings, bridges, and other structures. ‘In the middle 20th century, concrete structures were designed to last 50 years, and a lot of them are on borrowed time,' Monteiro says. 'Now we design buildings to last 100 to 120 years.' Yet Roman harbor installations have survived 2,000 years of chemical attack from seawater and wave action. Stronger, longer-lasting modern concrete may be the legacy of a deeper understanding of how the Romans made their incomparable concrete.</p>\n            </div>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "table_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6",
+        "q7"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-anchor\">\n                <h4>Questions 14–20</h4>\n                <p>Reading Passage 2 has seven paragraphs, <strong>A–G</strong>.</p>\n                <p>Which paragraph contains the following information?</p>\n                <p><em>Write the correct letter <strong>A–G</strong> in boxes 14–20 on your answer sheet.</em></p>\n                 <div style=\"overflow-x: auto;\">\n                    <table class=\"matching-table\">\n                        <thead>\n                            <tr>\n                                <th></th>\n                                <th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th>\n                            </tr>\n                        </thead>\n                        <tbody>\n                            <tr>\n                                <td><strong>14</strong> an opinion on why the Romans reduced the amount of concrete they made for use in seawater</td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"A\"></td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"B\"></td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"C\"></td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"D\"></td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"E\"></td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"F\"></td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"G\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>15</strong> a list of the contents of both Portland and Roman cement</td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"A\"></td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"B\"></td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"C\"></td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"D\"></td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"E\"></td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"F\"></td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"G\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>16</strong> an argument for finding substitutes for a limited resource that is used in making cement</td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"A\"></td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"B\"></td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"C\"></td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"D\"></td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"E\"></td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"F\"></td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"G\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>17</strong> information about the structure from which the scientists took their Roman concrete samples</td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"A\"></td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"B\"></td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"C\"></td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"D\"></td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"E\"></td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"F\"></td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"G\"></td>\n                            </tr>\n                             <tr>\n                                <td><strong>18</strong> a comparison of the environmental impacts of making modern and Roman concrete</td>\n                                <td><input type=\"radio\" name=\"q5\" value=\"A\"></td>\n                                <td><input type=\"radio\" name=\"q5\" value=\"B\"></td>\n                                <td><input type=\"radio\" name=\"q5\" value=\"C\"></td>\n                                <td><input type=\"radio\" name=\"q5\" value=\"D\"></td>\n                                <td><input type=\"radio\" name=\"q5\" value=\"E\"></td>\n                                <td><input type=\"radio\" name=\"q5\" value=\"F\"></td>\n                                <td><input type=\"radio\" name=\"q5\" value=\"G\"></td>\n                            </tr>\n                             <tr>\n                                <td><strong>19</strong> a comparison of the durability of Roman concrete with concrete produced today</td>\n                                <td><input type=\"radio\" name=\"q6\" value=\"A\"></td>\n                                <td><input type=\"radio\" name=\"q6\" value=\"B\"></td>\n                                <td><input type=\"radio\" name=\"q6\" value=\"C\"></td>\n                                <td><input type=\"radio\" name=\"q6\" value=\"D\"></td>\n                                <td><input type=\"radio\" name=\"q6\" value=\"E\"></td>\n                                <td><input type=\"radio\" name=\"q6\" value=\"F\"></td>\n                                <td><input type=\"radio\" name=\"q6\" value=\"G\"></td>\n                            </tr>\n                             <tr>\n                                <td><strong>20</strong> details of how the Romans used seawater to make concrete</td>\n                                <td><input type=\"radio\" name=\"q7\" value=\"A\"></td>\n                                <td><input type=\"radio\" name=\"q7\" value=\"B\"></td>\n                                <td><input type=\"radio\" name=\"q7\" value=\"C\"></td>\n                                <td><input type=\"radio\" name=\"q7\" value=\"D\"></td>\n                                <td><input type=\"radio\" name=\"q7\" value=\"E\"></td>\n                                <td><input type=\"radio\" name=\"q7\" value=\"F\"></td>\n                                <td><input type=\"radio\" name=\"q7\" value=\"G\"></td>\n                            </tr>\n                        </tbody>\n                    </table>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "multi_choice",
+      "questionIds": [
+        "q8",
+        "q9"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q8-9-anchor\">\n                <h4>Questions 21 and 22</h4>\n                <p>Choose <strong>TWO</strong> letters, <strong>A–E</strong>.</p>\n                <p>According to the passage, which <strong>TWO</strong> of the following statements about fly ash are true?</p>\n                <div class=\"options-list\">\n                    <label><input type=\"checkbox\" name=\"q8-9\" value=\"A\"> A Fly ash results in less damage to the environment than Portland cement.</label>\n                    <label><input type=\"checkbox\" name=\"q8-9\" value=\"B\"> B Fly ash was used by the Romans as an alternative to volcanic ash.</label>\n                    <label><input type=\"checkbox\" name=\"q8-9\" value=\"C\"> C Fly ash is already used in the production of some concrete.</label>\n                    <label><input type=\"checkbox\" name=\"q8-9\" value=\"D\"> D All countries have access to fly ash resources.</label>\n                    <label><input type=\"checkbox\" name=\"q8-9\" value=\"E\"> E Fly ash will soon replace volcanic ash.</label>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "summary_completion",
+      "questionIds": [
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q10-11-12-13-anchor\">\n                 <h4>Questions 23 – 26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD AND/OR A NUMBER</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h4>The environmental effects of concrete production</h4>\n                    <p>\n                    Roman concrete is better for the environment than modern concrete, which is made by using Portland cement. This is because a temperature of 1,450 degrees Celsius is needed to combine clays and \n                    <strong>23</strong> <input type=\"text\" id=\"q23_input\"> to make Portland cement. This level of heat was reduced by a \n                    <strong>24</strong> <input type=\"text\" id=\"q24_input\"> when making Roman concrete. Needing less heat meant less \n                    <strong>25</strong> <input type=\"text\" id=\"q25_input\"> had to be burned and less carbon dioxide was produced. According to Monteiro, when considering the amount of carbon dioxide emitted by \n                    <strong>26</strong> <input type=\"text\" id=\"q26_input\">, seven percent of it comes from the manufacture of Portland cement.\n                    </p>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "D",
+    "q2": "B",
+    "q3": "F",
+    "q4": "A",
+    "q5": "E",
+    "q6": "G",
+    "q7": "C",
+    "q8": "A",
+    "q9": "C",
+    "q10": "limestone",
+    "q11": "third",
+    "q12": "fuel",
+    "q13": "industry"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/43. P2 - Learning from the Romans 罗马混凝土【高】/43. P2 - Learning from the Romans 罗马混凝土【高】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/43. P2 - Learning from the Romans 罗马混凝土【高】/43. P2 - Learning from the Romans 罗马混凝土【高】.pdf",
+    "ieltsHtml": "IELTS/P2/Learning from the Romans.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.738Z",
+    "notes": "signature:radio,checkbox,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "14",
+    "q2": "15",
+    "q3": "16",
+    "q4": "17",
+    "q5": "18",
+    "q6": "19",
+    "q7": "20",
+    "q8": "21",
+    "q9": "22",
+    "q10": "23",
+    "q11": "24",
+    "q12": "25",
+    "q13": "26"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

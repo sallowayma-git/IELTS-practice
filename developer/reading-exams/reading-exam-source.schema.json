@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "ReadingExamSourceV1",
+  "requiredFields": [
+    "schemaVersion",
+    "examId",
+    "meta",
+    "passage",
+    "questionGroups",
+    "answerKey",
+    "sourceRefs",
+    "audit"
+  ],
+  "allowedQuestionGroupKinds": [
+    "single_choice",
+    "multi_choice",
+    "true_false_not_given",
+    "yes_no_not_given",
+    "matching",
+    "classification",
+    "summary_completion",
+    "table_completion",
+    "diagram_completion",
+    "short_answer",
+    "sentence_completion"
+  ]
+}

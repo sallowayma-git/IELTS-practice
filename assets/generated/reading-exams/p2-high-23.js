@@ -1,0 +1,121 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p2-high-23", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-high-23",
+  "meta": {
+    "title": "The Constant Evolution of the Humble Tomato 番茄的演化",
+    "category": "P2",
+    "frequency": "high",
+    "pdfFilename": "119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化【高】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化【高】/",
+    "legacyFilename": "119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化【高】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 2</h2>\n            <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>\n            \n            <h3>The Constant Evolution of the Humble Tomato</h3>\n            <h4>Heirloom tomatoes—varieties that have been passed down through several generations of a family because they are thought to have a particularly good flavor—are really no more “natural” than the varieties available in grocery stores. New studies promise to restore their lost, healthy genes.</h4>\n            \n            <p><strong>A</strong> Famous for their taste, color, and organic appearance, heirloom tomatoes are favorites of gardeners and advocates of locally grown foods. The tomato enthusiast might conclude that, given the immense varieties, heirlooms must have a more diverse and superior set of genes than the tomatoes available in grocery stores, those ordinary hybrid varieties such as cherry and plum. However, their seeming diversity is only skin-deep: heirlooms are actually feeble and inbred—the defective product of breeding experiments that began hundreds of years ago, and exploded thanks to enthusiastic backyard gardeners. “The irony of all this,” says Steven Tanksley, a geneticist at Cornell University, \"is that all that diversity of heirlooms can be accounted for by a handful of genes. There are probably no more than 10 mutant genes that create the diversity of heirlooms you see.” But rather than simply proving that the myth about the heirlooms' diversity is wrong, Tanksley's deconstruction of the tomato genome, along with work by others, is showing how a small berry-like fruit from the Andes became one of the world's top crops.</p>\n            <p><strong>B</strong> The cultivated tomato is a member of the nightshade family that includes New World crops such as the potato, which spread around the globe after Christopher Columbus brought them back to Spain in the 15th century. But whereas scientists have uncovered a wealth of archaeological evidence on early farming practices in the New World, the record is blank when it comes to the tomato. The modern tomato seems to have its origins in the Andes in South America and may have been domesticated in Veracruz, Mexico. Primitive varieties still grow throughout the Americas. All told, botanists call as many as 13 species “tomatoes” and consider an additional four to be closely related.</p>\n            <p><strong>C</strong> One might assume that one of these known wild species became today's cultivated crop, but that's not the case: the Mother Tomato has never been found. The closest relative is the currant tomato, which, based on genetic comparisons, split from today's tomato some 1.4 million years ago. So researchers like Tanksley have to work backward, crossing tomato varieties and species in order to understand how various genes influence shape and size. Once isolated, Tanksley later inserts those genes into other tomato varieties to make his case with a dramatic transformation.</p>\n            <p><strong>D</strong> Tanksley concludes from his analyses that in their effort to make bigger, tastier, and faster-growing fruit, our ancestors ultimately exploited just 30 mutations out of the tomato's 35,000 genes. Most of these genes have only small effects on tomato size and shape, but recently Tanksley and his colleagues reported that they found a gene that increases fruit size by 50 percent. It was probably the most important event in domestication. The first written record of tomatoes—from Spain in the 1500s—confirms that this mutation, which enlarges tomatoes by producing compartments known as locules, existed back in the same yellow tomatoes that gave Italians the word pomodoro, or golden apple. Besides size, tomato farmers also selected for shape. To discover those genes, Esther van der Knaap, a Tanksley alumna now at The Ohio State University, took a gene from one heirloom tomato and inserted it into a wild relative. She observed that, as a result, the tiny fruits became shaped like pears.</p>\n            <p><strong>E</strong> The selection of these traits has, however, affected the heirlooms' hardiness. They often suffer from infections that cause the fruit to crack, split, and otherwise rot quickly. Wild plants must continuously evolve to fend off such infections, points out Roger Chetelat of the Tomato Genetics Resource Center at the University of California. But in their quest for size, shape, and flavor, humans have inadvertently eliminated defensive genes. As a result, most possess only a single disease-resistant gene. Chetelat elaborates that heirlooms' taste may have less to do with their genes than with the productivity of the plant and the growing environment. Any plant that produces only two fruits, as heirlooms sometimes do, is highly likely to produce juicier, sweeter, and more flavorful fruit than varieties that produce 100, as commercial types do. In addition, heirlooms are sold ripened on the vine, a certain way to get tastier results than allowing them to mature on the shelf. This means breeders feel confident that getting germ-beating genes back into heirlooms won't harm the desirable aspects of the fruit. Modern breeding has resuscitated grocery-store tomatoes with an influx of wild genes; in the past 50 years, as many as 40 disease-resistant genes have been bred back into commercial crops.</p>\n            <p><strong>F</strong> In 1996, a tomato breeder and former Tanksley student named Doug Heath began a favorite project. After 12 years of traditional breeding with the help of molecular markers, he created a new multi-colored tomato less prone to cracking and also endowed with 12 disease-resistant genes. The original heirloom plant, Heath explains, had defective flowers, which is one reason why it produced only two fruits compared with the 30 he gets from his new variety. He claims he is also able to maintain a comparable flavor and sugar profile even on productive plants. The heirloom's defects are, after all, just an accident of a narrow breeding strategy left over from the very beginning of genetic modification.</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "table_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-anchor\">\n                <h4>Questions 14–17</h4>\n                <p>Reading Passage 2 has six paragraphs, <strong>A–F</strong>.</p>\n                <p>Which paragraph contains the following information?</p>\n                <p><em>Write the correct letter, <strong>A–F</strong>, in boxes 14–17 on your answer sheet.</em></p>\n                <div style=\"overflow-x: auto;\">\n                    <table class=\"matching-table\">\n                        <thead>\n                            <tr>\n                                <th></th>\n                                <th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th>\n                            </tr>\n                        </thead>\n                        <tbody>\n                            <tr>\n                                <td><strong>14</strong> an explanation of research aimed at restoring the health of the heirloom tomato</td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"A\"></td><td><input type=\"radio\" name=\"q1\" value=\"B\"></td><td><input type=\"radio\" name=\"q1\" value=\"C\"></td><td><input type=\"radio\" name=\"q1\" value=\"D\"></td><td><input type=\"radio\" name=\"q1\" value=\"E\"></td><td><input type=\"radio\" name=\"q1\" value=\"F\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>15</strong> a reference to a false belief about the heirloom tomato</td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"A\"></td><td><input type=\"radio\" name=\"q2\" value=\"B\"></td><td><input type=\"radio\" name=\"q2\" value=\"C\"></td><td><input type=\"radio\" name=\"q2\" value=\"D\"></td><td><input type=\"radio\" name=\"q2\" value=\"E\"></td><td><input type=\"radio\" name=\"q2\" value=\"F\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>16</strong> a description of the flavor of the heirloom tomato</td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"A\"></td><td><input type=\"radio\" name=\"q3\" value=\"B\"></td><td><input type=\"radio\" name=\"q3\" value=\"C\"></td><td><input type=\"radio\" name=\"q3\" value=\"D\"></td><td><input type=\"radio\" name=\"q3\" value=\"E\"></td><td><input type=\"radio\" name=\"q3\" value=\"F\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>17</strong> a reference to a single gene that significantly improves the cultivation of tomatoes</td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"A\"></td><td><input type=\"radio\" name=\"q4\" value=\"B\"></td><td><input type=\"radio\" name=\"q4\" value=\"C\"></td><td><input type=\"radio\" name=\"q4\" value=\"D\"></td><td><input type=\"radio\" name=\"q4\" value=\"E\"></td><td><input type=\"radio\" name=\"q4\" value=\"F\"></td>\n                            </tr>\n                        </tbody>\n                    </table>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "matching",
+      "questionIds": [
+        "q5",
+        "q6",
+        "q7",
+        "q8"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-anchor\">\n                <h4>Questions 18–21</h4>\n                <p>Look at the following statements (Questions 18–21) and the list of researchers below.</p>\n                <p>Match each statement with the correct researcher, <strong>A, B, C</strong> or <strong>D</strong>.</p>\n                \n                <div class=\"match-question-item\">\n                    <p><strong>18</strong> The transplanting of certain genes into tomatoes can change their shape.</p>\n                    <div class=\"match-dropzone\" data-question=\"q5\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>19</strong> The flavor of the heirloom tomato is largely dependent on actual yield and cultivation.</p>\n                    <div class=\"match-dropzone\" data-question=\"q6\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                     <p><strong>20</strong> A new type of tomato can be produced that is stronger than the original heirloom tomato yet equally sweet and flavorsome.</p>\n                    <div class=\"match-dropzone\" data-question=\"q7\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                    <p><strong>21</strong> The wide variety of heirloom tomatoes is due to only a small number of genes.</p>\n                    <div class=\"match-dropzone\" data-question=\"q8\"></div>\n                </div>\n\n                <div class=\"options-pool\" id=\"researcher-options-pool\">\n                    <strong>List of Researchers</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"A\">A Steven Tanksley</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"B\">B Esther van der Knaap</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"C\">C Roger Chetelat</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"D\">D Doug Heath</div>\n                    </div>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q9-10-11-12-13-anchor\">\n                 <h4>Questions 22–26</h4>\n                <p>Complete the sentences below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"sentence-completion\">\n                    <p><strong>22</strong> There is little information on the origin of the tomato despite the existence of <input type=\"text\" id=\"q22_input\"> data on the growing of other New World crops.</p>\n                    <p><strong>23</strong> Although it is uncertain, the tomato is thought to have first grown in the <input type=\"text\" id=\"q23_input\">.</p>\n                    <p><strong>24</strong> In regard to genetic similarities, the type of tomato <input type=\"text\" id=\"q24_input\"> is the nearest to the earliest.</p>\n                    <p><strong>25</strong> A genetic <input type=\"text\" id=\"q25_input\">, which is evident in <i>pomodoro</i>, produced larger tomatoes.</p>\n                    <p><strong>26</strong> <input type=\"text\" id=\"q26_input\"> are a problem for heirloom tomatoes because they frequently lead to damage and deterioration.</p>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "F",
+    "q2": "A",
+    "q3": "E",
+    "q4": "D",
+    "q5": "B",
+    "q6": "C",
+    "q7": "D",
+    "q8": "A",
+    "q9": "archaeological",
+    "q10": "andes",
+    "q11": "currant",
+    "q12": "mutation",
+    "q13": "infections"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化【高】/119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化【高】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化【高】/119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化【高】.pdf",
+    "ieltsHtml": "IELTS/P2/The Constant Evolution of the Humble Tomato.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.549Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "14",
+    "q2": "15",
+    "q3": "16",
+    "q4": "17",
+    "q5": "18",
+    "q6": "19",
+    "q7": "20",
+    "q8": "21",
+    "q9": "22",
+    "q10": "23",
+    "q11": "24",
+    "q12": "25",
+    "q13": "26"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

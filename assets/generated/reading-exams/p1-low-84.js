@@ -1,0 +1,114 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-low-84", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-low-84",
+  "meta": {
+    "title": "Why good ideas fail TF公司",
+    "category": "P1",
+    "frequency": "low",
+    "pdfFilename": "174. P1 - Why good ideas fail TF公司.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/174. P1 - Why good ideas fail TF公司/",
+    "legacyFilename": "174. P1 - Why good ideas fail TF公司.html",
+    "questionIntroHtml": "<h3>Questions 1–5</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>Why good ideas fail</h3>\n            <h4>As part of a marketing course, two marketing experts comment on a hypothetical case study involving TF, a fictional retail giant specializing in home furnishing. The experts give concrete solutions and advice to assist students.</h4>\n            \n            <h4>Hypothetical case study:</h4>\n            <p>TF became a retail success in the 1970s when it succeeded in spotting homeware trends and meeting the needs of its then trendy young customers. However, by 2004, the TF stores were failing and a rethink was clearly necessary. Tibal Fisher, TF's founder and CEO, decided to change its focus under a new brand name, TF's Nextstage. His aim was to recapture the now ageing customers that had given him his early success and target consumers aged 60+ with devices and gadgets specifically designed to assist them with the problems associated with ageing: mobile phones with screens that were easy to read; kitchen gadgets with comfortable grips; electronic devices that were easy to set and adjust. TF's market research proved to be very positive, showing strong consumer support for the products.</p>\n            <p>In 2007, the stores were remodelled at a cost of US $40 million, and the new brand was launched. Each store was made more comfortable and featured a coffee shop to help increase traffic. Tibal had predicted that if they could get customers into the stores, then the products would sell themselves. However, by 2009 it was clear that the idea was a failure, and the stores consistently remained empty. Customers complained that the new stores felt like a senior center and reminded them that they were growing old.</p>\n            \n            <h4>Feedback from experts:</h4>\n            <p><strong>Expert 1: Donna Sturgess, global head of innovation, GlaxoSmithKline</strong></p>\n            <p>The team's customer research efforts are a classic case of missing the subconscious associations at work in consumers' minds. Tibal and his executives looked only at surface attitudes. Since those attitudes make up a relatively small part of the total consumer response, the executives are clueless about the reason for the poor sales. It's critical for companies to understand that every customer relates to a brand emotionally, and it's those emotions that trigger — or block — purchases.</p>\n            <p>That's why we've focused on using emotional strategies behind branding for a number of years now. A great example is Alli (pronounced 'ally'), a drug to aid weight loss. The product deals with a highly emotional issue, so in marketing it, we faced the same challenge that the new TF stores are facing: the very thought of buying the product reminds customers that they have problems they feel negatively about. In the case of TF's Nextstage, the problems are age and infirmity. In the case of Alli, the problems are excessive weight and its consequences. There's always a risk that consumers' negative feelings will discourage them from starting or staying on a diet. So, after extensive market research, we took a number of steps to inject emotions into the whole process of using the product.</p>\n            <p>First, we came up with a name that sounds like a helpful partner. We also aimed to make the container both beautiful and functional — something that didn't just hold pills but could later be used to store diet guides and recipes. Traditional market research is unlikely to uncover ideas like this, so we use a wide variety of techniques. Even simple techniques, such as one-on-one interviews, or ethnographic observation that involves going into people's houses to examine their behaviour, can provide valuable data.</p>\n            \n            <p><strong>Expert 2: Alex Lee, president of OXO International, maker of OXO Good Grips household products</strong></p>\n            <p>This retailer can get back on track by remembering a principle that applies to consumers in general, and those aged 60+ in particular: they're attracted by brands they associate with the type of people they'd like to be — not the type they really are. That's why marketing campaigns for surf gear feature surfers, not the city dwellers who will wear the products while doing their shopping.</p>\n            <p>I was reminded of this principle a few years ago when we wanted to find out how far we could apply our design philosophy of making things easier to use in order to move from our core business, kitchen tools, into other products. We conducted what are known as focus groups, where participants were asked to look at photos of people and pick those they perceived to be users and non-users of our products. Consistently, they picked people who looked fit as the sort who would use our products, and people who looked old and boring as the sort who wouldn't. Yet the participants, all owners of our products, looked a lot more like the latter than the former.</p>\n            <p>Although the needs of elderly users and those with deteriorating vision or dexterity are very much taken into consideration when we develop new designs, we try to offer products that appeal to 20- and 30-year-olds. We believe that referring to these products as helping tools would serve only to harm the brand in our customers' eyes. That's why our philosophy of universal design, which involves creating products that are comfortably useable by the largest possible range of people, is never explicitly stated as part of our marketing position.</p>\n            <p>We've found that market research does not need to be very sophisticated. For instance, we have conducted simple surveys in the lobby of our building, offering free products in exchange for people's opinions. Some may call this unscientific, but we have uncovered great insights this way. Sometimes the most important signals come from an executive's own instincts. In Tibal Fisher's case, this could have told him what his surveys and focus groups didn't: 60-plus-year-olds won't support a business that expects them to act their age.</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Do the following statements agree with the information given in Reading Passage 1?</h4>\n                <p>In boxes 1–5 on your answer sheet, write:</p>\n                <ul style=\"list-style-position: inside; padding-left: 0; margin-bottom: 1rem;\">\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information on this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>1</strong> The TF Nextstage stores planned to sell products to make life easier for older people.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q1\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>2</strong> TF's market research indicated that people liked the products.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q2\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>3</strong> It cost more than expected to remodel the TF stores.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q3\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>4</strong> The TF Nextstage coffee shops sold their own brand of food and drink.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q4\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>5</strong> TF Nextstage customers liked the atmosphere in the new stores.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q5\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions 1–5</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q6",
+        "q7",
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q6-7-8-9-10-11-12-13-anchor\">\n                <h4>Complete the notes below.</h4>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n                \n                <div class=\"notes-completion\">\n                    <h4>Feedback from experts</h4>\n                    <p><strong>Donna Sturgess</strong></p>\n                    <p>Problems with customer research:</p>\n                    <ul>\n                        <li>The TF team limited their research to attitudes that occur at a <strong>6</strong> <input type=\"text\" id=\"q6_input\" maxlength=\"20\"> level in customers' minds.</li>\n                        <li>TF did not consider customers' emotions.</li>\n                    </ul>\n                    <p>How my company dealt with a similar problem:</p>\n                    <ul>\n                         <li>Product: Alli</li>\n                         <li>Use: help people achieve <strong>7</strong> <input type=\"text\" id=\"q7_input\" maxlength=\"20\"></li>\n                         <li>Marketing aim: help customers see the product in a positive way by:\n                            <ul>\n                                <li>giving the product a <strong>8</strong> <input type=\"text\" id=\"q8_input\" maxlength=\"20\"> that seems helpful and supportive</li>\n                                <li>giving the product a reusable <strong>9</strong> <input type=\"text\" id=\"q9_input\" maxlength=\"20\"></li>\n                            </ul>\n                         </li>\n                    </ul>\n                    <p>Market research:</p>\n                    <ul>\n                         <li>does not need to be complex</li>\n                         <li>good information can come from interviews or studying the <strong>10</strong> <input type=\"text\" id=\"q10_input\" maxlength=\"20\"> of consumers in the home</li>\n                    </ul>\n                    <hr style=\"margin: 20px 0; border: none; border-top: 1px solid var(--line);\">\n                    <p><strong>Alex Lee</strong></p>\n                    <p>Problem:</p>\n                    <ul>\n                         <li>customers are attracted to the ideal, not the reality, e.g. ads for surf gear</li>\n                    </ul>\n                    <p>How my company dealt with a similar problem:</p>\n                     <ul>\n                         <li>we organised <strong>11</strong> <input type=\"text\" id=\"q11_input\" maxlength=\"20\"> to find out what images customers associate with our products</li>\n                         <li>we do not call our products helping tools in our marketing campaigns</li>\n                    </ul>\n                     <p>Market research:</p>\n                    <ul>\n                         <li>can be basic, e.g. by doing <strong>12</strong> <input type=\"text\" id=\"q12_input\" maxlength=\"20\"></li>\n                         <li>company executives should follow their <strong>13</strong> <input type=\"text\" id=\"q13_input\" maxlength=\"20\"></li>\n                    </ul>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "TRUE",
+    "q2": "TRUE",
+    "q3": "NOT GIVEN",
+    "q4": "NOT GIVEN",
+    "q5": "FALSE",
+    "q6": "surface",
+    "q7": "weight loss",
+    "q8": "name",
+    "q9": "container",
+    "q10": "behaviour",
+    "q11": "focus groups",
+    "q12": "simple surveys",
+    "q13": "instincts"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/174. P1 - Why good ideas fail TF公司/174. P1 - Why good ideas fail TF公司.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/174. P1 - Why good ideas fail TF公司/174. P1 - Why good ideas fail TF公司.pdf",
+    "ieltsHtml": null
+  },
+  "audit": {
+    "matchStatus": "shui_only",
+    "matchConfidence": 0,
+    "verifiedAt": "2026-03-08T16:24:30.654Z",
+    "notes": "signature:radio,text,textarea,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);
