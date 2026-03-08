@@ -1,0 +1,114 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-low-69", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-low-69",
+  "meta": {
+    "title": "An important language development 楔形文字",
+    "category": "P1",
+    "frequency": "low",
+    "pdfFilename": "160. P1 - An important language development 楔形文字.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/160. P1 - An important language development 楔形文字/",
+    "legacyFilename": "160. P1 - An important language development 楔形文字.html",
+    "questionIntroHtml": "<h3>Questions 1–5</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>An important language development</h3>\n            \n            <p>Cuneiform, the world's first known system of handwriting, originated some 6,000 years ago in Sumer in what is now southern Iraq. It was most often inscribed on palm-sized, rectangular clay tablets measuring several centimetres across, although occasionally larger tablets or cylinders were used. Clay was an excellent medium for writing. Other surfaces which have been employed—for example, parchment, papyrus and paper—are not long-lasting and are easily destroyed by fire and water. But clay has proved to be resistant to those particular kinds of damage.</p>\n            <p>The word 'cuneiform' actually refers to the marks or signs inscribed in the clay. The original cuneiform signs consisted of a series of lines—triangular, vertical, diagonal, and horizontal. Sumerian writers would impress these lines into the wet clay with a stylus—a long, thin, pointed instrument which looked somewhat like a pen. Oddly, the signs were often almost too small to see with the naked eye. Cuneiform signs were used for the writing of at least a dozen languages. This is similar to how the Latin alphabet is used today for writing English, French, Spanish and German, for example.</p>\n            <p>Before the development of cuneiform, tokens were used by the Sumerians to record certain information. For example, they might take small stones and use them as tokens or representations of something else, like a goat. A number of tokens, then, might mean a herd of goats. These tokens might then be placed in a cloth container and provided to a buyer as a receipt for a transaction, perhaps five tokens for five animals. It was not that different from what we do today when we buy some bread and the clerk gives us back a piece of paper with numbers on it to confirm the exchange.</p>\n            <p>By the 4th century BCE, the Sumerians had adapted this system to a form of writing. They began putting tokens in a container resembling an envelope, one made of clay instead of cloth. They then stamped the outside to indicate the number and type of tokens inside. A person could then 'read' what was stamped on the container and know what was inside.</p>\n            <p>Gradually, Sumerians developed symbols for words. When first developed, each symbol looked like the concrete thing it represented. For example, an image which resembled the drawing of a sheep meant just that. Then another level of abstraction was introduced when symbols were developed for intangible ideas such as ‘female' or 'hot' or 'God'. Cuneiform, in other words, evolved from a way used primarily to track and store information into a way to represent the world symbolically. Over the centuries, the marks became ever more abstract, finally evolving into signs that looked nothing like what they referred to, just as the letters 'h-o-u-s-e' have no visual connection to the place we live in. At this last stage in the evolution of cuneiform, the signs took the form of triangles, which became common cuneiform signs.</p>\n            <p>As the marks became more abstract, the system became more efficient because there were fewer marks for a 'reader' to learn. But cuneiform also became more complex because society itself was becoming more complex, so there were more ideas and concepts that needed to be expressed. However, most linguists and historians agree cuneiform developed primarily as a tool for accounting. Of the cuneiform tablets that have been discovered, excavated and translated, about 75 percent contain this type of practical information, rather than artistic or imaginative work.</p>\n            <p>Cuneiform writing was used for thousands of years, but it eventually ceased to be used in everyday life. In fact, it died out and remained unintelligible for almost 2,000 years. In the late 19th century, a British army officer, Henry Rawlinson, discovered cuneiform inscriptions which had been carved into the surface of rocks in the Behistun Mountains in what is present-day Iran. Rawlinson made impressions of the marks on large pieces of paper as he balanced dangerously on the surrounding rocks.</p>\n            <p>Rawlinson took his copies home to Britain and studied them for years to determine what each line stood for, and what each group of symbols meant. He found that, in the writing on those particular rocks, every word was repeated three times in three languages: Old Persian, Elamite and Babylonian. Since the meanings in these languages were already known to linguists, he could thus translate the cuneiform. Eventually, he fully decoded the cuneiform marks and discovered that they described the life of Darius, a king of the Persian Empire in the 5th century BСЕ.</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Do the following statements agree with the information given in Reading Passage 1?</h4>\n                <p>In boxes 1–5 on your answer sheet, write:</p>\n                <ul style=\"list-style-position: inside; padding-left: 0; margin-bottom: 1rem;\">\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information on this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>1</strong> Cuneiform tablets were produced in different shapes and sizes.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q1\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>2</strong> When Sumerian writers marked the clay tablets, the tablets were dry.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q2\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>3</strong> Cuneiform was often difficult to read because of its size.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q3\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>4</strong> A number of languages adopted cuneiform.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q4\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>5</strong> Cuneiform signs can be found in some modern alphabets.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q5\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions 1–5</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q6",
+        "q7",
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q6-7-8-9-10-11-12-13-anchor\">\n                <h4>Complete the notes below.</h4>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"notes-completion\">\n                    <h4>The Development and Translation of Cuneiform</h4>\n                    <p class=\"section-title\">Before cuneiform</p>\n                    <ul>\n                        <li>tokens, for example, <strong>6</strong> <input type=\"text\" id=\"q6_input\" maxlength=\"20\"> were often used</li>\n                        <li>the first tokens were kept in containers made of <strong>7</strong> <input type=\"text\" id=\"q7_input\" maxlength=\"20\"></li>\n                        <li>tokens were used as a <strong>8</strong> <input type=\"text\" id=\"q8_input\" maxlength=\"20\"> to give when selling something</li>\n                    </ul>\n\n                    <p class=\"section-title\">By the 4th century BCE</p>\n                    <ul>\n                         <li>tokens were put in a container that looked like a clay <strong>9</strong> <input type=\"text\" id=\"q9_input\" maxlength=\"20\"></li>\n                    </ul>\n\n                    <p class=\"section-title\">Complex, abstract symbols developed</p>\n                    <ul>\n                         <li>at first, signs looked like what they indicated, e.g. <strong>10</strong> <input type=\"text\" id=\"q10_input\" maxlength=\"20\"></li>\n                         <li>then signs became more abstract</li>\n                         <li>eventually, cuneiform signs shaped like <strong>11</strong> <input type=\"text\" id=\"q11_input\" maxlength=\"20\"> were developed</li>\n                         <li>according to experts, cuneiform was mainly used for <strong>12</strong> <input type=\"text\" id=\"q12_input\" maxlength=\"20\"></li>\n                    </ul>\n\n                    <p class=\"section-title\">19th-century translation of cuneiform inscriptions by Henry Rawlinson</p>\n                    <ul>\n                         <li>Rawlinson found cuneiform inscriptions in the Behistun Mountains</li>\n                         <li>Rawlinson copied the inscriptions onto <strong>13</strong> <input type=\"text\" id=\"q13_input\" maxlength=\"20\"></li>\n                         <li>Rawlinson realised that each word of the inscriptions appeared in three languages</li>\n                         <li>When translated, Rawlinson found that the writings were about a 5th-century BCE king</li>\n                    </ul>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "TRUE",
+    "q2": "FALSE",
+    "q3": "TRUE",
+    "q4": "TRUE",
+    "q5": "NOT GIVEN",
+    "q6": "stones",
+    "q7": "cloth",
+    "q8": "receipt",
+    "q9": "envelope",
+    "q10": "sheep",
+    "q11": "triangles",
+    "q12": "accounting",
+    "q13": "paper"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/160. P1 - An important language development 楔形文字/160. P1 - An important language development 楔形文字.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/160. P1 - An important language development 楔形文字/160. P1 - An important language development 楔形文字.pdf",
+    "ieltsHtml": "IELTS/P1/An important language development.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.629Z",
+    "notes": "signature:radio,text,textarea,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

@@ -1,0 +1,114 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-medium-33", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-medium-33",
+  "meta": {
+    "title": "The Pyramid of Cestius 罗马金字塔",
+    "category": "P1",
+    "frequency": "medium",
+    "pdfFilename": "128. P1 - The Pyramid of Cestius 罗马金字塔【次】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/128. P1 - The Pyramid of Cestius 罗马金字塔【次】/",
+    "legacyFilename": "128. P1 - The Pyramid of Cestius 罗马金字塔【次】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>The Pyramid of Cestius</h3>\n            \n            <p>A 2,000-year-old pyramid in the city of Rome has been restored by archaeologists.</p>\n            \n            <p>Though Rome draws tourists from around the world to its many impressive sites, one notable monument there has never attracted nearly as much interest: the Pyramid of Cestius. But why would there be a pyramid in Italy? After the Roman conquest of Egypt in 30 B.C., Egyptian architectural style became the fashion in Rome.</p>\n            \n            <p>Though obelisks and other monuments inspired by Egypt's great pyramids sprang up around the city, only two actual pyramids are known to have been built. The only one left standing, the Pyramid of Cestius, was designed as the burial pyramid for a Roman politician named Caius Cestius, who ordered that the building work be completed within a period of 330 days. Construction took place at some point between 18 B.C. and 12 B.C. Cestius' pyramid had a layer of white Carrara marble on the outside, and was constructed from brick held together by a basic kind of cement on the inside. One of the things that strikes you when you look at the pyramid is how steep it is, so that the shape of Cestius' pyramid is quite unlike that of typical Egyptian ones. This is a difference that could have been the result of inaccurate information sent back to Rome by soldiers who saw the pyramids in person in Egypt. Alternatively, Roman builders could have drawn inspiration from the pyramids in Nubia, a region located in what is today northern Sudan and southern Egypt.</p>\n            \n            <p>At the time of its construction, since there was a strict Roman law prohibiting the placement of tombs within the city itself, the Pyramid of Cestius would have stood in the countryside. Rome grew enormously during the next two centuries, and, by the 3rd century A.D., the pyramid would have been surrounded by buildings. We also know that in the 3rd century A.D., the Pyramid of Cestius was hidden behind a high wall on the orders of Emperor Aurelian; this probably helped it survive throughout the centuries to come, even as other ancient monuments disappeared. By the Middle Ages, the pyramid was covered in vegetation and thick dirt, and popular myth had developed that it might be a tomb for one of the twin brothers Romulus and Remus, who were regarded as the men who had established the city of Rome. Cestius' actual tomb within the pyramid and the inscription identifying the pyramid as his weren't rediscovered until the 1660s, when the pyramid underwent restoration. During excavations, when trees and plants were cleared away, two marble bases were found in front of the pyramid, as well as fragments of bronze statues that had once stood on them, on either side of the pyramid. The people employed to excavate the pyramid did not find the urn that would have contained Cestius' remains, but they did come across a tunnel. It was quite possible, therefore, that robbers had at some earlier time removed the contents of the tomb. But while some of the features of Cestius' tomb no longer exist, at least the pyramid itself has survived.</p>\n            \n            <p>Today, the foundations of Cestius' pyramid rest below street level near an intersection with heavy traffic, so that passing tourists and residents could easily fail to notice its full height of 119 feet. Across the intersection is the Piramide station, located on Line B of the Rome Metro. In 2011, the Japanese clothing-company entrepreneur Yuzo Yagi, president of Yagi Tsusho Ltd, announced his intention to help the Italian government pay for an ambitious renovation of the Pyramid of Cestius. 'It's an act of gratitude,' he later told journalists. 'Our company has grown thanks to Italy.' Work began at the site shortly after Yagi signed an official agreement with the Special Superintendency for the Archaeological Heritage of Rome, and was completed ahead of schedule thanks to his 2-million-euro contribution.</p>\n            \n            <p>As archaeologist Leonardo Guarnieri explained to journalists, officials are now conducting tours of the newly renovated pyramid twice a month by reservation. Visitors who take advantage of the tour can make their way through a narrow corridor in order to enter the burial chamber itself. It is within these walls that they can admire the frescoes: watercolour paintings typical of the time. In the chamber, it is possible to make out four frescoes of the winged Roman goddess of war, Victoria, a figure from Roman legend, as well as a series of vases, the type that would have been used for special rituals and purification purposes. We know from the writings of earlier visitors that there used to be more here, but the majority have disappeared over time. Only one problem remains now that the restoration is complete. The white exterior of the Pyramid of Cestius will have to be cleaned every few months to remove the layer of urban pollution. A team of free-climbers will be employed to do the job, in order to avoid placing builders' scaffolding around the newly welcoming monument.</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6",
+        "q7"
+      ],
+      "bodyHtml": "<div class=\"group\">\n                <h4>Questions 1–7</h4>\n                <p>Do the following statements agree with the information in Reading Passage 1?</p>\n                <p>In boxes 1–7 on your answer sheet, write:</p>\n                <ul>\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information about this</li>\n                </ul>\n                \n                <div class=\"question-item\" id=\"q1-anchor\">\n                    <p>1. The Pyramid of Cestius has always been one of Rome's most popular tourist attractions.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q1\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                \n                <div class=\"question-item\" id=\"q2-anchor\">\n                    <p>2. The construction of the Pyramid was completed before Cestius' death.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q2\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                \n                <div class=\"question-item\" id=\"q3-anchor\">\n                    <p>3. In the Middle Ages, people thought an original founder of Rome was buried in the Pyramid of Cestius.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q3\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                \n                <div class=\"question-item\" id=\"q4-anchor\">\n                    <p>4. Today, the height of the Pyramid is something that tourists and residents immediately notice.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q4\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                \n                <div class=\"question-item\" id=\"q5-anchor\">\n                    <p>5. Japanese businessman Yuzo Yagi was an admirer of both Italian and Egyptian architecture.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q5\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                \n                <div class=\"question-item\" id=\"q6-anchor\">\n                    <p>6. The restoration of the Pyramid of Cestius, which was funded by Yuzo Yagi, finished earlier than expected.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q6\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                \n                <div class=\"question-item\" id=\"q7-anchor\">\n                    <p>7. Most of the original frescoes inside Cestius' tomb have survived to this day.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q7\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "short_answer",
+      "questionIds": [
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\">\n                <h4>Questions 8-13</h4>\n                <p>Complete the notes below.</p>\n                <p>Choose ONE WORD ONLY from the passage for each answer.</p>\n                \n                <h5>History of the Pyramid of Cestius</h5>\n                \n                <p><strong>Construction of Cestius' pyramid</strong></p>\n                <p>• it was made from 8 <input class=\"blank\" data-answer=\"brick\"> and cement</p>\n                <p>• its 9 <input class=\"blank\" data-answer=\"shape\"> is different to the pyramids found in Egypt</p>\n                <p>• it was originally built in the 10 <input class=\"blank\" data-answer=\"countryside\"> as building tombs in the city was forbidden</p>\n                <p>• Emperor Aurelian ordered that a wall had to be built around it</p>\n                \n                <p><strong>Restoration of Cestius' pyramid in the 1660s</strong></p>\n                <p>• In the 1660s, some broken 11 <input class=\"blank\" data-answer=\"statues\"> were found next to it</p>\n                <p>• the 12 <input class=\"blank\" data-answer=\"tunnel\"> inside the tomb suggests that robbers had been there</p>\n                <p>• the frescoes show mythological scenes, and images of vases</p>\n                \n                <p><strong>Restoration of Cestius' pyramid today</strong></p>\n                <p>• a Japanese businessman paid for its restoration</p>\n                <p>• climbers are helping to get rid of signs of 13 <input class=\"blank\" data-answer=\"pollution\"></p>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "FALSE",
+    "q2": "NOT GIVEN",
+    "q3": "TRUE",
+    "q4": "FALSE",
+    "q5": "NOT GIVEN",
+    "q6": "TRUE",
+    "q7": "FALSE",
+    "q8": "brick",
+    "q9": "shape",
+    "q10": "countryside",
+    "q11": "statues",
+    "q12": "tunnel",
+    "q13": "pollution"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/128. P1 - The Pyramid of Cestius 罗马金字塔【次】/128. P1 - The Pyramid of Cestius 罗马金字塔【次】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/128. P1 - The Pyramid of Cestius 罗马金字塔【次】/128. P1 - The Pyramid of Cestius 罗马金字塔【次】.pdf",
+    "ieltsHtml": "IELTS/P1/The Pyramid of Cestius.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.563Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

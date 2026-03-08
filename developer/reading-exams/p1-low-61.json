@@ -1,0 +1,108 @@
+{
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-low-61",
+  "meta": {
+    "title": "Carnivorous plants 食虫植物",
+    "category": "P1",
+    "frequency": "low",
+    "pdfFilename": "153. P1 - Carnivorous plants 食虫植物.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/153. P1 - Carnivorous plants 食虫植物/",
+    "legacyFilename": "153. P1 - Carnivorous plants 食虫植物.html",
+    "questionIntroHtml": "<h3>Questions 1–5</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>Carnivorous plants</h3>\n            <h4>They attract insects and then eat their flesh. Is that any way for a plant to behave?</h4>\n            \n            <p>The naturalist and author of On the Origin of Species, Charles Darwin, was fascinated by carnivorous plants. In 1860, soon after he came across his first carnivorous plant — the sundew, Drosera — he wrote, 'I care more about Drosera than the origin of all the species in the world.' He spent months running experiments on the plants. He dropped flies and bits of meat on their leaves and watched them slowly fold their sticky tentacles over their prey. He thought it incredible that brushing a leaf with a single strand of human hair was enough to bring about a response. Yet sundews, he observed, ignored raindrops. To react to such a false alarm, he reasoned, would obviously be a great evil to the plant. This was no accident. This was adaptation.</p>\n            <p>Darwin expanded his studies from sundews to other species in his book Insectivorous Plants. He was amazed at the quickness and power of the Venus flytrap. He showed that when one of its leaves snapped shut, it formed itself into a temporary ‘stomach', secreting enzymes that could dissolve the prey. He noted that a leaf took more than a week to reopen after closing, and reasoned that the interlocking spines along the margin of the leaf allowed tiny insects to escape, saving the plant the expense of digesting an insufficient meal.</p>\n            <p>Today, biologists using 21st-century tools to study cells and DNA are beginning to understand how these plants hunt, eat, and digest — and how these strange adaptations came about in the first place. Alexander Volkov, a plant physiologist at Oakwood University in Alabama, believes he has figured out the Venus flytrap's secret. ‘This,' Volkov declares, 'is an electrical plant.'</p>\n            <p>When an insect brushes against a hair on the leaf of a Venus flytrap, the movement sets off an electric charge. The charge builds up inside the tissue of the leaf but is not enough to stimulate the snap, which keeps the Venus flytrap from reacting to false alarms, such as raindrops. An insect, however, is likely to brush a second hair, adding enough electric charge for the leaf to close.</p>\n            <p>Volkov's experiments reveal that the electric charge travels down fluid-filled tunnels in a leaf, which opens up pores in cell membranes. Water rushes from the cells on the inside of the leaf to those on the outside, causing the leaf to rapidly flip in shape from convex to concave, like a soft contact lens. As the leaves flip, they snap together, trapping an insect inside.</p>\n            <p>The bladderwort plant has an equally sophisticated way of setting its underwater trap. It pumps water out of tiny air sacs or bladders, lowering the pressure inside. When a water flea or some other small creature swims past, it bends hairs on the bladder, causing a flap to spring apart. The low pressure sucks water in, carrying the creature along with it. In one five-hundredth of a second, the flap swings shut again. The cells in the bladder then begin to pump water out again, creating a new vacuum. Many other species of carnivorous plants act like living flypaper, catching animals on sticky tentacles. Pitcher plants use yet another strategy, growing long tube-shaped leaves into which insects fall. Some of the largest have pitchers up to 30cm deep and can consume whole frogs unlucky enough to fall into them. Sophisticated chemistry helps make the pitcher a death trap.</p>\n            <p>Nicholas Gotelli, of the University of Vermont, is trying to figure out what evolutionary forces pushed these plants towards meat. Carnivorous plants clearly benefit from eating animals; when scientists feed pitcher plants extra bugs, the plants get bigger. But the benefits of eating flesh are not the ones you might expect. Carnivorous animals, like ourselves, use the carbon in protein and the fat in meat to build muscles and store energy. Carnivorous plants, however, take nitrogen and phosphorus from the flesh in order to build light-harvesting enzymes. Eating animals, in other words, lets carnivorous plants do what all plants do: grow by taking energy directly from the sun.</p>\n            <p>Unfortunately, they do a really bad job of it. That's because they have to use a lot of energy to make the equipment they need to catch animals — the enzymes, the pumps, the sticky tentacles, and so on. A pitcher or a flytrap is not very good at photosynthesis because, unlike plants with ordinary leaves, it does not have flat solar panels that can absorb lots of sunlight. Gotelli suspects that only under special conditions are the benefits of being carnivorous greater than the costs. The poor soil of bogs and swamps, where many carnivorous plants grow, offers little nitrogen and phosphorus, so carnivorous plants enjoy an advantage there over ‘conventional' plants. Also, bogs are often flooded with sunshine, so even an inefficient carnivorous plant can carry out enough photosynthesis to survive. 'They're stuck, and they're making the best of it,' says Aaron Ellison of Harvard University.</p>\n            <p>Unfortunately, the adaptations that enable carnivorous plants to survive in harsh habitats also make them extremely sensitive to environmental changes. Chemical fertilizers used in agriculture and pollution from power plants are adding extra nitrogen to many bogs in North America. Carnivorous plants are so finely adapted to low levels of nitrogen that this extra fertilizer is overloading their systems. Humans also threaten carnivorous plants in other ways. The black market trade in exotic carnivorous plants is strong, but even if this can be prevented, carnivorous plants will continue to suffer from other dangers. Their habitat is disappearing, to be replaced by shopping centers and houses. The suppression of wildfires by government agencies allows other plants to grow quickly and outcompete the Venus flytraps. Good news, perhaps, for flies. But a loss for all who delight in the inventiveness of evolution.</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Complete the notes below.</h4>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"notes-completion\">\n                    <h4>Carnivorous Plants</h4>\n                    <p><strong>Darwin's experiments:</strong></p>\n                    <p><u>Drosera</u></p>\n                    <ul>\n                        <li>He put insects and small amounts of meat onto leaves and observed what happened.</li>\n                        <li>He was amazed that one human hair triggered a response.</li>\n                        <li>He understood why the plant did not respond to <strong>1</strong> <input name=\"q1\" type=\"text\" id=\"q1_input\" maxlength=\"20\">.</li>\n                    </ul>\n                    <p><u>Venus flytrap</u></p>\n                    <ul>\n                        <li>He demonstrated how leaves close and then, for a short period, act like a <strong>2</strong> <input name=\"q2\" type=\"text\" id=\"q2_input\" maxlength=\"20\">.</li>\n                        <li>He noted the structure of the leaves ensures small insects are released.</li>\n                    </ul>\n                    <p><strong>Biology today:</strong></p>\n                    <p><u>Venus flytrap</u></p>\n                    <ul>\n                         <li>If insects come into contact with leaf hairs, their movement produces an electric charge.</li>\n                         <li>The charge enters fluid-filled tunnels, causing <strong>3</strong> <input name=\"q3\" type=\"text\" id=\"q3_input\" maxlength=\"20\"> in cell membranes to open.</li>\n                         <li>Water moves between cells and then the leaf changes from convex to concave, trapping the insect inside.</li>\n                    </ul>\n                    <p><u>Bladderwort</u></p>\n                    <ul>\n                        <li>Hairs bend when insects swim past, resulting in the opening of a flap.</li>\n                        <li>Water is sucked in.</li>\n                        <li>When water is pumped out of bladder cells, a <strong>4</strong> <input name=\"q4\" type=\"text\" id=\"q4_input\" maxlength=\"20\"> builds up inside.</li>\n                    </ul>\n                     <p><u>Pitcher plants</u></p>\n                    <ul>\n                        <li>The plants have tube-shaped leaves that insects fall into.</li>\n                        <li>Some plants are big enough to capture and eat <strong>5</strong> <input name=\"q5\" type=\"text\" id=\"q5_input\" maxlength=\"20\">.</li>\n                    </ul>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions 1–5</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q6",
+        "q7",
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q6-7-8-9-10-11-12-13-anchor\">\n                <h4>Do the following statements agree with the information given in Reading Passage 1?</h4>\n                <p>In boxes 6–13 on your answer sheet, write:</p>\n                <ul style=\"list-style-position: inside; padding-left: 0; margin-bottom: 1rem;\">\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information on this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>6</strong> Pitcher plants increase in size after they have digested a lot of insects.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q6\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>7</strong> Carnivorous plants produce light-harvesting enzymes with the nutrients they extract from animals.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q7\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>8</strong> Pitcher plants and Venus flytraps are more efficient at photosynthesis than plants with ordinary leaves.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q8\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>9</strong> Venus flytraps are better adapted to the soil of swamps and bogs than other carnivorous plants.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q9\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>10</strong> Carnivorous plants frequently find it difficult to photosynthesise in bogs due to a lack of sunlight.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q10\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q10\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q10\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>11</strong> Scientists have campaigned to reduce the amount of nitrogen that is released into the soil by agricultural practices.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q11\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>12</strong> A lot of exotic carnivorous plants are sold illegally.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q12\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>13</strong> Preventing wildfires is beneficial to the Venus flytrap.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q13\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "raindrops",
+    "q2": "stomach",
+    "q3": "pores",
+    "q4": "vacuum",
+    "q5": "frogs",
+    "q6": "TRUE",
+    "q7": "TRUE",
+    "q8": "FALSE",
+    "q9": "NOT GIVEN",
+    "q10": "FALSE",
+    "q11": "NOT GIVEN",
+    "q12": "TRUE",
+    "q13": "FALSE"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/153. P1 - Carnivorous plants 食虫植物/153. P1 - Carnivorous plants 食虫植物.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/153. P1 - Carnivorous plants 食虫植物/153. P1 - Carnivorous plants 食虫植物.pdf",
+    "ieltsHtml": "IELTS/P1/Carnivorous plants.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.615Z",
+    "notes": "signature:radio,text,textarea,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+}

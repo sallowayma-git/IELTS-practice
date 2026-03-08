@@ -1,0 +1,125 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p3-low-166", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p3-low-166",
+  "meta": {
+    "title": "Life on Mars_ 火星地球化改造",
+    "category": "P3",
+    "frequency": "low",
+    "pdfFilename": "75. P3 - Life on Mars_ 火星地球化改造.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/75. P3 - Life on Mars_ 火星地球化改造/",
+    "legacyFilename": "75. P3 - Life on Mars_ 火星地球化改造.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 3</h2>\n            <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>\n            \n            <h3>Life on Mars?</h3>\n            <p><strong>Terraforming may sound like something out of science fiction, but some believe it is possible to turn that fiction into fact.</strong></p>\n            \n            <p>As plans are slowly being drawn up for the first manned mission to Mars, many space-travel sceptics are asking one vital question: why go there? Mars is a barren, desolate planet, and with its thin atmosphere and bitterly cold climate, it would appear to be completely unsuitable for human life. Above all, it is a very distant place, and getting there would be an enormous challenge. However, the planet might just hold the key to long-term human survival. With the Earth's population currently at more than seven billion and climbing, we may eventually be forced to look elsewhere in the solar system for somewhere to live. It is just possible that, contrary to photographic evidence, Mars may be more promising than it appears.</p>\n            <p>Today, Mars is a viciously cold, dry place. However, it does have some things in common with our own planet. For example, it has a daily rotation rate of 24 hours 37 minutes, compared with 23 hours 56 minutes on Earth. It also has an axial tilt of 24 degrees, which is just half a degree more than Earth's, and a gravitational pull one third of Earth's. Furthermore, it holds many of the elements that are required to support life, including carbon and oxygen (in the form of carbon dioxide), nitrogen, and frozen water at its polar ice caps. In fact, if you were to travel back in time several billion years, you would notice some remarkable parallels between the atmosphere on Earth then and Mars today. Back then, Earth was also a lifeless planet; until photosynthetic bacteria developed and began to produce enough oxygen to allow for the development of animal and plant life, our atmosphere also consisted entirely of carbon dioxide and nitrogen.</p>\n            <p>It comes as no surprise to learn, therefore, that some scientists believe the same process which turned Earth's atmosphere from mostly carbon dioxide into breathable air could be repeated on Mars, but by using technology rather than by letting nature and evolution take its natural course. Terraforming, as this process is known, would initially create a greenhouse effect that would heat the planet, which in turn would create other conditions necessary to provide a suitable living environment for plants and animals. However, it would be a highly challenging undertaking, and the process of terraforming the entire planet into an Earth-like habitat could still take many thousands of years.</p>\n            <p>Three terraforming methods have been suggested, with the first already under development, albeit for a different purpose. At present, the American space agency NASA is working on a system that will use large mirrors to capture the Sun's radiation. This radiation will be used to propel spacecraft through space, removing the need for heavy and expensive rocket fuel. With a few changes, it might be possible to use similar mirrors to reflect the Sun's radiation and heat the surface of Mars. Aimed at the planet from a distance of two hundred thousand miles, these enormous mirrors would raise the surface temperature by a few degrees. If they were concentrated on the polar ice caps, they would provide enough heat to melt the polar ice caps and release the carbon dioxide that is believed to be trapped there. Gradually, as the temperature rose, greenhouse gases would be released, and this would create a form of Martian global warming, the first stage in making the planet sustainable for life.</p>\n            <p>The second method would be to set up greenhouse-gas 'factories' in order to raise the temperature of the planet. It is generally accepted that greenhouse gases produced by heavy industry are raising the Earth's temperature. Therefore, by building hundreds of greenhouse-gas-emitting factories on Mars, a similar effect could be achieved. Carbon dioxide, methane and other greenhouse gases would be pumped into the Martian atmosphere. The same factories would then produce oxygen by mimicking the natural process of plant photosynthesis: they would inhale the carbon dioxide they produce, and then emit oxygen. The process could be accelerated by 'sowing the planet's surface with photosynthetic bacteria', which would increase the rate at which oxygen is produced. Eventually, there would be enough oxygen on the planet for humans to breathe using only special apparatus similar to that used by mountain climbers.</p>\n            <p>The third, and by far the most extreme, method has been proposed by space scientists Robert Zubrin and Christopher McKay. They believe that it would be possible to produce greenhouse gases and water by firing large, ammonia-bearing asteroids at the planet. Each asteroid would weigh about ten billion tons, and would be powered by huge rocket engines which would move it towards Mars at over 10,000 miles per hour. At this speed, it would take each asteroid about ten years to reach its destination. The energy produced by one asteroid slamming into Mars' surface, say Zubrin and McKay, would raise the temperature of the planet by three degrees Celsius and melt about one thousand billion tons of ice at the polar caps. They believe it would take many of these asteroids, and at least fifty years, in order to create a temperate climate and enough water to cover a quarter of the planet's surface.</p>\n            <p>Terraforming Mars, if it is ever attempted, will be neither cheap nor easy. And it certainly won't be quick: although optimists like Zubrin and McKay say it could be achieved in five or six decades, the reality is that terraforming is more likely to take hundreds or even thousands of years. Furthermore, it will stretch human ingenuity to its limits, and will require levels of will and commitment that have rarely been seen before. The challenge of developing a habitable environment and bringing life to the cold, dry world of Mars is fraught with challenges, but it might just be one that saves the human race.</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "yes_no_not_given",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Questions 27–31</h4>\n                <p>Do the following statements agree with the views of the writer in the Reading passage 3?</p>\n                <p>In boxes 27-31 on your answer sheet, write:</p>\n                <ul>\n                    <li><strong>YES</strong> if the statement agrees with the writer's view</li>\n                    <li><strong>NO</strong> if the statement contradicts the writer's view</li>\n                    <li><strong>NOT GIVEN</strong> if it is impossible to say what the writer thinks about this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>27</strong> Pictures of Mars suggest it might make a good place for people to settle.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q1\" type=\"radio\" value=\"YES\"> YES</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NO\"> NO</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>28</strong> Modern Mars and ancient Earth looked remarkably similar.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q2\" type=\"radio\" value=\"YES\"> YES</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NO\"> NO</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>29</strong> One method of terraforming could involve adapting technology that is already under development.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q3\" type=\"radio\" value=\"YES\"> YES</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NO\"> NO</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>30</strong> Greenhouse-gas factories would provide enough oxygen for people to breathe without special equipment.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q4\" type=\"radio\" value=\"YES\"> YES</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NO\"> NO</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>31</strong> Terraforming Mars would be an extreme test of human skill and intelligence.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q5\" type=\"radio\" value=\"YES\"> YES</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"NO\"> NO</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "single_choice",
+      "questionIds": [
+        "q6",
+        "q7",
+        "q8",
+        "q9"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q6-7-8-9-anchor\">\n                <h4>Questions 32–35</h4>\n                <p>Choose the correct letter, <strong>A, B, C</strong> or <strong>D</strong>.</p>\n                \n                <div class=\"question-item\">\n                    <p><strong>32</strong> Which one of these factors suggests that Mars might be a good place for people to settle?</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q6\" type=\"radio\" value=\"A\"> A It is not too far from Earth.</label><br>\n                        <label><input name=\"q6\" type=\"radio\" value=\"B\"> B It has no other life forms living there.</label><br>\n                        <label><input name=\"q6\" type=\"radio\" value=\"C\"> C It has a cool, dry climate.</label><br>\n                        <label><input name=\"q6\" type=\"radio\" value=\"D\"> D It has some similarities with Earth.</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>33</strong> The first step in terraforming Mars would be to</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q7\" type=\"radio\" value=\"A\"> A make the planet warmer.</label><br>\n                        <label><input name=\"q7\" type=\"radio\" value=\"B\"> B create a breathable atmosphere.</label><br>\n                        <label><input name=\"q7\" type=\"radio\" value=\"C\"> C find a suitable source of water.</label><br>\n                        <label><input name=\"q7\" type=\"radio\" value=\"D\"> D create a habitat for living organisms.</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>34</strong> Special factories on Mars could be used to</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q8\" type=\"radio\" value=\"A\"> A control the level of greenhouse gases.</label><br>\n                        <label><input name=\"q8\" type=\"radio\" value=\"B\"> B absorb excess levels of carbon dioxide.</label><br>\n                        <label><input name=\"q8\" type=\"radio\" value=\"C\"> C produce oxygen in a manner similar to plants.</label><br>\n                        <label><input name=\"q8\" type=\"radio\" value=\"D\"> D help grow essential bacteria.</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>35</strong> What is the writer's main purpose in the passage?</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q9\" type=\"radio\" value=\"A\"> A To explain why we need to terraform Mars.</label><br>\n                        <label><input name=\"q9\" type=\"radio\" value=\"B\"> B To illustrate the three processes required to terraform a planet like Mars.</label><br>\n                        <label><input name=\"q9\" type=\"radio\" value=\"C\"> C To consider how and why Mars might be terraformed.</label><br>\n                        <label><input name=\"q9\" type=\"radio\" value=\"D\"> D To demonstrate how straightforward it would be to terraform a planet.</label>\n                    </div>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "summary_completion",
+      "questionIds": [
+        "q10",
+        "q11",
+        "q12",
+        "q13",
+        "q14"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q10-11-12-13-14-anchor\">\n                 <h4>Questions 36–40</h4>\n                <p>Complete the summary using a word A–I from the box.</p>\n                <p>Write the correct letter, A-I, in boxes 36-40 on your answer sheet.</p>\n\n                <div class=\"summary-box\">\n                    <p>One method of terraforming Mars would be to <strong>36</strong> <input type=\"text\" id=\"q36_input\"> asteroids at the planet. Rockets attached to an enormous asteroid would propel it towards Mars, taking ten years to <strong>37</strong> <input type=\"text\" id=\"q37_input\"> the enormous distances required. The asteroid would <strong>38</strong> <input type=\"text\" id=\"q38_input\"> the planet with incredible force and <strong>39</strong> <input type=\"text\" id=\"q39_input\"> enough energy to <strong>40</strong> <input type=\"text\" id=\"q40_input\"> the planet's temperature. The result would be a temperate climate and lots of water from melting ice caps.</p>\n                    <div class=\"word-list\">\n                        <strong>A</strong> cover &nbsp;&nbsp; <strong>B</strong> create &nbsp;&nbsp; <strong>C</strong> hit <br>\n                        <strong>D</strong> increase &nbsp;&nbsp; <strong>E</strong> land &nbsp;&nbsp; <strong>F</strong> drive <br>\n                        <strong>G</strong> power &nbsp;&nbsp; <strong>H</strong> rise &nbsp;&nbsp; <strong>I</strong> shoot\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "NO",
+    "q2": "NOT GIVEN",
+    "q3": "YES",
+    "q4": "NO",
+    "q5": "YES",
+    "q6": "D",
+    "q7": "A",
+    "q8": "C",
+    "q9": "C",
+    "q10": "I",
+    "q11": "A",
+    "q12": "C",
+    "q13": "B",
+    "q14": "D"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/75. P3 - Life on Mars_ 火星地球化改造/75. P3 - Life on Mars_ 火星地球化改造.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/75. P3 - Life on Mars_ 火星地球化改造/75. P3 - Life on Mars_ 火星地球化改造.pdf",
+    "ieltsHtml": null
+  },
+  "audit": {
+    "matchStatus": "shui_only",
+    "matchConfidence": 0,
+    "verifiedAt": "2026-03-08T16:24:30.792Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13",
+    "q14"
+  ],
+  "questionDisplayMap": {
+    "q1": "27",
+    "q2": "28",
+    "q3": "29",
+    "q4": "30",
+    "q5": "31",
+    "q6": "32",
+    "q7": "33",
+    "q8": "34",
+    "q9": "35",
+    "q10": "36",
+    "q11": "37",
+    "q12": "38",
+    "q13": "39",
+    "q14": "40"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

@@ -1,0 +1,115 @@
+{
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-low-51",
+  "meta": {
+    "title": "The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异",
+    "category": "P2",
+    "frequency": "low",
+    "pdfFilename": "144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异/",
+    "legacyFilename": "144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 2</h2>\n            <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>\n            <h3>The gender gap in New Zealand's high school examination results</h3>\n            <h4>Results from New Zealand's new national examinations for secondary schools are giving that country some cause for concern.</h4>\n\n            <p><strong>A</strong> The issue is the difference in pass rates between the sexes: at each level of the examination and across all school types, the difference is about 10 percentage points. Girls are doing better in every subject, and those in girls-only schools are taking top honours. The results are not a surprise: high school girls have been outperforming boys academically for more than a decade. It is an international phenomenon, and within Australia was the subject of much debate and controversy. Within New Zealand back in the 1980s, there was a concerted campaign, called 'Girls Can Do Anything', which was aimed at lifting girls' participation rates, achievement levels and aspirations. This was so successful that the pendulum has now swung to the other extreme. Views differ on how worried people should be. After all, for much of history, girls were excluded from any form of education, and this new phenomenon could be seen as a temporary over-correction before the balance is righted.</p>\n            <p><strong>B</strong> However the New Zealand State Ministry of Education says it is taking the issue seriously. It is working with a reference group on boys' education which has been set up, and it has commissioned an Australian academic to report on interventions that have been found to work for boys, drawing particularly on Australia's experience. But some, such as former prison manager Celia Lashlie, the author of a book for parents of teenage boys, believe there is still resistance within the Education Ministry towards doing anything about the problem.</p>\n            <p><strong>C</strong> Education Ministry learning policy manager Steve Benson says that the 'National Certificate in Educational Achievement', or NCEA, as New Zealand's high school exams are called, is useful to employers and to universities because it provides a fine-grained picture of pupils' performance in every aspect of a subject, rather than just a pass or fail in an overall area. ‘In most parts of the curriculum, for example in maths, there isn't really a gender gap. But literacy is a different matter. Even boys who are good at writing tend not to write so much. There's actually a quantity issue.'</p>\n            <p><strong>D</strong> The discrepancy in reading and writing skills between males and females shows up as early as preschool, and the difference is clear by the time these children enter high school. Not being good at literacy was not such a problem in the old days when many students left school for manual jobs after Year 11. But nowadays many more stay on to higher education, and almost all jobs require literacy skills. Roger Moses, the headmaster of Wellington College, says that the written content of NCEA papers is more demanding than the previous system of secondary school qualifications in New Zealand, even in subjects such as statistics and accounting.</p>\n            <p><strong>E</strong> New Zealand 15-year-olds do very well in international reading tests, but beneath this average lies a wide variance, with New Zealand European girls most represented at the top and New Zealand Pacific Island boys at the bottom. Yet some European girls drop out, and some Pacific Island boys excel. In other words, the range in performance within each gender group is much greater than the gender differences. Ethnic differences, and differences in socio-economic status, may be more significant than the simple boy/girl explanation.</p>\n            <p><strong>F</strong> This makes the Education Ministry nervous about pushing solutions that emphasise stereotyped gender differences, rather than looking at underachievement as a whole. Rob Burroughs, principal of Linwood High School in Christchurch, agrees. For three years his school ran separate boys' classes to try to address the disparity in performance, before abandoning them. The research showed that the boys did better in their own class than in the co-educational environment. But when he looked at which teachers they had, and how well those teachers' other classes did, it became clear that the difference was, instead, to do with the quality of instruction.</p>\n            <p><strong>G</strong> At Onslow College, Dr Stuart Martin would do away with the NCEA Level 1 exam if he could. He says that in Year 11, aged 15, boys are simply not mature enough to cope. 'They tend to think that just passing is enough, and that it's not necessary to work hard for a Merit or an Excellence grade. Often they are busy with other activities and part-time jobs. Boys' competitive instinct tends to come out later in their schooling years, especially if there is money attached or other tangible rewards. By 17, boys are catching up academically with the girls, and by the end of Year 13, boys are again winning the top prizes.'</p>\n            <p><strong>H</strong> Boys in single-sex schools do better in NCEA across all levels, something economist Brian Easton reported after analysing data from the first year of NCEA's implementation. He said the results were valid, even when socio-economic status was taken into account. Dr Paul Baker, head of Waitaki Boys' High School in Oamaru, agrees. He thinks that although it is possible for all schools to do more to boost boys' performance, it is easier in a boys' school, where activities cannot be ‘captured by girls'.</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n\n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "summary_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-anchor\">\n                <h4>Questions 14–16</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n\n                <div class=\"summary-completion\">\n                    <h4>High school assessment in New Zealand</h4>\n                    <p>\n                        New Zealanders are worried at the outcomes of their high school assessment system, because the <strong>14</strong> <input type=\"text\" id=\"q14_input\"> of girls are higher than those of boys by 10%. A gender gap has been apparent for over a <strong>15</strong> <input type=\"text\" id=\"q15_input\">. This situation is not unique to New Zealand, and has been noticed in <strong>16</strong> <input type=\"text\" id=\"q16_input\"> also.\n                    </p>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "table_completion",
+      "questionIds": [
+        "q4",
+        "q5",
+        "q6",
+        "q7"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q4-5-6-7-anchor\">\n                 <h4>Questions 17–20</h4>\n                <p>Reading Passage 2 has eight paragraphs, <strong>A–H</strong>.</p>\n                <p>Which paragraph contains the following information?</p>\n                <div style=\"overflow-x: auto;\">\n                    <table class=\"matching-table\">\n                        <thead>\n                            <tr>\n                                <th style=\"min-width: 200px;\"></th>\n                                <th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>H</th>\n                            </tr>\n                        </thead>\n                        <tbody>\n                            <tr>\n                                <td><strong>17</strong> an advantage of New Zealand's secondary school tests</td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"A\"></td><td><input type=\"radio\" name=\"q4\" value=\"B\"></td><td><input type=\"radio\" name=\"q4\" value=\"C\"></td><td><input type=\"radio\" name=\"q4\" value=\"D\"></td><td><input type=\"radio\" name=\"q4\" value=\"E\"></td><td><input type=\"radio\" name=\"q4\" value=\"F\"></td><td><input type=\"radio\" name=\"q4\" value=\"G\"></td><td><input type=\"radio\" name=\"q4\" value=\"H\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>18</strong> a mention of current government initiatives to boost male achievement</td>\n                                <td><input type=\"radio\" name=\"q5\" value=\"A\"></td><td><input type=\"radio\" name=\"q5\" value=\"B\"></td><td><input type=\"radio\" name=\"q5\" value=\"C\"></td><td><input type=\"radio\" name=\"q5\" value=\"D\"></td><td><input type=\"radio\" name=\"q5\" value=\"E\"></td><td><input type=\"radio\" name=\"q5\" value=\"F\"></td><td><input type=\"radio\" name=\"q5\" value=\"G\"></td><td><input type=\"radio\" name=\"q5\" value=\"H\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>19</strong> when gender difference in literacy skills first becomes evident</td>\n                                <td><input type=\"radio\" name=\"q6\" value=\"A\"></td><td><input type=\"radio\" name=\"q6\" value=\"B\"></td><td><input type=\"radio\" name=\"q6\" value=\"C\"></td><td><input type=\"radio\" name=\"q6\" value=\"D\"></td><td><input type=\"radio\" name=\"q6\" value=\"E\"></td><td><input type=\"radio\" name=\"q6\" value=\"F\"></td><td><input type=\"radio\" name=\"q6\" value=\"G\"></td><td><input type=\"radio\" name=\"q6\" value=\"H\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>20</strong> findings that relate academic achievement to race</td>\n                                <td><input type=\"radio\" name=\"q7\" value=\"A\"></td><td><input type=\"radio\" name=\"q7\" value=\"B\"></td><td><input type=\"radio\" name=\"q7\" value=\"C\"></td><td><input type=\"radio\" name=\"q7\" value=\"D\"></td><td><input type=\"radio\" name=\"q7\" value=\"E\"></td><td><input type=\"radio\" name=\"q7\" value=\"F\"></td><td><input type=\"radio\" name=\"q7\" value=\"G\"></td><td><input type=\"radio\" name=\"q7\" value=\"H\"></td>\n                            </tr>\n                        </tbody>\n                    </table>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "matching",
+      "questionIds": [
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q8-9-10-11-12-13-anchor\">\n                <h4>Questions 21–26</h4>\n                <p>Look at the following people (Questions 21–26) and the list of statements below.</p>\n                <p>Match each person with the correct statement, <strong>A–H</strong>.</p>\n                \n                <div class=\"match-question-item\">\n                    <p><strong>21</strong> Celia Lashlie</p>\n                    <div class=\"match-dropzone\" data-question=\"q8\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>22</strong> Steve Benson</p>\n                    <div class=\"match-dropzone\" data-question=\"q9\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                     <p><strong>23</strong> Roger Moses</p>\n                    <div class=\"match-dropzone\" data-question=\"q10\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                    <p><strong>24</strong> Rob Burroughs</p>\n                    <div class=\"match-dropzone\" data-question=\"q11\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>25</strong> Stuart Martin</p>\n                    <div class=\"match-dropzone\" data-question=\"q12\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>26</strong> Paul Baker</p>\n                    <div class=\"match-dropzone\" data-question=\"q13\"></div>\n                </div>\n\n                <div class=\"options-pool\" id=\"statements-options-pool\">\n                    <strong>List of Statements</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"A\">A Boys gain lower marks on NCEA if they attend an all-boys' school.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"B\">B Boys are disadvantaged by girls tending to take over at school.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"C\">C Good teaching is more important than whether classrooms are single-sex or mixed.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"D\">D Mathematical skills were not so important in the past.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"E\">E The difference in achievement between schoolboys and girls is only evident in some subjects.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"F\">F Older boys are more motivated to study than younger boys.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"G\">G The NCEA exams have higher literacy standards than past exams did.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"H\">H The New Zealand government is reluctant to take action on behalf of boys.</div>\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "pass rates",
+    "q2": "decade",
+    "q3": "Australia",
+    "q4": "C",
+    "q5": "B",
+    "q6": "D",
+    "q7": "E",
+    "q8": "H",
+    "q9": "E",
+    "q10": "G",
+    "q11": "C",
+    "q12": "F",
+    "q13": "B"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.pdf",
+    "ieltsHtml": null
+  },
+  "audit": {
+    "matchStatus": "shui_only",
+    "matchConfidence": 0,
+    "verifiedAt": "2026-03-08T16:24:30.598Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "14",
+    "q2": "15",
+    "q3": "16",
+    "q4": "17",
+    "q5": "18",
+    "q6": "19",
+    "q7": "20",
+    "q8": "21",
+    "q9": "22",
+    "q10": "23",
+    "q11": "24",
+    "q12": "25",
+    "q13": "26"
+  }
+}
