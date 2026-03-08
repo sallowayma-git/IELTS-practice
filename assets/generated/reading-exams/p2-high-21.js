@@ -1,0 +1,121 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p2-high-21", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-high-21",
+  "meta": {
+    "title": "Stress Less 工作压力",
+    "category": "P2",
+    "frequency": "high",
+    "pdfFilename": "117. P2 - Stress Less 工作压力【高】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/117. P2 - Stress Less 工作压力【高】/",
+    "legacyFilename": "117. P2 - Stress Less 工作压力【高】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 2</h2>\n            <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>\n            \n            <h3>Stress Less</h3>\n            \n            <p>How busy is too busy? For some it means sometimes having to have a short lunch; for others it may mean missing lunch altogether. For a few, it is not being able to take a day off once a month. Then there is a group of people for whom working every evening and weekend is normal, and feeling stressed is taken for granted. For most senior executives, workloads swing between extremely busy and frenzied. Neil Plumridge, vice-president of a management consultancy company, says that his weeks vary from a 'manageable' 45 hours to 80 hours, but average 60 hours.</p>\n            <p>Three signs warn Plumridge about his workload: sleep, scheduling and family. He knows he is doing too much when he gets less than six hours' sleep for three consecutive nights, when he is constantly having to reschedule appointments, and when he misses a family birthday or anniversary. ‘Then,' he says, ‘I know things are out of control.' Plumridge states that stress is often caused by his having unrealistic expectations of himself. ‘I'll promise a client that I'll do something tomorrow, and then I'll promise another client that I'll do the same thing, when I know it's not going to happen. I could have said: “Why don't I give that to you in 48 hours?” The client wouldn't care.'</p>\n            <p>Over-committing is something people experience as an individual problem. However, new research indicates that people may be designed to over-commit. A study in the <em>Journal of Experimental Psychology</em> shows that people always believe that they will be less busy in the future. This is a misapprehension according to the authors of the report, Gal Zauberman of the University of North Carolina and John Lynch of Duke University. 'On average, an individual will be just as busy two weeks or a month from now as he or she is today. But that is not how it appears in everyday life,' they say. ‘People make commitments long in advance that they would never make if the same commitments required immediate action. They discount future time investments relatively steeply.'</p>\n            <p>Being 'too busy' is highly subjective, but for any individual there are some concrete signs of stress: disturbed sleep and declining mental and physical health are the most common examples. Figures for National Workers' Compensation (insurance against injury caused by work) show that stress causes the most loss of time of any workplace injury: employees suffering stress are absent from work for an average of 16.6 weeks. The effects of stress are also expensive. The Australian Government insurer reports that, in 2003–2004, claims for stress-related psychological injury accounted for 7% of insurance claims, but almost 27% of the amount paid out in claim payments.</p>\n            <p>Experts say the key to dealing with stress is not to focus on relief — a game of golf or a massage — but to reassess workloads. Neil Plumridge says he makes it a priority to work out what has to change: that might mean allocating extra staff to a job, allowing more time, or changing expectations. He also relies on the advice of colleagues, saying that his peers coach each other on business problems: ‘Just a fresh pair of eyes over an issue can help,' he states.</p>\n            <p>Executive stress is not confined to big organisations. Vanessa Stoykov has been running her own advertising agency and public relations business for seven years. Her company has grown so fast that it appeared on the <em>Business Review Weekly</em> ‘Fast 100' list of fastest-growing small enterprises in 2004, just after Stoykov had her first child. In 2005, revenue was projected to double to $2.4 million. She had just had her second child. With a fast-growing business and two small children, Stoykov says she has mastered the art of caring for children, typing, and talking on the phone at the same time. But, unlike many others, she appears to thrive on the mental stimulation of running her own business, despite the stress.</p>\n            <p>Jan Elsner, a psychologist who specialises in executive coaching, says that doing well on a demanding workload is typical of senior executives. Some people work best with high-adrenaline periods followed by quieter times, while others thrive under sustained pressure. Elsner's practice is based on a movement known as positive psychology, a school of thought that argues that positive experiences — feeling engaged and challenged, for example — do not balance out negative experiences such as stress; instead they help people increase their resilience over time. Elsner says that many of the senior business people she coaches are increasingly relying more on regulating stress through methods such as meditation. She points to research showing that meditation can alter the biochemistry of the brain and the way that brains and bodies react to stress.</p>\n            <p>Some experts believe there is too much emphasis on treating job stress as an individual problem. Tony LaMontagne, of the University of Melbourne, says that while personality traits do have some effect on stress, it is systemic stressors — qualities of job roles and organisations themselves — that have a far greater effect. His recent research shows that the major predictor of stress is the level of job control a person has. The best type of job combines challenging work with high autonomy. The worst jobs combine challenging work and low control. People with demanding jobs but little autonomy have up to four times the probability of depression and more than double the risk of heart attack.</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "matching",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Questions 14–18</h4>\n                <p>Look at the following statements (Questions 14–18) and the list of people below.</p>\n                <p>Match each statement with the correct person, <strong>A–D</strong>.</p>\n                <p><em>NB You may use any letter more than once.</em></p>\n                \n                <div class=\"match-question-item\">\n                    <p><strong>14</strong> High-level workers tend to react positively to stress</p>\n                    <div class=\"match-dropzone\" data-question=\"q1\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>15</strong> Stress levels are increased by trying to please customers</p>\n                    <div class=\"match-dropzone\" data-question=\"q2\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                     <p><strong>16</strong> Support from other workers may relieve stress</p>\n                    <div class=\"match-dropzone\" data-question=\"q3\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                    <p><strong>17</strong> Lack of independence at work is often responsible for stress</p>\n                    <div class=\"match-dropzone\" data-question=\"q4\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>18</strong> Workers commonly expect their workloads to lessen over time</p>\n                    <div class=\"match-dropzone\" data-question=\"q5\"></div>\n                </div>\n\n                <div class=\"options-pool\" id=\"people-options-pool\">\n                    <strong>List of People</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" id=\"person-A\" draggable=\"true\" data-option=\"A\">A Neil Plumridge</div>\n                        <div class=\"drag-item\" id=\"person-B\" draggable=\"true\" data-option=\"B\">B Gal Zauberman and John Lynch</div>\n                        <div class=\"drag-item\" id=\"person-C\" draggable=\"true\" data-option=\"C\">C Jan Elsner</div>\n                        <div class=\"drag-item\" id=\"person-D\" draggable=\"true\" data-option=\"D\">D Tony LaMontagne</div>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "single_choice",
+      "questionIds": [
+        "q6",
+        "q7",
+        "q8"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q6-7-8-anchor\">\n                <h4>Questions 19–21</h4>\n                <p>Choose the correct letter, <strong>A, B, C</strong> or <strong>D</strong>.</p>\n                \n                <div class=\"question-item\">\n                    <p><strong>19</strong> Which of the following is <strong>NOT</strong> mentioned by Neil Plumridge as an indication that his workload is too heavy?</p>\n                    <label class=\"mcq-option\"><input type=\"radio\" name=\"q6\" value=\"A\"> A an inability to keep to his schedule</label>\n                    <label class=\"mcq-option\"><input type=\"radio\" name=\"q6\" value=\"B\"> B inattention to family celebrations</label>\n                    <label class=\"mcq-option\"><input type=\"radio\" name=\"q6\" value=\"C\"> C a lack of concentration on a task</label>\n                    <label class=\"mcq-option\"><input type=\"radio\" name=\"q6\" value=\"D\"> D a period of insufficient sleep</label>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>20</strong> Which method of lessening work stress is <strong>NOT</strong> suggested by Neil Plumridge?</p>\n                    <label class=\"mcq-option\"><input type=\"radio\" name=\"q7\" value=\"A\"> A rethinking ideas of what can be achieved</label>\n                    <label class=\"mcq-option\"><input type=\"radio\" name=\"q7\" value=\"B\"> B extending the deadline for completing the task</label>\n                    <label class=\"mcq-option\"><input type=\"radio\" name=\"q7\" value=\"C\"> C using more workers on a project</label>\n                    <label class=\"mcq-option\"><input type=\"radio\" name=\"q7\" value=\"D\"> D taking more time off for sport or other recreation</label>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>21</strong> According to Jan Elsner, meditation offers a method of</p>\n                    <label class=\"mcq-option\"><input type=\"radio\" name=\"q8\" value=\"A\"> A taking a worker's mind off his troubles.</label>\n                    <label class=\"mcq-option\"><input type=\"radio\" name=\"q8\" value=\"B\"> B changing the physical response to stress.</label>\n                    <label class=\"mcq-option\"><input type=\"radio\" name=\"q8\" value=\"C\"> C resting more effectively.</label>\n                    <label class=\"mcq-option\"><input type=\"radio\" name=\"q8\" value=\"D\"> D encouraging executives to take breaks.</label>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "summary_completion",
+      "questionIds": [
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q9-10-11-12-13-anchor\">\n                 <h4>Questions 22–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS AND/OR A NUMBER</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h5>Stress: its effects and how to reduce it</h5>\n                    <p>\n                    Statistics on workers' compensation show that people take more time off work due to stress than for any other <strong>22</strong> <input type=\"text\" id=\"q22_input\"> at work. On average, workers who take time off because of stress stay away for <strong>23</strong> <input type=\"text\" id=\"q23_input\">. This absence comes at a high price — while the number of insurance claims due to stress amount to only <strong>24</strong> <input type=\"text\" id=\"q24_input\"> of the total, they account for a much higher proportion of the cost of claim payments.\n                    </p>\n                    <p>\n                    Experts believe that seeking to relieve stress through physical therapies such as sport or <strong>25</strong> <input type=\"text\" id=\"q25_input\"> may be less effective than simply reviewing your <strong>26</strong> <input type=\"text\" id=\"q26_input\">.\n                    </p>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "C",
+    "q2": "A",
+    "q3": "A",
+    "q4": "D",
+    "q5": "B",
+    "q6": "C",
+    "q7": "D",
+    "q8": "B",
+    "q9": "injury",
+    "q10": "16.6 weeks",
+    "q11": "7%",
+    "q12": "massage",
+    "q13": "workloads"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/117. P2 - Stress Less 工作压力【高】/117. P2 - Stress Less 工作压力【高】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/117. P2 - Stress Less 工作压力【高】/117. P2 - Stress Less 工作压力【高】.pdf",
+    "ieltsHtml": "IELTS/P2/Stress Less.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.547Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "14",
+    "q2": "15",
+    "q3": "16",
+    "q4": "17",
+    "q5": "18",
+    "q6": "19",
+    "q7": "20",
+    "q8": "21",
+    "q9": "22",
+    "q10": "23",
+    "q11": "24",
+    "q12": "25",
+    "q13": "26"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

@@ -1,0 +1,121 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p2-medium-93", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-medium-93",
+  "meta": {
+    "title": "Antarctic research 南极考察",
+    "category": "P2",
+    "frequency": "medium",
+    "pdfFilename": "182. P2 - Antarctic research 南极考察.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/182. P2 - Antarctic research 南极考察【次】/",
+    "legacyFilename": "182. P2 - Antarctic research 南极考察.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 2</h2>\n            <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>\n            <h3>Antarctic research</h3>\n            <h4>Thirteen nations took part in the recent International Polar Year</h4>\n            \n            <p><strong>A</strong> New Zealand's contribution to International Polar Year was a 52-day voyage by the ship Tangaroa in order to conduct research in Antarctica's Ross Sea. Lead scientist Mary Livingston emphasises just what a multi-faceted expedition this was, bringing together zoologists, oceanographers, meteorologists and other scientists from the Ministry of Fisheries, the National Institute for Water and Atmospheric Research, the National Museum and various universities, to study life beneath the seas of Antarctica. Competition for berths – the ship can carry 44 people, including 13 crew – was fierce. Voyage leader Stu Hanchet says, ‘We could have filled the science positions four times over ... we had so many people requesting a berth ... We ended up with a really strong team.'</p>\n            <p><strong>B</strong> It would be hard to overstate how hostile the Antarctic environment is for scientists. The Tangaroa's captain, Graham Leachman, explains that the Ross Sea is subject to katabatic winds* that sweep down off the Antarctic continent to create rough seas. Another danger is the possibility of the ship colliding with floating ice. ‘Even though the ship's officers use all sorts of high-tech equipment ... none of it can tell you how thick the ice is,' says Leachman, ‘and you still can't beat looking out of the window.' In the dark, he says, you can't tell how thick the ice is, but if you can see its colour, it's possible to estimate. This is why he prefers sailing in summer, when the hours of daylight in these high latitudes are longest, even though this plays tricks with his passengers' body clocks.</p>\n            <p><strong>C</strong> Analysis of what the expedition found continues, but it's likely that several new species have been discovered and numerous other secrets revealed about life 3,000 metres below the surface. ‘We have collected huge worms and strange crustaceans,' says Livingston, 'but most impressive of all were the starfish that measured more than half a metre across – that's most abnormal for creatures belonging to this species.' This phenomenon of Antarctic seas is called 'gigantism' – the fact that some species grow to unusually large sizes. Livingston suggests various possible causes for gigantism including the extreme cold, few predators and high levels of oxygen in the seawater, but as yet no final determination can be made. Another interesting discovery was that in some places every inch of the sea floor was covered with life, whereas elsewhere icebergs have scoured out deep scars and ravines in the sea floor as they go by.</p>\n            <p><strong>D</strong> By using deep-sea trawl nets, high-definition cameras and water samplers, the team has revealed that many of the creatures that live at extreme depths have a bizarre appearance. Among them were spotted tunicates, plankton-eating animals that are slender structures that appear to be fashioned from glass. The most fearsome-looking fish was the Southern Ocean daggertooth, a species that is ‘monocyclic', meaning the fish die after the first spawning. They are also unusual for being capable of shedding their teeth and growing a new set. Another predatory fish brought to the surface was the stareater, an extraordinary species that has an appendage like a piece of cord hanging from its chin. In these deep, dark waters, this glows red and attracts prey to swim within striking distance. Just as impressive and much more beautiful were the basket stars, a species related to starfish that lives on the seabed. The basket stars' five arms branch out numerous times to form a spectacular fan-like structure which they turn to face into the current so that food is brought into their embrace.</p>\n            <p><strong>E</strong> But whatever exciting discoveries were made, everyday life onboard ship in the Ross Sea is unrelenting. Most people share a cabin with one other person – they're allocated so that as one person begins their 12 hours off duty, the other occupant is starting work on deck. The fresh food runs out in a few days and after that most provisions are frozen, canned or dried. Expedition general manager Fred Smits recognises that the cook has an essential role in ensuring the well-being of those onboard. ‘When you are at sea for so long,' he says, 'you think a lot about your next meal.'</p>\n            <p><strong>F</strong> Perhaps most controversially, one of the precious berths on the Tangaroa was taken up by cameraman Max Quinn, who filmed a documentary about the voyage. Quinn's inclusion wasn't welcomed at first. ‘Scientists by nature,' Livingston says, 'tend to be camera-shy and quiet. They're not into having cameras there, so it was difficult getting everyone's permission and agreement.' But in the end Quinn fitted in very well. ‘The trick,' he says, 'is to mostly film the scientists at work, in their professional roles ... rather than eating their breakfast.' He knows when not to intrude. The documentary is a window on a trip few people get to make and also a peek into what research really looks like. 'Science,' says Livingston, ‘is intrepid, more so than people realise. It's not necessarily examining dry samples in the laboratory, but can also mean braving the elements on deck. That's what the documentary captures, the sense of real people with real lives.'</p>\n\n            <div class=\"footnote\">\n                * katabatic wind: a wind caused by the local downward motion of cool air\n            </div>\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "table_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-anchor\">\n                 <h4>Questions 14–17</h4>\n                <p>Reading Passage 2 has six paragraphs, <strong>A–F</strong>.</p>\n                <p>Which paragraph contains the following information?</p>\n                <p><em>Write the correct letter, A–F, in boxes 14–17 on your answer sheet.</em></p>\n                <div style=\"overflow-x: auto;\">\n                    <table class=\"matching-table\">\n                        <thead>\n                            <tr>\n                                <th style=\"min-width: 200px;\"></th>\n                                <th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th>\n                            </tr>\n                        </thead>\n                        <tbody>\n                            <tr>\n                                <td><strong>14</strong> details of some equipment used by the scientists</td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"A\"></td><td><input type=\"radio\" name=\"q1\" value=\"B\"></td><td><input type=\"radio\" name=\"q1\" value=\"C\"></td><td><input type=\"radio\" name=\"q1\" value=\"D\"></td><td><input type=\"radio\" name=\"q1\" value=\"E\"></td><td><input type=\"radio\" name=\"q1\" value=\"F\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>15</strong> a description of the challenging sailing conditions in Antarctica</td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"A\"></td><td><input type=\"radio\" name=\"q2\" value=\"B\"></td><td><input type=\"radio\" name=\"q2\" value=\"C\"></td><td><input type=\"radio\" name=\"q2\" value=\"D\"></td><td><input type=\"radio\" name=\"q2\" value=\"E\"></td><td><input type=\"radio\" name=\"q2\" value=\"F\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>16</strong> information about the composition of the scientific group</td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"A\"></td><td><input type=\"radio\" name=\"q3\" value=\"B\"></td><td><input type=\"radio\" name=\"q3\" value=\"C\"></td><td><input type=\"radio\" name=\"q3\" value=\"D\"></td><td><input type=\"radio\" name=\"q3\" value=\"E\"></td><td><input type=\"radio\" name=\"q3\" value=\"F\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>17</strong> the identity of a potentially unpopular person on the ship</td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"A\"></td><td><input type=\"radio\" name=\"q4\" value=\"B\"></td><td><input type=\"radio\" name=\"q4\" value=\"C\"></td><td><input type=\"radio\" name=\"q4\" value=\"D\"></td><td><input type=\"radio\" name=\"q4\" value=\"E\"></td><td><input type=\"radio\" name=\"q4\" value=\"F\"></td>\n                            </tr>\n                        </tbody>\n                    </table>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "summary_completion",
+      "questionIds": [
+        "q5",
+        "q6",
+        "q7",
+        "q8",
+        "q9",
+        "q10"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-9-10-anchor\">\n                <h4>Questions 18–23</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"summary-completion\">\n                    <h4>The expedition's findings</h4>\n                    <p>Analysis continues of the expedition's remarkable discoveries, including a <strong>18</strong> <input type=\"text\" id=\"q18_input\"> very notable for its unusual width. The reasons why creatures grow so large at great depths in Antarctica may include the highly oxygenated water, the temperature, or the small number of <strong>19</strong> <input type=\"text\" id=\"q19_input\">. A further fascinating finding was the existence of canyons in the seabed caused by passing <strong>20</strong> <input type=\"text\" id=\"q20_input\">. Many creatures living at great depth look very strange, such as tunicates, which seem to be made of <strong>21</strong> <input type=\"text\" id=\"q21_input\">. One frightening-looking fish species is characterised by loss of its <strong>22</strong> <input type=\"text\" id=\"q22_input\"> and the fact that it spawns only once. Another fish has something like a length of string attached to its <strong>23</strong> <input type=\"text\" id=\"q23_input\"> that assists with hunting.</p>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "matching",
+      "questionIds": [
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                <h4>Questions 24–26</h4>\n                <p>Look at the following people (Questions 24–26) and the list of opinions below.</p>\n                <p>Match each person with the correct opinion, <strong>A–G</strong>.</p>\n                \n                <div class=\"match-question-item\">\n                    <p><strong>24</strong> Mary Livingston</p>\n                    <div class=\"match-dropzone\" data-question=\"q11\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>25</strong> Stu Hanchet</p>\n                    <div class=\"match-dropzone\" data-question=\"q12\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                     <p><strong>26</strong> Max Quinn</p>\n                    <div class=\"match-dropzone\" data-question=\"q13\"></div>\n                </div>\n\n                <div class=\"options-pool\" id=\"opinions-pool\">\n                    <strong>List of opinions</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"A\">A The repetitive food was one of the hardships of the voyage.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"B\">B Respecting your subjects' privacy gets the best results.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"C\">C The summer is the best time to sail these waters.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"D\">D The kitchen is one of the most important parts of the ship.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"E\">E Being separated from family was difficult.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"F\">F The nature of scientific work may surprise some people.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"G\">G More applications to join the group were received than there were places.</div>\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "D",
+    "q2": "B",
+    "q3": "A",
+    "q4": "F",
+    "q5": "starfish",
+    "q6": "predators",
+    "q7": "icebergs",
+    "q8": "glass",
+    "q9": "teeth",
+    "q10": "chin",
+    "q11": "F",
+    "q12": "G",
+    "q13": "B"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/182. P2 - Antarctic research 南极考察【次】/182. P2 - Antarctic research 南极考察.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/182. P2 - Antarctic research 南极考察【次】/182. P2 - Antarctic research 南极考察.pdf",
+    "ieltsHtml": "IELTS/P2/Antarctic research.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.666Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "14",
+    "q2": "15",
+    "q3": "16",
+    "q4": "17",
+    "q5": "18",
+    "q6": "19",
+    "q7": "20",
+    "q8": "21",
+    "q9": "22",
+    "q10": "23",
+    "q11": "24",
+    "q12": "25",
+    "q13": "26"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

@@ -1,0 +1,114 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-high-82", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-high-82",
+  "meta": {
+    "title": "Think Small 微观科学",
+    "category": "P1",
+    "frequency": "high",
+    "pdfFilename": "172. P1 - Think Small 微观科学.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/172. P1 - Think Small 微观科学【高】/",
+    "legacyFilename": "172. P1 - Think Small 微观科学.html",
+    "questionIntroHtml": "<h3>Questions 1–7</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>Think Small</h3>\n            <h4>Izon is a New Zealand company specialising in nanoscience – the study of atoms, molecules and other very small pieces of matter.</h4>\n            \n            <p>The new US headquarters of Izon are situated in Cambridge, Massachusetts, one of the most important global centres of scientific research and technology. Half the other offices in the building Izon shares have scientific names like Stemgent, or the word 'pharmaceutical' in the name. In the past three years, Izon has expanded to 17 times its previous size. It's done so selling only one product that it's been developing since 2004, the qNano. This is an adjustable tool for the measurement and analysis of tiny particles in scientific research, which comes with a $27,000 price tag. Izon's success results from the fact that the qNano machine provides precise measurements, while similar machines of the same price only offer averaging techniques. In effect, researchers using the qNano are able to gather information about very small things, and it has many possible applications from drug delivery analysis through to environmental research.</p>\n            <p>Kristoffer Bolen is Izon's US head of sales. Alongside his full-time role with the company, he's just finished the fifth semester of six for his High-Tech Master of Business Administration at Northeastern University, which will be his second master's degree, alongside a Master of Science. These soon-to-be twin master's degrees provide Bolen with the perfect combination of skills for his job, which depends on him being able to manage the sales process and also comprehend in depth a very complicated piece of technology. When a customer buys a qNano device, an Izon representative will fly anywhere in America to train them how to use the instrument. The representative then checks in with the client on an ongoing basis to be completely informed about how each qNano is being used, and then liaises with technicians back in New Zealand.</p>\n            <p>The Izon story started 8 years ago in New Zealand. Hans van der Voorn was aimless, having sold his own company, and was looking for something more taxing to set his mind to. Van der Voorn was introduced to three scientists with an idea that involved simply a small plastic membrane with a tiny adjustable hole to measure a range of very small particles. Initially he put up an investment of $1.5 million to move the process forward to the development of a prototype, and this led to the founding of Izon and the production of the qNano. Van der Voorn believes that the worlds of science and business sometimes don't understand each other very well. However, he thinks that engineering can be a bridge between the two, and his long experience in that field has been crucial to the company's success. He soon realised that Izon was going to need people on the ground overseas if it was going to grow, so the US office was opened. For now Izon trades in the US as a foreign company, so avoids the high level of compliance that comes with being an American-registered company. But he sees that one day soon this will change, as Izon's current position disallows it from entering into partnerships locally.</p>\n            <p>Marketing the qNano is complicated. Izon needs scientists both to buy and advertise the product. The science world may seem like a big playing field, but it's actually a small group. As a result, the critical part of the company's marketing is articles that clients publish describing work they have performed with the qNano. So for Izon the sale isn't enough in itself; it also has a stake in how customers are using the qNano. That's where Yaniv Gaynor comes in. As development and training manager, he's involved throughout the sales process and manages most of the customer's post-sale experience. The sales process is new for Gaynor, who shifted cities and switched from a role as teacher at the University of Minnesota to his first private sector role with Izon. ‘It's tricky, it's challenging, and it's not in my comfort zone,' he concedes. But nine out of ten times, if there's an unhappy customer, he's able to turn their experience around. And there's another part to this, because sitting with customers as they learn about the qNano, Gaynor gets to see how they are using the product. 'People ask very good questions, and these are great triggers for future development,' he says.</p>\n            <p>'Our business is selling research tools,' van der Voorn says. But he knows that the application range of this tool is wide. For instance, Izon is engaged in a project with Harvard University, looking for a particular type of particle of blood that is a symptom of the medical condition of thrombosis. If in the future they can identify this particle, they can design a simple test for it. This would make it easier for doctors to diagnose thrombosis. Another planned development is eventually to shift the US base to more spacious offices on the other side of town. With larger headquarters, the company will be able to bring clients into the Izon building for training with its product, rather than travelling to them, which will hopefully result in an even closer relationship between the company and its customers.</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6",
+        "q7"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-anchor\">\n                <h4>Do the following statements agree with the information given in Reading Passage 1?</h4>\n                <p>In boxes 1–7 on your answer sheet, write:</p>\n                <ul style=\"list-style-position: inside; padding-left: 0; margin-bottom: 1rem;\">\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information on this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>1</strong> Izon's new US headquarters are located in an area popular with other science businesses.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q1\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>2</strong> Izon's growth in the last three years has been faster than the company predicted.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q2\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>3</strong> Since 2004, Izon has developed a range of equipment for use in scientific research.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q3\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>4</strong> One advantage of the qNano is that it is cheaper than its competitors.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q4\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>5</strong> Drug delivery analysis will be the most profitable application of the qNano.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q5\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>6</strong> Kristoffer Bolen is still completing his studies.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q6\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>7</strong> Bolen's job requires him to fully understand how the qNano works.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q7\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions 1–7</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q8-9-10-11-12-13-anchor\">\n                <h4>Complete the notes below.</h4>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"notes-completion\">\n                    <h4>The Izon Story</h4>\n                    <p><strong>Hans van der Voorn</strong></p>\n                    <ul>\n                        <li>He made the <strong>8</strong> <input type=\"text\" id=\"q8_input\" maxlength=\"20\"> which enabled the prototype to be created.</li>\n                        <li>His background in <strong>9</strong> <input type=\"text\" id=\"q9_input\" maxlength=\"20\"> as well as business gave him the skills to run Izon.</li>\n                    </ul>\n                    <p><strong>Izon in the United States</strong></p>\n                    <ul>\n                         <li>It is unable to form partnerships in the US because it's not registered there.</li>\n                         <li>The company's marketing relies on <strong>10</strong> <input type=\"text\" id=\"q10_input\" maxlength=\"20\"> about its customers' research.</li>\n                         <li>Yaniv Gaynor was formerly a <strong>11</strong> <input type=\"text\" id=\"q11_input\" maxlength=\"20\"> with no experience in sales.</li>\n                         <li>Development of the product is influenced by customers' questions.</li>\n                    </ul>\n                    <p><strong>Plans for the future</strong></p>\n                    <ul>\n                         <li>To diagnose thrombosis, a <strong>12</strong> <input type=\"text\" id=\"q12_input\" maxlength=\"20\"> may be developed.</li>\n                         <li><strong>13</strong> <input type=\"text\" id=\"q13_input\" maxlength=\"20\"> will be done at Izon's US headquarters.</li>\n                    </ul>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "TRUE",
+    "q2": "NOT GIVEN",
+    "q3": "FALSE",
+    "q4": "FALSE",
+    "q5": "NOT GIVEN",
+    "q6": "TRUE",
+    "q7": "TRUE",
+    "q8": "investment",
+    "q9": "engineering",
+    "q10": "articles",
+    "q11": "teacher",
+    "q12": "test",
+    "q13": "training"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/172. P1 - Think Small 微观科学【高】/172. P1 - Think Small 微观科学.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/172. P1 - Think Small 微观科学【高】/172. P1 - Think Small 微观科学.pdf",
+    "ieltsHtml": "IELTS/P1/Think Small.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.650Z",
+    "notes": "signature:radio,text,textarea,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);
