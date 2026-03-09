@@ -35,6 +35,7 @@
             'js/views/legacyViewBundle.js',
             'js/app/examActions.js',
             // 单篇练习通信与会话能力属于 browse/practice 主流程
+            'js/app/readingLaunchMixin.js',
             'js/app/examSessionMixin.js',
             'js/app/browseController.js',
             'js/presentation/message-center.js',

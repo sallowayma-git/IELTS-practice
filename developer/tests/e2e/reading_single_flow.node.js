@@ -20,6 +20,8 @@ const REPORT_DIR = path.join(REPO_ROOT, 'developer', 'tests', 'e2e', 'reports');
 const REPORT_FILE = path.join(REPORT_DIR, 'reading-single-flow-report.json');
 const TMP_DIR = '/tmp/ielts-playwright-tmp';
 const BROWSERS_DIR = path.join(REPO_ROOT, 'developer', 'tests', 'e2e', '.pw-browsers');
+const TARGET_UNIFIED_EXAM_ID = 'p3-medium-169';
+const TARGET_MANUAL_PDF_EXAM_ID = 'p2-high-26';
 
 function nowIso() {
   return new Date().toISOString();
@@ -125,68 +127,112 @@ async function ensureReadingListReady(page) {
   );
 }
 
-async function openPlayableExam(page, consoleLog) {
-  const examIds = await page.evaluate(
-    () => Array.from(document.querySelectorAll('#exam-list-container .exam-item[data-exam-id]'))
-      .map((item) => (item.dataset && item.dataset.examId) || '')
-      .filter((examId) => !!examId)
+async function openExamPopup(page, examId, consoleLog) {
+  const selector = `#exam-list-container .exam-item[data-exam-id='${examId}'] button[data-action='start']`;
+  const startBtn = page.locator(selector).first();
+  const popupPromise = page.waitForEvent('popup', { timeout: 30_000 });
+  await triggerExamOpen(page, examId, startBtn);
+  const practicePage = await popupPromise;
+  collectConsole(practicePage, consoleLog);
+  await practicePage.waitForLoadState('load');
+  return practicePage;
+}
+
+async function triggerExamOpen(page, examId, startBtn = null) {
+  const button = startBtn || page.locator(
+    `#exam-list-container .exam-item[data-exam-id='${examId}'] button[data-action='start']`
+  ).first();
+
+  if (await button.count() > 0) {
+    await button.evaluate((node) => node.click());
+    return;
+  }
+
+  await page.evaluate(async (targetExamId) => {
+    if (!window.app || typeof window.app.openExam !== 'function') {
+      throw new Error('openExam_missing');
+    }
+    await window.app.openExam(targetExamId);
+  }, examId);
+}
+
+async function openUnifiedExam(page, examId, consoleLog) {
+  const practicePage = await openExamPopup(page, examId, consoleLog);
+
+  await page.waitForFunction(
+    (targetExamId) => {
+      const app = window.app;
+      if (!app || !app.examWindows || typeof app.examWindows.get !== 'function') {
+        return false;
+      }
+      const info = app.examWindows.get(targetExamId);
+      return !!(info && info.expectedSessionId);
+    },
+    examId,
+    { timeout: 12_000 }
   );
 
-  if (!examIds.length) {
-    throw new Error('题库列表为空，无法执行单篇 E2E');
+  await practicePage.waitForFunction(
+    () => window.location.href.includes('templates/reading-practice-unified.html') && !!document.getElementById('question-groups'),
+    { timeout: 20_000 }
+  );
+
+  const sessionId = await page.evaluate(
+    (targetExamId) => window.app?.examWindows?.get?.(targetExamId)?.expectedSessionId || '',
+    examId
+  );
+  const collectorReady = await page.evaluate(
+    (targetExamId) => !!window.app?.examWindows?.get?.(targetExamId)?.dataCollectorReady,
+    examId
+  );
+  const popupUrl = await practicePage.evaluate(() => window.location.href);
+
+  if (!sessionId) {
+    throw new Error(`题目 ${examId} 未生成 expectedSessionId`);
   }
 
-  const maxTry = Math.min(examIds.length, 8);
-  for (let index = 0; index < maxTry; index += 1) {
-    const examId = examIds[index];
-    const selector = `#exam-list-container .exam-item[data-exam-id='${examId}'] button[data-action='start']`;
-    const startBtn = page.locator(selector).first();
-    if (await startBtn.count() === 0) {
-      continue;
-    }
+  return { practicePage, sessionId, collectorReady, popupUrl };
+}
 
-    let practicePage = null;
-    try {
-      const popupPromise = page.waitForEvent('popup', { timeout: 30_000 });
-      await startBtn.click();
-      practicePage = await popupPromise;
-      collectConsole(practicePage, consoleLog);
-      await practicePage.waitForLoadState('load');
+async function openManualPdfExam(page, examId) {
+  await page.evaluate(() => {
+    window.__readingPdfCapture = { urls: [] };
+    window.__readingPdfNativeOpen = window.open;
+    window.open = function(url) {
+      const normalized = String(url || '');
+      window.__readingPdfCapture.urls.push(normalized);
+      return {
+        closed: false,
+        focus() {},
+        location: { href: normalized },
+      };
+    };
+  });
 
-      await page.waitForFunction(
-        (targetExamId) => {
-          const app = window.app;
-          if (!app || !app.examWindows || typeof app.examWindows.get !== 'function') {
-            return false;
-          }
-          const info = app.examWindows.get(targetExamId);
-          return !!(info && info.expectedSessionId);
-        },
-        examId,
-        { timeout: 12_000 }
-      );
-
-      const sessionId = await page.evaluate(
-        (targetExamId) => window.app?.examWindows?.get?.(targetExamId)?.expectedSessionId || '',
-        examId
-      );
-      const collectorReady = await page.evaluate(
-        (targetExamId) => !!window.app?.examWindows?.get?.(targetExamId)?.dataCollectorReady,
-        examId
-      );
-      if (!sessionId) {
-        throw new Error(`题目 ${examId} 未生成 expectedSessionId`);
+  try {
+    await page.evaluate(async (targetExamId) => {
+      if (!window.app || typeof window.app.openExam !== 'function') {
+        throw new Error('openExam_missing');
       }
-      return { examId, practicePage, index, sessionId, collectorReady };
-    } catch (error) {
-      logStep(`candidate #${index + 1} (${examId}) 不可用: ${String(error)}`, 'DEBUG');
-      if (practicePage && !practicePage.isClosed()) {
-        try { await practicePage.close(); } catch (_) {}
+      await window.app.openExam(targetExamId, { target: 'tab' });
+    }, examId);
+    await page.waitForTimeout(300);
+    const popupUrl = await page.evaluate(
+      () => window.__readingPdfCapture?.urls?.slice(-1)[0] || ''
+    );
+    const hasSession = await page.evaluate(
+      (targetExamId) => !!window.app?.examWindows?.get?.(targetExamId)?.expectedSessionId,
+      examId
+    );
+    return { popupUrl, hasSession };
+  } finally {
+    await page.evaluate(() => {
+      if (window.__readingPdfNativeOpen) {
+        window.open = window.__readingPdfNativeOpen;
+        delete window.__readingPdfNativeOpen;
       }
-    }
+    });
   }
-
-  throw new Error('未找到可建立父页会话映射的单篇题目');
 }
 
 async function run() {
@@ -204,6 +250,7 @@ async function run() {
   let status = 'fail';
   let examId = null;
   let sessionId = null;
+  let manualPdfUrl = null;
   let failure = null;
 
   const { firefox } = await import('playwright');
@@ -238,12 +285,15 @@ async function run() {
     logStep('window.app.openExam 可用', 'SUCCESS');
 
     const checkpoint = consoleLog.length;
-    const opened = await openPlayableExam(page, consoleLog);
-    examId = opened.examId;
+    examId = TARGET_UNIFIED_EXAM_ID;
+    const opened = await openUnifiedExam(page, examId, consoleLog);
     sessionId = opened.sessionId;
-    logStep(`选中题目: ${examId} (candidate #${opened.index + 1})`, 'DEBUG');
+    logStep(`选中统一页题目: ${examId}`, 'DEBUG');
     logStep(`父页通信会话已就绪: ${sessionId}`, 'SUCCESS');
     logStep(`SESSION_READY 状态: ${opened.collectorReady ? 'ready' : 'pending'}`, 'DEBUG');
+    if (!opened.popupUrl.includes('templates/reading-practice-unified.html')) {
+      throw new Error(`统一阅读页 URL 非预期: ${opened.popupUrl}`);
+    }
 
     const completionPayload = {
       examId,
@@ -318,6 +368,16 @@ async function run() {
     }
     logStep('未检测到 fallback/synthetic 路径', 'SUCCESS');
 
+    const manualPdf = await openManualPdfExam(page, TARGET_MANUAL_PDF_EXAM_ID);
+    manualPdfUrl = manualPdf.popupUrl;
+    logStep(`手工 PDF 题目已打开: ${TARGET_MANUAL_PDF_EXAM_ID}`, 'SUCCESS');
+    if (manualPdfUrl.includes('reading-practice-unified.html') || !manualPdfUrl.toLowerCase().includes('.pdf')) {
+      throw new Error(`手工 PDF 题目未打开 PDF: ${manualPdfUrl}`);
+    }
+    if (manualPdf.hasSession) {
+      throw new Error('手工 PDF 题目不应建立 unified/session 会话');
+    }
+
     status = 'pass';
   } catch (error) {
     failure = String(error && (error.stack || error.message || error));
@@ -330,6 +390,8 @@ async function run() {
       status,
       examId,
       sessionId,
+      manualPdfExamId: TARGET_MANUAL_PDF_EXAM_ID,
+      manualPdfUrl,
       error: failure,
       consoleSummary: {
         total: consoleLog.length,
