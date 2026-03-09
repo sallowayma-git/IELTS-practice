@@ -9,8 +9,18 @@
     "ieltsPaths": [
       "IELTS/P3/200 Years of Australian Landscapes at the Royal Academy in London.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P3/200 Years of Australian Landscapes at the Royal Academy in London.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "a brief history of humans and food",
@@ -30,7 +40,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-medium-63"
+    "examId": "p1-medium-63",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "a brief history of tea",
@@ -51,7 +69,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-high-01"
+    "examId": "p1-high-01",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/1. P1 - A Brief History of Tea 茶叶简史【高】/1. P1 - A Brief History of Tea 茶叶简史【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "a closer examination of a study on verbal and non-verbal messages",
@@ -71,7 +97,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-150"
+    "examId": "p3-high-150",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】/60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "a mechanical friend for children",
@@ -83,8 +117,19 @@
     "ieltsPaths": [
       "IELTS/P2/A mechanical friend for children.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "text"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P2/A mechanical friend for children.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "a new look for talbot park",
@@ -96,8 +141,20 @@
     "ieltsPaths": [
       "IELTS/P2/A new look for Talbot Park.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "text",
+      "select"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P2/A new look for Talbot Park.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "a study of western celebrity",
@@ -117,7 +174,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-medium-10"
+    "examId": "p2-medium-10",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/107. P2 - A study of western celebrity 西方名人【次】/107. P2 - A study of western celebrity 西方名人【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "a survivor's story",
@@ -138,7 +203,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-high-105"
+    "examId": "p1-high-105",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/2. P1 - A survivor’s story 新西兰猫头鹰【高】/2. P1 - A survivor’s story 新西兰猫头鹰【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "a unique golden textile",
@@ -158,7 +231,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-medium-121"
+    "examId": "p2-medium-121",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/34. P2 - A unique golden textile 蜘蛛丝【次】/34. P2 - A unique golden textile 蜘蛛丝【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "advertising needs attention",
@@ -177,7 +258,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-116"
+    "examId": "p1-low-116",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/3. P1 - Advertising Needs Attention 广告的吸引力/3. P1 - Advertising Needs Attention 广告的吸引力.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "ahead of its time",
@@ -189,8 +278,19 @@
     "ieltsPaths": [
       "IELTS/P1/Ahead of its time.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "text"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P1/Ahead of its time.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "ai_studio_code (9)",
@@ -209,7 +309,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-120"
+    "examId": "p2-high-120",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/33. P2 - A new look for Talbot Park 奥克兰社区改造【高】/ai_studio_code (9).html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "ambergris",
@@ -230,7 +338,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-127"
+    "examId": "p1-low-127",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/4. P1 - Ambergris 龙涎香/4. P1 - Ambergris 龙涎香.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "an important language development",
@@ -250,7 +366,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-low-69"
+    "examId": "p1-low-69",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/160. P1 - An important language development 楔形文字/160. P1 - An important language development 楔形文字.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "antarctic research",
@@ -271,7 +395,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-medium-93"
+    "examId": "p2-medium-93",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/182. P2 - Antarctic research 南极考察【次】/182. P2 - Antarctic research 南极考察.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "australia's airborne dentists",
@@ -283,8 +415,19 @@
     "ieltsPaths": [
       "IELTS/P1/Australia's Airborne Dentists.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "text"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P1/Australia's Airborne Dentists.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "australia's camouflaged creatures",
@@ -305,7 +448,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-91"
+    "examId": "p2-high-91",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/180. P2 - Australia’s camouflaged creatures 澳洲伪装生物【高】/180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "australia's cane toad problem",
@@ -317,8 +468,19 @@
     "ieltsPaths": [
       "IELTS/P1/Australia's cane toad problem.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "text"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P1/Australia's cane toad problem.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "australia's megafauna controversy",
@@ -330,8 +492,19 @@
     "ieltsPaths": [
       "IELTS/P3/Australia's Megafauna Controversy.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "table"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P3/Australia's Megafauna Controversy.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "australian artist margaret preston",
@@ -350,7 +523,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-138"
+    "examId": "p1-low-138",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/5. P1 - Australian artist Margaret Preston 澳大利亚艺术家/5. P1 - Australian artist Margaret Preston 澳大利亚艺术家.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "biomimicry",
@@ -369,7 +550,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-06"
+    "examId": "p2-low-06",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/103. P2 - Biomimicry 仿生学/103. P2 - Biomimicry 仿生学.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "biophilic design",
@@ -389,7 +578,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-122"
+    "examId": "p2-low-122",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/35. P2 - Biophilic Design 亲自然设计/35. P2 - Biophilic Design 亲自然设计.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "bird migration",
@@ -410,7 +607,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-123"
+    "examId": "p2-high-123",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/36. P2 - Bird Migration 鸟类迁徙【高】/36. P2 - Bird Migration 鸟类迁徙【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "book review the discovery of slowness",
@@ -430,7 +635,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-151"
+    "examId": "p3-low-151",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现)/61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "boring buildings",
@@ -449,7 +662,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-65"
+    "examId": "p2-low-65",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/157. P2 - Boring Buildings 无聊建筑/157. P2 - Boring Buildings 无聊建筑.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "born to trade",
@@ -468,7 +689,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-49"
+    "examId": "p2-low-49",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/142. P2 - Born to Trade 交易的本能/142. P2 - Born to Trade 交易的本能.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "bovids",
@@ -487,7 +716,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-11"
+    "examId": "p1-low-11",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/108. P1 - Bovids 牛科动物/108. P1 - Bovids 牛科动物.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "caral an ancient south american city",
@@ -505,7 +742,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-low-52"
+    "examId": "p1-low-52",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/145. P1 - Caral an ancient South American city 卡拉尔古城/145. P1 - Caral an ancient South American city 卡拉尔古城.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "carnivorous plants",
@@ -525,7 +770,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-low-61"
+    "examId": "p1-low-61",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/153. P1 - Carnivorous plants 食虫植物/153. P1 - Carnivorous plants 食虫植物.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "categorizing societies",
@@ -544,7 +797,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-149"
+    "examId": "p1-low-149",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/6. P1 - Categorizing societies 社会分类/6. P1 - Categorizing societies 社会分类html.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "charles darwin and evolutionary psychology",
@@ -564,7 +825,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-medium-152"
+    "examId": "p3-medium-152",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】/62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "children's literature studies today",
@@ -576,8 +845,18 @@
     "ieltsPaths": [
       "IELTS/P3/Children's literature studies today.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P3/Children's literature studies today.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "chili peppers",
@@ -596,7 +875,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-160"
+    "examId": "p1-low-160",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/7. P1 - Chili peppers 辣椒的历史/7. P1 - Chili peppers 辣椒的历史.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "conformity",
@@ -616,7 +903,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p3-low-44"
+    "examId": "p3-low-44",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/138. P3 - Conformity 从众心理/138. P3 - Conformity 从众心理.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "corporate social responsibility",
@@ -637,7 +932,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-124"
+    "examId": "p2-high-124",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/37. P2 - Corporate Social Responsibility  企业社会责任【高】/37. P2 - Corporate Social Responsibility  企业社会责任【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "crossing the threshold",
@@ -656,7 +959,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-153"
+    "examId": "p3-low-153",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/63. P3 - Crossing the Threshold 奥克兰美术馆/63. P3 - Crossing the Threshold 奥克兰美术馆.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "decision fatigue",
@@ -668,8 +979,19 @@
     "ieltsPaths": [
       "IELTS/P2/Decision Fatigue.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "text"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P2/Decision Fatigue.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "decisions, decisions",
@@ -687,7 +1009,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-medium-154"
+    "examId": "p3-medium-154",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/64. P3 - Decisions, Decisions 决策之间【次】/64. P3 - Decisions, Decisions 决策之间【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "does class size matter",
@@ -699,8 +1029,18 @@
     "ieltsPaths": [
       "IELTS/P3/Does class size matter.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P3/Does class size matter.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "does class size matter_",
@@ -718,7 +1058,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-medium-155"
+    "examId": "p3-medium-155",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/65. P3 - Does class size matter_ 课堂规模【次】/65. P3 - Does class size matter_ 课堂规模【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "dolls through the ages",
@@ -739,7 +1087,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-high-31"
+    "examId": "p1-high-31",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/126. P1 - Dolls through the ages 玩偶的变迁史【高】/126. P1 - Dolls through the ages 玩偶的变迁史【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "dust and the american west",
@@ -759,7 +1115,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-high-92"
+    "examId": "p1-high-92",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/181. P1 - Dust and the American West 美国西部尘埃【高】/181. P1 - Dust and the American West 美国西部尘埃.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "dyes and fabric dyeing",
@@ -780,7 +1144,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-40"
+    "examId": "p1-low-40",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/134. P1 - Dyes and fabric dyeing 染料的历史/134. P1 - Dyes and fabric dyeing 染料的历史.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "early approaches to organisational design",
@@ -800,7 +1172,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-09"
+    "examId": "p2-high-09",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/106. P2 - Early Approaches to Organisational Design 组织设计【高】/106. P2 - Early Approaches to Organisational Design 组织设计【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "egypt's ancient boat-builders",
@@ -819,7 +1199,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-125"
+    "examId": "p2-low-125",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/38. P2 - Egypt’s ancient boat-builders 古埃及造船/38. P2 - Egypt’s ancient boat-builders 古埃及造船.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "elephant communication",
@@ -840,7 +1228,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-156"
+    "examId": "p3-high-156",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/66. P3 - Elephant Communication 大象交流【高】/66. P3 - Elephant Communication 大象交流【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "fishbourne roman palace",
@@ -861,7 +1257,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-high-171"
+    "examId": "p1-high-171",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/8. P1 - Fishbourne Roman Palace 罗马宫殿【高】/8. P1 - Fishbourne Roman Palace 罗马宫殿【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "flower power",
@@ -882,7 +1286,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-157"
+    "examId": "p3-high-157",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/67. P3 - Flower Power 鲜花的力量(花之力)【高】/67. P3 - Flower Power 鲜花的力量(花之力)【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "fluorescence deep sea discovery深海发光生物研究",
@@ -900,7 +1312,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-low-70"
+    "examId": "p1-low-70",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/161. P1 - Fluorescence Deep sea discovery深海发光生物研究/161. P1 - Fluorescence Deep sea discovery深海发光生物研究.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "footprints in the mud",
@@ -921,7 +1341,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-high-27"
+    "examId": "p1-high-27",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/122. P1 - Footprints in the Mud 恐龙脚印【高】/122. P1 - Footprints in the Mud 恐龙脚印【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "game theory",
@@ -939,7 +1367,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-158"
+    "examId": "p3-low-158",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/68. P3 - Game theory 博弈论/68. P3 - Game theory 博弈论.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "grimm's fairy tales",
@@ -957,7 +1393,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-159"
+    "examId": "p3-high-159",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/69. P3 - Grimm’s Fairy Tales 格林童话【高】/69. P3 - Grimm’s Fairy Tales 格林童话【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "growing more for less",
@@ -969,8 +1413,19 @@
     "ieltsPaths": [
       "IELTS/P2/Growing more for less.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "text"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P2/Growing more for less.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "herbal medicines",
@@ -991,7 +1446,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-17"
+    "examId": "p2-high-17",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/113. P2 - Herbal Medicines 新西兰草药【高】/113. P2 - Herbal Medicines 新西兰草药【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "how are deserts formed",
@@ -1011,7 +1474,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-medium-126"
+    "examId": "p2-medium-126",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/39. P2 - How are deserts formed 沙漠成因【次】/39. P2 - How are deserts formed 沙漠成因【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "how the petri dish supports scientific advances",
@@ -1030,7 +1501,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-08"
+    "examId": "p2-low-08",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/105. P2 - How the Petri dish supports scientific advances 培养皿/105. P2 - How the Petri dish supports scientific advances 培养皿.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "how to be happy",
@@ -1051,7 +1530,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-39"
+    "examId": "p2-low-39",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/133. P2 - How to be Happy 如何获得幸福/133. P2 - How to be Happy 如何获得幸福.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "how to find your way out of a food desert",
@@ -1071,7 +1558,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-low-72"
+    "examId": "p1-low-72",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/163. P1 - How to find your way out of a food desert 城市食物荒漠/163. P1 - How to find your way out of a food desert 城市食物荒漠.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "how well do we concentrate",
@@ -1083,8 +1578,19 @@
     "ieltsPaths": [
       "IELTS/P2/How Well Do We Concentrate.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "text"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P2/How Well Do We Concentrate.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "how well do we concentrate_",
@@ -1103,7 +1609,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-128"
+    "examId": "p2-high-128",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/40. P2 - How Well Do We Concentrate_  多任务处理【高】/40. P2 - How Well Do We Concentrate_  多任务处理【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "humanities and the health professional",
@@ -1121,7 +1635,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-12"
+    "examId": "p3-low-12",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/109. P3 - Humanities and the health professional 人文医学/109. P3 - Humanities and the health professional 人文医学.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "images and places",
@@ -1142,7 +1664,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-28"
+    "examId": "p3-low-28",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/123. P3 - Images and Places 风景与印记/123. P3 - Images and Places 风景与印记.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "improving patient safety",
@@ -1162,7 +1692,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-55"
+    "examId": "p3-low-55",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/148. P3 - Improving Patient Safety 药品包装设计/148. P3 - Improving Patient Safety 药品包装设计.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "insect decision-making",
@@ -1180,7 +1718,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-medium-58"
+    "examId": "p2-medium-58",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/150. P2 - Insect Decision-Making 昆虫决策【次】/150. P2 - Insect Decision-Making 昆虫决策【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "insect-inspired robots",
@@ -1201,7 +1747,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-161"
+    "examId": "p3-high-161",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/70. P3 - Insect-inspired robots 昆虫机器人【高】/70. P3 - Insect-inspired robots 昆虫机器人【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "inside the mind of a fan",
@@ -1220,7 +1774,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p3-low-59"
+    "examId": "p3-low-59",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/151. P3 - Inside the mind of a fan 观赛心境/151. P3 - Inside the mind of a fan 观赛心境.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "intelligent behaviour in birds",
@@ -1239,7 +1801,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-medium-129"
+    "examId": "p2-medium-129",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】/41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "investing in the future",
@@ -1258,7 +1828,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-30"
+    "examId": "p1-low-30",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/125. P1 - Investing in the Future 投资未来/125. P1 - Investing in the Future 投资未来.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "investment in shares versus investment in other assets",
@@ -1278,7 +1856,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-130"
+    "examId": "p2-high-130",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/42. P2 - Investment in shares versus investment in other assets 回报数据分析【高】/42. P2 - Investment in shares versus investment in other assets 回报数据分析【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "jean piaget (1896-1980)",
@@ -1299,7 +1885,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-medium-162"
+    "examId": "p3-medium-162",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】/71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "jellyfish - the dominant species",
@@ -1320,7 +1914,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p2-low-50"
+    "examId": "p2-low-50",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "katherine mansfield",
@@ -1341,7 +1943,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-high-05"
+    "examId": "p1-high-05",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/102. P1 - Katherine Mansfield 新西兰作家【高】/102. P1 - Katherine Mansfield 新西兰作家【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "keeping the fun in funfairs",
@@ -1360,7 +1970,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-163"
+    "examId": "p3-low-163",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/72. P3 - Keeping the Fun in Funfairs 游乐场设计科学/72. P3 - Keeping the Fun in Funfairs 游乐场设计科学.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "keeping the water away",
@@ -1382,7 +2000,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-37"
+    "examId": "p2-low-37",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/131. P2 - Keeping the water away 洪水防控/131. P2 - Keeping the water away 洪水防控.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "language strategy in multinational companies",
@@ -1401,7 +2027,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-164"
+    "examId": "p3-high-164",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/73. P3 - Language Strategy in Multinational Companies 跨国公司语言策略【高】/73. P3 - Language Strategy in Multinational Companies 跨国公司语言策略【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "lean production innovation",
@@ -1419,7 +2053,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-75"
+    "examId": "p2-low-75",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/166. P2 - Lean Production Innovation 精益生产/166. P2 - Lean Production Innovation 精益生产.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "learning from the romans",
@@ -1441,7 +2083,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-131"
+    "examId": "p2-high-131",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/43. P2 - Learning from the Romans 罗马混凝土【高】/43. P2 - Learning from the Romans 罗马混凝土【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "learning to be bilingual",
@@ -1459,7 +2109,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-56"
+    "examId": "p3-low-56",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/149. P3 - Learning to be bilingual 双语学习/149. P3 - Learning to be bilingual 双语学习.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "let's teach them how to teach",
@@ -1478,7 +2136,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-165"
+    "examId": "p3-low-165",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/74. P3 - Let’s teach them how to teach 教他们如何教学/74. P3 - Let’s teach them how to teach 教他们如何教学.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "life on mars",
@@ -1490,8 +2156,19 @@
     "ieltsPaths": [
       "IELTS/P3/Life on Mars.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "select"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P3/Life on Mars.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "life on mars_",
@@ -1510,7 +2187,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-166"
+    "examId": "p3-low-166",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/75. P3 - Life on Mars_ 火星地球化改造/75. P3 - Life on Mars_ 火星地球化改造.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "listening to the ocean",
@@ -1531,7 +2216,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-medium-182"
+    "examId": "p1-medium-182",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/9. P1 - Listening to the Ocean 海洋探测【次】/9. P1 - Listening to the Ocean 海洋探测【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "living dunes",
@@ -1552,7 +2245,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-167"
+    "examId": "p3-high-167",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/76. P3 - Living dunes 流动沙丘【高】/76. P3 - Living dunes 流动沙丘【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "looking at daily life in ancient rome",
@@ -1572,7 +2273,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-89"
+    "examId": "p3-high-89",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/179. P3 - Looking at daily life in ancient Rome  古罗马的日常【高】/179. P3 - Looking at daily life in ancient Rome  古罗马的日常.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "looking for inspiration",
@@ -1591,7 +2300,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-83"
+    "examId": "p3-low-83",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/173. 1018纸笔 P3 - Looking for inspiration 寻找灵感/173. 1018纸笔 P3 - Looking for inspiration 寻找灵感.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "mammoth kill",
@@ -1611,7 +2328,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-77"
+    "examId": "p2-low-77",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/168. P2 - Mammoth Kill 猛犸象的灭绝/168. P2 - Mammoth Kill 猛犸象的灭绝.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "maori fish hooks",
@@ -1631,7 +2356,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-02"
+    "examId": "p1-low-02",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/10. P1 - Maori Fish Hooks 毛利鱼钩/10. P1 - Maori Fish Hooks 毛利鱼钩.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "marketing and the information age",
@@ -1652,7 +2385,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-medium-168"
+    "examId": "p3-medium-168",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/77. P3 - Marketing and the information age 信息时代营销【次】/77. P3 - Marketing and the information age 信息时代营销【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "mercator - the map maker",
@@ -1672,7 +2413,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p3-medium-66"
+    "examId": "p3-medium-66",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/158. P3 - Mercator - The Map Maker 地理制图师【次】/158. P3 - Mercator - The Map Maker 地理制图师【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "mind music",
@@ -1693,7 +2442,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-19"
+    "examId": "p2-high-19",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】/115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "mirror",
@@ -1711,7 +2468,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-100"
+    "examId": "p3-low-100",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/189. P3 - Mirror 镜子研究/189. P3 - Mirror 镜子研究.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "movement underwater",
@@ -1731,7 +2496,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p3-low-54"
+    "examId": "p3-low-54",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/147. P3 - Movement Underwater 水下运动/147. P3 - Movement Underwater 水下运动.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "multi-tasking and the brain",
@@ -1743,8 +2516,19 @@
     "ieltsPaths": [
       "IELTS/P2/Multi-tasking and the brain.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "text"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P2/Multi-tasking and the brain.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "muscle loss",
@@ -1757,20 +2541,43 @@
       "IELTS/P2/Muscle Loss.html"
     ],
     "signature": [],
-    "examId": null
+    "examId": "p2-high-26",
+    "sourceProvider": null,
+    "sourceHtmlPath": null,
+    "sourceHtmlExtractable": false,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": "manual_only",
+    "reviewReason": "manual_mapping_needed",
+    "manualOnly": true,
+    "notes": "当前仅有 PDF 与空壳 HTML，不生成统一页数据。"
   },
   {
     "normalizedTitle": "music language we all speak",
-    "matchStatus": "ielts_only",
-    "matchConfidence": 0,
-    "shuiPath": null,
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "shuiPath": "睡着过项目组/1.11月高频文章[94篇+18背景]/P3 （29高+6次高）/2. P3次高频 (6篇)/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】.html",
     "ieltsPath": "IELTS/P3/Music Language We All Speak.html",
-    "shuiPaths": [],
+    "shuiPaths": [
+      "睡着过项目组/1.11月高频文章[94篇+18背景]/P3 （29高+6次高）/2. P3次高频 (6篇)/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】.html"
+    ],
     "ieltsPaths": [
       "IELTS/P3/Music Language We All Speak.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "textarea",
+      "dragdrop",
+      "table"
+    ],
+    "examId": "p3-medium-169",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/1.11月高频文章[94篇+18背景]/P3 （29高+6次高）/2. P3次高频 (6篇)/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": "mapped",
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": "Shui 补源位于 reading 旧频次目录，不在当前批量扫描根。"
   },
   {
     "normalizedTitle": "music soothes and awes",
@@ -1788,7 +2595,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-85"
+    "examId": "p3-low-85",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/175. P3 - Music soothes and awes 音乐疗愈/175. P3 - Music soothes and awes 音乐疗愈.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "neanderthal technology",
@@ -1809,7 +2624,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-medium-22"
+    "examId": "p3-medium-22",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】/118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "new filter promises clean water for millions",
@@ -1827,7 +2650,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p2-low-64"
+    "examId": "p2-low-64",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/156. P2 - New filter promises clean water for millions 新型泥土净水器/156. P2 - New filter promises clean water for millions 新型泥土净水器.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "orientation of birds",
@@ -1846,7 +2677,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-132"
+    "examId": "p2-low-132",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/44. P2 - Orientation of Birds 鸟类的定位能力/44. P2 - Orientation of Birds 鸟类的定位能力.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "pacific navigation and voyaging",
@@ -1865,7 +2704,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-170"
+    "examId": "p3-high-170",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】/79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "petrol power an eco-revolution",
@@ -1885,7 +2732,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-98"
+    "examId": "p3-low-98",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/187. P3 - Petrol power an eco-revolution 交通的革命/187. P3 - Petrol power an eco-revolution 交通的革命.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "playing soccer",
@@ -1907,7 +2762,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-133"
+    "examId": "p2-high-133",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/45. P2 - Playing soccer 街头足球【高】/45. P2 - Playing soccer 街头足球【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "rebranding art museums",
@@ -1928,7 +2791,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-172"
+    "examId": "p3-low-172",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/80. P3 - Rebranding art museums 博物馆品牌重塑/80. P3 - Rebranding art museums 博物馆品牌重塑.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "report on a university drama project",
@@ -1949,7 +2820,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-13"
+    "examId": "p1-low-13",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/11. P1 - Report on a university drama project 大学戏剧项目报告/11. P1 - Report on a university drama project 大学戏剧项目报告.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "research into the effects of different teaching styles",
@@ -1969,7 +2848,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-38"
+    "examId": "p3-low-38",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/132. P3 - Research into the effects of different teaching styles 教学风格研究/132. P3 - Research into the effects of different teaching styles 教学风格研究.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "robert louis stevenson",
@@ -1990,7 +2877,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-173"
+    "examId": "p3-high-173",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/81. P3 - Robert Louis Stevenson 苏格兰作家【高】/81. P3 - Robert Louis Stevenson 苏格兰作家【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "roller coaster",
@@ -2011,7 +2906,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-134"
+    "examId": "p2-high-134",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/46. P2 - Roller coaster 过山车【高】/46. P2 - Roller coaster 过山车【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "rubber",
@@ -2032,7 +2935,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-high-24"
+    "examId": "p1-high-24",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/12. P1 - Rubber 橡胶【高】/12. P1 - Rubber 橡胶【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "salt",
@@ -2050,7 +2961,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-low-81"
+    "examId": "p1-low-81",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/171. P1 - Salt  盐的历史/171. P1 - Salt  盐的历史.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "saving languages",
@@ -2068,7 +2987,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-97"
+    "examId": "p3-low-97",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/186. P3 - Saving languages 拯救濒危语言/186. P3 - Saving languages 拯救濒危语言.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "scented plants",
@@ -2085,7 +3012,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-low-67"
+    "examId": "p1-low-67",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/159. P1 - Scented Plants 植物的味道/159. P1 - Scented Plants 植物的味道.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "science and filmmaking",
@@ -2106,7 +3041,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-32"
+    "examId": "p3-high-32",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/127. P3 - Science and Filmmaking 电影科学(CGI)【高】/127. P3 - Science and Filmmaking 电影科学(CGI)【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "science and filmmaking (cgi)",
@@ -2118,8 +3061,18 @@
     "ieltsPaths": [
       "IELTS/P3/Science and Filmmaking (CGI).html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P3/Science and Filmmaking (CGI).html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "sea change for salinity",
@@ -2136,7 +3089,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p3-low-71"
+    "examId": "p3-low-71",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/162. P3 - Sea Change for Salinity 土地盐碱化/162. P3 - Sea Change for Salinity 土地盐碱化.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "should space be explored by robots or by humans",
@@ -2157,7 +3118,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-14"
+    "examId": "p2-high-14",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "should we stop eating meat",
@@ -2178,7 +3147,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-104"
+    "examId": "p2-low-104",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素/192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "sign, baby, sign!",
@@ -2197,7 +3174,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p3-low-76"
+    "examId": "p3-low-76",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/167. P3 - Sign, Baby, Sign! 美国手语/167. P3 - Sign, Baby, Sign! 美国手语.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "skyscraper farming",
@@ -2217,7 +3202,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-135"
+    "examId": "p2-low-135",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/47. P2 - Skyscraper Farming 摩天大楼种植/47. P2 - Skyscraper Farming 摩天大楼种植.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "sleep study on modern-day hunter-gatherers dispels popular notions",
@@ -2237,7 +3230,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-low-45"
+    "examId": "p1-low-45",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/139. P1 - Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究/139. P1 - Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "solving the problem of waste disposal",
@@ -2257,7 +3258,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-136"
+    "examId": "p2-high-136",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/48. P2 - Solving the problem of waste disposal 垃圾处理【高】/48. P2 - Solving the problem of waste disposal 垃圾处理【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "some views on the use of headphones",
@@ -2278,7 +3287,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-174"
+    "examId": "p3-high-174",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/82. P3 - Some views on the use of headphones 耳机使用【高】/82. P3 - Some views on the use of headphones 耳机使用【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "sorry-who are you",
@@ -2298,7 +3315,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-medium-60"
+    "examId": "p1-medium-60",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/152. P1 - Sorry—who are you 脸盲症【次】/152. P1 - Sorry—who are you 脸盲症【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "speaking of nothing",
@@ -2316,7 +3341,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-87"
+    "examId": "p2-low-87",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/177. 1025纸笔P2 - Speaking of Nothing [Pretest] 闲聊的意义/177. 1025纸笔P2 - Speaking of Nothing [Pretest] 闲聊的意义.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "star performers",
@@ -2337,7 +3370,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-07"
+    "examId": "p3-low-07",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/104. P3 - Star Performers 明星员工/104. P3 - Star Performers 明星员工.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "stress less",
@@ -2358,7 +3399,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-21"
+    "examId": "p2-high-21",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/117. P2 - Stress Less 工作压力【高】/117. P2 - Stress Less 工作压力【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "surviving city life",
@@ -2378,7 +3427,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-137"
+    "examId": "p2-high-137",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/49. P2 - Surviving city life 动物适应城市【高】/49. P2 - Surviving city life 动物适应城市【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "sweet trouble",
@@ -2396,7 +3453,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-35"
+    "examId": "p1-low-35",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/13. P1 - Sweet Trouble 澳洲制糖产业/13. P1 - Sweet Trouble 澳洲制糖产业.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "sydney opera house",
@@ -2417,7 +3482,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-46"
+    "examId": "p1-low-46",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/14. P1 - Sydney Opera House 悉尼歌剧院/14. P1 - Sydney Opera House 悉尼歌剧院.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "tasmania's museum of old and new art",
@@ -2438,7 +3511,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-36"
+    "examId": "p3-low-36",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/130. P3 - Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA/130. P3 - Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "termite mounds",
@@ -2459,7 +3540,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-175"
+    "examId": "p3-low-175",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/83. P3 - Termite Mounds 白蚁丘/83. P3 - Termite Mounds 白蚁丘.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the analysis of fear",
@@ -2480,7 +3569,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-medium-176"
+    "examId": "p3-medium-176",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/84. P3 - The Analysis of Fear 猴子恐惧实验【次】/84. P3 - The Analysis of Fear 猴子恐惧实验【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the art of deception",
@@ -2501,7 +3598,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-medium-177"
+    "examId": "p3-medium-177",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/85. P3 - The Art of Deception 欺骗的艺术【次】/85. P3 - The Art of Deception 欺骗的艺术【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the benefits of learning an instrument",
@@ -2522,7 +3627,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-178"
+    "examId": "p3-high-178",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/86. P3 - The benefits of learning an instrument 学乐器的好处【高】/86. P3 - The benefits of learning an instrument 学乐器的好处【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the blockbuster phenomenon",
@@ -2542,7 +3655,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-medium-57"
+    "examId": "p1-medium-57",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the burgess shale fossils",
@@ -2561,7 +3682,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-low-47"
+    "examId": "p1-low-47",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/140. P1 - The Burgess Shale fossils 伯吉斯页岩/140. P1 - The Burgess Shale fossils 伯吉斯页岩.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the causes of linguistic change",
@@ -2573,8 +3702,19 @@
     "ieltsPaths": [
       "IELTS/P3/The Causes of Linguistic Change.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "text"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P3/The Causes of Linguistic Change.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the clipper races",
@@ -2595,7 +3735,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-68"
+    "examId": "p1-low-68",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/16. P1 - The Clipper Races 帆船竞速/16. P1 - The Clipper Races 帆船竞速.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the conquest of malaria in italy",
@@ -2616,7 +3764,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-139"
+    "examId": "p2-high-139",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/50. P2 - The conquest of malaria in Italy 意大利疟疾防治【高】/50. P2 - The conquest of malaria in Italy 意大利疟疾防治【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the constant evolution of the humble tomato",
@@ -2637,7 +3793,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-23"
+    "examId": "p2-high-23",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化【高】/119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the costs of brand loyalty",
@@ -2657,7 +3821,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-78"
+    "examId": "p3-low-78",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the development of plastics",
@@ -2678,7 +3850,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-medium-20"
+    "examId": "p1-medium-20",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/116. P1 - The Development of Plastics 塑料的发展史【次】/116. P1 - The Development of Plastics 塑料的发展史【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the development of the silk industry",
@@ -2699,7 +3879,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-high-79"
+    "examId": "p1-high-79",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the dingo debate",
@@ -2720,7 +3908,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-140"
+    "examId": "p2-low-140",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/51. P2 - The dingo debate 澳洲野犬/51. P2 - The dingo debate 澳洲野犬.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the early history of olive oil",
@@ -2740,7 +3936,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-low-53"
+    "examId": "p1-low-53",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/146. P1 - The Early History of Olive Oil 橄榄油的历史/146. P1 - The Early History of Olive Oil 橄榄油的历史.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the economic effect of climate",
@@ -2760,7 +3964,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-103"
+    "examId": "p2-low-103",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/191. P2 - The economic effect of climate 气候对经济的影响/191. P2 - The economic effect of climate 气候对经济的影响.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the exploration of mars",
@@ -2778,7 +3990,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-medium-179"
+    "examId": "p3-medium-179",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/87. P3 - The Exploration of Mars 火星探索【次】/87. P3 - The Exploration of Mars 火星探索【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the extinction of the cave bear",
@@ -2799,7 +4019,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-medium-29"
+    "examId": "p1-medium-29",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the fascinating world of attine ants",
@@ -2819,7 +4047,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-141"
+    "examId": "p2-high-141",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/52. P2 - The fascinating world of attine ants 切叶蚁【高】/52. P2 - The fascinating world of attine ants 切叶蚁【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the fashion industry",
@@ -2841,7 +4077,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-142"
+    "examId": "p2-low-142",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/53. P2 - The fashion industry 时尚产业/53. P2 - The fashion industry 时尚产业.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the fluoridation controversy",
@@ -2860,7 +4104,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-180"
+    "examId": "p3-high-180",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/88. P3 - The fluoridation controversy 氟化水争议【高】/88. P3 - The fluoridation controversy 氟化水争议【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the fruit book",
@@ -2881,7 +4133,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-181"
+    "examId": "p3-high-181",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/89. P3 - The Fruit Book 果实之书【高】/89. P3 - The Fruit Book 果实之书【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the gender gap in new zealand's high school examination results",
@@ -2900,7 +4160,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-51"
+    "examId": "p2-low-51",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the hazards of multitasking",
@@ -2919,7 +4187,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-medium-183"
+    "examId": "p3-medium-183",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/90. P3 - The hazards of multitasking 多任务处理【次】/90. P3 - The hazards of multitasking 多任务处理【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the history of tea",
@@ -2938,7 +4214,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-high-90"
+    "examId": "p1-high-90",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/18. P1 - The History of Tea 茶叶的历史【高】/18. P1 - The History of Tea 茶叶的历史【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the history of the bar code",
@@ -2958,7 +4242,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-low-99"
+    "examId": "p1-low-99",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/188. P1 - The history of the bar code 条形码的历史/188. P1 - The history of the bar code 条形码的历史.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the history of the british wool industry",
@@ -2970,8 +4262,19 @@
     "ieltsPaths": [
       "IELTS/P1/The history of the British wool industry.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "text"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P1/The history of the British wool industry.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the history of the guitar",
@@ -2990,7 +4293,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-low-48"
+    "examId": "p1-low-48",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/141. P1 - The history of the guitar 吉他的历史/141. P1 - The history of the guitar 吉他的历史.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the impact of invasive species",
@@ -3010,7 +4321,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-143"
+    "examId": "p2-low-143",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/54. P2 - The impact of invasive species 入侵物种的影响/54. P2 - The impact of invasive species 入侵物种的影响.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the impact of the potato",
@@ -3031,7 +4350,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-high-101"
+    "examId": "p1-high-101",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/19. P1 - The Impact of the Potato 土豆的影响【高】/19. P1 - The Impact of the Potato 土豆的影响【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the importance of being playful",
@@ -3052,7 +4379,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-94"
+    "examId": "p2-low-94",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/183. P2 - The importance of being playful 玩耍的重要性/183. P2 - The importance of being playful 玩耍的重要性.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the importance of business cards",
@@ -3073,7 +4408,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-106"
+    "examId": "p1-low-106",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/20. P1 - The Importance of Business Cards 名片的重要性/20. P1 - The Importance of Business Cards 名片的重要性.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the importance of law",
@@ -3094,7 +4437,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-16"
+    "examId": "p2-high-16",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/112. P2 - The Importance of Law 法律的意义【高】/112. P2 - The Importance of Law 法律的意义【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the life of beatrix potter",
@@ -3115,7 +4466,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-107"
+    "examId": "p1-low-107",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/21. P1 - The life of Beatrix Potter 彼得兔作家/21. P1 - The life of Beatrix Potter 彼得兔作家.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the myth of the eight-hour sleep",
@@ -3135,7 +4494,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-41"
+    "examId": "p2-low-41",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the nature of yawning",
@@ -3154,7 +4521,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-108"
+    "examId": "p1-low-108",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/22. P1 - The nature of Yawning 打哈欠的本质/22. P1 - The nature of Yawning 打哈欠的本质.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the new zealand writer margaret mahy",
@@ -3175,7 +4550,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-184"
+    "examId": "p3-high-184",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/91. P3 - The New Zealand writer Margaret Mahy 新西兰女作家【高】/91. P3 - The New Zealand writer Margaret Mahy 新西兰女作家【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the origin of paper",
@@ -3196,7 +4579,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-109"
+    "examId": "p1-low-109",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/23. P1 - The Origin of Paper 造纸术起源/23. P1 - The Origin of Paper 造纸术起源.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the pearls",
@@ -3216,7 +4607,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-high-110"
+    "examId": "p1-high-110",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/24. P1 - The Pearls 珍珠【高】/24. P1 - The Pearls 珍珠【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the peopling of patagonia",
@@ -3236,7 +4635,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-42"
+    "examId": "p3-low-42",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the pirahã people of brazil",
@@ -3257,7 +4664,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-medium-185"
+    "examId": "p3-medium-185",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言【次】/92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the placebo effect5",
@@ -3275,7 +4690,15 @@
       "select",
       "table"
     ],
-    "examId": "p3-low-74"
+    "examId": "p3-low-74",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/165. P3 - The Placebo Effect5 安慰剂效应/165. P3 - The Placebo Effect5 安慰剂效应.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the plan to bring an asteroid to earth",
@@ -3296,7 +4719,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-medium-144"
+    "examId": "p2-medium-144",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/55. P2 - The plan to bring an asteroid to Earth 捕获小行星【次】/55. P2 - The plan to bring an asteroid to Earth 捕获小行星【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the power of music",
@@ -3317,7 +4748,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-102"
+    "examId": "p2-low-102",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/190. P2 - The power of music 音乐的力量/190. P2 - The power of music 音乐的力量.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the power of smell",
@@ -3338,7 +4777,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-73"
+    "examId": "p2-low-73",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/164. P2 - The Power of Smell 嗅觉的力量/164. P2 - The Power of Smell 嗅觉的力量.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the purpose of facial expressions",
@@ -3357,7 +4804,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-62"
+    "examId": "p2-low-62",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/154. P2 - The purpose of facial expressions 面部表情/154. P2 - The purpose of facial expressions 面部表情.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the pyramid of cestius",
@@ -3378,7 +4833,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-medium-33"
+    "examId": "p1-medium-33",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/128. P1 - The Pyramid of Cestius 罗马金字塔【次】/128. P1 - The Pyramid of Cestius 罗马金字塔【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the return of monkey life",
@@ -3399,7 +4862,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-145"
+    "examId": "p2-high-145",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/56. P2 - The return of monkey life 猴群回归【高】/56. P2 - The return of monkey life 猴群回归【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the rise and fall of detective stories",
@@ -3418,7 +4889,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-111"
+    "examId": "p1-low-111",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰/25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the robbers cave study (山洞)群体行为实验",
@@ -3437,7 +4916,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-186"
+    "examId": "p3-low-186",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/93. P3 - The Robbers Cave Study (山洞)群体行为实验/93. P3 - The Robbers Cave Study (山洞)群体行为实验.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the science of sleep",
@@ -3456,7 +4943,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-187"
+    "examId": "p3-low-187",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/94. P3 - The science of sleep 睡眠的科学/94. P3 - The science of sleep 睡眠的科学.pdf.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the significant role of mother tongue in education",
@@ -3476,7 +4971,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-medium-188"
+    "examId": "p3-medium-188",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】/95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the slow food organization",
@@ -3497,7 +5000,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-34"
+    "examId": "p1-low-34",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/129. P1 - The Slow Food Organization 慢食运动组织/129. P1 - The Slow Food Organization 慢食运动组织.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the strange world of sight",
@@ -3517,7 +5028,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-95"
+    "examId": "p3-low-95",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/184. P3 - The strange world of sight 奇异的视觉世界/184. P3 - The strange world of sight 奇异的视觉世界.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the tasmanian tiger",
@@ -3538,7 +5057,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-medium-146"
+    "examId": "p2-medium-146",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/57. P2 - The Tasmanian Tiger 袋狼【次】/57. P2 - The Tasmanian Tiger 袋狼【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the tuatara - past and future",
@@ -3558,7 +5085,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-189"
+    "examId": "p3-high-189",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/96. P3 - The tuatara – past and future 新西兰蜥蜴【高】/96. P3 - The tuatara – past and future 新西兰蜥蜴【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the tuatara of new zealand",
@@ -3577,7 +5112,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-112"
+    "examId": "p1-low-112",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the unsung sense",
@@ -3597,7 +5140,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-low-80"
+    "examId": "p1-low-80",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/170. P1 - The unsung sense 被低估的嗅觉/170. P1 - The unsung sense 被低估的嗅觉.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "the value of literary prizes",
@@ -3615,7 +5166,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-190"
+    "examId": "p3-low-190",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/97. P3 - The value of literary prizes 文学奖项的价值/97. P3 - The value of literary prizes 文学奖项的价值.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "think small",
@@ -3635,7 +5194,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-high-82"
+    "examId": "p1-high-82",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/172. P1 - Think Small 微观科学【高】/172. P1 - Think Small 微观科学.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "thomas young the last man who knew everything",
@@ -3656,7 +5223,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-113"
+    "examId": "p1-low-113",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/27. P1 - Thomas Young The last man who knew everything 托马斯·杨/27. P1 - Thomas Young The last man who knew everything 托马斯·杨.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "translating a key to international understanding",
@@ -3676,7 +5251,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-88"
+    "examId": "p3-low-88",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/178. 1025纸笔P3 - Translating a key to international understanding 翻译的艺术/178. 1025纸笔P3 - Translating a key to international understanding 翻译的艺术.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "triumph of the city",
@@ -3695,7 +5278,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-low-114"
+    "examId": "p1-low-114",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/28. P1 - Triumph of the City 城市的胜利/28. P1 - Triumph of the City 城市的胜利.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "tunnelling under the thames",
@@ -3716,7 +5307,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-medium-115"
+    "examId": "p1-medium-115",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/29. P1 - Tunnelling under the Thames 泰晤士河隧道【次】/29. P1 - Tunnelling under the Thames 泰晤士河隧道【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "unlocking the mystery of dreams",
@@ -3734,7 +5333,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-medium-18"
+    "examId": "p3-medium-18",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/114. P3 - Unlocking the mystery of dreams 梦的解析【次】/114. P3 - Unlocking the mystery of dreams 梦的解析【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "urban regeneration",
@@ -3755,7 +5362,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-medium-86"
+    "examId": "p2-medium-86",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/176. P2 - Urban Regeneration 柏林公园改造【次】/176. P2 - Urban Regeneration 柏林公园改造.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "video games' unexpected benefits to the human brain",
@@ -3774,7 +5389,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-medium-191"
+    "examId": "p3-medium-191",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/98. P3 - Video Games’ Unexpected Benefits to the Human Brain 电子游戏的好处【次】/98. P3 - Video Games’ Unexpected Benefits to the Human Brain 电子游戏的好处【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "voynich manuscript",
@@ -3795,7 +5418,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-192"
+    "examId": "p3-high-192",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/99. P3 - Voynich Manuscript 伏尼契手稿【高】/99. P3 - Voynich Manuscript 伏尼契手稿【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "whale culture",
@@ -3817,7 +5448,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-15"
+    "examId": "p3-high-15",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/111. P3 - Whale Culture 鲸鱼文化【高】/111. P3 - Whale Culture 鲸鱼文化【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "what is social history",
@@ -3837,7 +5476,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-low-43"
+    "examId": "p3-low-43",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/137. P3 - What is social history 社会史/137. P3 - What is social history 社会史.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "what lucy taught us",
@@ -3858,7 +5505,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-medium-117"
+    "examId": "p1-medium-117",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/30. P1 - What Lucy Taught Us 露西化石【次】/30. P1 - What Lucy Taught Us 露西化石【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "what makes a musical expert",
@@ -3870,8 +5525,19 @@
     "ieltsPaths": [
       "IELTS/P3/What makes a musical expert.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "select"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P3/What makes a musical expert.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "what makes a musical expert_",
@@ -3889,7 +5555,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-03"
+    "examId": "p3-high-03",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/100. P3 - What makes a musical expert_ 音乐天赋【高】/100. P3 - What makes a musical expert_ 音乐天赋【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "when people are 'deaf' to music",
@@ -3901,8 +5575,18 @@
     "ieltsPaths": [
       "IELTS/P3/When people are 'deaf' to music.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P3/When people are 'deaf' to music.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "who wrote shakespeare's plays",
@@ -3923,7 +5607,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-147"
+    "examId": "p2-low-147",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/58. P2 - Who wrote Shakespeare's plays 莎士比亚/58. P2 - Who wrote Shakespeare's plays 莎士比亚.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "why do we need sleep",
@@ -3943,7 +5635,15 @@
       "select",
       "table"
     ],
-    "examId": "p2-low-96"
+    "examId": "p2-low-96",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "why do we need the arts_",
@@ -3963,7 +5663,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-low-148"
+    "examId": "p2-low-148",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/59. P2 - Why do we need the arts_ 艺术的意义/59. P2 - Why do we need the arts_ 艺术的意义.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "why good ideas fail tf公司",
@@ -3981,7 +5689,15 @@
       "textarea",
       "table"
     ],
-    "examId": "p1-low-84"
+    "examId": "p1-low-84",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/174. P1 - Why good ideas fail TF公司/174. P1 - Why good ideas fail TF公司.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "will eating less make you live longer",
@@ -4002,7 +5718,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p2-high-25"
+    "examId": "p2-high-25",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "william gilbert and magnetism",
@@ -4024,7 +5748,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-high-118"
+    "examId": "p1-high-118",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/31. P1 - William Gilbert and Magnetism 电磁学之父【高】/31. P1 - William Gilbert and Magnetism 电磁学之父【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "wood",
@@ -4043,7 +5775,15 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p1-medium-119"
+    "examId": "p1-medium-119",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/32. P1 - Wood 新西兰木材产业【次】/32. P1 - Wood 新西兰木材产业【次】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "wood a valuable resource in new zealand's economy",
@@ -4055,8 +5795,20 @@
     "ieltsPaths": [
       "IELTS/P1/Wood A Valuable Resource in New Zealand's Economy.html"
     ],
-    "signature": [],
-    "examId": null
+    "signature": [
+      "radio",
+      "text",
+      "table"
+    ],
+    "examId": null,
+    "sourceProvider": "ielts",
+    "sourceHtmlPath": "IELTS/P1/Wood A Valuable Resource in New Zealand's Economy.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   },
   {
     "normalizedTitle": "yawning",
@@ -4076,6 +5828,14 @@
       "dragdrop",
       "table"
     ],
-    "examId": "p3-high-04"
+    "examId": "p3-high-04",
+    "sourceProvider": "shui",
+    "sourceHtmlPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/101. P3 - Yawning 打呵欠【高】/101. P3 - Yawning 打呵欠【高】.html",
+    "sourceHtmlExtractable": true,
+    "sourceHtmlInspectionError": null,
+    "overrideStatus": null,
+    "reviewReason": null,
+    "manualOnly": false,
+    "notes": ""
   }
 ]
