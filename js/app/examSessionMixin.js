@@ -99,52 +99,28 @@
             }
 
             try {
+                const readingLaunch = typeof this.resolveReadingLaunchDescriptor === 'function'
+                    ? this.resolveReadingLaunchDescriptor(exam)
+                    : null;
+
+                if (readingLaunch && readingLaunch.mode === 'pdf_manual' && readingLaunch.pdfUrl) {
+                    return this._openPdfWindow(exam, readingLaunch.pdfUrl, options);
+                }
+
                 // 若无HTML，直接打开PDF
-                if (exam.hasHtml === false) {
+                if (!readingLaunch && exam.hasHtml === false) {
                     const pdfUrl = (typeof window.buildResourcePath === 'function')
                         ? window.buildResourcePath(exam, 'pdf')
                         : ((exam.path || '').replace(/\\/g, '/').replace(/\/+\//g, '/') + (exam.pdfFilename || ''));
                     const resolvedPdfUrl = this._ensureAbsoluteUrl(pdfUrl);
-                    let pdfWin = null;
-
-                    if (options.reuseWindow && !options.reuseWindow.closed) {
-                        try {
-                            options.reuseWindow.location.href = resolvedPdfUrl;
-                            options.reuseWindow.focus();
-                            pdfWin = options.reuseWindow;
-                        } catch (reuseError) {
-                            console.warn('[App] 无法复用已打开的标签，尝试重新打开:', reuseError);
-                        }
-                    }
-
-                    if (!pdfWin) {
-                        if (options.target === 'tab') {
-                            try {
-                                pdfWin = window.open(resolvedPdfUrl, '_blank');
-                            } catch (_) { }
-                        } else {
-                            try {
-                                pdfWin = window.open(resolvedPdfUrl, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
-                            } catch (_) { }
-                        }
-                    }
-
-                    if (!pdfWin) {
-                        try {
-                            window.location.href = resolvedPdfUrl;
-                            return window;
-                        } catch (e) {
-                            throw new Error('无法打开PDF窗口，请检查弹窗设置');
-                        }
-                    }
-
-                    window.showMessage(`正在打开PDF: ${exam.title}`, 'info');
-                    return pdfWin;
+                    return this._openPdfWindow(exam, resolvedPdfUrl, options);
                 }
 
                 const guardOptions = { ...options, examId };
                 // 测试环境的套题练习统一使用占位页，避免因题目资源差异导致 E2E 不稳定
-                let examUrl = this.buildExamUrl(exam);
+                let examUrl = (readingLaunch && readingLaunch.mode === 'unified_html' && readingLaunch.url)
+                    ? readingLaunch.url
+                    : this.buildExamUrl(exam);
                 if (guardOptions.suiteSessionId && this._shouldUsePlaceholderPage()) {
                     const placeholderUrl = this._buildExamPlaceholderUrl(exam, guardOptions);
                     if (placeholderUrl) {
@@ -183,12 +159,56 @@
             }
         },
 
+        _openPdfWindow(exam, resolvedPdfUrl, options = {}) {
+            let pdfWin = null;
+
+            if (options.reuseWindow && !options.reuseWindow.closed) {
+                try {
+                    options.reuseWindow.location.href = resolvedPdfUrl;
+                    options.reuseWindow.focus();
+                    pdfWin = options.reuseWindow;
+                } catch (reuseError) {
+                    console.warn('[App] 无法复用已打开的标签，尝试重新打开:', reuseError);
+                }
+            }
+
+            if (!pdfWin) {
+                if (options.target === 'tab') {
+                    try {
+                        pdfWin = window.open(resolvedPdfUrl, '_blank');
+                    } catch (_) { }
+                } else {
+                    try {
+                        pdfWin = window.open(resolvedPdfUrl, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
+                    } catch (_) { }
+                }
+            }
+
+            if (!pdfWin) {
+                try {
+                    window.location.href = resolvedPdfUrl;
+                    return window;
+                } catch (error) {
+                    throw new Error('无法打开PDF窗口，请检查弹窗设置');
+                }
+            }
+
+            window.showMessage(`正在打开PDF: ${exam.title}`, 'info');
+            return pdfWin;
+        },
+
         /**
          * 构造题目URL
          */
         buildExamUrl(exam) {
-            if (this._isUnifiedReadingExam(exam)) {
-                return this._buildUnifiedReadingUrl(exam);
+            const readingLaunch = typeof this.resolveReadingLaunchDescriptor === 'function'
+                ? this.resolveReadingLaunchDescriptor(exam)
+                : null;
+            if (readingLaunch && readingLaunch.mode === 'unified_html' && readingLaunch.url) {
+                return readingLaunch.url;
+            }
+            if (readingLaunch && readingLaunch.mode === 'pdf_manual' && readingLaunch.pdfUrl) {
+                return readingLaunch.pdfUrl;
             }
 
             // 使用全局的路径构建器以确保阅读/听力路径正确
@@ -202,41 +222,6 @@
                 examPath += '/';
             }
             return examPath + exam.filename;
-        },
-
-        _getUnifiedReadingManifestEntry(exam) {
-            if (!exam || typeof exam !== 'object' || !exam.id) {
-                return null;
-            }
-            const manifest = (typeof window !== 'undefined' && window.__READING_EXAM_MANIFEST__)
-                ? window.__READING_EXAM_MANIFEST__
-                : null;
-            const manifestEntry = manifest && exam.id ? manifest[exam.id] : null;
-            if (!manifestEntry || !(manifestEntry.dataKey || manifestEntry.examId)) {
-                return null;
-            }
-            return manifestEntry;
-        },
-
-        _isUnifiedReadingExam(exam) {
-            return !!this._getUnifiedReadingManifestEntry(exam);
-        },
-
-        _buildUnifiedReadingUrl(exam) {
-            const manifestEntry = this._getUnifiedReadingManifestEntry(exam);
-            const params = new URLSearchParams();
-            if (exam && exam.id) {
-                params.set('examId', String(exam.id));
-            }
-            const resolvedDataKey = manifestEntry?.dataKey || exam?.id;
-            if (resolvedDataKey) {
-                params.set('dataKey', String(resolvedDataKey));
-            }
-            const query = params.toString();
-            const url = query
-                ? `templates/reading-practice-unified.html?${query}`
-                : 'templates/reading-practice-unified.html';
-            return this._ensureAbsoluteUrl(url);
         },
 
         /**

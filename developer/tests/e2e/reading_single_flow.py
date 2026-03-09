@@ -17,6 +17,8 @@ INDEX_PATH = REPO_ROOT / "index.html"
 INDEX_URL = f"{INDEX_PATH.as_uri()}?test_env=1"
 REPORT_DIR = REPO_ROOT / "developer" / "tests" / "e2e" / "reports"
 REPORT_FILE = REPORT_DIR / "reading-single-flow-report.json"
+TARGET_UNIFIED_EXAM_ID = "p3-medium-169"
+TARGET_MANUAL_PDF_EXAM_ID = "p2-high-26"
 
 try:
     from playwright.async_api import (
@@ -166,68 +168,123 @@ async def _ensure_reading_list_ready(page: Page) -> int:
     )
 
 
-async def _open_playable_exam(page: Page, console_log: List[ConsoleEntry]) -> tuple[str, Page, int, str, bool]:
-    exam_ids = await page.evaluate(
+async def _open_exam_popup(page: Page, exam_id: str, console_log: List[ConsoleEntry]) -> Page:
+    selector = f"#exam-list-container .exam-item[data-exam-id='{exam_id}'] button[data-action='start']"
+    start_btn = page.locator(selector).first
+    async with page.expect_popup() as popup_wait:
+        await _trigger_exam_open(page, exam_id, start_btn)
+    practice_page = await popup_wait.value
+    _collect_console(practice_page, console_log)
+    await practice_page.wait_for_load_state("load")
+    return practice_page
+
+
+async def _trigger_exam_open(page: Page, exam_id: str, start_btn=None) -> None:
+    button = start_btn or page.locator(
+        f"#exam-list-container .exam-item[data-exam-id='{exam_id}'] button[data-action='start']"
+    ).first
+    if await button.count() > 0:
+        await button.evaluate("(node) => node.click()")
+        return
+
+    await page.evaluate(
         """
-        () => Array.from(document.querySelectorAll('#exam-list-container .exam-item[data-exam-id]'))
-            .map((item) => (item.dataset && item.dataset.examId) || '')
-            .filter((examId) => !!examId)
+        async (targetExamId) => {
+            if (!window.app || typeof window.app.openExam !== 'function') {
+                throw new Error('openExam_missing');
+            }
+            await window.app.openExam(targetExamId);
+        }
+        """,
+        exam_id,
+    )
+
+
+async def _open_unified_exam(page: Page, exam_id: str, console_log: List[ConsoleEntry]) -> tuple[Page, str, bool, str]:
+    practice_page = await _open_exam_popup(page, exam_id, console_log)
+    await page.wait_for_function(
+        """
+        (targetExamId) => {
+            const app = window.app;
+            if (!app || !app.examWindows || typeof app.examWindows.get !== 'function') {
+                return false;
+            }
+            const info = app.examWindows.get(targetExamId);
+            return !!(info && info.expectedSessionId);
+        }
+        """,
+        arg=exam_id,
+        timeout=12000,
+    )
+    await practice_page.wait_for_function(
+        "() => window.location.href.includes('templates/reading-practice-unified.html') && !!document.getElementById('question-groups')",
+        timeout=20000,
+    )
+    session_id = await page.evaluate(
+        "(targetExamId) => window.app?.examWindows?.get?.(targetExamId)?.expectedSessionId || ''",
+        exam_id,
+    )
+    collector_ready = await page.evaluate(
+        "(targetExamId) => !!window.app?.examWindows?.get?.(targetExamId)?.dataCollectorReady",
+        exam_id,
+    )
+    if not session_id:
+        raise AssertionError(f"题目 {exam_id} 未生成 expectedSessionId")
+    popup_url = await practice_page.evaluate("() => window.location.href")
+    return practice_page, session_id, collector_ready, popup_url
+
+
+async def _open_manual_pdf_exam(page: Page, exam_id: str) -> tuple[str, bool]:
+    await page.evaluate(
+        """
+        () => {
+            window.__readingPdfCapture = { urls: [] };
+            window.__readingPdfNativeOpen = window.open;
+            window.open = function(url) {
+                const normalized = String(url || '');
+                window.__readingPdfCapture.urls.push(normalized);
+                return {
+                    closed: false,
+                    focus() {},
+                    location: { href: normalized }
+                };
+            };
+        }
         """
     )
-    if not exam_ids:
-        raise AssertionError("题库列表为空，无法执行单篇 E2E")
 
-    max_try = min(len(exam_ids), 8)
-    for index in range(max_try):
-        exam_id = exam_ids[index]
-        start_btn = page.locator(
-            f"#exam-list-container .exam-item[data-exam-id='{exam_id}'] button[data-action='start']"
-        ).first
-        if await start_btn.count() == 0:
-            continue
-
-        practice_page: Page | None = None
-        try:
-            async with page.expect_popup() as popup_wait:
-                await start_btn.click()
-            practice_page = await popup_wait.value
-            _collect_console(practice_page, console_log)
-            await practice_page.wait_for_load_state("load")
-            await page.wait_for_function(
-                """
-                (targetExamId) => {
-                    const app = window.app;
-                    if (!app || !app.examWindows || typeof app.examWindows.get !== 'function') {
-                        return false;
-                    }
-                    const info = app.examWindows.get(targetExamId);
-                    return !!(info && info.expectedSessionId);
+    try:
+        await page.evaluate(
+            """
+            async (targetExamId) => {
+                if (!window.app || typeof window.app.openExam !== 'function') {
+                    throw new Error('openExam_missing');
                 }
-                """,
-                arg=exam_id,
-                timeout=12000,
-            )
-            session_id = await page.evaluate(
-                "(targetExamId) => window.app?.examWindows?.get?.(targetExamId)?.expectedSessionId || ''",
-                exam_id,
-            )
-            collector_ready = await page.evaluate(
-                "(targetExamId) => !!window.app?.examWindows?.get?.(targetExamId)?.dataCollectorReady",
-                exam_id,
-            )
-            if not session_id:
-                raise AssertionError(f"题目 {exam_id} 未生成 expectedSessionId")
-            return exam_id, practice_page, index, session_id, collector_ready
-        except Exception as error:
-            log_step(f"candidate #{index + 1} ({exam_id}) 不可用: {error}", "DEBUG")
-            try:
-                if practice_page and not practice_page.is_closed():
-                    await practice_page.close()
-            except Exception:
-                pass
-            continue
-
-    raise AssertionError("未找到可建立父页会话映射的单篇题目")
+                await window.app.openExam(targetExamId, { target: 'tab' });
+            }
+            """,
+            exam_id,
+        )
+        await page.wait_for_timeout(300)
+        popup_url = await page.evaluate(
+            "() => window.__readingPdfCapture?.urls?.slice(-1)[0] || ''"
+        )
+        has_session = await page.evaluate(
+            "(targetExamId) => !!window.app?.examWindows?.get?.(targetExamId)?.expectedSessionId",
+            exam_id,
+        )
+        return popup_url, has_session
+    finally:
+        await page.evaluate(
+            """
+            () => {
+                if (window.__readingPdfNativeOpen) {
+                    window.open = window.__readingPdfNativeOpen;
+                    delete window.__readingPdfNativeOpen;
+                }
+            }
+            """
+        )
 
 
 async def run() -> None:
@@ -239,6 +296,7 @@ async def run() -> None:
     failure: str | None = None
     exam_id: str | None = None
     session_id: str | None = None
+    manual_pdf_url: str | None = None
 
     try:
         async with async_playwright() as p:
@@ -271,10 +329,13 @@ async def run() -> None:
             log_step("window.app.openExam 可用", "SUCCESS")
 
             checkpoint = len(console_log)
-            exam_id, practice_page, try_index, session_id, collector_ready = await _open_playable_exam(page, console_log)
-            log_step(f"选中题目: {exam_id} (candidate #{try_index + 1})", "DEBUG")
+            exam_id = TARGET_UNIFIED_EXAM_ID
+            practice_page, session_id, collector_ready, unified_url = await _open_unified_exam(page, exam_id, console_log)
+            log_step(f"选中统一页题目: {exam_id}", "DEBUG")
             log_step(f"父页通信会话已就绪: {session_id}", "SUCCESS")
             log_step(f"SESSION_READY 状态: {'ready' if collector_ready else 'pending'}", "DEBUG")
+            if "templates/reading-practice-unified.html" not in unified_url:
+                raise AssertionError(f"统一阅读页 URL 非预期: {unified_url}")
 
             completion_payload = {
                 "examId": exam_id,
@@ -350,6 +411,16 @@ async def run() -> None:
                 raise AssertionError(f"检测到 synthetic 保存路径: {synthetic_hits[0].text}")
 
             log_step("未检测到 fallback/synthetic 路径", "SUCCESS")
+
+            manual_pdf_url, manual_has_session = await _open_manual_pdf_exam(
+                page, TARGET_MANUAL_PDF_EXAM_ID
+            )
+            log_step(f"手工 PDF 题目已打开: {TARGET_MANUAL_PDF_EXAM_ID}", "SUCCESS")
+            if "reading-practice-unified.html" in (manual_pdf_url or "") or ".pdf" not in (manual_pdf_url or "").lower():
+                raise AssertionError(f"手工 PDF 题目未打开 PDF: {manual_pdf_url}")
+            if manual_has_session:
+                raise AssertionError("手工 PDF 题目不应建立 unified/session 会话")
+
             await browser.close()
             status = "pass"
 
@@ -364,6 +435,8 @@ async def run() -> None:
             "status": status,
             "examId": exam_id,
             "sessionId": session_id,
+            "manualPdfExamId": TARGET_MANUAL_PDF_EXAM_ID,
+            "manualPdfUrl": manual_pdf_url,
             "error": failure,
             "consoleSummary": {
                 "total": len(console_log),

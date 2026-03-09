@@ -1,8 +1,9 @@
 {
-  "generatedAt": "2026-03-08T16:24:30.827Z",
+  "generatedAt": "2026-03-09T03:38:56.063Z",
   "totalReadingExams": 192,
-  "totalShuiCandidates": 190,
-  "migratedCount": 190,
+  "totalSourceCandidates": 191,
+  "totalShuiCandidates": 191,
+  "migratedCount": 191,
   "failedCount": 0,
   "migratedExamIds": [
     "p1-high-01",
@@ -185,6 +186,7 @@
     "p3-medium-155",
     "p3-medium-162",
     "p3-medium-168",
+    "p3-medium-169",
     "p3-medium-176",
     "p3-medium-177",
     "p3-medium-179",
