@@ -993,9 +993,18 @@
     }
 
     function syncPracticeRecordState(records) {
+        const syncAppState = (nextRecords) => {
+            try {
+                if (global.app && global.app.state && global.app.state.practice) {
+                    global.app.state.practice.records = Array.isArray(nextRecords) ? nextRecords.slice() : [];
+                }
+            } catch (_) {}
+        };
+
         if (typeof global.setPracticeRecordsState === 'function') {
             try {
                 const finalRecords = global.setPracticeRecordsState(records);
+                syncAppState(finalRecords);
                 try {
                     global.practiceRecords = Array.isArray(finalRecords) ? finalRecords.slice() : [];
                 } catch (_) {}
@@ -1004,6 +1013,7 @@
                 console.warn('[PracticeCore] 同步 practice records 状态失败:', error);
             }
         }
+        syncAppState(records);
         try {
             global.practiceRecords = Array.isArray(records) ? records.slice() : [];
         } catch (_) {}

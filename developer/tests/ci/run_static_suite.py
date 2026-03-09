@@ -912,6 +912,64 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("PracticeCore 静态守卫", False, "测试脚本缺失"))
         all_passed = False
 
+    practice_record_persistence_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceRecordPersistence.test.js"
+    if practice_record_persistence_test.exists():
+        try:
+            completed_practice_record_persistence = subprocess.run(
+                ["node", str(practice_record_persistence_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            practice_record_persistence_passed = False
+            practice_record_persistence_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_persistence_output = completed_practice_record_persistence.stdout.strip() or completed_practice_record_persistence.stderr.strip()
+            try:
+                practice_record_persistence_payload = json.loads(raw_persistence_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_record_persistence_passed = False
+                practice_record_persistence_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_record_persistence_passed = practice_record_persistence_payload.get("status") == "pass"
+                practice_record_persistence_detail = practice_record_persistence_payload.get("detail", practice_record_persistence_payload)
+        results.append(_format_result("练习记录持久化删除链路测试", practice_record_persistence_passed, practice_record_persistence_detail))
+        all_passed &= practice_record_persistence_passed
+    else:
+        results.append(_format_result("练习记录持久化删除链路测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    practice_core_app_state_sync_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCoreAppStateSync.test.js"
+    if practice_core_app_state_sync_test.exists():
+        try:
+            completed_practice_core_app_state_sync = subprocess.run(
+                ["node", str(practice_core_app_state_sync_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            practice_core_app_state_sync_passed = False
+            practice_core_app_state_sync_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_app_state_output = completed_practice_core_app_state_sync.stdout.strip() or completed_practice_core_app_state_sync.stderr.strip()
+            try:
+                practice_core_app_state_sync_payload = json.loads(raw_app_state_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_core_app_state_sync_passed = False
+                practice_core_app_state_sync_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_core_app_state_sync_passed = practice_core_app_state_sync_payload.get("status") == "pass"
+                practice_core_app_state_sync_detail = practice_core_app_state_sync_payload.get("detail", practice_core_app_state_sync_payload)
+        results.append(_format_result("PracticeCore app.state 同步测试", practice_core_app_state_sync_passed, practice_core_app_state_sync_detail))
+        all_passed &= practice_core_app_state_sync_passed
+    else:
+        results.append(_format_result("PracticeCore app.state 同步测试", False, "测试脚本缺失"))
+        all_passed = False
+
     # Integration tests
     integration_tests = [
         ("Reading migration snapshot integration test", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "readingMigrationSnapshot.test.js"),
