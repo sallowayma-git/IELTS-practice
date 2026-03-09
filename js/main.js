@@ -323,7 +323,8 @@ async function cleanupOldCache() {
 // --- Data Loading and Management ---
 
 // Phase 3: 练习记录同步 - 保留在 main.js（核心数据流，暂不迁移）
-async function syncPracticeRecords() {
+async function syncPracticeRecords(options = {}) {
+    const { forceRender = false } = options || {};
     console.log('[System] 正在从存储中同步练习记录...');
     let records = [];
     try {
@@ -434,15 +435,25 @@ async function syncPracticeRecords() {
         if (renderer && renderer.helpers && typeof renderer.helpers.computeRecordsSignature === 'function') {
             const prevSig = renderer.helpers.computeRecordsSignature(prev);
             const nextSig = renderer.helpers.computeRecordsSignature(records);
-            if (prevSig === nextSig) {
+            if (!forceRender && prevSig === nextSig) {
                 console.log('[System] 练习记录未变化，跳过UI刷新');
                 return;
             }
         }
     } catch (_) { /* 保底不中断同步流程 */ }
 
-    // 新增修复3D：确保全局变量是UI的单一数据源
+    // 新增修复3D：确保全局变量和 app.state 都跟 canonical records 保持一致
     setPracticeRecordsState(records);
+    try {
+        if (window.app && window.app.state && window.app.state.practice) {
+            const nextRecords = typeof getPracticeRecordsState === 'function'
+                ? getPracticeRecordsState()
+                : (Array.isArray(records) ? records : []);
+            window.app.state.practice.records = Array.isArray(nextRecords) ? nextRecords.slice() : [];
+        }
+    } catch (error) {
+        console.warn('[System] 同步练习记录到 App state 失败:', error);
+    }
     refreshBrowseProgressFromRecords(records);
 
     console.log(`[System] ${records.length} 条练习记录已加载到内存。`);
@@ -454,13 +465,15 @@ function ensurePracticeRecordsSync(trigger = 'default') {
     if (practiceRecordsLoadPromise) {
         return practiceRecordsLoadPromise;
     }
-    practiceRecordsLoadPromise = (async () => {
+    const loadTask = (async () => {
         await syncPracticeRecords();
         return true;
     })().catch((error) => {
         console.warn(`[System] 练习记录同步失败(${trigger}):`, error);
-        practiceRecordsLoadPromise = null;
         return false;
+    });
+    practiceRecordsLoadPromise = loadTask.finally(() => {
+        practiceRecordsLoadPromise = null;
     });
     return practiceRecordsLoadPromise;
 }
@@ -471,6 +484,92 @@ function startPracticeRecordsSyncInBackground(trigger = 'default') {
     } catch (error) {
         console.warn(`[System] 后台同步练习记录失败(${trigger}):`, error);
     }
+}
+
+async function listCanonicalPracticeRecords() {
+    const practiceKey = ['practice', 'records'].join('_');
+    const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+    if (practiceCoreStore && typeof practiceCoreStore.listPracticeRecords === 'function') {
+        return await practiceCoreStore.listPracticeRecords();
+    }
+
+    if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.getPracticeRecords === 'function') {
+        const records = await window.simpleStorageWrapper.getPracticeRecords();
+        return Array.isArray(records) ? records : [];
+    }
+
+    if (window.storage && typeof window.storage.get === 'function') {
+        const records = await window.storage.get(practiceKey, []);
+        return Array.isArray(records) ? records : [];
+    }
+
+    return [];
+}
+
+async function replaceCanonicalPracticeRecords(records) {
+    const finalRecords = Array.isArray(records) ? records : [];
+    const practiceKey = ['practice', 'records'].join('_');
+    const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+
+    if (practiceCoreStore && typeof practiceCoreStore.replacePracticeRecords === 'function') {
+        await practiceCoreStore.replacePracticeRecords(finalRecords);
+        return true;
+    }
+
+    if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+        await window.simpleStorageWrapper.savePracticeRecords(finalRecords);
+        return true;
+    }
+
+    if (window.storage && typeof window.storage.writePersistentValue === 'function') {
+        await window.storage.writePersistentValue(practiceKey, finalRecords);
+        return true;
+    }
+
+    if (window.storage && typeof window.storage.set === 'function') {
+        await window.storage.set(practiceKey, finalRecords);
+        return true;
+    }
+
+    throw new Error('练习记录存储未就绪');
+}
+
+function syncLegacyPracticeRecordArtifacts(records) {
+    const finalRecords = Array.isArray(records) ? records : [];
+    const legacyRawKeys = ['practice_records', 'old_prefix_practice_records'];
+    const shadowKey = window.storage && typeof window.storage.getKey === 'function'
+        ? window.storage.getKey('practice_records')
+        : null;
+
+    try {
+        if (finalRecords.length === 0) {
+            legacyRawKeys.forEach((key) => {
+                try { localStorage.removeItem(key); } catch (_) { }
+                try { sessionStorage.removeItem(key); } catch (_) { }
+            });
+        } else {
+            const serialized = JSON.stringify(finalRecords);
+            try { localStorage.setItem('practice_records', serialized); } catch (_) { }
+            try { sessionStorage.removeItem('practice_records'); } catch (_) { }
+            try { localStorage.removeItem('old_prefix_practice_records'); } catch (_) { }
+            try { sessionStorage.removeItem('old_prefix_practice_records'); } catch (_) { }
+        }
+    } catch (error) {
+        console.warn('[System] 同步 legacy 练习记录影子键失败:', error);
+    }
+
+    if (shadowKey && window.storage && window.storage.mode === 'indexeddb') {
+        try { localStorage.removeItem(shadowKey); } catch (_) { }
+        try { sessionStorage.removeItem(shadowKey); } catch (_) { }
+    }
+}
+
+async function persistPracticeRecordsAndRefresh(records, trigger = 'manual-update') {
+    const finalRecords = Array.isArray(records) ? records : [];
+    await replaceCanonicalPracticeRecords(finalRecords);
+    syncLegacyPracticeRecordArtifacts(finalRecords);
+    await syncPracticeRecords({ forceRender: true });
+    return getPracticeRecordsState();
 }
 
 const completionNoticeState = {
@@ -2433,38 +2532,23 @@ async function toggleBulkDelete() {
 }
 
 async function bulkDeleteRecords(selectedSnapshot = getSelectedRecordsState()) {
-    const store = window.storage;
-    if (!store || typeof store.get !== 'function' || typeof store.set !== 'function') {
-        console.error('[System] storage 管理器不可用，无法执行批量删除');
-        showMessage('存储未就绪，暂时无法删除记录', 'error');
-        return;
-    }
-
     const normalizedIds = Array.from(selectedSnapshot, (id) => normalizeRecordId(id)).filter(Boolean);
     if (normalizedIds.length === 0) {
         showMessage('请选择要删除的记录', 'warning');
         return;
     }
 
-    const records = await store.get('practice_records', []);
+    const records = await listCanonicalPracticeRecords();
     const baseList = Array.isArray(records) ? records : [];
     const recordsToKeep = baseList.filter(record => !normalizedIds.includes(normalizeRecordId(record && record.id)));
 
     const deletedCount = baseList.length - recordsToKeep.length;
-
-    if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
-        await window.PracticeCore.store.replacePracticeRecords(recordsToKeep);
-    } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
-        await window.simpleStorageWrapper.savePracticeRecords(recordsToKeep);
-    } else {
-        const practiceKey = ['practice', 'records'].join('_');
-        await store.set(practiceKey, recordsToKeep);
+    if (deletedCount === 0) {
+        showMessage('未找到可删除的记录', 'warning');
+        return;
     }
-    setPracticeRecordsState(recordsToKeep);
 
-    if (typeof syncPracticeRecords === 'function') {
-        await syncPracticeRecords();
-    }
+    await persistPracticeRecordsAndRefresh(recordsToKeep, 'bulk-delete');
 
     showMessage(`已删除 ${deletedCount} 条记录`, 'success');
     console.log(`[System] 批量删除了 ${deletedCount} 条练习记录`);
@@ -2494,9 +2578,7 @@ async function deleteRecord(recordId) {
         return;
     }
 
-    const records = window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function'
-        ? await window.PracticeCore.store.listPracticeRecords()
-        : await storage.get('practice_records', []);
+    const records = await listCanonicalPracticeRecords();
     const recordIndex = records.findIndex(record => String(record.id) === String(recordId));
 
     if (recordIndex === -1) {
@@ -2508,55 +2590,19 @@ async function deleteRecord(recordId) {
     const confirmMessage = `确定要删除这条练习记录吗？\n\n题目: ${record.title}\n时间: ${new Date(record.date).toLocaleString()}\n\n此操作不可恢复。`;
 
     if (confirm(confirmMessage)) {
-        const historyItem = document.querySelector(`[data-record-id="${recordId}"]`);
-        if (historyItem) {
-            historyItem.classList.add('deleting');
-            setTimeout(async () => {
-                historyItem.classList.add('deleted');
-                setTimeout(async () => {
-                    records.splice(recordIndex, 1);
-                    if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
-                        await window.PracticeCore.store.replacePracticeRecords(records);
-                    } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
-                        await window.simpleStorageWrapper.savePracticeRecords(records);
-                    } else {
-                        const practiceKey = ['practice', 'records'].join('_');
-                        await storage.set(practiceKey, records);
-                    }
-                    syncPracticeRecords(); // Re-sync and update UI
-                    showMessage('记录已删除', 'success');
-                }, 300);
-            }, 200);
-        } else {
-            // Fallback if element not found
-            records.splice(recordIndex, 1);
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
-                await window.PracticeCore.store.replacePracticeRecords(records);
-            } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
-                await window.simpleStorageWrapper.savePracticeRecords(records);
-            } else {
-                const practiceKey = ['practice', 'records'].join('_');
-                await storage.set(practiceKey, records);
-            }
-            syncPracticeRecords();
-            showMessage('记录已删除', 'success');
-        }
+        const nextRecords = records.filter((record) => String(record.id) !== String(recordId));
+        await persistPracticeRecordsAndRefresh(nextRecords, 'single-delete');
+        showMessage('记录已删除', 'success');
     }
 }
 
 async function clearPracticeData() {
     if (confirm('确定要清除所有练习记录吗？此操作不可恢复。')) {
-        setPracticeRecordsState([]);
-        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
-            await window.PracticeCore.store.replacePracticeRecords([]);
-        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
-            await window.simpleStorageWrapper.savePracticeRecords([]);
-        } else {
-            const practiceKey = ['practice', 'records'].join('_');
-            await storage.set(practiceKey, []); // Use storage helper
-        }
+        await persistPracticeRecordsAndRefresh([], 'clear-all');
         processedSessions.clear();
-        updatePracticeView();
+        clearSelectedRecordsState();
+        setBulkDeleteModeState(false);
+        refreshBulkDeleteButton();
         showMessage('练习记录已清除', 'success');
     }
 }
