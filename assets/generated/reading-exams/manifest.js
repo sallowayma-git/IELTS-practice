@@ -1,6 +1,13 @@
 (function registerReadingExamManifest(global) {
   'use strict';
   global.__READING_EXAM_MANIFEST__ = {
+  "p3-medium-169": {
+    "examId": "p3-medium-169",
+    "dataKey": "p3-medium-169",
+    "script": "../assets/generated/reading-exams/p3-medium-169.js",
+    "title": "（无题目）  Music Language We All Speak 音乐语言",
+    "category": "P3"
+  },
   "p1-high-01": {
     "examId": "p1-high-01",
     "dataKey": "p1-high-01",

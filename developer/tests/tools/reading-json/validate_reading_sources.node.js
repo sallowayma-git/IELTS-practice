@@ -102,8 +102,22 @@ function validateRecord(record, filePath) {
         }
     }
 
-    if (!record.sourceRefs || !record.sourceRefs.shuiHtml || !record.sourceRefs.shuiPdf) {
-        errors.push('sourceRefs.shuiHtml/shuiPdf 缺失');
+    if (!record.sourceRefs || !record.sourceRefs.shuiPdf) {
+        errors.push('sourceRefs.shuiPdf 缺失');
+    } else if (record.sourceRefs.primaryProvider && !['shui', 'ielts'].includes(record.sourceRefs.primaryProvider)) {
+        errors.push(`sourceRefs.primaryProvider 非法: ${record.sourceRefs.primaryProvider}`);
+    }
+
+    if (record.sourceRefs) {
+        const hasPrimaryPair = Boolean(record.sourceRefs.primaryHtml && record.sourceRefs.primaryProvider);
+        const hasLegacyShuiHtml = Boolean(record.sourceRefs.shuiHtml);
+        if (!hasPrimaryPair && !hasLegacyShuiHtml) {
+            errors.push('sourceRefs.primaryHtml/primaryProvider 或 sourceRefs.shuiHtml 至少保留一组');
+        }
+        if ((record.sourceRefs.primaryHtml && !record.sourceRefs.primaryProvider)
+            || (!record.sourceRefs.primaryHtml && record.sourceRefs.primaryProvider)) {
+            errors.push('sourceRefs.primaryHtml 与 primaryProvider 必须同时出现');
+        }
     }
 
     if (!record.audit || !record.audit.matchStatus) {
