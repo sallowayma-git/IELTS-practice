@@ -217,7 +217,7 @@ async def _open_unified_exam(page: Page, exam_id: str, console_log: List[Console
         timeout=12000,
     )
     await practice_page.wait_for_function(
-        "() => window.location.href.includes('templates/reading-practice-unified.html') && !!document.getElementById('question-groups')",
+        "() => window.location.href.includes('assets/generated/reading-exams/reading-practice-unified.html') && !!document.getElementById('question-groups')",
         timeout=20000,
     )
     session_id = await page.evaluate(
@@ -334,7 +334,7 @@ async def run() -> None:
             log_step(f"选中统一页题目: {exam_id}", "DEBUG")
             log_step(f"父页通信会话已就绪: {session_id}", "SUCCESS")
             log_step(f"SESSION_READY 状态: {'ready' if collector_ready else 'pending'}", "DEBUG")
-            if "templates/reading-practice-unified.html" not in unified_url:
+            if "assets/generated/reading-exams/reading-practice-unified.html" not in unified_url:
                 raise AssertionError(f"统一阅读页 URL 非预期: {unified_url}")
 
             completion_payload = {
