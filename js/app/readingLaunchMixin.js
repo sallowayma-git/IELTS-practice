@@ -57,8 +57,8 @@
             }
             const query = params.toString();
             const url = query
-                ? `templates/reading-practice-unified.html?${query}`
-                : 'templates/reading-practice-unified.html';
+                ? `assets/generated/reading-exams/reading-practice-unified.html?${query}`
+                : 'assets/generated/reading-exams/reading-practice-unified.html';
             return typeof this._ensureAbsoluteUrl === 'function'
                 ? this._ensureAbsoluteUrl(url)
                 : url;

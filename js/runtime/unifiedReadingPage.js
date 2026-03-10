@@ -81,7 +81,7 @@
         if (global.__READING_EXAM_MANIFEST__) {
             return global.__READING_EXAM_MANIFEST__;
         }
-        await loadScript('../assets/generated/reading-exams/manifest.js');
+        await loadScript('./manifest.js');
         return global.__READING_EXAM_MANIFEST__ || {};
     }
 
@@ -230,11 +230,14 @@
     }
 
     function getDropzones() {
-        return Array.from(document.querySelectorAll('.paragraph-dropzone, .match-dropzone'));
+        return Array.from(document.querySelectorAll('.paragraph-dropzone, .match-dropzone, .drop-target-summary'));
     }
 
     function ensureDropzoneHolder(dropzone) {
         if (!dropzone) return null;
+        if (dropzone.classList.contains('drop-target-summary')) {
+            return dropzone; // inline dropzones operate on themselves
+        }
         let holder = dropzone.querySelector('.dropped-items');
         if (!holder) {
             holder = document.createElement('div');
@@ -255,9 +258,13 @@
         if (!dropzone) return;
         dropzone.dataset.answerValue = '';
         dropzone.dataset.answerLabel = '';
-        const holder = ensureDropzoneHolder(dropzone);
-        if (holder) {
-            holder.innerHTML = '';
+        if (dropzone.classList.contains('drop-target-summary')) {
+            dropzone.innerHTML = '';
+        } else {
+            const holder = ensureDropzoneHolder(dropzone);
+            if (holder) {
+                holder.innerHTML = '';
+            }
         }
         updateDropzoneState(dropzone);
     }
@@ -275,7 +282,7 @@
 
     function buildDragPayload(item) {
         if (!item) return null;
-        const sourceDropzone = item.closest('.paragraph-dropzone, .match-dropzone');
+        const sourceDropzone = item.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary');
         return {
             value: item.dataset.heading || item.dataset.option || item.dataset.answerValue || item.textContent.trim(),
             label: item.dataset.answerLabel || item.textContent.trim(),
@@ -351,7 +358,13 @@
                 updateNavStatuses();
             });
             attachDraggableBehavior(item);
-            holder.appendChild(item);
+
+            if (dropzone.classList.contains('drop-target-summary')) {
+                dropzone.innerHTML = '';
+                dropzone.appendChild(item);
+            } else {
+                holder.appendChild(item);
+            }
         }
         updateDropzoneState(dropzone);
     }
@@ -452,7 +465,7 @@
 
     function getDropzoneAnswer(questionId) {
         // Find match dropzones
-        const direct = document.querySelector(`.match-dropzone[data-question="${questionId}"]`);
+        const direct = document.querySelector(`.match-dropzone[data-question="${questionId}"], .drop-target-summary[data-question="${questionId}"]`);
         if (direct) {
             const items = direct.querySelectorAll('.drag-item');
             if (items.length > 0) {
