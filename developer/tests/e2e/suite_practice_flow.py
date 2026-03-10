@@ -113,6 +113,22 @@ async def _click_nav(page: Page, view: str) -> None:
 async def _dismiss_overlays(page: Page) -> None:
     """关闭可能阻塞交互的覆盖层"""
     log_step("检查并关闭覆盖层...")
+
+    # 关闭 GPL 许可弹窗
+    license_modal = page.locator("#license-modal.show")
+    if await license_modal.count():
+        try:
+            acknowledge = license_modal.locator("button.lm-btn")
+            if await acknowledge.count():
+                await acknowledge.first.click()
+                await page.wait_for_function(
+                    "() => !document.getElementById('license-modal')?.classList.contains('show')",
+                    timeout=5000,
+                )
+                log_step("已关闭 GPL 许可弹窗", "SUCCESS")
+        except Exception as e:
+            log_step(f"关闭 GPL 许可弹窗失败: {e}", "WARNING")
+
     
     # 关闭题库加载器覆盖层
     overlay = page.locator("#library-loader-overlay")
