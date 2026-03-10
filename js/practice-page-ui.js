@@ -516,7 +516,7 @@
             if (matchZone) {
                 return matchZone;
             }
-            const genericZone = target.closest('.dropzone');
+            const genericZone = target.closest('.dropzone, .drop-target-summary');
             if (genericZone) {
                 return genericZone;
             }
@@ -539,7 +539,7 @@
                 clearDropzone(container, item);
             }
 
-            if (container.classList.contains('match-dropzone')) {
+            if (container.classList.contains('match-dropzone') || container.classList.contains('drop-target-summary')) {
                 clearDropzone(container, item);
             }
 
@@ -622,14 +622,14 @@
             });
 
             // 清空拖拽题结果
-            document.querySelectorAll('.paragraph-dropzone .dropped-items, .match-dropzone, .dropzone').forEach((zone) => {
+            document.querySelectorAll('.paragraph-dropzone .dropped-items, .match-dropzone, .dropzone, .drop-target-summary').forEach((zone) => {
                 clearDropzone(zone);
             });
 
             // 将所有拖拽选项放回原池
             document.querySelectorAll('.drag-item').forEach((item) => {
                 const container = item.parentElement;
-                if (container && (container.classList.contains('dropped-items') || container.classList.contains('match-dropzone') || container.classList.contains('dropzone'))) {
+                if (container && (container.classList.contains('dropped-items') || container.classList.contains('match-dropzone') || container.classList.contains('dropzone') || container.classList.contains('drop-target-summary'))) {
                     returnItemToPool(item);
                 }
                 item.setAttribute('draggable', 'true');
