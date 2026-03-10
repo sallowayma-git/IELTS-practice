@@ -72,7 +72,7 @@ async function dismissOverlays(page) {
         await closeBtn.first().click();
         await overlay.waitFor({ state: 'detached', timeout: 5_000 });
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 
@@ -113,7 +113,7 @@ async function ensureReadingListReady(page) {
     }
 
     if (typeof window.loadExamList === 'function') {
-      try { window.loadExamList(); } catch (_) {}
+      try { window.loadExamList(); } catch (_) { }
     }
   });
 
@@ -173,7 +173,7 @@ async function openUnifiedExam(page, examId, consoleLog) {
   );
 
   await practicePage.waitForFunction(
-    () => window.location.href.includes('templates/reading-practice-unified.html') && !!document.getElementById('question-groups'),
+    () => window.location.href.includes('assets/generated/reading-exams/reading-practice-unified.html') && !!document.getElementById('question-groups'),
     { timeout: 20_000 }
   );
 
@@ -198,12 +198,12 @@ async function openManualPdfExam(page, examId) {
   await page.evaluate(() => {
     window.__readingPdfCapture = { urls: [] };
     window.__readingPdfNativeOpen = window.open;
-    window.open = function(url) {
+    window.open = function (url) {
       const normalized = String(url || '');
       window.__readingPdfCapture.urls.push(normalized);
       return {
         closed: false,
-        focus() {},
+        focus() { },
         location: { href: normalized },
       };
     };
@@ -291,7 +291,7 @@ async function run() {
     logStep(`选中统一页题目: ${examId}`, 'DEBUG');
     logStep(`父页通信会话已就绪: ${sessionId}`, 'SUCCESS');
     logStep(`SESSION_READY 状态: ${opened.collectorReady ? 'ready' : 'pending'}`, 'DEBUG');
-    if (!opened.popupUrl.includes('templates/reading-practice-unified.html')) {
+    if (!opened.popupUrl.includes('assets/generated/reading-exams/reading-practice-unified.html')) {
       throw new Error(`统一阅读页 URL 非预期: ${opened.popupUrl}`);
     }
 
@@ -335,7 +335,7 @@ async function run() {
       (targetExamId) => {
         const recordsFromState = window.app?.state?.practice?.records;
         if (Array.isArray(recordsFromState) &&
-            recordsFromState.some((r) => String(r?.examId || '') === targetExamId)) {
+          recordsFromState.some((r) => String(r?.examId || '') === targetExamId)) {
           return true;
         }
         if (typeof window.getPracticeRecordsState === 'function') {
@@ -383,7 +383,7 @@ async function run() {
     failure = String(error && (error.stack || error.message || error));
     logStep(`测试失败: ${failure}`, 'ERROR');
   } finally {
-    await browser.close().catch(() => {});
+    await browser.close().catch(() => { });
     const report = {
       generatedAt: nowIso(),
       duration: (Date.now() - startedAt) / 1000,
@@ -414,7 +414,7 @@ run().catch((error) => {
       `${JSON.stringify({ generatedAt: nowIso(), status: 'fail', error: String(error && (error.stack || error.message || error)) }, null, 2)}\n`,
       'utf8'
     );
-  } catch (_) {}
+  } catch (_) { }
   process.stderr.write(String(error && (error.stack || error.message || error)) + '\n');
   process.exit(1);
 });

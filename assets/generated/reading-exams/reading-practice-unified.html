@@ -657,6 +657,72 @@
         #notes-panel textarea:focus {
             outline: none;
         }
+
+        /* ---------------- Exam Option Layouts ---------------- */
+        .choice-item label,
+        .multiple-choice-options label,
+        .matching-options label,
+        .radio-options label,
+        .multiple-choice label,
+        .true-false-ng label {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            line-height: 1.5;
+        }
+
+        .choice-item label input[type="checkbox"],
+        .choice-item label input[type="radio"],
+        .multiple-choice-options label input[type="radio"],
+        .matching-options label input[type="radio"],
+        .radio-options label input[type="radio"],
+        .multiple-choice label input[type="radio"],
+        .true-false-ng label input[type="radio"] {
+            margin-top: 4px;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+
+        /* ---------------- Drop Targets ---------------- */
+        .drop-target-summary {
+            display: inline-flex;
+            min-width: 80px;
+            min-height: 30px;
+            border-bottom: 2px solid var(--muted);
+            margin: 0 4px;
+            vertical-align: bottom;
+            align-items: center;
+            justify-content: center;
+            padding: 0 8px;
+            background: rgba(0, 0, 0, 0.02);
+            border-radius: 4px 4px 0 0;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .drop-target-summary.drag-over {
+            border-bottom-color: var(--accent);
+            background: #dbeafe;
+        }
+
+        .drop-target-summary.dropzone-filled {
+            border-bottom-color: var(--success);
+            background: #dcfce7;
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .drop-target-summary .drag-item {
+            border: none;
+            background: transparent;
+            padding: 0;
+            margin: 0;
+            cursor: grab;
+            color: inherit;
+            font-weight: inherit;
+        }
     </style>
 </head>
 
@@ -722,10 +788,10 @@
         </div>
     </div>
 
-    <script src="../js/runtime/readingExamRegistry.js"></script>
-    <script src="../assets/generated/reading-exams/manifest.js"></script>
-    <script src="../js/practice-page-ui.js"></script>
-    <script src="../js/runtime/unifiedReadingPage.js"></script>
+    <script src="../../../js/runtime/readingExamRegistry.js"></script>
+    <script src="./manifest.js"></script>
+    <script src="../../../js/practice-page-ui.js"></script>
+    <script src="../../../js/runtime/unifiedReadingPage.js"></script>
 </body>
 
 </html>
