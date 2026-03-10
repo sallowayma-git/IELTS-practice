@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,9 +18,16 @@
             --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
-        html { font-size: 16px; }
+        html {
+            font-size: 16px;
+        }
+
         body {
             font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
             background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
@@ -108,6 +116,7 @@
             flex: 1;
             min-width: 320px;
             background: var(--panel-alt);
+            padding: 16px 20px;
         }
 
         #left p,
@@ -116,14 +125,17 @@
             margin: 0 0 14px;
         }
 
-        .group,
         .unified-group {
+            margin-bottom: 18px;
+        }
+
+        .group {
             background: var(--panel);
             border: 1px solid var(--line);
             border-radius: 12px;
             box-shadow: var(--shadow);
-            padding: 18px;
-            margin-bottom: 18px;
+            padding: 24px 32px;
+            margin-bottom: 24px;
         }
 
         .question-item,
@@ -243,25 +255,52 @@
             border: 1px solid var(--line);
             border-radius: 8px;
             background: var(--panel);
-            padding: 8px 12px;
+            padding: 6px 12px;
+            font-size: 0.9rem;
+            color: var(--text);
             cursor: pointer;
-            min-width: 42px;
         }
 
-        .q-item.answered { border-color: var(--accent); color: var(--accent); }
-        .q-item.correct { border-color: #86efac; color: var(--success); background: #f0fdf4; }
-        .q-item.incorrect { border-color: #fca5a5; color: var(--danger); background: #fef2f2; }
+        .q-item:hover,
+        .practice-nav .controls button:hover {
+            background: #f1f5f9;
+        }
+
+        .q-item.active {
+            border-color: var(--accent);
+            background: #eff6ff;
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .q-item.answered {
+            background: #dbeafe;
+            border-color: #93c5fd;
+        }
+
+        .q-item.correct {
+            border-color: var(--success);
+            background: #dcfce7;
+            color: var(--success);
+        }
+
+        .q-item.incorrect {
+            border-color: var(--danger);
+            background: #fee2e2;
+            color: var(--danger);
+        }
 
         .practice-nav .controls {
             margin-left: auto;
             display: flex;
-            gap: 10px;
+            gap: 8px;
         }
 
-        .practice-nav .controls .primary {
-            background: var(--accent);
-            color: #fff;
-            border-color: var(--accent);
+        .submit-btn {
+            background: var(--accent) !important;
+            color: white !important;
+            border-color: var(--accent) !important;
+            font-weight: 600;
         }
 
         #results {
@@ -288,8 +327,15 @@
             text-align: center;
         }
 
-        .result-correct { color: var(--success); font-weight: 700; }
-        .result-incorrect { color: var(--danger); font-weight: 700; }
+        .result-correct {
+            color: var(--success);
+            font-weight: 700;
+        }
+
+        .result-incorrect {
+            color: var(--danger);
+            font-weight: 700;
+        }
 
         .overlay {
             display: none;
@@ -337,8 +383,283 @@
                 justify-content: flex-end;
             }
         }
+
+        /* ---------------- Phase 2 Aesthetics ---------------- */
+        #timer {
+            cursor: pointer;
+            transition: opacity 0.2s ease, background 0.2s ease;
+        }
+
+        #timer:hover {
+            opacity: 0.85;
+        }
+
+        #timer.paused {
+            opacity: 0.5;
+        }
+
+        #settings-btn {
+            font-size: 1.1rem;
+            padding: 6px 12px;
+            font-weight: 700;
+        }
+
+        /* ---------------- IELTS Aesthetic Tweaks ---------------- */
+        /* Flattening corners */
+        .group,
+        .unified-group,
+        #results {
+            border-radius: 4px;
+        }
+
+        .paragraph-dropzone,
+        .match-dropzone {
+            border-radius: 4px;
+        }
+
+        .drag-item {
+            border-radius: 4px;
+        }
+
+        #timer,
+        .header-btn,
+        .q-item,
+        .practice-nav .controls button {
+            border-radius: 4px;
+        }
+
+        /* Font size utility classes */
+        html.font-normal {
+            font-size: 16px;
+        }
+
+        html.font-large {
+            font-size: 18px;
+        }
+
+        html.font-xlarge {
+            font-size: 20px;
+        }
+
+        /* Highlight visual */
+        .hl {
+            background-color: #fef08a;
+            /* Yellow highlight */
+            color: #000;
+        }
+
+        /* Dark Mode variables */
+        body.dark-mode {
+            --panel: #1e293b;
+            --panel-alt: #0f172a;
+            --text: #f8fafc;
+            --line: #334155;
+            background: #020617;
+        }
+
+        body.dark-mode .header {
+            background: rgba(30, 41, 59, 0.94);
+            border-bottom: 1px solid var(--line);
+        }
+
+        body.dark-mode .group,
+        body.dark-mode .unified-group {
+            background: var(--panel);
+        }
+
+        body.dark-mode .hl {
+            background-color: #854d0e;
+            color: #fff;
+        }
+
+        body.dark-mode .paragraph-dropzone,
+        body.dark-mode .match-dropzone {
+            background: #1e293b;
+            border-color: #475569;
+        }
+
+        body.dark-mode .drag-item {
+            background: #334155;
+            border-color: #64748b;
+            color: #f8fafc;
+        }
+
+        body.dark-mode #timer,
+        body.dark-mode .header-btn {
+            background: var(--panel);
+            color: #f8fafc;
+        }
+
+        /* Phase 3 Nav Dark Mode */
+        body.dark-mode .practice-nav {
+            background: var(--panel);
+            border-color: var(--line);
+        }
+
+        body.dark-mode .q-item,
+        body.dark-mode .practice-nav .controls button {
+            background: var(--panel-alt);
+            color: #f8fafc;
+            border-color: var(--line);
+        }
+
+        body.dark-mode .q-item:hover,
+        body.dark-mode .practice-nav .controls button:hover {
+            background: #334155;
+        }
+
+        body.dark-mode .q-item.active {
+            border-color: var(--accent);
+            background: #1e40af;
+            color: white;
+        }
+
+        body.dark-mode .q-item.answered {
+            background: #1e3a8a;
+            border-color: #3b82f6;
+            color: #ffffff;
+        }
+
+        body.dark-mode .q-item.correct {
+            background: #064e3b;
+            border-color: var(--success);
+            color: #dcfce7;
+        }
+
+        body.dark-mode .q-item.incorrect {
+            background: #7f1d1d;
+            border-color: var(--danger);
+            color: #fee2e2;
+        }
+
+        body.dark-mode .submit-btn {
+            background: var(--accent) !important;
+        }
+
+        /* Selection bar visual */
+        #selbar {
+            position: absolute;
+            z-index: 1000;
+            background: #1e293b;
+            color: white;
+            padding: 4px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+            display: none;
+            /* hidden by default */
+            gap: 4px;
+        }
+
+        #selbar button {
+            background: transparent;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+
+        #selbar button:hover {
+            background: #334155;
+        }
+
+        /* Settings Panel floating */
+        #settings-panel {
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            padding: 16px;
+            width: 260px;
+            z-index: 1000;
+            display: none;
+            /* toggled by JS */
+        }
+
+        #settings-panel .settings-section {
+            margin-bottom: 16px;
+        }
+
+        #settings-panel .settings-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .settings-title {
+            font-size: 0.9rem;
+            color: var(--muted);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .settings-options {
+            display: flex;
+            gap: 8px;
+        }
+
+        .settings-option {
+            flex: 1;
+            padding: 8px;
+            background: var(--panel-alt);
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            cursor: pointer;
+            color: var(--text);
+            text-align: center;
+        }
+
+        .settings-option.active {
+            border-color: var(--accent);
+            background: var(--accent);
+            color: white;
+        }
+
+        /* Notes panel basic styles */
+        #notes-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: 300px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            z-index: 1001;
+            display: none;
+            /* toggled by JS */
+            flex-direction: column;
+        }
+
+        #notes-panel header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--line);
+            font-weight: 600;
+        }
+
+        #notes-panel textarea {
+            flex: 1;
+            padding: 16px;
+            border: none;
+            resize: none;
+            background: transparent;
+            color: var(--text);
+            font-family: inherit;
+        }
+
+        #notes-panel textarea:focus {
+            outline: none;
+        }
     </style>
 </head>
+
 <body>
     <header class="header">
         <div class="header-content">
@@ -346,15 +667,34 @@
             <p id="exam-subtitle">统一阅读页</p>
         </div>
         <div class="header-controls">
-            <div id="timer">00:00</div>
-            <button class="header-btn" id="size-btn" type="button">字号</button>
-            <button class="header-btn" id="color-btn" type="button">颜色</button>
+            <div id="timer" title="点击启停">00:00</div>
+            <button class="header-btn" id="settings-btn" title="Settings" type="button">☰</button>
             <button class="header-btn" id="note-btn" type="button">笔记</button>
         </div>
     </header>
 
-    <div id="settings-panel"></div>
-    <div id="notes-panel"><header><h3>Notes</h3><button id="close-note" type="button">Close</button></header><textarea></textarea></div>
+    <div id="settings-panel">
+        <div class="settings-section">
+            <h3 class="settings-title">字号调整</h3>
+            <div class="settings-options">
+                <button class="settings-option active" data-size="normal">A</button>
+                <button class="settings-option" data-size="large" style="font-size: 1.1rem;">A</button>
+                <button class="settings-option" data-size="xlarge" style="font-size: 1.25rem;">A</button>
+            </div>
+        </div>
+        <div class="settings-section">
+            <h3 class="settings-title">背景颜色</h3>
+            <div class="settings-options">
+                <button class="settings-option active" data-mode="light">浅色</button>
+                <button class="settings-option" data-mode="dark">深色</button>
+            </div>
+        </div>
+    </div>
+    <div id="notes-panel">
+        <header>
+            <h3>Notes</h3><button id="close-note" type="button">Close</button>
+        </header><textarea></textarea>
+    </div>
     <div class="overlay"></div>
 
     <div class="shell">
@@ -367,15 +707,16 @@
     </div>
 
     <div id="selbar">
-        <button type="button" data-role="highlight">Highlight</button>
-        <button type="button" data-role="remove-highlight">Remove</button>
+        <button type="button" id="btnHL" data-role="highlight">Highlight</button>
+        <button type="button" id="btnUH" data-role="remove-highlight">Remove</button>
+        <button type="button" id="btnNote" data-role="note">Note</button>
     </div>
 
     <div class="practice-nav">
         <div class="title">题目导航</div>
         <div class="questions" id="question-nav"></div>
         <div class="controls">
-            <button id="pause-btn" type="button">暂停</button>
+            <button id="exit-btn" type="button" title="退出" style="margin-right: 8px;">🔙 退出</button>
             <button id="reset-btn" type="button">重置</button>
             <button id="submit-btn" class="primary" type="button">提交</button>
         </div>
@@ -386,4 +727,5 @@
     <script src="../js/practice-page-ui.js"></script>
     <script src="../js/runtime/unifiedReadingPage.js"></script>
 </body>
+
 </html>

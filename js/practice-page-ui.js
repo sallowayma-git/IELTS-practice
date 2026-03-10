@@ -24,7 +24,6 @@
         const timerEl = document.getElementById('timer');
         const submitBtn = document.getElementById('submit-btn');
         const resetBtn = document.getElementById('reset-btn');
-        const pauseBtn = document.getElementById('pause-btn');
 
         function startTimer() {
             if (!timerEl) return;
@@ -154,24 +153,31 @@
         // --- Header buttons ---
         if (timerEl) startTimer();
 
-        const sizeBtn = document.getElementById('size-btn');
-        const colorBtn = document.getElementById('color-btn');
+        const settingsBtn = document.getElementById('settings-btn');
         const noteBtn = document.getElementById('note-btn');
         const closeNoteBtn = document.getElementById('close-note');
 
-        if (sizeBtn && settingsPanel) {
-            sizeBtn.addEventListener('click', (e) => {
+        if (settingsBtn && settingsPanel) {
+            settingsBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 settingsOpen = !settingsOpen;
                 settingsPanel.style.display = settingsOpen ? 'block' : 'none';
             });
         }
 
-        if (colorBtn && settingsPanel) {
-            colorBtn.addEventListener('click', (e) => {
+        if (timerEl) {
+            timerEl.addEventListener('click', (e) => {
+                e.preventDefault();
                 e.stopPropagation();
-                settingsOpen = !settingsOpen;
-                settingsPanel.style.display = settingsOpen ? 'block' : 'none';
+                if (submissionLocked) return;
+                timerRunning = !timerRunning;
+                if (!timerRunning) {
+                    timerEl.style.opacity = '0.5';
+                    timerEl.classList.add('paused');
+                } else {
+                    timerEl.style.opacity = '1';
+                    timerEl.classList.remove('paused');
+                }
             });
         }
 
@@ -520,6 +526,11 @@
         function moveItemToContainer(item, container) {
             if (!item || !container) return;
 
+            // If dropping on top of another drag-item, redirect to its parent container
+            if (container.classList.contains('drag-item')) {
+                container = container.parentElement;
+            }
+
             if (container.classList.contains('dropped-items')) {
                 clearDropzone(container, item);
             }
@@ -635,10 +646,6 @@
             if (timerEl) {
                 timerEl.textContent = '00:00';
             }
-            const pauseBtn = document.getElementById('pause-btn');
-            if (pauseBtn) {
-                pauseBtn.textContent = 'Pause';
-            }
         }
 
         if (resetBtn) {
@@ -651,10 +658,10 @@
             });
         }
 
-        if (pauseBtn) {
-            pauseBtn.addEventListener('click', () => {
-                timerRunning = !timerRunning;
-                pauseBtn.textContent = timerRunning ? 'Pause' : 'Resume';
+        const exitBtn = document.getElementById('exit-btn');
+        if (exitBtn) {
+            exitBtn.addEventListener('click', () => {
+                window.close();
             });
         }
 
