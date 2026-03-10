@@ -458,6 +458,10 @@
             if (resetBtn) {
                 resetBtn.disabled = true;
             }
+            const exitBtn = document.getElementById('exit-btn');
+            if (exitBtn) {
+                exitBtn.style.display = 'block';
+            }
             disableAnswerInputs();
         }
 
@@ -586,6 +590,10 @@
         function resetPracticePage() {
             if (submissionLocked) {
                 return;
+            }
+            const exitBtn = document.getElementById('exit-btn');
+            if (exitBtn) {
+                exitBtn.style.display = 'none';
             }
             // 清空输入
             document.querySelectorAll('input').forEach((input) => {
