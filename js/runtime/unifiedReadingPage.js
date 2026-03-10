@@ -392,48 +392,14 @@
     }
 
     function attachDragDrop() {
+        // practice-page-ui.js already manages drag boundaries and placing items.
+        // We only need to ensure the dropzones have the correct structure initialized.
         getDropzones().forEach((dropzone, index) => {
             if (!dropzone.dataset.dropzoneId) {
                 dropzone.dataset.dropzoneId = `dropzone-${index + 1}`;
             }
             ensureDropzoneHolder(dropzone);
             updateDropzoneState(dropzone);
-        });
-
-        document.querySelectorAll('.drag-item[draggable="true"]').forEach((item) => {
-            attachDraggableBehavior(item);
-        });
-
-        getDropzones().forEach((dropzone) => {
-            dropzone.addEventListener('dragover', (event) => {
-                event.preventDefault();
-                dropzone.classList.add('drag-over');
-            });
-            dropzone.addEventListener('dragleave', () => {
-                dropzone.classList.remove('drag-over');
-            });
-            dropzone.addEventListener('drop', (event) => {
-                event.preventDefault();
-                dropzone.classList.remove('drag-over');
-                const payload = parseDragPayload(event.dataTransfer?.getData('text/plain'));
-                handleDropOnDropzone(dropzone, payload);
-            });
-        });
-
-        document.querySelectorAll('.pool-items').forEach((pool) => {
-            pool.addEventListener('dragover', (event) => {
-                event.preventDefault();
-                pool.classList.add('drag-over');
-            });
-            pool.addEventListener('dragleave', () => {
-                pool.classList.remove('drag-over');
-            });
-            pool.addEventListener('drop', (event) => {
-                event.preventDefault();
-                pool.classList.remove('drag-over');
-                const payload = parseDragPayload(event.dataTransfer?.getData('text/plain'));
-                handleDropBackToPool(payload);
-            });
         });
     }
 
@@ -485,13 +451,24 @@
     }
 
     function getDropzoneAnswer(questionId) {
+        // Find match dropzones
         const direct = document.querySelector(`.match-dropzone[data-question="${questionId}"]`);
         if (direct) {
+            const items = direct.querySelectorAll('.drag-item');
+            if (items.length > 0) {
+                return Array.from(items).map(item => String(item.dataset.answerValue || item.dataset.heading || item.dataset.option || item.textContent).trim()).join(', ');
+            }
             return String(direct.dataset.answerValue || '').trim();
         }
+
+        // Find paragraph dropzones
         const anchor = document.getElementById(`${questionId}-anchor`);
         const zone = anchor?.querySelector?.('.paragraph-dropzone');
         if (zone) {
+            const items = zone.querySelectorAll('.drag-item');
+            if (items.length > 0) {
+                return Array.from(items).map(item => String(item.dataset.answerValue || item.dataset.heading || item.dataset.option || item.textContent).trim()).join(', ');
+            }
             return String(zone.dataset.answerValue || '').trim();
         }
         return '';
@@ -791,6 +768,25 @@
         buildQuestionNav();
         attachNavListeners();
         attachDragDrop();
+
+        // Ensure drag items can return home when replaced or discarded
+        function initDragPools() {
+            document.querySelectorAll('.pool-items').forEach((pool, index) => {
+                if (!pool.id) {
+                    pool.id = `practice-pool-${index}`;
+                }
+            });
+            document.querySelectorAll('.pool-items .drag-item').forEach((item) => {
+                if (!item.dataset.originPool) {
+                    const pool = item.closest('.pool-items');
+                    if (pool?.id) {
+                        item.dataset.originPool = pool.id;
+                    }
+                }
+            });
+        }
+        initDragPools();
+
         attachActionListeners();
         attachMessageBridge();
         updateNavStatuses();
