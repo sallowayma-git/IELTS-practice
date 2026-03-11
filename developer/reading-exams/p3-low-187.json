@@ -32,6 +32,7 @@
         "q6"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 27–32</h4>\n                <p>Look at the following statements (Questions 27–32) and the list of people below.</p>\n                <p>Match each statement with the correct person, <strong>A–F</strong>.</p>\n                \n                <div class=\"match-question-item\">\n                    <p><strong>27</strong> All of the body is able to recover during one type of sleep.</p>\n                    <div class=\"match-dropzone\" data-question=\"q1\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>28</strong> The brain benefits from one type of sleep during an early stage of life.</p>\n                    <div class=\"match-dropzone\" data-question=\"q2\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                     <p><strong>29</strong> Humans spend more time asleep than engaged in any other activity.</p>\n                    <div class=\"match-dropzone\" data-question=\"q3\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                    <p><strong>30</strong> It is likely that the purpose of one type of sleep has altered over time.</p>\n                    <div class=\"match-dropzone\" data-question=\"q4\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>31</strong> Brain activity during one type of sleep is similar to that when people are awake.</p>\n                    <div class=\"match-dropzone\" data-question=\"q5\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>32</strong> One type of sleep enables an individual to learn from past experience.</p>\n                    <div class=\"match-dropzone\" data-question=\"q6\"></div>\n                </div>\n\n                <div class=\"options-pool\" id=\"people-options-pool\">\n                    <strong>List of People</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"A\">A Paul Martin</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"B\">B Nathaniel Kleitman</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"C\">C Jerome M. Siegel</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"D\">D Jim Horne</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"E\">E Claudio Stampi</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"F\">F Michel Jouvet</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -84,7 +85,7 @@
   "audit": {
     "matchStatus": "shui_only",
     "matchConfidence": 0,
-    "verifiedAt": "2026-03-08T16:24:30.820Z",
+    "verifiedAt": "2026-03-11T14:43:22.403Z",
     "notes": "signature:radio,text,textarea,dragdrop,table"
   },
   "questionOrder": [

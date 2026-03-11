@@ -33,6 +33,7 @@
         "q7"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-anchor\">\n                <h4>Questions 14–20</h4>\n                <p>Reading Passage 2 has seven paragraphs, <strong>A–G</strong>.</p>\n                <p>Choose the correct heading for each paragraph from the list of headings below.</p>\n                <p><em>Drag a heading from the list and drop it into the correct paragraph's answer box on the left.</em></p>\n                \n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i. The best moment to migrate</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii. The unexplained rejection of closer feeding grounds</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii. The influence of weather on the migration route</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv. Physical characteristics that allow birds to migrate</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v. The main reason why birds migrate</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi. The best wintering grounds for birds</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii. Research findings on how birds migrate</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii. Successful migration despite the trouble of wind</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ix\">ix. The contrast between long-distance migration and short-distance migration</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"x\">x. Mysterious migration despite lack of teaching</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -79,7 +80,7 @@
   "audit": {
     "matchStatus": "matched",
     "matchConfidence": 1,
-    "verifiedAt": "2026-03-08T16:24:30.721Z",
+    "verifiedAt": "2026-03-11T14:43:22.256Z",
     "notes": "signature:checkbox,text,textarea,dragdrop,table"
   },
   "questionOrder": [

@@ -32,6 +32,7 @@
         "q6"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 27–32</h4>\n                <p>Complete the summary using the list of phrases, <strong>A–L</strong>, below.</p>\n                <div class=\"summary-text\">\n                    <p>\n                    MNCs often encounter language barriers in their daily operations, so they seek several approaches to solve such problems. First, using the native language gives them a realistic base in a different-language-speaking country, but problems turn up when they deal with overseas <span id=\"q1-target\" class=\"drop-target-summary\"></span>. For example, when translating key <span id=\"q2-target\" class=\"drop-target-summary\"></span>, differences inevitably arise because of rules in different countries. Another way is to rely on a combination of spoken language and <span id=\"q3-target\" class=\"drop-target-summary\"></span>, yet a report noted that over one-tenth of business <span id=\"q4-target\" class=\"drop-target-summary\"></span> were processed in a party-language setting. A third way is to hire translators. However, this is <span id=\"q5-target\" class=\"drop-target-summary\"></span>; besides, if they are not well-prepared, they have to engage in <span id=\"q6-target\" class=\"drop-target-summary\"></span> work.\n                    </p>\n                </div>\n                <div id=\"word-options\" class=\"options-pool\">\n                    <div id=\"word-A\" class=\"draggable-word\" draggable=\"true\" data-key=\"A\">A gestures</div>\n                    <div id=\"word-B\" class=\"draggable-word\" draggable=\"true\" data-key=\"B\">B clients</div>\n                    <div id=\"word-C\" class=\"draggable-word\" draggable=\"true\" data-key=\"C\">C transactions</div>\n                    <div id=\"word-D\" class=\"draggable-word\" draggable=\"true\" data-key=\"D\">D assumption</div>\n                    <div id=\"word-E\" class=\"draggable-word\" draggable=\"true\" data-key=\"E\">E accurate</div>\n                    <div id=\"word-F\" class=\"draggable-word\" draggable=\"true\" data-key=\"F\">F documents</div>\n                    <div id=\"word-G\" class=\"draggable-word\" draggable=\"true\" data-key=\"G\">G managers</div>\n                    <div id=\"word-H\" class=\"draggable-word\" draggable=\"true\" data-key=\"H\">H body language</div>\n                    <div id=\"word-I\" class=\"draggable-word\" draggable=\"true\" data-key=\"I\">I long-term</div>\n                    <div id=\"word-J\" class=\"draggable-word\" draggable=\"true\" data-key=\"J\">J effective</div>\n                    <div id=\"word-K\" class=\"draggable-word\" draggable=\"true\" data-key=\"K\">K rivals</div>\n                    <div id=\"word-L\" class=\"draggable-word\" draggable=\"true\" data-key=\"L\">L costly</div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -81,7 +82,7 @@
   "audit": {
     "matchStatus": "shui_only",
     "matchConfidence": 0,
-    "verifiedAt": "2026-03-08T16:24:30.789Z",
+    "verifiedAt": "2026-03-11T14:43:22.326Z",
     "notes": "signature:radio,text,textarea,dragdrop,table"
   },
   "questionOrder": [
