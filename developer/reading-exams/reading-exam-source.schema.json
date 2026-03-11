@@ -22,5 +22,9 @@
     "diagram_completion",
     "short_answer",
     "sentence_completion"
+  ],
+  "questionGroupOptionalFields": [
+    "leadHtml",
+    "allowOptionReuse"
   ]
 }
