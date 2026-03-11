@@ -36,6 +36,7 @@
         "q5"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Questions 27–31</h4>\n                <p>Complete the summary using the list of words, <strong>A–H</strong>, below.</p>\n                <p><em>Drag a word from the list and drop it into the correct blank.</em></p>\n                <div class=\"summary-text\">\n                    <h5>How is social history different from historical study?</h5>\n                    <p>\n                    Since it became an academic discipline, historical study has been too concerned with a search for <strong>27</strong> <span id=\"q1-target\" class=\"drop-target-summary\"></span> by researchers who want to develop their careers. Social history, however, is more closely related to the <strong>28</strong> <span id=\"q2-target\" class=\"drop-target-summary\"></span> of the public. It avoids history's traditional focus on <strong>29</strong> <span id=\"q3-target\" class=\"drop-target-summary\"></span>, and its later concentration on <strong>30</strong> <span id=\"q4-target\" class=\"drop-target-summary\"></span>, and it is also different from traditional history in its teaching <strong>31</strong> <span id=\"q5-target\" class=\"drop-target-summary\"></span>, which is derived from different academic subjects.\n                    </p>\n                </div>\n                 <div class=\"options-pool\">\n                    <div class=\"pool-items\" id=\"summary-options-pool\">\n                        <div class=\"drag-item\" id=\"word-A\" draggable=\"true\" data-option=\"A\">A methodology</div>\n                        <div class=\"drag-item\" id=\"word-B\" draggable=\"true\" data-option=\"B\">B needs</div>\n                        <div class=\"drag-item\" id=\"word-C\" draggable=\"true\" data-option=\"C\">C originality</div>\n                        <div class=\"drag-item\" id=\"word-D\" draggable=\"true\" data-option=\"D\">D important people</div>\n                        <div class=\"drag-item\" id=\"word-E\" draggable=\"true\" data-option=\"E\">E accuracy</div>\n                        <div class=\"drag-item\" id=\"word-F\" draggable=\"true\" data-option=\"F\">F interests and feelings</div>\n                        <div class=\"drag-item\" id=\"word-G\" draggable=\"true\" data-option=\"G\">G explanation</div>\n                        <div class=\"drag-item\" id=\"word-H\" draggable=\"true\" data-option=\"H\">H organisational matters</div>\n                    </div>\n                 </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -86,7 +87,7 @@
   "audit": {
     "matchStatus": "matched",
     "matchConfidence": 1,
-    "verifiedAt": "2026-03-08T16:24:30.584Z",
+    "verifiedAt": "2026-03-11T14:43:22.070Z",
     "notes": "signature:radio,textarea,dragdrop,table"
   },
   "questionOrder": [
