@@ -1,0 +1,108 @@
+{
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-low-107",
+  "meta": {
+    "title": "The life of Beatrix Potter 彼得兔作家",
+    "category": "P1",
+    "frequency": "low",
+    "pdfFilename": "21. P1 - The life of Beatrix Potter 彼得兔作家.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/21. P1 - The life of Beatrix Potter 彼得兔作家/",
+    "legacyFilename": "21. P1 - The life of Beatrix Potter 彼得兔作家.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>The life of Beatrix Potter</h3>\n            <h4>The children's author and illustrator who created Peter Rabbit</h4>\n            \n            <p>Beatrix Potter is one of the best-selling children's authors of all time. Her popular series of books that includes The Tale of Peter Rabbit was first published over one hundred years ago and has never been out of print. Generations of children have enjoyed her many stories and illustrations, all of which celebrate the English way of life and rural landscape through the adventures of animals.</p>\n            <p>Born into a comfortable middle-class family in London in 1866, Potter spent much of her early life in her own company. She was educated at home by a governess and rarely saw her brother, Bertram, who was sent to boarding school. Having little social contact with children of her own age, Potter was drawn into a private world of writing. When she was 15, she began to keep a diary written in a secret code of her own invention. Even Beatrix herself, when she read back over it in later life, found it difficult to understand. It was not until 15 years after her death that the code was cracked. To the outside world Beatrix seemed shy and reserved, but in her diary she expressed herself freely and was critical of the work of several contemporary artists.</p>\n            <p>Potter was a naturally gifted artist, and with the aid of some art lessons she also learned the technical side of drawing. Throughout her childhood she looked after many animals—rabbits, frogs and even bats—and sketched them constantly, gradually improving her work by sketching in museums. She was also interested in natural history. She would spend many hours drawing wildlife such as fungi and flowers, and at one time she had an ambition to develop this scientific interest. An uncle tried to help her enrol at the Royal Botanic Gardens at Kew in London, but she was rejected because of her gender. Nevertheless, she won respect from the scientific establishment for her illustrations and her contribution to mycology, the study of fungi.</p>\n            <p>When Potter was in her early twenties, her parents tried to arrange a husband for her. Many suitable suitors were found; however, Potter turned them all down. Fiercely independent, she disliked the idea of being tied to a domestic life that, at that time, consisted mostly of staying at home and raising children. Thus—unusually for British women of the period—she remained single and lived in her parents' home.</p>\n            <p>For several years Potter tried to get her first children's book, The Tale of Peter Rabbit, published. Her initial attempts were unsuccessful, but she persevered, and eventually Frederick Warne & Co. accepted the book. It was finally published in 1902, when Potter was 36, though the publishers did not expect it to sell many copies. The project was given to the youngest brother in the firm, Norman Warne, as his first assignment—essentially a test. Luckily, he warmed to both the book and its author. Determined to make it a success, he worked closely with Potter, poring over every detail. It was Norman who insisted that each illustration should be in colour, while Potter insisted the book remain small enough for children to hold easily. By the end of the year, 28,000 copies were in print.</p>\n            <p>The relationship between Warne and Potter blossomed, and they eventually became engaged. However, Potter's parents disapproved because of his occupation. They relented only on condition that the couple live apart for six months to give Potter time to reconsider. Tragically, before the wedding could take place, Warne developed pernicious anaemia, a blood disease, and passed away. Potter was devastated and wrote to his sister, Millie, “He did not live long, but he fulfilled a useful, happy life. I must try to make a fresh beginning next year.”</p>\n            <p>After Warne's death, Potter moved to the Lake District in northern England. In 1905 she bought a small farm there, and for the next eight years she busied herself writing more books, some set in or around the area. She remained there for the rest of her life, but failing eyesight eventually forced her to stop writing children's books. Instead, she devoted herself to breeding sheep and helping to conserve farms in the district. Thanks to the proceeds from her successful books and a later inheritance, Potter was able to buy many working farms. On her death she left more than 4,000 acres to the National Trust, an organisation that protects historic buildings and countryside in England. As a result, her beloved landscape is now accessible to countless visitors.</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 1–6</h4>\n                <p>Complete the notes below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"notes-completion\">\n                    <h4 style=\"text-align: center;\">Beatrix Potter</h4>\n                    \n                    <p><strong>Success as an author</strong></p>\n                    <ul>\n                        <li>Her books have been in print for more than 100 years.</li>\n                    </ul>\n\n                    <p><strong>Childhood</strong></p>\n                    <ul>\n                        <li>She received lessons at home from a <strong>1</strong> <input type=\"text\" id=\"q1_input\">.</li>\n                        <li>She wrote in her <strong>2</strong> <input type=\"text\" id=\"q2_input\"> in code.</li>\n                        <li>She disliked the work of some <strong>3</strong> <input type=\"text\" id=\"q3_input\"> of the time.</li>\n                        <li>She took lessons in drawing.</li>\n                        <li>She practised drawing things she saw when she visited <strong>4</strong> <input type=\"text\" id=\"q4_input\">.</li>\n                    </ul>\n\n                     <p><strong>Life as a young adult</strong></p>\n                    <ul>\n                        <li>Her <strong>5</strong> <input type=\"text\" id=\"q5_input\"> to have a career in natural history was not realised.</li>\n                        <li>Her illustrations were recognised as assisting research into <strong>6</strong> <input type=\"text\" id=\"q6_input\">.</li>\n                    </ul>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q7",
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q7-8-9-10-11-12-13-anchor\">\n                <h4>Questions 7–13</h4>\n                <p>Do the following statements agree with the information given in Reading Passage 1?</p>\n                <p>In boxes 7–13 on your answer sheet, write:</p>\n                <ul>\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information about this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>7</strong> The life of a typical married woman at that time appealed to Potter.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q7\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>8</strong> Potter's publishers insisted on changing the title of her first book.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q8\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>9</strong> The publishers doubted whether Potter's first book would be successful.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q9\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>10</strong> Norman Warne suggested Potter include black-and-white illustrations in her first book.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q10\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q10\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q10\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>11</strong> At first, Potter's parents disapproved of Norman Warne as a potential husband.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q11\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>12</strong> Potter continued writing children's books until her death.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q12\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>13</strong> Potter's gift to the National Trust was the largest in recent times.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q13\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "governess",
+    "q2": "diary",
+    "q3": "artists",
+    "q4": "museums",
+    "q5": "ambition",
+    "q6": "mycology",
+    "q7": "FALSE",
+    "q8": "NOT GIVEN",
+    "q9": "TRUE",
+    "q10": "FALSE",
+    "q11": "TRUE",
+    "q12": "FALSE",
+    "q13": "NOT GIVEN"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/21. P1 - The life of Beatrix Potter 彼得兔作家/21. P1 - The life of Beatrix Potter 彼得兔作家.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/21. P1 - The life of Beatrix Potter 彼得兔作家/21. P1 - The life of Beatrix Potter 彼得兔作家.pdf",
+    "ieltsHtml": "IELTS/P1/The life of Beatrix Potter.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.689Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+}

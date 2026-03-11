@@ -24,7 +24,6 @@
         const timerEl = document.getElementById('timer');
         const submitBtn = document.getElementById('submit-btn');
         const resetBtn = document.getElementById('reset-btn');
-        const pauseBtn = document.getElementById('pause-btn');
 
         function startTimer() {
             if (!timerEl) return;
@@ -154,24 +153,31 @@
         // --- Header buttons ---
         if (timerEl) startTimer();
 
-        const sizeBtn = document.getElementById('size-btn');
-        const colorBtn = document.getElementById('color-btn');
+        const settingsBtn = document.getElementById('settings-btn');
         const noteBtn = document.getElementById('note-btn');
         const closeNoteBtn = document.getElementById('close-note');
 
-        if (sizeBtn && settingsPanel) {
-            sizeBtn.addEventListener('click', (e) => {
+        if (settingsBtn && settingsPanel) {
+            settingsBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 settingsOpen = !settingsOpen;
                 settingsPanel.style.display = settingsOpen ? 'block' : 'none';
             });
         }
 
-        if (colorBtn && settingsPanel) {
-            colorBtn.addEventListener('click', (e) => {
+        if (timerEl) {
+            timerEl.addEventListener('click', (e) => {
+                e.preventDefault();
                 e.stopPropagation();
-                settingsOpen = !settingsOpen;
-                settingsPanel.style.display = settingsOpen ? 'block' : 'none';
+                if (submissionLocked) return;
+                timerRunning = !timerRunning;
+                if (!timerRunning) {
+                    timerEl.style.opacity = '0.5';
+                    timerEl.classList.add('paused');
+                } else {
+                    timerEl.style.opacity = '1';
+                    timerEl.classList.remove('paused');
+                }
             });
         }
 
@@ -452,6 +458,10 @@
             if (resetBtn) {
                 resetBtn.disabled = true;
             }
+            const exitBtn = document.getElementById('exit-btn');
+            if (exitBtn) {
+                exitBtn.style.display = 'block';
+            }
             disableAnswerInputs();
         }
 
@@ -506,7 +516,7 @@
             if (matchZone) {
                 return matchZone;
             }
-            const genericZone = target.closest('.dropzone');
+            const genericZone = target.closest('.dropzone, .drop-target-summary');
             if (genericZone) {
                 return genericZone;
             }
@@ -520,11 +530,16 @@
         function moveItemToContainer(item, container) {
             if (!item || !container) return;
 
+            // If dropping on top of another drag-item, redirect to its parent container
+            if (container.classList.contains('drag-item')) {
+                container = container.parentElement;
+            }
+
             if (container.classList.contains('dropped-items')) {
                 clearDropzone(container, item);
             }
 
-            if (container.classList.contains('match-dropzone')) {
+            if (container.classList.contains('match-dropzone') || container.classList.contains('drop-target-summary')) {
                 clearDropzone(container, item);
             }
 
@@ -576,6 +591,10 @@
             if (submissionLocked) {
                 return;
             }
+            const exitBtn = document.getElementById('exit-btn');
+            if (exitBtn) {
+                exitBtn.style.display = 'none';
+            }
             // 清空输入
             document.querySelectorAll('input').forEach((input) => {
                 if (input.type === 'radio' || input.type === 'checkbox') {
@@ -603,14 +622,14 @@
             });
 
             // 清空拖拽题结果
-            document.querySelectorAll('.paragraph-dropzone .dropped-items, .match-dropzone, .dropzone').forEach((zone) => {
+            document.querySelectorAll('.paragraph-dropzone .dropped-items, .match-dropzone, .dropzone, .drop-target-summary').forEach((zone) => {
                 clearDropzone(zone);
             });
 
             // 将所有拖拽选项放回原池
             document.querySelectorAll('.drag-item').forEach((item) => {
                 const container = item.parentElement;
-                if (container && (container.classList.contains('dropped-items') || container.classList.contains('match-dropzone') || container.classList.contains('dropzone'))) {
+                if (container && (container.classList.contains('dropped-items') || container.classList.contains('match-dropzone') || container.classList.contains('dropzone') || container.classList.contains('drop-target-summary'))) {
                     returnItemToPool(item);
                 }
                 item.setAttribute('draggable', 'true');
@@ -635,10 +654,6 @@
             if (timerEl) {
                 timerEl.textContent = '00:00';
             }
-            const pauseBtn = document.getElementById('pause-btn');
-            if (pauseBtn) {
-                pauseBtn.textContent = 'Pause';
-            }
         }
 
         if (resetBtn) {
@@ -651,10 +666,10 @@
             });
         }
 
-        if (pauseBtn) {
-            pauseBtn.addEventListener('click', () => {
-                timerRunning = !timerRunning;
-                pauseBtn.textContent = timerRunning ? 'Pause' : 'Resume';
+        const exitBtn = document.getElementById('exit-btn');
+        if (exitBtn) {
+            exitBtn.addEventListener('click', () => {
+                window.close();
             });
         }
 

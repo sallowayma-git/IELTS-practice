@@ -1,0 +1,121 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p2-low-65", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-low-65",
+  "meta": {
+    "title": "Boring Buildings 无聊建筑",
+    "category": "P2",
+    "frequency": "low",
+    "pdfFilename": "157. P2 - Boring Buildings 无聊建筑.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/157. P2 - Boring Buildings 无聊建筑/",
+    "legacyFilename": "157. P2 - Boring Buildings 无聊建筑.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 2</h2>\n            <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>\n            <h3>Boring Buildings</h3>\n            <p>There could be more than an economic or nostalgic price to impersonal retail and high-rise construction; boring architecture may take an emotional toll on the people forced to live with it.</p>\n            \n            <p><strong>A</strong> A growing body of research in cognitive science illuminates the physical and mental toll bland cityscapes take on residents. Generally, these researchers argue that humans are healthier when they live surrounded by variety or work in well-designed, unique spaces, rather than unattractive, generic ones. Urban policy professor Justin Hollander and architect Ann Sussman review scientific data to help architects and urban planners understand how, exactly, people respond to their built surroundings, particularly at work. People, they argue, function best in intricate settings, not ‘big, blank, boxy offices'.</p>\n\n            <p><strong>B</strong> Indeed, that's what Colin Ellard, a neuroscientist at the University of Waterloo in Canada, has found in his work. Five years ago, Ellard became interested in a certain building—the gigantic Whole Foods Market ‘plopped into' a notoriously textured part of Lower Manhattan in New York. Ellard partnered with the Guggenheim Museum to analyze what happens when someone walks out of a tiny neighborhood restaurant and encounters a full city block with nothing but 'the long, blank facade of the Whole Foods Market building'.</p>\n            <p>In 2011, Ellard led small groups on Lower East Side walks to measure the effect of the urban environment on them. Participants recorded their responses to questions at each stopping point and wore sensors that measured skin conductance, a response to emotional excitement. Passing the monolithic Whole Foods Market, people's state of arousal plummeted. Physiologically, Ellard explained, they were bored. To describe this place, they used words like 'bland' and 'passionless'. In contrast, one block east at the other test site—‘a lively sea of restaurants with lots of open doors and windows’—people measured high levels of excitement, and they listed words like ‘lively' and 'socializing'. Ellard explains that the main objective of urban design should be to produce some kind of novelty or change every few seconds; otherwise, we become cognitively disengaged.</p>\n\n            <p><strong>C</strong> The trick, it seems, is to design a world that excites but doesn't overload our faculties with a constant barrage of information. ‘We are, as animals, programmed to respond to thrill,' said professor Brendan Walker. In Walker's ‘thrill laboratory' at the University of Nottingham in the UK, devices measure heart rate and skin conductance to see how people respond to adrenaline-producing experiences such as a roller-coaster ride. A thrilling encounter moves us quickly from a state of equilibrium to a desirable 'disorientation'. 'Humans want a certain element of turmoil or confusion,' he said. 'Complexity is thrilling whether in an amusement park or architecture.'</p>\n\n            <p><strong>D</strong> Psychologists have found that awe-inspiring moments can potentially improve our well-being. One study conducted by Melanie Rudd, Kathleen Vohs and Jennifer Aaker of Stanford University in the US showed that the feeling of 'awe' can make people more patient and less materialistic. In an experiment, the researchers showed students 60-second clips of waterfalls, whales, or astronauts in space. After only a minute of virtual images, those who said they were awed also felt less pressed for time. And in another variation, people made hypothetical choices between physical and experiential goods of equal monetary value. Those who had just ‘felt awe' were more likely to choose an experience over a possession, a choice that is linked with greater satisfaction in the long run. In other words, a visual buzz—whether architectural or natural—might have the ability to change our frame of mind, making modern-day life more satisfying and interactive.</p>\n\n            <p><strong>E</strong> It's important to note, however, that architectural boredom isn't about how pristine a street is. People often confuse successful architecture with whether an area looks pleasant. On the contrary, when it comes to city buildings, people often focus too narrowly on aesthetics, said Charles Montgomery, author of <em>Happy City: Transforming Our Lives Through Urban Design</em>. Some of the happiest blocks in New York City, he argues, are 'kind of ugly and messy'.</p>\n            <p>In 2014, Montgomery's Happy City Lab conducted an experiment in which he found a strong correlation between messier blocks and pro-social behavior. Montgomery sent researchers, posing as lost tourists, to places he coded as either 'active' or 'inactive' facades. He concluded that the former had a high level of interest—that is, they were messy—while the latter had no special features such as long warehouse blocks. Pedestrians at active sites were nearly five times more likely to offer assistance than at inactive ones. Of those who assisted, seven times as many at the active site offered use of their phones.</p>\n\n            <p><strong>F</strong> Fortunately, it's not necessarily a dichotomy—new architecture can achieve the optimal level of cacophony and beauty. Take the 2006 Hearst Tower in midtown Manhattan. Designed by architect Norman Foster, Hearst Tower is a glass-and-steel skyscraper, 40 stories of which are designed in a triangular pattern, differing in style from the 1920s Art Deco base. From the outside, the facade jolts city dwellers from their daily commutes, while energizing employees who enter it each morning. For many who walk by, Hearst Tower's design may not be the easiest to understand; it's both sleek and old. The top looks like it traveled from the future. Inside, workers travel upon diagonal escalators, up a three-story water sculpture, through the tower's historic atrium, flooded with light. Few New Yorkers who pass by would find this building boring. And they're likely to be happier—maybe even nicer to each other—because of it.</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "table_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Questions 14–18</h4>\n                <p>Reading Passage 2 has six sections, <strong>A–F</strong>.</p>\n                <p>Which section contains the following information?</p>\n                <p><em>Write the correct letter, <strong>A–F</strong>, in boxes 14–18 on your answer sheet.</em></p>\n                <div style=\"overflow-x: auto;\">\n                    <table class=\"matching-table\">\n                        <thead>\n                            <tr>\n                                <th style=\"min-width: 200px;\"></th>\n                                <th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th>\n                            </tr>\n                        </thead>\n                        <tbody>\n                            <tr>\n                                <td><strong>14</strong> a description of a building that has a positive effect</td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"A\"></td><td><input type=\"radio\" name=\"q1\" value=\"B\"></td><td><input type=\"radio\" name=\"q1\" value=\"C\"></td><td><input type=\"radio\" name=\"q1\" value=\"D\"></td><td><input type=\"radio\" name=\"q1\" value=\"E\"></td><td><input type=\"radio\" name=\"q1\" value=\"F\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>15</strong> a reference to architecture affecting people's performance in their jobs</td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"A\"></td><td><input type=\"radio\" name=\"q2\" value=\"B\"></td><td><input type=\"radio\" name=\"q2\" value=\"C\"></td><td><input type=\"radio\" name=\"q2\" value=\"D\"></td><td><input type=\"radio\" name=\"q2\" value=\"E\"></td><td><input type=\"radio\" name=\"q2\" value=\"F\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>16</strong> examples of the intensity of people's reactions in two urban settings</td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"A\"></td><td><input type=\"radio\" name=\"q3\" value=\"B\"></td><td><input type=\"radio\" name=\"q3\" value=\"C\"></td><td><input type=\"radio\" name=\"q3\" value=\"D\"></td><td><input type=\"radio\" name=\"q3\" value=\"E\"></td><td><input type=\"radio\" name=\"q3\" value=\"F\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>17</strong> details of a study where seeing certain pictures reduced people's stress</td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"A\"></td><td><input type=\"radio\" name=\"q4\" value=\"B\"></td><td><input type=\"radio\" name=\"q4\" value=\"C\"></td><td><input type=\"radio\" name=\"q4\" value=\"D\"></td><td><input type=\"radio\" name=\"q4\" value=\"E\"></td><td><input type=\"radio\" name=\"q4\" value=\"F\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>18</strong> a claim about feelings experienced in response to both architecture and leisure settings</td>\n                                <td><input type=\"radio\" name=\"q5\" value=\"A\"></td><td><input type=\"radio\" name=\"q5\" value=\"B\"></td><td><input type=\"radio\" name=\"q5\" value=\"C\"></td><td><input type=\"radio\" name=\"q5\" value=\"D\"></td><td><input type=\"radio\" name=\"q5\" value=\"E\"></td><td><input type=\"radio\" name=\"q5\" value=\"F\"></td>\n                            </tr>\n                        </tbody>\n                    </table>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "matching",
+      "questionIds": [
+        "q6",
+        "q7",
+        "q8",
+        "q9",
+        "q10"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q6-7-8-9-10-anchor\">\n                <h4>Questions 19–23</h4>\n                <p>Look at the following statements (Questions 19–23) and the list of researchers below.</p>\n                <p>Match each statement with the correct researcher, <strong>A, B, C</strong> or <strong>D</strong>.</p>\n                <p><em>NB You may use any letter more than once.</em></p>\n                \n                <div class=\"match-question-item\">\n                    <p><strong>19</strong> The aim of good city planning is to provide variety in architecture.</p>\n                    <div class=\"match-dropzone\" data-question=\"q6\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>20</strong> People in untidy areas were more helpful.</p>\n                    <div class=\"match-dropzone\" data-question=\"q7\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                     <p><strong>21</strong> People who had recently felt amazed placed less importance on material goods.</p>\n                    <div class=\"match-dropzone\" data-question=\"q8\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                    <p><strong>22</strong> 'Attractive' places are not necessarily the most enjoyable places to be.</p>\n                    <div class=\"match-dropzone\" data-question=\"q9\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>23</strong> One particular building failed to provide visual stimulation.</p>\n                    <div class=\"match-dropzone\" data-question=\"q10\"></div>\n                </div>\n\n                <div class=\"options-pool\" id=\"researcher-options-pool\">\n                    <strong>List of Researchers</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" id=\"researcher-A\" draggable=\"true\" data-option=\"A\">A Colin N Ellard</div>\n                        <div class=\"drag-item\" id=\"researcher-B\" draggable=\"true\" data-option=\"B\">B Brendan Walker</div>\n                        <div class=\"drag-item\" id=\"researcher-C\" draggable=\"true\" data-option=\"C\">C Rudd, Vohs and Aaker</div>\n                        <div class=\"drag-item\" id=\"researcher-D\" draggable=\"true\" data-option=\"D\">D Charles Montgomery</div>\n                    </div>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "summary_completion",
+      "questionIds": [
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                <h4>Questions 24–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"summary-completion\">\n                    <h4>Hearst Tower</h4>\n                    <p>Norman Foster's Hearst Tower was built in 2006. The 40-storey modern triangular-patterned building is made of glass and steel, contrasting with the base which is in the style of the 1920s. The sight of the building's <strong>24</strong> <input type=\"text\" id=\"q24_input\"> has a striking impact on commuters and employees. Some passers-by may find the building's design confusing, as it mixes old and new elements. Inside the tower <strong>25</strong> <input type=\"text\" id=\"q25_input\"> carry employees up past a large water sculpture in the light-filled <strong>26</strong> <input type=\"text\" id=\"q26_input\">.</p>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "F",
+    "q2": "A",
+    "q3": "B",
+    "q4": "D",
+    "q5": "C",
+    "q6": "A",
+    "q7": "D",
+    "q8": "C",
+    "q9": "D",
+    "q10": "A",
+    "q11": "facade",
+    "q12": "escalators",
+    "q13": "atrium"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/157. P2 - Boring Buildings 无聊建筑/157. P2 - Boring Buildings 无聊建筑.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/157. P2 - Boring Buildings 无聊建筑/157. P2 - Boring Buildings 无聊建筑.pdf",
+    "ieltsHtml": null
+  },
+  "audit": {
+    "matchStatus": "shui_only",
+    "matchConfidence": 0,
+    "verifiedAt": "2026-03-08T16:24:30.624Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "14",
+    "q2": "15",
+    "q3": "16",
+    "q4": "17",
+    "q5": "18",
+    "q6": "19",
+    "q7": "20",
+    "q8": "21",
+    "q9": "22",
+    "q10": "23",
+    "q11": "24",
+    "q12": "25",
+    "q13": "26"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

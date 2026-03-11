@@ -69,6 +69,7 @@ class ExamSystemApp {
             mixins.bootstrap || {},
             mixins.lifecycle || {},
             mixins.navigation || {},
+            mixins.readingLaunch || {},
             mixins.examSession || {},
             mixins.suitePractice || {},
             mixins.fallback || {});

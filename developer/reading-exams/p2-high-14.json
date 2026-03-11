@@ -1,0 +1,115 @@
+{
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-high-14",
+  "meta": {
+    "title": "Should space be explored by robots or by humans 人机太空探索",
+    "category": "P2",
+    "frequency": "high",
+    "pdfFilename": "110. P2 - Should space be explored by robots or by humans 人机太空探索【高】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】/",
+    "legacyFilename": "110. P2 - Should space be explored by robots or by humans 人机太空探索【高】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 2</h2>\n            <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>\n            \n            <h3>Should space be explored by robots or by humans?</h3>\n            \n            <div class=\"paragraph-wrapper\" id=\"pA-anchor\">\n                <div class=\"paragraph-dropzone\" data-paragraph=\"A\">\n                    <span class=\"paragraph-label\">Paragraph A (Q14):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>A</strong> The advisability of humans participating directly in space travel continues to cause many debates. There is no doubt that the presence of people on board a space vehicle makes its design much more complex and challenging, and produces a large increase in costs, since safety requirements are greatly increased, and the performance of the technology providing necessities for human passengers such as oxygen, food and water must be guaranteed. Moreover, the systems required are bulky and costly, and their complexity increases for long-duration missions. Meanwhile, advances in electronics and computer science allow increasingly complex tasks to be entrusted to robots, and unmanned space probes are becoming lighter, smaller and more convenient.</p>\n            </div>\n            <div class=\"paragraph-wrapper\" id=\"pB-anchor\">\n                <div class=\"paragraph-dropzone\" data-paragraph=\"B\">\n                    <span class=\"paragraph-label\">Paragraph B (Q15):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>B</strong> However, experience has shown that the idea of humans in space is popular with the public. Humans can also be useful; there are many cases when only direct intervention by an astronaut or cosmonaut can correct the malfunction of an automatic device. Astronauts and cosmonauts have proved that they can adapt to conditions of weightlessness and work in space without encountering too many problems, as was seen in the operations to repair and to upgrade the Hubble Space Telescope. One human characteristic which is particularly precious in space missions, and which so far is lacking in robots, is the ability to perform a great variety of tasks. In addition, robots are not good at reacting to situations they have not been specifically prepared for. This is especially important in the case of deep space missions. While in the case of the Moon it is possible for someone on Earth to ‘tele-operate’ a robotic device such as a probe, as the two-way link time is only a couple of seconds, on Mars the two-way link time is several minutes, so sending instructions from Earth is more difficult.</p>\n            </div>\n            <div class=\"paragraph-wrapper\" id=\"pC-anchor\">\n                <div class=\"paragraph-dropzone\" data-paragraph=\"C\">\n                    <span class=\"paragraph-label\">Paragraph C (Q16):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>C</strong> Many of the promises of artificial intelligence are still far from being fulfilled. The construction of machines simulating human logical reasoning moves towards ever more distant dates. The more the performance of computers improves, the more we realise how difficult it is to build machines which display logical abilities. In the past it was confidently predicted that we would soon have fully automated factories in which all operations were performed without any human intervention, and forecasts of the complete substitution of workers by robots in many production areas were made. Today, these perspectives are being revised. It seems that all machines, even the smartest ones, must cooperate with humans. Rather than replacing humans, the present need appears to be for an intelligent machine capable of helping a human operator without replacing him or her. The word ‘cobot’, from ‘collaborative robot’, has been invented to designate this type of robot.</p>\n            </div>\n             <div class=\"paragraph-wrapper\" id=\"pD-anchor\">\n                <div class=\"paragraph-dropzone\" data-paragraph=\"D\">\n                    <span class=\"paragraph-label\">Paragraph D (Q17):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>D</strong> A similar trend is also apparent in the field of space exploration. Tasks which were in the past entrusted only to machines are now performed by human beings, sometimes with the aim of using simpler and less costly devices, sometimes to obtain better performance. In many cases, to involve a person in the control loop is a welcome simplification which may lower the cost of a mission without compromising safety. Many operations originally designed to be performed under completely automatic control can be performed more efficiently by astronauts, perhaps helped by their ‘cobots’. The human-machine relationship must evolve towards a closer collaboration.</p>\n            </div>\n            <div class=\"paragraph-wrapper\" id=\"pE-anchor\">\n                 <div class=\"paragraph-dropzone\" data-paragraph=\"E\">\n                    <span class=\"paragraph-label\">Paragraph E (Q18):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>E</strong> One way this could happen is by adopting the Mars Outposts approach, proposed by the Planetary Society. This would involve sending a number of robotic research stations to Mars, equipped with permanent communications and navigational systems. They would perform research, and establish the infrastructure needed to prepare future landing sites for the exploration of Mars by humans. It has also been suggested that in the most difficult environments, as on Venus or Jupiter, robots could be controlled by human beings located in spaceships which remain in orbit around the planet. In this case, the link time for communication between humans and robots would be far less than it would be from Earth.</p>\n            </div>\n            <div class=\"paragraph-wrapper\" id=\"pF-anchor\">\n                 <div class=\"paragraph-dropzone\" data-paragraph=\"F\">\n                    <span class=\"paragraph-label\">Paragraph F (Q19):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>F</strong> But if space is to be more than a place to build automatic laboratories or set up industrial enterprises in the vicinity of our planet, the presence of humans is essential. They must learn how to voyage through space towards destinations which will be not only scientific bases but also places to live. If space is a frontier, that frontier must see the presence of people. So the aim for humankind in the future will be not just the exploration of space, but its colonisation. The result of exploring and living in space may be a deep change in the views which humankind has of itself. And this process is already under way. The images of Earth taken from the Moon in the Apollo programme have given humankind a new consciousness of its fragility, its smallness, and its unity. These impressions have triggered a realisation of the need to protect and preserve it, for it is the place in the solar system most suitable for us and above all it is the only place we have, at least for now.</p>\n            </div>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "matching",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 14–19</h4>\n                <p>Reading Passage 2 has six paragraphs, <strong>A–F</strong>.</p>\n                <p>Choose the correct heading for each paragraph from the list of headings below.</p>\n                \n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i. Robots on Earth – a re-evaluation</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii. The barriers to cooperation in space exploration</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii. Some limitations of robots in space</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv. Reduced expectations for space exploration</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v. A general reconsideration of human/robot responsibilities in space</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi. Problems in using humans for space exploration</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii. The danger to humans of intelligent machines</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii. Space settlement and the development of greater self-awareness</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ix\">ix. Possible examples of cooperation in space</div>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "multi_choice",
+      "questionIds": [
+        "q7",
+        "q8"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q7-8-anchor\">\n                <h4>Questions 20 and 21</h4>\n                <p>Choose <strong>TWO</strong> letters, <strong>A–E</strong>.</p>\n                <p>According to the writer, which <strong>TWO</strong> predictions about artificial intelligence have not yet been fulfilled?</p>\n                <div class=\"choice-item\">\n                    <label><input type=\"checkbox\" name=\"q7_8\" value=\"A\"> A. Robots will work independently of humans.</label>\n                </div>\n                 <div class=\"choice-item\">\n                    <label><input type=\"checkbox\" name=\"q7_8\" value=\"B\"> B. Robots will begin to oppose human interests.</label>\n                </div>\n                 <div class=\"choice-item\">\n                    <label><input type=\"checkbox\" name=\"q7_8\" value=\"C\"> C. Robots will be used to help humans perform tasks more efficiently.</label>\n                </div>\n                 <div class=\"choice-item\">\n                    <label><input type=\"checkbox\" name=\"q7_8\" value=\"D\"> D. Robots will think in the same way as humans.</label>\n                </div>\n                 <div class=\"choice-item\">\n                    <label><input type=\"checkbox\" name=\"q7_8\" value=\"E\"> E. Robots will become too costly to use on space missions.</label>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "summary_completion",
+      "questionIds": [
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q9-10-11-12-13-anchor\">\n                <h4>Questions 22–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-text\">\n                    <h5>Humans in space – the Mars Outposts approach and its implications</h5>\n                    <p>\n                    One way of exploring space would be through collaboration between humans and robots. For example, when exploring the planet Mars, robots could be used to set up <strong>22</strong> <input type=\"text\" id=\"q22_input\"> and do initial research before humans arrive. In other cases, humans could stay in orbiting <strong>23</strong> <input type=\"text\" id=\"q23_input\"> and give orders to robots working on the surface of the planet. This would increase the speed of <strong>24</strong> <input type=\"text\" id=\"q24_input\"> with the robots.\n                    </p>\n                    <p>\n                    In such ways, robots might be used to work in space in commercial enterprises or <strong>25</strong> <input type=\"text\" id=\"q25_input\">. However, the final aim of humankind may be the <strong>26</strong> <input type=\"text\" id=\"q26_input\"> of space, and this could in turn change people's attitudes towards Earth.\n                    </p>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "vi",
+    "q2": "iii",
+    "q3": "i",
+    "q4": "v",
+    "q5": "ix",
+    "q6": "viii",
+    "q7": "A",
+    "q8": "D",
+    "q9": "infrastructure",
+    "q10": "spaceships",
+    "q11": "communication",
+    "q12": "laboratories",
+    "q13": "colonisation"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】/110. P2 - Should space be explored by robots or by humans 人机太空探索【高】.pdf",
+    "ieltsHtml": "IELTS/P2/Should space be explored by robots or by humans.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.531Z",
+    "notes": "signature:checkbox,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "14",
+    "q2": "15",
+    "q3": "16",
+    "q4": "17",
+    "q5": "18",
+    "q6": "19",
+    "q7": "20",
+    "q8": "21",
+    "q9": "22",
+    "q10": "23",
+    "q11": "24",
+    "q12": "25",
+    "q13": "26"
+  }
+}

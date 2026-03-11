@@ -173,68 +173,14 @@
 
         // 初始化全局变量访问兼容层
         initializeGlobalCompatibility() {
-            // 考试相关
-            Object.defineProperty(window, 'examIndex', {
-                get: () => this.state.exam.index,
-                set: (value) => this.setState('exam.index', value),
-                configurable: true
-            });
-
-            Object.defineProperty(window, 'currentCategory', {
-                get: () => this.state.exam.currentCategory,
-                set: (value) => this.setState('exam.currentCategory', value),
-                configurable: true
-            });
-
-            Object.defineProperty(window, 'currentExamType', {
-                get: () => this.state.exam.currentExamType,
-                set: (value) => this.setState('exam.currentExamType', value),
-                configurable: true
-            });
-
-            Object.defineProperty(window, 'filteredExams', {
-                get: () => this.state.exam.filteredExams,
-                set: (value) => this.setState('exam.filteredExams', value),
-                configurable: true
-            });
-
-            // 练习相关
-            Object.defineProperty(window, 'practiceRecords', {
-                get: () => this.state.practice.records,
-                set: (value) => this.setState('practice.records', value),
-                configurable: true
-            });
-
-            Object.defineProperty(window, 'bulkDeleteMode', {
-                get: () => this.state.practice.bulkDeleteMode,
-                set: (value) => this.setState('practice.bulkDeleteMode', value),
-                configurable: true
-            });
-
-            Object.defineProperty(window, 'selectedRecords', {
-                get: () => this.state.practice.selectedRecords,
-                set: (value) => this.setState('practice.selectedRecords', value),
-                configurable: true
-            });
-
-            // UI状态
-            Object.defineProperty(window, '__browseFilter', {
-                get: () => this.state.ui.browseFilter,
-                set: (value) => this.setState('ui.browseFilter', value),
-                configurable: true
-            });
-
-            Object.defineProperty(window, '__pendingBrowseFilter', {
-                get: () => this.state.ui.pendingBrowseFilter,
-                set: (value) => this.setState('ui.pendingBrowseFilter', value),
-                configurable: true
-            });
-
-            Object.defineProperty(window, '__legacyBrowseType', {
-                get: () => this.state.ui.legacyBrowseType,
-                set: (value) => this.setState('ui.legacyBrowseType', value),
-                configurable: true
-            });
+            if (window.appStateService) {
+                try {
+                    window.appStateService.installGlobalBindings(window);
+                    window.appStateService.connectApp(this);
+                } catch (error) {
+                    console.warn('[App] AppStateService connect failed:', error);
+                }
+            }
 
             // 组件实例
             Object.defineProperty(window, 'dataIntegrityManager', {
@@ -257,14 +203,6 @@
 
             // 全局组件检查函数
             window.checkComponents = () => this.checkComponents();
-
-            if (window.LegacyStateBridge && typeof window.LegacyStateBridge.connect === 'function') {
-                try {
-                    window.LegacyStateBridge.connect(this);
-                } catch (error) {
-                    console.warn('[App] LegacyStateBridge connect failed:', error);
-                }
-            }
         },
     };
 

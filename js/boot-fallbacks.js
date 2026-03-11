@@ -535,34 +535,6 @@
     };
   }
 
-  function _fallbackAssignSequence(list) {
-    if (typeof window.assignExamSequenceNumbers === 'function') {
-      try { window.assignExamSequenceNumbers(list); return; } catch (_) { }
-    }
-    list.forEach(function (item, idx) {
-      if (item && typeof item === 'object' && item.sequenceNumber == null) {
-        item.sequenceNumber = idx + 1;
-      }
-    });
-  }
-
-  function _fallbackGetExamIndexState() {
-    if (typeof window.getExamIndexState === 'function') {
-      try { return window.getExamIndexState(); } catch (_) { }
-    }
-    return Array.isArray(window.examIndex) ? window.examIndex : [];
-  }
-
-  function _fallbackSetExamIndexState(list) {
-    var cloned = Array.isArray(list) ? list.slice() : [];
-    _fallbackAssignSequence(cloned);
-    if (typeof window.setExamIndexState === 'function') {
-      try { return window.setExamIndexState(cloned); } catch (_) { }
-    }
-    try { window.examIndex = cloned; } catch (_) { }
-    return cloned;
-  }
-
   function _fallbackIsQuotaExceeded(error) {
     return !!(error && (
       error.name === 'QuotaExceededError' ||
@@ -1175,52 +1147,16 @@
       }
     }
 
-    function _fallbackDerivePathMap(exams, fallbackMap) {
-      if (typeof window.derivePathMapFromIndex === 'function') {
-        try { return window.derivePathMapFromIndex(exams, fallbackMap); } catch (_) { }
-      }
-      if (window.LibraryManager && typeof window.LibraryManager.derivePathMapFromIndex === 'function') {
-        try { return window.LibraryManager.derivePathMapFromIndex(exams, fallbackMap); } catch (_) { }
-      }
-      return null;
-    }
-
-    async function _fallbackLoadPathMap(key) {
-      if (typeof window.loadPathMapForConfiguration === 'function') {
-        try { return await window.loadPathMapForConfiguration(key); } catch (_) { }
-      }
-      var manager = null;
-      if (window.LibraryManager && typeof window.LibraryManager.getInstance === 'function') {
-        manager = window.LibraryManager.getInstance();
-      }
-      if (manager && typeof manager.loadPathMapForConfiguration === 'function') {
-        try { return await manager.loadPathMapForConfiguration(key); } catch (_) { }
-      }
-      return null;
-    }
-
-    async function _fallbackSavePathMap(key, exams, options) {
-      if (typeof window.savePathMapForConfiguration === 'function') {
-        try { return await window.savePathMapForConfiguration(key, exams, options || {}); } catch (_) { }
-      }
-      var manager = null;
-      if (window.LibraryManager && typeof window.LibraryManager.getInstance === 'function') {
-        manager = window.LibraryManager.getInstance();
-      }
-      if (manager && typeof manager.savePathMapForConfiguration === 'function') {
-        try { return await manager.savePathMapForConfiguration(key, exams, options || {}); } catch (err) {
-          console.warn('[Fallback] 保存路径映射失败:', err);
-        }
-      }
-      return null;
-    }
-
     async function _fallbackApplyLibraryConfig(key, dataset, options) {
       if (typeof window.applyLibraryConfiguration === 'function') {
         try { return await window.applyLibraryConfiguration(key, dataset, options || {}); } catch (_) { }
       }
       // fallback:直接刷新内存状态与UI
-      _fallbackSetExamIndexState(dataset);
+      if (typeof window.setExamIndexState === 'function') {
+        try { window.setExamIndexState(dataset); } catch (_) { }
+      } else {
+        try { window.examIndex = Array.isArray(dataset) ? dataset.slice() : []; } catch (_) { }
+      }
       if (options && options.setActive) {
         await _fallbackSetActiveLibraryKey(key);
       }
@@ -1354,7 +1290,9 @@
       }
 
       var activeKey = await _fallbackGetActiveLibraryKey();
-      var currentIndex = _fallbackGetExamIndexState();
+      var currentIndex = (typeof window.getExamIndexState === 'function')
+        ? window.getExamIndexState()
+        : (Array.isArray(window.examIndex) ? window.examIndex : []);
       if (storage && storage.get) {
         try {
           var maybeCurrent = storage.get(activeKey, currentIndex);
@@ -1377,15 +1315,23 @@
         var dedupAdd = additions.filter(function (e) { return !existingKeys.has((e.path || '') + '|' + (e.filename || '') + '|' + e.title); });
         newIndex = currentIndex.concat(dedupAdd);
       }
-      _fallbackAssignSequence(newIndex);
+      if (typeof window.assignExamSequenceNumbers === 'function') {
+        try { window.assignExamSequenceNumbers(newIndex); } catch (_) { }
+      }
 
       if (mode === 'full') {
         var targetKey = 'exam_index_' + Date.now();
         var configName = (type === 'reading' ? '阅读' : '听力') + '全量-' + new Date().toLocaleString();
         await _fallbackSaveIndexForKey(targetKey, newIndex);
-        var fullPathFallback = await _fallbackLoadPathMap(targetKey);
-        var fullDerivedMap = _fallbackDerivePathMap(newIndex, fullPathFallback);
-        await _fallbackSavePathMap(targetKey, newIndex, { overrideMap: fullDerivedMap, setActive: true });
+        var fullPathFallback = (typeof window.loadPathMapForConfiguration === 'function')
+          ? await window.loadPathMapForConfiguration(targetKey)
+          : null;
+        var fullDerivedMap = (typeof window.derivePathMapFromIndex === 'function')
+          ? window.derivePathMapFromIndex(newIndex, fullPathFallback)
+          : fullPathFallback;
+        if (typeof window.savePathMapForConfiguration === 'function') {
+          await window.savePathMapForConfiguration(targetKey, newIndex, { overrideMap: fullDerivedMap, setActive: true });
+        }
         await _fallbackSaveLibraryConfiguration(configName, targetKey, newIndex.length);
         await _fallbackSetActiveLibraryKey(targetKey);
         try {
@@ -1406,9 +1352,15 @@
         targetKeyInc = 'exam_index_' + Date.now();
         configNameInc = (type === 'reading' ? '阅读' : '听力') + '增量-' + new Date().toLocaleString();
         await _fallbackSaveIndexForKey(targetKeyInc, newIndex);
-        var incFallback = await _fallbackLoadPathMap(targetKeyInc);
-        var derivedMap = _fallbackDerivePathMap(newIndex, incFallback);
-        await _fallbackSavePathMap(targetKeyInc, newIndex, { overrideMap: derivedMap, setActive: true });
+        var incFallback = (typeof window.loadPathMapForConfiguration === 'function')
+          ? await window.loadPathMapForConfiguration(targetKeyInc)
+          : null;
+        var derivedMap = (typeof window.derivePathMapFromIndex === 'function')
+          ? window.derivePathMapFromIndex(newIndex, incFallback)
+          : incFallback;
+        if (typeof window.savePathMapForConfiguration === 'function') {
+          await window.savePathMapForConfiguration(targetKeyInc, newIndex, { overrideMap: derivedMap, setActive: true });
+        }
         await _fallbackSaveLibraryConfiguration(configNameInc, targetKeyInc, newIndex.length);
         await _fallbackSetActiveLibraryKey(targetKeyInc);
         window.showMessage && window.showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
@@ -1417,11 +1369,21 @@
       }
 
       await _fallbackSaveIndexForKey(targetKeyInc, newIndex);
-      var targetPathFallback = await _fallbackLoadPathMap(targetKeyInc);
-      var incrementalMap = _fallbackDerivePathMap(newIndex, targetPathFallback);
-      await _fallbackSavePathMap(targetKeyInc, newIndex, { overrideMap: incrementalMap, setActive: true });
+      var targetPathFallback = (typeof window.loadPathMapForConfiguration === 'function')
+        ? await window.loadPathMapForConfiguration(targetKeyInc)
+        : null;
+      var incrementalMap = (typeof window.derivePathMapFromIndex === 'function')
+        ? window.derivePathMapFromIndex(newIndex, targetPathFallback)
+        : targetPathFallback;
+      if (typeof window.savePathMapForConfiguration === 'function') {
+        await window.savePathMapForConfiguration(targetKeyInc, newIndex, { overrideMap: incrementalMap, setActive: true });
+      }
       await _fallbackSaveLibraryConfiguration((type === 'reading' ? '阅读' : '听力') + '增量-' + new Date().toLocaleString(), targetKeyInc, newIndex.length);
-      _fallbackSetExamIndexState(newIndex);
+      if (typeof window.setExamIndexState === 'function') {
+        window.setExamIndexState(newIndex);
+      } else {
+        try { window.examIndex = Array.isArray(newIndex) ? newIndex.slice() : []; } catch (_) { }
+      }
       try { if (typeof window.updateOverview === 'function') window.updateOverview(); } catch (_) { }
       if (document.getElementById('browse-view') && document.getElementById('browse-view').classList.contains('active') && typeof window.loadExamList === 'function') {
         try { window.loadExamList(); } catch (_) { }

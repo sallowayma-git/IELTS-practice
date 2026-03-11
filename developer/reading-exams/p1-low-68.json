@@ -1,0 +1,108 @@
+{
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-low-68",
+  "meta": {
+    "title": "The Clipper Races 帆船竞速",
+    "category": "P1",
+    "frequency": "low",
+    "pdfFilename": "16. P1 - The Clipper Races 帆船竞速.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/16. P1 - The Clipper Races 帆船竞速/",
+    "legacyFilename": "16. P1 - The Clipper Races 帆船竞速.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage below.</p>\n            \n            <h3>The Clipper Races: an era of competition between cargo ships</h3>\n            <p>During the seventeenth and eighteenth centuries, the British East India Company had the monopoly on trade with China and India. This meant that because no rival could legally import tea or other goods from these countries at this time, the company was rarely in a hurry to transport its merchandise. Instead, its priority was to minimise costs by carrying as much as possible on each ship. This meant that its ships – known as East Indiamen – were enormous, strong and very slow.</p>\n            <p>By 1800, the average East Indiaman could carry 1,200 tons of merchandise. The trading pattern for China tea usually meant the East Indiamen set sail from Britain in January, sailed round the Cape of Good Hope at the southernmost tip of Africa, and arrived in China in September. There they would load up that year's tea harvest, set off again and, depending on the wind and weather, aim to arrive back by the following September, so even with favourable sailing conditions, the round trip lasted almost two years, and if anything went wrong it could take a lot longer.</p>\n            <p>However, by 1834 the company had lost its trading monopolies, and tea had become a freely traded item. Having no more use for its great ships, the company sold them off, and many were bought by merchants or their captains, who continued to plough the seas between Britain and China. But now that tea could be traded freely, a few smart sailors began to realise that whoever brought each new harvest of tea to Britain first stood to make the most money.</p>\n            <p>This was partly because if you were home first, you could sell your shipment of tea before your competitors even arrived, and partly because consumers in Britain in the nineteenth century believed that the fresher and earlier-picked the tea, the better the resulting drink. Tea traders now needed faster, sleeker ships to bring their precious cargo back. Nevertheless, in Britain this idea only caught on slowly, and while the 1840s saw a few faster ships launched, for the time being many merchants remained satisfied with the slow but reliable East Indiamen.</p>\n            <p>In fact it was the Americans who pioneered the first clipper ships. These vessels were fast and slender, with a narrow hull that was deeper at the back than at the front, and masses of sails on tall masts. They earned their name from the way that they ‘clipped off' journey time. British merchants resolved to build their own clippers to rival the Americans, and the first British tea clipper, Stornaway, was built in Aberdeen in 1850. More tea clippers were designed and built in Britain throughout the 1850s and 1860s; they had a narrower beam than their American equivalents, making them less powerful during storms but faster in calmer weather.</p>\n            <p>There was a great spirit of competition between the British and American ships plying the tea trade, but to begin with the Americans had the edge. Then in 1851 a British shipowner, Richard Green, built the aptly named clipper Challenger with the stated intention of beating the American ships. Loaded with tea, Challenger left China for London in 1852 at the same time as the American clipper Challenge, a much larger, older ship already greatly admired for its speed. Large sums were bet on which would complete the journey first. In the event, the British ship beat its rival to London by two days, amid much jubilation. From then on, such international races grew in popularity.</p>\n            <p>After 1855, American participation in the British tea trade gradually stopped. But even without the Anglo-American rivalry, the competitive spirit continued. It was really ignited when new ports were opened up for trade in China. These included Foochow, which was much closer to the tea-producing areas than Canton, the port used previously. As a result, tea could be loaded on board earlier and fresher, and the clippers could set off in late May or early June – sometimes not even taking time to fill out the official paperwork – racing back to Britain whatever the difficulties.</p>\n            <p>They sped down through the South China Sea and into the Indian Ocean, then raced to get round the southernmost tip of Africa at the Cape of Good Hope. Then it was north across the vast Atlantic, past the Azores, through the English Channel and into the estuary of the River Thames. Once there, they would be towed by tugs up the river and into the docks.</p>\n            <p>The cargo of the winning ship could earn a premium of up to sixpence per pound – and so the captain and crew were rewarded by the owners of the cargo. But the races were about more than just money: the crews, about 40 men on each clipper, were expert sailors, proud of their ships, and they delighted in competing against each other. Without their enthusiasm, the races would never have happened, since getting home as fast as possible required the crew to be totally dedicated and to sacrifice much of their rest for the duration of the race.</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 1–6</h4>\n                <p>Do the following statements agree with the information given in Reading Passage 1?</p>\n                <p>In boxes 1–6 on your answer sheet, write</p>\n                <p>\n                    <strong>TRUE</strong> if the statement agrees with the information<br>\n                    <strong>FALSE</strong> if the statement contradicts the information<br>\n                    <strong>NOT GIVEN</strong> if there is no information on this\n                </p>\n                <div class=\"question-item\">\n                    <p><strong>1</strong> In the seventeenth and eighteenth centuries, the British East India Company faced a lot of competition.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q1\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q1\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q1\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>2</strong> Before 1800, cargo size was the most important consideration for the East India Company.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q2\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q2\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q2\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>3</strong> At best, voyages of the East Indiamen to China and back took nearly two years to complete.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q3\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q3\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q3\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>4</strong> Before 1834, voyages to and from China were considered to be highly dangerous.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q4\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q4\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q4\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>5</strong> After 1834, the ships which had served the East India Company stopped being used for commercial purposes.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q5\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q5\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q5\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>6</strong> In the nineteenth century, British drinkers preferred tea made from mature leaves to that made from younger leaves.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q6\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q6\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q6\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q7",
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q7-8-9-10-11-12-13-anchor\">\n                <h4>Questions 7–13</h4>\n                <p>Complete the notes below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"notes-completion\">\n                    <h4>Clipper races</h4>\n                    <ul>\n                        <li><strong>The ships</strong>\n                            <ul>\n                                <li>Clipper ships were first used for trading by American merchants.</li>\n                                <li>The ships were remarkable for the number of <strong>7</strong> <input type=\"text\" class=\"blank\" id=\"q7_input\"> they had.</li>\n                                <li>The performance of British tea clippers was particularly affected when there were <strong>8</strong> <input type=\"text\" class=\"blank\" id=\"q8_input\"> at sea.</li>\n                            </ul>\n                        </li>\n                         <li><strong>The races</strong>\n                            <ul>\n                                <li>It was in a ship called <strong>9</strong> <input type=\"text\" class=\"blank\" id=\"q9_input\"> that the British first competed successfully against the Americans.</li>\n                                <li>Richard Green's ship arrived two days ahead of its competitor.</li>\n                                <li>Competition increased when additional Chinese trading <strong>10</strong> <input type=\"text\" class=\"blank\" id=\"q10_input\"> were established.</li>\n                                <li>Merchants were occasionally in such a hurry that they failed to complete the <strong>11</strong> <input type=\"text\" class=\"blank\" id=\"q11_input\"> before leaving China.</li>\n                                <li>At the end of their journey, the ships needed the help of <strong>12</strong> <input type=\"text\" class=\"blank\" id=\"q12_input\">.</li>\n                            </ul>\n                        </li>\n                        <li><strong>The rewards</strong>\n                            <ul>\n                                <li>The crews were motivated by both <strong>13</strong> <input type=\"text\" class=\"blank\" id=\"q13_input\"> and their enthusiasm for the competition.</li>\n                            </ul>\n                        </li>\n                    </ul>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "FALSE",
+    "q2": "TRUE",
+    "q3": "TRUE",
+    "q4": "NOT GIVEN",
+    "q5": "FALSE",
+    "q6": "FALSE",
+    "q7": "sails",
+    "q8": "storms",
+    "q9": "challenger",
+    "q10": "ports",
+    "q11": "paperwork",
+    "q12": "tugs",
+    "q13": "money"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/16. P1 - The Clipper Races 帆船竞速/16. P1 - The Clipper Races 帆船竞速.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/16. P1 - The Clipper Races 帆船竞速/16. P1 - The Clipper Races 帆船竞速.pdf",
+    "ieltsHtml": "IELTS/P1/The Clipper Races.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.628Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+}

@@ -1,248 +1,112 @@
 (function (global) {
     'use strict';
 
-    const RAW_DEFAULT_PATH_MAP = {
-        reading: {
-            root: '',
-            exceptions: {}
-        },
-        listening: {
-            root: 'ListeningPractice/',
-            exceptions: {}
-        }
-    };
-
-    function clonePathMap(map, fallback = RAW_DEFAULT_PATH_MAP) {
-        const source = map && typeof map === 'object' ? map : fallback;
-        const cloneCategory = (category) => {
-            const segment = source[category] && typeof source[category] === 'object' ? source[category] : {};
-            return {
-                root: typeof segment.root === 'string' ? segment.root : '',
-                exceptions: segment.exceptions && typeof segment.exceptions === 'object'
-                    ? Object.assign({}, segment.exceptions)
-                    : {}
-            };
-        };
-        return {
-            reading: cloneCategory('reading'),
-            listening: cloneCategory('listening')
-        };
+    function getResourceCore() {
+        return global.ResourceCore || null;
     }
 
-    function normalizePathRoot(value) {
-        if (!value) {
-            return '';
-        }
-        let root = String(value).replace(/\\/g, '/');
-        root = root.replace(/\/+$/, '') + '/';
-        if (root.startsWith('./')) {
-            root = root.slice(2);
-        }
-        return root;
-    }
-
-    function mergeRootWithFallback(root, fallbackRoot) {
-        const normalizedPrimary = normalizePathRoot(root || '');
-        if (normalizedPrimary) {
-            return normalizedPrimary;
-        }
-        return normalizePathRoot(fallbackRoot || '');
-    }
-
-    function buildOverridePathMap(metadata, fallback = RAW_DEFAULT_PATH_MAP) {
-        const base = clonePathMap(fallback);
-        if (!metadata || typeof metadata !== 'object') {
-            return base;
-        }
-
-        const rootMeta = metadata.pathRoot;
-        if (rootMeta && typeof rootMeta === 'object') {
-            if (rootMeta.reading) {
-                base.reading.root = normalizePathRoot(rootMeta.reading);
-            }
-            if (rootMeta.listening) {
-                base.listening.root = normalizePathRoot(rootMeta.listening);
-            }
-        }
-
-        return base;
-    }
-
-    const DEFAULT_PATH_MAP = buildOverridePathMap(
-        typeof global !== 'undefined' ? global.examIndexMetadata : null,
-        RAW_DEFAULT_PATH_MAP
-    );
-    const PATH_MAP_STORAGE_PREFIX = 'exam_path_map__';
-
-    function normalizePathMap(map, fallback = DEFAULT_PATH_MAP) {
-        const base = clonePathMap(fallback);
-        const incoming = clonePathMap(map);
-        if (incoming.reading.root) {
-            base.reading.root = normalizePathRoot(incoming.reading.root);
-        }
-        if (incoming.listening.root) {
-            base.listening.root = normalizePathRoot(incoming.listening.root);
-        }
-        if (Object.keys(incoming.reading.exceptions).length) {
-            base.reading.exceptions = incoming.reading.exceptions;
-        }
-        if (Object.keys(incoming.listening.exceptions).length) {
-            base.listening.exceptions = incoming.listening.exceptions;
-        }
-        return base;
-    }
-
-    function computeCommonRoot(paths) {
-        if (!paths || !paths.length) {
-            return '';
-        }
-        const segmentsList = paths.map((rawPath) => {
-            if (typeof rawPath !== 'string') {
-                return [];
-            }
-            const normalized = rawPath.replace(/\\/g, '/').replace(/\/+$/g, '');
-            return normalized ? normalized.split('/') : [];
-        }).filter((segments) => segments.length);
-
-        if (!segmentsList.length) {
-            return '';
-        }
-
-        let prefix = segmentsList[0].slice();
-        for (let i = 1; i < segmentsList.length; i += 1) {
-            const segments = segmentsList[i];
-            let j = 0;
-            while (j < prefix.length && j < segments.length && prefix[j] === segments[j]) {
-                j += 1;
-            }
-            if (j === 0) {
-                return '';
-            }
-            prefix = prefix.slice(0, j);
-        }
-
-        return prefix.length ? prefix.join('/') + '/' : '';
-    }
-
-    function derivePathMapFromIndex(exams, fallbackMap = DEFAULT_PATH_MAP) {
-        const fallback = normalizePathMap(fallbackMap);
-        const result = clonePathMap(fallback);
-
-        if (!Array.isArray(exams)) {
-            return result;
-        }
-
-        const pathsByType = { reading: [], listening: [] };
-
-        exams.forEach((exam) => {
-            if (!exam || (!exam.folder && typeof exam.path !== 'string') || !exam.type) {
-                return;
-            }
-            const normalized = (exam.folder || exam.path).replace(/\\/g, '/');
-            if (exam.type === 'reading') {
-                pathsByType.reading.push(normalized);
-            } else if (exam.type === 'listening') {
-                pathsByType.listening.push(normalized);
-            }
-        });
-
-        const readingRoot = computeCommonRoot(pathsByType.reading);
-        if (pathsByType.reading.length) {
-            result.reading.root = readingRoot ? normalizePathRoot(readingRoot) : '';
-        }
-
-        const listeningRoot = computeCommonRoot(pathsByType.listening);
-        if (pathsByType.listening.length) {
-            result.listening.root = listeningRoot ? normalizePathRoot(listeningRoot) : '';
-        }
-
-        return result;
-    }
-
-    function getPathMapStorageKey(key) {
-        return PATH_MAP_STORAGE_PREFIX + key;
-    }
-
-    function setActivePathMap(map) {
-        const normalized = normalizePathMap(map);
-        try { global.__activeLibraryPathMap = normalized; } catch (_) { }
-        try { global.pathMap = normalized; } catch (_) { }
-        return normalized;
+    function cloneArray(value) {
+        return Array.isArray(value) ? value.slice() : [];
     }
 
     class LibraryManager {
         constructor(options = {}) {
-            this.options = options;
-            this.defaultPathMap = DEFAULT_PATH_MAP;
+            this.options = options || {};
+        }
+
+        get resourceCore() {
+            return getResourceCore();
+        }
+
+        get RAW_DEFAULT_PATH_MAP() {
+            return this.resourceCore ? this.resourceCore.RAW_DEFAULT_PATH_MAP : null;
+        }
+
+        get DEFAULT_PATH_MAP() {
+            return this.resourceCore ? this.resourceCore.DEFAULT_PATH_MAP : null;
+        }
+
+        normalizePathRoot(value) {
+            return this.resourceCore && typeof this.resourceCore.normalizePathRoot === 'function'
+                ? this.resourceCore.normalizePathRoot(value)
+                : '';
+        }
+
+        mergeRootWithFallback(root, fallbackRoot) {
+            return this.resourceCore && typeof this.resourceCore.mergeRootWithFallback === 'function'
+                ? this.resourceCore.mergeRootWithFallback(root, fallbackRoot)
+                : '';
+        }
+
+        buildOverridePathMap(metadata, fallback) {
+            return this.resourceCore && typeof this.resourceCore.buildOverridePathMap === 'function'
+                ? this.resourceCore.buildOverridePathMap(metadata, fallback)
+                : (fallback || null);
+        }
+
+        getPathMap() {
+            return this.resourceCore && typeof this.resourceCore.getPathMap === 'function'
+                ? this.resourceCore.getPathMap()
+                : null;
+        }
+
+        async loadPathMapForConfiguration(key) {
+            return this.resourceCore && typeof this.resourceCore.loadPathMapForConfiguration === 'function'
+                ? this.resourceCore.loadPathMapForConfiguration(key)
+                : null;
+        }
+
+        async savePathMapForConfiguration(key, examIndex, options = {}) {
+            return this.resourceCore && typeof this.resourceCore.savePathMapForConfiguration === 'function'
+                ? this.resourceCore.savePathMapForConfiguration(key, examIndex, options)
+                : null;
+        }
+
+        setActivePathMap(map) {
+            return this.resourceCore && typeof this.resourceCore.setActivePathMap === 'function'
+                ? this.resourceCore.setActivePathMap(map)
+                : (map || null);
         }
 
         async getActiveLibraryConfigurationKey() {
-            return await global.storage.get('active_exam_index_key', 'exam_index');
+            return global.storage.get('active_exam_index_key', 'exam_index');
         }
 
         async setActiveLibraryConfiguration(key) {
             try {
                 await global.storage.set('active_exam_index_key', key);
-            } catch (e) {
-                console.error('[LibraryManager] 设置活动题库配置失败:', e);
+            } catch (error) {
+                console.error('[LibraryManager] 设置活动题库配置失败:', error);
             }
         }
 
         async getLibraryConfigurations() {
-            return await global.storage.get('exam_index_configurations', []);
+            return global.storage.get('exam_index_configurations', []);
         }
 
         async saveLibraryConfiguration(name, key, examCount) {
             try {
-                const configs = await global.storage.get('exam_index_configurations', []);
-                const newEntry = { name, key, examCount, timestamp: Date.now() };
-                const idx = configs.findIndex(c => c.key === key);
-                if (idx >= 0) {
-                    configs[idx] = newEntry;
+                let configs = await global.storage.get('exam_index_configurations', []);
+                if (!Array.isArray(configs)) {
+                    configs = [];
+                }
+                const entry = { name, key, examCount, timestamp: Date.now() };
+                const existingIndex = configs.findIndex((item) => item && item.key === key);
+                if (existingIndex >= 0) {
+                    configs[existingIndex] = entry;
                 } else {
-                    configs.push(newEntry);
+                    configs.push(entry);
                 }
                 await global.storage.set('exam_index_configurations', configs);
-            } catch (e) {
-                console.error('[LibraryManager] 保存题库配置失败:', e);
-            }
-        }
-
-        async loadPathMapForConfiguration(key) {
-            if (!key) {
-                return clonePathMap(this.defaultPathMap);
-            }
-            try {
-                const stored = await global.storage.get(getPathMapStorageKey(key));
-                if (stored && typeof stored === 'object') {
-                    return normalizePathMap(stored, this.defaultPathMap);
-                }
             } catch (error) {
-                console.warn('[LibraryManager] 读取路径映射失败:', error);
+                console.error('[LibraryManager] 保存题库配置失败:', error);
             }
-            return clonePathMap(this.defaultPathMap);
-        }
-
-        async savePathMapForConfiguration(key, examIndex, options = {}) {
-            if (!key || !Array.isArray(examIndex)) {
-                return null;
-            }
-            const fallback = options.fallbackMap || this.defaultPathMap;
-            const overrideMap = options.overrideMap;
-            const derived = overrideMap ? normalizePathMap(overrideMap, fallback) : derivePathMapFromIndex(examIndex, fallback);
-            try {
-                await global.storage.set(getPathMapStorageKey(key), derived);
-            } catch (error) {
-                console.warn('[LibraryManager] 写入路径映射失败:', error);
-            }
-            if (options.setActive) {
-                setActivePathMap(derived);
-            }
-            return derived;
         }
 
         resolveScriptPathRoot(type) {
-            // 1. 尝试从脚本数据的 pathRoot 元数据读取
+            const defaultRoot = type === 'reading'
+                ? '睡着过项目组/2. 所有文章(11.20)[192篇]/'
+                : 'ListeningPractice/';
             try {
                 if (type === 'reading') {
                     const rootMeta = global.completeExamIndex && global.completeExamIndex.pathRoot;
@@ -252,10 +116,11 @@
                     if (rootMeta && typeof rootMeta === 'object' && typeof rootMeta.reading === 'string') {
                         return rootMeta.reading.trim();
                     }
-                } else if (type === 'listening') {
-                    const listeningRoot = global.listeningExamIndex && global.listeningExamIndex.pathRoot;
-                    if (typeof listeningRoot === 'string' && listeningRoot.trim()) {
-                        return listeningRoot.trim();
+                }
+                if (type === 'listening') {
+                    const rootMeta = global.listeningExamIndex && global.listeningExamIndex.pathRoot;
+                    if (typeof rootMeta === 'string' && rootMeta.trim()) {
+                        return rootMeta.trim();
                     }
                     const completeRoot = global.completeExamIndex && global.completeExamIndex.pathRoot;
                     if (completeRoot && typeof completeRoot === 'object' && typeof completeRoot.listening === 'string') {
@@ -263,25 +128,7 @@
                     }
                 }
             } catch (_) { }
-
-            // 2. 从 exam 条目的 folder/path 字段动态推算公共根路径
-            try {
-                const source = type === 'reading' ? global.completeExamIndex : global.listeningExamIndex;
-                if (Array.isArray(source) && source.length) {
-                    const folders = source
-                        .filter(function (e) { return e && (e.folder || e.path); })
-                        .map(function (e) { return String(e.folder || e.path).replace(/\\/g, '/'); });
-                    if (folders.length) {
-                        const derived = computeCommonRoot(folders);
-                        if (derived) {
-                            return derived;
-                        }
-                    }
-                }
-            } catch (_) { }
-
-            // 3. 最终 fallback（空字符串表示无固定前缀）
-            return type === 'listening' ? 'ListeningPractice/' : '';
+            return defaultRoot;
         }
 
         finishLibraryLoading(startTime) {
@@ -302,10 +149,9 @@
             if (typeof global.reportBootStage === 'function') {
                 global.reportBootStage('加载题库索引', 35);
             }
+
             const rawKey = await this.getActiveLibraryConfigurationKey();
-            const activeConfigKey = typeof rawKey === 'string' && rawKey.trim()
-                ? rawKey.trim()
-                : 'exam_index';
+            const activeConfigKey = typeof rawKey === 'string' && rawKey.trim() ? rawKey.trim() : 'exam_index';
             const isDefaultConfig = activeConfigKey === 'exam_index';
 
             let cachedData = null;
@@ -321,23 +167,18 @@
 
             if (!forceReload && !isDefaultConfig && Array.isArray(cachedData) && cachedData.length > 0) {
                 const updatedIndex = global.setExamIndexState ? global.setExamIndexState(cachedData) : cachedData;
-                try {
-                    await this.savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: true });
-                } catch (error) {
-                    console.warn('[LibraryManager] 应用路径映射失败:', error);
-                }
+                await this.savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: true });
                 this.finishLibraryLoading(startTime);
                 return updatedIndex;
             }
 
             if (!isDefaultConfig) {
                 const normalized = Array.isArray(cachedData) ? cachedData : [];
-                if (global.setExamIndexState) global.setExamIndexState(normalized);
-                if (!normalized.length) {
-                    console.warn('[LibraryManager] 当前题库配置中没有找到可用数据');
-                    if (typeof global.showMessage === 'function') {
-                        global.showMessage('当前题库配置没有数据，请重新导入或切换至默认题库。', 'warning');
-                    }
+                if (global.setExamIndexState) {
+                    global.setExamIndexState(normalized);
+                }
+                if (!normalized.length && typeof global.showMessage === 'function') {
+                    global.showMessage('当前题库配置没有数据，请重新导入或切换至默认题库。', 'warning');
                 }
                 this.finishLibraryLoading(startTime);
                 return normalized;
@@ -350,6 +191,7 @@
                 if (typeof global.reportBootStage === 'function') {
                     global.reportBootStage('解析题库数据', 55);
                 }
+
                 const readingExams = Array.isArray(global.completeExamIndex)
                     ? global.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
                     : [];
@@ -358,13 +200,15 @@
                     : [];
 
                 if (!readingExams.length && !listeningExams.length) {
-                    if (global.setExamIndexState) global.setExamIndexState([]);
+                    if (global.setExamIndexState) {
+                        global.setExamIndexState([]);
+                    }
                     console.warn('[LibraryManager] 未检测到默认题库脚本中的题源数据');
                     this.finishLibraryLoading(startTime);
                     return [];
                 }
 
-                const combined = [...readingExams, ...listeningExams];
+                const combined = cloneArray(readingExams).concat(listeningExams);
                 if (typeof global.assignExamSequenceNumbers === 'function') {
                     global.assignExamSequenceNumbers(combined);
                 }
@@ -385,16 +229,7 @@
                 };
                 try { global.examIndexMetadata = metadata; } catch (_) { }
 
-                const overrideMap = {
-                    reading: {
-                        root: metadata.pathRoot.reading,
-                        exceptions: {}
-                    },
-                    listening: {
-                        root: metadata.pathRoot.listening,
-                        exceptions: {}
-                    }
-                };
+                const overrideMap = this.buildOverridePathMap(metadata, this.DEFAULT_PATH_MAP);
 
                 await global.storage.set('exam_index', updatedIndex);
                 await this.saveLibraryConfiguration('默认题库', 'exam_index', updatedIndex.length);
@@ -408,7 +243,9 @@
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('题库刷新失败: ' + (error && error.message ? error.message : error), 'error');
                 }
-                if (global.setExamIndexState) global.setExamIndexState([]);
+                if (global.setExamIndexState) {
+                    global.setExamIndexState([]);
+                }
                 this.finishLibraryLoading(startTime);
                 return [];
             }
@@ -425,14 +262,12 @@
                 }
                 const now = Date.now();
                 let mutated = false;
-
-                const updatedConfigs = configs.map((entry) => {
+                const updated = configs.map((entry) => {
                     if (!entry) {
                         return entry;
                     }
                     if (typeof entry === 'string') {
-                        const trimmed = entry.trim();
-                        if (trimmed === key) {
+                        if (entry.trim() === key) {
                             mutated = true;
                             return {
                                 name: key === 'exam_index' ? '默认题库' : key,
@@ -443,20 +278,17 @@
                         }
                         return entry;
                     }
-                    if (entry && entry.key === key) {
-                        const next = Object.assign({}, entry);
-                        if (Number(next.examCount) !== examCount) {
-                            next.examCount = examCount;
-                        }
-                        next.timestamp = now;
+                    if (entry.key === key) {
                         mutated = true;
-                        return next;
+                        return Object.assign({}, entry, {
+                            examCount,
+                            timestamp: now
+                        });
                     }
                     return entry;
                 });
-
                 if (mutated) {
-                    await global.storage.set('exam_index_configurations', updatedConfigs);
+                    await global.storage.set('exam_index_configurations', updated);
                 }
             } catch (error) {
                 console.warn('[LibraryManager] 无法刷新题库配置元数据', error);
@@ -485,11 +317,15 @@
                 return false;
             }
 
-            let pathMap = await this.loadPathMapForConfiguration(key);
-            pathMap = derivePathMapFromIndex(exams, pathMap);
-            setActivePathMap(pathMap);
+            const currentPathMap = await this.loadPathMapForConfiguration(key);
+            const pathMap = this.resourceCore && typeof this.resourceCore.derivePathMapFromIndex === 'function'
+                ? this.resourceCore.derivePathMapFromIndex(exams, currentPathMap || this.DEFAULT_PATH_MAP)
+                : (currentPathMap || null);
+            this.setActivePathMap(pathMap);
 
-            if (global.setExamIndexState) global.setExamIndexState(exams);
+            if (global.setExamIndexState) {
+                global.setExamIndexState(exams);
+            }
             if (typeof global.setBrowseFilterState === 'function') {
                 global.setBrowseFilterState('all', 'all');
             }
@@ -514,9 +350,7 @@
             try { global.loadExamList && global.loadExamList(); } catch (_) { }
 
             try {
-                global.dispatchEvent(new CustomEvent('examIndexLoaded', {
-                    detail: { key }
-                }));
+                global.dispatchEvent(new CustomEvent('examIndexLoaded', { detail: { key } }));
             } catch (error) {
                 console.warn('[LibraryManager] 题库切换事件派发失败', error);
             }
@@ -536,9 +370,20 @@
 
             return true;
         }
+
+        async loadLibrary(keyOrForceReload) {
+            if (keyOrForceReload === 'default' || keyOrForceReload === 'exam_index') {
+                return this.loadActiveLibrary(true);
+            }
+            if (typeof keyOrForceReload === 'string' && keyOrForceReload) {
+                return this.applyLibraryConfiguration(keyOrForceReload);
+            }
+            return this.loadActiveLibrary(!!keyOrForceReload);
+        }
     }
 
     let singleton = null;
+
     function getInstance(options) {
         if (!singleton) {
             singleton = new LibraryManager(options);
@@ -548,45 +393,37 @@
 
     async function switchLibraryConfig(key) {
         const manager = getInstance();
-        // 如果没有传入 key，尝试获取当前激活的 key
-        if (!key) {
-            key = await manager.getActiveLibraryConfigurationKey();
-        }
-        // 如果仍然没有 key，默认为 exam_index
-        if (!key) {
-            key = 'exam_index';
-        }
-
-        // 确认对话框逻辑（如果需要）
-        // 这里简化为直接切换，因为 UI 层通常会处理确认
-
-        return await manager.applyLibraryConfiguration(key);
+        const nextKey = key || await manager.getActiveLibraryConfigurationKey() || 'exam_index';
+        return manager.applyLibraryConfiguration(nextKey);
     }
 
-    async function loadLibrary(key) {
-        const manager = getInstance();
-        if (key === 'default' || key === 'exam_index') {
-            // 重新加载默认题库
-            return await manager.loadActiveLibrary(true);
-        }
-        // 加载指定题库
-        return await manager.applyLibraryConfiguration(key);
+    async function loadLibrary(keyOrForceReload) {
+        return getInstance().loadLibrary(keyOrForceReload);
     }
 
     global.LibraryManager = {
         getInstance,
-        derivePathMapFromIndex,
-        normalizePathRoot,
-        mergeRootWithFallback,
-        buildOverridePathMap,
-        RAW_DEFAULT_PATH_MAP,
-        DEFAULT_PATH_MAP,
         switchLibraryConfig,
-        loadLibrary
+        loadLibrary,
+        get RAW_DEFAULT_PATH_MAP() {
+            const manager = getInstance();
+            return manager.RAW_DEFAULT_PATH_MAP;
+        },
+        get DEFAULT_PATH_MAP() {
+            const manager = getInstance();
+            return manager.DEFAULT_PATH_MAP;
+        },
+        normalizePathRoot(value) {
+            return getInstance().normalizePathRoot(value);
+        },
+        mergeRootWithFallback(root, fallbackRoot) {
+            return getInstance().mergeRootWithFallback(root, fallbackRoot);
+        },
+        buildOverridePathMap(metadata, fallback) {
+            return getInstance().buildOverridePathMap(metadata, fallback);
+        },
     };
 
-    // 导出全局快捷函数
     global.switchLibraryConfig = switchLibraryConfig;
     global.loadLibrary = loadLibrary;
-
 })(typeof window !== 'undefined' ? window : globalThis);
