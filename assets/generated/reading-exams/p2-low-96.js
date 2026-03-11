@@ -1,0 +1,139 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p2-low-96", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-low-96",
+  "meta": {
+    "title": "[Pretest] Why Do We Need Sleep 睡眠的目的",
+    "category": "P2",
+    "frequency": "low",
+    "pdfFilename": "185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的/",
+    "legacyFilename": "185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.html",
+    "questionIntroHtml": ""
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>Why Do We Need Sleep?</h2>\n            \n            <p class=\"passage-paragraph\"><strong>A</strong> According to the United States (U.S.) Centers for Disease Control and Prevention (CDC), more than 80 million American adults are chronically sleep deprived, meaning they sleep less than the recommended minimum of seven hours a night. The resulting fatigue contributes to more than a million auto accidents each year, as well as to a significant number of medical errors. Even small adjustments in sleep can be problematic. On the Monday after a daylight-saving time change in the U.S.—when the clocks are moved ahead one hour—there is a 24 percent increase in heart attacks and a jump in fatal car crashes, compared with other Mondays.</p>\n            <p class=\"passage-paragraph\"><strong>B</strong> During their lifetimes, about a third of Americans will suffer from at least one of the recognized sleep disorders. They range from common sleep disorders to much rarer and stranger conditions such as sleep apnea and restless leg syndrome. For example, in exploding head syndrome, booming noises seem to reverberate in your brain as you try to sleep. Also, people with Kleine-Levin syndrome will, every few years, sleep nearly nonstop for a week or two. However, insomnia is by far the most prevalent of these problems and the main reason 4 percent of U.S. adults take sleeping pills in any given month.</p>\n            <p class=\"passage-paragraph\"><strong>C</strong> Evolution endowed us with sleep that is flexible in its timing and easily disturbed, so that attention can be directed to higher priorities. The brain has an automatic override system that can wake us in all stages of sleep when it perceives an emergency like the cry of a child. But the problem is that, in the modern world, our ancient innate wake-up call is constantly triggered by something that is non-life-threatening, like worrying before an exam or the unexpected sound of a car alarm. Before the Industrial Revolution, which brought us alarm clocks and fixed work schedules, we could often counteract a sleep deficit by simply sleeping in. That is no longer possible.</p>\n            <p class=\"passage-paragraph\"><strong>D</strong> The first segment of the brain that begins to fail when we don't get enough sleep is the prefrontal cortex, the center of decision-making and problem-solving. Dr Chiara Cirelli, a neuroscientist in the U.S., suggests that, ‘Every cognitive function to some extent seems to be affected by sleep loss,' and she comments that people are often more irritable, moody, and irrational. For instance, sleep-deprived suspects held by the police will often confess to anything in exchange for rest. Other research has also found that people who regularly sleep less than six hours a night have an elevated risk of developing depression, as well as other mental and physical illnesses. In fact, lack of sleep has been directly tied to obesity: without enough sleep, the stomach and other organs overproduce ghrelin, the hunger hormone, causing us to eat more. However, proving a cause-and-effect relationship in this case is challenging because subjecting humans to the necessary experiments is unethical.</p>\n            <p class=\"passage-paragraph\"><strong>E</strong> NREM (Non-Rapid Eye Movement) makes up the first of two distinct and repetitive phases of a night's sleep. As we fall into NREM sleep, our brain stays active and begins an editing process—deciding which memories to keep and which ones to ignore. The first of NREM's four stages is called the shallow end of sleep and is characterized by a distinctive regular pattern of brain activity, as shown on an EEG (electroencephalogram) device—a machine that measures electrical impulses. In stage two, the EEG measures electric sparks that strike the cerebral cortex (grey matter covering the outer layer of the brain) in regular half-second intervals. Researchers believe that this electrical activity helps the cortex preserve and store recently acquired information. Stages three and four have been described as a deep, coma-like sleep that is as essential to our brain as food is to our body. In stage three, big, rolling waves of brain activity as measured on an EEG are present less than half the time; in stage four, more than half the time. It's in this deep sleep that our cells produce most growth hormone, which is needed throughout life to service bones and muscles.</p>\n            <p class=\"passage-paragraph\"><strong>F</strong> REM (Rapid Eye Movement) sleep was at first believed to be only a variation of a stage in NREM sleep, and not particularly significant. However, once scientists documented the distinctive eye movements in REM, and found that virtually all dreaming takes place during this period, REM sleep was recognized as the second major phase of sleep. Today, scientists believe that the content of our approximately two hours of dreams each night in REM sleep is important in the processing of new memories. Some sleep theorists argue that REM sleep is when we are our most intelligent, insightful, creative, and free. It's when we truly come alive. ‘REM sleep may be the thing that makes us the most human, both for what it does for the brain and body, and for the sheer experience of it,' says Professor Michael Perlis.</p>\n            <p class=\"passage-paragraph\"><strong>G</strong> The problem of sleep loss is not easily solved—whether by power naps or pharmaceuticals. Dr Jeffrey Ellenbogen, a sleep scientist at Johns Hopkins University in the U.S., argues, ‘It's tempting to manipulate sleep with drugs or devices, but we don't yet understand sleep enough to risk artificially manipulating the parts.' Dr Ellenbogen and other experts argue against shortcuts, especially the notion that we can mostly do without sleep. In fact, Dr Steven Lockley, of Brigham and Women's Hospital in Boston, suggests that sleep may be more essential to us than food.</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "short_answer",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6",
+        "q7"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-anchor\">\n                <h4>Questions 17–23</h4>\n                <p>Reading Passage 2 has seven paragraphs, <strong>A–G</strong>.</p>\n                <p>Which paragraph contains the following information?</p>\n                <p><em>Write the correct letter, <strong>A–G</strong>, on your answer sheet.</em></p>\n                <div id=\"paragraph-matching\">\n                    <div class=\"question-item\">\n                        <p><strong>17</strong> an example of how sleeplessness can influence a person accused of a crime</p>\n                        <div class=\"paragraph-options\">\n                             <select id=\"q1\"><option value=\"\">Select</option><option value=\"A\">A</option><option value=\"B\">B</option><option value=\"C\">C</option><option value=\"D\">D</option><option value=\"E\">E</option><option value=\"F\">F</option><option value=\"G\">G</option></select>\n                        </div>\n                    </div>\n                    <div class=\"question-item\">\n                        <p><strong>18</strong> a description of recordings of different types of brain activity during sleep</p>\n                        <div class=\"paragraph-options\">\n                             <select id=\"q2\"><option value=\"\">Select</option><option value=\"A\">A</option><option value=\"B\">B</option><option value=\"C\">C</option><option value=\"D\">D</option><option value=\"E\">E</option><option value=\"F\">F</option><option value=\"G\">G</option></select>\n                        </div>\n                    </div>\n                    <div class=\"question-item\">\n                        <p><strong>19</strong> a description of how present-day society interrupts sleep</p>\n                        <div class=\"paragraph-options\">\n                             <select id=\"q3\"><option value=\"\">Select</option><option value=\"A\">A</option><option value=\"B\">B</option><option value=\"C\">C</option><option value=\"D\">D</option><option value=\"E\">E</option><option value=\"F\">F</option><option value=\"G\">G</option></select>\n                        </div>\n                    </div>\n                    <div class=\"question-item\">\n                        <p><strong>20</strong> information about the relationship between being overweight and sleep</p>\n                        <div class=\"paragraph-options\">\n                             <select id=\"q4\"><option value=\"\">Select</option><option value=\"A\">A</option><option value=\"B\">B</option><option value=\"C\">C</option><option value=\"D\">D</option><option value=\"E\">E</option><option value=\"F\">F</option><option value=\"G\">G</option></select>\n                        </div>\n                    </div>\n                    <div class=\"question-item\">\n                        <p><strong>21</strong> a suggestion that medication is an ineffective solution for sleeping problems</p>\n                        <div class=\"paragraph-options\">\n                             <select id=\"q5\"><option value=\"\">Select</option><option value=\"A\">A</option><option value=\"B\">B</option><option value=\"C\">C</option><option value=\"D\">D</option><option value=\"E\">E</option><option value=\"F\">F</option><option value=\"G\">G</option></select>\n                        </div>\n                    </div>\n                    <div class=\"question-item\">\n                        <p><strong>22</strong> a discovery that changed ideas about how sleep is understood</p>\n                        <div class=\"paragraph-options\">\n                             <select id=\"q6\"><option value=\"\">Select</option><option value=\"A\">A</option><option value=\"B\">B</option><option value=\"C\">C</option><option value=\"D\">D</option><option value=\"E\">E</option><option value=\"F\">F</option><option value=\"G\">G</option></select>\n                        </div>\n                    </div>\n                    <div class=\"question-item\">\n                        <p><strong>23</strong> examples of the life-threatening consequences of inadequate sleep</p>\n                        <div class=\"paragraph-options\">\n                             <select id=\"q7\"><option value=\"\">Select</option><option value=\"A\">A</option><option value=\"B\">B</option><option value=\"C\">C</option><option value=\"D\">D</option><option value=\"E\">E</option><option value=\"F\">F</option><option value=\"G\">G</option></select>\n                        </div>\n                    </div>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "multi_choice",
+      "questionIds": [
+        "q8",
+        "q9"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q8-9-anchor\">\n                <h4>Questions 24 and 25</h4>\n                <p>Choose <strong>TWO</strong> letters, <strong>A–E</strong>.</p>\n                <p>Which <strong>TWO</strong> of these statements describe characteristics of NREM sleep?</p>\n                <div class=\"checkbox-options\" data-group=\"q8-9\" data-limit=\"2\">\n                    <label><input name=\"q8-9\" type=\"checkbox\" value=\"A\"><span><strong>A</strong> NREM sleep is important for maintaining brain function.</span></label>\n                    <label><input name=\"q8-9\" type=\"checkbox\" value=\"B\"><span><strong>B</strong> NREM sleep consists of two distinct parts.</span></label>\n                    <label><input name=\"q8-9\" type=\"checkbox\" value=\"C\"><span><strong>C</strong> The brain remains passive throughout NREM sleep.</span></label>\n                    <label><input name=\"q8-9\" type=\"checkbox\" value=\"D\"><span><strong>D</strong> Each stage of NREM sleep has a unique EEG pattern.</span></label>\n                    <label><input name=\"q8-9\" type=\"checkbox\" value=\"E\"><span><strong>E</strong> Hormones are released continuously throughout NREM sleep.</span></label>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "multi_choice",
+      "questionIds": [
+        "q10",
+        "q11"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q10-11-anchor\">\n                <h4>Questions 26 and 27</h4>\n                <p>Choose <strong>TWO</strong> letters, <strong>A–E</strong>.</p>\n                <p>Which <strong>TWO</strong> of these statements describe the characteristics of REM sleep?</p>\n                <div class=\"checkbox-options\" data-group=\"q10-11\" data-limit=\"2\">\n                    <label><input name=\"q10-11\" type=\"checkbox\" value=\"A\"><span><strong>A</strong> The REM stage is the longest phase of sleep.</span></label>\n                    <label><input name=\"q10-11\" type=\"checkbox\" value=\"B\"><span><strong>B</strong> REM sleep can be identified by an unusual physical feature.</span></label>\n                    <label><input name=\"q10-11\" type=\"checkbox\" value=\"C\"><span><strong>C</strong> REM sleep is important for removing unpleasant memories.</span></label>\n                    <label><input name=\"q10-11\" type=\"checkbox\" value=\"D\"><span><strong>D</strong> REM sleep is another part of NREM sleep.</span></label>\n                    <label><input name=\"q10-11\" type=\"checkbox\" value=\"E\"><span><strong>E</strong> Some scientists consider REM sleep to be a source of human innovation.</span></label>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-4",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q12",
+        "q13",
+        "q14",
+        "q15",
+        "q16"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q12-13-14-15-16-anchor\">\n                <h4>Questions 28–32</h4>\n                <p>Complete the sentences below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"sentence-completion\">\n                    <p><span class=\"q-num\">28</span> According to the CDC, lack of sleep leads to <input type=\"text\" id=\"q12\">, which is often a factor in car crashes.</p>\n                    <p><span class=\"q-num\">29</span> The most common sleep disorder in the U.S. is <input type=\"text\" id=\"q13\">.</p>\n                    <p><span class=\"q-num\">30</span> The brain responds to any type of <input type=\"text\" id=\"q14\"> by activating a built-in alarm.</p>\n                    <p><span class=\"q-num\">31</span> Researchers claim that routinely sleep-deprived people are more likely to be obese and suffer from illnesses like <input type=\"text\" id=\"q15\">.</p>\n                    <p><span class=\"q-num\">32</span> The processing of new memories is crucially linked to our <input type=\"text\" id=\"q16\"> during sleep.</p>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "D",
+    "q2": "E",
+    "q3": "C",
+    "q4": "D",
+    "q5": "G",
+    "q6": "F",
+    "q7": "A",
+    "q8": "A",
+    "q9": "D",
+    "q10": "B",
+    "q11": "E",
+    "q12": "fatigue",
+    "q13": "insomnia",
+    "q14": "emergency",
+    "q15": "depression",
+    "q16": "dreams"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.pdf",
+    "ieltsHtml": null
+  },
+  "audit": {
+    "matchStatus": "shui_only",
+    "matchConfidence": 0,
+    "verifiedAt": "2026-03-08T16:24:30.671Z",
+    "notes": "signature:radio,checkbox,text,textarea,select,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13",
+    "q14",
+    "q15",
+    "q16"
+  ],
+  "questionDisplayMap": {
+    "q1": "17",
+    "q2": "18",
+    "q3": "19",
+    "q4": "20",
+    "q5": "21",
+    "q6": "22",
+    "q7": "23",
+    "q8": "24",
+    "q9": "25",
+    "q10": "26",
+    "q11": "27",
+    "q12": "28",
+    "q13": "29",
+    "q14": "30",
+    "q15": "31",
+    "q16": "32"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

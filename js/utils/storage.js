@@ -759,10 +759,17 @@ class StorageManager {
      * 存储数据
      */
     async set(key, value, options = {}) {
-        const { skipReady = false } = options;
+        const { skipReady = false, skipPracticeCoreRedirect = false } = options;
         await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
+            const allowPracticeCoreRedirect = !skipReady && !skipPracticeCoreRedirect;
+            if (allowPracticeCoreRedirect && window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.handlesStorageKey === 'function' && window.PracticeCore.store.handlesStorageKey(key)) {
+                const redirected = await window.PracticeCore.store.routeStorageSet(this, key, value, options);
+                if (redirected !== null && redirected !== undefined) {
+                    return redirected;
+                }
+            }
             return await this.writePersistentValue(key, value);
         } catch (error) {
             console.error('[Storage] set 操作错误:', error);
@@ -811,10 +818,17 @@ class StorageManager {
      * 删除数据
      */
     async remove(key, options = {}) {
-        const { skipReady = false } = options;
+        const { skipReady = false, skipPracticeCoreRedirect = false } = options;
         await this.waitForInitialization(skipReady);
         try {
             await this.ensureIndexedDBReady();
+            const allowPracticeCoreRedirect = !skipReady && !skipPracticeCoreRedirect;
+            if (allowPracticeCoreRedirect && window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.handlesStorageKey === 'function' && window.PracticeCore.store.handlesStorageKey(key)) {
+                const redirected = await window.PracticeCore.store.routeStorageRemove(this, key, options);
+                if (redirected !== null && redirected !== undefined) {
+                    return redirected;
+                }
+            }
             return await this.removePersistentValue(key);
         } catch (error) {
             console.error('Storage remove error:', error);
@@ -2700,7 +2714,7 @@ class StorageKeyRegistry {
     }
 }
 
-class LegacyStorageFacade {
+class StorageFacade {
     constructor(options = {}) {
         this.persistentStore = options.persistentStore;
         this.preferenceStore = options.preferenceStore;
@@ -2735,9 +2749,6 @@ class LegacyStorageFacade {
 
     async set(key, value, options = {}) {
         const target = this.resolveStore(key);
-        if (target.entry.storageClass === 'persistent') {
-            console.warn(`[LegacyStorageFacade] deprecated persistent write via storage facade: ${key}`);
-        }
         return await target.store.set(key, value, Object.assign({}, target.options, options));
     }
 
@@ -2762,7 +2773,7 @@ class LegacyStorageFacade {
             ? await this.persistentStore.getStorageInfo(options)
             : null;
         return Object.assign({}, persistentInfo || {}, {
-            facade: 'legacy-storage',
+            facade: 'storage-facade',
             volatile: Boolean(this.persistentStore && this.persistentStore.volatileMode)
         });
     }
@@ -2771,7 +2782,7 @@ class LegacyStorageFacade {
 const storageManager = new StorageManager();
 const preferenceStore = new PreferenceStore(storageManager.prefix);
 const storageKeyRegistry = new StorageKeyRegistry();
-const legacyStorageFacade = new LegacyStorageFacade({
+const storageFacade = new StorageFacade({
     persistentStore: storageManager,
     preferenceStore,
     keyRegistry: storageKeyRegistry
@@ -2780,7 +2791,7 @@ const legacyStorageFacade = new LegacyStorageFacade({
 window.persistentStore = storageManager;
 window.preferenceStore = preferenceStore;
 window.storageKeyRegistry = storageKeyRegistry;
-window.storage = legacyStorageFacade;
+window.storage = storageFacade;
 
 // 启动存储监控和数据同步
 storageManager.ready

@@ -1,0 +1,125 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p3-medium-169", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p3-medium-169",
+  "meta": {
+    "title": "（无题目）  Music Language We All Speak 音乐语言",
+    "category": "P3",
+    "frequency": "medium",
+    "pdfFilename": "78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】.pdf",
+    "legacyPath": "睡着过项目组/1.11月高频文章[94篇+18背景]/P3 （29高+6次高）/2. P3次高频 (6篇)/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】/",
+    "legacyFilename": "78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 3</h2>\n            <p>You should spend about 20 minutes on Questions 27-40, which are based on Reading Passage 3 below.</p>\n            \n            <h3>Music: Language We All Speak</h3>\n            \n            <div class=\"paragraph-wrapper\" id=\"q1-anchor\">\n                <div class=\"paragraph-dropzone\" data-paragraph=\"A\" id=\"q1-dropzone\">\n                    <span class=\"paragraph-label\">Section A:</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>A</strong> Music is one of the human species' relatively few universal abilities. Without formal training, any individual, from Stone Age tribesman to suburban teenager, has the ability to recognise music and, in some fashion, to make it. Why this should be so is a mystery. After all, music isn't necessary for getting through the day, and if it aids in reproduction, it does so only in highly indirect ways. Language, by contrast, is also everywhere — but for reasons that are more obvious. With language, you and the members of your tribe can organise a migration across Africa, build reed boats and cross the seas, and communicate at night even when you can't see each other. Modern culture, in all its technological extravagance, springs directly from the human talent for manipulating symbols and syntax.</p>\n                <p>Scientists have always been intrigued by the connection between music and language. Yet over the years, words and melody have acquired a vastly different status in the lab and the seminar room. While language has long been considered essential to unlocking the mechanisms of human intelligence, music is generally treated as an evolutionary frippery – mere “auditory cheesecake”, as the Harvard cognitive scientist Steven Pinker puts it.</p>\n            </div>\n            <div class=\"paragraph-wrapper\" id=\"q2-anchor\">\n                <div class=\"paragraph-dropzone\" data-paragraph=\"B\" id=\"q2-dropzone\">\n                    <span class=\"paragraph-label\">Section B:</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>B</strong> But thanks to a decade-long wave of neuroscience research, that tune is changing. A flurry of recent publications suggests that language and music may equally be able to tell us who we are and where we're from — not just emotionally, but biologically. In July, the journal <em>Nature Neuroscience</em> devoted a special issue to the topic. And in an article in the 6 August issue of the <em>Journal of Neuroscience</em>, David Schwartz, Catherine Howe and Dale Purves of Duke University argued that the sounds of music and the sounds of language are intricately connected.</p>\n                <p>To grasp the originality of this idea, it's necessary to realise two things about how music has traditionally been understood. First, musicologists have long emphasised that while each culture stamps a special identity onto its music, music itself has some universal qualities. For example, in virtually all cultures, sound is divided into some or all of the 12 intervals that make up the chromatic scale — that is, the scale represented by the keys on a piano. For centuries, observers have attributed this preference for certain combinations of tones to the mathematical properties of sound itself.</p>\n                <p>Some 2,500 years ago, Pythagoras was the first to note a direct relationship between the harmoniousness of a tone combination and the physical dimensions of the object that produced it. For example, a plucked string will always play an octave lower than a similar string half its size, and a fifth lower than a similar string two-thirds its length. This link between simple ratios and harmony has influenced music theory ever since.</p>\n            </div>\n            <div class=\"paragraph-wrapper\" id=\"q3-anchor\">\n                <div class=\"paragraph-dropzone\" data-paragraph=\"C\" id=\"q3-dropzone\">\n                    <span class=\"paragraph-label\">Section C:</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>C</strong> This music-is-math idea is often accompanied by the notion that music, formally speaking at least, exists apart from the world in which it was created. Writing recently in <em>The New York Review of Books</em>, pianist and critic Charles Rosen discussed the long-standing notion that while painting and sculpture reproduce at least some aspects of the natural world, and writing describes thoughts and feelings we are all familiar with, music is entirely abstracted from the world in which we live. Neither idea is right, according to David Schwartz and his colleagues. Human musical preferences are fundamentally shaped not by elegant algorithms or ratios but by the messy sounds of real life, and of speech in particular – which in turn is shaped by our evolutionary heritage. \"The explanation of music, like the explanation of any product of the mind, must be rooted in biology, not in numbers per se,” says Schwartz.</p>\n                <p>Schwartz, Howe and Purves analysed a vast selection of speech sounds from a variety of languages to reveal the underlying patterns common to all utterances. In order to focus only on the raw sounds, they discarded all theories about speech and meaning, and sliced sentences into random bites. Using a database of over 100,000 brief segments of speech, they noted which frequency had the greatest emphasis in each sound. The resulting set of frequencies, they discovered, corresponded closely to the chromatic scale. In short, the building blocks of music are to be found in speech.</p>\n                <p>Far from being abstract, music presents a strange analogue to the patterns created by the sounds of speech. “Music, like visual arts, is rooted in our experience of the natural world,” says Schwartz. “It emulates our sound environment in the way that visual arts emulate the visual environment.” In music we hear the echo of our basic sound-making instrument — the vocal tract. The explanation for human music is simpler still than Pythagoras's mathematical equations: we like the sounds that are familiar to us — specifically, we like the sounds that remind us of us.</p>\n                <p>This brings up some chicken-or-egg evolutionary questions. It may be that music imitates speech directly, the researchers say, in which case it would seem that language evolved first. It's also conceivable that music came first and language is in effect an imitation of song — that in everyday speech we hit the musical notes we especially like. Alternatively, it may be that music imitates the general products of the human sound-making system, which just happens to be mostly speech. “We can't know this,\" says Schwartz. “What we do know is that they both come from the same system, and it is this that shapes our preferences.”</p>\n            </div>\n            <div class=\"paragraph-wrapper\" id=\"q4-anchor\">\n                 <div class=\"paragraph-dropzone\" data-paragraph=\"D\" id=\"q4-dropzone\">\n                    <span class=\"paragraph-label\">Section D:</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>D</strong> Schwartz's study also casts light on the long-running question of whether animals understand or appreciate music. Despite the apparent abundance of “music” in the natural world — birdsong, whale song, wolf howls, synchronised chimpanzee hooting — previous studies have found that many laboratory animals don't show a great affinity for the human variety of music making.</p>\n                <p>Marc Hauser and Josh McDermott of Harvard argued in the July issue of Nature Neuroscience that animals don't create or perceive music the way we do. The fact that laboratory monkeys can show recognition of human tunes is evidence, they say, of shared general features of the auditory system, not any specific chimpanzee musical ability. As for birds, those most musical beasts, they generally recognise their own tunes — a narrow repertoire — but don't generate novel melodies like we do. There are no avian Mozarts.</p>\n                <p>But what's been played to animals, Schwartz notes, is human music. If animals evolve preferences for sound as we do — based upon the soundscape in which they live — then their “music” would be fundamentally different from ours. In the same way our scales derive from human utterances, a cat's idea of a good tune would derive from yowls and meows. To demonstrate that animals don't appreciate sound the way we do, we'd need evidence that they don't respond to “music” constructed from their own sound environment.</p>\n            </div>\n            <div class=\"paragraph-wrapper\" id=\"q5-anchor\">\n                 <div class=\"paragraph-dropzone\" data-paragraph=\"E\" id=\"q5-dropzone\">\n                    <span class=\"paragraph-label\">Section E:</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>E</strong> No matter how the connection between language and music is parsed, what is apparent is that our sense of music, even our love for it, is as deeply rooted in our biology and in our brains as language is. This is most obvious with babies, says Sandra Trehub at the University of Toronto, who also published a paper in the <em>Nature Neuroscience</em> special issue.</p>\n                <p>For babies, music and speech are on a continuum. Mothers use musical speech to “regulate infants' emotional states”, Trehub says. Regardless of what language they speak, the voice all mothers use with babies is the same: “something between speech and song\". This kind of communication “puts the baby in a trance-like state, which may proceed to sleep or extended periods of rapture”. So if the babies of the world could understand the latest research on language and music, they probably wouldn't be very surprised. The upshot, says Trehub, is that music may be even more of a necessity than we realise.</p>\n            </div>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "matching",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Questions 27–31</h4>\n                <p>Reading Passage 3 has five sections, <strong>A–E</strong>.</p>\n                <p>Choose the correct heading for each section from the list of headings below. Write the correct number i-viii in boxes 27-31 on your answer sheet.</p>\n                <p><em>To answer, drag a heading from the list below and drop it into the correct box above each section in the passage on the left.</em></p>\n                \n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i &nbsp; Communication in music with animals</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii &nbsp; New discoveries on animal music</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii &nbsp; Music and language contrasted</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv &nbsp; Current research on music</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v &nbsp; Music is beneficial for infants.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi &nbsp; Music transcends cultures.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii &nbsp; Look back at some of the historical theories</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii &nbsp; Are we genetically designed for music?</div>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "matching",
+      "questionIds": [
+        "q6",
+        "q7",
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q6-7-8-9-10-11-12-anchor\">\n                <h4>Questions 32–38</h4>\n                <p>Look at the following statements and the list of people below.</p>\n                <p>Match each statement with the correct person.</p>\n                \n                <div class=\"match-question-item\">\n                    <p><strong>32</strong> Steven Pinker</p>\n                    <div class=\"match-dropzone\" data-question=\"q6\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                    <p><strong>33</strong> Musicologists</p>\n                    <div class=\"match-dropzone\" data-question=\"q7\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                    <p><strong>34</strong> Greek philosopher Pythagoras</p>\n                    <div class=\"match-dropzone\" data-question=\"q8\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>35</strong> Schwartz, Howe, and Purves</p>\n                    <div class=\"match-dropzone\" data-question=\"q9\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>36</strong> Marc Hauser and Josh McDermott</p>\n                    <div class=\"match-dropzone\" data-question=\"q10\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                    <p><strong>37</strong> Charles Rosen</p>\n                    <div class=\"match-dropzone\" data-question=\"q11\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                    <p><strong>38</strong> Sandra Trehub</p>\n                    <div class=\"match-dropzone\" data-question=\"q12\"></div>\n                </div>\n\n                <div class=\"options-pool\" id=\"statements-options-pool\">\n                    <strong>List of Statements</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"A\">A &nbsp; Music exists outside of the world it is created in.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"B\">B &nbsp; Music has a universal character despite cultural influences on it.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"C\">C &nbsp; Music is a necessity for humans.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"D\">D &nbsp; Music preference is related to the surrounding influences.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"E\">E &nbsp; He discovered the mathematical basis of music.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"F\">F &nbsp; Music doesn’t enjoy the same status of research interest as language.</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"G\">G &nbsp; Humans and monkeys have similar traits in perceiving sound.</div>\n                    </div>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "single_choice",
+      "questionIds": [
+        "q13",
+        "q14"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q13-14-anchor\">\n                 <h4>Questions 39–40</h4>\n                 <p>Choose the correct letter, A, B, C or D.</p>\n                <div class=\"mc-question-item\">\n                    <p><strong>39</strong> Why was the study of animal music inconclusive?</p>\n                    <label class=\"mc-option\"><input type=\"radio\" name=\"q13\" value=\"A\"> A &nbsp; Animals don’t have the same auditory system as humans.</label>\n                    <label class=\"mc-option\"><input type=\"radio\" name=\"q13\" value=\"B\"> B &nbsp; Tests on animal music are limited.</label>\n                    <label class=\"mc-option\"><input type=\"radio\" name=\"q13\" value=\"C\"> C &nbsp; Animals can’t make up new tunes.</label>\n                    <label class=\"mc-option\"><input type=\"radio\" name=\"q13\" value=\"D\"> D &nbsp; There aren’t enough tests on a wide range of animals.</label>\n                </div>\n                <div class=\"mc-question-item\">\n                    <p><strong>40</strong> What is the main theme of this passage?</p>\n                    <label class=\"mc-option\"><input type=\"radio\" name=\"q14\" value=\"A\"> A &nbsp; Language and learning</label>\n                    <label class=\"mc-option\"><input type=\"radio\" name=\"q14\" value=\"B\"> B &nbsp; The evolution of music</label>\n                    <label class=\"mc-option\"><input type=\"radio\" name=\"q14\" value=\"C\"> C &nbsp; The role of music in human society</label>\n                    <label class=\"mc-option\"><input type=\"radio\" name=\"q14\" value=\"D\"> D &nbsp; Music for animals</label>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "iii",
+    "q2": "vii",
+    "q3": "iv",
+    "q4": "i",
+    "q5": "v",
+    "q6": "F",
+    "q7": "B",
+    "q8": "E",
+    "q9": "D",
+    "q10": "G",
+    "q11": "A",
+    "q12": "C",
+    "q13": "B",
+    "q14": "B"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/1.11月高频文章[94篇+18背景]/P3 （29高+6次高）/2. P3次高频 (6篇)/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】.html",
+    "shuiPdf": "睡着过项目组/1.11月高频文章[94篇+18背景]/P3 （29高+6次高）/2. P3次高频 (6篇)/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】.pdf",
+    "ieltsHtml": "IELTS/P3/Music Language We All Speak.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-09T03:37:43.797Z",
+    "notes": "signature:radio,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13",
+    "q14"
+  ],
+  "questionDisplayMap": {
+    "q1": "27",
+    "q2": "28",
+    "q3": "29",
+    "q4": "30",
+    "q5": "31",
+    "q6": "32",
+    "q7": "33",
+    "q8": "34",
+    "q9": "35",
+    "q10": "36",
+    "q11": "37",
+    "q12": "38",
+    "q13": "39",
+    "q14": "40"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

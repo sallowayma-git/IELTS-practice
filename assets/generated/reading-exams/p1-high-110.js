@@ -1,0 +1,121 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-high-110", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-high-110",
+  "meta": {
+    "title": "The Pearls 珍珠",
+    "category": "P1",
+    "frequency": "high",
+    "pdfFilename": "24. P1 - The Pearls 珍珠【高】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/24. P1 - The Pearls 珍珠【高】/",
+    "legacyFilename": "24. P1 - The Pearls 珍珠【高】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>Pearls</h3>\n            \n            <p id=\"para-A\"><strong>A</strong> Long known as the “Queen of Gems”, pearls possess a history and allure far beyond what today's wearer may recognize. Throughout much of recorded history, a natural pearl necklace comprised of matched spheres was a treasure of almost incomparable value, in fact, the most expensive jewelry in the world. Before the creation of cultured pearls in the early 1900s, natural pearls were so rare and expensive that they were reserved almost exclusively for the noble and very rich. The ancient Egyptians were particularly fond of their pearls. Many Egyptian leaders treasured pearls so much that they were often buried along with their cherished pearl collection. In the Orient and Persian Empire, pearls were ground into costly powders to cure anything from heart disease to epilepsy, with possible aphrodisiac uses as well. China's long recorded history also provides ample evidence of the importance of pearls.</p>\n            <p id=\"para-B\"><strong>B</strong> Pearls usually fall into three categories—natural pearls, cultured pearls and simulated pearls. A natural pearl forms when an irritant, such as a piece of sand, works its way into a particular species of oyster, mussel, or clam. As a defense mechanism, the mollusk secretes a fluid to coat the irritant. Layer upon layer of this coating is deposited on the irritant until a lustrous pearl is formed. A cultured pearl undergoes the same process. The only difference between natural pearls and cultured pearls is that the irritant is a surgically implanted bead or piece of shell called Mother of Pearl. Often, these shells are ground oyster shells that are worth significant amounts of money in their own right as irritant-catalysts for quality pearls. The resulting core is much larger than in a natural pearl. Imitation pearls are a different story altogether. In most cases, a glass bead is dipped into a solution made from fish scales. This coating is thin and may eventually wear off. One can usually tell an imitation by biting on it. The island of Mallorca in Spain is known for its imitation pearl industry.</p>\n            <p id=\"para-C\"><strong>C</strong> Regardless of the method used to acquire a pearl, the process usually takes several years. Mussels must reach a mature age, which can take up to 3 years, and then be implanted or naturally receive an irritant. Once the irritant is in place, it can take up to another 3 years for the pearl to reach its full size. Often, the irritant may be rejected, the pearl will be terrifically misshapen, or the oyster may simply die from disease or countless other complications. By the end of a 5 to 10 year cycle, only 50% of the oysters will have survived. And of the pearls produced, only approximately 5% are of a quality substantial enough for top jewelry makers.</p>\n            <p id=\"para-D\"><strong>D</strong> How can untrained eyes determine a pearl's worth? Luster and size are generally considered the two main factors to look for. Luster, for instance, depends on the fineness and evenness of the layers. The deeper the glow, the more perfect the shape and surface, the more valuable they are. Size, on the other hand, has to do with the age of the oyster that created the pearl (the more mature oysters produce larger pearls) and the location in which the pearl was cultured. The South Sea waters of Australia tend to produce the larger pearls; probably because the water along the coastline is supplied with rich nutrients from the ocean floor. Also, the type of mussel being common to the area seems to possess a predilection for producing comparatively large pearls.</p>\n            <p id=\"para-E\"><strong>E</strong> In general, cultured pearls are less valuable than natural pearls, whereas imitation pearls have almost no value. One way that jewelers can determine whether a pearl is cultured or natural is to have a gem lab perform an X-ray of the pearl. If the X-ray reveals a nucleus, the pearl is likely a bead nucleated saltwater pearl. If no nucleus is present, but irregular and small dark inner spots indicating a cavity are visible, combined with concentric rings of organic substance, the pearl is likely a cultured freshwater pearl. Among cultured pearls, Akoya pearls from Japan are some of the most lustrous. Although imitation pearls look the part, they do not have the same weight or smoothness as real pearls, and their luster will also dim greatly.</p>\n            <p id=\"para-F\"><strong>F</strong> Historically, the world's best pearls came from the Persian Gulf, especially around what is now Bahrain. The pearls of the Persian Gulf were naturally created and collected by breath-hold divers. Unfortunately, the natural pearl industry of the Persian Gulf ended abruptly in the early 1930s with the discovery of large deposits of oil. The water pollution resulting from spilled oil and indiscriminate overfishing of oysters essentially ruined the pristine waters of the Gulf that once produced pearls. Still, Bahrain remains one of the foremost trading centers for high quality pearls. In fact, cultured pearls are banned from the Bahrain pearl market, in an effort to preserve the location's heritage. Nowadays, the largest stock of natural pearls probably resides in India. Ironically, much of India's stock of natural pearls came originally from Bahrain. Unlike Bahrain, which has essentially lost its pearl resource, traditional pearl fishing is still practiced on a small scale in India.</p>\n            <p id=\"para-G\"><strong>G</strong> Pearls also come in many colours. The most popular colours are white, cream, and pink. Silver, black, and gold are also gaining interest. In fact, a deep lustrous black pearl is one of the rarest finds in the pearling industry, usually only being found in the South Sea near Australia. Thus, they can be one of the more costly items. Nowadays, pearls predominantly come from Japan, Australia, Indonesia, Myanmar, China, India, the Philippines, and Tahiti. Japan, however, controls roughly 80% of the world pearl market, with Australia and China coming in second and third, respectively.</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "table_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-anchor\">\n                <h4>Questions 1–4</h4>\n                <p>Reading Passage 1 has seven paragraphs, <strong>A–G</strong>.</p>\n                <p>Which paragraph contains the following information?</p>\n                <div style=\"overflow-x: auto;\">\n                    <table class=\"matching-table\">\n                        <thead>\n                            <tr>\n                                <th></th>\n                                <th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th>\n                            </tr>\n                        </thead>\n                        <tbody>\n                            <tr>\n                                <td><strong>1</strong> difficulties in the cultivation process</td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"A\"></td><td><input type=\"radio\" name=\"q1\" value=\"B\"></td><td><input type=\"radio\" name=\"q1\" value=\"C\"></td><td><input type=\"radio\" name=\"q1\" value=\"D\"></td><td><input type=\"radio\" name=\"q1\" value=\"E\"></td><td><input type=\"radio\" name=\"q1\" value=\"F\"></td><td><input type=\"radio\" name=\"q1\" value=\"G\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>2</strong> causes affecting the size of natural pearls</td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"A\"></td><td><input type=\"radio\" name=\"q2\" value=\"B\"></td><td><input type=\"radio\" name=\"q2\" value=\"C\"></td><td><input type=\"radio\" name=\"q2\" value=\"D\"></td><td><input type=\"radio\" name=\"q2\" value=\"E\"></td><td><input type=\"radio\" name=\"q2\" value=\"F\"></td><td><input type=\"radio\" name=\"q2\" value=\"G\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>3</strong> ancient customs around pearls</td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"A\"></td><td><input type=\"radio\" name=\"q3\" value=\"B\"></td><td><input type=\"radio\" name=\"q3\" value=\"C\"></td><td><input type=\"radio\" name=\"q3\" value=\"D\"></td><td><input type=\"radio\" name=\"q3\" value=\"E\"></td><td><input type=\"radio\" name=\"q3\" value=\"F\"></td><td><input type=\"radio\" name=\"q3\" value=\"G\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>4</strong> distinctions between cultured pearls and natural ones</td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"A\"></td><td><input type=\"radio\" name=\"q4\" value=\"B\"></td><td><input type=\"radio\" name=\"q4\" value=\"C\"></td><td><input type=\"radio\" name=\"q4\" value=\"D\"></td><td><input type=\"radio\" name=\"q4\" value=\"E\"></td><td><input type=\"radio\" name=\"q4\" value=\"F\"></td><td><input type=\"radio\" name=\"q4\" value=\"G\"></td>\n                            </tr>\n                        </tbody>\n                    </table>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "matching",
+      "questionIds": [
+        "q5",
+        "q6",
+        "q7",
+        "q8",
+        "q9",
+        "q10"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-9-10-anchor\">\n                <h4>Questions 5–10</h4>\n                <p>Complete the summary using the list of words, <strong>A–K</strong>, below.</p>\n                <div class=\"summary-completion\">\n                    <p>\n                    Throughout history, people in <span id=\"q5-target\" class=\"drop-target\"></span> used pearls for medicine and philtres. There are essentially three types of pearls: natural, cultured and imitation. Natural and cultured pearls share a similar growing process, while imitation pearls are different. And <span id=\"q6-target\" class=\"drop-target\"></span> owns the reputation for its imitation pearl industry. The country <span id=\"q7-target\" class=\"drop-target\"></span> usually produces the larger pearls due to the favourable environment along the coastline, while the nation of <span id=\"q8-target\" class=\"drop-target\"></span> manufactures some of the most glistening cultured pearls. In the past, the country <span id=\"q9-target\" class=\"drop-target\"></span> in the Persian Gulf produced the world's best pearls. At present, the major remaining suppliers of natural pearls are in <span id=\"q10-target\" class=\"drop-target\"></span>.\n                    </p>\n                </div>\n                 <div class=\"options-pool\">\n                    <div class=\"pool-items\" id=\"word-pool\">\n                        <div class=\"drag-item\" id=\"word-A\" draggable=\"true\" data-word=\"A\">A America</div>\n                        <div class=\"drag-item\" id=\"word-B\" draggable=\"true\" data-word=\"B\">B Philippines</div>\n                        <div class=\"drag-item\" id=\"word-C\" draggable=\"true\" data-word=\"C\">C Australia</div>\n                        <div class=\"drag-item\" id=\"word-D\" draggable=\"true\" data-word=\"D\">D Bahrain</div>\n                        <div class=\"drag-item\" id=\"word-E\" draggable=\"true\" data-word=\"E\">E China</div>\n                        <div class=\"drag-item\" id=\"word-F\" draggable=\"true\" data-word=\"F\">F Japan</div>\n                        <div class=\"drag-item\" id=\"word-G\" draggable=\"true\" data-word=\"G\">G India</div>\n                        <div class=\"drag-item\" id=\"word-H\" draggable=\"true\" data-word=\"H\">H Egypt</div>\n                        <div class=\"drag-item\" id=\"word-I\" draggable=\"true\" data-word=\"I\">I Myanmar</div>\n                        <div class=\"drag-item\" id=\"word-J\" draggable=\"true\" data-word=\"J\">J Persia</div>\n                        <div class=\"drag-item\" id=\"word-K\" draggable=\"true\" data-word=\"K\">K Mallorca</div>\n                    </div>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                <h4>Questions 11–13</h4>\n                <p>Do the following statements agree with the information given in Reading Passage 1?</p>\n                \n                <div class=\"tfng-item\">\n                    <p><strong>11</strong> A cultured pearl's centre is often significantly larger than that in a natural pearl.</p>\n                    <div class=\"tfng-options\">\n                        <label><input name=\"q11\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"tfng-item\">\n                    <p><strong>12</strong> Imitation pearls are usually the same price as natural ones.</p>\n                    <div class=\"tfng-options\">\n                        <label><input name=\"q12\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"tfng-item\">\n                    <p><strong>13</strong> Akoya pearls from Japan glow more deeply than South Sea pearls from Australia.</p>\n                    <div class=\"tfng-options\">\n                        <label><input name=\"q13\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "C",
+    "q2": "D",
+    "q3": "A",
+    "q4": "B",
+    "q5": "J",
+    "q6": "K",
+    "q7": "C",
+    "q8": "F",
+    "q9": "D",
+    "q10": "G",
+    "q11": "TRUE",
+    "q12": "FALSE",
+    "q13": "NOT GIVEN"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/24. P1 - The Pearls 珍珠【高】/24. P1 - The Pearls 珍珠【高】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/24. P1 - The Pearls 珍珠【高】/24. P1 - The Pearls 珍珠【高】.pdf",
+    "ieltsHtml": "IELTS/P1/The Pearls.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.694Z",
+    "notes": "signature:radio,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);
