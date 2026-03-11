@@ -1,0 +1,121 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p2-high-91", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-high-91",
+  "meta": {
+    "title": "Australia’s camouflaged creatures 澳洲伪装生物",
+    "category": "P2",
+    "frequency": "high",
+    "pdfFilename": "180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/180. P2 - Australia’s camouflaged creatures 澳洲伪装生物【高】/",
+    "legacyFilename": "180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 2</h2>\n            <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>\n            \n            <h3>Australia's Camouflaged Creatures</h3>\n            <p>Many species of animal in Australia protect themselves by using camouflage — a way of ‘hiding’ by blending into the surroundings.</p>\n            \n            <p><strong>A</strong> Most species use camouflage to some extent. If they are convincing, they survive to pass their genes on to future generations. After generations of natural selection, animals can develop astonishingly complex camouflage techniques, manipulating shape, colour and movement. ‘The principle of camouflage is to make it economically unviable for a predator to pursue a particular species of prey,’ explains Professor Mark Elgar of the University of Melbourne. ‘Camouflage increases the search time and, as a consequence, the predator will simply target another species, either because it doesn’t see the camouflaged individual or it just finds something more obvious to do.’</p>\n            <p><strong>B</strong> The easiest way for an animal to disguise itself is to be invisible in its surroundings. To that end, stick and leaf insects have evolved complex camouflage to hide themselves from predators. Many have the texture of sticks or dry leaves, while others imitate living foliage, even the veins in a leaf. Some insects develop blemishes to match the spots caused by disease. A convincing appearance only works if its owner also acts the part, so during the day the creature using this type of camouflage keeps motionless, or sways like a dead leaf in the breeze. If disturbed, it falls to the ground and stays still. Entomologist Paul Zborowski, who has spent decades photographing inconspicuous creatures, rates the desert insects of Central Australia as the most convincingly disguised creatures he’s seen. ‘It’s an incredibly old habitat, so the creatures have had a long time to adapt,’ Zborowski explains. Most of them behave like stones and don’t move all day, feeding only at night.</p>\n            <p><strong>C</strong> A tawny frogmouth sitting motionless on a stump also illustrates the importance of pairing a persuasive costume with behaviour. Professor Gisela Kaplan of the University of New England in Australia says the frogmouth’s skill at camouflaging is learned behaviour. While adopting a pose may be a reflex of the bird, and can be observed in a hatchling’s first week, the ability to choose a backdrop which matches its colouration does not develop for 4–6 months. When the chicks land, they are usually highly conspicuous, and their parents try to signal to them to move to a safe location.</p>\n            <p><strong>D</strong> Fixed camouflage is only good against a relatively unchanging environment, so some animals, such as the cuttlefish, have evolved an adaptable disguise. The cuttlefish can almost instantly change its colour, pattern and texture to match its surroundings, using specialised cells and muscles. On Queensland’s reefs, scientists have been studying another ocean dweller that uses colour change, although not to blend into the surroundings. Dr Karen Cheney, from the University of Queensland, says the bluestriped fangblenny alters its colouration to mimic other species of fish, allowing it to travel with them and benefit from safety in numbers. Its most impressive impersonation is of the black-with-neon-blue-striped cleaner wrasse, which eats the parasites on larger fish. Not only does the fangblenny benefit from the reduced predation that comes with the wrasse’s beneficial relationships with other fish, but the disguise also lets it get closer to prey. It darts out from the safety of the wrasse’s cleaning station to nip at unsuspecting fish passing by, but it doesn’t attack those coming to be cleaned.</p>\n            <p><strong>E</strong> The most famous form of mimicry, however, is for defence, not attack. Batesian mimicry refers to animals that gain protection from predators by imitating a dangerous organism, often using conspicuous colours. The nineteenth-century naturalist Henry Bates first suggested this camouflage technique after noticing that several Amazonian butterfly species looked the same. The technique was later called after him. In Australian waters, the harmless harlequin snake eel sports the same black and white bandings as the highly toxic yellow-lipped sea krait, ensuring no predator will attack. However, the success of Batesian mimicry depends on the ratio of mimics to originals. If a predator encounters too many that are edible, it will just assume none of the animals with those markings are dangerous, explains Martyn Robinson, an educational naturalist with the Australian Museum.</p>\n            <p><strong>F</strong> An imitation of a more dangerous creature needn’t be exact, just enough to make potential predators hesitate. The hawk moth caterpillar has markings resembling a snake’s eyes on its abdomen. When confronted, the caterpillar pulls its head in and the ‘eyes’ flash open. Whether the potential predator thinks it has seen a snake, or is simply startled, is unclear, but the outcome is that the caterpillar lives to see another day.</p>\n            <p><strong>G</strong> In Queensland’s tablelands, the chameleon gecko has another way of making predators hesitate. Its body is brown, but its tail is banded in black and white. Robinson explains that if attacked, the chameleon gecko will drop off its tail, which will wriggle around on the ground. Many lizards do this, but in the case of the chameleon gecko the tail bones actually rub against one another, so it squeaks. ‘The predator is, of course, thoroughly absorbed by this black-and-white-striped, wriggling, squeaking thing on the ground, and the gecko can sneak away,’ Robinson says. It’s a one-time-only trick: the regrown tail is brown, the same as the gecko’s body. Such precise disguise and elaborate trickery illustrate the limitless possibilities of nature. But, as Robinson points out, only the most successful illusionists are here to tell the tale.</p>\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "table_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                 <h4>Questions 14–18</h4>\n                <p>Reading Passage 2 has seven sections, <strong>A–G</strong>.</p>\n                <p>Which section contains the following information?</p>\n                <p><em>Write the correct letter, <strong>A–G</strong>, in boxes 14–18 on your answer sheet.</em></p>\n                <div style=\"overflow-x: auto;\">\n                    <table class=\"matching-table\">\n                        <thead>\n                            <tr>\n                                <th style=\"min-width: 200px;\"></th>\n                                <th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th>\n                            </tr>\n                        </thead>\n                        <tbody>\n                            <tr>\n                                <td><strong>14</strong> a species that indicates to its young to move to a place where they are less visible</td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"A\"></td><td><input type=\"radio\" name=\"q1\" value=\"B\"></td><td><input type=\"radio\" name=\"q1\" value=\"C\"></td><td><input type=\"radio\" name=\"q1\" value=\"D\"></td><td><input type=\"radio\" name=\"q1\" value=\"E\"></td><td><input type=\"radio\" name=\"q1\" value=\"F\"></td><td><input type=\"radio\" name=\"q1\" value=\"G\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>15</strong> an instance where sound is used to help an animal escape</td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"A\"></td><td><input type=\"radio\" name=\"q2\" value=\"B\"></td><td><input type=\"radio\" name=\"q2\" value=\"C\"></td><td><input type=\"radio\" name=\"q2\" value=\"D\"></td><td><input type=\"radio\" name=\"q2\" value=\"E\"></td><td><input type=\"radio\" name=\"q2\" value=\"F\"></td><td><input type=\"radio\" name=\"q2\" value=\"G\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>16</strong> a creature that can use camouflage to match a range of different backgrounds</td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"A\"></td><td><input type=\"radio\" name=\"q3\" value=\"B\"></td><td><input type=\"radio\" name=\"q3\" value=\"C\"></td><td><input type=\"radio\" name=\"q3\" value=\"D\"></td><td><input type=\"radio\" name=\"q3\" value=\"E\"></td><td><input type=\"radio\" name=\"q3\" value=\"F\"></td><td><input type=\"radio\" name=\"q3\" value=\"G\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>17</strong> a claim that the majority of animals disguise themselves in some way</td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"A\"></td><td><input type=\"radio\" name=\"q4\" value=\"B\"></td><td><input type=\"radio\" name=\"q4\" value=\"C\"></td><td><input type=\"radio\" name=\"q4\" value=\"D\"></td><td><input type=\"radio\" name=\"q4\" value=\"E\"></td><td><input type=\"radio\" name=\"q4\" value=\"F\"></td><td><input type=\"radio\" name=\"q4\" value=\"G\"></td>\n                            </tr>\n                             <tr>\n                                <td><strong>18</strong> examples of animals that use camouflage to look like plants</td>\n                                <td><input type=\"radio\" name=\"q5\" value=\"A\"></td><td><input type=\"radio\" name=\"q5\" value=\"B\"></td><td><input type=\"radio\" name=\"q5\" value=\"C\"></td><td><input type=\"radio\" name=\"q5\" value=\"D\"></td><td><input type=\"radio\" name=\"q5\" value=\"E\"></td><td><input type=\"radio\" name=\"q5\" value=\"F\"></td><td><input type=\"radio\" name=\"q5\" value=\"G\"></td>\n                            </tr>\n                        </tbody>\n                    </table>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "matching",
+      "questionIds": [
+        "q6",
+        "q7",
+        "q8",
+        "q9",
+        "q10"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q6-7-8-9-10-anchor\">\n                <h4>Questions 19–23</h4>\n                <p>Look at the following statements (Questions 19–23) and the list of people below.</p>\n                <p>Match each statement with the correct person, <strong>A–F</strong>.</p>\n                <p><em>Write the correct letter, <strong>A–F</strong>, in boxes 19–23 on your answer sheet.</em></p>\n                \n                <div class=\"match-question-item\">\n                    <p><strong>19</strong> one species has a camouflage tactic that is not present from birth.</p>\n                    <div class=\"match-dropzone\" data-question=\"q6\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>20</strong> species that live in an ancient environment have become very effective at camouflaging themselves.</p>\n                    <div class=\"match-dropzone\" data-question=\"q7\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                     <p><strong>21</strong> part of an animal is left behind to distract predators.</p>\n                    <div class=\"match-dropzone\" data-question=\"q8\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                    <p><strong>22</strong> if it takes too long to find one kind of prey, animals will look for an alternative source of food.</p>\n                    <div class=\"match-dropzone\" data-question=\"q9\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>23</strong> camouflage can involve copying a threatening type of animal.</p>\n                    <div class=\"match-dropzone\" data-question=\"q10\"></div>\n                </div>\n\n                <div class=\"options-pool\" id=\"researcher-options-pool\">\n                    <strong>List of people</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" id=\"person-A\" draggable=\"true\" data-option=\"A\">A Professor Mark Elgar</div>\n                        <div class=\"drag-item\" id=\"person-B\" draggable=\"true\" data-option=\"B\">B Paul Zborowski</div>\n                        <div class=\"drag-item\" id=\"person-C\" draggable=\"true\" data-option=\"C\">C Professor Gisela Kaplan</div>\n                        <div class=\"drag-item\" id=\"person-D\" draggable=\"true\" data-option=\"D\">D Dr Karen Cheney</div>\n                        <div class=\"drag-item\" id=\"person-E\" draggable=\"true\" data-option=\"E\">E Henry Bates</div>\n                        <div class=\"drag-item\" id=\"person-F\" draggable=\"true\" data-option=\"F\">F Martyn Robinson</div>\n                    </div>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "summary_completion",
+      "questionIds": [
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                 <h4>Questions 24–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h4>The bluestriped fangblenny</h4>\n                    <p>\n                    Dr Karen Cheney studies the bluestriped fangblenny on <strong>24</strong> <input type=\"text\" id=\"q24_input\"> off Queensland's coast. She found that the fangblenny was able to make itself resemble other fish by adjusting its colouration. The fangblenny impersonates the striped cleaner wrasse, a fish that is welcomed by other species as it gets rid of their <strong>25</strong> <input type=\"text\" id=\"q25_input\">. The fangblenny can approach its <strong>26</strong> <input type=\"text\" id=\"q26_input\"> without drawing the attention of predators or disturbing the work of the striped cleaner wrasse.\n                    </p>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "C",
+    "q2": "G",
+    "q3": "D",
+    "q4": "A",
+    "q5": "B",
+    "q6": "C",
+    "q7": "B",
+    "q8": "F",
+    "q9": "A",
+    "q10": "E",
+    "q11": "reefs",
+    "q12": "parasites",
+    "q13": "prey"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/180. P2 - Australia’s camouflaged creatures 澳洲伪装生物【高】/180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/180. P2 - Australia’s camouflaged creatures 澳洲伪装生物【高】/180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.pdf",
+    "ieltsHtml": "IELTS/P2/Australia's camouflaged creatures.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.664Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "14",
+    "q2": "15",
+    "q3": "16",
+    "q4": "17",
+    "q5": "18",
+    "q6": "19",
+    "q7": "20",
+    "q8": "21",
+    "q9": "22",
+    "q10": "23",
+    "q11": "24",
+    "q12": "25",
+    "q13": "26"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

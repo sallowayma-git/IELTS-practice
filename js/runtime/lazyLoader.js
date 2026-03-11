@@ -12,9 +12,9 @@
         ];
 
         manifest['state-core'] = [
+            'js/core/practiceCore.js',
+            'js/core/resourceCore.js',
             'js/app/state-service.js',
-            'js/services/GlobalStateService.js',
-            'js/runtime/legacy-state-adapter.js',
             'js/services/libraryManager.js'
         ];
 
@@ -26,9 +26,7 @@
             'js/components/practiceHistoryEnhancer.js',
             'js/core/scoreStorage.js',
             'js/utils/answerSanitizer.js',
-            'js/core/practiceRecorder.js',
-            'js/core/legacyStateBridge.js',
-            'js/utils/legacyStateAdapter.js'
+            'js/core/practiceRecorder.js'
         ];
 
         manifest['browse-runtime'] = [
@@ -36,6 +34,7 @@
             'js/views/legacyViewBundle.js',
             'js/app/examActions.js',
             // 单篇练习通信与会话能力属于 browse/practice 主流程
+            'js/app/readingLaunchMixin.js',
             'js/app/examSessionMixin.js',
             'js/app/browseController.js',
             'js/presentation/message-center.js',

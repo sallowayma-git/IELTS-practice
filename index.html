@@ -65,14 +65,20 @@
                     </label>
                 </div>
                 <div id="type-filter-buttons" class="hero-panel__actions shui-filter-group">
-                    <button class="btn btn-sm shui-filter-btn" onclick="filterByType('all')">全部</button>
-                    <button class="btn btn-sm shui-filter-btn" onclick="filterByType('reading')">阅读</button>
-                    <button class="btn btn-sm shui-filter-btn" onclick="filterByType('listening')">听力</button>
+                    <button class="btn btn-sm shui-filter-btn active" type="button" aria-pressed="true" data-filter-type="all" onclick="filterByType('all')">全部</button>
+                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="reading" onclick="filterByType('reading')">阅读</button>
+                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="listening" onclick="filterByType('listening')">听力</button>
                 </div>
             </div>
 
-            <div class="search-box hero-surface">
-                <input type="text" class="search-input" placeholder="搜索题目..." onkeyup="searchExams(this.value)">
+            <div class="search-box">
+                <input type="text" class="search-input" id="exam-search-input" placeholder="搜索题目..." aria-label="搜索题目" onkeyup="searchExams(this.value)">
+                <button type="button" class="search-clear-btn" id="search-clear-btn" aria-label="清除搜索" hidden onclick="clearSearch()">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
             </div>
 
             <div id="exam-list-container"></div>
@@ -113,10 +119,9 @@
                 <div class="hero-panel__header">
                     <h3 class="hero-panel__title">📈 练习历史 <span class="hero-tag">SHUI Timeline</span></h3>
                     <div id="record-type-filter-buttons" class="hero-panel__actions shui-filter-group">
-                        <button class="btn btn-sm shui-filter-btn" onclick="filterRecordsByType('all')">全部</button>
-                        <button class="btn btn-sm shui-filter-btn" onclick="filterRecordsByType('reading')">阅读</button>
-                        <button class="btn btn-sm shui-filter-btn"
-                            onclick="filterRecordsByType('listening')">听力</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="true" data-filter-type="all" onclick="filterRecordsByType('all')">全部</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="reading" onclick="filterRecordsByType('reading')">阅读</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="listening" onclick="filterRecordsByType('listening')">听力</button>
                     </div>
                     <div class="hero-panel__actions">
                         <button class="btn btn-secondary hero-btn hero-btn--ghost"
@@ -203,6 +208,14 @@
             </div>
             <p class="more-view-subtitle">探索额外的学习辅助功能，助你高效备考。</p>
             <div class="more-tools-grid">
+                <button class="tool-card tool-card--featured" type="button" id="writing-entry-btn">
+                    <div class="tool-card-icon">✍️</div>
+                    <div class="tool-card-content">
+                        <h3>写作评分</h3>
+                        <p>AI驱动的雅思写作评分系统，获取专业四维度评分与详细反馈。</p>
+                    </div>
+                    <div class="tool-card-arrow">进入</div>
+                </button>
                 <button class="tool-card" type="button" data-action="open-clock">
                     <div class="tool-card-icon">🕒</div>
                     <div class="tool-card-content">
@@ -369,7 +382,7 @@
         <div class="theme-modal-content">
             <div class="theme-modal-header">
                 <h3>🎨 主题切换</h3>
-                <button class="theme-modal-close" onclick="hideThemeSwitcherModal()">×</button>
+                <button class="theme-modal-close" onclick="hideThemeSwitcherModal()" aria-label="关闭">×</button>
             </div>
             <div class="theme-modal-body">
                 <div class="theme-options-viewport" role="presentation">
@@ -379,7 +392,7 @@
                                 <div class="theme-name">📚 Academic</div>
                                 <div class="theme-desc">专业 高效 可靠</div>
                             </div>
-                            <button class="btn btn-sm"
+                            <button class="btn btn-sm" aria-label="切换到 Academic 主题"
                                 onclick="navigateToThemePortal('.superdesign/design_iterations/ielts_academic_functional_2.html', { label: 'Academic' })">切换</button>
                         </div>
                         <div class="theme-option">
@@ -387,14 +400,14 @@
                                 <div class="theme-name">🍂 Bloom</div>
                                 <div class="theme-desc">秋日 暖阳</div>
                             </div>
-                            <button id="bloom-theme-btn" class="btn btn-sm" onclick="toggleBloomDarkMode()">切换</button>
+                            <button id="bloom-theme-btn" class="btn btn-sm" aria-label="切换到 Bloom 主题" onclick="toggleBloomDarkMode()">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
                                 <div class="theme-name" style="color: #0554F2;">🔵 Blue</div>
                                 <div class="theme-desc" style="color: #0788D9;">冷静 清爽 专注</div>
                             </div>
-                            <button id="blue-theme-btn" class="btn btn-sm"
+                            <button id="blue-theme-btn" class="btn btn-sm" aria-label="切换到 Blue 主题"
                                 style="background: #0554F2; border-color: #1154D9;"
                                 onclick="applyTheme('blue')">切换</button>
                         </div>
@@ -403,7 +416,7 @@
                                 <div class="theme-name" style="color: #ec4899;">🎀 Melody</div>
                                 <div class="theme-desc" style="color: #ec4899;">美乐蒂</div>
                             </div>
-                            <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;"
+                            <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;" aria-label="切换到 Melody 主题"
                                 onclick="navigateToThemePortal('.superdesign/design_iterations/my_melody_ielts_1.html', { label: 'MyMelody', theme: 'mymelody' })">切换</button>
                         </div>
                         <div class="theme-option">
@@ -420,7 +433,7 @@
                                 <div class="theme-name" style="color: #ffc83d;">🐷 小呆呆</div>
                                 <div class="theme-desc" style="color: #f59e0b;">小呆呆控制台</div>
                             </div>
-                            <button class="btn btn-sm"
+                            <button class="btn btn-sm" aria-label="切换到 小呆呆 主题"
                                 style="background: linear-gradient(120deg, #ffe08a, #ffc83d); border-color: #fbbf24; color: #3b2400;"
                                 onclick="navigateToThemePortal('.superdesign/design_iterations/xiaodaidai_dashboard_1.html', { label: 'XiaoDaiDai', theme: 'xiaodaidai' })">切换</button>
                         </div>
@@ -450,6 +463,9 @@
     <script src="js/data/repositories/backupRepository.js"></script>
     <script src="js/data/repositories/metaRepository.js"></script>
     <script src="js/data/index.js"></script>
+    <script src="js/core/practiceCore.js"></script>
+    <script src="js/core/resourceCore.js"></script>
+    <script src="assets/generated/reading-exams/manifest.js"></script>
     <script src="js/utils/stateSerializer.js"></script>
     <script src="js/utils/simpleStorageWrapper.js"></script>
 
@@ -478,7 +494,7 @@
         <div class="theme-modal-content" style="max-width: 600px;">
             <div class="theme-modal-header">
                 <h3>🏆 我的成就</h3>
-                <button class="theme-modal-close" onclick="hideAchievements()">×</button>
+                <button class="theme-modal-close" onclick="hideAchievements()" aria-label="关闭">×</button>
             </div>
             <div class="theme-modal-body">
                 <div class="achievements-grid" id="achievements-list">

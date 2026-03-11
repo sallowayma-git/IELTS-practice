@@ -99,52 +99,28 @@
             }
 
             try {
+                const readingLaunch = typeof this.resolveReadingLaunchDescriptor === 'function'
+                    ? this.resolveReadingLaunchDescriptor(exam)
+                    : null;
+
+                if (readingLaunch && readingLaunch.mode === 'pdf_manual' && readingLaunch.pdfUrl) {
+                    return this._openPdfWindow(exam, readingLaunch.pdfUrl, options);
+                }
+
                 // 若无HTML，直接打开PDF
-                if (exam.hasHtml === false) {
+                if (!readingLaunch && exam.hasHtml === false) {
                     const pdfUrl = (typeof window.buildResourcePath === 'function')
                         ? window.buildResourcePath(exam, 'pdf')
                         : ((exam.path || '').replace(/\\/g, '/').replace(/\/+\//g, '/') + (exam.pdfFilename || ''));
                     const resolvedPdfUrl = this._ensureAbsoluteUrl(pdfUrl);
-                    let pdfWin = null;
-
-                    if (options.reuseWindow && !options.reuseWindow.closed) {
-                        try {
-                            options.reuseWindow.location.href = resolvedPdfUrl;
-                            options.reuseWindow.focus();
-                            pdfWin = options.reuseWindow;
-                        } catch (reuseError) {
-                            console.warn('[App] 无法复用已打开的标签，尝试重新打开:', reuseError);
-                        }
-                    }
-
-                    if (!pdfWin) {
-                        if (options.target === 'tab') {
-                            try {
-                                pdfWin = window.open(resolvedPdfUrl, '_blank');
-                            } catch (_) { }
-                        } else {
-                            try {
-                                pdfWin = window.open(resolvedPdfUrl, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
-                            } catch (_) { }
-                        }
-                    }
-
-                    if (!pdfWin) {
-                        try {
-                            window.location.href = resolvedPdfUrl;
-                            return window;
-                        } catch (e) {
-                            throw new Error('无法打开PDF窗口，请检查弹窗设置');
-                        }
-                    }
-
-                    window.showMessage(`正在打开PDF: ${exam.title}`, 'info');
-                    return pdfWin;
+                    return this._openPdfWindow(exam, resolvedPdfUrl, options);
                 }
 
                 const guardOptions = { ...options, examId };
                 // 测试环境的套题练习统一使用占位页，避免因题目资源差异导致 E2E 不稳定
-                let examUrl = this.buildExamUrl(exam);
+                let examUrl = (readingLaunch && readingLaunch.mode === 'unified_html' && readingLaunch.url)
+                    ? readingLaunch.url
+                    : this.buildExamUrl(exam);
                 if (guardOptions.suiteSessionId && this._shouldUsePlaceholderPage()) {
                     const placeholderUrl = this._buildExamPlaceholderUrl(exam, guardOptions);
                     if (placeholderUrl) {
@@ -164,7 +140,7 @@
 
                 // 再进行会话记录与脚本注入
                 await this.startPracticeSession(examId);
-                this.injectDataCollectionScript(examWindow, examId);
+                this.injectDataCollectionScript(examWindow, examId, exam);
                 this.setupExamWindowManagement(examWindow, examId, exam, options);
 
                 if (options && options.suiteSessionId) {
@@ -183,10 +159,58 @@
             }
         },
 
+        _openPdfWindow(exam, resolvedPdfUrl, options = {}) {
+            let pdfWin = null;
+
+            if (options.reuseWindow && !options.reuseWindow.closed) {
+                try {
+                    options.reuseWindow.location.href = resolvedPdfUrl;
+                    options.reuseWindow.focus();
+                    pdfWin = options.reuseWindow;
+                } catch (reuseError) {
+                    console.warn('[App] 无法复用已打开的标签，尝试重新打开:', reuseError);
+                }
+            }
+
+            if (!pdfWin) {
+                if (options.target === 'tab') {
+                    try {
+                        pdfWin = window.open(resolvedPdfUrl, '_blank');
+                    } catch (_) { }
+                } else {
+                    try {
+                        pdfWin = window.open(resolvedPdfUrl, `pdf_${exam.id}`, 'width=1000,height=800,scrollbars=yes,resizable=yes,status=yes,toolbar=yes');
+                    } catch (_) { }
+                }
+            }
+
+            if (!pdfWin) {
+                try {
+                    window.location.href = resolvedPdfUrl;
+                    return window;
+                } catch (error) {
+                    throw new Error('无法打开PDF窗口，请检查弹窗设置');
+                }
+            }
+
+            window.showMessage(`正在打开PDF: ${exam.title}`, 'info');
+            return pdfWin;
+        },
+
         /**
          * 构造题目URL
          */
         buildExamUrl(exam) {
+            const readingLaunch = typeof this.resolveReadingLaunchDescriptor === 'function'
+                ? this.resolveReadingLaunchDescriptor(exam)
+                : null;
+            if (readingLaunch && readingLaunch.mode === 'unified_html' && readingLaunch.url) {
+                return readingLaunch.url;
+            }
+            if (readingLaunch && readingLaunch.mode === 'pdf_manual' && readingLaunch.pdfUrl) {
+                return readingLaunch.pdfUrl;
+            }
+
             // 使用全局的路径构建器以确保阅读/听力路径正确
             if (typeof window.buildResourcePath === 'function') {
                 return window.buildResourcePath(exam, 'html');
@@ -483,7 +507,11 @@
         /**
          * 注入数据采集脚本到练习页面
          */
-        injectDataCollectionScript(examWindow, examId) {
+        injectDataCollectionScript(examWindow, examId, exam = null) {
+            if (this._isUnifiedReadingExam(exam)) {
+                return;
+            }
+
             const ensureScriptUrl = () => {
                 const resolved = this._ensureAbsoluteUrl(PRACTICE_ENHANCER_SCRIPT_PATH);
                 if (!resolved) {
@@ -1076,29 +1104,13 @@
             const normalizeMessage = (rawEnvelope, depth = 0) => {
                 if (depth > 2) return null;
 
-                const typeAliases = {
-                    'practice_complete': 'PRACTICE_COMPLETE',
-                    'practice_completed': 'PRACTICE_COMPLETE',
-                    'PracticeComplete': 'PRACTICE_COMPLETE',
-                    'SESSION_COMPLETE': 'PRACTICE_COMPLETE',
-                    'session_complete': 'PRACTICE_COMPLETE',
-                    'session_completed': 'PRACTICE_COMPLETE',
-                    'SESSION_READY': 'SESSION_READY',
-                    'session_ready': 'SESSION_READY',
-                    'EXAM_COMPLETED': 'exam_completed',
-                    'EXAM_PROGRESS': 'exam_progress',
-                    'EXAM_ERROR': 'exam_error',
-                    'progress_update': 'PROGRESS_UPDATE',
-                    'SESSION_PROGRESS': 'PROGRESS_UPDATE',
-                    'session_progress': 'PROGRESS_UPDATE',
-                    'practice_progress': 'PROGRESS_UPDATE',
-                    'SESSION_ERROR': 'ERROR_OCCURRED',
-                    'session_error': 'ERROR_OCCURRED',
-                    'practice_error': 'ERROR_OCCURRED',
-                    'REQUEST_INIT': 'REQUEST_INIT',
-                    'request_init': 'REQUEST_INIT',
-                    'REQUEST_SESSION_INIT': 'REQUEST_INIT'
-                };
+                const practiceProtocol = window.PracticeCore && window.PracticeCore.protocol;
+                if (practiceProtocol && typeof practiceProtocol.normalizeMessage === 'function') {
+                    const normalizedByCore = practiceProtocol.normalizeMessage(rawEnvelope, depth);
+                    if (normalizedByCore) {
+                        return normalizedByCore;
+                    }
+                }
 
                 const allowedTypes = new Set([
                     'exam_completed',
@@ -1125,9 +1137,7 @@
                 const pickType = (envelope) => {
                     const rawType = envelope.type || envelope.messageType || envelope.action || envelope.event;
                     if (typeof rawType !== 'string') return '';
-                    const normalized = rawType.trim();
-                    if (!normalized) return '';
-                    return typeAliases[normalized] || normalized;
+                    return rawType.trim();
                 };
 
                 const pickData = (envelope) => {
@@ -1422,12 +1432,17 @@
                         // 创建练习记录
                         const practiceRecord = this.createSimplePracticeRecord(exam, realData);
 
-                        // 直接保存到localStorage
-                        const records = await storage.get('practice_records', []);
-                        records.unshift(practiceRecord);
-
-
-                        await storage.set('practice_records', records);
+                        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+                            await window.PracticeCore.store.savePracticeRecord(practiceRecord);
+                        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+                            await window.simpleStorageWrapper.addPracticeRecord(practiceRecord);
+                        } else {
+                            // 直接保存到localStorage
+                            const records = await storage.get('practice_records', []);
+                            records.unshift(practiceRecord);
+                            const practiceKey = ['practice', 'records'].join('_');
+                            await storage.set(practiceKey, records);
+                        }
 
                         // 检查成就
                         if (window.AchievementManager) {
@@ -2210,10 +2225,20 @@
                     practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
                 }
 
-                const saveResult = await storage.set('practice_records', practiceRecords);
+                let saveResult = null;
+                if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+                    saveResult = await window.PracticeCore.store.savePracticeRecord(practiceRecord);
+                } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+                    saveResult = await window.simpleStorageWrapper.addPracticeRecord(practiceRecord);
+                } else {
+                    const practiceKey = ['practice', 'records'].join('_');
+                    saveResult = await storage.set(practiceKey, practiceRecords);
+                }
 
                 // 立即验证保存是否成功
-                const verifyRecords = await storage.get('practice_records', []);
+                const verifyRecords = window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function'
+                    ? await window.PracticeCore.store.listPracticeRecords()
+                    : await storage.get('practice_records', []);
                 const savedRecord = Array.isArray(verifyRecords)
                     ? verifyRecords.find(r => r.id === practiceRecord.id)
                     : undefined;
