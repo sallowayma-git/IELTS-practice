@@ -38,6 +38,7 @@
         "q7"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-anchor\">\n                <h4>Questions 1–7</h4>\n                <p>Reading Passage 1 has seven paragraphs <strong>A–G</strong>.</p>\n                <p>Choose the correct heading for each paragraph from the list of headings below.</p>\n                <p><em>Drag a heading from the list and drop it onto the correct paragraph's answer box on the left.</em></p>\n                \n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i. Early years of Gilbert</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii. What was new about his scientific research method</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii. The development of chemistry</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv. Questioning traditional astronomy</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v. Pioneers of early science</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi. Professional and social recognition</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii. Becoming the president of the Royal Society</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii. The great works of Gilbert</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ix\">ix. His discovery about magnetism</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"x\">x. His change of focus</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -84,7 +85,7 @@
   "audit": {
     "matchStatus": "matched",
     "matchConfidence": 1,
-    "verifiedAt": "2026-03-08T16:24:30.711Z",
+    "verifiedAt": "2026-03-11T14:43:22.248Z",
     "notes": "signature:radio,checkbox,text,textarea,dragdrop,table"
   },
   "questionOrder": [
