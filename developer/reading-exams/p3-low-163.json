@@ -32,6 +32,7 @@
         "q6"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 27–32</h4>\n                <p>Reading Passage 3 has seven paragraphs A–G.</p>\n                <p>Choose the correct heading for paragraphs B–G from the list of headings below.</p>\n                <p><em>Drag a heading from this list and drop it onto the correct paragraph's answer box on the left. (Example for Para A is vii)</em></p>\n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i Less is more</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii Research can't guarantee safety</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii Unexplained symptoms</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv Setting the limits of acceleration</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v The irresistible appeal of speed</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi Gentle surprises</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii A difficult task</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii A different ride every time</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -81,7 +82,7 @@
   "audit": {
     "matchStatus": "shui_only",
     "matchConfidence": 0,
-    "verifiedAt": "2026-03-08T16:24:30.788Z",
+    "verifiedAt": "2026-03-11T14:43:22.324Z",
     "notes": "signature:radio,text,textarea,dragdrop,table"
   },
   "questionOrder": [

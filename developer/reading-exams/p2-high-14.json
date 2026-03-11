@@ -32,6 +32,7 @@
         "q6"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 14–19</h4>\n                <p>Reading Passage 2 has six paragraphs, <strong>A–F</strong>.</p>\n                <p>Choose the correct heading for each paragraph from the list of headings below.</p>\n                \n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i. Robots on Earth – a re-evaluation</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii. The barriers to cooperation in space exploration</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii. Some limitations of robots in space</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv. Reduced expectations for space exploration</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v. A general reconsideration of human/robot responsibilities in space</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi. Problems in using humans for space exploration</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii. The danger to humans of intelligent machines</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii. Space settlement and the development of greater self-awareness</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ix\">ix. Possible examples of cooperation in space</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -79,7 +80,7 @@
   "audit": {
     "matchStatus": "matched",
     "matchConfidence": 1,
-    "verifiedAt": "2026-03-08T16:24:30.531Z",
+    "verifiedAt": "2026-03-11T14:43:22.013Z",
     "notes": "signature:checkbox,text,textarea,dragdrop,table"
   },
   "questionOrder": [
