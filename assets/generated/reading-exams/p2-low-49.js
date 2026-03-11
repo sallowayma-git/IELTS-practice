@@ -36,6 +36,7 @@
         "q5"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Questions 14–18</h4>\n                <p>Reading Passage 2 has five sections, <strong>A–E</strong>.</p>\n                <p>Choose the correct heading for each section from the list of headings below.</p>\n                <p><em>Write the correct number, i–vii, in boxes 14–18 on your answer sheet. (Drag a heading from this list and drop it onto the correct section's answer box on the left.)</em></p>\n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i The desire to make expensive jewellery</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii The clues that indicate ancient items were decorative</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii Querying the changes in the value of traded items</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv A natural human talent</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v How status can be gained from ownership of goods</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi Recent finds alter theories about when consumerism started</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii Changes in research methods</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -84,7 +85,7 @@
   "audit": {
     "matchStatus": "shui_only",
     "matchConfidence": 0,
-    "verifiedAt": "2026-03-08T16:24:30.595Z",
+    "verifiedAt": "2026-03-11T14:43:22.085Z",
     "notes": "signature:radio,text,textarea,dragdrop,table"
   },
   "questionOrder": [

@@ -38,6 +38,7 @@
         "q7"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-anchor\">\n                <h4>Questions 27–33</h4>\n                <p>Reading Passage 3 has seven paragraphs, <strong>A–G</strong>.</p>\n                <p>Choose the correct heading for each paragraph from the list of headings below.</p>\n                <p><em>Drag a heading from this list and drop it onto the correct paragraph's answer box on the left.</em></p>\n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i. A negative reaction to receiving flowers</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii. Some surprisingly strong responses to flowers</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii. A mutually beneficial relationship?</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv. Becoming more open about personal matters</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v. Some common social functions of flowers</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi. Sensory appeal versus practical purpose of flowers</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii. Bridging the gap between strangers in an enclosed space</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii. An imperfect theory</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -86,7 +87,7 @@
   "audit": {
     "matchStatus": "matched",
     "matchConfidence": 1,
-    "verifiedAt": "2026-03-08T16:24:30.779Z",
+    "verifiedAt": "2026-03-11T14:43:22.312Z",
     "notes": "signature:radio,text,textarea,dragdrop,table"
   },
   "questionOrder": [

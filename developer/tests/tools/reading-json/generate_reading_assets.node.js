@@ -815,6 +815,35 @@ function detectGroupKind(groupHtml) {
     return 'short_answer';
 }
 
+function inferAllowOptionReuse(bodyHtml, questionIds, answerKey, kind) {
+    if (kind !== 'matching' && kind !== 'classification') {
+        return undefined;
+    }
+
+    const html = bodyHtml || '';
+    if (!/paragraph-dropzone|match-dropzone|drag-item|headings-pool|options-pool/i.test(html)) {
+        return undefined;
+    }
+
+    if (/may use\s+(?:any\s+)?(?:letter|option|heading|answer).+more than once/i.test(html)) {
+        return true;
+    }
+
+    const normalizedAnswers = (questionIds || [])
+        .map((questionId) => answerKey[questionId])
+        .filter((value) => value != null)
+        .map((value) => Array.isArray(value) ? JSON.stringify(value) : String(value).trim())
+        .filter(Boolean);
+    if (normalizedAnswers.length > 1) {
+        const distinctAnswers = new Set(normalizedAnswers);
+        if (distinctAnswers.size < normalizedAnswers.length) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function extractQuestionIdsFromHtml(html) {
     const ids = [];
     const patterns = [
@@ -916,6 +945,10 @@ function buildQuestionGroups(groupBlocks, introHtml, answerKey, originalToIntern
             questionIds: finalQuestionIds,
             bodyHtml
         };
+        const allowOptionReuse = inferAllowOptionReuse(bodyHtml, finalQuestionIds, answerKey, group.kind);
+        if (typeof allowOptionReuse === 'boolean') {
+            group.allowOptionReuse = allowOptionReuse;
+        }
         if (!ALLOWED_GROUP_KINDS.has(group.kind)) {
             throw new Error(`检测到不允许的题组类型: ${group.kind}`);
         }
@@ -979,6 +1012,10 @@ function buildQuestionGroupsLegacy(groupBlocks, introHtml, answerKey) {
             questionIds: filteredQuestionIds,
             bodyHtml
         };
+        const allowOptionReuse = inferAllowOptionReuse(bodyHtml, filteredQuestionIds, answerKey, group.kind);
+        if (typeof allowOptionReuse === 'boolean') {
+            group.allowOptionReuse = allowOptionReuse;
+        }
         if (!ALLOWED_GROUP_KINDS.has(group.kind)) {
             throw new Error(`检测到不允许的题组类型: ${group.kind}`);
         }
@@ -1116,7 +1153,7 @@ function buildManifest(sourceRecords) {
         manifest[record.examId] = {
             examId: record.examId,
             dataKey: record.examId,
-            script: `../assets/generated/reading-exams/${record.examId}.js`,
+            script: `./${record.examId}.js`,
             title: record.meta.title,
             category: record.meta.category
         };
@@ -1150,7 +1187,11 @@ function writeSchemaFile() {
             'sourceRefs',
             'audit'
         ],
-        allowedQuestionGroupKinds: Array.from(ALLOWED_GROUP_KINDS)
+        allowedQuestionGroupKinds: Array.from(ALLOWED_GROUP_KINDS),
+        questionGroupOptionalFields: [
+            'leadHtml',
+            'allowOptionReuse'
+        ]
     };
     writeJson(path.join(SOURCE_DIR, 'reading-exam-source.schema.json'), schema);
 }
@@ -1267,7 +1308,7 @@ function buildCrosswalkReviewReport(readingIndex, crosswalk, sourceRecords, fail
 function main() {
     const existingSourceRecords = loadBaselineSourceRecords();
     resetGeneratedDir(SOURCE_DIR);
-    resetGeneratedDir(GENERATED_DIR);
+    resetGeneratedDir(GENERATED_DIR, new Set(['reading-practice-unified.html']));
 
     const readingIndex = loadReadingIndex();
     const overrides = loadCrosswalkOverrides();
