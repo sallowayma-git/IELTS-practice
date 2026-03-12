@@ -4077,6 +4077,21 @@ body.no-scroll {
     border-radius: 8px;
 }
 
+.record-summary .record-summary-replay-trigger {
+    cursor: pointer;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.record-summary .record-summary-replay-trigger:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(17, 24, 39, 0.22);
+}
+
+.record-summary .record-summary-replay-trigger:focus-visible {
+    outline: 3px solid rgba(255, 255, 255, 0.85);
+    outline-offset: 2px;
+}
+
 .record-meta {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
