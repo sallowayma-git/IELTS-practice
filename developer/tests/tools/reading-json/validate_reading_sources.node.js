@@ -23,6 +23,13 @@ const ALLOWED_GROUP_KINDS = new Set([
     'sentence_completion'
 ]);
 
+function requiresExplicitOptionReuse(group) {
+    if (!group || !ALLOWED_GROUP_KINDS.has(group.kind)) {
+        return false;
+    }
+    return group.kind === 'matching' || group.kind === 'classification';
+}
+
 function readJson(filePath) {
     return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
@@ -78,6 +85,9 @@ function validateRecord(record, filePath) {
         }
         if (!group.groupId) {
             errors.push('题组缺少 groupId');
+        }
+        if (requiresExplicitOptionReuse(group) && typeof group.allowOptionReuse !== 'boolean') {
+            errors.push(`题组 ${group.groupId} 缺少 allowOptionReuse 布尔字段`);
         }
         if (!Array.isArray(group.questionIds)) {
             errors.push(`题组 ${group.groupId} 缺少 questionIds`);

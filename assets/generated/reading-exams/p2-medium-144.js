@@ -36,6 +36,7 @@
         "q5"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Questions 14–18</h4>\n                <p>Reading Passage 2 has five sections, <strong>A–E</strong>.</p>\n                <p>Choose the correct heading for each section from the list of headings below.</p>\n                <p><em>Drag a heading from this list and drop it onto the correct section's answer box on the left.</em></p>\n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i The need for skill and care</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii Choosing the richest asteroid</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii The safest way to protect an asteroid</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv Obtaining support for the project</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v An achievable goal, not an impossible dream</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi The need for global cooperation</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii Beginning with a less challenging task</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii Practical, economic and research justifications</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -84,7 +85,7 @@
   "audit": {
     "matchStatus": "matched",
     "matchConfidence": 1,
-    "verifiedAt": "2026-03-08T16:24:30.758Z",
+    "verifiedAt": "2026-03-11T14:43:22.292Z",
     "notes": "signature:radio,text,textarea,dragdrop,table"
   },
   "questionOrder": [

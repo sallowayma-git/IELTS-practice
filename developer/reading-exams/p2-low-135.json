@@ -32,6 +32,7 @@
         "q6"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 14–19</h4>\n                <p>Reading Passage 2 has six paragraphs, <strong>A–F</strong>.</p>\n                <p>Choose the correct heading for each paragraph from the list of headings below.</p>\n                <p><em>Write the correct number, i–ix, in boxes 14–19 on your answer sheet.</em></p>\n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i Potential production capabilities of vertical farms</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii Opposition to new ideas about food production</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii A successful application of vertical-farming technology</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv The potential to provide urgent relief</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v The original inspiration for vertical farming</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi Various environmental benefits of vertical farming</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii An increasing problem for farmers worldwide</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii A return to traditional farming methods</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ix\">ix A rising demand for food</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -79,7 +80,7 @@
   "audit": {
     "matchStatus": "matched",
     "matchConfidence": 1,
-    "verifiedAt": "2026-03-08T16:24:30.743Z",
+    "verifiedAt": "2026-03-11T14:43:22.273Z",
     "notes": "signature:radio,textarea,dragdrop,table"
   },
   "questionOrder": [

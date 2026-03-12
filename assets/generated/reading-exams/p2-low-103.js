@@ -38,6 +38,7 @@
         "q7"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-anchor\">\n                <h4>Questions 14–20</h4>\n                <p>Reading Passage 2 has seven paragraphs, <strong>A–G</strong>.</p>\n                <p>Choose the correct heading for each paragraph from the list of headings below.</p>\n                <p><em>Drag a heading from the list and drop it onto the correct paragraph's answer box on the left.</em></p>\n                \n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\"><span class=\"heading-num\">i</span> Levels of wealth affected by several other influences besides climate</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\"><span class=\"heading-num\">ii</span> The failure of vaccination programmes</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\"><span class=\"heading-num\">iii</span> The problems experienced by small countries</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\"><span class=\"heading-num\">iv</span> The role of governments in creating wealth</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\"><span class=\"heading-num\">v</span> The best use of financial assistance</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\"><span class=\"heading-num\">vi</span> The inspiration for Masters's research</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\"><span class=\"heading-num\">vii</span> The advantages of cold weather to people and agriculture</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\"><span class=\"heading-num\">viii</span> Positive correlations between climate and economy</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ix\"><span class=\"heading-num\">ix</span> Reflecting on the traditional view</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"x\"><span class=\"heading-num\">x</span> Crop spread in Europe and other continents</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -77,7 +78,7 @@
   "audit": {
     "matchStatus": "matched",
     "matchConfidence": 1,
-    "verifiedAt": "2026-03-08T16:24:30.682Z",
+    "verifiedAt": "2026-03-11T14:43:22.199Z",
     "notes": "signature:text,textarea,dragdrop,table"
   },
   "questionOrder": [
