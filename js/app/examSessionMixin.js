@@ -92,6 +92,7 @@
             const examIndex = await getActiveExamIndexSnapshot();
             const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
             const exam = list.find(e => e.id === examId);
+            const reviewMode = Boolean(options && options.reviewMode);
 
             if (!exam) {
                 window.showMessage('题目不存在', 'error');
@@ -139,7 +140,9 @@
                 }
 
                 // 再进行会话记录与脚本注入
-                await this.startPracticeSession(examId);
+                if (!reviewMode) {
+                    await this.startPracticeSession(examId);
+                }
                 this.injectDataCollectionScript(examWindow, examId, exam);
                 this.setupExamWindowManagement(examWindow, examId, exam, options);
 
@@ -149,7 +152,14 @@
                     this.examWindows && this.examWindows.set(examId, sessionInfo);
                 }
 
-                window.showMessage(`正在打开题目: ${exam.title}`, 'info');
+                if (reviewMode && typeof this._bindReviewWindowRef === 'function') {
+                    this._bindReviewWindowRef(options.reviewSessionId, examWindow);
+                }
+
+                window.showMessage(
+                    reviewMode ? `正在打开历史回顾: ${exam.title}` : `正在打开题目: ${exam.title}`,
+                    'info'
+                );
 
                 return examWindow;
 
@@ -887,7 +897,6 @@
          */
         initializePracticeSession(examWindow, examId) {
             try {
-                const sessionId = `${examId}_${Date.now()}`;
                 const now = Date.now();
 
                 let existingInfo = null;
@@ -914,13 +923,11 @@
                     }
                 }
 
-                const initPayload = {
-                    sessionId: sessionId,
-                    examId: examId,
-                    parentOrigin: window.location.origin,
-                    timestamp: now,
-                    suiteSessionId: suiteSessionId || null
-                };
+                const windowInfo = this.ensureExamWindowSession(examId, examWindow);
+                if (suiteSessionId && !windowInfo.suiteSessionId) {
+                    windowInfo.suiteSessionId = suiteSessionId;
+                }
+                const initPayload = this._buildExamInitPayload(examId, windowInfo, { timestamp: now });
 
                 // 发送会话初始化消息
                 examWindow.postMessage({
@@ -934,7 +941,7 @@
                 }
 
                 if (existingInfo) {
-                    existingInfo.sessionId = sessionId;
+                    existingInfo.sessionId = initPayload.sessionId;
                     existingInfo.initTime = now;
                     existingInfo.status = 'initialized';
                     if (suiteSessionId && !existingInfo.suiteSessionId) {
@@ -946,13 +953,13 @@
                     this.examWindows.set(examId, existingInfo);
                 } else {
                     console.warn('[DataInjection] 未找到窗口信息，创建新的');
-                    this.examWindows.set(examId, {
+                    this.examWindows.set(examId, Object.assign({}, windowInfo, {
                         window: examWindow,
-                        sessionId: sessionId,
+                        sessionId: initPayload.sessionId,
                         initTime: now,
                         status: 'initialized',
                         suiteSessionId: suiteSessionId || null
-                    });
+                    }));
                 }
 
             } catch (error) {
@@ -1015,7 +1022,13 @@
                 status: 'active',
                 expectedSessionId: null,
                 origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : '',
-                suiteSessionId: (options && options.suiteSessionId) ? options.suiteSessionId : null
+                suiteSessionId: (options && options.suiteSessionId) ? options.suiteSessionId : null,
+                reviewMode: Boolean(options && options.reviewMode),
+                reviewSessionId: options && options.reviewSessionId ? String(options.reviewSessionId) : null,
+                reviewEntryIndex: Number.isInteger(options && options.reviewEntryIndex) ? options.reviewEntryIndex : 0,
+                readOnly: options && Object.prototype.hasOwnProperty.call(options, 'readOnly')
+                    ? Boolean(options.readOnly)
+                    : Boolean(options && options.reviewMode)
             });
 
             // 监听窗口关闭事件
@@ -1052,15 +1065,7 @@
 
             const emitInitEnvelope = () => {
                 const windowInfo = this.ensureExamWindowSession(examId, examWindow);
-                const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
-                    ? this._resolveSuiteSessionId(examId, windowInfo)
-                    : null;
-                const initPayload = {
-                    examId: examId,
-                    parentOrigin: window.location.origin,
-                    sessionId: windowInfo.expectedSessionId,
-                    suiteSessionId: suiteSessionId
-                };
+                const initPayload = this._buildExamInitPayload(examId, windowInfo);
                 try {
                     examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
                     examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
@@ -1081,7 +1086,9 @@
             }
 
             // 更新UI状态
-            this.updateExamStatus(examId, 'in-progress');
+            if (!(options && options.reviewMode)) {
+                this.updateExamStatus(examId, 'in-progress');
+            }
         },
 
         /**
@@ -1120,7 +1127,9 @@
                     'PROGRESS_UPDATE',
                     'PRACTICE_COMPLETE',
                     'ERROR_OCCURRED',
-                    'REQUEST_INIT'
+                    'REQUEST_INIT',
+                    'SUITE_CLOSE_ATTEMPT',
+                    'REVIEW_NAVIGATE'
                 ]);
 
                 const baseKeys = new Set(['type', 'messageType', 'action', 'event', 'data', 'payload', 'detail', 'args', 'source', 'message', 'messageData']);
@@ -1288,6 +1297,10 @@
                         this.handleProgressUpdate(examId, data);
                         break;
                     case 'PRACTICE_COMPLETE':
+                        if (windowInfo && windowInfo.reviewMode) {
+                            console.info('[ReviewReplay] 回顾模式忽略 PRACTICE_COMPLETE:', examId);
+                            break;
+                        }
                         if (data && data.suiteSessionId && windowInfo) {
                             windowInfo.suiteSessionId = data.suiteSessionId;
                             this.examWindows && this.examWindows.set(examId, windowInfo);
@@ -1302,6 +1315,9 @@
                         break;
                     case 'SUITE_CLOSE_ATTEMPT':
                         console.warn('[SuitePractice] 练习页尝试关闭套题窗口:', data);
+                        break;
+                    case 'REVIEW_NAVIGATE':
+                        await this.handleReviewReplayNavigate(examId, data, event.source || expectedWindow);
                         break;
                     default:
                 }
@@ -1319,15 +1335,7 @@
             const sendInitEnvelope = (targetWindow) => {
                 try {
                     const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
-                    const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
-                        ? this._resolveSuiteSessionId(examId, windowInfo)
-                        : null;
-                    const initPayload = {
-                        examId: examId,
-                        parentOrigin: window.location.origin,
-                        sessionId: windowInfo.expectedSessionId,
-                        suiteSessionId: suiteSessionId
-                    };
+                    const initPayload = this._buildExamInitPayload(examId, windowInfo);
                     targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
                     targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
                 } catch (initError) {
@@ -1379,15 +1387,7 @@
             if (this._handshakeTimers.has(examId)) return;
 
             const windowInfo = this.ensureExamWindowSession(examId, examWindow);
-            const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
-                ? this._resolveSuiteSessionId(examId, windowInfo)
-                : null;
-            const initPayload = {
-                examId,
-                parentOrigin: window.location.origin,
-                sessionId: windowInfo.expectedSessionId,
-                suiteSessionId
-            };
+            const initPayload = this._buildExamInitPayload(examId, windowInfo);
 
             let attempts = 0;
             const maxAttempts = 30; // ~9s
@@ -1595,6 +1595,610 @@
             return `session_${suffix}`;
         },
 
+        _cloneReviewData(value) {
+            if (value == null) {
+                return value;
+            }
+            try {
+                return JSON.parse(JSON.stringify(value));
+            } catch (_) {
+                return value;
+            }
+        },
+
+        _isReplayObject(value) {
+            return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+        },
+
+        _normalizeReplayQuestionKey(rawKey) {
+            if (rawKey == null) {
+                return '';
+            }
+            const key = String(rawKey).trim();
+            if (!key) {
+                return '';
+            }
+            if (/^q\d+$/i.test(key)) {
+                return key.toLowerCase();
+            }
+            const numericOnly = key.match(/^\d+$/);
+            if (numericOnly) {
+                return `q${numericOnly[0]}`;
+            }
+            const ranged = key.match(/^q?(\d+\s*-\s*\d+)$/i);
+            if (ranged) {
+                return `q${ranged[1].replace(/\s+/g, '')}`;
+            }
+            const questionMatch = key.match(/^question[-_\s]*(\d+)$/i);
+            if (questionMatch) {
+                return `q${questionMatch[1]}`;
+            }
+            return key;
+        },
+
+        _splitReplayCompositeKey(rawKey) {
+            if (rawKey == null) {
+                return { examPrefix: '', questionKey: '' };
+            }
+            const key = String(rawKey).trim();
+            if (!key) {
+                return { examPrefix: '', questionKey: '' };
+            }
+            const sep = key.indexOf('::');
+            if (sep === -1) {
+                return {
+                    examPrefix: '',
+                    questionKey: this._normalizeReplayQuestionKey(key)
+                };
+            }
+            const examPrefix = key.slice(0, sep).trim();
+            const questionKey = this._normalizeReplayQuestionKey(key.slice(sep + 2));
+            return { examPrefix, questionKey };
+        },
+
+        _normalizeReplayAnswerMap(rawMap, targetExamId = '', allowUnprefixed = true) {
+            const normalized = {};
+            if (!this._isReplayObject(rawMap)) {
+                return normalized;
+            }
+            const normalizedTarget = targetExamId ? String(targetExamId).trim().toLowerCase() : '';
+            Object.entries(rawMap).forEach(([rawKey, rawValue]) => {
+                const split = this._splitReplayCompositeKey(rawKey);
+                if (!split.questionKey) {
+                    return;
+                }
+                const hasPrefix = !!split.examPrefix;
+                if (hasPrefix) {
+                    if (!normalizedTarget || split.examPrefix.toLowerCase() !== normalizedTarget) {
+                        return;
+                    }
+                } else if (!allowUnprefixed) {
+                    return;
+                }
+                normalized[split.questionKey] = this._cloneReviewData(rawValue);
+            });
+            return normalized;
+        },
+
+        _normalizeReplayComparison(rawComparison, targetExamId = '', allowUnprefixed = true) {
+            const normalized = {};
+            if (!this._isReplayObject(rawComparison)) {
+                return normalized;
+            }
+            const normalizedTarget = targetExamId ? String(targetExamId).trim().toLowerCase() : '';
+            Object.entries(rawComparison).forEach(([rawKey, rawValue]) => {
+                const split = this._splitReplayCompositeKey(rawKey);
+                if (!split.questionKey) {
+                    return;
+                }
+                const hasPrefix = !!split.examPrefix;
+                if (hasPrefix) {
+                    if (!normalizedTarget || split.examPrefix.toLowerCase() !== normalizedTarget) {
+                        return;
+                    }
+                } else if (!allowUnprefixed) {
+                    return;
+                }
+                const entry = this._isReplayObject(rawValue) ? rawValue : { userAnswer: rawValue };
+                normalized[split.questionKey] = {
+                    questionId: split.questionKey,
+                    userAnswer: this._cloneReviewData(entry.userAnswer),
+                    correctAnswer: this._cloneReviewData(entry.correctAnswer),
+                    isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
+                };
+            });
+            return normalized;
+        },
+
+        _deriveReplayExamIdFromSources(...sources) {
+            for (let i = 0; i < sources.length; i += 1) {
+                const source = sources[i];
+                if (!this._isReplayObject(source)) {
+                    continue;
+                }
+                const keys = Object.keys(source);
+                for (let j = 0; j < keys.length; j += 1) {
+                    const split = this._splitReplayCompositeKey(keys[j]);
+                    if (split.examPrefix) {
+                        return split.examPrefix;
+                    }
+                }
+            }
+            return '';
+        },
+
+        _hydrateReplayCorrectAnswersFromDetails(detailSource, correctAnswers, comparison, targetExamId = '', allowUnprefixed = true) {
+            if (!this._isReplayObject(detailSource)) {
+                return;
+            }
+            const normalizedTarget = targetExamId ? String(targetExamId).trim().toLowerCase() : '';
+            Object.entries(detailSource).forEach(([rawKey, rawDetail]) => {
+                const split = this._splitReplayCompositeKey(rawKey);
+                if (!split.questionKey) {
+                    return;
+                }
+                const hasPrefix = !!split.examPrefix;
+                if (hasPrefix) {
+                    if (!normalizedTarget || split.examPrefix.toLowerCase() !== normalizedTarget) {
+                        return;
+                    }
+                } else if (!allowUnprefixed) {
+                    return;
+                }
+                const detail = this._isReplayObject(rawDetail) ? rawDetail : {};
+                const userAnswer = detail.userAnswer != null ? detail.userAnswer : '';
+                const correctAnswer = detail.correctAnswer != null ? detail.correctAnswer : '';
+                if (!Object.prototype.hasOwnProperty.call(correctAnswers, split.questionKey) && correctAnswer !== '') {
+                    correctAnswers[split.questionKey] = this._cloneReviewData(correctAnswer);
+                }
+                if (!comparison[split.questionKey]) {
+                    comparison[split.questionKey] = {
+                        questionId: split.questionKey,
+                        userAnswer: this._cloneReviewData(userAnswer),
+                        correctAnswer: this._cloneReviewData(correctAnswer),
+                        isCorrect: typeof detail.isCorrect === 'boolean' ? detail.isCorrect : null
+                    };
+                } else if (comparison[split.questionKey].correctAnswer == null || comparison[split.questionKey].correctAnswer === '') {
+                    comparison[split.questionKey].correctAnswer = this._cloneReviewData(correctAnswer);
+                }
+            });
+        },
+
+        _finalizeReplayComparison(answers, correctAnswers, comparison) {
+            const merged = this._isReplayObject(comparison) ? comparison : {};
+            const keySet = new Set([
+                ...Object.keys(answers || {}),
+                ...Object.keys(correctAnswers || {}),
+                ...Object.keys(merged || {})
+            ]);
+            keySet.forEach((questionId) => {
+                if (!questionId) {
+                    return;
+                }
+                const existing = merged[questionId] && this._isReplayObject(merged[questionId])
+                    ? merged[questionId]
+                    : {};
+                const userAnswer = Object.prototype.hasOwnProperty.call(existing, 'userAnswer')
+                    ? existing.userAnswer
+                    : (Object.prototype.hasOwnProperty.call(answers, questionId) ? answers[questionId] : '');
+                const correctAnswer = Object.prototype.hasOwnProperty.call(existing, 'correctAnswer')
+                    ? existing.correctAnswer
+                    : (Object.prototype.hasOwnProperty.call(correctAnswers, questionId) ? correctAnswers[questionId] : '');
+                let isCorrect = typeof existing.isCorrect === 'boolean' ? existing.isCorrect : null;
+                if (isCorrect === null && userAnswer != null && correctAnswer != null && String(correctAnswer).trim()) {
+                    isCorrect = String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
+                }
+                merged[questionId] = {
+                    questionId,
+                    userAnswer: this._cloneReviewData(userAnswer),
+                    correctAnswer: this._cloneReviewData(correctAnswer),
+                    isCorrect
+                };
+            });
+            return merged;
+        },
+
+        _deriveReplayScoreInfo(sourceScoreInfo, comparison) {
+            const scoreInfo = this._isReplayObject(sourceScoreInfo) ? this._cloneReviewData(sourceScoreInfo) : {};
+            const stats = {
+                total: 0,
+                correct: 0
+            };
+            Object.values(comparison || {}).forEach((entry) => {
+                if (!this._isReplayObject(entry)) {
+                    return;
+                }
+                const hasContent = entry.userAnswer != null
+                    || entry.correctAnswer != null
+                    || typeof entry.isCorrect === 'boolean';
+                if (!hasContent) {
+                    return;
+                }
+                stats.total += 1;
+                if (entry.isCorrect === true) {
+                    stats.correct += 1;
+                }
+            });
+
+            const resolvedTotal = Number(scoreInfo.total ?? scoreInfo.totalQuestions);
+            const resolvedCorrect = Number(scoreInfo.correct ?? scoreInfo.score);
+            const finalTotal = Number.isFinite(resolvedTotal) && resolvedTotal >= 0 ? resolvedTotal : stats.total;
+            const finalCorrect = Number.isFinite(resolvedCorrect) && resolvedCorrect >= 0 ? resolvedCorrect : stats.correct;
+            const derivedAccuracy = finalTotal > 0 ? finalCorrect / finalTotal : 0;
+            const resolvedAccuracy = Number(scoreInfo.accuracy);
+            const finalAccuracy = Number.isFinite(resolvedAccuracy) ? resolvedAccuracy : derivedAccuracy;
+            const resolvedPercentage = Number(scoreInfo.percentage);
+            const finalPercentage = Number.isFinite(resolvedPercentage)
+                ? resolvedPercentage
+                : Math.round(finalAccuracy * 100);
+
+            scoreInfo.correct = finalCorrect;
+            scoreInfo.total = finalTotal;
+            scoreInfo.totalQuestions = finalTotal;
+            scoreInfo.accuracy = finalAccuracy;
+            scoreInfo.percentage = finalPercentage;
+            return scoreInfo;
+        },
+
+        _collectReplayQuestionIds(entry) {
+            const keys = new Set();
+            const collect = (source) => {
+                if (!this._isReplayObject(source)) {
+                    return;
+                }
+                Object.keys(source).forEach((key) => {
+                    const normalized = this._normalizeReplayQuestionKey(key);
+                    if (normalized) {
+                        keys.add(normalized);
+                    }
+                });
+            };
+            collect(entry.answers);
+            collect(entry.correctAnswers);
+            collect(entry.answerComparison);
+            if (Array.isArray(entry.allQuestionIds)) {
+                entry.allQuestionIds.forEach((key) => {
+                    const normalized = this._normalizeReplayQuestionKey(key);
+                    if (normalized) {
+                        keys.add(normalized);
+                    }
+                });
+            }
+            return Array.from(keys).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        },
+
+        _buildReviewReplayEntriesFromRecord(record) {
+            if (!record || typeof record !== 'object') {
+                return [];
+            }
+            const recordMetadata = this._isReplayObject(record.metadata) ? record.metadata : {};
+            const hasSuiteEntries = Array.isArray(record.suiteEntries) && record.suiteEntries.length > 0;
+            const baseEntries = hasSuiteEntries ? record.suiteEntries : [record];
+            const isAggregated = baseEntries.length > 1;
+            const recordAnswersSource = this._isReplayObject(record.answers) ? record.answers : (this._isReplayObject(record.realData?.answers) ? record.realData.answers : {});
+            const recordComparisonSource = this._isReplayObject(record.answerComparison) ? record.answerComparison : (this._isReplayObject(record.realData?.answerComparison) ? record.realData.answerComparison : {});
+            const recordCorrectSource = this._isReplayObject(record.correctAnswerMap)
+                ? record.correctAnswerMap
+                : (this._isReplayObject(record.correctAnswers)
+                    ? record.correctAnswers
+                    : (this._isReplayObject(record.realData?.correctAnswers) ? record.realData.correctAnswers : {}));
+            const recordDetailSource = record.scoreInfo?.details
+                || record.realData?.scoreInfo?.details
+                || null;
+
+            const builtEntries = [];
+            baseEntries.forEach((rawEntry, index) => {
+                const entry = this._isReplayObject(rawEntry) ? rawEntry : {};
+                const entryMetadata = this._isReplayObject(entry.metadata) ? entry.metadata : {};
+                const entryExamId = entry.examId
+                    || entryMetadata.examId
+                    || this._deriveReplayExamIdFromSources(entry.answers, entry.answerComparison, recordAnswersSource, recordComparisonSource)
+                    || (!isAggregated ? (record.examId || recordMetadata.examId) : '');
+                const allowUnprefixed = !isAggregated;
+
+                if (!entryExamId) {
+                    return;
+                }
+
+                let answers = this._normalizeReplayAnswerMap(
+                    this._isReplayObject(entry.answers) ? entry.answers : (this._isReplayObject(entry.realData?.answers) ? entry.realData.answers : {}),
+                    entryExamId,
+                    true
+                );
+                if (Object.keys(answers).length === 0) {
+                    answers = this._normalizeReplayAnswerMap(recordAnswersSource, entryExamId, allowUnprefixed);
+                }
+
+                let comparison = this._normalizeReplayComparison(
+                    this._isReplayObject(entry.answerComparison) ? entry.answerComparison : (this._isReplayObject(entry.realData?.answerComparison) ? entry.realData.answerComparison : {}),
+                    entryExamId,
+                    true
+                );
+                if (Object.keys(comparison).length === 0) {
+                    comparison = this._normalizeReplayComparison(recordComparisonSource, entryExamId, allowUnprefixed);
+                }
+
+                let correctAnswers = this._normalizeReplayAnswerMap(
+                    this._isReplayObject(entry.correctAnswerMap)
+                        ? entry.correctAnswerMap
+                        : (this._isReplayObject(entry.correctAnswers)
+                            ? entry.correctAnswers
+                            : (this._isReplayObject(entry.realData?.correctAnswers) ? entry.realData.correctAnswers : {})),
+                    entryExamId,
+                    true
+                );
+                if (Object.keys(correctAnswers).length === 0) {
+                    correctAnswers = this._normalizeReplayAnswerMap(recordCorrectSource, entryExamId, allowUnprefixed);
+                }
+
+                const detailSource = entry.scoreInfo?.details
+                    || entry.realData?.scoreInfo?.details
+                    || recordDetailSource;
+                this._hydrateReplayCorrectAnswersFromDetails(
+                    detailSource,
+                    correctAnswers,
+                    comparison,
+                    entryExamId,
+                    allowUnprefixed
+                );
+
+                comparison = this._finalizeReplayComparison(answers, correctAnswers, comparison);
+                const scoreInfo = this._deriveReplayScoreInfo(entry.scoreInfo || entry.realData?.scoreInfo || record.scoreInfo || record.realData?.scoreInfo, comparison);
+                const mergedMetadata = Object.assign({}, recordMetadata, entryMetadata, {
+                    examId: entryExamId
+                });
+                const built = {
+                    examId: String(entryExamId),
+                    title: entry.title
+                        || mergedMetadata.examTitle
+                        || mergedMetadata.title
+                        || record.title
+                        || recordMetadata.examTitle
+                        || `回顾题目 ${index + 1}`,
+                    answers,
+                    correctAnswers,
+                    answerComparison: comparison,
+                    scoreInfo,
+                    allQuestionIds: [],
+                    startTime: entry.startTime || record.startTime || record.date || null,
+                    endTime: entry.endTime || record.endTime || record.date || null,
+                    duration: Number(entry.duration ?? record.duration) || 0,
+                    metadata: mergedMetadata
+                };
+                built.allQuestionIds = this._collectReplayQuestionIds(built);
+                builtEntries.push(built);
+            });
+            return builtEntries;
+        },
+
+        _ensureReviewReplayStore() {
+            if (!this.reviewReplaySessions) {
+                this.reviewReplaySessions = new Map();
+            }
+            return this.reviewReplaySessions;
+        },
+
+        _buildReviewSession(record) {
+            const entries = this._buildReviewReplayEntriesFromRecord(record);
+            const validEntries = entries.filter((entry) => entry && entry.examId);
+            if (validEntries.length === 0) {
+                return null;
+            }
+            return {
+                sessionId: `review_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+                entries: validEntries,
+                currentIndex: 0,
+                windowRef: null,
+                readOnly: true
+            };
+        },
+
+        _bindReviewWindowRef(reviewSessionId, windowRef) {
+            if (!reviewSessionId || !windowRef || windowRef.closed) {
+                return;
+            }
+            const store = this._ensureReviewReplayStore();
+            const session = store.get(String(reviewSessionId));
+            if (!session) {
+                return;
+            }
+            session.windowRef = windowRef;
+            store.set(String(reviewSessionId), session);
+        },
+
+        _buildReviewContextPayload(session, entryIndex) {
+            const safeIndex = Number.isInteger(entryIndex) ? entryIndex : 0;
+            const total = Array.isArray(session.entries) ? session.entries.length : 0;
+            const current = session.entries[safeIndex] || {};
+            return {
+                reviewSessionId: session.sessionId,
+                index: safeIndex + 1,
+                currentIndex: safeIndex,
+                total,
+                canPrev: safeIndex > 0,
+                canNext: safeIndex < total - 1,
+                title: current.title || current.metadata?.examTitle || current.examId || '',
+                examId: current.examId || '',
+                readOnly: session.readOnly !== false
+            };
+        },
+
+        _sendReviewReplayMessages(examId, targetWindow, session, entryIndex) {
+            if (!targetWindow || targetWindow.closed || !session || !Array.isArray(session.entries)) {
+                return false;
+            }
+            const safeIndex = Number.isInteger(entryIndex) ? entryIndex : 0;
+            const entry = session.entries[safeIndex];
+            if (!entry || !entry.examId) {
+                return false;
+            }
+            const replayPayload = {
+                reviewSessionId: session.sessionId,
+                reviewEntryIndex: safeIndex,
+                readOnly: session.readOnly !== false,
+                entry: this._cloneReviewData(entry)
+            };
+            const contextPayload = this._buildReviewContextPayload(session, safeIndex);
+            try {
+                targetWindow.postMessage({ type: 'REPLAY_PRACTICE_RECORD', data: replayPayload }, '*');
+                targetWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, '*');
+                return true;
+            } catch (error) {
+                console.warn('[ReviewReplay] 向题目页发送回放数据失败:', error);
+                return false;
+            }
+        },
+
+        _dispatchReviewReplayForExam(examId, targetWindow = null) {
+            const windowInfo = this.examWindows && this.examWindows.get(examId);
+            if (!windowInfo || !windowInfo.reviewMode || !windowInfo.reviewSessionId) {
+                return false;
+            }
+            const store = this._ensureReviewReplayStore();
+            const session = store.get(String(windowInfo.reviewSessionId));
+            if (!session) {
+                return false;
+            }
+            const index = Number.isInteger(windowInfo.reviewEntryIndex)
+                ? windowInfo.reviewEntryIndex
+                : (Number.isInteger(session.currentIndex) ? session.currentIndex : 0);
+            const resolvedWindow = targetWindow || windowInfo.window || session.windowRef || null;
+            const sent = this._sendReviewReplayMessages(examId, resolvedWindow, session, index);
+            if (sent) {
+                session.currentIndex = index;
+                if (resolvedWindow && !resolvedWindow.closed) {
+                    session.windowRef = resolvedWindow;
+                }
+                store.set(String(session.sessionId), session);
+                windowInfo.reviewEntryIndex = index;
+                if (resolvedWindow && !resolvedWindow.closed) {
+                    windowInfo.window = resolvedWindow;
+                }
+                this.examWindows && this.examWindows.set(examId, windowInfo);
+            }
+            return sent;
+        },
+
+        async handleReviewReplayNavigate(examId, data = {}, sourceWindow = null) {
+            const windowInfo = this.examWindows && this.examWindows.get(examId);
+            if (!windowInfo || !windowInfo.reviewMode) {
+                return;
+            }
+            const sessionId = data.reviewSessionId
+                ? String(data.reviewSessionId)
+                : (windowInfo.reviewSessionId ? String(windowInfo.reviewSessionId) : '');
+            if (!sessionId) {
+                return;
+            }
+            const store = this._ensureReviewReplayStore();
+            const session = store.get(sessionId);
+            if (!session || !Array.isArray(session.entries) || session.entries.length === 0) {
+                return;
+            }
+            const direction = String(data.direction || data.action || '').toLowerCase();
+            let nextIndex = Number.isInteger(session.currentIndex) ? session.currentIndex : 0;
+            if (direction === 'next') {
+                nextIndex += 1;
+            } else if (direction === 'prev' || direction === 'previous') {
+                nextIndex -= 1;
+            } else if (Number.isInteger(data.targetIndex)) {
+                nextIndex = data.targetIndex;
+            } else {
+                return;
+            }
+
+            if (nextIndex < 0) {
+                nextIndex = 0;
+            }
+            if (nextIndex >= session.entries.length) {
+                nextIndex = session.entries.length - 1;
+            }
+
+            const nextEntry = session.entries[nextIndex];
+            if (!nextEntry || !nextEntry.examId) {
+                return;
+            }
+
+            session.currentIndex = nextIndex;
+            session.windowRef = sourceWindow || windowInfo.window || session.windowRef || null;
+            store.set(sessionId, session);
+
+            if (String(nextEntry.examId) === String(examId)) {
+                windowInfo.reviewEntryIndex = nextIndex;
+                this.examWindows && this.examWindows.set(examId, windowInfo);
+                this._sendReviewReplayMessages(examId, session.windowRef, session, nextIndex);
+                return;
+            }
+
+            try {
+                await this.cleanupExamSession(examId);
+            } catch (error) {
+                console.warn('[ReviewReplay] 清理旧题目会话失败:', error);
+            }
+
+            await this.openExam(nextEntry.examId, {
+                reviewMode: true,
+                readOnly: true,
+                reviewSessionId: sessionId,
+                reviewEntryIndex: nextIndex,
+                reuseWindow: session.windowRef || null
+            });
+        },
+
+        async openPracticeRecordReplay(record) {
+            const session = this._buildReviewSession(record);
+            if (!session) {
+                throw new Error('该练习记录缺少可回放的题目映射');
+            }
+            const store = this._ensureReviewReplayStore();
+            store.set(session.sessionId, session);
+
+            const firstEntry = session.entries[0];
+            if (!firstEntry || !firstEntry.examId) {
+                store.delete(session.sessionId);
+                throw new Error('无法解析首题题目标识');
+            }
+
+            const openedWindow = await this.openExam(firstEntry.examId, {
+                reviewMode: true,
+                readOnly: true,
+                reviewSessionId: session.sessionId,
+                reviewEntryIndex: 0
+            });
+            if (!openedWindow) {
+                store.delete(session.sessionId);
+                throw new Error('无法打开回顾页面');
+            }
+            this._bindReviewWindowRef(session.sessionId, openedWindow);
+            return session;
+        },
+
+        _buildExamInitPayload(examId, windowInfo = {}, extras = {}) {
+            const info = windowInfo || {};
+            if (!info.expectedSessionId) {
+                info.expectedSessionId = this.generateSessionId(examId);
+            }
+            const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
+                ? this._resolveSuiteSessionId(examId, info)
+                : (info.suiteSessionId || null);
+            const payload = {
+                examId: examId,
+                parentOrigin: window.location.origin,
+                sessionId: info.expectedSessionId,
+                suiteSessionId: suiteSessionId || null,
+                reviewMode: Boolean(info.reviewMode),
+                reviewSessionId: info.reviewSessionId ? String(info.reviewSessionId) : null,
+                reviewEntryIndex: Number.isInteger(info.reviewEntryIndex) ? info.reviewEntryIndex : 0,
+                readOnly: Object.prototype.hasOwnProperty.call(info, 'readOnly')
+                    ? Boolean(info.readOnly)
+                    : Boolean(info.reviewMode)
+            };
+            if (extras && typeof extras === 'object') {
+                Object.assign(payload, extras);
+            }
+            return payload;
+        },
+
         ensureExamWindowSession(examId, examWindow = null) {
             if (!this.examWindows) {
                 this.examWindows = new Map();
@@ -1606,7 +2210,11 @@
                     startTime: Date.now(),
                     status: 'active',
                     expectedSessionId: this.generateSessionId(examId),
-                    origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : ''
+                    origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : '',
+                    reviewMode: false,
+                    reviewSessionId: null,
+                    reviewEntryIndex: 0,
+                    readOnly: false
                 });
             }
 
@@ -1618,6 +2226,15 @@
 
             if (!windowInfo.expectedSessionId) {
                 windowInfo.expectedSessionId = this.generateSessionId(examId);
+            }
+            if (typeof windowInfo.reviewMode !== 'boolean') {
+                windowInfo.reviewMode = false;
+            }
+            if (!Number.isInteger(windowInfo.reviewEntryIndex)) {
+                windowInfo.reviewEntryIndex = 0;
+            }
+            if (!Object.prototype.hasOwnProperty.call(windowInfo, 'readOnly')) {
+                windowInfo.readOnly = Boolean(windowInfo.reviewMode);
             }
 
             this.examWindows.set(examId, windowInfo);
@@ -1781,7 +2398,8 @@
                 }
             }
 
-            if (this.components
+            if (!(windowInfo && windowInfo.reviewMode)
+                && this.components
                 && this.components.practiceRecorder
                 && typeof this.components.practiceRecorder.handleSessionStarted === 'function') {
                 const recorderSessionId = (windowInfo && windowInfo.expectedSessionId) || payload.sessionId || this.generateSessionId(examId);
@@ -1808,6 +2426,10 @@
                     this._handshakeTimers.delete(examId);
                 }
             } catch (_) { }
+
+            if (windowInfo && windowInfo.reviewMode) {
+                this._dispatchReviewReplayForExam(examId, windowInfo.window || null);
+            }
 
             // 可以在这里发送额外的配置信息给数据采集器
             // 例如题目信息、特殊设置等
