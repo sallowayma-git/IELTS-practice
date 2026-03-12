@@ -2748,11 +2748,12 @@ body.no-scroll {
 
 .search-box {
     margin-bottom: var(--space-xl);
+    position: relative;
 }
 
 .search-input {
     width: 100%;
-    padding: var(--space-md) var(--space-lg);
+    padding: var(--space-md) 45px var(--space-md) var(--space-lg);
     border: 1px solid var(--color-gray-300);
     border-radius: var(--border-radius-lg);
     background: var(--color-white);
@@ -2761,11 +2762,55 @@ body.no-scroll {
     font-family: var(--font-family-primary);
     transition: all var(--transition-normal);
     outline: none;
+
+}
+
+.search-clear-btn[hidden] {
+    display: none !important;
+}
+
+.search-clear-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--color-gray-100);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-gray-500);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    padding: 0;
+    opacity: 0.8;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    z-index: 2;
+}
+
+.search-clear-btn:hover {
+    background: var(--color-gray-200);
+    color: var(--color-gray-700);
+    opacity: 1;
+    transform: translateY(-50%) scale(1.1);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+}
+
+.search-clear-btn:active {
+    transform: translateY(-50%) scale(0.95);
+}
+
+.search-clear-btn svg {
+    width: 14px;
+    height: 14px;
 }
 
 .search-input:focus {
     border-color: var(--color-brand-primary);
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+
 }
 
 .search-input::placeholder {
@@ -3368,7 +3413,7 @@ body.no-scroll {
 
 .library-config-panel__item:hover {
     transform: translateY(-1px);
-    box-shadow: var(--shadow-sm);
+
     background: rgba(217, 203, 186, 0.55);
 }
 
