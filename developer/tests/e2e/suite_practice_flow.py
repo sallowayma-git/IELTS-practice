@@ -386,6 +386,17 @@ async def run() -> None:
             
             log_step(f"找到套题记录: {record_id}", "SUCCESS")
 
+            record_count_before = await page.evaluate(
+                "async () => {\n"
+                "  if (window.storage && typeof window.storage.get === 'function') {\n"
+                "    const records = await window.storage.get('practice_records', []);\n"
+                "    return Array.isArray(records) ? records.length : 0;\n"
+                "  }\n"
+                "  return document.querySelectorAll('#history-list .history-record-item').length;\n"
+                "}"
+            )
+            log_step(f"回放前记录数: {record_count_before}", "DEBUG")
+
             title_text = await page.evaluate(
                 "(id) => {\n"
                 "  const base = '#history-list .history-record-item[data-record-id=\\'' + id + '\\']';\n"
@@ -431,6 +442,110 @@ async def run() -> None:
             detail_path = REPORT_DIR / "suite-practice-record-detail.png"
             await page.locator("#practice-record-modal .modal-container").screenshot(path=str(detail_path))
             log_step(f"已保存截图: {detail_path.name}", "SUCCESS")
+
+            log_step("通过详情标题启动回放...")
+            async with page.expect_popup(timeout=20000) as replay_popup_wait:
+                await page.click("#practice-record-modal .record-summary .record-summary-replay-trigger")
+            replay_page = await replay_popup_wait.value
+            _collect_console(replay_page, console_log)
+            await replay_page.wait_for_load_state("load")
+
+            await replay_page.wait_for_function(
+                "() => {\n"
+                "  const results = document.getElementById('results');\n"
+                "  if (!results || results.style.display === 'none') return false;\n"
+                "  return results.querySelectorAll('tbody tr').length > 0 || results.textContent.includes('得分');\n"
+                "}",
+                timeout=30000,
+            )
+            await replay_page.wait_for_function(
+                "() => !!(document.getElementById('review-nav-bar') || document.getElementById('practice-review-nav'))",
+                timeout=30000,
+            )
+            await replay_page.wait_for_function(
+                "() => {\n"
+                "  const bar = document.getElementById('review-nav-bar') || document.getElementById('practice-review-nav');\n"
+                "  const header = document.querySelector('body > header') || document.querySelector('header');\n"
+                "  return !!(bar && header && header.contains(bar));\n"
+                "}",
+                timeout=30000,
+            )
+            await replay_page.wait_for_function(
+                "() => {\n"
+                "  const bar = document.getElementById('review-nav-bar') || document.getElementById('practice-review-nav');\n"
+                "  const header = document.querySelector('body > header') || document.querySelector('header');\n"
+                "  if (!bar || !header) return false;\n"
+                "  const br = bar.getBoundingClientRect();\n"
+                "  const hr = header.getBoundingClientRect();\n"
+                "  const centerDelta = Math.abs((br.left + br.width / 2) - (hr.left + hr.width / 2));\n"
+                "  return centerDelta <= Math.max(24, hr.width * 0.08);\n"
+                "}",
+                timeout=30000,
+            )
+            log_step("回放页已进入结算态并显示切题栏", "SUCCESS")
+
+            readonly_state = await replay_page.evaluate(
+                "() => {\n"
+                "  const submit = document.querySelector('#submit-btn, [data-submit-suite], .suite-submit-btn, button[type=\"submit\"]');\n"
+                "  const reset = document.querySelector('#reset-btn');\n"
+                "  return {\n"
+                "    submitDisabled: !submit || submit.disabled === true,\n"
+                "    resetDisabled: !reset || reset.disabled === true\n"
+                "  };\n"
+                "}"
+            )
+            if not readonly_state.get("submitDisabled"):
+                raise AssertionError("Replay page is not read-only: submit button is still enabled")
+            log_step("只读态校验通过", "SUCCESS")
+
+            nav_state = await replay_page.evaluate(
+                "() => {\n"
+                "  const bar = document.getElementById('review-nav-bar') || document.getElementById('practice-review-nav');\n"
+                "  if (!bar) return null;\n"
+                "  const next = bar.querySelector('button[data-review-dir=\"next\"], button[data-review-nav=\"next\"]');\n"
+                "  return {\n"
+                "    reviewIndex: Number.parseInt(bar.dataset.reviewIndex || '0', 10),\n"
+                "    nextDisabled: !next || next.disabled,\n"
+                "    selector: next ? (next.getAttribute('data-review-dir') ? '#review-nav-bar button[data-review-dir=\"next\"]' : '#practice-review-nav button[data-review-nav=\"next\"]') : ''\n"
+                "  };\n"
+                "}"
+            )
+            if nav_state and not nav_state.get("nextDisabled"):
+                await replay_page.click(nav_state.get("selector"))
+                await replay_page.wait_for_load_state("load", timeout=30000)
+                await replay_page.wait_for_function(
+                    "(prevIndex) => {\n"
+                    "  const bar = document.getElementById('review-nav-bar') || document.getElementById('practice-review-nav');\n"
+                    "  if (!bar) return false;\n"
+                    "  const current = Number.parseInt(bar.dataset.reviewIndex || '0', 10);\n"
+                    "  return Number.isFinite(current) && current !== Number(prevIndex);\n"
+                    "}",
+                    arg=nav_state.get("reviewIndex", 0),
+                    timeout=30000,
+                )
+                log_step("回放左右切题校验通过", "SUCCESS")
+            else:
+                log_step("该记录仅一题或无下一题，跳过切题点击", "WARNING")
+
+            replay_path = REPORT_DIR / "suite-practice-replay-final.png"
+            await replay_page.screenshot(path=str(replay_path))
+            log_step(f"已保存截图: {replay_path.name}", "SUCCESS")
+
+            await replay_page.close()
+            await page.wait_for_timeout(800)
+
+            record_count_after = await page.evaluate(
+                "async () => {\n"
+                "  if (window.storage && typeof window.storage.get === 'function') {\n"
+                "    const records = await window.storage.get('practice_records', []);\n"
+                "    return Array.isArray(records) ? records.length : 0;\n"
+                "  }\n"
+                "  return document.querySelectorAll('#history-list .history-record-item').length;\n"
+                "}"
+            )
+            if record_count_after != record_count_before:
+                raise AssertionError(f"Replay should not create new records: before={record_count_before}, after={record_count_after}")
+            log_step("回放不落库校验通过", "SUCCESS")
 
             await browser.close()
             log_step("浏览器已关闭", "SUCCESS")
