@@ -33,6 +33,7 @@
         "q7"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-anchor\">\n                <h4>Questions 14–20</h4>\n                <p>The reading passage has seven paragraphs, <strong>A–G</strong>.</p>\n                <p>Choose the correct heading for each paragraph from the list of headings below.</p>\n                <p><em>Drag a heading from this list and drop it onto the correct paragraph's answer box on the left.</em></p>\n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i. How CSR may help one business to expand</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii. CSR in many aspects of a company's business</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii. A CSR initiative without a financial gain</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv. Lack of action by the state on social issues</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v. Drivers or pressures motivate companies to address CSR</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi. The past illustrates businesses are responsible for future outcomes</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii. Companies applying CSR should be selective</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii. Reasons that business and society benefit each other</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -79,7 +80,7 @@
   "audit": {
     "matchStatus": "matched",
     "matchConfidence": 1,
-    "verifiedAt": "2026-03-08T16:24:30.723Z",
+    "verifiedAt": "2026-03-11T14:43:22.257Z",
     "notes": "signature:radio,text,textarea,dragdrop,table"
   },
   "questionOrder": [

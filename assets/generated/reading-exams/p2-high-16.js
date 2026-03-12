@@ -37,6 +37,7 @@
         "q6"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 14–19</h4>\n                <p>Reading Passage 2 has six paragraphs, <strong>A–F</strong>.</p>\n                <p>Choose the correct heading for each paragraph from the list of headings below.</p>\n                \n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i Different areas of professional expertise</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii Reasons why it is unfair to criticise lawyers</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii The disadvantages of the legal system</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv The law applies throughout our lives</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v The law has affected historical events</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi A negative regard for lawyers</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii The public's increasing ability to influence the law</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii Growth in laws</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -84,7 +85,7 @@
   "audit": {
     "matchStatus": "matched",
     "matchConfidence": 1,
-    "verifiedAt": "2026-03-08T16:24:30.536Z",
+    "verifiedAt": "2026-03-11T14:43:22.019Z",
     "notes": "signature:checkbox,text,textarea,dragdrop,table"
   },
   "questionOrder": [
