@@ -45,7 +45,7 @@ try {
 
     const assertions = [
         [sourceFiles.length === 191, `developer/reading-exams 数量应为 191，实际 ${sourceFiles.length}`],
-        [manifestKeys.length === 191, `manifest 条目数应为 191，实际 ${manifestKeys.length}`],
+        [manifestKeys.length === 214, `manifest 条目数应为 214，实际 ${manifestKeys.length}`],
         [review.unmigratedCount === 1, `unmigratedCount 应为 1，实际 ${review.unmigratedCount}`],
         [unmigratedIds.length === 1 && unmigratedIds[0] === 'p2-high-26', `唯一未迁移题应为 p2-high-26，实际 ${JSON.stringify(unmigratedIds)}`],
         [manualOnly.length === 1 && manualOnly[0].examId === 'p2-high-26', 'manual_mapping_needed 未正确单独暴露'],
