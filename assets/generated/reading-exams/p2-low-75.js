@@ -38,6 +38,7 @@
         "q7"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-anchor\">\n                <h4>Questions 14–20</h4>\n                <p>Reading Passage 2 has seven paragraphs, <strong>A–G</strong>.</p>\n                <p>Choose the correct heading for each paragraph from the list of headings below.</p>\n                <p><em>Drag a heading from the list and drop it onto the correct paragraph's answer box on the left.</em></p>\n                \n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i &nbsp; Global resistance to lean manufacturing</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii &nbsp; The historical context</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii &nbsp; Procedures for controlling quality</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv &nbsp; The pros and cons of different production systems</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v &nbsp; The impact on profits</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi &nbsp; Procedures for controlling supply</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii &nbsp; The origin of the term</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii &nbsp; A crucial difference in levels of quality</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ix\">ix &nbsp; Working conditions</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"x\">x &nbsp; Interdependent strategies for controlling expenditure</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -80,7 +81,7 @@
   "audit": {
     "matchStatus": "shui_only",
     "matchConfidence": 0,
-    "verifiedAt": "2026-03-08T16:24:30.642Z",
+    "verifiedAt": "2026-03-11T14:43:22.121Z",
     "notes": "signature:text,textarea,dragdrop,table"
   },
   "questionOrder": [

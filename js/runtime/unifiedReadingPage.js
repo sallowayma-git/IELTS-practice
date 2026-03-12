@@ -110,8 +110,11 @@
     function createGroupMarkup(group) {
         const lead = group.leadHtml ? `<div class="unified-group__lead">${group.leadHtml}</div>` : '';
         const questionIds = Array.isArray(group.questionIds) ? group.questionIds.join(',') : '';
+        const allowOptionReuse = typeof group.allowOptionReuse === 'boolean'
+            ? ` data-allow-option-reuse="${group.allowOptionReuse ? 'true' : 'false'}"`
+            : '';
         return `
-            <section class="unified-group" data-group-id="${group.groupId}" data-question-ids="${questionIds}">
+            <section class="unified-group" data-group-id="${group.groupId}" data-question-ids="${questionIds}"${allowOptionReuse}>
                 ${lead}
                 ${group.bodyHtml || ''}
             </section>

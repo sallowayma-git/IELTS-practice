@@ -38,6 +38,7 @@
         "q7"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-anchor\">\n                <h4>Questions 14–20</h4>\n                <p>Reading Passage 2 has seven paragraphs, <strong>A–G</strong>.</p>\n                <p>Choose the correct heading for each paragraph from the list of headings below.</p>\n                <p><em>Drag a heading from the list and drop it onto the correct paragraph's answer box on the left.</em></p>\n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i Some of the problems that developed at Talbot Park</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii Where the residents lived while the work was being completed</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii The ethnic makeup of the new Talbot Park</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv The unexpectedly high standard of the housing</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v Financial hardship in Talbot Park and a neighbouring community</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi The experiences of one family living at Talbot Park today</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii How to co-ordinate and assist the people who live at Talbot Park</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii Raising the money to pay for the makeover</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ix\">ix A close community in the original Talbot Park development</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"x\">x Details of the style of buildings used in the makeover</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -84,7 +85,7 @@
   "audit": {
     "matchStatus": "shui_only",
     "matchConfidence": 0,
-    "verifiedAt": "2026-03-08T16:24:30.714Z",
+    "verifiedAt": "2026-03-11T14:43:22.251Z",
     "notes": "signature:radio,text,textarea,dragdrop,table"
   },
   "questionOrder": [

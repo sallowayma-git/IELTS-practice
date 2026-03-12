@@ -335,20 +335,79 @@
             });
         }
 
+        function getPoolContainers() {
+            return document.querySelectorAll('.pool-items, .cardpool');
+        }
+
+        function isPoolContainer(element) {
+            return !!(element && element.classList && (element.classList.contains('pool-items') || element.classList.contains('cardpool')));
+        }
+
+        function getOriginPool(item) {
+            if (!item || !(item instanceof HTMLElement)) {
+                return null;
+            }
+            const originId = item.dataset.originPool;
+            return originId ? document.getElementById(originId) : null;
+        }
+
+        function detectPoolReuse(pool) {
+            if (!pool) return false;
+            const explicitReuse = pool.dataset.allowReuse;
+            if (explicitReuse === 'true') return true;
+            if (explicitReuse === 'false') return false;
+
+            const unifiedGroup = pool.closest('.unified-group');
+            const groupReuse = unifiedGroup?.dataset?.allowOptionReuse;
+            if (groupReuse === 'true' || groupReuse === 'false') {
+                pool.dataset.allowReuse = groupReuse;
+                return groupReuse === 'true';
+            }
+
+            pool.dataset.allowReuse = 'false';
+            return false;
+        }
+
+        function markAssignedItem(item, sourcePool, isPoolClone) {
+            if (!item) return item;
+            if (sourcePool?.id && !item.dataset.originPool) {
+                item.dataset.originPool = sourcePool.id;
+            }
+            item.dataset.assignedItem = 'true';
+            if (isPoolClone) {
+                item.dataset.poolClone = 'true';
+            } else {
+                delete item.dataset.poolClone;
+            }
+            return item;
+        }
+
+        function createAssignedClone(item, sourcePool) {
+            if (!item) return null;
+            const clone = item.cloneNode(true);
+            clone.classList.remove('dragging');
+            clone.removeAttribute('id');
+            clone.dataset.dragClone = 'true';
+            return markAssignedItem(clone, sourcePool, true);
+        }
+
         function ensurePoolIds() {
-            document.querySelectorAll('.pool-items').forEach((pool, index) => {
+            getPoolContainers().forEach((pool, index) => {
                 if (!pool.id) {
                     pool.id = `practice-pool-${index}`;
                 }
+                detectPoolReuse(pool);
             });
 
-            document.querySelectorAll('.pool-items .drag-item').forEach((item) => {
+            document.querySelectorAll('.pool-items .drag-item, .cardpool .drag-item').forEach((item) => {
                 if (!item.dataset.originPool) {
-                    const pool = item.closest('.pool-items');
+                    const pool = item.closest('.pool-items, .cardpool');
                     if (pool?.id) {
                         item.dataset.originPool = pool.id;
                     }
                 }
+                delete item.dataset.assignedItem;
+                delete item.dataset.poolClone;
             });
         }
 
@@ -467,14 +526,20 @@
 
         function returnItemToPool(item) {
             if (!item) return;
-            const originId = item.dataset.originPool;
-            let pool = originId ? document.getElementById(originId) : null;
-            if (!pool) {
-                pool = document.querySelector('.pool-items');
+            const pool = getOriginPool(item);
+            if (item.dataset.poolClone === 'true' || (!pool && item.dataset.assignedItem === 'true')) {
+                item.remove();
+                return;
             }
-            if (!pool) return;
+            let targetPool = pool;
+            if (!targetPool) {
+                targetPool = document.querySelector('.pool-items, .cardpool');
+            }
+            if (!targetPool) return;
             item.classList.remove('dragging');
-            pool.appendChild(item);
+            delete item.dataset.assignedItem;
+            delete item.dataset.poolClone;
+            targetPool.appendChild(item);
         }
 
         function clearDropzone(zone, exceptItem) {
@@ -487,23 +552,37 @@
         }
 
         const dragState = {
-            item: null
+            item: null,
+            sourceContainer: null,
+            sourcePool: null,
+            sourceAllowsReuse: false
         };
+
+        function resetDragState() {
+            if (dragState.item) {
+                dragState.item.classList.remove('dragging');
+            }
+            dragState.item = null;
+            dragState.sourceContainer = null;
+            dragState.sourcePool = null;
+            dragState.sourceAllowsReuse = false;
+        }
 
         function handleDragStart(event) {
             const target = event.target.closest('.drag-item');
             if (!target) return;
+            const sourcePool = target.closest('.pool-items, .cardpool');
             dragState.item = target;
+            dragState.sourceContainer = target.parentElement;
+            dragState.sourcePool = sourcePool || getOriginPool(target);
+            dragState.sourceAllowsReuse = !!(sourcePool && detectPoolReuse(sourcePool));
             event.dataTransfer.effectAllowed = 'move';
             event.dataTransfer.setData('text/plain', target.dataset.heading || target.dataset.option || target.textContent || '');
             requestAnimationFrame(() => target.classList.add('dragging'));
         }
 
         function handleDragEnd() {
-            if (dragState.item) {
-                dragState.item.classList.remove('dragging');
-            }
-            dragState.item = null;
+            resetDragState();
         }
 
         function resolveDropContainer(target) {
@@ -520,11 +599,21 @@
             if (genericZone) {
                 return genericZone;
             }
-            const pool = target.closest('.pool-items');
+            const pool = target.closest('.pool-items, .cardpool');
             if (pool) {
                 return pool;
             }
             return null;
+        }
+
+        function resolveDraggedItem(container) {
+            if (!dragState.item || !container) {
+                return null;
+            }
+            if (isPoolContainer(dragState.sourceContainer) && dragState.sourceAllowsReuse && !isPoolContainer(container)) {
+                return createAssignedClone(dragState.item, dragState.sourcePool || dragState.sourceContainer);
+            }
+            return markAssignedItem(dragState.item, dragState.sourcePool, false);
         }
 
         function moveItemToContainer(item, container) {
@@ -543,13 +632,20 @@
                 clearDropzone(container, item);
             }
 
-            if (container.classList.contains('pool-items')) {
+            if (isPoolContainer(container)) {
+                if (item.dataset.poolClone === 'true') {
+                    item.remove();
+                    return;
+                }
                 item.classList.remove('dragging');
+                delete item.dataset.assignedItem;
+                delete item.dataset.poolClone;
                 container.appendChild(item);
                 return;
             }
 
             item.classList.remove('dragging');
+            item.dataset.assignedItem = 'true';
             container.appendChild(item);
         }
 
@@ -571,11 +667,12 @@
             const container = resolveDropContainer(event.target);
             if (!container || !dragState.item) return;
             event.preventDefault();
-            const previousContainer = dragState.item.parentElement;
+            const previousContainer = dragState.sourceContainer || dragState.item.parentElement;
+            const draggedItem = resolveDraggedItem(container);
             container.classList.remove('drag-over');
-            moveItemToContainer(dragState.item, container);
-            dragState.item = null;
-            if (previousContainer) {
+            moveItemToContainer(draggedItem, container);
+            resetDragState();
+            if (previousContainer && previousContainer !== container) {
                 handleAnswerInteraction(previousContainer);
             }
             handleAnswerInteraction(container);

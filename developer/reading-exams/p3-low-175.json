@@ -33,6 +33,7 @@
         "q7"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-anchor\">\n                <h4>Questions 27–33</h4>\n                <p>Reading Passage 3 has seven paragraphs <strong>A–G</strong>.</p>\n                <p>Choose the correct heading for each paragraph from the list of headings below.</p>\n                <p><em>Drag a heading from the list and drop it onto the correct paragraph's answer box on the left.</em></p>\n                \n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i. methods used to investigate termite mound formation</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii. challenging our assumptions about the nature of life</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii. reconsidering the termite's reputation</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv. principal functions of the termite mound</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v. distribution of termite mounds in sub-Saharan Africa</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi. some potential benefits of understanding termite architecture</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii. the astonishing physical dimensions of the termite mound</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"viii\">viii. termite mounds under threat from global climate change</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ix\">ix. a mutually beneficial relationship</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -81,7 +82,7 @@
   "audit": {
     "matchStatus": "matched",
     "matchConfidence": 1,
-    "verifiedAt": "2026-03-08T16:24:30.803Z",
+    "verifiedAt": "2026-03-11T14:43:22.347Z",
     "notes": "signature:radio,text,textarea,dragdrop,table"
   },
   "questionOrder": [

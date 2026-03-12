@@ -36,6 +36,7 @@
         "q5"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Questions 14–18</h4>\n                <p>Look at the following statements (Questions 14–18) and the list of people below.</p>\n                <p>Match each statement with the correct person, <strong>A–D</strong>.</p>\n                <p><em>NB You may use any letter more than once.</em></p>\n                \n                <div class=\"match-question-item\">\n                    <p><strong>14</strong> High-level workers tend to react positively to stress</p>\n                    <div class=\"match-dropzone\" data-question=\"q1\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>15</strong> Stress levels are increased by trying to please customers</p>\n                    <div class=\"match-dropzone\" data-question=\"q2\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                     <p><strong>16</strong> Support from other workers may relieve stress</p>\n                    <div class=\"match-dropzone\" data-question=\"q3\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                    <p><strong>17</strong> Lack of independence at work is often responsible for stress</p>\n                    <div class=\"match-dropzone\" data-question=\"q4\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>18</strong> Workers commonly expect their workloads to lessen over time</p>\n                    <div class=\"match-dropzone\" data-question=\"q5\"></div>\n                </div>\n\n                <div class=\"options-pool\" id=\"people-options-pool\">\n                    <strong>List of People</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" id=\"person-A\" draggable=\"true\" data-option=\"A\">A Neil Plumridge</div>\n                        <div class=\"drag-item\" id=\"person-B\" draggable=\"true\" data-option=\"B\">B Gal Zauberman and John Lynch</div>\n                        <div class=\"drag-item\" id=\"person-C\" draggable=\"true\" data-option=\"C\">C Jan Elsner</div>\n                        <div class=\"drag-item\" id=\"person-D\" draggable=\"true\" data-option=\"D\">D Tony LaMontagne</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": true,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -84,7 +85,7 @@
   "audit": {
     "matchStatus": "matched",
     "matchConfidence": 1,
-    "verifiedAt": "2026-03-08T16:24:30.547Z",
+    "verifiedAt": "2026-03-11T14:43:22.027Z",
     "notes": "signature:radio,text,textarea,dragdrop,table"
   },
   "questionOrder": [

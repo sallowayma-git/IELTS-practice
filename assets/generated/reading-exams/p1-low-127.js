@@ -37,6 +37,7 @@
         "q6"
       ],
       "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 1–6</h4>\n                <p>Classify the following statements as referring to</p>\n                <ul class=\"classification-options\">\n                    <li><strong>A</strong> ambergris only</li>\n                    <li><strong>B</strong> amber only</li>\n                    <li><strong>C</strong> both ambergris and amber</li>\n                    <li><strong>D</strong> neither ambergris nor amber</li>\n                </ul>\n                <p>Drag and drop the correct option into the boxes for questions 1–6.<br><strong>NB</strong> You may use any option more than once.</p>\n\n                <div class=\"match-question-item\">\n                    <p><strong>1</strong> very expensive</p>\n                    <div class=\"match-dropzone\" data-question=\"q1\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>2</strong> a food flavouring</p>\n                    <div class=\"match-dropzone\" data-question=\"q2\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>3</strong> used as currency</p>\n                    <div class=\"match-dropzone\" data-question=\"q3\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>4</strong> sweet-smelling</p>\n                    <div class=\"match-dropzone\" data-question=\"q4\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>5</strong> referred to by Herman Melville</p>\n                    <div class=\"match-dropzone\" data-question=\"q5\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>6</strong> can be seen through</p>\n                    <div class=\"match-dropzone\" data-question=\"q6\"></div>\n                </div>\n\n                <div class=\"options-pool\" id=\"classification-options-pool\">\n                    <strong>List of Options</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" id=\"option-A\" draggable=\"true\" data-option=\"A\">A ambergris only</div>\n                        <div class=\"drag-item\" id=\"option-B\" draggable=\"true\" data-option=\"B\">B amber only</div>\n                        <div class=\"drag-item\" id=\"option-C\" draggable=\"true\" data-option=\"C\">C both ambergris and amber</div>\n                        <div class=\"drag-item\" id=\"option-D\" draggable=\"true\" data-option=\"D\">D neither ambergris nor amber</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": true,
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -84,7 +85,7 @@
   "audit": {
     "matchStatus": "matched",
     "matchConfidence": 1,
-    "verifiedAt": "2026-03-08T16:24:30.730Z",
+    "verifiedAt": "2026-03-11T14:43:22.261Z",
     "notes": "signature:radio,text,textarea,dragdrop,table"
   },
   "questionOrder": [
