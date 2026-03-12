@@ -2230,11 +2230,11 @@ window.setActivePathMap = function (map) {
     return map || null;
 };
 
-function openExam(examId) {
+function openExam(examId, options = {}) {
     // 优先使用App流程（带会话与通信）
     if (window.app && typeof window.app.openExam === 'function') {
         try {
-            window.app.openExam(examId);
+            window.app.openExam(examId, options || {});
             return;
         } catch (e) {
             console.warn('[Main] app.openExam 调用失败，启用降级握手路径:', e);

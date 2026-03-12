@@ -3,8 +3,12 @@ class PracticeRecordModal {
         this.modalId = 'practice-record-modal';
         this.isVisible = false;
         this.modalElement = null;
+        this.currentRecord = null;
         this.boundBackdropHandler = null;
         this.boundEscHandler = null;
+        this.replayTriggerElement = null;
+        this.boundReplayClickHandler = null;
+        this.boundReplayKeyHandler = null;
 
         window.practiceRecordModal = this;
     }
@@ -27,6 +31,7 @@ class PracticeRecordModal {
             document.body.insertAdjacentHTML('beforeend', modalHtml);
 
             this.modalElement = document.getElementById(this.modalId);
+            this.currentRecord = processedRecord;
             this.setupEventListeners(this.modalElement);
             this.isVisible = true;
 
@@ -51,6 +56,7 @@ class PracticeRecordModal {
         }
 
         this.modalElement = null;
+        this.currentRecord = null;
         this.isVisible = false;
     }
 
@@ -62,9 +68,18 @@ class PracticeRecordModal {
         if (this.boundEscHandler) {
             document.removeEventListener('keydown', this.boundEscHandler);
         }
+        if (this.replayTriggerElement && this.boundReplayClickHandler) {
+            this.replayTriggerElement.removeEventListener('click', this.boundReplayClickHandler);
+        }
+        if (this.replayTriggerElement && this.boundReplayKeyHandler) {
+            this.replayTriggerElement.removeEventListener('keydown', this.boundReplayKeyHandler);
+        }
 
         this.boundBackdropHandler = null;
         this.boundEscHandler = null;
+        this.replayTriggerElement = null;
+        this.boundReplayClickHandler = null;
+        this.boundReplayKeyHandler = null;
     }
 
     setupEventListeners(modal) {
@@ -92,6 +107,50 @@ class PracticeRecordModal {
             }
         };
         document.addEventListener('keydown', this.boundEscHandler);
+
+        const replayTrigger = modal.querySelector('.record-summary-replay-trigger');
+        if (replayTrigger) {
+            this.replayTriggerElement = replayTrigger;
+            const launchReplay = async () => {
+                const replayRecord = this.currentRecord;
+                if (!replayRecord) {
+                    if (typeof window.showMessage === 'function') {
+                        window.showMessage('未找到可回放记录', 'error');
+                    }
+                    return;
+                }
+                if (!window.app || typeof window.app.openPracticeRecordReplay !== 'function') {
+                    if (typeof window.showMessage === 'function') {
+                        window.showMessage('当前版本不支持记录回放', 'error');
+                    }
+                    return;
+                }
+
+                closeModal();
+                try {
+                    await window.app.openPracticeRecordReplay(replayRecord);
+                } catch (error) {
+                    console.error('[PracticeRecordModal] 启动回放失败:', error);
+                    if (typeof window.showMessage === 'function') {
+                        window.showMessage(`无法回放该记录：${error.message || '未知错误'}`, 'error');
+                    }
+                }
+            };
+
+            this.boundReplayClickHandler = (event) => {
+                event.preventDefault();
+                launchReplay();
+            };
+            this.boundReplayKeyHandler = (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    launchReplay();
+                }
+            };
+
+            replayTrigger.addEventListener('click', this.boundReplayClickHandler);
+            replayTrigger.addEventListener('keydown', this.boundReplayKeyHandler);
+        }
     }
 
     createModalHtml(record) {
@@ -136,7 +195,9 @@ class PracticeRecordModal {
                     </div>
                     <div class="modal-body">
                         <div class="record-summary">
-                            <h4>${this.escapeHtml(category)} - ${this.escapeHtml(frequencyLabel)} - ${this.escapeHtml(examTitle)}</h4>
+                            <h4 class="record-summary-replay-trigger" role="button" tabindex="0" aria-label="打开该练习记录回放">
+                                ${this.escapeHtml(category)} - ${this.escapeHtml(frequencyLabel)} - ${this.escapeHtml(examTitle)}
+                            </h4>
                             <div class="record-meta">
                                 <div class="meta-item">
                                     <span class="meta-label">\u7ec3\u4e60\u65f6\u95f4\uff1a</span>
