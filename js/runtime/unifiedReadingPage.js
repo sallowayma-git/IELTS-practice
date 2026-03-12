@@ -123,7 +123,7 @@
 
     function renderDataset(dataset) {
         const passageHtml = (dataset.passage?.blocks || [])
-            .map((block) => block?.html || '')
+            .map((block) => block?.bodyHtml || block?.html || '')
             .join('\n');
         const groupsHtml = (dataset.questionGroups || [])
             .map((group) => createGroupMarkup(group))
@@ -553,6 +553,14 @@
         return String(normalizedCorrect).toLowerCase() === String(normalizedUser).toLowerCase();
     }
 
+    function questionWeight(correctAnswer) {
+        const normalized = normalizeAnswerValue(correctAnswer);
+        if (Array.isArray(normalized) && normalized.length > 0) {
+            return normalized.length;
+        }
+        return 1;
+    }
+
     function hasAnswer(questionId) {
         const answers = collectAnswers();
         const value = answers[questionId];
@@ -566,13 +574,16 @@
         const answerComparison = {};
         const details = {};
         let correctCount = 0;
+        let totalQuestions = 0;
 
         questionOrder.forEach((questionId) => {
             const userAnswer = answers[questionId] || '';
             const correctAnswer = answerKey[questionId];
             const isCorrect = compareAnswers(userAnswer, correctAnswer);
+            const weight = questionWeight(correctAnswer);
+            totalQuestions += weight;
             if (isCorrect) {
-                correctCount += 1;
+                correctCount += weight;
             }
             answerComparison[questionId] = {
                 questionId,
@@ -588,7 +599,6 @@
             };
         });
 
-        const totalQuestions = questionOrder.length;
         const accuracy = totalQuestions > 0 ? correctCount / totalQuestions : 0;
         return {
             answers,
