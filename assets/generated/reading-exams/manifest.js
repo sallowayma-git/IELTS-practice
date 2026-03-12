@@ -1337,6 +1337,167 @@
     "script": "./p3-high-192.js",
     "title": "Voynich Manuscript 伏尼契手稿",
     "category": "P3"
+  },
+  "p1-low-223": {
+    "examId": "p1-low-223",
+    "dataKey": "p1-low-223",
+    "script": "./p1-low-223.js",
+    "title": "Effect and Cause 湖泊海啸研究",
+    "category": "P1"
+  },
+  "p2-low-222": {
+    "examId": "p2-low-222",
+    "dataKey": "p2-low-222",
+    "script": "./p2-low-222.js",
+    "title": "Ideal Homes 理想居所",
+    "category": "P2"
+  },
+  "p1-high-194": {
+    "examId": "p1-high-194",
+    "dataKey": "p1-high-194",
+    "script": "./p1-high-194.js",
+    "title": "The history of the British wool industry 英国羊毛产业的历史【高】",
+    "category": "P1"
+  },
+  "p1-medium-161": {
+    "examId": "p1-medium-161",
+    "dataKey": "p1-medium-161",
+    "script": "./p1-medium-161.js",
+    "title": "Deep sea discovery 深海发光生物研究【次】",
+    "category": "P1"
+  },
+  "p2-high-192": {
+    "examId": "p2-high-192",
+    "dataKey": "p2-high-192",
+    "script": "./p2-high-192.js",
+    "title": "P2(1115纸笔) - Should we stop eating meat 是否应该吃素【高】",
+    "category": "P2"
+  },
+  "p2-medium-213": {
+    "examId": "p2-medium-213",
+    "dataKey": "p2-medium-213",
+    "script": "./p2-medium-213.js",
+    "title": "Growing more for less 卫星农业【次】",
+    "category": "P2"
+  },
+  "p2-low-051": {
+    "examId": "p2-low-051",
+    "dataKey": "p2-low-051",
+    "script": "./p2-low-051.js",
+    "title": "The dingo debate 澳洲野犬_澳洲野狗",
+    "category": "P2"
+  },
+  "p2-medium-058": {
+    "examId": "p2-medium-058",
+    "dataKey": "p2-medium-058",
+    "script": "./p2-medium-058.js",
+    "title": "Who wrote Shakespeare's plays 莎士比亚【次】",
+    "category": "P2"
+  },
+  "p2-medium-209": {
+    "examId": "p2-medium-209",
+    "dataKey": "p2-medium-209",
+    "script": "./p2-medium-209.js",
+    "title": "Decision Fatigue 决策疲劳【次】",
+    "category": "P2"
+  },
+  "p2-medium-217": {
+    "examId": "p2-medium-217",
+    "dataKey": "p2-medium-217",
+    "script": "./p2-medium-217.js",
+    "title": "A mechanical friend for children 孩子的机器人朋友【次】",
+    "category": "P2"
+  },
+  "p2-high-201": {
+    "examId": "p2-high-201",
+    "dataKey": "p2-high-201",
+    "script": "./p2-high-201.js",
+    "title": "Multi-tasking and the brain 大脑与多任务处理【高】",
+    "category": "P2"
+  },
+  "p3-low-198": {
+    "examId": "p3-low-198",
+    "dataKey": "p3-low-198",
+    "script": "./p3-low-198.js",
+    "title": "Child’s Play in Medieval England 中世纪的游戏",
+    "category": "P3"
+  },
+  "p3-medium-197": {
+    "examId": "p3-medium-197",
+    "dataKey": "p3-medium-197",
+    "script": "./p3-medium-197.js",
+    "title": "Australia’s Megafauna Controversy 巨兽灭绝【次】",
+    "category": "P3"
+  },
+  "p3-low-078": {
+    "examId": "p3-low-078",
+    "dataKey": "p3-low-078",
+    "script": "./p3-low-078.js",
+    "title": "P3 (ds做出来的) - Music Language We All Speak 音乐语言",
+    "category": "P3"
+  },
+  "p3-high-206": {
+    "examId": "p3-high-206",
+    "dataKey": "p3-high-206",
+    "script": "./p3-high-206.js",
+    "title": "200 Years of Australian Landscapes at the Royal Academy in London 亚洲风景展【高】",
+    "category": "P3"
+  },
+  "p3-high-212": {
+    "examId": "p3-high-212",
+    "dataKey": "p3-high-212",
+    "script": "./p3-high-212.js",
+    "title": "Children’s literature studies today 儿童文学【高】",
+    "category": "P3"
+  },
+  "p3-low-999": {
+    "examId": "p3-low-999",
+    "dataKey": "p3-low-999",
+    "script": "./p3-low-999.js",
+    "title": "Risk taking",
+    "category": "P3"
+  },
+  "p3-high-218": {
+    "examId": "p3-high-218",
+    "dataKey": "p3-high-218",
+    "script": "./p3-high-218.js",
+    "title": "The Causes of Linguistic Change 语音的演变【高】",
+    "category": "P3"
+  },
+  "p3-low-219": {
+    "examId": "p3-low-219",
+    "dataKey": "p3-low-219",
+    "script": "./p3-low-219.js",
+    "title": "The origin of language 语言的起源",
+    "category": "P3"
+  },
+  "p3-high-204": {
+    "examId": "p3-high-204",
+    "dataKey": "p3-high-204",
+    "script": "./p3-high-204.js",
+    "title": "When people are ‘deaf’ to music 失乐症【高】",
+    "category": "P3"
+  },
+  "p1-high-200": {
+    "examId": "p1-high-200",
+    "dataKey": "p1-high-200",
+    "script": "./p1-high-200.js",
+    "title": "Australia’s Airborne Dentists 澳洲飞行牙医【高】",
+    "category": "P1"
+  },
+  "p1-high-216": {
+    "examId": "p1-high-216",
+    "dataKey": "p1-high-216",
+    "script": "./p1-high-216.js",
+    "title": "Australia’s cane toad problem 澳洲蟾蜍【高】",
+    "category": "P1"
+  },
+  "p1-high-211": {
+    "examId": "p1-high-211",
+    "dataKey": "p1-high-211",
+    "script": "./p1-high-211.js",
+    "title": "Ahead of its time 新西兰头骨【高】",
+    "category": "P1"
   }
 };
 })(typeof window !== "undefined" ? window : globalThis);
