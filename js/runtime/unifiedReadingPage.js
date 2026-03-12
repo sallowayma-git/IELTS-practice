@@ -11,6 +11,11 @@
         dataKey: null,
         sessionId: null,
         suiteSessionId: null,
+        reviewSessionId: null,
+        reviewEntryIndex: 0,
+        reviewMode: false,
+        readOnly: false,
+        reviewContext: null,
         startTime: Date.now(),
         ready: false,
         submitted: false,
@@ -650,6 +655,259 @@
         dom.results.style.display = 'block';
     }
 
+    function escapeSelector(value) {
+        if (global.CSS && typeof global.CSS.escape === 'function') {
+            try {
+                return global.CSS.escape(value);
+            } catch (_) {
+                // ignore and use fallback
+            }
+        }
+        return String(value).replace(/["\\]/g, '\\$&');
+    }
+
+    function normalizeReplayQuestionId(rawValue) {
+        if (rawValue == null) return '';
+        const raw = String(rawValue).trim();
+        if (!raw) return '';
+        const splitIndex = raw.lastIndexOf('::');
+        const value = splitIndex >= 0 ? raw.slice(splitIndex + 2) : raw;
+        const direct = normalizeQuestionId(value);
+        if (direct) return direct;
+        const digits = value.match(/(\d+)/);
+        return digits ? `q${digits[1]}` : value.toLowerCase();
+    }
+
+    function normalizeReplayMap(rawMap = {}) {
+        const normalized = {};
+        if (!rawMap || typeof rawMap !== 'object') {
+            return normalized;
+        }
+        Object.entries(rawMap).forEach(([key, value]) => {
+            const normalizedKey = normalizeReplayQuestionId(key);
+            if (!normalizedKey) return;
+            normalized[normalizedKey] = value;
+        });
+        return normalized;
+    }
+
+    function buildReplayResults(entry = {}) {
+        const normalizedAnswers = normalizeReplayMap(entry.answers || {});
+        const normalizedCorrectAnswers = normalizeReplayMap(entry.correctAnswers || {});
+        const normalizedComparison = {};
+        const rawComparison = normalizeReplayMap(entry.answerComparison || {});
+        const questionIds = new Set([
+            ...Object.keys(normalizedAnswers),
+            ...Object.keys(normalizedCorrectAnswers),
+            ...Object.keys(rawComparison),
+            ...(Array.isArray(entry.allQuestionIds)
+                ? entry.allQuestionIds.map((item) => normalizeReplayQuestionId(item)).filter(Boolean)
+                : [])
+        ]);
+
+        let correctCount = 0;
+        questionIds.forEach((questionId) => {
+            const rawEntry = rawComparison[questionId];
+            const comparisonEntry = (rawEntry && typeof rawEntry === 'object' && !Array.isArray(rawEntry))
+                ? rawEntry
+                : {};
+            const userAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'userAnswer')
+                ? comparisonEntry.userAnswer
+                : (Object.prototype.hasOwnProperty.call(normalizedAnswers, questionId) ? normalizedAnswers[questionId] : '');
+            const correctAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'correctAnswer')
+                ? comparisonEntry.correctAnswer
+                : (Object.prototype.hasOwnProperty.call(normalizedCorrectAnswers, questionId) ? normalizedCorrectAnswers[questionId] : '');
+            let isCorrect = typeof comparisonEntry.isCorrect === 'boolean'
+                ? comparisonEntry.isCorrect
+                : compareAnswers(userAnswer, correctAnswer);
+            if (isCorrect) {
+                correctCount += 1;
+            }
+            normalizedComparison[questionId] = {
+                questionId,
+                userAnswer,
+                correctAnswer,
+                isCorrect
+            };
+        });
+
+        const totalQuestions = questionIds.size;
+        const scoreInfo = Object.assign({}, entry.scoreInfo || {});
+        scoreInfo.correct = Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : correctCount;
+        scoreInfo.total = Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : totalQuestions;
+        scoreInfo.totalQuestions = Number.isFinite(Number(scoreInfo.totalQuestions)) ? Number(scoreInfo.totalQuestions) : scoreInfo.total;
+        scoreInfo.accuracy = scoreInfo.totalQuestions > 0 ? scoreInfo.correct / scoreInfo.totalQuestions : 0;
+        scoreInfo.percentage = Number.isFinite(Number(scoreInfo.percentage))
+            ? Number(scoreInfo.percentage)
+            : Math.round(scoreInfo.accuracy * 100);
+
+        return {
+            answers: normalizedAnswers,
+            correctAnswers: normalizedCorrectAnswers,
+            answerComparison: normalizedComparison,
+            scoreInfo
+        };
+    }
+
+    function applyReplayAnswersToDom(answers = {}) {
+        Object.entries(answers).forEach(([questionId, rawValue]) => {
+            const normalizedId = normalizeReplayQuestionId(questionId);
+            if (!normalizedId) return;
+            const aliases = Array.from(new Set([
+                normalizedId,
+                normalizedId.replace(/^q/i, ''),
+                `question${normalizedId.replace(/^q/i, '')}`
+            ])).filter(Boolean);
+
+            const valueList = Array.isArray(rawValue)
+                ? rawValue.map((item) => String(item).trim()).filter(Boolean)
+                : String(rawValue == null ? '' : rawValue).split(',').map((item) => item.trim()).filter(Boolean);
+            const firstValue = valueList[0] || '';
+
+            aliases.forEach((alias) => {
+                const escapedAlias = escapeSelector(alias);
+                const selector = [
+                    `input[name="${escapedAlias}"]`,
+                    `textarea[name="${escapedAlias}"]`,
+                    `select[name="${escapedAlias}"]`,
+                    `input[id="${escapedAlias}"]`,
+                    `textarea[id="${escapedAlias}"]`,
+                    `select[id="${escapedAlias}"]`
+                ].join(', ');
+                const fields = Array.from(document.querySelectorAll(selector));
+                fields.forEach((field) => {
+                    if (!(field instanceof HTMLElement)) return;
+                    if (field instanceof HTMLInputElement) {
+                        if (field.type === 'radio') {
+                            const candidate = String(field.value || field.dataset?.option || '').trim();
+                            field.checked = valueList.includes(candidate) || valueList.includes(field.id || '');
+                            return;
+                        }
+                        if (field.type === 'checkbox') {
+                            const candidate = String(field.value || field.dataset?.option || '').trim();
+                            field.checked = valueList.includes(candidate) || valueList.includes(field.id || '');
+                            return;
+                        }
+                        field.value = firstValue;
+                        return;
+                    }
+                    if (field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
+                        field.value = firstValue;
+                    }
+                });
+            });
+        });
+    }
+
+    function setReadOnlyMode(enabled) {
+        state.readOnly = Boolean(enabled);
+        document.body.classList.toggle('review-readonly-mode', state.readOnly);
+        if (dom.submitBtn) {
+            dom.submitBtn.disabled = state.readOnly;
+            if (state.readOnly) {
+                dom.submitBtn.textContent = '回顾模式';
+            }
+        }
+        if (dom.resetBtn) {
+            dom.resetBtn.disabled = state.readOnly;
+        }
+        const controls = document.querySelectorAll('input, textarea, select');
+        controls.forEach((control) => {
+            if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
+                control.disabled = state.readOnly;
+            }
+        });
+    }
+
+    function ensureReviewNavStyle() {
+        if (document.getElementById('review-nav-style')) return;
+        const style = document.createElement('style');
+        style.id = 'review-nav-style';
+        style.textContent = `
+            #review-nav-bar { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 8px; z-index: 2; }
+            #review-nav-bar button { border: 1px solid rgba(148, 163, 184, 0.6); border-radius: 6px; padding: 4px 10px; background: #fff; color: #0f172a; cursor: pointer; font-size: 12px; font-weight: 600; }
+            #review-nav-bar button:disabled { opacity: 0.4; cursor: not-allowed; }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function ensureReviewNavBar() {
+        let bar = document.getElementById('review-nav-bar');
+        if (bar) return bar;
+        ensureReviewNavStyle();
+        bar = document.createElement('div');
+        bar.id = 'review-nav-bar';
+        bar.innerHTML = `
+            <button type="button" data-review-dir="prev">上一题</button>
+            <button type="button" data-review-dir="next">下一题</button>
+        `;
+        bar.addEventListener('click', (event) => {
+            const button = event.target instanceof HTMLElement ? event.target.closest('button[data-review-dir]') : null;
+            if (!button || button.disabled) return;
+            const direction = button.getAttribute('data-review-dir') || '';
+            if (!direction) return;
+            postMessage('REVIEW_NAVIGATE', {
+                direction,
+                reviewSessionId: state.reviewSessionId || state.reviewContext?.reviewSessionId || null,
+                currentIndex: Number.isInteger(state.reviewContext?.currentIndex) ? state.reviewContext.currentIndex : state.reviewEntryIndex
+            });
+        });
+        const header = document.querySelector('body > header') || document.querySelector('header');
+        if (header) {
+            try {
+                if (global.getComputedStyle(header).position === 'static') {
+                    header.style.position = 'relative';
+                    header.dataset.reviewNavPatched = '1';
+                }
+            } catch (_) {
+                header.style.position = 'relative';
+                header.dataset.reviewNavPatched = '1';
+            }
+            header.appendChild(bar);
+        } else {
+            document.body.insertAdjacentElement('afterbegin', bar);
+        }
+        return bar;
+    }
+
+    function applyReviewContext(data = {}) {
+        state.reviewContext = data;
+        if (data.reviewSessionId) {
+            state.reviewSessionId = data.reviewSessionId;
+        }
+        if (Number.isInteger(data.currentIndex)) {
+            state.reviewEntryIndex = data.currentIndex;
+        }
+        const bar = ensureReviewNavBar();
+        const prevBtn = bar.querySelector('button[data-review-dir="prev"]');
+        const nextBtn = bar.querySelector('button[data-review-dir="next"]');
+        const currentIndex = Number.isFinite(Number(data.currentIndex)) ? Number(data.currentIndex) : state.reviewEntryIndex;
+        const total = Number.isFinite(Number(data.total)) ? Number(data.total) : 1;
+        bar.dataset.reviewIndex = String(currentIndex);
+        bar.dataset.reviewTotal = String(total);
+        if (prevBtn) prevBtn.disabled = !data.canPrev;
+        if (nextBtn) nextBtn.disabled = !data.canNext;
+        setReadOnlyMode(data.readOnly !== false);
+    }
+
+    function applyReplayRecord(data = {}) {
+        const entry = data.entry && typeof data.entry === 'object' ? data.entry : data;
+        const replayResults = buildReplayResults(entry);
+        if (data.reviewSessionId) {
+            state.reviewSessionId = data.reviewSessionId;
+        }
+        if (Number.isInteger(data.reviewEntryIndex)) {
+            state.reviewEntryIndex = data.reviewEntryIndex;
+        }
+        state.reviewMode = true;
+        applyReplayAnswersToDom(replayResults.answers || {});
+        state.lastResults = replayResults;
+        state.submitted = true;
+        renderResults(replayResults);
+        updateNavStatuses(replayResults);
+        setReadOnlyMode(data.readOnly !== false);
+    }
+
     function buildEnvelope(type, payload) {
         return {
             type,
@@ -681,7 +939,11 @@
         postMessage('SESSION_READY', {
             url: global.location.href,
             pageType: 'unified-reading',
-            title: state.dataset?.meta?.title || document.title
+            title: state.dataset?.meta?.title || document.title,
+            reviewMode: state.reviewMode,
+            readOnly: state.readOnly,
+            reviewSessionId: state.reviewSessionId,
+            reviewEntryIndex: state.reviewEntryIndex
         });
     }
 
@@ -701,6 +963,9 @@
     }
 
     function handleSubmit() {
+        if (state.readOnly) {
+            return;
+        }
         const results = buildResults();
         state.lastResults = results;
         renderResults(results);
@@ -725,6 +990,9 @@
     }
 
     function handleReset() {
+        if (state.readOnly) {
+            return;
+        }
         document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach((input) => {
             input.checked = false;
         });
@@ -765,8 +1033,26 @@
             if (data.suiteSessionId) {
                 state.suiteSessionId = data.suiteSessionId;
             }
+            if (data.reviewSessionId) {
+                state.reviewSessionId = data.reviewSessionId;
+            }
+            if (Number.isInteger(data.reviewEntryIndex)) {
+                state.reviewEntryIndex = data.reviewEntryIndex;
+            }
+            if (data.reviewMode) {
+                state.reviewMode = true;
+                setReadOnlyMode(data.readOnly !== false);
+            }
             stopInitLoop();
             sendSessionReady();
+            return;
+        }
+        if (type === 'REPLAY_PRACTICE_RECORD') {
+            applyReplayRecord(data || {});
+            return;
+        }
+        if (type === 'REVIEW_CONTEXT') {
+            applyReviewContext(data || {});
             return;
         }
         if (type === 'SUITE_NAVIGATE' && data.url) {
