@@ -2761,7 +2761,7 @@ window.completeExamIndex = [
         filename: '192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素【高】.pdf',
+        pdfFilename: '99. P3 - Voynich Manuscript 伏尼契手稿【高】.pdf',
     },
     {
         id: 'p1-high-200',
