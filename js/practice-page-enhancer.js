@@ -783,6 +783,12 @@
         currentSuiteId: null, // 新增：当前激活的套题ID
         submittedSuites: new Set(), // 新增：已提交的套题ID集合
         isSubmitting: false, // 新增：提交状态标志，防止并发提交
+        reviewMode: false,
+        readOnly: false,
+        reviewSessionId: null,
+        reviewEntryIndex: 0,
+        reviewContext: null,
+        reviewNavBarElement: null,
         mixinsApplied: false,
         activeMixins: [],
         hookHandlers: {},
@@ -840,6 +846,11 @@
                 console.log('[PracticeEnhancer] 开始初始化');
                 this.hasDispatchedFinalResults = false;
                 this.submitInProgress = false;
+                this.reviewMode = false;
+                this.readOnly = false;
+                this.reviewSessionId = null;
+                this.reviewEntryIndex = 0;
+                this.reviewContext = null;
                 this.pageContext = this.getPageContext(true);
                 this.activateMixins();
 
@@ -1216,6 +1227,10 @@
                 this.answerCollectionInterval = null;
             }
             this.stopInitRequestLoop();
+            if (this.reviewNavBarElement && this.reviewNavBarElement.parentNode) {
+                this.reviewNavBarElement.parentNode.removeChild(this.reviewNavBarElement);
+            }
+            this.reviewNavBarElement = null;
         },
 
         configure: function (options = {}) {
@@ -1325,6 +1340,314 @@
             return normalizedId;
         },
 
+        normalizeReplayMap: function (rawMap) {
+            const normalized = {};
+            if (!rawMap || typeof rawMap !== 'object') {
+                return normalized;
+            }
+            Object.entries(rawMap).forEach(([key, value]) => {
+                let candidate = key;
+                if (typeof candidate === 'string' && candidate.includes('::')) {
+                    const split = candidate.split('::');
+                    candidate = split[split.length - 1];
+                }
+                const normalizedKey = this.normalizeQuestionId(candidate);
+                if (!normalizedKey) {
+                    return;
+                }
+                normalized[normalizedKey] = value;
+            });
+            return normalized;
+        },
+
+        buildReplayResultsFromEntry: function (entry = {}) {
+            const answers = this.normalizeReplayMap(entry.answers || {});
+            const correctAnswers = this.normalizeReplayMap(entry.correctAnswers || entry.correctAnswerMap || {});
+            const rawComparison = this.normalizeReplayMap(entry.answerComparison || {});
+            const questionIds = new Set([
+                ...Object.keys(answers),
+                ...Object.keys(correctAnswers),
+                ...Object.keys(rawComparison),
+                ...(Array.isArray(entry.allQuestionIds)
+                    ? entry.allQuestionIds.map((item) => this.normalizeQuestionId(item)).filter(Boolean)
+                    : [])
+            ]);
+
+            const answerComparison = {};
+            questionIds.forEach((questionId) => {
+                const rawEntry = rawComparison[questionId];
+                const item = (rawEntry && typeof rawEntry === 'object' && !Array.isArray(rawEntry))
+                    ? rawEntry
+                    : {};
+                const userAnswer = Object.prototype.hasOwnProperty.call(item, 'userAnswer')
+                    ? item.userAnswer
+                    : (Object.prototype.hasOwnProperty.call(answers, questionId) ? answers[questionId] : '');
+                const correctAnswer = Object.prototype.hasOwnProperty.call(item, 'correctAnswer')
+                    ? item.correctAnswer
+                    : (Object.prototype.hasOwnProperty.call(correctAnswers, questionId) ? correctAnswers[questionId] : '');
+                const isCorrect = typeof item.isCorrect === 'boolean'
+                    ? item.isCorrect
+                    : this.compareAnswers(userAnswer, correctAnswer);
+                answerComparison[questionId] = {
+                    questionId,
+                    userAnswer,
+                    correctAnswer,
+                    isCorrect
+                };
+            });
+
+            let scoreInfo = {};
+            if (entry.scoreInfo && typeof entry.scoreInfo === 'object') {
+                scoreInfo = Object.assign({}, entry.scoreInfo);
+            } else {
+                scoreInfo = {};
+            }
+            const derivedScore = this.calculateScoreFromComparison(answerComparison) || { correct: 0, total: questionIds.size, accuracy: 0, percentage: 0 };
+            scoreInfo.correct = Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : derivedScore.correct;
+            scoreInfo.total = Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : derivedScore.total;
+            scoreInfo.accuracy = Number.isFinite(Number(scoreInfo.accuracy)) ? Number(scoreInfo.accuracy) : derivedScore.accuracy;
+            scoreInfo.percentage = Number.isFinite(Number(scoreInfo.percentage))
+                ? Number(scoreInfo.percentage)
+                : Math.round(scoreInfo.accuracy * 100);
+
+            return {
+                answers,
+                correctAnswers,
+                answerComparison,
+                scoreInfo
+            };
+        },
+
+        applyReplayAnswersToDom: function (answers) {
+            if (!answers || typeof answers !== 'object') {
+                return;
+            }
+
+            Object.entries(answers).forEach(([questionId, rawValue]) => {
+                const normalizedId = this.normalizeQuestionId(questionId);
+                if (!normalizedId) {
+                    return;
+                }
+
+                const aliases = Array.from(new Set([
+                    normalizedId,
+                    normalizedId.replace(/^q/i, ''),
+                    `question${normalizedId.replace(/^q/i, '')}`
+                ])).filter(Boolean);
+
+                const values = Array.isArray(rawValue)
+                    ? rawValue.map((item) => String(item).trim()).filter(Boolean)
+                    : String(rawValue == null ? '' : rawValue).split(',').map((item) => item.trim()).filter(Boolean);
+                const firstValue = values[0] || '';
+
+                aliases.forEach((alias) => {
+                    const escapedAlias = cssEscape(alias);
+                    const selector = [
+                        `input[name="${escapedAlias}"]`,
+                        `textarea[name="${escapedAlias}"]`,
+                        `select[name="${escapedAlias}"]`,
+                        `input[id="${escapedAlias}"]`,
+                        `textarea[id="${escapedAlias}"]`,
+                        `select[id="${escapedAlias}"]`
+                    ].join(', ');
+                    const fields = document.querySelectorAll(selector);
+                    fields.forEach((field) => {
+                        if (field instanceof HTMLInputElement) {
+                            if (field.type === 'radio' || field.type === 'checkbox') {
+                                const candidate = String(field.value || field.dataset.option || field.id || '').trim();
+                                field.checked = values.includes(candidate);
+                            } else {
+                                field.value = firstValue;
+                            }
+                        } else if (field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
+                            field.value = firstValue;
+                        }
+                    });
+                });
+            });
+        },
+
+        setReviewMode: function (enabled) {
+            this.reviewMode = Boolean(enabled);
+            this.readOnly = this.reviewMode;
+            document.body.classList.toggle('practice-review-readonly', this.readOnly);
+
+            const controls = document.querySelectorAll('input, textarea, select');
+            controls.forEach((control) => {
+                if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
+                    control.disabled = this.readOnly;
+                }
+            });
+
+            const actionButtons = document.querySelectorAll('#submit-btn, #reset-btn, button[type="submit"], [data-submit-suite], .suite-submit-btn');
+            actionButtons.forEach((button) => {
+                if (button instanceof HTMLButtonElement || button instanceof HTMLInputElement) {
+                    button.disabled = this.readOnly;
+                }
+            });
+        },
+
+        ensureReviewNavStyles: function () {
+            if (document.getElementById('practice-review-nav-style')) {
+                return;
+            }
+            const style = document.createElement('style');
+            style.id = 'practice-review-nav-style';
+            style.textContent = `
+                #practice-review-nav { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 8px; z-index: 2; }
+                #practice-review-nav button { border: 1px solid rgba(148, 163, 184, 0.6); border-radius: 6px; padding: 4px 10px; background: #fff; color: #0f172a; font-size: 12px; font-weight: 600; cursor: pointer; }
+                #practice-review-nav button:disabled { opacity: 0.4; cursor: not-allowed; }
+            `;
+            document.head.appendChild(style);
+        },
+
+        ensureReviewNavBar: function () {
+            if (this.reviewNavBarElement && this.reviewNavBarElement.isConnected) {
+                return this.reviewNavBarElement;
+            }
+            this.ensureReviewNavStyles();
+
+            const bar = document.createElement('div');
+            bar.id = 'practice-review-nav';
+            bar.innerHTML = `
+                <button type="button" data-review-nav="prev">上一题</button>
+                <button type="button" data-review-nav="next">下一题</button>
+            `;
+            bar.addEventListener('click', (event) => {
+                const button = event.target && event.target.closest
+                    ? event.target.closest('button[data-review-nav]')
+                    : null;
+                if (!button || button.disabled) {
+                    return;
+                }
+                const direction = button.dataset.reviewNav;
+                if (!direction) {
+                    return;
+                }
+                this.sendMessage('REVIEW_NAVIGATE', {
+                    direction,
+                    reviewSessionId: this.reviewSessionId || (this.reviewContext && this.reviewContext.reviewSessionId) || null,
+                    currentIndex: Number.isInteger(this.reviewEntryIndex) ? this.reviewEntryIndex : 0
+                });
+            });
+            const header = document.querySelector('body > header') || document.querySelector('header');
+            if (header) {
+                try {
+                    if (window.getComputedStyle(header).position === 'static') {
+                        header.style.position = 'relative';
+                        header.dataset.reviewNavPatched = '1';
+                    }
+                } catch (_) {
+                    header.style.position = 'relative';
+                    header.dataset.reviewNavPatched = '1';
+                }
+                header.appendChild(bar);
+            } else {
+                document.body.insertAdjacentElement('afterbegin', bar);
+            }
+            this.reviewNavBarElement = bar;
+            return bar;
+        },
+
+        applyReviewContext: function (context = {}) {
+            this.reviewContext = context;
+            if (context.reviewSessionId) {
+                this.reviewSessionId = context.reviewSessionId;
+            }
+            if (Number.isInteger(context.currentIndex)) {
+                this.reviewEntryIndex = context.currentIndex;
+            }
+            this.setReviewMode(context.readOnly !== false);
+            const bar = this.ensureReviewNavBar();
+            const prevBtn = bar.querySelector('button[data-review-nav="prev"]');
+            const nextBtn = bar.querySelector('button[data-review-nav="next"]');
+            const currentIndex = Number.isFinite(Number(context.currentIndex)) ? Number(context.currentIndex) : this.reviewEntryIndex;
+            const total = Number.isFinite(Number(context.total)) ? Number(context.total) : 1;
+            bar.dataset.reviewIndex = String(currentIndex);
+            bar.dataset.reviewTotal = String(total);
+            if (prevBtn) {
+                prevBtn.disabled = !context.canPrev;
+            }
+            if (nextBtn) {
+                nextBtn.disabled = !context.canNext;
+            }
+        },
+
+        renderReplayFallbackTable: function (results) {
+            const resultsEl = document.getElementById('results');
+            if (!resultsEl || !results || !results.answerComparison) {
+                return;
+            }
+
+            const rows = Object.values(results.answerComparison).map((entry) => {
+                const label = this.normalizeQuestionId(entry.questionId) || entry.questionId;
+                const userAnswer = Array.isArray(entry.userAnswer) ? entry.userAnswer.join(', ') : (entry.userAnswer || '未作答');
+                const correctAnswer = Array.isArray(entry.correctAnswer) ? entry.correctAnswer.join(', ') : (entry.correctAnswer || '');
+                const status = entry.isCorrect ? '✓' : '✗';
+                const statusClass = entry.isCorrect ? 'result-correct' : 'result-incorrect';
+                return `
+                    <tr>
+                        <td>${label}</td>
+                        <td>${userAnswer}</td>
+                        <td>${correctAnswer}</td>
+                        <td class="${statusClass}">${status}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            resultsEl.innerHTML = `
+                <h4>回顾结果</h4>
+                <p>得分 ${results.scoreInfo?.correct ?? 0} / ${results.scoreInfo?.total ?? 0} · ${results.scoreInfo?.percentage ?? 0}%</p>
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>题号</th>
+                            <th>你的答案</th>
+                            <th>正确答案</th>
+                            <th>结果</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+            resultsEl.style.display = 'block';
+        },
+
+        applyReplayRecord: function (payload = {}) {
+            const entry = payload && typeof payload.entry === 'object' ? payload.entry : payload;
+            const replayResults = this.buildReplayResultsFromEntry(entry || {});
+            if (payload.reviewSessionId) {
+                this.reviewSessionId = payload.reviewSessionId;
+            }
+            if (Number.isInteger(payload.reviewEntryIndex)) {
+                this.reviewEntryIndex = payload.reviewEntryIndex;
+            }
+
+            this.setReviewMode(payload.readOnly !== false);
+            this.answers = Object.assign({}, replayResults.answers);
+            this.correctAnswers = Object.assign({}, replayResults.correctAnswers);
+            this.allQuestionIds = Object.keys(replayResults.answerComparison || {}).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+            this.applyReplayAnswersToDom(this.answers);
+
+            const finalPayload = Object.assign({
+                examId: entry.examId || this.examId,
+                sessionId: this.sessionId,
+                status: 'final',
+                metadata: Object.assign({}, entry.metadata || {}, {
+                    practiceMode: 'review',
+                    readOnly: true,
+                    replay: true
+                })
+            }, replayResults);
+            this.dispatchPracticeResultsEvent(finalPayload);
+
+            setTimeout(() => {
+                if (!this.hasRenderableResults()) {
+                    this.renderReplayFallbackTable(finalPayload);
+                }
+            }, 120);
+        },
+
         captureQuestionSet: function () {
             const idSet = new Set(Array.isArray(this.allQuestionIds) ? this.allQuestionIds : []);
             const addCandidate = (candidate) => {
@@ -1370,11 +1693,22 @@
                 if (!payload || typeof payload.type !== 'string') {
                     return;
                 }
+                const messageType = String(payload.type).toUpperCase();
+                const payloadData = payload.data || {};
 
-                if (payload.type === 'INIT_SESSION') {
-                    const initData = payload.data || {};
+                if (messageType === 'INIT_SESSION' || messageType === 'INIT_EXAM_SESSION') {
+                    const initData = payloadData;
                     this.sessionId = initData.sessionId;
                     this.examId = initData.examId; // 存储 examId
+                    if (initData.reviewSessionId) {
+                        this.reviewSessionId = initData.reviewSessionId;
+                    }
+                    if (Number.isInteger(initData.reviewEntryIndex)) {
+                        this.reviewEntryIndex = initData.reviewEntryIndex;
+                    }
+                    if (initData.reviewMode) {
+                        this.setReviewMode(initData.readOnly !== false);
+                    }
                     if (initData.suiteSessionId) {
                         this.enableSuiteMode(initData);
                     }
@@ -1385,8 +1719,22 @@
                         sessionId: this.sessionId,
                         suiteSessionId: this.suiteSessionId || null,
                         url: window.location.href,
-                        title: document.title
+                        title: document.title,
+                        reviewMode: this.reviewMode,
+                        readOnly: this.readOnly,
+                        reviewSessionId: this.reviewSessionId || null,
+                        reviewEntryIndex: this.reviewEntryIndex
                     });
+                    return;
+                }
+
+                if (messageType === 'REPLAY_PRACTICE_RECORD') {
+                    this.applyReplayRecord(payloadData || {});
+                    return;
+                }
+
+                if (messageType === 'REVIEW_CONTEXT') {
+                    this.applyReviewContext(payloadData || {});
                     return;
                 }
 
@@ -1394,9 +1742,9 @@
                     return;
                 }
 
-                if (payload.type === 'SUITE_NAVIGATE') {
-                    this.handleSuiteNavigation(payload.data || {});
-                } else if (payload.type === 'SUITE_FORCE_CLOSE') {
+                if (messageType === 'SUITE_NAVIGATE') {
+                    this.handleSuiteNavigation(payloadData || {});
+                } else if (messageType === 'SUITE_FORCE_CLOSE') {
                     this.teardownSuiteGuards();
                     if (this._nativeClose) {
                         this._nativeClose();
@@ -2491,6 +2839,10 @@
          * @param {string} suiteId - 套题ID
          */
         handleSuiteSubmit: function (suiteId) {
+            if (this.readOnly) {
+                console.info('[PracticeEnhancer] 回顾模式下忽略套题提交');
+                return;
+            }
             if (!suiteId) {
                 console.warn('[PracticeEnhancer] handleSuiteSubmit: 套题ID为空');
                 return;
@@ -3300,6 +3652,10 @@
         },
 
         handleSubmit: function () {
+            if (this.readOnly) {
+                console.info('[PracticeEnhancer] 回顾模式下忽略提交');
+                return;
+            }
             if (this.hasDispatchedFinalResults) {
                 console.log('[PracticeEnhancer] 最终结果已发送，忽略重复提交');
                 return;
@@ -3423,6 +3779,13 @@
                 document.dispatchEvent(new CustomEvent('practiceResultsReady', {
                     detail: results
                 }));
+                if (this.readOnly && results && results.status === 'final') {
+                    setTimeout(() => {
+                        if (!this.hasRenderableResults()) {
+                            this.renderReplayFallbackTable(results);
+                        }
+                    }, 120);
+                }
             } catch (eventError) {
                 console.warn('[PracticeEnhancer] 触发practiceResultsReady事件失败:', eventError);
             }
@@ -3809,6 +4172,10 @@
         sendMessage: function (type, data) {
             if (!this.parentWindow) {
                 console.warn('[PracticeEnhancer] 无父窗口，无法发送消息');
+                return;
+            }
+            if (this.readOnly && type === 'PRACTICE_COMPLETE') {
+                console.info('[PracticeEnhancer] 回顾模式阻止 PRACTICE_COMPLETE 上报');
                 return;
             }
 
