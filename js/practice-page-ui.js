@@ -335,12 +335,71 @@
             });
         }
 
+        const DRAGGABLE_ITEM_SELECTOR = '.drag-item, .drag-item-clone, .draggable-word';
+        const ACTIVE_DRAG_ITEM_SELECTOR = '.drag-item, .draggable-word';
+        const POOL_CONTAINER_SELECTOR = '.pool-items, .cardpool, #word-options';
+        const POOL_OPTION_SELECTOR = '.pool-items .drag-item, .cardpool .drag-item, #word-options .draggable-word';
+        const DROP_ZONE_SELECTOR = '.paragraph-dropzone .dropped-items, .match-dropzone, .dropzone, .drop-target-summary';
+        const GENERIC_DROP_ZONE_SELECTOR = '.dropzone, .drop-target-summary';
+        const QUESTION_ID_SUFFIX_PATTERN = /[-_](anchor|nav|target)$/i;
+
         function getPoolContainers() {
-            return document.querySelectorAll('.pool-items, .cardpool');
+            return document.querySelectorAll(POOL_CONTAINER_SELECTOR);
         }
 
         function isPoolContainer(element) {
-            return !!(element && element.classList && (element.classList.contains('pool-items') || element.classList.contains('cardpool')));
+            return !!(element && ((element.classList && (element.classList.contains('pool-items') || element.classList.contains('cardpool'))) || element.id === 'word-options'));
+        }
+
+        function isDragItemElement(element) {
+            return !!(
+                element &&
+                element.classList &&
+                (
+                    element.classList.contains('drag-item') ||
+                    element.classList.contains('drag-item-clone') ||
+                    element.classList.contains('draggable-word')
+                )
+            );
+        }
+
+        function isDropTargetContainer(element) {
+            return !!(
+                element &&
+                element.classList &&
+                (
+                    element.classList.contains('dropped-items') ||
+                    element.classList.contains('match-dropzone') ||
+                    element.classList.contains('dropzone') ||
+                    element.classList.contains('drop-target-summary')
+                )
+            );
+        }
+
+        function shouldClearOnDrop(element) {
+            return !!(
+                element &&
+                element.classList &&
+                (
+                    element.classList.contains('dropped-items') ||
+                    element.classList.contains('match-dropzone') ||
+                    element.classList.contains('drop-target-summary')
+                )
+            );
+        }
+
+        function isAnswerValueContainer(element) {
+            return !!(
+                element &&
+                element.classList &&
+                (
+                    element.classList.contains('match-dropzone') ||
+                    element.classList.contains('dropzone') ||
+                    element.classList.contains('paragraph-dropzone') ||
+                    element.classList.contains('dropped-items') ||
+                    element.classList.contains('drop-target-summary')
+                )
+            );
         }
 
         function getOriginPool(item) {
@@ -399,9 +458,9 @@
                 detectPoolReuse(pool);
             });
 
-            document.querySelectorAll('.pool-items .drag-item, .cardpool .drag-item').forEach((item) => {
+            document.querySelectorAll(POOL_OPTION_SELECTOR).forEach((item) => {
                 if (!item.dataset.originPool) {
-                    const pool = item.closest('.pool-items, .cardpool');
+                    const pool = item.closest(POOL_CONTAINER_SELECTOR);
                     if (pool?.id) {
                         item.dataset.originPool = pool.id;
                     }
@@ -485,7 +544,7 @@
                 element.disabled = true;
                 element.dataset.practiceLocked = 'true';
             });
-            document.querySelectorAll('.drag-item, .drag-item-clone').forEach((item) => {
+            document.querySelectorAll(DRAGGABLE_ITEM_SELECTOR).forEach((item) => {
                 item.setAttribute('draggable', 'false');
                 item.classList.add('drag-item-locked');
             });
@@ -533,7 +592,7 @@
             }
             let targetPool = pool;
             if (!targetPool) {
-                targetPool = document.querySelector('.pool-items, .cardpool');
+                targetPool = document.querySelector(POOL_CONTAINER_SELECTOR);
             }
             if (!targetPool) return;
             item.classList.remove('dragging');
@@ -544,7 +603,7 @@
 
         function clearDropzone(zone, exceptItem) {
             if (!zone) return;
-            const existingItems = zone.querySelectorAll('.drag-item');
+            const existingItems = zone.querySelectorAll(ACTIVE_DRAG_ITEM_SELECTOR);
             existingItems.forEach((existing) => {
                 if (exceptItem && existing === exceptItem) return;
                 returnItemToPool(existing);
@@ -569,9 +628,9 @@
         }
 
         function handleDragStart(event) {
-            const target = event.target.closest('.drag-item');
+            const target = event.target.closest(ACTIVE_DRAG_ITEM_SELECTOR);
             if (!target) return;
-            const sourcePool = target.closest('.pool-items, .cardpool');
+            const sourcePool = target.closest(POOL_CONTAINER_SELECTOR);
             dragState.item = target;
             dragState.sourceContainer = target.parentElement;
             dragState.sourcePool = sourcePool || getOriginPool(target);
@@ -595,11 +654,11 @@
             if (matchZone) {
                 return matchZone;
             }
-            const genericZone = target.closest('.dropzone, .drop-target-summary');
+            const genericZone = target.closest(GENERIC_DROP_ZONE_SELECTOR);
             if (genericZone) {
                 return genericZone;
             }
-            const pool = target.closest('.pool-items, .cardpool');
+            const pool = target.closest(POOL_CONTAINER_SELECTOR);
             if (pool) {
                 return pool;
             }
@@ -620,15 +679,11 @@
             if (!item || !container) return;
 
             // If dropping on top of another drag-item, redirect to its parent container
-            if (container.classList.contains('drag-item')) {
+            if (isDragItemElement(container)) {
                 container = container.parentElement;
             }
 
-            if (container.classList.contains('dropped-items')) {
-                clearDropzone(container, item);
-            }
-
-            if (container.classList.contains('match-dropzone') || container.classList.contains('drop-target-summary')) {
+            if (shouldClearOnDrop(container)) {
                 clearDropzone(container, item);
             }
 
@@ -719,14 +774,14 @@
             });
 
             // 清空拖拽题结果
-            document.querySelectorAll('.paragraph-dropzone .dropped-items, .match-dropzone, .dropzone, .drop-target-summary').forEach((zone) => {
+            document.querySelectorAll(DROP_ZONE_SELECTOR).forEach((zone) => {
                 clearDropzone(zone);
             });
 
             // 将所有拖拽选项放回原池
-            document.querySelectorAll('.drag-item').forEach((item) => {
+            document.querySelectorAll(ACTIVE_DRAG_ITEM_SELECTOR).forEach((item) => {
                 const container = item.parentElement;
-                if (container && (container.classList.contains('dropped-items') || container.classList.contains('match-dropzone') || container.classList.contains('dropzone') || container.classList.contains('drop-target-summary'))) {
+                if (isDropTargetContainer(container)) {
                     returnItemToPool(item);
                 }
                 item.setAttribute('draggable', 'true');
@@ -880,6 +935,42 @@
     opacity: 0.55;
     pointer-events: none;
 }
+.options label, .checkbox-group label {
+    display: block;
+    margin-bottom: 10px;
+    cursor: pointer;
+    line-height: 1.5;
+}
+.matching-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+}
+.matching-table th, .matching-table td {
+    border: 1px solid #e5e7eb;
+    padding: 12px;
+    text-align: center;
+    vertical-align: middle;
+}
+.matching-table th {
+    background-color: #f9fafb;
+    font-weight: 600;
+    color: #4b5563;
+}
+.matching-table th:first-child, .matching-table td:first-child {
+    text-align: left;
+    min-width: 120px;
+}
+.matching-table tbody tr {
+    transition: background-color 0.15s ease-in-out;
+}
+.matching-table tbody tr:hover {
+    background-color: #f3f4f6;
+}
+.matching-table input[type="radio"] {
+    cursor: pointer;
+    transform: scale(1.15);
+}
 `;
         document.head.appendChild(style);
     }
@@ -888,7 +979,7 @@
         if (questionId === undefined || questionId === null) return null;
         const raw = String(questionId).trim();
         if (!raw) return null;
-        const cleaned = raw.replace(/[-_](anchor|nav)$/i, '');
+        const cleaned = raw.replace(QUESTION_ID_SUFFIX_PATTERN, '');
         if (/^q[\w-]+/i.test(cleaned)) return cleaned.replace(/^Q/, 'q');
         const numeric = cleaned.match(/^\d+/);
         if (numeric) return 'q' + numeric[0];
@@ -905,7 +996,7 @@
             dataset.question,
             dataset.questionId,
             dataset.for,
-            element.id ? element.id.replace(/(_input|-input|_answer)$/i, '') : null
+            element.id ? element.id.replace(/(_input|-input|_answer|-target)$/i, '') : null
         ];
         for (let i = 0; i < candidates.length; i++) {
             const normalized = normalizeQuestionId(candidates[i]);
@@ -975,7 +1066,9 @@
                 `.paragraph-dropzone[data-question="${normalized}"]`,
                 `[data-question="${normalized}"] .dropped-items`,
                 `#${normalized}-anchor .dropped-items`,
-                `#${normalized} .dropped-items`
+                `#${normalized} .dropped-items`,
+                `#${normalized}-target`,
+                `.drop-target-summary[data-question="${normalized}"]`
             ];
             candidateSelectors.forEach((selector) => {
                 document.querySelectorAll(selector).forEach((el) => matches.push(el));
@@ -1015,13 +1108,8 @@
                 }
                 return String(element.value || '').trim() !== '';
             }
-            if (
-                element.classList.contains('match-dropzone') ||
-                element.classList.contains('dropzone') ||
-                element.classList.contains('paragraph-dropzone') ||
-                element.classList.contains('dropped-items')
-            ) {
-                return !!element.querySelector('.drag-item, .drag-item-clone');
+            if (isAnswerValueContainer(element)) {
+                return !!element.querySelector(DRAGGABLE_ITEM_SELECTOR);
             }
             return false;
         });
