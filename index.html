@@ -27,10 +27,15 @@
     <div class="container hero-shell">
         <div class="hero-header">
             <h1 style="width: 100%;">📚 考试总览系统
-                <button type="button" class="hero-badge hero-badge--cta" onclick="showDeveloperTeam(); return false;"
-                    aria-label="睡着过开发团队">
-                    SHUI
-                </button>
+                <span
+                    style="font-size: 0.35em; opacity: 0.6; font-weight: normal; margin-left: 12px; vertical-align: middle; display: inline-block;">项目仅授权ZYZ
+                    Reading Walks 提供分发，小红书号：276752989</span>
+                <a href="https://www.xiaohongshu.com/user/profile/5b4d76744eacab058489e72f?xsec_token=ABlVO2QUdaoyzC6LYAHxh1yuvCcdFmZCFy-npJva106mg=&xsec_source=pc_search"
+                    target="_blank" rel="noopener noreferrer" class="hero-badge hero-badge--cta"
+                    style="background: #ff1c1c; box-shadow: 0 12px 30px rgba(255, 77, 79, 0.35); text-decoration: none; display: inline-flex; align-items: center; justify-content: center;"
+                    aria-label="小红书主页">
+                    小红书
+                </a>
                 <a href="https://github.com/sallowayma-git/IELTS-practice" target="_blank" rel="noopener noreferrer"
                     aria-label="GitHub Repository"
                     style="margin-left: auto; margin-right: 20px; color: inherit; display: flex; align-items: center; transition: opacity 0.2s;"
@@ -214,7 +219,7 @@
                         style="margin-top: 30px; text-align: center; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.2);">
                         <a href="https://github.com/sallowayma-git" target="_blank" rel="noopener noreferrer"
                             style="color: gray; text-decoration: none; font-size: 0.9em; transition: color 0.3s ease;">
-                            Salloway
+                            Salloway呈现
                         </a>
                     </div>
                 </div>
@@ -248,7 +253,7 @@
                     <div class="tool-card-icon">🧠</div>
                     <div class="tool-card-content">
                         <h3>单词背诵</h3>
-                        <p>本地 Leitner 分箱 + 艾宾浩斯复习节奏，随时继续你的词汇任务。</p>
+                        <p>SM-2记忆算法，随时继续你的词汇任务。</p>
                     </div>
                     <div class="tool-card-arrow">进入</div>
                 </button>
@@ -319,83 +324,7 @@
         </div>
     </div>
 
-    <!-- 开发团队弹窗 -->
-    <div id="developer-modal" class="developer-modal">
-        <div class="developer-modal-content">
-            <h2>🎉 睡着过开发团队</h2>
-            <p style="text-align: center; margin-bottom: 25px; opacity: 0.9; font-size: 0.95em;">
-                感谢以下开发者的贡献 (排名不分先后)
-            </p>
 
-            <div class="developer-grid">
-                <div class="developer-card">
-                    <div class="developer-name">🕊️</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">Sallowaymmm(🧐)</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">julie</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">呆呆军师</div>
-                </div>
-                <div class="developer-card" id="dev-poi">
-                    <div class="developer-name">POI</div>
-                    <span class="heart-interaction">❤</span>
-                </div>
-                <div class="developer-card" id="dev-nana">
-                    <div class="developer-name">Na.8.0</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">猪柳蛋</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">馒头不吃鱼</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">i</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">Aurelia 7.0</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">twoLin</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">yyyyy</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">鑫鑫</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">Gamiya_</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">zᙆ</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">zO_cssjjj👧</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">爱吃青花鱼罐头的罗罗酱</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">llalaland</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">哈希海</div>
-                </div>
-                <div class="developer-card">
-                    <div class="developer-name">阿橙</div>
-                </div>
-            </div>
-
-            <button class="modal-close-btn" onclick="hideDeveloperTeam()">
-                关闭
-            </button>
-        </div>
-    </div>
 
     <!-- 主题切换弹窗 -->
     <div id="theme-switcher-modal" class="theme-modal">
@@ -470,7 +399,7 @@
     <script src="js/runtime/bootScreen.js" defer></script>
     <script src="js/runtime/lazyLoader.js" defer></script>
     <script src="js/presentation/app-actions.js" defer></script>
-    <script src="js/presentation/developerTeamModal.js" defer></script>
+
 
     <!-- 基础环境与日志 -->
     <script src="js/utils/environmentDetector.js"></script>
