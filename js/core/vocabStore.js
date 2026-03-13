@@ -56,6 +56,7 @@
     const DEFAULT_REVIEW_QUEUE = Object.freeze([]);
     const DEFAULT_LIST_ID = 'default';
     const DEFAULT_LEXICON_URL = 'assets/wordlists/ielts_core.json';
+    const SPELLING_ERROR_LIST_IDS = new Set(['spelling-errors-p1', 'spelling-errors-p4', 'spelling-errors-master']);
 
     const state = {
         repositories: null,
@@ -272,14 +273,67 @@
         return getStorageKeyForListId(state.activeListId);
     }
 
-    function normalizeStoredListWords(storedData) {
-        if (storedData && typeof storedData === 'object' && Array.isArray(storedData.words)) {
-            return storedData.words.map(convertSpellingErrorToWord).filter(Boolean);
+    function isSpellingErrorList(listId) {
+        return SPELLING_ERROR_LIST_IDS.has(listId);
+    }
+
+    function normalizeListEntry(entry, listId) {
+        if (isSpellingErrorList(listId)) {
+            return convertSpellingErrorToWord(entry) || normalizeWordRecord(entry);
         }
-        if (Array.isArray(storedData)) {
-            return storedData.map(normalizeWordRecord).filter(Boolean);
+        return normalizeWordRecord(entry);
+    }
+
+    function normalizeStoredListWords(storedData, listId = DEFAULT_LIST_ID) {
+        const listWords = storedData && typeof storedData === 'object' && Array.isArray(storedData.words)
+            ? storedData.words
+            : (Array.isArray(storedData) ? storedData : null);
+        if (!listWords) {
+            return [];
         }
-        return [];
+        return listWords.map((entry) => normalizeListEntry(entry, listId)).filter(Boolean);
+    }
+
+    async function fetchJsonWithFileFallback(url) {
+        const primary = await fetch(url, { cache: 'no-store' });
+        if (!primary.ok) {
+            throw new Error(`HTTP ${primary.status}`);
+        }
+        return primary.json();
+    }
+
+    async function readJsonViaXHR(url) {
+        return new Promise((resolve, reject) => {
+            if (typeof XMLHttpRequest === 'undefined') {
+                reject(new Error('xhr_unavailable'));
+                return;
+            }
+            try {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', url, true);
+                xhr.overrideMimeType('application/json');
+                xhr.onreadystatechange = () => {
+                    if (xhr.readyState !== 4) {
+                        return;
+                    }
+                    const isSuccess = (xhr.status >= 200 && xhr.status < 300) || xhr.status === 0;
+                    if (!isSuccess) {
+                        reject(new Error(`HTTP ${xhr.status}`));
+                        return;
+                    }
+                    try {
+                        const parsed = JSON.parse(xhr.responseText);
+                        resolve(parsed);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                xhr.onerror = () => reject(new Error('xhr_network_error'));
+                xhr.send();
+            } catch (error) {
+                reject(error);
+            }
+        });
     }
 
     function isLikelySpellingErrorSnapshot(words) {
@@ -297,11 +351,24 @@
     }
 
     async function loadBundledDefaultLexicon() {
-        const response = await fetch(DEFAULT_LEXICON_URL, { cache: 'no-store' });
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+        let payload;
+        const embeddedWordlists = window.__EMBEDDED_WORDLISTS__;
+        if (embeddedWordlists && Array.isArray(embeddedWordlists.ielts_core) && embeddedWordlists.ielts_core.length) {
+            payload = embeddedWordlists.ielts_core;
         }
-        const payload = await response.json();
+        if (!payload) {
+        try {
+            payload = await fetchJsonWithFileFallback(DEFAULT_LEXICON_URL);
+        } catch (fetchError) {
+            const isFileProtocol = typeof window !== 'undefined'
+                && window.location
+                && window.location.protocol === 'file:';
+            if (!isFileProtocol) {
+                throw fetchError;
+            }
+            payload = await readJsonViaXHR(DEFAULT_LEXICON_URL);
+        }
+        }
         const validator = window.VocabDataIO;
         if (validator && typeof validator.validateSchema === 'function' && !validator.validateSchema(payload)) {
             throw new Error('default_lexicon_schema_invalid');
@@ -331,7 +398,7 @@
 
             const activeStorageKey = getStorageKeyForListId(state.activeListId);
             const storedWords = await read(activeStorageKey, []);
-            const normalizedWords = normalizeStoredListWords(storedWords);
+            const normalizedWords = normalizeStoredListWords(storedWords, state.activeListId);
             if (normalizedWords.length) {
                 setWordsInternal(normalizedWords);
                 state.lastLoadSource = state.metaRepo ? 'meta' : (state.storageManager ? 'storage' : 'localStorage');
@@ -353,7 +420,7 @@
         try {
             const defaultStorageKey = getStorageKeyForListId(DEFAULT_LIST_ID);
             const storedDefault = await read(defaultStorageKey, []);
-            const normalizedStored = normalizeStoredListWords(storedDefault);
+            const normalizedStored = normalizeStoredListWords(storedDefault, DEFAULT_LIST_ID);
             const pollutedBySpellingList = isLikelySpellingErrorSnapshot(normalizedStored);
             if (normalizedStored.length && !pollutedBySpellingList) {
                 if (state.activeListId === DEFAULT_LIST_ID && !state.words.length) {
@@ -624,7 +691,7 @@
                 const ensured = await ensureDefaultLexicon();
                 storedData = ensured;
             }
-            let normalizedWords = normalizeStoredListWords(storedData);
+            let normalizedWords = normalizeStoredListWords(storedData, listId);
             if (!normalizedWords.length && listId === DEFAULT_LIST_ID) {
                 normalizedWords = await ensureDefaultLexicon();
             }
