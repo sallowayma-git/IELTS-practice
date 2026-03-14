@@ -236,6 +236,224 @@
         openExamWithFallback(randomExam);
     }
 
+    // ============================================================================
+    // Phase 4: 无尽模式
+    // ============================================================================
+
+    var endlessState = null;
+    var ENDLESS_WINDOW_NAME = 'ielts-endless-mode-tab';
+    var ENDLESS_COUNTDOWN_SEC = 5;
+
+    function stopEndlessPractice(opts) {
+        if (!endlessState) return;
+        var silent = opts && opts.silent;
+        endlessState.active = false;
+        if (endlessState.countdownTimer) {
+            clearInterval(endlessState.countdownTimer);
+            endlessState.countdownTimer = null;
+        }
+        if (endlessState.messageHandler) {
+            window.removeEventListener('message', endlessState.messageHandler);
+            endlessState.messageHandler = null;
+        }
+        endlessState = null;
+        if (!silent && typeof global.showMessage === 'function') {
+            global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\u5df2\u9000\u51fa', 'info');
+        }
+    }
+
+    function pickRandomExam() {
+        var getExamIndexState = global.getExamIndexState || function () {
+            return Array.isArray(global.examIndex) ? global.examIndex : [];
+        };
+        var list = getExamIndexState().filter(function (e) {
+            return e && e.hasHtml && e.type === 'reading';
+        });
+        if (!list.length) return null;
+        return list[Math.floor(Math.random() * list.length)];
+    }
+
+    function openEndlessExam(exam, reuseWindow) {
+        if (!exam) return null;
+        var url = null;
+        try {
+            if (global.app && typeof global.app.buildExamUrl === 'function') {
+                url = global.app.buildExamUrl(exam);
+            } else if (typeof global.buildResourcePath === 'function') {
+                url = global.buildResourcePath(exam, 'html');
+            } else {
+                var p = exam.path || '';
+                if (!p.endsWith('/')) p += '/';
+                url = p + exam.filename;
+            }
+            // resolve to absolute
+            url = new URL(url, window.location.href).href;
+        } catch (_) { }
+        if (!url) return null;
+
+        var win = null;
+        if (reuseWindow && !reuseWindow.closed) {
+            try {
+                reuseWindow.location.href = url;
+                reuseWindow.focus();
+                win = reuseWindow;
+            } catch (_) { }
+        }
+        if (!win) {
+            try {
+                win = window.open(url, ENDLESS_WINDOW_NAME);
+                if (win) win.focus();
+            } catch (_) { }
+        }
+        return win;
+    }
+
+    function scheduleEndlessNext(sourceWindow) {
+        if (!endlessState || !endlessState.active) return;
+
+        var countdown = ENDLESS_COUNTDOWN_SEC;
+
+        // 通知练习页开始倒计时
+        try {
+            if (sourceWindow && !sourceWindow.closed) {
+                sourceWindow.postMessage({
+                    type: 'ENDLESS_COUNTDOWN',
+                    data: { seconds: countdown }
+                }, '*');
+            }
+        } catch (_) { }
+
+        if (endlessState.countdownTimer) {
+            clearInterval(endlessState.countdownTimer);
+        }
+
+        endlessState.countdownTimer = setInterval(function () {
+            if (!endlessState || !endlessState.active) {
+                clearInterval(endlessState && endlessState.countdownTimer);
+                return;
+            }
+            if (sourceWindow && sourceWindow.closed) {
+                stopEndlessPractice({ silent: true });
+                return;
+            }
+            countdown -= 1;
+            // 持续更新倒计时
+            try {
+                if (sourceWindow && !sourceWindow.closed) {
+                    sourceWindow.postMessage({
+                        type: 'ENDLESS_COUNTDOWN_TICK',
+                        data: { seconds: countdown }
+                    }, '*');
+                }
+            } catch (_) { }
+
+            if (countdown <= 0) {
+                clearInterval(endlessState.countdownTimer);
+                endlessState.countdownTimer = null;
+
+                if (!endlessState || !endlessState.active) return;
+
+                var nextExam = pickRandomExam();
+                if (!nextExam) {
+                    if (typeof global.showMessage === 'function') {
+                        global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\uff1a\u9898\u5e93\u4e3a\u7a7a', 'warning');
+                    }
+                    stopEndlessPractice({ silent: true });
+                    return;
+                }
+
+                if (typeof global.showMessage === 'function') {
+                    global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\uff1a\u8fdb\u5165\u4e0b\u4e00\u9898 ' + nextExam.title, 'info');
+                }
+
+                var reuseWin = (sourceWindow && !sourceWindow.closed) ? sourceWindow : null;
+                var newWin = openEndlessExam(nextExam, reuseWin);
+                if (newWin) {
+                    endlessState.currentWindow = newWin;
+                    // 注入数据采集脚本（延迟，等页面加载）
+                    if (global.app && typeof global.app.injectDataCollectionScript === 'function') {
+                        setTimeout(function () {
+                            if (newWin && !newWin.closed) {
+                                try { global.app.startPracticeSession && global.app.startPracticeSession(nextExam.id); } catch (_) { }
+                                global.app.injectDataCollectionScript(newWin, nextExam.id, nextExam);
+                                global.app.setupExamWindowManagement && global.app.setupExamWindowManagement(newWin, nextExam.id, nextExam, {});
+                            }
+                        }, 600);
+                    } else if (typeof global.openExam === 'function') {
+                        // fallback: 重新通过标准路径打开（会产生新窗口，但保证注入）
+                        try { global.openExam(nextExam.id); } catch (_) { }
+                    }
+                }
+            }
+        }, 1000);
+    }
+
+    function startEndlessPractice() {
+        // 如果已激活，不再走“父页按钮二次点击退出”的伪交互
+        if (endlessState && endlessState.active) {
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\u8fdb\u884c\u4e2d\uff0c\u8bf7\u5728\u7ec3\u4e60\u9875\u70b9\u51fb\u9000\u51fa', 'info');
+            }
+            return;
+        }
+
+        var firstExam = pickRandomExam();
+        if (!firstExam) {
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\uff1a\u9898\u5e93\u4e3a\u7a7a\uff0c\u8bf7\u5148\u52a0\u8f7d\u9898\u5e93', 'error');
+            }
+            return;
+        }
+
+        // 标记状态
+        endlessState = {
+            active: true,
+            countdownTimer: null,
+            currentWindow: null,
+            messageHandler: null
+        };
+
+        // 监听 PRACTICE_COMPLETE 消息（无尽模式专用拦截）
+        var handler = function (event) {
+            if (!endlessState || !endlessState.active) return;
+            var msg = event && event.data;
+            if (!msg || typeof msg.type !== 'string') return;
+            if (msg.type === 'ENDLESS_USER_EXIT') {
+                stopEndlessPractice();
+                return;
+            }
+            if (msg.type !== 'PRACTICE_COMPLETE') return;
+
+            // 找到当前的练习窗口
+            var srcWin = event.source || (endlessState.currentWindow && !endlessState.currentWindow.closed ? endlessState.currentWindow : null);
+            scheduleEndlessNext(srcWin);
+        };
+
+        endlessState.messageHandler = handler;
+        window.addEventListener('message', handler);
+
+        // 打开第一题
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\u5df2\u542f\u52a8\uff0c\u6b63\u5728\u6253\u5f00\uff1a' + firstExam.title, 'info');
+        }
+
+        var win = null;
+        // 优先用 app.openExam 保证注入
+        if (global.app && typeof global.app.openExam === 'function') {
+            try {
+                Promise.resolve(global.app.openExam(firstExam.id, {
+                    target: 'tab',
+                    windowName: ENDLESS_WINDOW_NAME
+                })).then(function (w) {
+                    if (w && endlessState) endlessState.currentWindow = w;
+                }).catch(function () { });
+            } catch (_) { }
+        } else {
+            win = openEndlessExam(firstExam, null);
+            if (win && endlessState) endlessState.currentWindow = win;
+        }
+    }
+
     global.AppActions = Object.assign({}, global.AppActions, {
         exportPracticeMarkdown: exportPracticeMarkdown,
         ensurePracticeSuite: ensurePracticeSuite,
@@ -245,12 +463,17 @@
         // Phase 3
         startSuitePractice: startSuitePractice,
         openExamWithFallback: openExamWithFallback,
-        startRandomPractice: startRandomPractice
+        startRandomPractice: startRandomPractice,
+        // Phase 4
+        startEndlessPractice: startEndlessPractice,
+        stopEndlessPractice: stopEndlessPractice
     });
 
     // 挂载到全局（向后兼容）
     global.startSuitePractice = startSuitePractice;
     global.openExamWithFallback = openExamWithFallback;
     global.startRandomPractice = startRandomPractice;
+    global.startEndlessPractice = startEndlessPractice;
+    global.stopEndlessPractice = stopEndlessPractice;
 
 })(typeof window !== 'undefined' ? window : this);

@@ -59,7 +59,7 @@
         "q12",
         "q13"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                 <h4>Questions 24–26</h4>\n                <p>Complete the sentences below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n                <div class=\"sentence-completion\">\n                    <p><strong>24</strong> A term used to refer to a situation when you are reading a text and cannot focus on your surroundings is <input type=\"text\" id=\"q24_input\">.</p>\n                    <p><strong>25</strong> The <input type=\"text\" id=\"q25_input\"> part of the brain controls multitasking.</p>\n                    <p><strong>26</strong> The practical solution to multitasking at work is not to allow the use of cellphones in <input type=\"text\" id=\"q26_input\">.</p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                 <h4>Questions 24–26</h4>\n                <p>Complete the sentences below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n                <div class=\"sentence-completion\">\n                    <p><strong>24</strong> A term used to refer to a situation when you are reading a text and cannot focus on your surroundings is <input name=\"q11\" type=\"text\" id=\"q24_input\">.</p>\n                    <p><strong>25</strong> The <input name=\"q12\" type=\"text\" id=\"q25_input\"> part of the brain controls multitasking.</p>\n                    <p><strong>26</strong> The practical solution to multitasking at work is not to allow the use of cellphones in <input name=\"q13\" type=\"text\" id=\"q26_input\">.</p>\n                </div>\n            </div>"
     }
   ],
   "answerKey": {
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);
