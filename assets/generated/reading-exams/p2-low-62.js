@@ -59,7 +59,7 @@
         "q12",
         "q13"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                <h4>Questions 24–26</h4>\n                <p>Complete the sentences below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"summary-completion\">\n                    <p><strong>24</strong> In Fridlund's view a <input type=\"text\" id=\"q24_input\"> on someone's face may be intended as an invitation to come nearer.</p>\n                    <p><strong>25</strong> According to Fridlund, when we are by ourselves we still use facial expressions because we are having a <input type=\"text\" id=\"q25_input\"> with someone in our minds.</p>\n                    <p><strong>26</strong> Fridlund considers facial expressions to be <input type=\"text\" id=\"q26_input\"> that can affect our contact with other people.</p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                <h4>Questions 24–26</h4>\n                <p>Complete the sentences below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"summary-completion\">\n                    <p><strong>24</strong> In Fridlund's view a <input name=\"q11\" type=\"text\" id=\"q24_input\"> on someone's face may be intended as an invitation to come nearer.</p>\n                    <p><strong>25</strong> According to Fridlund, when we are by ourselves we still use facial expressions because we are having a <input name=\"q12\" type=\"text\" id=\"q25_input\"> with someone in our minds.</p>\n                    <p><strong>26</strong> Fridlund considers facial expressions to be <input name=\"q13\" type=\"text\" id=\"q26_input\"> that can affect our contact with other people.</p>\n                </div>\n            </div>"
     }
   ],
   "answerKey": {
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);
