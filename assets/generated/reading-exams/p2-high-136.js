@@ -59,7 +59,7 @@
         "q12",
         "q13"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                 <h4>Questions 24–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h5>What recent history tells us about recycling</h5>\n                    <p>\n                    Richard Fisher, a researcher from Cranfield University, points out that the pace of consumerism has increased more quickly than was predicted in the 1980s. There has, for example, been unexpected growth in waste from <strong>24</strong> <input type=\"text\" id=\"q24_input\"> products. He suggests that the need to protect the environment should be linked to basic values, and adds that it might be better if consumers had more influence over <strong>25</strong> <input type=\"text\" id=\"q25_input\"> and more direction was provided by <strong>26</strong> <input type=\"text\" id=\"q26_input\">.\n                    </p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                 <h4>Questions 24–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h5>What recent history tells us about recycling</h5>\n                    <p>\n                    Richard Fisher, a researcher from Cranfield University, points out that the pace of consumerism has increased more quickly than was predicted in the 1980s. There has, for example, been unexpected growth in waste from <strong>24</strong> <input name=\"q11\" type=\"text\" id=\"q24_input\"> products. He suggests that the need to protect the environment should be linked to basic values, and adds that it might be better if consumers had more influence over <strong>25</strong> <input name=\"q12\" type=\"text\" id=\"q25_input\"> and more direction was provided by <strong>26</strong> <input name=\"q13\" type=\"text\" id=\"q26_input\">.\n                    </p>\n                </div>\n            </div>"
     }
   ],
   "answerKey": {
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);

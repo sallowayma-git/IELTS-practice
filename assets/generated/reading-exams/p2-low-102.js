@@ -47,7 +47,7 @@
         "q8",
         "q9"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q6-7-8-9-anchor\">\n                <h4>Questions 19–22</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <p>A study involving collaboration between researchers in Oxford and Montreal. The participants in this study led by Dr Chen were chosen because they were not musicians, and they demonstrated a good state of <strong>19</strong> <input type=\"text\" id=\"q19_input\">. The participants were given <strong>20</strong> <input type=\"text\" id=\"q20_input\"> while music with a very noticeable rhythm was being played. Previous research had indicated that listening to this type of music seemed to be of assistance to some <strong>21</strong> <input type=\"text\" id=\"q21_input\"> people. By listening to it, their <strong>22</strong> <input type=\"text\" id=\"q22_input\"> ability had definitely got better. The findings of Dr Chen's study proved most informative.</p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q6-7-8-9-anchor\">\n                <h4>Questions 19–22</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <p>A study involving collaboration between researchers in Oxford and Montreal. The participants in this study led by Dr Chen were chosen because they were not musicians, and they demonstrated a good state of <strong>19</strong> <input name=\"q6\" type=\"text\" id=\"q19_input\">. The participants were given <strong>20</strong> <input name=\"q7\" type=\"text\" id=\"q20_input\"> while music with a very noticeable rhythm was being played. Previous research had indicated that listening to this type of music seemed to be of assistance to some <strong>21</strong> <input name=\"q8\" type=\"text\" id=\"q21_input\"> people. By listening to it, their <strong>22</strong> <input name=\"q9\" type=\"text\" id=\"q22_input\"> ability had definitely got better. The findings of Dr Chen's study proved most informative.</p>\n                </div>\n            </div>"
     },
     {
       "groupId": "group-3",
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);

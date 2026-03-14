@@ -46,7 +46,7 @@
         "q7",
         "q8"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-anchor\">\n                <h4>Questions 18–21</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"notes-completion\">\n                    <h4>The history of herbal medicines in New Zealand</h4>\n                    <p>Originally, the Maori people consumed plants to help deal with <strong>18</strong> <input type=\"text\" id=\"q18_input\">, and also as food. When Europeans settled in the country, a <strong>19</strong> <input type=\"text\" id=\"q19_input\"> by James Neil showed that some of them also recognised the medicinal value of native plants. However, criticism of herbal medicine appeared in one newspaper in 1907. The following year, the use of herbal medicines was made more difficult because of a new <strong>20</strong> <input type=\"text\" id=\"q20_input\">, and for a time in the mid-20th century, they were largely ignored. Then in the 1980s a number of institutions started offering a <strong>21</strong> <input type=\"text\" id=\"q21_input\"> in the subject, although for many years there was still little evidence to support their use, because doctors and academics were not interested.</p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-anchor\">\n                <h4>Questions 18–21</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"notes-completion\">\n                    <h4>The history of herbal medicines in New Zealand</h4>\n                    <p>Originally, the Maori people consumed plants to help deal with <strong>18</strong> <input name=\"q5\" type=\"text\" id=\"q18_input\">, and also as food. When Europeans settled in the country, a <strong>19</strong> <input name=\"q6\" type=\"text\" id=\"q19_input\"> by James Neil showed that some of them also recognised the medicinal value of native plants. However, criticism of herbal medicine appeared in one newspaper in 1907. The following year, the use of herbal medicines was made more difficult because of a new <strong>20</strong> <input name=\"q7\" type=\"text\" id=\"q20_input\">, and for a time in the mid-20th century, they were largely ignored. Then in the 1980s a number of institutions started offering a <strong>21</strong> <input name=\"q8\" type=\"text\" id=\"q21_input\"> in the subject, although for many years there was still little evidence to support their use, because doctors and academics were not interested.</p>\n                </div>\n            </div>"
     },
     {
       "groupId": "group-3",
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);
