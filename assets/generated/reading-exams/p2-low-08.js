@@ -65,7 +65,7 @@
         "q15",
         "q16"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q13-14-15-16-anchor\">\n                <h4>Questions 26–29</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h5>Research in the MRC Lab of Molecular Biology</h5>\n                    <p>\n                        A team led by Dr Madeline Lancaster is using special Petri dishes which prevent brain cells from <strong>26</strong> <input type=\"text\" id=\"q26_input\"> to them. The aim is to allow the neurons to grow in three <strong>27</strong> <input type=\"text\" id=\"q27_input\">. This results in a <strong>28</strong> <input type=\"text\" id=\"q28_input\"> that resembles a developing brain. The technology could help scientists study how neuron production varies in different <strong>29</strong> <input type=\"text\" id=\"q29_input\">, leading to possibilities for increased medical knowledge.\n                    </p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q13-14-15-16-anchor\">\n                <h4>Questions 26–29</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h5>Research in the MRC Lab of Molecular Biology</h5>\n                    <p>\n                        A team led by Dr Madeline Lancaster is using special Petri dishes which prevent brain cells from <strong>26</strong> <input name=\"q13\" type=\"text\" id=\"q26_input\"> to them. The aim is to allow the neurons to grow in three <strong>27</strong> <input name=\"q14\" type=\"text\" id=\"q27_input\">. This results in a <strong>28</strong> <input name=\"q15\" type=\"text\" id=\"q28_input\"> that resembles a developing brain. The technology could help scientists study how neuron production varies in different <strong>29</strong> <input name=\"q16\" type=\"text\" id=\"q29_input\">, leading to possibilities for increased medical knowledge.\n                    </p>\n                </div>\n            </div>"
     }
   ],
   "answerKey": {
@@ -133,5 +133,6 @@
     "q15": "28",
     "q16": "29"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);

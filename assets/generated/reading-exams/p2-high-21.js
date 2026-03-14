@@ -59,7 +59,7 @@
         "q12",
         "q13"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q9-10-11-12-13-anchor\">\n                 <h4>Questions 22–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS AND/OR A NUMBER</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h5>Stress: its effects and how to reduce it</h5>\n                    <p>\n                    Statistics on workers' compensation show that people take more time off work due to stress than for any other <strong>22</strong> <input type=\"text\" id=\"q22_input\"> at work. On average, workers who take time off because of stress stay away for <strong>23</strong> <input type=\"text\" id=\"q23_input\">. This absence comes at a high price — while the number of insurance claims due to stress amount to only <strong>24</strong> <input type=\"text\" id=\"q24_input\"> of the total, they account for a much higher proportion of the cost of claim payments.\n                    </p>\n                    <p>\n                    Experts believe that seeking to relieve stress through physical therapies such as sport or <strong>25</strong> <input type=\"text\" id=\"q25_input\"> may be less effective than simply reviewing your <strong>26</strong> <input type=\"text\" id=\"q26_input\">.\n                    </p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q9-10-11-12-13-anchor\">\n                 <h4>Questions 22–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS AND/OR A NUMBER</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h5>Stress: its effects and how to reduce it</h5>\n                    <p>\n                    Statistics on workers' compensation show that people take more time off work due to stress than for any other <strong>22</strong> <input name=\"q9\" type=\"text\" id=\"q22_input\"> at work. On average, workers who take time off because of stress stay away for <strong>23</strong> <input name=\"q10\" type=\"text\" id=\"q23_input\">. This absence comes at a high price — while the number of insurance claims due to stress amount to only <strong>24</strong> <input name=\"q11\" type=\"text\" id=\"q24_input\"> of the total, they account for a much higher proportion of the cost of claim payments.\n                    </p>\n                    <p>\n                    Experts believe that seeking to relieve stress through physical therapies such as sport or <strong>25</strong> <input name=\"q12\" type=\"text\" id=\"q25_input\"> may be less effective than simply reviewing your <strong>26</strong> <input name=\"q13\" type=\"text\" id=\"q26_input\">.\n                    </p>\n                </div>\n            </div>"
     }
   ],
   "answerKey": {
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);

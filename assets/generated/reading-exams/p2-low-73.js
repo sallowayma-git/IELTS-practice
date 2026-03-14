@@ -59,7 +59,7 @@
         "q12",
         "q13"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                 <h4>Questions 24–26</h4>\n                <p>Complete the sentences below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"completion-container\">\n                    <p>\n                    <strong>24</strong> The <input type=\"text\" id=\"q24_input\"> is a part of the brain that deals with feelings and smell.\n                    </p>\n                    <p>\n                    <strong>25</strong> <input type=\"text\" id=\"q25_input\"> smells create especially powerful associations with memories.\n                    </p>\n                    <p>\n                    <strong>26</strong> Of all the senses, smell has the capacity to prompt memories of <input type=\"text\" id=\"q26_input\">.\n                    </p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                 <h4>Questions 24–26</h4>\n                <p>Complete the sentences below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"completion-container\">\n                    <p>\n                    <strong>24</strong> The <input name=\"q11\" type=\"text\" id=\"q24_input\"> is a part of the brain that deals with feelings and smell.\n                    </p>\n                    <p>\n                    <strong>25</strong> <input name=\"q12\" type=\"text\" id=\"q25_input\"> smells create especially powerful associations with memories.\n                    </p>\n                    <p>\n                    <strong>26</strong> Of all the senses, smell has the capacity to prompt memories of <input name=\"q13\" type=\"text\" id=\"q26_input\">.\n                    </p>\n                </div>\n            </div>"
     }
   ],
   "answerKey": {
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);
