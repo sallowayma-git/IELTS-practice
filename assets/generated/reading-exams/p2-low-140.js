@@ -59,7 +59,7 @@
         "q12",
         "q13"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                 <h4>Questions 24–26</h4>\n                <p>Complete the sentences below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n                <div class=\"sentence-completion\">\n                    <p><strong>24</strong> The dingo replaced the <input type=\"text\" id=\"q24_input\"> as the main predatory animal in Australia.</p>\n                    <p><strong>25</strong> Foxes and cats are more likely to hunt native animals when there are fewer <input type=\"text\" id=\"q25_input\">.</p>\n                    <p><strong>26</strong> Australian animals reproduce at a slow rate as a natural way of avoiding <input type=\"text\" id=\"q26_input\">.</p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                 <h4>Questions 24–26</h4>\n                <p>Complete the sentences below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n                <div class=\"sentence-completion\">\n                    <p><strong>24</strong> The dingo replaced the <input name=\"q11\" type=\"text\" id=\"q24_input\"> as the main predatory animal in Australia.</p>\n                    <p><strong>25</strong> Foxes and cats are more likely to hunt native animals when there are fewer <input name=\"q12\" type=\"text\" id=\"q25_input\">.</p>\n                    <p><strong>26</strong> Australian animals reproduce at a slow rate as a natural way of avoiding <input name=\"q13\" type=\"text\" id=\"q26_input\">.</p>\n                </div>\n            </div>"
     }
   ],
   "answerKey": {
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);
