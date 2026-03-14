@@ -48,7 +48,7 @@
         "q8",
         "q9"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q7-8-9-anchor\">\n                <h4>Questions 7–9</h4>\n                <p>Complete the flow chart below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n                \n                <h5>How ambergris is formed</h5>\n                <div class=\"flow-chart-box\">\n                    Ambergris is formed in whales because of problems digesting the <strong>7</strong> <input type=\"text\" id=\"q7_input\"> of giant squid.\n                </div>\n                <div class=\"flow-chart-arrow\">↓</div>\n                <div class=\"flow-chart-box\">\n                    Black liquid is produced and is <strong>8</strong> <input type=\"text\" id=\"q8_input\"> from time to time.\n                </div>\n                <div class=\"flow-chart-arrow\">↓</div>\n                <div class=\"flow-chart-box\">\n                    The liquid <strong>9</strong> <input type=\"text\" id=\"q9_input\"> on contact with the air.\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q7-8-9-anchor\">\n                <h4>Questions 7–9</h4>\n                <p>Complete the flow chart below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n                \n                <h5>How ambergris is formed</h5>\n                <div class=\"flow-chart-box\">\n                    Ambergris is formed in whales because of problems digesting the <strong>7</strong> <input name=\"q7\" type=\"text\" id=\"q7_input\"> of giant squid.\n                </div>\n                <div class=\"flow-chart-arrow\">↓</div>\n                <div class=\"flow-chart-box\">\n                    Black liquid is produced and is <strong>8</strong> <input name=\"q8\" type=\"text\" id=\"q8_input\"> from time to time.\n                </div>\n                <div class=\"flow-chart-arrow\">↓</div>\n                <div class=\"flow-chart-box\">\n                    The liquid <strong>9</strong> <input name=\"q9\" type=\"text\" id=\"q9_input\"> on contact with the air.\n                </div>\n            </div>"
     },
     {
       "groupId": "group-3",
@@ -118,5 +118,6 @@
     "q12": "12",
     "q13": "13"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);

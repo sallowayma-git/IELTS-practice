@@ -48,7 +48,7 @@
         "q9",
         "q10"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-9-10-anchor\">\n                <h4>Questions 18–23</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"summary-completion\">\n                    <h4>The expedition's findings</h4>\n                    <p>Analysis continues of the expedition's remarkable discoveries, including a <strong>18</strong> <input type=\"text\" id=\"q18_input\"> very notable for its unusual width. The reasons why creatures grow so large at great depths in Antarctica may include the highly oxygenated water, the temperature, or the small number of <strong>19</strong> <input type=\"text\" id=\"q19_input\">. A further fascinating finding was the existence of canyons in the seabed caused by passing <strong>20</strong> <input type=\"text\" id=\"q20_input\">. Many creatures living at great depth look very strange, such as tunicates, which seem to be made of <strong>21</strong> <input type=\"text\" id=\"q21_input\">. One frightening-looking fish species is characterised by loss of its <strong>22</strong> <input type=\"text\" id=\"q22_input\"> and the fact that it spawns only once. Another fish has something like a length of string attached to its <strong>23</strong> <input type=\"text\" id=\"q23_input\"> that assists with hunting.</p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-9-10-anchor\">\n                <h4>Questions 18–23</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"summary-completion\">\n                    <h4>The expedition's findings</h4>\n                    <p>Analysis continues of the expedition's remarkable discoveries, including a <strong>18</strong> <input name=\"q5\" type=\"text\" id=\"q18_input\"> very notable for its unusual width. The reasons why creatures grow so large at great depths in Antarctica may include the highly oxygenated water, the temperature, or the small number of <strong>19</strong> <input name=\"q6\" type=\"text\" id=\"q19_input\">. A further fascinating finding was the existence of canyons in the seabed caused by passing <strong>20</strong> <input name=\"q7\" type=\"text\" id=\"q20_input\">. Many creatures living at great depth look very strange, such as tunicates, which seem to be made of <strong>21</strong> <input name=\"q8\" type=\"text\" id=\"q21_input\">. One frightening-looking fish species is characterised by loss of its <strong>22</strong> <input name=\"q9\" type=\"text\" id=\"q22_input\"> and the fact that it spawns only once. Another fish has something like a length of string attached to its <strong>23</strong> <input name=\"q10\" type=\"text\" id=\"q23_input\"> that assists with hunting.</p>\n                </div>\n            </div>"
     },
     {
       "groupId": "group-3",
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);
