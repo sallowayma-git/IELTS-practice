@@ -1045,6 +1045,52 @@ def run_checks() -> Tuple[List[dict], bool]:
             results.append(_format_result(test_name, False, "测试脚本缺失"))
             all_passed = False
 
+    reading_question_audit_script = REPO_ROOT / "developer" / "tests" / "e2e" / "reading_question_audit.py"
+    if reading_question_audit_script.exists():
+        try:
+            completed_reading_audit = subprocess.run(
+                ["python3", str(reading_question_audit_script), "--mode", "quick"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=480,
+            )
+        except subprocess.TimeoutExpired:
+            reading_audit_passed = False
+            reading_audit_detail = "执行超时（480秒）"
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            reading_audit_passed = False
+            reading_audit_detail = f"执行失败: {output_text.strip()}"
+        else:
+            output_text = completed_reading_audit.stdout.strip() or completed_reading_audit.stderr.strip()
+            reading_report_path = REPO_ROOT / "developer" / "tests" / "e2e" / "reports" / "reading-question-audit-quick.json"
+            if reading_report_path.exists():
+                try:
+                    payload = json.loads(reading_report_path.read_text(encoding="utf-8"))
+                except json.JSONDecodeError as parse_error:
+                    reading_audit_passed = False
+                    reading_audit_detail = f"报告解析失败: {parse_error}"
+                else:
+                    summary = payload.get("summary", {}) if isinstance(payload, dict) else {}
+                    reading_audit_passed = summary.get("exitCode") == 0
+                    reading_audit_detail = {
+                        "staticAudited": summary.get("staticAudited", 0),
+                        "staticFailed": summary.get("staticFailed", 0),
+                        "uiAudited": summary.get("uiAudited", 0),
+                        "uiFailed": summary.get("uiFailed", 0),
+                        "report": "developer/tests/e2e/reports/reading-question-audit-quick.json",
+                    }
+            else:
+                reading_audit_passed = False
+                reading_audit_detail = f"缺少报告文件，输出: {output_text}"
+
+        results.append(_format_result("Reading 逐题自动排查（quick）", reading_audit_passed, reading_audit_detail))
+        all_passed &= reading_audit_passed
+    else:
+        results.append(_format_result("Reading 逐题自动排查（quick）", False, "测试脚本缺失"))
+        all_passed = False
+
     return results, all_passed
 
 
