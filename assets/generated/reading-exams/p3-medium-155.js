@@ -115,5 +115,6 @@
     "q13": "39",
     "q14": "40"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);
