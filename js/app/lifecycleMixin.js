@@ -551,6 +551,15 @@
                                 window.showMessage('套题模块加载失败，请稍后重试', 'error');
                             }
                         });
+                    },
+                    onStartEndless() {
+                        if (window.AppActions && typeof window.AppActions.startEndlessPractice === 'function') {
+                            window.AppActions.startEndlessPractice();
+                            return;
+                        }
+                        if (typeof window.showMessage === 'function') {
+                            window.showMessage('无尽模式未就绪，请稍后重试', 'warning');
+                        }
                     }
                 }
             });

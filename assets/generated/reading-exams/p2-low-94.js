@@ -59,7 +59,7 @@
         "q12",
         "q13"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q10-11-12-13-anchor\">\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h4>Animal research into the value of play</h4>\n                    <p>In studies researching links between play and social learning, experiments analysing protein levels in the <strong>23</strong> <input type=\"text\" id=\"q23_input\"> of rats noted significant differences between rats which had played and those which had not.</p>\n                    <p>In another study, rats made distressed by an object smelling of a <strong>24</strong> <input type=\"text\" id=\"q24_input\"> experienced a noticeable reduction in their <strong>25</strong> <input type=\"text\" id=\"q25_input\"> levels after they had been allowed to play.</p>\n                    <p>A further experiment, in which rats had to move a <strong>26</strong> <input type=\"text\" id=\"q26_input\"> in order to reach a reward, indicated that rats deprived of play were less skilled at dealing with problems.</p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q10-11-12-13-anchor\">\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h4>Animal research into the value of play</h4>\n                    <p>In studies researching links between play and social learning, experiments analysing protein levels in the <strong>23</strong> <input name=\"q10\" type=\"text\" id=\"q23_input\"> of rats noted significant differences between rats which had played and those which had not.</p>\n                    <p>In another study, rats made distressed by an object smelling of a <strong>24</strong> <input name=\"q11\" type=\"text\" id=\"q24_input\"> experienced a noticeable reduction in their <strong>25</strong> <input name=\"q12\" type=\"text\" id=\"q25_input\"> levels after they had been allowed to play.</p>\n                    <p>A further experiment, in which rats had to move a <strong>26</strong> <input name=\"q13\" type=\"text\" id=\"q26_input\"> in order to reach a reward, indicated that rats deprived of play were less skilled at dealing with problems.</p>\n                </div>\n            </div>"
     }
   ],
   "answerKey": {
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);

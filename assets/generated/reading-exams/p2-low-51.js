@@ -33,7 +33,7 @@
         "q2",
         "q3"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-anchor\">\n                <h4>Questions 14–16</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n\n                <div class=\"summary-completion\">\n                    <h4>High school assessment in New Zealand</h4>\n                    <p>\n                        New Zealanders are worried at the outcomes of their high school assessment system, because the <strong>14</strong> <input type=\"text\" id=\"q14_input\"> of girls are higher than those of boys by 10%. A gender gap has been apparent for over a <strong>15</strong> <input type=\"text\" id=\"q15_input\">. This situation is not unique to New Zealand, and has been noticed in <strong>16</strong> <input type=\"text\" id=\"q16_input\"> also.\n                    </p>\n                </div>\n            </div>",
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-anchor\">\n                <h4>Questions 14–16</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n\n                <div class=\"summary-completion\">\n                    <h4>High school assessment in New Zealand</h4>\n                    <p>\n                        New Zealanders are worried at the outcomes of their high school assessment system, because the <strong>14</strong> <input name=\"q1\" type=\"text\" id=\"q14_input\"> of girls are higher than those of boys by 10%. A gender gap has been apparent for over a <strong>15</strong> <input name=\"q2\" type=\"text\" id=\"q15_input\">. This situation is not unique to New Zealand, and has been noticed in <strong>16</strong> <input name=\"q3\" type=\"text\" id=\"q16_input\"> also.\n                    </p>\n                </div>\n            </div>",
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);

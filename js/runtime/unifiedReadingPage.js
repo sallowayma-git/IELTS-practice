@@ -461,14 +461,28 @@
 
     function getTextualAnswer(questionId) {
         const fields = document.querySelectorAll(`[name="${questionId}"]`);
+        const values = [];
         for (const field of fields) {
             if (field.type === 'radio') continue;
             if (field.tagName === 'SELECT') {
-                return String(field.value || '').trim();
+                const value = String(field.value || '').trim();
+                if (value) {
+                    values.push(value);
+                }
+                continue;
             }
-            return String(field.value || '').trim();
+            const value = String(field.value || '').trim();
+            if (value) {
+                values.push(value);
+            }
         }
-        return '';
+        if (!values.length) {
+            return '';
+        }
+        if (values.length === 1) {
+            return values[0];
+        }
+        return values;
     }
 
     function getDropzoneAnswer(questionId) {
@@ -507,7 +521,7 @@
             }
             const sorted = values.slice().sort((left, right) => left.localeCompare(right, 'en'));
             if (questionIds.length === 1) {
-                answers[questionIds[0]] = sorted.join('');
+                answers[questionIds[0]] = sorted.length > 1 ? sorted : (sorted[0] || '');
                 return;
             }
             questionIds.forEach((questionId, index) => {
@@ -548,12 +562,17 @@
         const normalizedCorrect = normalizeAnswerValue(correctAnswer);
         const normalizedUser = normalizeAnswerValue(userAnswer);
         if (Array.isArray(normalizedCorrect)) {
-            const userArray = Array.isArray(normalizedUser)
-                ? normalizedUser
-                : [normalizedUser].filter(Boolean);
-            const expected = normalizedCorrect.slice().sort((left, right) => left.localeCompare(right, 'en'));
-            const actual = userArray.slice().sort((left, right) => left.localeCompare(right, 'en'));
-            return expected.length === actual.length && expected.every((value, index) => value === actual[index]);
+            if (Array.isArray(normalizedUser)) {
+                const expected = normalizedCorrect.slice().sort((left, right) => left.localeCompare(right, 'en'));
+                const actual = normalizedUser.slice().sort((left, right) => left.localeCompare(right, 'en'));
+                return expected.length === actual.length && expected.every((value, index) => value === actual[index]);
+            }
+            const scalarUser = String(normalizedUser || '').toLowerCase();
+            if (!scalarUser) {
+                return false;
+            }
+            // Single-field answers may provide one of several accepted variants.
+            return normalizedCorrect.some((value) => String(value || '').toLowerCase() === scalarUser);
         }
         return String(normalizedCorrect).toLowerCase() === String(normalizedUser).toLowerCase();
     }
