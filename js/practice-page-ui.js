@@ -864,6 +864,60 @@
             lockPracticeAfterSubmit();
         });
 
+        // --- 无尽模式：监听来自父窗口的倒计时指令 ---
+        (function setupEndlessCountdownListener() {
+            var endlessCountdownActive = false;
+
+            function applyEndlessTimer(seconds) {
+                if (!timerEl) return;
+                timerEl.textContent = seconds + 's';
+                timerEl.style.background = 'rgba(248, 113, 113, 0.8)';
+            }
+
+            function resetEndlessTimer() {
+                if (!timerEl) return;
+                timerEl.style.background = '';
+            }
+
+            window.addEventListener('message', function (event) {
+                var msg = event && event.data;
+                if (!msg || typeof msg.type !== 'string') return;
+
+                if (msg.type === 'ENDLESS_COUNTDOWN') {
+                    endlessCountdownActive = true;
+                    var secs = (msg.data && typeof msg.data.seconds === 'number') ? msg.data.seconds : 5;
+                    applyEndlessTimer(secs);
+                    var exitBtn = document.getElementById('exit-btn');
+                    if (exitBtn) {
+                        exitBtn.style.display = 'block';
+                        exitBtn.textContent = '\u9000\u51fa\u65e0\u5c3d\u6a21\u5f0f';
+                        exitBtn.onclick = function () {
+                            var opener = window.opener;
+                            if (opener && !opener.closed) {
+                                try {
+                                    opener.postMessage({ type: 'ENDLESS_USER_EXIT' }, '*');
+                                    if (typeof opener.stopEndlessPractice === 'function') {
+                                        opener.stopEndlessPractice();
+                                    } else if (opener.AppActions && typeof opener.AppActions.stopEndlessPractice === 'function') {
+                                        opener.AppActions.stopEndlessPractice();
+                                    }
+                                } catch (_) {}
+                            }
+                            window.close();
+                        };
+                    }
+                } else if (msg.type === 'ENDLESS_COUNTDOWN_TICK') {
+                    if (!endlessCountdownActive) return;
+                    var remaining = (msg.data && typeof msg.data.seconds === 'number') ? msg.data.seconds : 0;
+                    applyEndlessTimer(remaining);
+                    if (remaining <= 0) {
+                        endlessCountdownActive = false;
+                        resetEndlessTimer();
+                    }
+                }
+            });
+        })();
+
         setupAudioPlayer();
         initializeTranscriptPane();
     });

@@ -59,7 +59,7 @@
         "q12",
         "q13"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                 <h4>Questions 24–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h4>The bluestriped fangblenny</h4>\n                    <p>\n                    Dr Karen Cheney studies the bluestriped fangblenny on <strong>24</strong> <input type=\"text\" id=\"q24_input\"> off Queensland's coast. She found that the fangblenny was able to make itself resemble other fish by adjusting its colouration. The fangblenny impersonates the striped cleaner wrasse, a fish that is welcomed by other species as it gets rid of their <strong>25</strong> <input type=\"text\" id=\"q25_input\">. The fangblenny can approach its <strong>26</strong> <input type=\"text\" id=\"q26_input\"> without drawing the attention of predators or disturbing the work of the striped cleaner wrasse.\n                    </p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                 <h4>Questions 24–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h4>The bluestriped fangblenny</h4>\n                    <p>\n                    Dr Karen Cheney studies the bluestriped fangblenny on <strong>24</strong> <input name=\"q11\" type=\"text\" id=\"q24_input\"> off Queensland's coast. She found that the fangblenny was able to make itself resemble other fish by adjusting its colouration. The fangblenny impersonates the striped cleaner wrasse, a fish that is welcomed by other species as it gets rid of their <strong>25</strong> <input name=\"q12\" type=\"text\" id=\"q25_input\">. The fangblenny can approach its <strong>26</strong> <input name=\"q13\" type=\"text\" id=\"q26_input\"> without drawing the attention of predators or disturbing the work of the striped cleaner wrasse.\n                    </p>\n                </div>\n            </div>"
     }
   ],
   "answerKey": {
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);

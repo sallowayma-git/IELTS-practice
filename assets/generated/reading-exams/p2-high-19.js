@@ -46,7 +46,7 @@
         "q7",
         "q8"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-anchor\">\n                <h4>Questions 18–21</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"summary-completion\">\n                    <h4>Goldsmiths study</h4>\n                    <p>Researchers from Goldsmiths concluded that the music we imagine in our minds is quite similar to recordings. They proved this by asking volunteers to record the rhythm of music using a monitor on their <strong>18</strong> <input type=\"text\" id=\"q18_input\">. Further research has demonstrated that those who hear earworms more frequently have brains that may deal with <strong>19</strong> <input type=\"text\" id=\"q19_input\"> differently from other people. Dr Stewart also believes that the brain is <strong>20</strong> <input type=\"text\" id=\"q20_input\"> by earworms when it is not focused on a task. In fact, a reduction in the occurrence of earworms was found to be directly related to how <strong>21</strong> <input type=\"text\" id=\"q21_input\"> the task was. Interestingly, volunteers' diaries revealed that the songs they heard inside their head reflected their moods, so the choice of music is not accidental.</p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-anchor\">\n                <h4>Questions 18–21</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"summary-completion\">\n                    <h4>Goldsmiths study</h4>\n                    <p>Researchers from Goldsmiths concluded that the music we imagine in our minds is quite similar to recordings. They proved this by asking volunteers to record the rhythm of music using a monitor on their <strong>18</strong> <input name=\"q5\" type=\"text\" id=\"q18_input\">. Further research has demonstrated that those who hear earworms more frequently have brains that may deal with <strong>19</strong> <input name=\"q6\" type=\"text\" id=\"q19_input\"> differently from other people. Dr Stewart also believes that the brain is <strong>20</strong> <input name=\"q7\" type=\"text\" id=\"q20_input\"> by earworms when it is not focused on a task. In fact, a reduction in the occurrence of earworms was found to be directly related to how <strong>21</strong> <input name=\"q8\" type=\"text\" id=\"q21_input\"> the task was. Interestingly, volunteers' diaries revealed that the songs they heard inside their head reflected their moods, so the choice of music is not accidental.</p>\n                </div>\n            </div>"
     },
     {
       "groupId": "group-3",
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);

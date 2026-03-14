@@ -48,7 +48,7 @@
         "q9",
         "q10"
       ],
-      "bodyHtml": "<div class=\"group summary-completion\" id=\"q7-8-9-10-anchor\">\n                <h4>Questions 33–36</h4>\n                <p class=\"instructions\">Complete the summary below.<br>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n                <p>\n                Colin Martindale carried out research into the creative brain at work. For his study, volunteers had a series of <strong>33</strong> <input type=\"text\" id=\"q33_input\"> placed on their heads which were used to monitor brain activity while they made up stories. Martindale demonstrated that creativity consisted of <strong>34</strong> <input type=\"text\" id=\"q34a_input\"> and <input type=\"text\" id=\"q34b_input\"> phases. In the first of these, the brain was mostly inactive except for <strong>35</strong> <input type=\"text\" id=\"q35_input\">, and this corresponds to what takes place during dreaming or relaxation. In the second phase, when the volunteers worked on their stories, however, their brains became a lot busier. Interestingly, the most creative stories were produced by those volunteers with the greatest <strong>36</strong> <input type=\"text\" id=\"q36_input\"> in brain activity between the two phases.\n                </p>\n            </div>"
+      "bodyHtml": "<div class=\"group summary-completion\" id=\"q7-8-9-10-anchor\">\n                <h4>Questions 33–36</h4>\n                <p class=\"instructions\">Complete the summary below.<br>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n                <p>\n                Colin Martindale carried out research into the creative brain at work. For his study, volunteers had a series of <strong>33</strong> <input name=\"q7\" type=\"text\" id=\"q33_input\"> placed on their heads which were used to monitor brain activity while they made up stories. Martindale demonstrated that creativity consisted of <strong>34</strong> <input name=\"q8\" type=\"text\" id=\"q34a_input\"> and <input name=\"q8\" type=\"text\" id=\"q34b_input\"> phases. In the first of these, the brain was mostly inactive except for <strong>35</strong> <input name=\"q9\" type=\"text\" id=\"q35_input\">, and this corresponds to what takes place during dreaming or relaxation. In the second phase, when the volunteers worked on their stories, however, their brains became a lot busier. Interestingly, the most creative stories were produced by those volunteers with the greatest <strong>36</strong> <input name=\"q10\" type=\"text\" id=\"q36_input\"> in brain activity between the two phases.\n                </p>\n            </div>"
     },
     {
       "groupId": "group-3",
@@ -124,5 +124,6 @@
     "q13": "39",
     "q14": "40"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);
