@@ -3,6 +3,13 @@
 
     const MESSAGE_SOURCE = 'practice_page';
     const INIT_RETRY_MS = 1500;
+    const EXPLANATION_STYLE_ID = 'reading-explanation-style';
+    const EXPLANATION_SPLIT_KINDS = new Set([
+        'single_choice',
+        'multi_choice',
+        'true_false_not_given',
+        'yes_no_not_given'
+    ]);
     const navStatus = new Map();
     const scriptCache = new Map();
 
@@ -22,6 +29,7 @@
         initTimer: null,
         manifestLoaded: false,
         dataset: null,
+        explanation: null,
         lastResults: null,
         parentWindow: global.opener || global.parent || null
     };
@@ -112,6 +120,159 @@
         return dataset;
     }
 
+    async function ensureExplanationManifest() {
+        if (global.__READING_EXPLANATION_MANIFEST__) {
+            return global.__READING_EXPLANATION_MANIFEST__;
+        }
+        await loadScript('../reading-explanations/manifest.js');
+        return global.__READING_EXPLANATION_MANIFEST__ || {};
+    }
+
+    async function ensureExplanationDataset() {
+        const registry = global.__READING_EXPLANATION_DATA__;
+        if (!registry || typeof registry.get !== 'function') {
+            return null;
+        }
+        let manifest = {};
+        try {
+            manifest = await ensureExplanationManifest();
+        } catch (_) {
+            return null;
+        }
+        const entry = manifest[state.dataKey] || manifest[state.examId];
+        if (!entry || !entry.dataKey || !entry.script) {
+            return null;
+        }
+        if (!registry.has(entry.dataKey)) {
+            try {
+                await loadScript(entry.script);
+            } catch (_) {
+                return null;
+            }
+        }
+        const payload = registry.get(entry.dataKey);
+        state.explanation = payload || null;
+        return state.explanation;
+    }
+
+    function ensureExplanationStyles() {
+        if (document.getElementById(EXPLANATION_STYLE_ID)) {
+            return;
+        }
+        const style = document.createElement('style');
+        style.id = EXPLANATION_STYLE_ID;
+        style.textContent = `
+            .reading-explanation-card {
+                margin: 10px 0 14px;
+                padding: 10px 12px;
+                border: 1px solid rgba(37, 99, 235, 0.22);
+                border-left: 4px solid rgba(37, 99, 235, 0.9);
+                border-radius: 8px;
+                background: rgba(239, 246, 255, 0.75);
+            }
+            .reading-explanation-card__label {
+                font-size: 12px;
+                line-height: 1.3;
+                margin-bottom: 6px;
+                font-weight: 700;
+                color: #1d4ed8;
+            }
+            .reading-explanation-card__text {
+                font-size: 14px;
+                line-height: 1.6;
+                color: #1f2937;
+                white-space: pre-wrap;
+            }
+            .reading-group-explanation {
+                margin-top: 10px;
+            }
+            .reading-question-explanation {
+                margin-top: 8px;
+            }
+            .reading-question-explanation-list {
+                margin-top: 10px;
+                padding: 10px 12px;
+                border: 1px dashed rgba(59, 130, 246, 0.45);
+                border-radius: 8px;
+                background: rgba(239, 246, 255, 0.45);
+            }
+            .reading-question-explanation-list h5 {
+                margin: 0 0 8px;
+                font-size: 13px;
+                color: #1e3a8a;
+            }
+            .reading-question-explanation-list .reading-question-explanation-item + .reading-question-explanation-item {
+                margin-top: 8px;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function clearExplanations() {
+        document.querySelectorAll(
+            '.reading-explanation-card, .reading-group-explanation, .reading-question-explanation, .reading-question-explanation-list'
+        ).forEach((node) => node.remove());
+    }
+
+    function parseQuestionNumber(value) {
+        const match = String(value || '').match(/\d+/);
+        return match ? Number(match[0]) : null;
+    }
+
+    function questionNumberFromId(questionId) {
+        const label = displayLabel(questionId);
+        const parsed = parseQuestionNumber(label);
+        if (parsed != null) {
+            return parsed;
+        }
+        return parseQuestionNumber(questionId);
+    }
+
+    function sectionOverlap(section, numbers = []) {
+        const range = section?.questionRange;
+        if (!range || !Number.isFinite(range.start) || !Number.isFinite(range.end)) {
+            return 0;
+        }
+        return numbers.filter((value) => Number.isFinite(value) && value >= range.start && value <= range.end).length;
+    }
+
+    function pickSectionForGroup(questionNumbers = [], preferMode = null) {
+        const sections = Array.isArray(state.explanation?.questionExplanations) ? state.explanation.questionExplanations : [];
+        const filtered = preferMode ? sections.filter((item) => item?.mode === preferMode) : sections;
+        if (!filtered.length) {
+            return null;
+        }
+        let best = null;
+        let bestScore = -1;
+        filtered.forEach((section) => {
+            const score = sectionOverlap(section, questionNumbers);
+            if (score > bestScore) {
+                best = section;
+                bestScore = score;
+            }
+        });
+        if (best && bestScore > 0) {
+            return best;
+        }
+        return null;
+    }
+
+    function createExplanationCard(label, text, className = '') {
+        const card = document.createElement('div');
+        card.className = `reading-explanation-card ${className}`.trim();
+        if (label) {
+            const header = document.createElement('div');
+            header.className = 'reading-explanation-card__label';
+            header.textContent = label;
+            card.appendChild(header);
+        }
+        const body = document.createElement('div');
+        body.className = 'reading-explanation-card__text';
+        body.textContent = String(text || '').trim();
+        card.appendChild(body);
+        return card;
+    }
+
     function createGroupMarkup(group) {
         const lead = group.leadHtml ? `<div class="unified-group__lead">${group.leadHtml}</div>` : '';
         const questionIds = Array.isArray(group.questionIds) ? group.questionIds.join(',') : '';
@@ -127,6 +288,7 @@
     }
 
     function renderDataset(dataset) {
+        clearExplanations();
         const passageHtml = (dataset.passage?.blocks || [])
             .map((block) => block?.bodyHtml || block?.html || '')
             .join('\n');
@@ -237,6 +399,152 @@
         dom.nav?.addEventListener('click', navClickHandler);
     }
 
+    function resolvePassageTargets() {
+        if (!dom.left) return [];
+        const wrapped = Array.from(dom.left.querySelectorAll('.paragraph-wrapper > p'));
+        if (wrapped.length) {
+            return wrapped;
+        }
+        const paragraphs = Array.from(dom.left.querySelectorAll('p')).filter((node) => {
+            const text = (node.textContent || '').trim();
+            return text.length > 0 && !/you should spend about/i.test(text);
+        });
+        return paragraphs;
+    }
+
+    function renderPassageExplanations() {
+        const notes = Array.isArray(state.explanation?.passageNotes) ? state.explanation.passageNotes : [];
+        if (!notes.length) {
+            return;
+        }
+        const targets = resolvePassageTargets();
+        if (!targets.length) {
+            return;
+        }
+        ensureExplanationStyles();
+        const size = Math.min(notes.length, targets.length);
+        for (let index = 0; index < size; index += 1) {
+            const note = notes[index];
+            const target = targets[index];
+            if (!note || !target) continue;
+            const label = note.label || `${state.explanation?.meta?.noteType || '段落讲解'} ${index + 1}`;
+            const card = createExplanationCard(label, note.text || '', 'reading-passage-explanation');
+            target.insertAdjacentElement('afterend', card);
+        }
+    }
+
+    function locateQuestionContainer(groupEl, questionId) {
+        const escaped = escapeSelector(questionId);
+        const directByAnchor = groupEl.querySelector(`#${escaped}-anchor`);
+        if (directByAnchor) {
+            return directByAnchor.closest('.question-item, .tfng-item, .match-question-item, .question-row, .summary-completion')
+                || directByAnchor.parentElement;
+        }
+        const inputByName = groupEl.querySelector(`[name="${escaped}"]`);
+        if (inputByName) {
+            return inputByName.closest('.question-item, .tfng-item, .match-question-item, .question-row, .summary-completion');
+        }
+        const byData = groupEl.querySelector(`[data-question="${escaped}"]`);
+        if (byData) {
+            return byData.closest('.question-item, .match-question-item, .paragraph-wrapper, .summary-completion') || byData.parentElement;
+        }
+        return null;
+    }
+
+    function renderGroupExplanation(groupEl, section, questionNumbers) {
+        const title = section?.sectionTitle || `题型讲解（Q${questionNumbers[0] || ''}）`;
+        const text = section?.text || '';
+        if (!text) {
+            return;
+        }
+        const card = createExplanationCard(title, text, 'reading-group-explanation');
+        groupEl.appendChild(card);
+    }
+
+    function renderPerQuestionExplanations(groupEl, section, questionPairs) {
+        const itemMap = new Map();
+        (section?.items || []).forEach((item) => {
+            const number = Number(item?.questionNumber);
+            if (!Number.isFinite(number)) return;
+            itemMap.set(number, item.text || '');
+        });
+        if (!itemMap.size) {
+            renderGroupExplanation(groupEl, section, questionPairs.map((pair) => pair.number));
+            return;
+        }
+
+        const fallback = [];
+        questionPairs.forEach(({ questionId, number }) => {
+            const text = itemMap.get(number);
+            if (!text) return;
+            const container = locateQuestionContainer(groupEl, questionId);
+            if (container) {
+                const card = createExplanationCard(`Q${number} 讲解`, text, 'reading-question-explanation');
+                container.appendChild(card);
+            } else {
+                fallback.push({ number, text });
+            }
+        });
+
+        if (!fallback.length) {
+            return;
+        }
+        const wrapper = document.createElement('div');
+        wrapper.className = 'reading-question-explanation-list';
+        const heading = document.createElement('h5');
+        heading.textContent = section?.sectionTitle || '题目讲解';
+        wrapper.appendChild(heading);
+        fallback.forEach(({ number, text }) => {
+            const item = createExplanationCard(`Q${number}`, text, 'reading-question-explanation-item');
+            wrapper.appendChild(item);
+        });
+        groupEl.appendChild(wrapper);
+    }
+
+    function renderQuestionExplanations() {
+        if (!dom.groups) return;
+        const groups = Array.from(dom.groups.querySelectorAll('.unified-group'));
+        if (!groups.length) return;
+        ensureExplanationStyles();
+
+        const datasetGroups = Array.isArray(state.dataset?.questionGroups) ? state.dataset.questionGroups : [];
+        groups.forEach((groupEl, index) => {
+            const group = datasetGroups[index] || {};
+            const questionIds = Array.isArray(group.questionIds) ? group.questionIds : [];
+            const questionPairs = questionIds.map((questionId) => ({
+                questionId,
+                number: questionNumberFromId(questionId)
+            })).filter((pair) => Number.isFinite(pair.number));
+            const questionNumbers = questionPairs.map((pair) => pair.number);
+            const splitMode = EXPLANATION_SPLIT_KINDS.has(group.kind);
+
+            if (splitMode) {
+                const section = pickSectionForGroup(questionNumbers, 'per_question')
+                    || pickSectionForGroup(questionNumbers, null);
+                if (section) {
+                    renderPerQuestionExplanations(groupEl, section, questionPairs);
+                }
+                return;
+            }
+
+            const section = pickSectionForGroup(questionNumbers, 'group')
+                || pickSectionForGroup(questionNumbers, null);
+            if (section) {
+                renderGroupExplanation(groupEl, section, questionNumbers);
+            }
+        });
+    }
+
+    async function renderExplanations() {
+        clearExplanations();
+        const explanation = await ensureExplanationDataset();
+        if (!explanation) {
+            return;
+        }
+        renderPassageExplanations();
+        renderQuestionExplanations();
+    }
+
     function getDropzones() {
         return Array.from(document.querySelectorAll('.paragraph-dropzone, .match-dropzone, .drop-target-summary'));
     }
@@ -292,8 +600,8 @@
         if (!item) return null;
         const sourceDropzone = item.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary');
         return {
-            value: item.dataset.heading || item.dataset.option || item.dataset.answerValue || item.textContent.trim(),
-            label: item.dataset.answerLabel || item.textContent.trim(),
+            value: item.dataset.heading || item.dataset.option || item.dataset.word || item.dataset.value || item.dataset.answerValue || item.textContent.trim(),
+            label: item.dataset.answerLabel || item.dataset.word || item.dataset.value || item.textContent.trim(),
             sourceDropzoneId: sourceDropzone?.dataset?.dropzoneId || ''
         };
     }
@@ -486,12 +794,22 @@
     }
 
     function getDropzoneAnswer(questionId) {
+        const extractItemValue = (item) => String(
+            item?.dataset?.answerValue
+            || item?.dataset?.heading
+            || item?.dataset?.option
+            || item?.dataset?.word
+            || item?.dataset?.value
+            || item?.textContent
+            || ''
+        ).trim();
+
         // Find match dropzones
         const direct = document.querySelector(`.match-dropzone[data-question="${questionId}"], .drop-target-summary[data-question="${questionId}"]`);
         if (direct) {
-            const items = direct.querySelectorAll('.drag-item');
+            const items = direct.querySelectorAll('.drag-item, .draggable-word, .card');
             if (items.length > 0) {
-                return Array.from(items).map(item => String(item.dataset.answerValue || item.dataset.heading || item.dataset.option || item.textContent).trim()).join(', ');
+                return Array.from(items).map((item) => extractItemValue(item)).join(', ');
             }
             return String(direct.dataset.answerValue || '').trim();
         }
@@ -500,9 +818,9 @@
         const anchor = document.getElementById(`${questionId}-anchor`);
         const zone = anchor?.querySelector?.('.paragraph-dropzone');
         if (zone) {
-            const items = zone.querySelectorAll('.drag-item');
+            const items = zone.querySelectorAll('.drag-item, .draggable-word, .card');
             if (items.length > 0) {
-                return Array.from(items).map(item => String(item.dataset.answerValue || item.dataset.heading || item.dataset.option || item.textContent).trim()).join(', ');
+                return Array.from(items).map((item) => extractItemValue(item)).join(', ');
             }
             return String(zone.dataset.answerValue || '').trim();
         }
@@ -909,7 +1227,7 @@
         setReadOnlyMode(data.readOnly !== false);
     }
 
-    function applyReplayRecord(data = {}) {
+    async function applyReplayRecord(data = {}) {
         const entry = data.entry && typeof data.entry === 'object' ? data.entry : data;
         const replayResults = buildReplayResults(entry);
         if (data.reviewSessionId) {
@@ -923,6 +1241,7 @@
         state.lastResults = replayResults;
         state.submitted = true;
         renderResults(replayResults);
+        await renderExplanations();
         updateNavStatuses(replayResults);
         setReadOnlyMode(data.readOnly !== false);
     }
@@ -981,13 +1300,14 @@
         }, INIT_RETRY_MS);
     }
 
-    function handleSubmit() {
+    async function handleSubmit() {
         if (state.readOnly) {
             return;
         }
         const results = buildResults();
         state.lastResults = results;
         renderResults(results);
+        await renderExplanations();
         updateNavStatuses(results);
         postMessage('PRACTICE_COMPLETE', Object.assign({
             duration: Math.max(1, Math.round((Date.now() - state.startTime) / 1000)),
@@ -1028,6 +1348,7 @@
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
         }
+        clearExplanations();
         updateNavStatuses();
     }
 
@@ -1067,7 +1388,7 @@
             return;
         }
         if (type === 'REPLAY_PRACTICE_RECORD') {
-            applyReplayRecord(data || {});
+            applyReplayRecord(data || {}).catch(() => {});
             return;
         }
         if (type === 'REVIEW_CONTEXT') {
