@@ -11,7 +11,7 @@ window.completeExamIndex = [
         filename: '1. P1 - A Brief History of Tea 茶叶简史【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '1. P1 - A Brief History of Tea 茶叶简史【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/1. P1 - A Brief History of Tea 茶叶简史.pdf',
     },
     {
         id: 'p1-low-02',
@@ -22,7 +22,7 @@ window.completeExamIndex = [
         filename: '10. P1 - Maori Fish Hooks 毛利鱼钩.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '10. P1 - Maori Fish Hooks 毛利鱼钩.pdf',
+        pdfFilename: 'ReadingPractice/PDF/10. P1 - Maori Fish Hooks 毛利鱼钩.pdf',
     },
     {
         id: 'p3-high-03',
@@ -33,7 +33,7 @@ window.completeExamIndex = [
         filename: '100. P3 - What makes a musical expert_ 音乐天赋【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '100. P3 - What makes a musical expert_ 音乐天赋【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/100. P3 - What makes a musical expert_ 音乐天赋.pdf',
     },
     {
         id: 'p3-high-04',
@@ -44,7 +44,7 @@ window.completeExamIndex = [
         filename: '101. P3 - Yawning 打呵欠【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '101. P3 - Yawning 打呵欠【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/101. P3 - Yawning 打哈欠.pdf',
     },
     {
         id: 'p1-high-05',
@@ -55,7 +55,7 @@ window.completeExamIndex = [
         filename: '102. P1 - Katherine Mansfield 新西兰作家【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '102. P1 - Katherine Mansfield 新西兰作家【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/102. P1 - Katherine Mansfield 新西兰作家.pdf',
     },
     {
         id: 'p2-low-06',
@@ -66,7 +66,7 @@ window.completeExamIndex = [
         filename: '103. P2 - Biomimicry 仿生学.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '103. P2 - Biomimicry 仿生学.pdf',
+        pdfFilename: 'ReadingPractice/PDF/103. P2 - Biomimicry 仿生学.pdf',
     },
     {
         id: 'p3-low-07',
@@ -77,7 +77,7 @@ window.completeExamIndex = [
         filename: '104. P3 - Star Performers 明星员工.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '104. P3 - Star Performers 明星员工.pdf',
+        pdfFilename: 'ReadingPractice/PDF/104. P3 - Star Performers 明星员工.pdf',
     },
     {
         id: 'p2-low-08',
@@ -88,7 +88,7 @@ window.completeExamIndex = [
         filename: '105. P2 - How the Petri dish supports scientific advances 培养皿.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '105. P2 - How the Petri dish supports scientific advances 培养皿.pdf',
+        pdfFilename: 'ReadingPractice/PDF/105. P2 - How the Petri dish supports scientific advances 培养皿.pdf',
     },
     {
         id: 'p2-high-09',
@@ -99,7 +99,7 @@ window.completeExamIndex = [
         filename: '106. P2 - Early Approaches to Organisational Design 组织设计【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '106. P2 - Early Approaches to Organisational Design 组织设计【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/106. P2 - Early Approaches to Organisational Design 组织设计.pdf',
     },
     {
         id: 'p2-medium-10',
@@ -110,7 +110,7 @@ window.completeExamIndex = [
         filename: '107. P2 - A study of western celebrity 西方名人【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '107. P2 - A study of western celebrity 西方名人【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/107. P2 - A study of western celebrity 西方名人.pdf',
     },
     {
         id: 'p1-low-11',
@@ -121,7 +121,7 @@ window.completeExamIndex = [
         filename: '108. P1 - Bovids 牛科动物.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '108. P1 - Bovids 牛科动物.pdf',
+        pdfFilename: 'ReadingPractice/PDF/108. P1 - Bovids 牛科动物.pdf',
     },
     {
         id: 'p3-low-12',
@@ -132,7 +132,7 @@ window.completeExamIndex = [
         filename: '109. P3 - Humanities and the health professional 人文医学.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '109. P3 - Humanities and the health professional 人文医学.pdf',
+        pdfFilename: 'ReadingPractice/PDF/109. P3 - Humanities and the health professional 人文医学.pdf',
     },
     {
         id: 'p1-low-13',
@@ -143,7 +143,7 @@ window.completeExamIndex = [
         filename: '11. P1 - Report on a university drama project 大学戏剧项目报告.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '11. P1 - Report on a university drama project 大学戏剧项目报告.pdf',
+        pdfFilename: 'ReadingPractice/PDF/11. P1 - Report on a university drama project 大学戏剧项目报告.pdf',
     },
     {
         id: 'p2-high-14',
@@ -154,7 +154,7 @@ window.completeExamIndex = [
         filename: '110. P2 - Should space be explored by robots or by humans 人机太空探索【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '110. P2 - Should space be explored by robots or by humans 人机太空探索【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/110. P2 - Should space be explored by robots or by humans 人机太空探索.pdf',
     },
     {
         id: 'p3-high-15',
@@ -165,7 +165,7 @@ window.completeExamIndex = [
         filename: '111. P3 - Whale Culture 鲸鱼文化【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '111. P3 - Whale Culture 鲸鱼文化【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/111. P3 - Whale Culture 鲸鱼文化.pdf',
     },
     {
         id: 'p2-high-16',
@@ -176,7 +176,7 @@ window.completeExamIndex = [
         filename: '112. P2 - The Importance of Law 法律的意义【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '112. P2 - The Importance of Law 法律的意义【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/112. P2 - The Importance of Law 法律的意义.pdf',
     },
     {
         id: 'p2-high-17',
@@ -187,7 +187,7 @@ window.completeExamIndex = [
         filename: '113. P2 - Herbal Medicines 新西兰草药【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '113. P2 - Herbal Medicines 新西兰草药【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/113. P2 - Herbal Medicines 新西兰草药.pdf',
     },
     {
         id: 'p3-medium-18',
@@ -198,7 +198,7 @@ window.completeExamIndex = [
         filename: '114. P3 - Unlocking the mystery of dreams 梦的解析【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '114. P3 - Unlocking the mystery of dreams 梦的解析【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/114. P3 - Unlocking the mystery of dreams 梦的解析.pdf',
     },
     {
         id: 'p2-high-19',
@@ -209,7 +209,7 @@ window.completeExamIndex = [
         filename: '115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '115. P2 - Mind Music 脑海中的音乐(心灵音乐)【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/115. P2 - Mind Music 脑海中的音乐(心灵音乐).pdf',
     },
     {
         id: 'p1-medium-20',
@@ -220,7 +220,7 @@ window.completeExamIndex = [
         filename: '116. P1 - The Development of Plastics 塑料的发展史【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '116. P1 - The Development of Plastics 塑料的发展史【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/116. P1 - The Development of Plastics 塑料的发展史.pdf',
     },
     {
         id: 'p2-high-21',
@@ -231,7 +231,7 @@ window.completeExamIndex = [
         filename: '117. P2 - Stress Less 工作压力【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '117. P2 - Stress Less 工作压力【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/117. P2 - Stress Less 工作压力.pdf',
     },
     {
         id: 'p3-medium-22',
@@ -242,7 +242,7 @@ window.completeExamIndex = [
         filename: '118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '118. P3 - Neanderthal Technology 尼安德特人的生存技艺【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/118. P3 - Neanderthal Technology 尼安德特人的生存技艺.pdf',
     },
     {
         id: 'p2-high-23',
@@ -253,7 +253,7 @@ window.completeExamIndex = [
         filename: '119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/119. P2 - The Constant Evolution of the Humble Tomato 番茄的演化.pdf',
     },
     {
         id: 'p1-high-24',
@@ -264,7 +264,7 @@ window.completeExamIndex = [
         filename: '12. P1 - Rubber 橡胶【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '12. P1 - Rubber 橡胶【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/12. P1 - Rubber 橡胶.pdf',
     },
     {
         id: 'p2-high-25',
@@ -275,7 +275,7 @@ window.completeExamIndex = [
         filename: '120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/120. P2 - Will Eating Less Make You Live Longer 节食与长寿.pdf',
     },
     {
         id: 'p2-high-26',
@@ -286,7 +286,7 @@ window.completeExamIndex = [
         filename: '',
         hasHtml: false,
         hasPdf: true,
-        pdfFilename: '121. P2 - Muscle Loss 肌肉流失【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/121. P2(仅原文无题) - Muscle Loss 肌肉流失.pdf',
     },
     {
         id: 'p1-high-27',
@@ -297,7 +297,7 @@ window.completeExamIndex = [
         filename: '122. P1 - Footprints in the Mud 恐龙脚印【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '122. P1 - Footprints in the Mud 恐龙脚印【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/122. P1 - Footprints in the Mud 恐龙脚印.pdf',
     },
     {
         id: 'p3-low-28',
@@ -308,7 +308,7 @@ window.completeExamIndex = [
         filename: '123. P3 - Images and Places 风景与印记.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '123. P3 - Images and Places 风景与印记.pdf',
+        pdfFilename: 'ReadingPractice/PDF/123. P3 - Images and Places 风景与印记.pdf',
     },
     {
         id: 'p1-medium-29',
@@ -319,7 +319,7 @@ window.completeExamIndex = [
         filename: '124. P1 - The extinction of the cave bear 洞熊的灭绝【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '124. P1 - The extinction of the cave bear洞熊的灭绝【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/124. P1 - The extinction of the cave bear 洞熊的灭绝.pdf',
     },
     {
         id: 'p1-low-30',
@@ -330,7 +330,7 @@ window.completeExamIndex = [
         filename: '125. P1 - Investing in the Future 投资未来.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '125. P1 - Investing in the Future 投资未来.pdf',
+        pdfFilename: 'ReadingPractice/PDF/125. P1 - Investing in the Future 投资未来.pdf',
     },
     {
         id: 'p1-high-31',
@@ -341,7 +341,7 @@ window.completeExamIndex = [
         filename: '126. P1 - Dolls through the ages 玩偶的变迁史【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '126. P1 - Dolls through the ages 玩偶的变迁史【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/126. P1 - Dolls through the ages 玩偶的变迁史.pdf',
     },
     {
         id: 'p3-high-32',
@@ -352,7 +352,7 @@ window.completeExamIndex = [
         filename: '127. P3 - Science and Filmmaking 电影科学(CGI)【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '127. P3 - Science and Filmmaking 电影科学(CGI)【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/127. P3 - Science and Filmmaking 电影科学(CGI).pdf',
     },
     {
         id: 'p1-medium-33',
@@ -363,7 +363,7 @@ window.completeExamIndex = [
         filename: '128. P1 - The Pyramid of Cestius 罗马金字塔【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '128. P1 - The Pyramid of Cestius 罗马金字塔【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/128. P1 - The Pyramid of Cestius 罗马金字塔.pdf',
     },
     {
         id: 'p1-low-34',
@@ -374,7 +374,7 @@ window.completeExamIndex = [
         filename: '129. P1 - The Slow Food Organization 慢食运动组织.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '129. P1 - The Slow Food Organization 慢食运动组织.pdf',
+        pdfFilename: 'ReadingPractice/PDF/129. P1 - The Slow Food Organization 慢食运动组织.pdf',
     },
     {
         id: 'p1-low-35',
@@ -385,7 +385,7 @@ window.completeExamIndex = [
         filename: '13. P1 - Sweet Trouble 澳洲制糖产业.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '13. P1 - Sweet Trouble 澳洲制糖产业.pdf',
+        pdfFilename: 'ReadingPractice/PDF/13. P1 - Sweet Trouble 澳洲制糖产业.pdf',
     },
     {
         id: 'p3-low-36',
@@ -396,7 +396,7 @@ window.completeExamIndex = [
         filename: '130. P3 - Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '130. P3 - Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA.pdf',
+        pdfFilename: 'ReadingPractice/PDF/130. P3 - Tasmania’s Museum of Old and New Art 塔斯马尼亚古今艺术博物馆 MONA.pdf',
     },
     {
         id: 'p2-low-37',
@@ -407,7 +407,7 @@ window.completeExamIndex = [
         filename: '131. P2 - Keeping the water away 洪水防控.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '131. P2 - Keeping the water away 洪水防控.pdf',
+        pdfFilename: 'ReadingPractice/PDF/131. P2 - Keeping the water away 洪水防控.pdf',
     },
     {
         id: 'p3-low-38',
@@ -418,7 +418,7 @@ window.completeExamIndex = [
         filename: '132. P3 - Research into the effects of different teaching styles 教学风格研究.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '132. P3 - Research into the effects of different teaching styles 教学风格研究.pdf',
+        pdfFilename: 'ReadingPractice/PDF/132. P3 - Research into the effects of different teaching styles 教学风格研究.pdf',
     },
     {
         id: 'p2-low-39',
@@ -429,7 +429,7 @@ window.completeExamIndex = [
         filename: '133. P2 - How to be Happy 如何获得幸福.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '133. P2 - How to be Happy 如何获得幸福.pdf',
+        pdfFilename: 'ReadingPractice/PDF/133. P2 - How to be Happy 如何获得幸福.pdf',
     },
     {
         id: 'p1-low-40',
@@ -440,7 +440,7 @@ window.completeExamIndex = [
         filename: '134. P1 - Dyes and fabric dyeing 染料的历史.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '134. P1 - Dyes and fabric dyeing 染料的历史.pdf',
+        pdfFilename: 'ReadingPractice/PDF/134. P1 - Dyes and fabric dyeing 染料的历史.pdf',
     },
     {
         id: 'p2-low-41',
@@ -451,7 +451,7 @@ window.completeExamIndex = [
         filename: '135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.pdf',
+        pdfFilename: 'ReadingPractice/PDF/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.pdf',
     },
     {
         id: 'p3-low-42',
@@ -462,7 +462,7 @@ window.completeExamIndex = [
         filename: '136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.pdf',
+        pdfFilename: 'ReadingPractice/PDF/136. P3 - The peopling of Patagonia 巴塔哥尼亚的人类迁徙.pdf',
     },
     {
         id: 'p3-low-43',
@@ -473,7 +473,7 @@ window.completeExamIndex = [
         filename: '137. P3 - What is social history 社会史.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '137. P3 - What is social history 社会史.pdf',
+        pdfFilename: 'ReadingPractice/PDF/137. P3 - What is social history 社会史.pdf',
     },
     {
         id: 'p3-low-44',
@@ -484,7 +484,7 @@ window.completeExamIndex = [
         filename: '138. P3 - Conformity 从众心理.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '138. P3 - Conformity 从众心理.pdf',
+        pdfFilename: 'ReadingPractice/PDF/138. P3 - Conformity 从众心理.pdf',
     },
     {
         id: 'p1-low-45',
@@ -495,7 +495,7 @@ window.completeExamIndex = [
         filename: '139. P1 - Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '139. P1 - Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究.pdf',
+        pdfFilename: 'ReadingPractice/PDF/139. P1 - Sleep Study on Modern-Day Hunter-Gatherers Dispels Popular Notions 部落睡眠研究.pdf',
     },
     {
         id: 'p1-low-46',
@@ -506,7 +506,7 @@ window.completeExamIndex = [
         filename: '14. P1 - Sydney Opera House 悉尼歌剧院.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '14. P1 - Sydney Opera House 悉尼歌剧院.pdf',
+        pdfFilename: 'ReadingPractice/PDF/14. P1 - Sydney Opera House 悉尼歌剧院.pdf',
     },
     {
         id: 'p1-low-47',
@@ -517,7 +517,7 @@ window.completeExamIndex = [
         filename: '140. P1 - The Burgess Shale fossils 伯吉斯页岩.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '140. P1 - The Burgess Shale fossils 伯吉斯页岩.pdf',
+        pdfFilename: 'ReadingPractice/PDF/140. P1 - The Burgess Shale fossils 伯吉斯页岩.pdf',
     },
     {
         id: 'p1-low-48',
@@ -550,7 +550,7 @@ window.completeExamIndex = [
         filename: '143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.pdf',
+        pdfFilename: 'ReadingPractice/PDF/143. P2 - Jellyfish – The Dominant Species 水母·海洋中的优势物种.pdf',
     },
     {
         id: 'p2-low-51',
@@ -561,7 +561,7 @@ window.completeExamIndex = [
         filename: '144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.pdf',
+        pdfFilename: 'ReadingPractice/PDF/144. P2 - The gender gap in New Zealand’s high school examination results 新西兰考试成绩的性别差异.pdf',
     },
     {
         id: 'p1-low-52',
@@ -572,7 +572,7 @@ window.completeExamIndex = [
         filename: '145. P1 - Caral an ancient South American city 卡拉尔古城.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '145. P1 - Caral an ancient South American city 卡拉尔古城.pdf',
+        pdfFilename: 'ReadingPractice/PDF/145. P1 - Caral an ancient South American city 卡拉尔古城.pdf',
     },
     {
         id: 'p1-low-53',
@@ -583,7 +583,7 @@ window.completeExamIndex = [
         filename: '146. P1 - The Early History of Olive Oil 橄榄油的历史.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '146. P1 - The Early History of Olive Oil 橄榄油的历史.pdf',
+        pdfFilename: 'ReadingPractice/PDF/146. P1 - The Early History of Olive Oil 橄榄油的历史.pdf',
     },
     {
         id: 'p3-low-54',
@@ -594,7 +594,7 @@ window.completeExamIndex = [
         filename: '147. P3 - Movement Underwater 水下运动.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '147. P3 - Movement Underwater 水下运动.pdf',
+        pdfFilename: 'ReadingPractice/PDF/147. P3 - Movement Underwater 水下运动.pdf',
     },
     {
         id: 'p3-low-55',
@@ -605,7 +605,7 @@ window.completeExamIndex = [
         filename: '148. P3 - Improving Patient Safety 药品包装设计.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '148. P3 - Improving Patient Safety 药品包装设计.pdf',
+        pdfFilename: 'ReadingPractice/PDF/148. P3 - Improving Patient Safety 药品包装设计.pdf',
     },
     {
         id: 'p3-low-56',
@@ -616,7 +616,7 @@ window.completeExamIndex = [
         filename: '149. P3 - Learning to be bilingual 双语学习.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '149. P3 - Learning to be bilingual 双语学习.pdf',
+        pdfFilename: 'ReadingPractice/PDF/149. P3 - Learning to be bilingual 双语学习.pdf',
     },
     {
         id: 'p1-medium-57',
@@ -627,7 +627,7 @@ window.completeExamIndex = [
         filename: '15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '15. P1 - The Blockbuster Phenomenon 博物馆爆款现象【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/15. P1 - The Blockbuster Phenomenon 博物馆爆款现象.pdf',
     },
     {
         id: 'p2-medium-58',
@@ -638,7 +638,7 @@ window.completeExamIndex = [
         filename: '150. P2 - Insect Decision-Making 昆虫决策【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '150. P2 - Insect Decision-Making 昆虫决策【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/150. P2 - Insect Decision-Making 昆虫决策.pdf',
     },
     {
         id: 'p3-low-59',
@@ -649,7 +649,7 @@ window.completeExamIndex = [
         filename: '151. P3 - Inside the mind of a fan 观赛心境.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '151. P3 - Inside the mind of a fan 观赛心境.pdf',
+        pdfFilename: 'ReadingPractice/PDF/151. P3 - Inside the mind of a fan 观赛心境.pdf',
     },
     {
         id: 'p1-medium-60',
@@ -660,7 +660,7 @@ window.completeExamIndex = [
         filename: '152. P1 - Sorry—who are you 脸盲症【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '152. P1 - Sorry—who are you 脸盲症【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/152. P1 - Sorry—who are you 脸盲症.pdf',
     },
     {
         id: 'p1-low-61',
@@ -671,7 +671,7 @@ window.completeExamIndex = [
         filename: '153. P1 - Carnivorous plants 食虫植物.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '153. P1 - Carnivorous plants 食虫植物.pdf',
+        pdfFilename: 'ReadingPractice/PDF/153. P1 - Carnivorous plants 食虫植物.pdf',
     },
     {
         id: 'p2-low-62',
@@ -682,7 +682,7 @@ window.completeExamIndex = [
         filename: '154. P2 - The purpose of facial expressions 面部表情.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '154. P2 - The purpose of facial expressions 面部表情.pdf',
+        pdfFilename: 'ReadingPractice/PDF/154. P2 - The purpose of facial expressions 面部表情.pdf',
     },
     {
         id: 'p1-medium-63',
@@ -693,7 +693,7 @@ window.completeExamIndex = [
         filename: '155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/155. P1 - A Brief History of Humans and Food 人类食物的历史.pdf',
     },
     {
         id: 'p2-low-64',
@@ -704,7 +704,7 @@ window.completeExamIndex = [
         filename: '156. P2 - New filter promises clean water for millions 新型泥土净水器.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '156. P2 - New filter promises clean water for millions 新型泥土净水器.pdf',
+        pdfFilename: 'ReadingPractice/PDF/156. P2 - New filter promises clean water for millions 新型泥土净水器.pdf',
     },
     {
         id: 'p2-low-65',
@@ -715,7 +715,7 @@ window.completeExamIndex = [
         filename: '157. P2 - Boring Buildings 无聊建筑.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '157. P2 - Boring Buildings 无聊建筑.pdf',
+        pdfFilename: 'ReadingPractice/PDF/157. P2 - Boring Buildings 无聊建筑.pdf',
     },
     {
         id: 'p3-medium-66',
@@ -726,7 +726,7 @@ window.completeExamIndex = [
         filename: '158. P3 - Mercator - The Map Maker 地理制图师【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '158. P3 - Mercator - The Map Maker 地理制图师【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/158. P3 - Mercator - The Map Maker 地理制图师.pdf',
     },
     {
         id: 'p1-low-67',
@@ -737,7 +737,7 @@ window.completeExamIndex = [
         filename: '159. P1 - Scented Plants 植物的味道.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '159. P1 - Scented Plants 植物的味道.pdf',
+        pdfFilename: 'ReadingPractice/PDF/159. P1 - Scented Plants 植物的味道.pdf',
     },
     {
         id: 'p1-low-68',
@@ -748,7 +748,7 @@ window.completeExamIndex = [
         filename: '16. P1 - The Clipper Races 帆船竞速.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '16. P1 - The Clipper Races 帆船竞速.pdf',
+        pdfFilename: 'ReadingPractice/PDF/16. P1 - The Clipper Races 帆船竞速.pdf',
     },
     {
         id: 'p1-low-69',
@@ -759,7 +759,7 @@ window.completeExamIndex = [
         filename: '160. P1 - An important language development 楔形文字.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '160. P1 - An important language development 楔形文字.pdf',
+        pdfFilename: 'ReadingPractice/PDF/160. P1 - An important language development 楔形文字.pdf',
     },
     {
         id: 'p1-low-70',
@@ -770,7 +770,7 @@ window.completeExamIndex = [
         filename: '161. P1 - Fluorescence Deep sea discovery深海发光生物研究.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '161. P1 - Fluorescence Deep sea discovery深海发光生物研究.pdf',
+        pdfFilename: 'ReadingPractice/PDF/161. P1 - Deep sea discovery 深海发光生物研究.pdf',
     },
     {
         id: 'p3-low-71',
@@ -781,7 +781,7 @@ window.completeExamIndex = [
         filename: '162. P3 - Sea Change for Salinity 土地盐碱化.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '162. P3 - Sea Change for Salinity 土地盐碱化.pdf',
+        pdfFilename: 'ReadingPractice/PDF/162. P3 - Sea Change for Salinity 土地盐碱化.pdf',
     },
     {
         id: 'p1-low-72',
@@ -792,7 +792,7 @@ window.completeExamIndex = [
         filename: '163. P1 - How to find your way out of a food desert 城市食物荒漠.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '163. P1 - How to find your way out of a food desert 城市食物荒漠.pdf',
+        pdfFilename: 'ReadingPractice/PDF/163. P1 - How to find your way out of a food desert 城市食物荒漠.pdf',
     },
     {
         id: 'p2-low-73',
@@ -803,7 +803,7 @@ window.completeExamIndex = [
         filename: '164. P2 - The Power of Smell 嗅觉的力量.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '164. P2 - The Power of Smell 嗅觉的力量.pdf',
+        pdfFilename: 'ReadingPractice/PDF/164. P2 - The Power of Smell 嗅觉的力量.pdf',
     },
     {
         id: 'p3-low-74',
@@ -814,7 +814,7 @@ window.completeExamIndex = [
         filename: '165. P3 - The Placebo Effect5 安慰剂效应.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '165. P3 - The Placebo Effect5 安慰剂效应.pdf',
+        pdfFilename: 'ReadingPractice/PDF/165. P3 - The Placebo Effect5 安慰剂效应.pdf',
     },
     {
         id: 'p2-low-75',
@@ -825,7 +825,7 @@ window.completeExamIndex = [
         filename: '166. P2 - Lean Production Innovation 精益生产.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '166. P2 - Lean Production Innovation 精益生产.pdf',
+        pdfFilename: 'ReadingPractice/PDF/166. P2 - Lean Production Innovation 精益生产.pdf',
     },
     {
         id: 'p3-low-76',
@@ -836,7 +836,7 @@ window.completeExamIndex = [
         filename: '167. P3 - Sign, Baby, Sign! 美国手语.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '167. P3 - Sign, Baby, Sign! 美国手语.pdf',
+        pdfFilename: 'ReadingPractice/PDF/167. P3 - Sign, Baby, Sign! 美国手语.pdf',
     },
     {
         id: 'p2-low-77',
@@ -847,7 +847,7 @@ window.completeExamIndex = [
         filename: '168. P2 - Mammoth Kill 猛犸象的灭绝.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '168. P2 - Mammoth Kill 猛犸象的灭绝.pdf',
+        pdfFilename: 'ReadingPractice/PDF/168. P2 - Mammoth Kill 猛犸象的灭绝.pdf',
     },
     {
         id: 'p3-low-78',
@@ -858,7 +858,7 @@ window.completeExamIndex = [
         filename: '169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.pdf',
+        pdfFilename: 'ReadingPractice/PDF/169. P3 - The Costs of Brand Loyalty 品牌忠诚的代价.pdf',
     },
     {
         id: 'p1-high-79',
@@ -869,7 +869,7 @@ window.completeExamIndex = [
         filename: '17. P1 - The Development of The Silk Industry 丝绸产业发展【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '17. P1 - The Development of The Silk Industry 丝绸产业发展【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/17. P1 - The Development of The Silk Industry 丝绸产业发展.pdf',
     },
     {
         id: 'p1-low-80',
@@ -880,7 +880,7 @@ window.completeExamIndex = [
         filename: '170. P1 - The unsung sense 被低估的嗅觉.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '170. P1 - The unsung sense 被低估的嗅觉.pdf',
+        pdfFilename: 'ReadingPractice/PDF/170. P1 - The unsung sense 被低估的嗅觉.pdf',
     },
     {
         id: 'p1-low-81',
@@ -891,7 +891,7 @@ window.completeExamIndex = [
         filename: '171. P1 - Salt  盐的历史.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '171. P1 - Salt  盐的历史.pdf',
+        pdfFilename: 'ReadingPractice/PDF/171. P1 - Salt  盐的历史.pdf',
     },
     {
         id: 'p1-high-82',
@@ -902,7 +902,7 @@ window.completeExamIndex = [
         filename: '172. P1 - Think Small 微观科学.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '172. P1 - Think Small 微观科学.pdf',
+        pdfFilename: 'ReadingPractice/PDF/172. P1 - Think Small 微观科学.pdf',
     },
     {
         id: 'p3-low-83',
@@ -913,7 +913,7 @@ window.completeExamIndex = [
         filename: '173. 1018纸笔 P3 - Looking for inspiration 寻找灵感.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '173. 1018纸笔 P3 - Looking for inspiration 寻找灵感.pdf',
+        pdfFilename: 'ReadingPractice/PDF/173. P3(1018纸笔 ) - Looking for inspiration 寻找灵感.pdf',
     },
     {
         id: 'p1-low-84',
@@ -924,7 +924,7 @@ window.completeExamIndex = [
         filename: '174. P1 - Why good ideas fail TF公司.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '174. P1 - Why good ideas fail TF公司.pdf',
+        pdfFilename: 'ReadingPractice/PDF/174. P1 - Why good ideas fail TF公司.pdf',
     },
     {
         id: 'p3-low-85',
@@ -935,7 +935,7 @@ window.completeExamIndex = [
         filename: '175. P3 - Music soothes and awes 音乐疗愈.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '175. P3 - Music soothes and awes 音乐疗愈.pdf',
+        pdfFilename: 'ReadingPractice/PDF/175. P3 - Music soothes and awes 音乐疗愈.pdf',
     },
     {
         id: 'p2-medium-86',
@@ -946,7 +946,7 @@ window.completeExamIndex = [
         filename: '176. P2 - Urban Regeneration 柏林公园改造.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '176. P2 - Urban Regeneration 柏林公园改造.pdf',
+        pdfFilename: 'ReadingPractice/PDF/176. P2 - Urban Regeneration 柏林公园改造.pdf',
     },
     {
         id: 'p2-low-87',
@@ -957,7 +957,7 @@ window.completeExamIndex = [
         filename: '177. 1025纸笔P2 - Speaking of Nothing [Pretest] 闲聊的意义.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '177. 1025纸笔P2 - Speaking of Nothing [Pretest] 闲聊的意义.pdf',
+        pdfFilename: 'ReadingPractice/PDF/177. P2（1025纸笔）[Pretest]  - Speaking of Nothing 闲聊的意义.pdf',
     },
     {
         id: 'p3-low-88',
@@ -968,7 +968,7 @@ window.completeExamIndex = [
         filename: '178. 1025纸笔P3 - Translating a key to international understanding 翻译的艺术.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '178. 1025纸笔P3 - Translating a key to international understanding 翻译的艺术.pdf',
+        pdfFilename: 'ReadingPractice/PDF/178. P3（1025纸笔）[Pretest]  - Translating a key to international understanding 翻译的艺术.pdf',
     },
     {
         id: 'p3-high-89',
@@ -979,7 +979,7 @@ window.completeExamIndex = [
         filename: '179. P3 - Looking at daily life in ancient Rome  古罗马的日常.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '179. P3 - Looking at daily life in ancient Rome  古罗马的日常.pdf',
+        pdfFilename: 'ReadingPractice/PDF/179. P3 - Looking at daily life in ancient Rome  古罗马的日常.pdf',
     },
     {
         id: 'p1-high-90',
@@ -990,7 +990,7 @@ window.completeExamIndex = [
         filename: '18. P1 - The History of Tea 茶叶的历史【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '18. P1 - The History of Tea 茶叶的历史【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/18. P1 - The History of Tea 茶叶的历史.pdf',
     },
     {
         id: 'p2-high-91',
@@ -1001,7 +1001,7 @@ window.completeExamIndex = [
         filename: '180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.pdf',
+        pdfFilename: 'ReadingPractice/PDF/180. P2 - Australia’s camouflaged creatures 澳洲伪装生物.pdf',
     },
     {
         id: 'p1-high-92',
@@ -1012,7 +1012,7 @@ window.completeExamIndex = [
         filename: '181. P1 - Dust and the American West 美国西部尘埃.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '181. P1 - Dust and the American West 美国西部尘埃.pdf',
+        pdfFilename: 'ReadingPractice/PDF/181. P1 - Dust and the American West 美国西部尘埃.pdf',
     },
     {
         id: 'p2-medium-93',
@@ -1023,7 +1023,7 @@ window.completeExamIndex = [
         filename: '182. P2 - Antarctic research 南极考察.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '182. P2 - Antarctic research 南极考察.pdf',
+        pdfFilename: 'ReadingPractice/PDF/182. P2 - Antarctic research 南极考察.pdf',
     },
     {
         id: 'p2-low-94',
@@ -1034,7 +1034,7 @@ window.completeExamIndex = [
         filename: '183. P2 - The importance of being playful 玩耍的重要性.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '183. P2 - The importance of being playful 玩耍的重要性.pdf',
+        pdfFilename: 'ReadingPractice/PDF/183. P2 - The importance of being playful 玩耍的重要性.pdf',
     },
     {
         id: 'p3-low-95',
@@ -1045,7 +1045,7 @@ window.completeExamIndex = [
         filename: '184. P3 - The strange world of sight 奇异的视觉世界.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '184. P3 - The strange world of sight 奇异的视觉世界.pdf',
+        pdfFilename: 'ReadingPractice/PDF/184. P3 - The strange world of sight 奇异的视觉世界.pdf',
     },
     {
         id: 'p2-low-96',
@@ -1056,7 +1056,7 @@ window.completeExamIndex = [
         filename: '185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.pdf',
+        pdfFilename: 'ReadingPractice/PDF/185. [Pretest] P2 - Why Do We Need Sleep 睡眠的目的.pdf',
     },
     {
         id: 'p3-low-97',
@@ -1067,7 +1067,7 @@ window.completeExamIndex = [
         filename: '186. P3 - Saving languages 拯救濒危语言.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '186. P3 - Saving languages 拯救濒危语言.pdf',
+        pdfFilename: 'ReadingPractice/PDF/186. P3 - Saving languages 拯救濒危语言.pdf',
     },
     {
         id: 'p3-low-98',
@@ -1078,7 +1078,7 @@ window.completeExamIndex = [
         filename: '187. P3 - Petrol power an eco-revolution 交通的革命.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '187. P3 - Petrol power an eco-revolution 交通的革命.pdf',
+        pdfFilename: 'ReadingPractice/PDF/187. P3 - Petrol power an eco-revolution 交通的革命.pdf',
     },
     {
         id: 'p1-low-99',
@@ -1089,7 +1089,7 @@ window.completeExamIndex = [
         filename: '188. P1 - The history of the bar code 条形码的历史.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '188. P1 - The history of the bar code 条形码的历史.pdf',
+        pdfFilename: 'ReadingPractice/PDF/188. P1 - The history of the bar code 条形码的历史.pdf',
     },
     {
         id: 'p3-low-100',
@@ -1100,7 +1100,7 @@ window.completeExamIndex = [
         filename: '189. P3 - Mirror 镜子研究.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '189. P3 - Mirror 镜子研究.pdf',
+        pdfFilename: 'ReadingPractice/PDF/189. P3 - Mirror 镜子研究.pdf',
     },
     {
         id: 'p1-high-101',
@@ -1111,7 +1111,7 @@ window.completeExamIndex = [
         filename: '19. P1 - The Impact of the Potato 土豆的影响【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '19. P1 - The Impact of the Potato 土豆的影响【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/19. P1 - The Impact of the Potato 土豆的影响.pdf',
     },
     {
         id: 'p2-low-102',
@@ -1122,7 +1122,7 @@ window.completeExamIndex = [
         filename: '190. P2 - The power of music 音乐的力量.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '190. P2 - The power of music 音乐的力量.pdf',
+        pdfFilename: 'ReadingPractice/PDF/190. P2 - The power of music 音乐的力量.pdf',
     },
     {
         id: 'p2-low-103',
@@ -1133,7 +1133,7 @@ window.completeExamIndex = [
         filename: '191. P2 - The economic effect of climate 气候对经济的影响.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '191. P2 - The economic effect of climate 气候对经济的影响.pdf',
+        pdfFilename: 'ReadingPractice/PDF/191. P2 - The economic effect of climate 气候对经济的影响.pdf',
     },
     {
         id: 'p2-low-104',
@@ -1144,7 +1144,7 @@ window.completeExamIndex = [
         filename: '192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '192. 1115纸笔P2 - Should we stop eating meat 是否应该吃素.pdf',
+        pdfFilename: 'ReadingPractice/PDF/192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素.pdf',
     },
     {
         id: 'p1-high-105',
@@ -1155,7 +1155,7 @@ window.completeExamIndex = [
         filename: '2. P1 - A survivor’s story 新西兰猫头鹰【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '2. P1 - A survivor’s story 新西兰猫头鹰【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/2. P1 - A survivor’s story 新西兰猫头鹰.pdf',
     },
     {
         id: 'p1-low-106',
@@ -1166,7 +1166,7 @@ window.completeExamIndex = [
         filename: '20. P1 - The Importance of Business Cards 名片的重要性.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '20. P1 - The Importance of Business Cards 名片的重要性.pdf',
+        pdfFilename: 'ReadingPractice/PDF/20. P1 - The Importance of Business Cards 名片的重要性.pdf',
     },
     {
         id: 'p1-low-107',
@@ -1177,7 +1177,7 @@ window.completeExamIndex = [
         filename: '21. P1 - The life of Beatrix Potter 彼得兔作家.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '21. P1 - The life of Beatrix Potter 彼得兔作家.pdf',
+        pdfFilename: 'ReadingPractice/PDF/21. P1 - The life of Beatrix Potter 彼得兔作家.pdf',
     },
     {
         id: 'p1-low-108',
@@ -1188,7 +1188,7 @@ window.completeExamIndex = [
         filename: '22. P1 - The nature of Yawning 打哈欠的本质.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '22. P1 - The nature of Yawning 打哈欠的本质.pdf',
+        pdfFilename: 'ReadingPractice/PDF/22. P1 - The nature of Yawning 打哈欠的本质.pdf',
     },
     {
         id: 'p1-low-109',
@@ -1199,7 +1199,7 @@ window.completeExamIndex = [
         filename: '23. P1 - The Origin of Paper 造纸术起源.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '23. P1 - The Origin of Paper 造纸术起源.pdf',
+        pdfFilename: 'ReadingPractice/PDF/23. P1 - The Origin of Paper 造纸术起源.pdf',
     },
     {
         id: 'p1-high-110',
@@ -1210,7 +1210,7 @@ window.completeExamIndex = [
         filename: '24. P1 - The Pearls 珍珠【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '24. P1 - The Pearls 珍珠【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/24. P1 - The Pearls 珍珠.pdf',
     },
     {
         id: 'p1-low-111',
@@ -1221,7 +1221,7 @@ window.completeExamIndex = [
         filename: '25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.pdf',
+        pdfFilename: 'ReadingPractice/PDF/25. P1 - The Rise and Fall of Detective Stories 侦探小说的兴衰.pdf',
     },
     {
         id: 'p1-low-112',
@@ -1232,7 +1232,7 @@ window.completeExamIndex = [
         filename: '26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.pdf',
+        pdfFilename: 'ReadingPractice/PDF/26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.pdf',
     },
     {
         id: 'p1-low-113',
@@ -1243,7 +1243,7 @@ window.completeExamIndex = [
         filename: '27. P1 - Thomas Young The last man who knew everything 托马斯·杨.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '27. P1 - Thomas Young The last man who knew everything 托马斯·杨.pdf',
+        pdfFilename: 'ReadingPractice/PDF/27. P1 - Thomas Young The last man who knew everything 托马斯·杨.pdf',
     },
     {
         id: 'p1-low-114',
@@ -1254,7 +1254,7 @@ window.completeExamIndex = [
         filename: '28. P1 - Triumph of the City 城市的胜利.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '28. P1 - Triumph of the City 城市的胜利.pdf',
+        pdfFilename: 'ReadingPractice/PDF/28. P1 - Triumph of the City 城市的胜利.pdf',
     },
     {
         id: 'p1-medium-115',
@@ -1265,7 +1265,7 @@ window.completeExamIndex = [
         filename: '29. P1 - Tunnelling under the Thames 泰晤士河隧道【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '29. P1 - Tunnelling under the Thames 泰晤士河隧道【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/29. P1 - Tunnelling under the Thames 泰晤士河隧道.pdf',
     },
     {
         id: 'p1-low-116',
@@ -1276,7 +1276,7 @@ window.completeExamIndex = [
         filename: '3. P1 - Advertising Needs Attention 广告的吸引力.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '3. P1 - Advertising Needs Attention 广告的吸引力.pdf',
+        pdfFilename: 'ReadingPractice/PDF/3. P1 - Advertising Needs Attention 广告的吸引力.pdf',
     },
     {
         id: 'p1-medium-117',
@@ -1287,7 +1287,7 @@ window.completeExamIndex = [
         filename: '30. P1 - What Lucy Taught Us 露西化石【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '30. P1 - What Lucy Taught Us 露西化石【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/30. P1 - What Lucy Taught Us 露西化石.pdf',
     },
     {
         id: 'p1-high-118',
@@ -1298,7 +1298,7 @@ window.completeExamIndex = [
         filename: '31. P1 - William Gilbert and Magnetism 电磁学之父【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '31. P1 - William Gilbert and Magnetism 电磁学之父【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/31. P1 - William Gilbert and Magnetism 电磁学之父.pdf',
     },
     {
         id: 'p1-medium-119',
@@ -1309,7 +1309,7 @@ window.completeExamIndex = [
         filename: '32. P1 - Wood 新西兰木材产业【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '32. P1 - Wood 新西兰木材产业【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/32. P1 - Wood 新西兰木材产业.pdf',
     },
     {
         id: 'p2-high-120',
@@ -1320,7 +1320,7 @@ window.completeExamIndex = [
         filename: 'ai_studio_code (9).html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '33. P2 - A new look for Talbot Park 奥克兰社区改造【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/33. P2 - A new look for Talbot Park 奥克兰社区改造.pdf',
     },
     {
         id: 'p2-medium-121',
@@ -1331,7 +1331,7 @@ window.completeExamIndex = [
         filename: '34. P2 - A unique golden textile 蜘蛛丝【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '34. P2 - A unique golden textile 蜘蛛丝【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/34. P2 - A unique golden textile 蜘蛛丝.pdf',
     },
     {
         id: 'p2-low-122',
@@ -1342,7 +1342,7 @@ window.completeExamIndex = [
         filename: '35. P2 - Biophilic Design 亲自然设计.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '35. P2 - Biophilic Design 亲自然设计.pdf',
+        pdfFilename: 'ReadingPractice/PDF/35. P2 - Biophilic Design 亲自然设计.pdf',
     },
     {
         id: 'p2-high-123',
@@ -1353,7 +1353,7 @@ window.completeExamIndex = [
         filename: '36. P2 - Bird Migration 鸟类迁徙【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '36. P2 - Bird Migration 鸟类迁徙【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/36. P2 - Bird Migration 鸟类迁徙.pdf',
     },
     {
         id: 'p2-high-124',
@@ -1364,7 +1364,7 @@ window.completeExamIndex = [
         filename: '37. P2 - Corporate Social Responsibility  企业社会责任【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '37. P2 - Corporate Social Responsibility  企业社会责任【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/37. P2 - Corporate Social Responsibility  企业社会责任.pdf',
     },
     {
         id: 'p2-low-125',
@@ -1375,7 +1375,7 @@ window.completeExamIndex = [
         filename: '38. P2 - Egypt’s ancient boat-builders 古埃及造船.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '38. P2 - Egypt’s ancient boat-builders 古埃及造船.pdf',
+        pdfFilename: 'ReadingPractice/PDF/38. P2 - Egypt’s ancient boat-builders 古埃及造船.pdf',
     },
     {
         id: 'p2-medium-126',
@@ -1386,7 +1386,7 @@ window.completeExamIndex = [
         filename: '39. P2 - How are deserts formed 沙漠成因【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '39. P2 - How are deserts formed 沙漠成因【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/39. P2 - How are deserts formed 沙漠成因.pdf',
     },
     {
         id: 'p1-low-127',
@@ -1397,7 +1397,7 @@ window.completeExamIndex = [
         filename: '4. P1 - Ambergris 龙涎香.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '4. P1 - Ambergris 龙涎香.pdf',
+        pdfFilename: 'ReadingPractice/PDF/4. P1 - Ambergris 龙涎香.pdf',
     },
     {
         id: 'p2-high-128',
@@ -1408,7 +1408,7 @@ window.completeExamIndex = [
         filename: '40. P2 - How Well Do We Concentrate_  多任务处理【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '40. P2 - How Well Do We Concentrate_  多任务处理【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/40. P2 - How Well Do We Concentrate_  多任务处理.pdf',
     },
     {
         id: 'p2-medium-129',
@@ -1419,7 +1419,7 @@ window.completeExamIndex = [
         filename: '41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '41. P2 - Intelligent behaviour in birds 鸟类智慧行为【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/41. P2 - Intelligent behaviour in birds 鸟类智慧行为.pdf',
     },
     {
         id: 'p2-high-130',
@@ -1430,7 +1430,7 @@ window.completeExamIndex = [
         filename: '42. P2 - Investment in shares versus investment in other assets 回报数据分析【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '42. P2 - Investment in shares versus investment in other assets 回报数据分析【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/42. P2 - Investment in shares versus investment in other assets 回报数据分析.pdf',
     },
     {
         id: 'p2-high-131',
@@ -1441,7 +1441,7 @@ window.completeExamIndex = [
         filename: '43. P2 - Learning from the Romans 罗马混凝土【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '43. P2 - Learning from the Romans 罗马混凝土【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/43. P2 - Learning from the Romans 罗马混凝土.pdf',
     },
     {
         id: 'p2-low-132',
@@ -1452,7 +1452,7 @@ window.completeExamIndex = [
         filename: '44. P2 - Orientation of Birds 鸟类的定位能力.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '44. P2 - Orientation of Birds 鸟类的定位能力.pdf',
+        pdfFilename: 'ReadingPractice/PDF/44. P2 - Orientation of Birds 鸟类的定位能力.pdf',
     },
     {
         id: 'p2-high-133',
@@ -1463,7 +1463,7 @@ window.completeExamIndex = [
         filename: '45. P2 - Playing soccer 街头足球【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '45. P2 - Playing soccer 街头足球【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/45. P2 - Playing soccer 街头足球.pdf',
     },
     {
         id: 'p2-high-134',
@@ -1474,7 +1474,7 @@ window.completeExamIndex = [
         filename: '46. P2 - Roller coaster 过山车【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '46. P2 - Roller coaster 过山车【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/46. P2 - Roller coaster 过山车.pdf',
     },
     {
         id: 'p2-low-135',
@@ -1485,7 +1485,7 @@ window.completeExamIndex = [
         filename: '47. P2 - Skyscraper Farming 摩天大楼种植.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '47. P2 - Skyscraper Farming 摩天大楼种植.pdf',
+        pdfFilename: 'ReadingPractice/PDF/47. P2 - Skyscraper Farming 摩天大楼种植.pdf',
     },
     {
         id: 'p2-high-136',
@@ -1496,7 +1496,7 @@ window.completeExamIndex = [
         filename: '48. P2 - Solving the problem of waste disposal 垃圾处理【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '48. P2 - Solving the problem of waste disposal 垃圾处理【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/48. P2 - Solving the problem of waste disposal 垃圾处理.pdf',
     },
     {
         id: 'p2-high-137',
@@ -1507,7 +1507,7 @@ window.completeExamIndex = [
         filename: '49. P2 - Surviving city life 动物适应城市【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '49. P2 - Surviving city life 动物适应城市【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/49. P2 - Surviving city life 动物适应城市.pdf',
     },
     {
         id: 'p1-low-138',
@@ -1518,7 +1518,7 @@ window.completeExamIndex = [
         filename: '5. P1 - Australian artist Margaret Preston 澳大利亚艺术家.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '5. P1 - Australian artist Margaret Preston 澳大利亚艺术家.pdf',
+        pdfFilename: 'ReadingPractice/PDF/5. P1 - Australian artist Margaret Preston 澳大利亚艺术家.pdf',
     },
     {
         id: 'p2-high-139',
@@ -1529,7 +1529,7 @@ window.completeExamIndex = [
         filename: '50. P2 - The conquest of malaria in Italy 意大利疟疾防治【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '50. P2 - The conquest of malaria in Italy 意大利疟疾防治【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/50. P2 - The conquest of malaria in Italy 意大利疟疾防治.pdf',
     },
     {
         id: 'p2-low-140',
@@ -1540,7 +1540,7 @@ window.completeExamIndex = [
         filename: '51. P2 - The dingo debate 澳洲野犬.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '51. P2 - The dingo debate 澳洲野犬.pdf',
+        pdfFilename: 'ReadingPractice/PDF/51. P2 - The dingo debate 澳洲野犬_澳洲野狗.pdf',
     },
     {
         id: 'p2-high-141',
@@ -1551,7 +1551,7 @@ window.completeExamIndex = [
         filename: '52. P2 - The fascinating world of attine ants 切叶蚁【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '52. P2 - The fascinating world of attine ants 切叶蚁【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/52. P2 - The fascinating world of attine ants 切叶蚁.pdf',
     },
     {
         id: 'p2-low-142',
@@ -1562,7 +1562,7 @@ window.completeExamIndex = [
         filename: '53. P2 - The fashion industry 时尚产业.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '53. P2 - The fashion industry 时尚产业.pdf',
+        pdfFilename: 'ReadingPractice/PDF/53. P2 - The fashion industry 时尚产业.pdf',
     },
     {
         id: 'p2-low-143',
@@ -1573,7 +1573,7 @@ window.completeExamIndex = [
         filename: '54. P2 - The impact of invasive species 入侵物种的影响.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '54. P2 - The impact of invasive species 入侵物种的影响.pdf',
+        pdfFilename: 'ReadingPractice/PDF/54. P2 - The impact of invasive species 入侵物种的影响.pdf',
     },
     {
         id: 'p2-medium-144',
@@ -1584,7 +1584,7 @@ window.completeExamIndex = [
         filename: '55. P2 - The plan to bring an asteroid to Earth 捕获小行星【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '55. P2 - The plan to bring an asteroid to Earth 捕获小行星【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/55. P2 - The plan to bring an asteroid to Earth 捕获小行星.pdf',
     },
     {
         id: 'p2-high-145',
@@ -1595,7 +1595,7 @@ window.completeExamIndex = [
         filename: '56. P2 - The return of monkey life 猴群回归【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '56. P2 - The return of monkey life 猴群回归【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/56. P2 - The return of monkey life 猴群回归.pdf',
     },
     {
         id: 'p2-medium-146',
@@ -1606,7 +1606,7 @@ window.completeExamIndex = [
         filename: '57. P2 - The Tasmanian Tiger 袋狼【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '57. P2 - The Tasmanian Tiger 袋狼【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/57. P2 - The Tasmanian Tiger 袋狼.pdf',
     },
     {
         id: 'p2-low-147',
@@ -1617,7 +1617,7 @@ window.completeExamIndex = [
         filename: '58. P2 - Who wrote Shakespeare\'s plays 莎士比亚.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '58. P2 - Who wrote Shakespeare\'s plays 莎士比亚.pdf',
+        pdfFilename: 'ReadingPractice/PDF/58. P2 - Who wrote Shakespeare\'s plays 莎士比亚.pdf',
     },
     {
         id: 'p2-low-148',
@@ -1628,7 +1628,7 @@ window.completeExamIndex = [
         filename: '59. P2 - Why do we need the arts_ 艺术的意义.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '59. P2 - Why do we need the arts_ 艺术的意义.pdf',
+        pdfFilename: 'ReadingPractice/PDF/59. P2 - Why do we need the arts_ 艺术的意义.pdf',
     },
     {
         id: 'p1-low-149',
@@ -1639,7 +1639,7 @@ window.completeExamIndex = [
         filename: '6. P1 - Categorizing societies 社会分类html.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '6. P1 - Categorizing societies 社会分类.pdf',
+        pdfFilename: 'ReadingPractice/PDF/6. P1 - Categorizing societies 社会分类.pdf',
     },
     {
         id: 'p3-high-150',
@@ -1650,7 +1650,7 @@ window.completeExamIndex = [
         filename: '60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/60. P3 - A closer examination of a study on verbal and non-verbal messages 语言表达研究.pdf',
     },
     {
         id: 'p3-low-151',
@@ -1661,7 +1661,7 @@ window.completeExamIndex = [
         filename: '61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).pdf',
+        pdfFilename: 'ReadingPractice/PDF/61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).pdf',
     },
     {
         id: 'p3-medium-152',
@@ -1672,7 +1672,7 @@ window.completeExamIndex = [
         filename: '62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/62. P3 - Charles Darwin and Evolutionary Psychology 进化心理学.pdf',
     },
     {
         id: 'p3-low-153',
@@ -1683,7 +1683,7 @@ window.completeExamIndex = [
         filename: '63. P3 - Crossing the Threshold 奥克兰美术馆.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '63. P3 - Crossing the Threshold 奥克兰美术馆.pdf',
+        pdfFilename: 'ReadingPractice/PDF/63. P3 - Crossing the Threshold 奥克兰美术馆.pdf',
     },
     {
         id: 'p3-medium-154',
@@ -1694,7 +1694,7 @@ window.completeExamIndex = [
         filename: '64. P3 - Decisions, Decisions 决策之间【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '64. P3 - Decisions, Decisions 决策之间【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/64. P3 - Decisions, Decisions 决策之间.pdf',
     },
     {
         id: 'p3-medium-155',
@@ -1705,7 +1705,7 @@ window.completeExamIndex = [
         filename: '65. P3 - Does class size matter_ 课堂规模【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '65. P3 - Does class size matter_ 课堂规模【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/65. P3 - Does class size matter 课堂规模.pdf',
     },
     {
         id: 'p3-high-156',
@@ -1716,7 +1716,7 @@ window.completeExamIndex = [
         filename: '66. P3 - Elephant Communication 大象交流【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '66. P3 - Elephant Communication 大象交流【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/66. P3 - Elephant Communication 大象交流.pdf',
     },
     {
         id: 'p3-high-157',
@@ -1727,7 +1727,7 @@ window.completeExamIndex = [
         filename: '67. P3 - Flower Power 鲜花的力量(花之力)【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '67. P3 - Flower Power 鲜花的力量(花之力)【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/67. P3 - Flower Power 鲜花的力量(花之力).pdf',
     },
     {
         id: 'p3-low-158',
@@ -1738,7 +1738,7 @@ window.completeExamIndex = [
         filename: '68. P3 - Game theory 博弈论.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '68. P3 - Game theory 博弈论.pdf',
+        pdfFilename: 'ReadingPractice/PDF/68. P3 - Game theory 博弈论.pdf',
     },
     {
         id: 'p3-high-159',
@@ -1749,7 +1749,7 @@ window.completeExamIndex = [
         filename: '69. P3 - Grimm’s Fairy Tales 格林童话【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '69. P3 - Grimm’s Fairy Tales 格林童话【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/69. P3 - Grimm’s Fairy Tales 格林童话.pdf',
     },
     {
         id: 'p1-low-160',
@@ -1760,7 +1760,7 @@ window.completeExamIndex = [
         filename: '7. P1 - Chili peppers 辣椒的历史.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '7. P1 - Chili peppers 辣椒的历史.pdf',
+        pdfFilename: 'ReadingPractice/PDF/7. P1 - Chili peppers 辣椒的历史.pdf',
     },
     {
         id: 'p3-high-161',
@@ -1771,7 +1771,7 @@ window.completeExamIndex = [
         filename: '70. P3 - Insect-inspired robots 昆虫机器人【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '70. P3 - Insect-inspired robots 昆虫机器人【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/70. P3 - Insect-inspired robots 昆虫机器人.pdf',
     },
     {
         id: 'p3-medium-162',
@@ -1782,7 +1782,7 @@ window.completeExamIndex = [
         filename: '71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '71. P3 - Jean Piaget (1896–1980) 让·皮亚杰【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/71. P3 - Jean Piaget (1896–1980) 让·皮亚杰.pdf',
     },
     {
         id: 'p3-low-163',
@@ -1793,7 +1793,7 @@ window.completeExamIndex = [
         filename: '72. P3 - Keeping the Fun in Funfairs 游乐场设计科学.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '72. P3 - Keeping the Fun in Funfairs 游乐场设计科学.pdf',
+        pdfFilename: 'ReadingPractice/PDF/72. P3 - Keeping the Fun in Funfairs 游乐场设计科学.pdf',
     },
     {
         id: 'p3-high-164',
@@ -1804,7 +1804,7 @@ window.completeExamIndex = [
         filename: '73. P3 - Language Strategy in Multinational Companies 跨国公司语言策略【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '73. P3 - Language Strategy in Multinational Companies 跨国公司语言策略【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/73. P3 - Language Strategy in Multinational Companies 跨国公司语言策略.pdf',
     },
     {
         id: 'p3-low-165',
@@ -1815,7 +1815,7 @@ window.completeExamIndex = [
         filename: '74. P3 - Let’s teach them how to teach 教他们如何教学.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '74. P3 - Let’s teach them how to teach 教他们如何教学.pdf',
+        pdfFilename: 'ReadingPractice/PDF/74. P3 - Let’s teach them how to teach 教他们如何教学.pdf',
     },
     {
         id: 'p3-low-166',
@@ -1826,7 +1826,7 @@ window.completeExamIndex = [
         filename: '75. P3 - Life on Mars_ 火星地球化改造.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '75. P3 - Life on Mars_ 火星地球化改造.pdf',
+        pdfFilename: 'ReadingPractice/PDF/75. P3 - Life on Mars 火星地球化改造.pdf',
     },
     {
         id: 'p3-high-167',
@@ -1837,7 +1837,7 @@ window.completeExamIndex = [
         filename: '76. P3 - Living dunes 流动沙丘【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '76. P3 - Living dunes 流动沙丘【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/76. P3 - Living dunes 流动沙丘.pdf',
     },
     {
         id: 'p3-medium-168',
@@ -1848,7 +1848,7 @@ window.completeExamIndex = [
         filename: '77. P3 - Marketing and the information age 信息时代营销【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '77. P3 - Marketing and the information age 信息时代营销【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/77. P3 - Marketing and the information age 信息时代营销.pdf',
     },
     {
         id: 'p3-medium-169',
@@ -1859,7 +1859,7 @@ window.completeExamIndex = [
         filename: '78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '78. P3 (仅原文无题) - Music Language We All Speak 音乐语言【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言.pdf',
     },
     {
         id: 'p3-high-170',
@@ -1870,7 +1870,7 @@ window.completeExamIndex = [
         filename: '79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '79. P3 - Pacific Navigation and Voyaging 太平洋航海【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/79. P3 - Pacific Navigation and Voyaging 太平洋航海.pdf',
     },
     {
         id: 'p1-high-171',
@@ -1881,7 +1881,7 @@ window.completeExamIndex = [
         filename: '8. P1 - Fishbourne Roman Palace 罗马宫殿【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '8. P1 - Fishbourne Roman Palace 罗马宫殿【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/8. P1 - Fishbourne Roman Palace 罗马宫殿.pdf',
     },
     {
         id: 'p3-low-172',
@@ -1892,7 +1892,7 @@ window.completeExamIndex = [
         filename: '80. P3 - Rebranding art museums 博物馆品牌重塑.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '80. P3 - Rebranding art museums 博物馆品牌重塑.pdf',
+        pdfFilename: 'ReadingPractice/PDF/80. P3 - Rebranding art museums 博物馆品牌重塑.pdf',
     },
     {
         id: 'p3-high-173',
@@ -1903,7 +1903,7 @@ window.completeExamIndex = [
         filename: '81. P3 - Robert Louis Stevenson 苏格兰作家【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '81. P3 - Robert Louis Stevenson 苏格兰作家【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/81. P3 - Robert Louis Stevenson 苏格兰作家.pdf',
     },
     {
         id: 'p3-high-174',
@@ -1914,7 +1914,7 @@ window.completeExamIndex = [
         filename: '82. P3 - Some views on the use of headphones 耳机使用【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '82. P3 - Some views on the use of headphones 耳机使用【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/82. P3 - Some views on the use of headphones 耳机使用.pdf',
     },
     {
         id: 'p3-low-175',
@@ -1925,7 +1925,7 @@ window.completeExamIndex = [
         filename: '83. P3 - Termite Mounds 白蚁丘.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '83. P3 - Termite Mounds 白蚁丘.pdf',
+        pdfFilename: 'ReadingPractice/PDF/83. P3 - Termite Mounds 白蚁丘.pdf',
     },
     {
         id: 'p3-medium-176',
@@ -1936,7 +1936,7 @@ window.completeExamIndex = [
         filename: '84. P3 - The Analysis of Fear 猴子恐惧实验【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '84. P3 - The Analysis of Fear 猴子恐惧实验【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/84. P3 - The Analysis of Fear 猴子恐惧实验.pdf',
     },
     {
         id: 'p3-medium-177',
@@ -1947,7 +1947,7 @@ window.completeExamIndex = [
         filename: '85. P3 - The Art of Deception 欺骗的艺术【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '85. P3 - The Art of Deception 欺骗的艺术【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/85. P3 - The Art of Deception 欺骗的艺术.pdf',
     },
     {
         id: 'p3-high-178',
@@ -1958,7 +1958,7 @@ window.completeExamIndex = [
         filename: '86. P3 - The benefits of learning an instrument 学乐器的好处【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '86. P3 - The benefits of learning an instrument 学乐器的好处【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/86. P3 - The benefits of learning an instrument 学乐器的好处.pdf',
     },
     {
         id: 'p3-medium-179',
@@ -1969,7 +1969,7 @@ window.completeExamIndex = [
         filename: '87. P3 - The Exploration of Mars 火星探索【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '87. P3 - The Exploration of Mars 火星探索【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/87. P3 - The Exploration of Mars 火星探索.pdf',
     },
     {
         id: 'p3-high-180',
@@ -1980,7 +1980,7 @@ window.completeExamIndex = [
         filename: '88. P3 - The fluoridation controversy 氟化水争议【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '88. P3 - The fluoridation controversy 氟化水争议【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/88. P3 - The fluoridation controversy 氟化水争议.pdf',
     },
     {
         id: 'p3-high-181',
@@ -1991,7 +1991,7 @@ window.completeExamIndex = [
         filename: '89. P3 - The Fruit Book 果实之书【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '89. P3 - The Fruit Book 果实之书【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/89. P3 - The Fruit Book 果实之书.pdf',
     },
     {
         id: 'p1-medium-182',
@@ -2002,7 +2002,7 @@ window.completeExamIndex = [
         filename: '9. P1 - Listening to the Ocean 海洋探测【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '9. P1 - Listening to the Ocean 海洋探测【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/9. P1 - Listening to the Ocean 海洋探测.pdf',
     },
     {
         id: 'p3-medium-183',
@@ -2013,7 +2013,7 @@ window.completeExamIndex = [
         filename: '90. P3 - The hazards of multitasking 多任务处理【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '90. P3 - The hazards of multitasking 多任务处理【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/90. P3 - The hazards of multitasking 多任务处理.pdf',
     },
     {
         id: 'p3-high-184',
@@ -2024,7 +2024,7 @@ window.completeExamIndex = [
         filename: '91. P3 - The New Zealand writer Margaret Mahy 新西兰女作家【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '91. P3 - The New Zealand writer Margaret Mahy 新西兰女作家【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/91. P3 - The New Zealand writer Margaret Mahy 新西兰女作家.pdf',
     },
     {
         id: 'p3-medium-185',
@@ -2035,7 +2035,7 @@ window.completeExamIndex = [
         filename: '92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/92. P3 - The Pirahã people of Brazil  巴西皮拉罕部落语言.pdf',
     },
     {
         id: 'p3-low-186',
@@ -2046,7 +2046,7 @@ window.completeExamIndex = [
         filename: '93. P3 - The Robbers Cave Study (山洞)群体行为实验.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '93. P3 - The Robbers Cave Study (山洞)群体行为实验.pdf',
+        pdfFilename: 'ReadingPractice/PDF/93. P3 - The Robbers Cave Study (山洞)群体行为实验.pdf',
     },
     {
         id: 'p3-low-187',
@@ -2057,7 +2057,7 @@ window.completeExamIndex = [
         filename: '94. P3 - The science of sleep 睡眠的科学.pdf.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '94. P3 - The science of sleep 睡眠的科学.pdf',
+        pdfFilename: 'ReadingPractice/PDF/94. P3 - The science of sleep 睡眠的科学.pdf',
     },
     {
         id: 'p3-medium-188',
@@ -2068,7 +2068,7 @@ window.completeExamIndex = [
         filename: '95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '95. P3 - The Significant Role of Mother Tongue in Education 母语教育【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/95. P3 - The Significant Role of Mother Tongue in Education 母语教育.pdf',
     },
     {
         id: 'p3-high-189',
@@ -2079,7 +2079,7 @@ window.completeExamIndex = [
         filename: '96. P3 - The tuatara – past and future 新西兰蜥蜴【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '96. P3 - The tuatara – past and future 新西兰蜥蜴【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/96. P3 - The tuatara – past and future 新西兰蜥蜴.pdf',
     },
     {
         id: 'p3-low-190',
@@ -2090,7 +2090,7 @@ window.completeExamIndex = [
         filename: '97. P3 - The value of literary prizes 文学奖项的价值.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '97. P3 - The value of literary prizes 文学奖项的价值.pdf',
+        pdfFilename: 'ReadingPractice/PDF/97. P3 - The value of literary prizes 文学奖项的价值.pdf',
     },
     {
         id: 'p3-medium-191',
@@ -2101,7 +2101,7 @@ window.completeExamIndex = [
         filename: '98. P3 - Video Games’ Unexpected Benefits to the Human Brain 电子游戏的好处【次】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '98. P3 - Video Games’ Unexpected Benefits to the Human Brain 电子游戏的好处【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/98. P3 - Video Games’ Unexpected Benefits to the Human Brain 电子游戏的好处.pdf',
     },
     {
         id: 'p3-high-192',
@@ -2112,7 +2112,7 @@ window.completeExamIndex = [
         filename: '99. P3 - Voynich Manuscript 伏尼契手稿【高】.html',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: '99. P3 - Voynich Manuscript 伏尼契手稿【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/99. P3 - Voynich Manuscript 伏尼契手稿.pdf',
     },
     {
         id: 'p1-high-200',
@@ -2123,7 +2123,7 @@ window.completeExamIndex = [
         filename: '200. P1 - Australia’s Airborne Dentists 澳洲飞行牙医【高】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '200. P1 - Australia’s Airborne Dentists 澳洲飞行牙医【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/200. P1 - Australia’s Airborne Dentists 澳洲飞行牙医.pdf',
     },
     {
         id: 'p1-high-211',
@@ -2134,7 +2134,7 @@ window.completeExamIndex = [
         filename: '211. P1 - Ahead of its time 新西兰头骨【高】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '211. P1 - Ahead of its time 新西兰头骨【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/211. P1 - Ahead of its time 新西兰头骨.pdf',
     },
     {
         id: 'p1-high-216',
@@ -2145,7 +2145,7 @@ window.completeExamIndex = [
         filename: '216. P1 - Australia’s cane toad problem 澳洲蟾蜍【高】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '216. P1 - Australia’s cane toad problem 澳洲蟾蜍【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/216. P1 - Australia’s cane toad problem 澳洲蟾蜍.pdf',
     },
     {
         id: 'p1-medium-161',
@@ -2156,7 +2156,7 @@ window.completeExamIndex = [
         filename: '161. P1 - Deep sea discovery 深海发光生物研究【次】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '161. P1 - Deep sea discovery 深海发光生物研究【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/161. P1 - Deep sea discovery 深海发光生物研究.pdf',
     },
     {
         id: 'p1-high-194',
@@ -2167,7 +2167,7 @@ window.completeExamIndex = [
         filename: '194. P1 - The history of the British wool industry 英国羊毛产业的历史【高】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '194. P1 - The history of the British wool industry 英国羊毛产业的历史【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/194. P1 - The history of the British wool industry 英国羊毛产业的历史.pdf',
     },
     {
         id: 'p2-low-222',
@@ -2178,7 +2178,7 @@ window.completeExamIndex = [
         filename: '222. P2 - Ideal Homes 理想居所.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '222. P2 - Ideal Homes 理想居所.pdf',
+        pdfFilename: 'ReadingPractice/PDF/222. P2 - Ideal Homes 理想居所.pdf',
     },
     {
         id: 'p1-low-223',
@@ -2189,7 +2189,7 @@ window.completeExamIndex = [
         filename: '223. P1 - Effect and Cause 湖泊海啸研究.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '223. P1 - Effect and Cause 湖泊海啸研究.pdf',
+        pdfFilename: 'ReadingPractice/PDF/223. P1 - Effect and Cause 湖泊海啸研究.pdf',
     },
     {
         id: 'p2-high-201',
@@ -2200,7 +2200,7 @@ window.completeExamIndex = [
         filename: '201. P2 - Multi-tasking and the brain 大脑与多任务处理【高】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '201. P2 - Multi-tasking and the brain 大脑与多任务处理【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/201. P2 - Multi-tasking and the brain 大脑与多任务处理.pdf',
     },
     {
         id: 'p2-medium-217',
@@ -2211,7 +2211,7 @@ window.completeExamIndex = [
         filename: '217. P2 - A mechanical friend for children 孩子的机器人朋友【次】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '217. P2 - A mechanical friend for children 孩子的机器人朋友【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/217. P2 - A mechanical friend for children 孩子的机器人朋友.pdf',
     },
     {
         id: 'p2-high-192',
@@ -2222,7 +2222,7 @@ window.completeExamIndex = [
         filename: '192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素【高】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/192. P2(1115纸笔) - Should we stop eating meat 是否应该吃素.pdf',
     },
     {
         id: 'p2-medium-209',
@@ -2233,7 +2233,7 @@ window.completeExamIndex = [
         filename: '209. P2 - Decision Fatigue 决策疲劳【次】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '209. P2 - Decision Fatigue 决策疲劳【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/209. P2 - Decision Fatigue 决策疲劳.pdf',
     },
     {
         id: 'p2-medium-213',
@@ -2244,7 +2244,7 @@ window.completeExamIndex = [
         filename: '213. P2 - Growing more for less 卫星农业【次】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '213. P2 - Growing more for less 卫星农业【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/213. P2 - Growing more for less 卫星农业.pdf',
     },
     {
         id: 'p2-low-051',
@@ -2255,7 +2255,7 @@ window.completeExamIndex = [
         filename: '51. P2 - The dingo debate 澳洲野犬_澳洲野狗.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '51. P2 - The dingo debate 澳洲野犬_澳洲野狗.pdf',
+        pdfFilename: 'ReadingPractice/PDF/51. P2 - The dingo debate 澳洲野犬_澳洲野狗.pdf',
     },
     {
         id: 'p2-medium-058',
@@ -2266,7 +2266,7 @@ window.completeExamIndex = [
         filename: '58. P2 - Who wrote Shakespeare\'s plays 莎士比亚【次】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '58. P2 - Who wrote Shakespeare\'s plays 莎士比亚【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/58. P2 - Who wrote Shakespeare\'s plays 莎士比亚.pdf',
     },
     {
         id: 'p3-high-204',
@@ -2277,7 +2277,7 @@ window.completeExamIndex = [
         filename: '204. P3 - When people are ‘deaf’ to music 失乐症【高】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '204. P3 - When people are ‘deaf’ to music 失乐症【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/204. P3 - When people are ‘deaf’ to music 失乐症.pdf',
     },
     {
         id: 'p3-high-206',
@@ -2288,7 +2288,7 @@ window.completeExamIndex = [
         filename: '206. P3 - 200 Years of Australian Landscapes at the Royal Academy in London 亚洲风景展【高】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '206. P3 - 200 Years of Australian Landscapes at the Royal Academy in London 亚洲风景展【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/206. P3 - 200 Years of Australian Landscapes at the Royal Academy in London 澳洲风景展.pdf',
     },
     {
         id: 'p3-high-212',
@@ -2299,7 +2299,7 @@ window.completeExamIndex = [
         filename: '212. P3 - Children’s literature studies today 儿童文学【高】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '212. P3 - Children’s literature studies today 儿童文学【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/212. P3 - Children’s literature studies today 儿童文学.pdf',
     },
     {
         id: 'p3-high-218',
@@ -2310,7 +2310,7 @@ window.completeExamIndex = [
         filename: '218. P3 - The Causes of Linguistic Change 语音的演变【高】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '218. P3 - The Causes of Linguistic Change 语音的演变【高】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/218. P3 - The Causes of Linguistic Change 语音的演变.pdf',
     },
     {
         id: 'p3-low-219',
@@ -2321,7 +2321,7 @@ window.completeExamIndex = [
         filename: '219. P3 - The origin of language 语言的起源.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '219. P3 - The origin of language 语言的起源.pdf',
+        pdfFilename: 'ReadingPractice/PDF/219. P3 - The origin of language 语言的起源.pdf',
     },
     {
         id: 'p3-low-999',
@@ -2332,7 +2332,7 @@ window.completeExamIndex = [
         filename: 'P3 - Risk taking.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: 'P3 - Risk taking.pdf',
+        pdfFilename: '',
     },
     {
         id: 'p3-medium-197',
@@ -2343,7 +2343,7 @@ window.completeExamIndex = [
         filename: '197. P3 - Australia’s Megafauna Controversy 巨兽灭绝【次】.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '197. P3 - Australia’s Megafauna Controversy 巨兽灭绝【次】.pdf',
+        pdfFilename: 'ReadingPractice/PDF/197. P3 - Australia’s Megafauna Controversy 巨兽灭绝.pdf',
     },
     {
         id: 'p3-low-198',
@@ -2354,7 +2354,7 @@ window.completeExamIndex = [
         filename: '198. P3 - Child’s Play in Medieval England 中世纪的游戏.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '198. P3 - Child’s Play in Medieval England 中世纪的游戏.pdf',
+        pdfFilename: 'ReadingPractice/PDF/198. P3 - Child’s Play in Medieval England 中世纪的游戏.pdf',
     },
     {
         id: 'p3-low-078',
@@ -2365,7 +2365,7 @@ window.completeExamIndex = [
         filename: '78. P3 (ds做出来的) - Music Language We All Speak 音乐语言.html',
         hasHtml: true,
         hasPdf: false,
-        pdfFilename: '78. P3 (ds做出来的) - Music Language We All Speak 音乐语言.pdf',
+        pdfFilename: 'ReadingPractice/PDF/78. P3 (仅原文无题) - Music Language We All Speak 音乐语言.pdf',
     },
 ];
 window.completeExamIndex.pathRoot = {
