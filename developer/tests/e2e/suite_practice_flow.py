@@ -484,6 +484,26 @@ async def run() -> None:
             )
             log_step("回放页已进入结算态并显示切题栏", "SUCCESS")
 
+            explanation_state = await replay_page.evaluate(
+                "() => {\n"
+                "  const params = new URLSearchParams(window.location.search || '');\n"
+                "  const examId = params.get('dataKey') || params.get('examId') || '';\n"
+                "  const manifest = window.__READING_EXPLANATION_MANIFEST__ || {};\n"
+                "  const hasManifestEntry = !!(examId && manifest[examId]);\n"
+                "  const explanationCount = document.querySelectorAll('.reading-explanation-card, .reading-question-explanation-list').length;\n"
+                "  const results = document.getElementById('results');\n"
+                "  const hasResultsTable = !!(results && results.querySelectorAll('tbody tr').length > 0);\n"
+                "  return { examId, hasManifestEntry, explanationCount, hasResultsTable };\n"
+                "}"
+            )
+            if explanation_state.get("hasManifestEntry") and explanation_state.get("explanationCount", 0) <= 0:
+                raise AssertionError(
+                    f"Replay page missing explanation DOM for exam {explanation_state.get('examId')}"
+                )
+            if not explanation_state.get("hasResultsTable"):
+                raise AssertionError("Replay page results table missing after explanation injection")
+            log_step("讲解注入与结果表并存校验通过", "SUCCESS")
+
             readonly_state = await replay_page.evaluate(
                 "() => {\n"
                 "  const submit = document.querySelector('#submit-btn, [data-submit-suite], .suite-submit-btn, button[type=\"submit\"]');\n"
