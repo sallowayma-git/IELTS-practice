@@ -1196,6 +1196,37 @@
 
     async function _fallbackBuildIndexFromFiles(files, type, label) {
       var byDir = new Map();
+
+      function normalizeUploadDir(rawDir) {
+        return String(rawDir || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+      }
+
+      function normalizeListeningDir(rawDir) {
+        var normalized = normalizeUploadDir(rawDir);
+        if (!normalized) return '';
+
+        var segments = normalized.split('/').filter(Boolean);
+        if (!segments.length) return normalized;
+
+        // Prefer stable semantic anchors from the scanned folder tree.
+        var anchorPatterns = [
+          /^listeningpractice$/i,
+          /^p[1-4]$/i,
+          /^vip$/i
+        ];
+        var anchorIndex = -1;
+        for (var i = 0; i < segments.length; i++) {
+          if (anchorPatterns.some(function (re) { return re.test(segments[i]); })) {
+            anchorIndex = i;
+            break;
+          }
+        }
+        if (anchorIndex >= 0) {
+          return segments.slice(anchorIndex).join('/');
+        }
+        return normalized;
+      }
+
       files.forEach(function (f) {
         var rel = (f.webkitRelativePath || f.name || '').replace(/\\/g, '/');
         var parts = rel.split('/');
@@ -1216,10 +1247,11 @@
         var category = 'P1';
         var m = dir.match(/\b(P1|P2|P3|P4)\b/);
         if (m) category = m[1];
-        var basePath = dir + '/';
-        if (type === 'listening') {
-          basePath = basePath.replace(/^.*?(ListeningPractice\/)/, '$1');
-        }
+        var normalizedDir = type === 'listening'
+          ? normalizeListeningDir(dir)
+          : normalizeUploadDir(dir);
+        if (!normalizedDir) return;
+        var basePath = normalizedDir + '/';
         var id = 'custom_' + type + '_' + Date.now() + '_' + (idx++);
         entries.push({
           id: id,
