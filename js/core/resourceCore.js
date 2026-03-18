@@ -466,6 +466,14 @@
             return joinAbsoluteResource(normalizedFile, '');
         }
 
+        // Support centralized PDF storage paths such as "ReadingPractice/PDF/*.pdf".
+        // These paths are repository-root relative and must not inherit cached HP_BASE_PREFIX.
+        if (resourceKind === 'pdf' && /^readingpractice\/pdf\//i.test(normalizedFile)) {
+            const rootedPdfPath = normalizedFile.replace(/^\/+/, '');
+            const encodedPdfPath = encodePathSegments(rootedPdfPath);
+            return encodedPdfPath ? './' + encodedPdfPath : './';
+        }
+
         const normalizedBasePath = basePath ? String(basePath).replace(/\\/g, '/') : '';
         if (isAbsolutePath(normalizedBasePath)) {
             return joinAbsoluteResource(normalizedBasePath, normalizedFile);
