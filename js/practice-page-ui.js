@@ -335,10 +335,10 @@
             });
         }
 
-        const DRAGGABLE_ITEM_SELECTOR = '.drag-item, .drag-item-clone, .draggable-word';
-        const ACTIVE_DRAG_ITEM_SELECTOR = '.drag-item, .draggable-word';
+        const DRAGGABLE_ITEM_SELECTOR = '.drag-item, .drag-item-clone, .draggable-word, .card';
+        const ACTIVE_DRAG_ITEM_SELECTOR = '.drag-item, .draggable-word, .card';
         const POOL_CONTAINER_SELECTOR = '.pool-items, .cardpool, #word-options';
-        const POOL_OPTION_SELECTOR = '.pool-items .drag-item, .cardpool .drag-item, #word-options .draggable-word';
+        const POOL_OPTION_SELECTOR = '.pool-items .drag-item, .cardpool .drag-item, .cardpool .card, #word-options .draggable-word';
         const DROP_ZONE_SELECTOR = '.paragraph-dropzone .dropped-items, .match-dropzone, .dropzone, .drop-target-summary';
         const GENERIC_DROP_ZONE_SELECTOR = '.dropzone, .drop-target-summary';
         const QUESTION_ID_SUFFIX_PATTERN = /[-_](anchor|nav|target)$/i;
@@ -358,7 +358,8 @@
                 (
                     element.classList.contains('drag-item') ||
                     element.classList.contains('drag-item-clone') ||
-                    element.classList.contains('draggable-word')
+                    element.classList.contains('draggable-word') ||
+                    element.classList.contains('card')
                 )
             );
         }
@@ -636,7 +637,16 @@
             dragState.sourcePool = sourcePool || getOriginPool(target);
             dragState.sourceAllowsReuse = !!(sourcePool && detectPoolReuse(sourcePool));
             event.dataTransfer.effectAllowed = 'move';
-            event.dataTransfer.setData('text/plain', target.dataset.heading || target.dataset.option || target.textContent || '');
+            event.dataTransfer.setData(
+                'text/plain',
+                target.dataset.answerValue
+                || target.dataset.heading
+                || target.dataset.option
+                || target.dataset.word
+                || target.dataset.value
+                || target.textContent
+                || ''
+            );
             requestAnimationFrame(() => target.classList.add('dragging'));
         }
 
