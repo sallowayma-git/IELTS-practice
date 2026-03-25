@@ -24,6 +24,7 @@
         const timerEl = document.getElementById('timer');
         const submitBtn = document.getElementById('submit-btn');
         const resetBtn = document.getElementById('reset-btn');
+        const suiteFlowModeSection = document.getElementById('suite-flow-mode-section');
 
         function startTimer() {
             if (!timerEl) return;
@@ -43,6 +44,70 @@
             if (settingsPanel) settingsPanel.style.display = 'none';
             if (overlay) overlay.style.display = 'none';
         }
+
+        function ensurePracticeConfig() {
+            if (!window.practiceConfig || typeof window.practiceConfig !== 'object') {
+                window.practiceConfig = {};
+            }
+            if (!window.practiceConfig.suite || typeof window.practiceConfig.suite !== 'object') {
+                window.practiceConfig.suite = {};
+            }
+            return window.practiceConfig;
+        }
+
+        function resolveSuiteAutoAdvance() {
+            const config = ensurePracticeConfig();
+            if (typeof config.suite.autoAdvanceAfterSubmit === 'boolean') {
+                return config.suite.autoAdvanceAfterSubmit;
+            }
+            try {
+                const persisted = window.localStorage && window.localStorage.getItem('suite_auto_advance_after_submit');
+                if (persisted === 'true' || persisted === 'false') {
+                    const parsed = persisted === 'true';
+                    config.suite.autoAdvanceAfterSubmit = parsed;
+                    return parsed;
+                }
+            } catch (_) {
+                // ignore storage access errors
+            }
+            config.suite.autoAdvanceAfterSubmit = true;
+            return true;
+        }
+
+        function updateSuiteFlowModeButtons() {
+            const isAutoAdvance = resolveSuiteAutoAdvance();
+            document.querySelectorAll('.settings-option[data-suite-flow-mode]').forEach((btn) => {
+                const mode = String(btn.dataset.suiteFlowMode || '').trim().toLowerCase();
+                const active = (mode === 'auto' && isAutoAdvance) || (mode === 'manual' && !isAutoAdvance);
+                btn.classList.toggle('active', !!active);
+            });
+        }
+
+        function postSuiteConfigUpdate(autoAdvanceAfterSubmit) {
+            const target = window.opener || window.parent;
+            if (!target || target === window || typeof target.postMessage !== 'function') {
+                return;
+            }
+            target.postMessage({
+                type: 'SUITE_CONFIG_UPDATE',
+                data: {
+                    autoAdvanceAfterSubmit: !!autoAdvanceAfterSubmit,
+                    source: 'practice_page'
+                }
+            }, '*');
+        }
+
+        function applySuiteModeVisibility(isSuiteMode) {
+            if (!suiteFlowModeSection) {
+                return;
+            }
+            // 套题流程模式已迁移到进入套题前的弹窗选择，练习页设置菜单不再允许中途切换
+            suiteFlowModeSection.style.display = 'none';
+        }
+
+        window.updatePracticeSuiteModeUI = function updatePracticeSuiteModeUI(isSuiteMode) {
+            applySuiteModeVisibility(!!isSuiteMode);
+        };
 
         window.scrollToElement = function (target) {
             const element = typeof target === 'string'
@@ -214,6 +279,11 @@
                 });
             });
 
+        // mode toggle moved to pre-start popup; keep legacy nodes inert
+        document.querySelectorAll('.settings-option[data-suite-flow-mode]').forEach((btn) => {
+            btn.disabled = true;
+        });
+
         if (closeNoteBtn) closeNoteBtn.addEventListener('click', closeAllPanels);
         if (overlay) overlay.addEventListener('click', closeAllPanels);
 
@@ -224,6 +294,8 @@
                 settingsOpen = false;
             }
         });
+
+        applySuiteModeVisibility(document.body && document.body.dataset && document.body.dataset.suiteMode === 'true');
 
         // --- Pane resizing ---
         const divider = document.getElementById('divider');
@@ -422,6 +494,12 @@
             if (groupReuse === 'true' || groupReuse === 'false') {
                 pool.dataset.allowReuse = groupReuse;
                 return groupReuse === 'true';
+            }
+
+            const hasCloneTemplate = !!pool.querySelector('[data-clone="true"]');
+            if (hasCloneTemplate) {
+                pool.dataset.allowReuse = 'true';
+                return true;
             }
 
             pool.dataset.allowReuse = 'false';
@@ -662,7 +740,13 @@
             }
             const matchZone = target.closest('.match-dropzone');
             if (matchZone) {
-                return matchZone;
+                let holder = matchZone.querySelector('.dropped-items');
+                if (!holder) {
+                    holder = document.createElement('div');
+                    holder.className = 'dropped-items';
+                    matchZone.appendChild(holder);
+                }
+                return holder;
             }
             const genericZone = target.closest(GENERIC_DROP_ZONE_SELECTOR);
             if (genericZone) {
@@ -819,11 +903,21 @@
         }
 
         if (resetBtn) {
-            resetBtn.addEventListener('click', resetPracticePage);
+            resetBtn.addEventListener('click', () => {
+                const simulationMode = window.__UNIFIED_READING_SIMULATION_MODE__ === true;
+                if (simulationMode) {
+                    return;
+                }
+                resetPracticePage();
+            });
         }
 
         if (submitBtn) {
             submitBtn.addEventListener('click', () => {
+                const simulationMode = window.__UNIFIED_READING_SIMULATION_MODE__ === true;
+                if (simulationMode) {
+                    return;
+                }
                 lockPracticeAfterSubmit();
             });
         }
@@ -1044,6 +1138,8 @@
         const raw = String(questionId).trim();
         if (!raw) return null;
         const cleaned = raw.replace(QUESTION_ID_SUFFIX_PATTERN, '');
+        const dropzoneMatch = cleaned.match(/^q(\d+)-dropzone$/i);
+        if (dropzoneMatch) return 'q' + dropzoneMatch[1];
         if (/^q[\w-]+/i.test(cleaned)) return cleaned.replace(/^Q/, 'q');
         const numeric = cleaned.match(/^\d+/);
         if (numeric) return 'q' + numeric[0];
@@ -1131,6 +1227,7 @@
                 `[data-question="${normalized}"] .dropped-items`,
                 `#${normalized}-anchor .dropped-items`,
                 `#${normalized} .dropped-items`,
+                `#${normalized}-dropzone`,
                 `#${normalized}-target`,
                 `.drop-target-summary[data-question="${normalized}"]`
             ];
@@ -1194,8 +1291,26 @@
         if (a === undefined || a === null || b === undefined || b === null) {
             return false;
         }
-        const normalize = (value) => String(value).trim().toLowerCase();
-        return normalize(a) === normalize(b);
+        const normalize = (value) => String(value).replace(/\s+/g, ' ').trim().toLowerCase();
+        const toList = (value) => {
+            if (Array.isArray(value)) {
+                return value.map(item => normalize(item)).filter(Boolean);
+            }
+            const text = normalize(value);
+            if (!text) return [];
+            if (/^[a-z](?:\s*,\s*[a-z])+$/i.test(text)) {
+                return text.split(',').map(item => normalize(item)).filter(Boolean);
+            }
+            return [text];
+        };
+        const left = toList(a);
+        const right = toList(b);
+        if (left.length !== right.length) {
+            return false;
+        }
+        const leftSorted = left.slice().sort();
+        const rightSorted = right.slice().sort();
+        return leftSorted.every((item, index) => item === rightSorted[index]);
     }
 
     function formatAnswerValue(value) {
