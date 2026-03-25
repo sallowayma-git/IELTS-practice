@@ -185,6 +185,30 @@
             font-size: 12px;
             letter-spacing: 0.02em;
         }
+        #practice-review-nav {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+            align-items: center;
+            gap: 8px;
+            z-index: 3;
+        }
+        #practice-review-nav button {
+            border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+            border-radius: 8px;
+            padding: 5px 11px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text);
+            background: color-mix(in srgb, var(--panel) 78%, transparent);
+            box-shadow: none;
+        }
+        #practice-review-nav button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body data-exam-id="" data-exam-state="initial">
@@ -286,10 +310,18 @@
         sessionId: null,
         suiteSessionId: null,
         sequenceIndex: null,
+        handshakeReady: false,
         submitted: false,
+        reviewMode: false,
+        reviewViewMode: 'answering',
+        suiteReviewMode: false,
+        reviewContext: null,
+        reviewEntryIndex: 0,
         baseDuration: 11 * 60,
         correctCount: 8,
-        totalCount: 13
+        totalCount: 13,
+        simulationMode: false,
+        simulationCtx: null
     };
 
     const dom = {
@@ -308,6 +340,89 @@
         log: document.getElementById('event-log')
     };
 
+    function ensureReviewNavBar() {
+        let bar = document.getElementById('practice-review-nav');
+        if (bar) {
+            return bar;
+        }
+        bar = document.createElement('div');
+        bar.id = 'practice-review-nav';
+        bar.innerHTML = `
+            <button type="button" data-review-nav="prev">上一题</button>
+            <button type="button" data-review-nav="next">下一题</button>
+        `;
+        bar.addEventListener('click', (event) => {
+            const button = event.target && event.target.closest
+                ? event.target.closest('button[data-review-nav]')
+                : null;
+            if (!button || button.disabled) {
+                return;
+            }
+            const direction = button.dataset.reviewNav || '';
+            if (!direction) {
+                return;
+            }
+            postMessage('REVIEW_NAVIGATE', {
+                direction,
+                sessionId: null,
+                suiteSessionId: state.suiteSessionId || null,
+                suiteReviewMode: state.suiteReviewMode === true || isManualReviewModeEnabled(),
+                currentIndex: Number.isInteger(state.reviewEntryIndex) ? state.reviewEntryIndex : 0,
+                finalizeOnNext: Boolean(direction === 'next' && bar.dataset && bar.dataset.finalizeOnNext === 'true')
+            });
+        });
+        const header = document.querySelector('body > header') || document.querySelector('header');
+        if (header) {
+            header.appendChild(bar);
+        } else {
+            document.body.insertAdjacentElement('afterbegin', bar);
+        }
+        return bar;
+    }
+
+    function setReviewNavVisibility(visible) {
+        const bar = ensureReviewNavBar();
+        if (bar && bar.style) {
+            bar.style.display = visible ? 'inline-flex' : 'none';
+        }
+    }
+
+    function isManualReviewModeEnabled() {
+        try {
+            const fromStorage = window.localStorage && window.localStorage.getItem('suite_auto_advance_after_submit');
+            if (fromStorage === 'false') {
+                return true;
+            }
+        } catch (_) {
+            // ignore storage access errors
+        }
+        return false;
+    }
+
+    function applyFallbackManualNavContext() {
+        if (!isManualReviewModeEnabled()) {
+            return;
+        }
+        const bar = ensureReviewNavBar();
+        const prevBtn = bar.querySelector('button[data-review-nav="prev"]');
+        const nextBtn = bar.querySelector('button[data-review-nav="next"]');
+        const currentIndex = Number.isFinite(state.sequenceIndex) ? Number(state.sequenceIndex) : 0;
+        const total = 3;
+        bar.dataset.reviewIndex = String(currentIndex);
+        bar.dataset.reviewTotal = String(total);
+        bar.dataset.viewMode = state.reviewViewMode || 'answering';
+        bar.dataset.finalizeOnNext = 'false';
+        if (prevBtn) {
+            prevBtn.disabled = currentIndex <= 0;
+        }
+        if (nextBtn) {
+            nextBtn.disabled = currentIndex >= (total - 1);
+        }
+        state.suiteReviewMode = true;
+        state.reviewEntryIndex = currentIndex;
+        setReviewNavVisibility(true);
+    }
+
     function decodeParam(value) {
         if (!value) return '';
         try { return decodeURIComponent(value.replace(/\+/g, ' ')); }
@@ -319,11 +434,13 @@
         const title = decodeParam(params.get('title')) || state.title;
         const examId = decodeParam(params.get('examId')) || null;
         const category = decodeParam(params.get('category')) || 'P1';
+        const suiteSessionId = decodeParam(params.get('suiteSessionId')) || null;
         const seq = params.get('index');
 
         state.title = title;
         state.examId = examId;
         state.category = category;
+        state.suiteSessionId = suiteSessionId;
         state.sequenceIndex = seq != null ? Number(seq) : null;
 
         document.body.dataset.examId = examId || '';
@@ -333,8 +450,12 @@
             : '当前题目无法加载，系统已切换到占位练习页。';
         dom.metaExam.textContent = examId || '未提供';
         dom.metaCategory.textContent = category || 'P1';
+        if (suiteSessionId) {
+            dom.metaSuite.textContent = suiteSessionId;
+        }
         dom.metaScore.textContent = `正确 ${state.correctCount} / 总题数 ${state.totalCount}（${Math.round((state.correctCount / state.totalCount) * 100)}%）`;
         dom.metaDuration.textContent = '~12 分钟';
+        applyFallbackManualNavContext();
     }
 
     function log(message, level = 'info') {
@@ -372,6 +493,13 @@
         }
     }
 
+    function setReadOnlyMode(readOnly) {
+        state.reviewMode = Boolean(readOnly);
+        const disabled = state.reviewMode || state.submitted;
+        dom.completeBtn.disabled = disabled;
+        dom.completeBtn.textContent = state.reviewMode ? '回顾模式' : '提交本篇成绩';
+    }
+
     function markState(stateLabel, detail) {
         document.body.dataset.examState = stateLabel;
         dom.statusTitle.textContent = stateLabel;
@@ -380,19 +508,94 @@
         }
     }
 
+    function applyReviewContext(context = {}) {
+        const contextExamId = context && context.examId != null ? String(context.examId).trim() : '';
+        const currentExamId = state.examId != null ? String(state.examId).trim() : '';
+        if (contextExamId && currentExamId && contextExamId !== currentExamId) {
+            return;
+        }
+        state.reviewContext = context;
+        state.suiteReviewMode = Boolean(context.suiteReviewMode);
+        state.reviewViewMode = context.viewMode === 'answering' ? 'answering' : 'review';
+        if (Number.isInteger(context.currentIndex)) {
+            state.reviewEntryIndex = context.currentIndex;
+        }
+        const bar = ensureReviewNavBar();
+        const prevBtn = bar.querySelector('button[data-review-nav="prev"]');
+        const nextBtn = bar.querySelector('button[data-review-nav="next"]');
+        const currentIndex = Number.isFinite(Number(context.currentIndex)) ? Number(context.currentIndex) : state.reviewEntryIndex;
+        const total = Number.isFinite(Number(context.total)) ? Number(context.total) : 1;
+        bar.dataset.reviewIndex = String(currentIndex);
+        bar.dataset.reviewTotal = String(total);
+        bar.dataset.viewMode = state.reviewViewMode;
+        bar.dataset.finalizeOnNext = context.finalizeOnNext ? 'true' : 'false';
+        if (prevBtn) {
+            prevBtn.disabled = !context.canPrev;
+        }
+        if (nextBtn) {
+            nextBtn.disabled = !context.canNext;
+        }
+        setReviewNavVisibility(context.showNav !== false);
+
+        if (state.reviewViewMode === 'answering') {
+            state.submitted = false;
+            setReadOnlyMode(false);
+            markState('当前为作答态', '请完成当前篇章后点击“提交本篇成绩”。');
+            return;
+        }
+
+        state.submitted = true;
+        setReadOnlyMode(context.readOnly !== false);
+        if (context.finalizeOnNext) {
+            markState('当前为回看态（末篇）', '点击“下一题”将完成并保存整套记录。');
+            return;
+        }
+        markState('当前为回看态', '可使用顶部“上一题/下一题”切换篇章。');
+    }
+
+    function applyReplayRecord(payload = {}) {
+        const entry = payload && typeof payload.entry === 'object' ? payload.entry : payload;
+        const entryExamId = entry && entry.examId != null ? String(entry.examId).trim() : '';
+        const currentExamId = state.examId != null ? String(state.examId).trim() : '';
+        if (entryExamId && currentExamId && entryExamId !== currentExamId) {
+            return;
+        }
+        state.reviewViewMode = 'review';
+        state.submitted = true;
+        setReadOnlyMode(payload.readOnly !== false);
+        markState('当前为回看态', '已回灌本篇结果，可切题继续回看。');
+    }
+
     function sendSessionReady() {
-        markState('已与父页面建立会话', '等待当前篇章作答完成。');
-        dom.completeBtn.disabled = false;
+        state.handshakeReady = true;
+        if (state.reviewViewMode === 'review') {
+            state.submitted = true;
+            setReadOnlyMode(true);
+            markState('已与父页面建立会话', '当前为回看态，可使用顶部按钮切换篇章。');
+        } else {
+            setReadOnlyMode(state.submitted);
+            markState('已与父页面建立会话', '等待当前篇章作答完成。');
+            applyFallbackManualNavContext();
+        }
         postMessage('SESSION_READY', {
             url: window.location.href,
             pageType: 'suite-placeholder',
-            status: 'ready'
+            status: 'ready',
+            reviewMode: state.reviewMode,
+            readOnly: state.reviewMode,
+            suiteReviewMode: state.suiteReviewMode === true,
+            viewMode: state.reviewViewMode,
+            reviewEntryIndex: state.reviewEntryIndex
         });
     }
 
     function submitResults() {
         if (state.submitted) {
             log('当前篇章已提交，忽略重复点击。', 'warn');
+            return;
+        }
+        if (state.reviewMode) {
+            log('当前为回看态，忽略提交请求。', 'warn');
             return;
         }
         const duration = state.baseDuration + Math.round(Math.random() * 180);
@@ -434,10 +637,31 @@
             }
         };
 
-        postMessage('PRACTICE_COMPLETE', payload);
+        const msgType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
+        postMessage(msgType, payload);
         state.submitted = true;
-        dom.completeBtn.disabled = true;
-        markState('已上报成绩，等待下一篇...', '请稍候，系统将自动跳转至下一篇套题。');
+        state.reviewViewMode = 'review';
+        setReadOnlyMode(true);
+        if (state.suiteReviewMode) {
+            const bar = ensureReviewNavBar();
+            const prevBtn = bar.querySelector('button[data-review-nav="prev"]');
+            const nextBtn = bar.querySelector('button[data-review-nav="next"]');
+            const currentIndex = Number.isFinite(state.sequenceIndex) ? Number(state.sequenceIndex) : 0;
+            bar.dataset.reviewIndex = String(currentIndex);
+            bar.dataset.reviewTotal = '3';
+            bar.dataset.viewMode = 'review';
+            bar.dataset.finalizeOnNext = currentIndex >= 2 ? 'true' : 'false';
+            if (prevBtn) {
+                prevBtn.disabled = currentIndex <= 0;
+            }
+            if (nextBtn) {
+                nextBtn.disabled = false;
+            }
+            setReviewNavVisibility(true);
+            markState('已上报成绩，进入回看态', '可使用顶部“下一题”进入下一篇。');
+        } else {
+            markState('已上报成绩，等待下一篇...', '请稍候，系统将自动跳转至下一篇套题。');
+        }
     }
 
     function handleIncoming(event) {
@@ -454,6 +678,13 @@
         const data = envelope.data || {};
 
         if (type === 'INIT_SESSION' || type === 'INIT_EXAM_SESSION') {
+            const previousExamId = state.examId;
+            const incomingExamId = data && data.examId != null ? String(data.examId).trim() : '';
+            const currentExamId = state.examId != null ? String(state.examId).trim() : '';
+            if (incomingExamId && currentExamId && incomingExamId !== currentExamId) {
+                log(`忽略错篇 INIT_SESSION: incoming=${incomingExamId}, current=${currentExamId}`, 'warn');
+                return;
+            }
             if (data.sessionId) {
                 state.sessionId = data.sessionId;
                 dom.metaSession.textContent = data.sessionId;
@@ -467,12 +698,41 @@
                 document.body.dataset.examId = data.examId;
                 dom.metaExam.textContent = data.examId;
             }
-            markState('握手成功，等待作答', '可点击“提交本篇成绩”模拟完成。');
-            dom.completeBtn.disabled = false;
+            if (Number.isInteger(data.reviewEntryIndex)) {
+                state.reviewEntryIndex = data.reviewEntryIndex;
+            }
+            state.suiteReviewMode = Boolean(data.suiteReviewMode);
+            state.reviewViewMode = data.viewMode === 'review' || data.reviewMode ? 'review' : 'answering';
+            state.handshakeReady = true;
+            if (state.reviewViewMode === 'review') {
+                state.submitted = true;
+                setReadOnlyMode(data.readOnly !== false);
+                markState('握手成功，当前为回看态', '可使用顶部“上一题/下一题”切换篇章。');
+            } else {
+                const normalizedPreviousExamId = previousExamId != null ? String(previousExamId).trim() : '';
+                const normalizedCurrentExamId = state.examId != null ? String(state.examId).trim() : '';
+                const examChanged = !!(normalizedPreviousExamId && normalizedCurrentExamId && normalizedPreviousExamId !== normalizedCurrentExamId);
+                if (examChanged) {
+                    state.submitted = false;
+                }
+                setReadOnlyMode(state.submitted);
+                markState('握手成功，等待作答', '可点击“提交本篇成绩”模拟完成。');
+                applyFallbackManualNavContext();
+            }
         }
 
         if (type === 'INIT_SESSION' || type === 'INIT_EXAM_SESSION') {
             sendSessionReady();
+        }
+
+        if (type === 'REVIEW_CONTEXT') {
+            applyReviewContext(data || {});
+            return;
+        }
+
+        if (type === 'REPLAY_PRACTICE_RECORD') {
+            applyReplayRecord(data || {});
+            return;
         }
 
         if (type === 'SUITE_NAVIGATE') {
@@ -485,6 +745,15 @@
                     log('跳转下一篇失败: ' + error, 'error');
                 }
             }
+        }
+
+        if (type === 'SIMULATION_CONTEXT') {
+            state.simulationMode = true;
+            state.simulationCtx = data;
+            const idx = (data.currentIndex || 0) + 1;
+            const total = data.total || 3;
+            markState(`模拟测试 ${idx}/${total}`, data.isLast ? '这是最后一篇，提交后将结算全部。' : '点击提交后自动进入下一篇。');
+            return;
         }
     }
 
@@ -499,6 +768,7 @@
     window.addEventListener('message', handleIncoming);
 
     parseParams();
+    setReadOnlyMode(false);
     log('占位页已初始化，等待父窗口发送 INIT_SESSION。');
     setTimeout(() => {
         if (!state.sessionId) {
