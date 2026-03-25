@@ -460,10 +460,16 @@ class PracticeRecordModal {
             return [];
         }
 
-        let entries = utils.getNormalizedEntries(record) || [];
         const suites = this.getSuiteEntries(record);
+        const hasSuites = Array.isArray(suites) && suites.length > 0;
+        let entries = [];
 
-        if (Array.isArray(suites) && suites.length > 0) {
+        // 套题详情优先使用分篇数据，避免顶层聚合数据导致错题数固定或重复统计。
+        if (!hasSuites) {
+            entries = utils.getNormalizedEntries(record) || [];
+        }
+
+        if (hasSuites) {
             suites.forEach((entry) => {
                 const subset = utils.getNormalizedEntries(entry) || [];
                 if (subset.length > 0) {
@@ -472,7 +478,21 @@ class PracticeRecordModal {
             });
         }
 
-        return entries;
+        if (!entries.length) {
+            return entries;
+        }
+
+        const seen = new Set();
+        return entries.filter((entry) => {
+            const questionKey = entry && (entry.questionId || entry.displayNumber || entry.key || '');
+            const examKey = entry && (entry.examId || '');
+            const dedupeKey = `${examKey}::${questionKey}::${entry && entry.correctAnswer ? String(entry.correctAnswer) : ''}`;
+            if (seen.has(dedupeKey)) {
+                return false;
+            }
+            seen.add(dedupeKey);
+            return true;
+        });
     }
 
     getEntriesSummary(entries) {
