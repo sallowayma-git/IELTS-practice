@@ -788,6 +788,8 @@
         reviewSessionId: null,
         reviewEntryIndex: 0,
         reviewContext: null,
+        suiteReviewMode: false,
+        reviewViewMode: null,
         reviewNavBarElement: null,
         mixinsApplied: false,
         activeMixins: [],
@@ -851,6 +853,8 @@
                 this.reviewSessionId = null;
                 this.reviewEntryIndex = 0;
                 this.reviewContext = null;
+                this.suiteReviewMode = false;
+                this.reviewViewMode = null;
                 this.pageContext = this.getPageContext(true);
                 this.activateMixins();
 
@@ -1526,8 +1530,12 @@
                 }
                 this.sendMessage('REVIEW_NAVIGATE', {
                     direction,
+                    sessionId: null,
                     reviewSessionId: this.reviewSessionId || (this.reviewContext && this.reviewContext.reviewSessionId) || null,
-                    currentIndex: Number.isInteger(this.reviewEntryIndex) ? this.reviewEntryIndex : 0
+                    currentIndex: Number.isInteger(this.reviewEntryIndex) ? this.reviewEntryIndex : 0,
+                    suiteSessionId: this.suiteSessionId || (this.reviewContext && this.reviewContext.suiteSessionId) || null,
+                    suiteReviewMode: this.suiteReviewMode === true,
+                    finalizeOnNext: Boolean(direction === 'next' && bar.dataset && bar.dataset.finalizeOnNext === 'true')
                 });
             });
             const header = document.querySelector('body > header') || document.querySelector('header');
@@ -1549,27 +1557,50 @@
             return bar;
         },
 
+        setReviewNavVisibility: function (visible) {
+            const bar = this.ensureReviewNavBar();
+            if (bar && bar.style) {
+                bar.style.display = visible ? 'inline-flex' : 'none';
+            }
+        },
+
         applyReviewContext: function (context = {}) {
+            const contextExamId = context && context.examId != null ? String(context.examId).trim() : '';
+            const currentExamId = this.examId != null ? String(this.examId).trim() : '';
+            if (contextExamId && currentExamId && contextExamId !== currentExamId) {
+                return;
+            }
             this.reviewContext = context;
+            this.suiteReviewMode = Boolean(context.suiteReviewMode);
+            const viewMode = context.viewMode === 'answering' ? 'answering' : 'review';
+            this.reviewViewMode = viewMode;
             if (context.reviewSessionId) {
                 this.reviewSessionId = context.reviewSessionId;
             }
             if (Number.isInteger(context.currentIndex)) {
                 this.reviewEntryIndex = context.currentIndex;
             }
-            this.setReviewMode(context.readOnly !== false);
             const bar = this.ensureReviewNavBar();
+            const shouldShowNav = context.showNav !== false;
+            this.setReviewNavVisibility(shouldShowNav);
             const prevBtn = bar.querySelector('button[data-review-nav="prev"]');
             const nextBtn = bar.querySelector('button[data-review-nav="next"]');
             const currentIndex = Number.isFinite(Number(context.currentIndex)) ? Number(context.currentIndex) : this.reviewEntryIndex;
             const total = Number.isFinite(Number(context.total)) ? Number(context.total) : 1;
             bar.dataset.reviewIndex = String(currentIndex);
             bar.dataset.reviewTotal = String(total);
+            bar.dataset.viewMode = viewMode;
+            bar.dataset.finalizeOnNext = context.finalizeOnNext ? 'true' : 'false';
             if (prevBtn) {
                 prevBtn.disabled = !context.canPrev;
             }
             if (nextBtn) {
                 nextBtn.disabled = !context.canNext;
+            }
+            if (viewMode === 'answering') {
+                this.setReviewMode(false);
+            } else {
+                this.setReviewMode(context.readOnly !== false);
             }
         },
 
@@ -1615,6 +1646,11 @@
 
         applyReplayRecord: function (payload = {}) {
             const entry = payload && typeof payload.entry === 'object' ? payload.entry : payload;
+            const entryExamId = entry && entry.examId != null ? String(entry.examId).trim() : '';
+            const currentExamId = this.examId != null ? String(this.examId).trim() : '';
+            if (entryExamId && currentExamId && entryExamId !== currentExamId) {
+                return;
+            }
             const replayResults = this.buildReplayResultsFromEntry(entry || {});
             if (payload.reviewSessionId) {
                 this.reviewSessionId = payload.reviewSessionId;
@@ -1622,7 +1658,7 @@
             if (Number.isInteger(payload.reviewEntryIndex)) {
                 this.reviewEntryIndex = payload.reviewEntryIndex;
             }
-
+            this.reviewViewMode = 'review';
             this.setReviewMode(payload.readOnly !== false);
             this.answers = Object.assign({}, replayResults.answers);
             this.correctAnswers = Object.assign({}, replayResults.correctAnswers);
@@ -1721,6 +1757,8 @@
                         url: window.location.href,
                         title: document.title,
                         reviewMode: this.reviewMode,
+                        viewMode: this.reviewViewMode || (this.reviewMode ? 'review' : 'answering'),
+                        suiteReviewMode: this.suiteReviewMode === true,
                         readOnly: this.readOnly,
                         reviewSessionId: this.reviewSessionId || null,
                         reviewEntryIndex: this.reviewEntryIndex
@@ -3652,6 +3690,11 @@
         },
 
         handleSubmit: function () {
+            const simulationMode = window.__UNIFIED_READING_SIMULATION_MODE__ === true;
+            if (simulationMode) {
+                console.info('[PracticeEnhancer] 模拟模式下忽略提交拦截，交由统一阅读页处理');
+                return;
+            }
             if (this.readOnly) {
                 console.info('[PracticeEnhancer] 回顾模式下忽略提交');
                 return;

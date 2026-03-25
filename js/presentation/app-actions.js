@@ -115,15 +115,131 @@
     // ============================================================================
 
     function startSuitePractice() {
+        function ensurePracticeConfig() {
+            if (!global.practiceConfig || typeof global.practiceConfig !== 'object') {
+                global.practiceConfig = {};
+            }
+            if (!global.practiceConfig.suite || typeof global.practiceConfig.suite !== 'object') {
+                global.practiceConfig.suite = {};
+            }
+            return global.practiceConfig;
+        }
+
+        function resolveSuiteFlowMode() {
+            var config = ensurePracticeConfig();
+            if (typeof config.suite.flowMode === 'string') {
+                var inMemoryMode = config.suite.flowMode.trim().toLowerCase();
+                if (inMemoryMode === 'classic' || inMemoryMode === 'stationary' || inMemoryMode === 'simulation') {
+                    return inMemoryMode;
+                }
+            }
+            try {
+                if (global.localStorage && typeof global.localStorage.getItem === 'function') {
+                    var persistedMode = String(global.localStorage.getItem('suite_flow_mode') || '').trim().toLowerCase();
+                    if (persistedMode === 'classic' || persistedMode === 'stationary' || persistedMode === 'simulation') {
+                        config.suite.flowMode = persistedMode;
+                        return persistedMode;
+                    }
+                }
+            } catch (_) {
+                // ignore storage errors
+            }
+            config.suite.flowMode = 'classic';
+            return 'classic';
+        }
+
+        function persistSuiteFlowMode(mode) {
+            var normalized = mode === 'stationary'
+                ? 'stationary'
+                : (mode === 'simulation' ? 'simulation' : 'classic');
+            var config = ensurePracticeConfig();
+            config.suite.flowMode = normalized;
+            config.suite.autoAdvanceAfterSubmit = normalized === 'classic';
+            if (normalized === 'simulation') {
+                config.suite.autoAdvanceAfterSubmit = true;
+            }
+            try {
+                if (global.localStorage && typeof global.localStorage.setItem === 'function') {
+                    global.localStorage.setItem('suite_flow_mode', normalized);
+                    global.localStorage.setItem(
+                        'suite_auto_advance_after_submit',
+                        normalized === 'classic' ? 'true' : 'false'
+                    );
+                }
+            } catch (_) {
+                // ignore storage errors
+            }
+            return normalized;
+        }
+
+        function promptSuiteModeSelection() {
+            return new Promise(function resolveSelection(resolve) {
+                var preselected = resolveSuiteFlowMode();
+                if (!global.document || !global.document.body) {
+                    resolve(preselected);
+                    return;
+                }
+                var host = global.document.getElementById('suite-mode-selector-modal');
+                if (host && host.parentNode) {
+                    host.parentNode.removeChild(host);
+                }
+                host = global.document.createElement('div');
+                host.id = 'suite-mode-selector-modal';
+                host.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;z-index:9999;';
+                host.innerHTML = [
+                    '<div role="dialog" aria-modal="true" style="width:min(420px,92vw);background:#fff;border-radius:12px;padding:18px 18px 14px;box-shadow:0 18px 45px rgba(2,6,23,.22);">',
+                    '<h3 style="margin:0 0 8px;font-size:18px;color:#0f172a;">选择套题流程</h3>',
+                    '<p style="margin:0 0 14px;font-size:13px;line-height:1.6;color:#334155;">本次会话将锁定所选流程，答题中不再切换。</p>',
+                    '<div style="display:grid;gap:10px;">',
+                    '<button type="button" data-suite-flow-mode="simulation" style="padding:11px 12px;border:1px solid #0ea5e9;border-radius:8px;background:#f0f9ff;color:#0c4a6e;font-weight:700;cursor:pointer;text-align:left;">模拟模式（上一题/下一题，最后一次提交）</button>',
+                    '<button type="button" data-suite-flow-mode="classic" style="padding:11px 12px;border:1px solid #0ea5e9;border-radius:8px;background:#f0f9ff;color:#0c4a6e;font-weight:700;cursor:pointer;text-align:left;">经典模式（自动跳转）</button>',
+                    '<button type="button" data-suite-flow-mode="stationary" style="padding:11px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;color:#0f172a;font-weight:700;cursor:pointer;text-align:left;">驻足模式（提交后停留回看）</button>',
+                    '</div>',
+                    '<div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px;">',
+                    '<button type="button" data-suite-flow-cancel="1" style="padding:8px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#475569;cursor:pointer;">取消</button>',
+                    '</div>',
+                    '</div>'
+                ].join('');
+                var markSelected = function markSelected(mode) {
+                    Array.prototype.slice.call(host.querySelectorAll('button[data-suite-flow-mode]')).forEach(function each(btn) {
+                        var isSelected = btn.getAttribute('data-suite-flow-mode') === mode;
+                        btn.style.outline = isSelected ? '2px solid #0284c7' : 'none';
+                        btn.style.boxShadow = isSelected ? 'inset 0 0 0 1px #0284c7' : 'none';
+                    });
+                };
+                markSelected(preselected);
+                host.addEventListener('click', function onClick(event) {
+                    var target = event.target && event.target.closest ? event.target.closest('button') : null;
+                    if (!target) return;
+                    var mode = target.getAttribute('data-suite-flow-mode');
+                    if (mode) {
+                        var normalized = persistSuiteFlowMode(mode);
+                        if (host.parentNode) host.parentNode.removeChild(host);
+                        resolve(normalized);
+                        return;
+                    }
+                    if (target.hasAttribute('data-suite-flow-cancel')) {
+                        if (host.parentNode) host.parentNode.removeChild(host);
+                        resolve(null);
+                    }
+                });
+                global.document.body.appendChild(host);
+            });
+        }
+
         var ensureSuiteReady = (global.AppEntry && typeof global.AppEntry.ensureSessionSuiteReady === 'function')
             ? global.AppEntry.ensureSessionSuiteReady()
             : ensurePracticeSuite();
 
         return Promise.resolve(ensureSuiteReady).then(function afterReady() {
+            return promptSuiteModeSelection().then(function handleMode(mode) {
+                if (!mode) {
+                    return undefined;
+                }
             var appInstance = global.app;
             if (appInstance && typeof appInstance.startSuitePractice === 'function') {
                 try {
-                    return appInstance.startSuitePractice();
+                        return appInstance.startSuitePractice({ flowMode: mode });
                 } catch (error) {
                     console.error('[AppActions] 套题模式启动失败', error);
                     if (typeof global.showMessage === 'function') {
@@ -140,12 +256,36 @@
                 alert(fallbackNotice);
             }
             return undefined;
+            });
         }).catch(function handleSuiteError(error) {
             console.error('[AppActions] 套题模块加载失败:', error);
             if (typeof global.showMessage === 'function') {
                 global.showMessage('套题模块加载失败，请稍后重试', 'error');
             }
             return undefined;
+        });
+    }
+
+    function continueSuitePractice() {
+        var ensureSuiteReady = (global.AppEntry && typeof global.AppEntry.ensureSessionSuiteReady === 'function')
+            ? global.AppEntry.ensureSessionSuiteReady()
+            : ensurePracticeSuite();
+
+        return Promise.resolve(ensureSuiteReady).then(function afterReady() {
+            var appInstance = global.app;
+            if (appInstance && typeof appInstance.continueSuitePractice === 'function') {
+                return appInstance.continueSuitePractice();
+            }
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('当前没有可继续的套题会话。', 'warning');
+            }
+            return false;
+        }).catch(function handleSuiteError(error) {
+            console.error('[AppActions] 套题继续失败:', error);
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('套题继续失败，请稍后重试', 'error');
+            }
+            return false;
         });
     }
 
@@ -462,6 +602,7 @@
         preloadMoreTools: triggerMorePrefetch,
         // Phase 3
         startSuitePractice: startSuitePractice,
+        continueSuitePractice: continueSuitePractice,
         openExamWithFallback: openExamWithFallback,
         startRandomPractice: startRandomPractice,
         // Phase 4
@@ -471,6 +612,7 @@
 
     // 挂载到全局（向后兼容）
     global.startSuitePractice = startSuitePractice;
+    global.continueSuitePractice = continueSuitePractice;
     global.openExamWithFallback = openExamWithFallback;
     global.startRandomPractice = startRandomPractice;
     global.startEndlessPractice = startEndlessPractice;

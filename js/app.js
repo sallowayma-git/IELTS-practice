@@ -85,6 +85,19 @@ class ExamSystemApp {
 // 新增修复3E：在js/app.js的DOMContentLoaded初始化中去除顶层await
 // 应用启动
 document.addEventListener('DOMContentLoaded', () => {
+    const existingPracticeConfig = (window.practiceConfig && typeof window.practiceConfig === 'object')
+        ? window.practiceConfig
+        : {};
+    const existingSuiteConfig = (existingPracticeConfig.suite && typeof existingPracticeConfig.suite === 'object')
+        ? existingPracticeConfig.suite
+        : {};
+    window.practiceConfig = Object.assign({}, existingPracticeConfig, {
+        suite: Object.assign({
+            autoAdvanceAfterSubmit: true,
+            flowMode: 'classic'
+        }, existingSuiteConfig)
+    });
+
     const signalAppCoreReady = () => {
         try {
             window.dispatchEvent(new CustomEvent('appCoreReady'));
