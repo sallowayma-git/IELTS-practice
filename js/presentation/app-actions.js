@@ -193,32 +193,55 @@
                 host.id = 'suite-mode-selector-modal';
                 host.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;z-index:9999;';
                 host.innerHTML = [
-                    '<div role="dialog" aria-modal="true" style="width:min(420px,92vw);background:#fff;border-radius:12px;padding:18px 18px 14px;box-shadow:0 18px 45px rgba(2,6,23,.22);">',
-                    '<h3 style="margin:0 0 8px;font-size:18px;color:#0f172a;">选择套题流程</h3>',
-                    '<p style="margin:0 0 14px;font-size:13px;line-height:1.6;color:#334155;">本次会话将锁定所选流程，答题中不再切换。</p>',
-                    '<div style="display:grid;gap:10px;">',
-                    '<button type="button" data-suite-flow-mode="simulation" style="padding:11px 12px;border:1px solid #0ea5e9;border-radius:8px;background:#f0f9ff;color:#0c4a6e;font-weight:700;cursor:pointer;text-align:left;">模拟模式（上一题/下一题，最后一次提交）</button>',
-                    '<button type="button" data-suite-flow-mode="classic" style="padding:11px 12px;border:1px solid #0ea5e9;border-radius:8px;background:#f0f9ff;color:#0c4a6e;font-weight:700;cursor:pointer;text-align:left;">经典模式（自动跳转）</button>',
-                    '<button type="button" data-suite-flow-mode="stationary" style="padding:11px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;color:#0f172a;font-weight:700;cursor:pointer;text-align:left;">驻足模式（提交后停留回看）</button>',
+                    '<div role="dialog" aria-modal="true" style="width:min(420px,92vw);background:var(--color-white, #fff);border:1px solid var(--color-gray-200, #e2e8f0);border-radius:16px;padding:24px;box-shadow:var(--shadow-xl, 0 20px 25px -5px rgba(0,0,0,0.1));font-family:var(--font-family-primary, sans-serif);">',
+                    '<h3 style="margin:0 0 8px;font-size:20px;font-weight:700;color:var(--color-gray-900, #0f172a);letter-spacing:-0.02em;">选择套题流程</h3>',
+                    '<p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:var(--color-gray-600, #475569);">本次会话将锁定所选流程，答题中不再切换。</p>',
+                    '<div style="display:flex;flex-direction:column;gap:10px;">',
+                    '<button type="button" data-suite-flow-mode="simulation" style="padding:14px 16px;border:2px solid transparent;border-radius:12px;background:var(--color-gray-50, #f8fafc);color:var(--color-gray-800, #1e293b);font-weight:600;cursor:pointer;text-align:left;transition:all 0.2s ease;display:flex;flex-direction:column;gap:4px;">',
+                    '<span style="font-size:15px;">模拟模式</span>',
+                    '<span style="font-size:12px;font-weight:400;color:var(--color-gray-500, #64748b);">贴近官方机考</span>',
+                    '</button>',
+                    '<button type="button" data-suite-flow-mode="classic" style="padding:14px 16px;border:2px solid transparent;border-radius:12px;background:var(--color-gray-50, #f8fafc);color:var(--color-gray-800, #1e293b);font-weight:600;cursor:pointer;text-align:left;transition:all 0.2s ease;display:flex;flex-direction:column;gap:4px;">',
+                    '<span style="font-size:15px;">经典模式</span>',
+                    '<span style="font-size:12px;font-weight:400;color:var(--color-gray-500, #64748b);">自动跳转</span>',
+                    '</button>',
+                    '<button type="button" data-suite-flow-mode="stationary" style="padding:14px 16px;border:2px solid transparent;border-radius:12px;background:var(--color-gray-50, #f8fafc);color:var(--color-gray-800, #1e293b);font-weight:600;cursor:pointer;text-align:left;transition:all 0.2s ease;display:flex;flex-direction:column;gap:4px;">',
+                    '<span style="font-size:15px;">驻足模式</span>',
+                    '<span style="font-size:12px;font-weight:400;color:var(--color-gray-500, #64748b);">提交后停留回看</span>',
+                    '</button>',
                     '</div>',
-                    '<div style="margin-top:12px;">',
-                    '<label for="suite-frequency-scope" style="display:block;margin-bottom:6px;font-size:12px;color:#334155;">抽题范围</label>',
-                    '<select id="suite-frequency-scope" style="width:100%;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;color:#0f172a;">',
+                    '<div style="margin-top:20px;">',
+                    '<label for="suite-frequency-scope" style="display:block;margin-bottom:8px;font-size:13px;font-weight:600;color:var(--color-gray-700, #334155);">抽题范围</label>',
+                    '<div style="position:relative;">',
+                    '<select id="suite-frequency-scope" style="width:100%;appearance:none;background:var(--color-white, #fff);padding:12px 36px 12px 14px;border:1px solid var(--color-gray-300, #cbd5e1);border-radius:10px;font-size:14px;color:var(--color-gray-900, #0f172a);cursor:pointer;outline:none;transition:border-color 0.2s ease;box-shadow:0 1px 2px rgba(0,0,0,0.05);">',
                     '<option value="high_medium">高频 + 次高频</option>',
                     '<option value="high">仅高频</option>',
                     '<option value="all">全部频率（默认）</option>',
                     '</select>',
+                    '<div style="position:absolute;right:14px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--color-gray-500, #64748b);">',
+                    '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
                     '</div>',
-                    '<div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px;">',
-                    '<button type="button" data-suite-flow-cancel="1" style="padding:8px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#475569;cursor:pointer;">取消</button>',
+                    '</div>',
+                    '</div>',
+                    '<div style="margin-top:24px;display:flex;justify-content:flex-end;gap:12px;">',
+                    '<button type="button" data-suite-flow-cancel="1" style="padding:10px 16px;border:1px solid var(--color-gray-200, #e2e8f0);border-radius:8px;background:var(--color-white, #fff);color:var(--color-gray-600, #475569);font-weight:500;font-size:14px;cursor:pointer;transition:all 0.2s ease;">取消</button>',
                     '</div>',
                     '</div>'
                 ].join('');
                 var markSelected = function markSelected(mode) {
                     Array.prototype.slice.call(host.querySelectorAll('button[data-suite-flow-mode]')).forEach(function each(btn) {
                         var isSelected = btn.getAttribute('data-suite-flow-mode') === mode;
-                        btn.style.outline = isSelected ? '2px solid #0284c7' : 'none';
-                        btn.style.boxShadow = isSelected ? 'inset 0 0 0 1px #0284c7' : 'none';
+                        if (isSelected) {
+                            btn.style.borderColor = 'var(--color-brand-primary, #667eea)';
+                            btn.style.background = 'rgba(102, 126, 234, 0.08)';
+                            btn.style.boxShadow = '0 0 0 1px var(--color-brand-primary, #667eea)';
+                            btn.style.outline = 'none';
+                        } else {
+                            btn.style.borderColor = 'transparent';
+                            btn.style.background = 'var(--color-gray-50, #f8fafc)';
+                            btn.style.boxShadow = 'none';
+                            btn.style.outline = 'none';
+                        }
                     });
                 };
                 markSelected(preselected);
@@ -260,29 +283,29 @@
                 if (!selection || !selection.flowMode) {
                     return undefined;
                 }
-            var appInstance = global.app;
-            if (appInstance && typeof appInstance.startSuitePractice === 'function') {
-                try {
+                var appInstance = global.app;
+                if (appInstance && typeof appInstance.startSuitePractice === 'function') {
+                    try {
                         return appInstance.startSuitePractice({
                             flowMode: selection.flowMode,
                             frequencyScope: selection.frequencyScope
                         });
-                } catch (error) {
-                    console.error('[AppActions] 套题模式启动失败', error);
-                    if (typeof global.showMessage === 'function') {
-                        global.showMessage('套题模式启动失败，请稍后重试', 'error');
+                    } catch (error) {
+                        console.error('[AppActions] 套题模式启动失败', error);
+                        if (typeof global.showMessage === 'function') {
+                            global.showMessage('套题模式启动失败，请稍后重试', 'error');
+                        }
+                        return undefined;
                     }
-                    return undefined;
                 }
-            }
 
-            var fallbackNotice = '套题模式尚未初始化，请完成加载后再试。';
-            if (typeof global.showMessage === 'function') {
-                global.showMessage(fallbackNotice, 'warning');
-            } else if (typeof alert === 'function') {
-                alert(fallbackNotice);
-            }
-            return undefined;
+                var fallbackNotice = '套题模式尚未初始化，请完成加载后再试。';
+                if (typeof global.showMessage === 'function') {
+                    global.showMessage(fallbackNotice, 'warning');
+                } else if (typeof alert === 'function') {
+                    alert(fallbackNotice);
+                }
+                return undefined;
             });
         }).catch(function handleSuiteError(error) {
             console.error('[AppActions] 套题模块加载失败:', error);
@@ -318,7 +341,7 @@
 
     function openExamWithFallback(exam, delay) {
         var actualDelay = typeof delay === 'number' ? delay : 600;
-        
+
         if (!exam) {
             if (typeof global.showMessage === 'function') {
                 global.showMessage('未找到可用题目', 'error');
@@ -354,13 +377,13 @@
         var getExamIndexState = global.getExamIndexState || function () {
             return Array.isArray(global.examIndex) ? global.examIndex : [];
         };
-        
+
         var list = getExamIndexState();
         var normalizedType = (!type || type === 'all') ? null : type;
         var normalizedPath = (typeof path === 'string' && path.trim()) ? path.trim() : null;
 
         var pool = Array.from(list);
-        
+
         if (normalizedType) {
             pool = pool.filter(function (exam) { return exam.type === normalizedType; });
         }
