@@ -34,7 +34,7 @@
         "q3",
         "q4"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-anchor\">\n                <h4>Questions 28–31</h4>\n                <p>Label the diagram below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n                <div class=\"diagram-container\">\n                    <img loading=\"lazy\" src=\"https://i.postimg.cc/xC4bjVt3/82bf1c86-d66b-481c-bf14-ff788ad98017.png\" alt=\"Diagram of an elephant's head and features for seismic communication\">\n                </div>\n                 <div class=\"diagram-inputs\">\n                    <div class=\"diagram-input-item\"><label for=\"q28_input\">28</label><input type=\"text\" id=\"q28_input\" name=\"q1\"></div>\n                    <div class=\"diagram-input-item\"><label for=\"q29_input\">29</label><input type=\"text\" id=\"q29_input\" name=\"q2\"></div>\n                    <div class=\"diagram-input-item\"><label for=\"q30_input\">30</label><input type=\"text\" id=\"q30_input\" name=\"q3\"></div>\n                    <div class=\"diagram-input-item\"><label for=\"q31_input\">31</label><input type=\"text\" id=\"q31_input\" name=\"q4\"></div>\n                </div>\n            </div>",
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-anchor\">\n                <h4>Questions 28–31</h4>\n                <p>Label the diagram below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n                <div class=\"diagram-container diagram-container--elephant\">\n                    <img class=\"diagram-image--elephant\" loading=\"lazy\" src=\"https://i.postimg.cc/xC4bjVt3/82bf1c86-d66b-481c-bf14-ff788ad98017.png\" alt=\"Diagram of an elephant's head and features for seismic communication\">\n                </div>\n                 <div class=\"diagram-inputs\">\n                    <div class=\"diagram-input-item\"><label for=\"q28_input\">28</label><input type=\"text\" id=\"q28_input\" name=\"q1\"></div>\n                    <div class=\"diagram-input-item\"><label for=\"q29_input\">29</label><input type=\"text\" id=\"q29_input\" name=\"q2\"></div>\n                    <div class=\"diagram-input-item\"><label for=\"q30_input\">30</label><input type=\"text\" id=\"q30_input\" name=\"q3\"></div>\n                    <div class=\"diagram-input-item\"><label for=\"q31_input\">31</label><input type=\"text\" id=\"q31_input\" name=\"q4\"></div>\n                </div>\n            </div>",
       "leadHtml": "<h3>Questions</h3>"
     },
     {
@@ -62,7 +62,10 @@
     }
   ],
   "answerKey": {
-    "q1": "hammer bone",
+    "q1": [
+      "hammer",
+      "hammer bone"
+    ],
     "q2": "body",
     "q3": "pad",
     "q4": "sinus cavities",

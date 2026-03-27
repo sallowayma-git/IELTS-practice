@@ -144,6 +144,7 @@
                 style: { margin: 0 }
             }, title));
 
+
             // 支持单个 rightButton（向后兼容）或多个 rightButtons
             const buttons = rightButtons || (rightButton ? [rightButton] : []);
             if (buttons.length > 0) {

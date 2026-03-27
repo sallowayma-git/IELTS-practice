@@ -66,8 +66,14 @@
     "q9": "mosaic floors",
     "q10": "wall",
     "q11": "93",
-    "q12": "ring",
-    "q13": "museum"
+    "q12": [
+      "ring",
+      "gold ring"
+    ],
+    "q13": [
+      "museum",
+      "modern museum"
+    ]
   },
   "sourceRefs": {
     "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/8. P1 - Fishbourne Roman Palace 罗马宫殿【高】/8. P1 - Fishbourne Roman Palace 罗马宫殿【高】.html",
