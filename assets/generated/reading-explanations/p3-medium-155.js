@@ -8,9 +8,9 @@
   "examId": "p3-medium-155",
   "meta": {
     "examId": "p3-medium-155",
-    "title": "Does class size matter_ 课堂规模",
+    "title": "Does class size matter 课堂规模",
     "category": "P3",
-    "sourceDoc": "P3 解析+1202高频_副本.md",
+    "sourceDoc": "ReadingPractice/PDF/65. P3 - Does class size matter 课堂规模.pdf",
     "noteType": "总结",
     "matchedTitle": "Does class size matter 课堂规模"
   },

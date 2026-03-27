@@ -788,6 +788,8 @@
         reviewSessionId: null,
         reviewEntryIndex: 0,
         reviewContext: null,
+        suiteReviewMode: false,
+        reviewViewMode: null,
         reviewNavBarElement: null,
         mixinsApplied: false,
         activeMixins: [],
@@ -851,8 +853,14 @@
                 this.reviewSessionId = null;
                 this.reviewEntryIndex = 0;
                 this.reviewContext = null;
+                this.suiteReviewMode = false;
+                this.reviewViewMode = null;
                 this.pageContext = this.getPageContext(true);
                 this.activateMixins();
+                const suiteSessionIdFromUrl = this.extractSuiteSessionIdFromUrl();
+                if (suiteSessionIdFromUrl) {
+                    this.enableSuiteMode({ suiteSessionId: suiteSessionIdFromUrl });
+                }
 
                 this.enhancerBaseUrl = this.getEnhancerBaseUrl();
                 await this.ensureStorageAvailable();
@@ -1526,8 +1534,12 @@
                 }
                 this.sendMessage('REVIEW_NAVIGATE', {
                     direction,
+                    sessionId: null,
                     reviewSessionId: this.reviewSessionId || (this.reviewContext && this.reviewContext.reviewSessionId) || null,
-                    currentIndex: Number.isInteger(this.reviewEntryIndex) ? this.reviewEntryIndex : 0
+                    currentIndex: Number.isInteger(this.reviewEntryIndex) ? this.reviewEntryIndex : 0,
+                    suiteSessionId: this.suiteSessionId || (this.reviewContext && this.reviewContext.suiteSessionId) || null,
+                    suiteReviewMode: this.suiteReviewMode === true,
+                    finalizeOnNext: Boolean(direction === 'next' && bar.dataset && bar.dataset.finalizeOnNext === 'true')
                 });
             });
             const header = document.querySelector('body > header') || document.querySelector('header');
@@ -1549,27 +1561,50 @@
             return bar;
         },
 
+        setReviewNavVisibility: function (visible) {
+            const bar = this.ensureReviewNavBar();
+            if (bar && bar.style) {
+                bar.style.display = visible ? 'inline-flex' : 'none';
+            }
+        },
+
         applyReviewContext: function (context = {}) {
+            const contextExamId = context && context.examId != null ? String(context.examId).trim() : '';
+            const currentExamId = this.examId != null ? String(this.examId).trim() : '';
+            if (contextExamId && currentExamId && contextExamId !== currentExamId) {
+                return;
+            }
             this.reviewContext = context;
+            this.suiteReviewMode = Boolean(context.suiteReviewMode);
+            const viewMode = context.viewMode === 'answering' ? 'answering' : 'review';
+            this.reviewViewMode = viewMode;
             if (context.reviewSessionId) {
                 this.reviewSessionId = context.reviewSessionId;
             }
             if (Number.isInteger(context.currentIndex)) {
                 this.reviewEntryIndex = context.currentIndex;
             }
-            this.setReviewMode(context.readOnly !== false);
             const bar = this.ensureReviewNavBar();
+            const shouldShowNav = context.showNav !== false;
+            this.setReviewNavVisibility(shouldShowNav);
             const prevBtn = bar.querySelector('button[data-review-nav="prev"]');
             const nextBtn = bar.querySelector('button[data-review-nav="next"]');
             const currentIndex = Number.isFinite(Number(context.currentIndex)) ? Number(context.currentIndex) : this.reviewEntryIndex;
             const total = Number.isFinite(Number(context.total)) ? Number(context.total) : 1;
             bar.dataset.reviewIndex = String(currentIndex);
             bar.dataset.reviewTotal = String(total);
+            bar.dataset.viewMode = viewMode;
+            bar.dataset.finalizeOnNext = context.finalizeOnNext ? 'true' : 'false';
             if (prevBtn) {
                 prevBtn.disabled = !context.canPrev;
             }
             if (nextBtn) {
                 nextBtn.disabled = !context.canNext;
+            }
+            if (viewMode === 'answering') {
+                this.setReviewMode(false);
+            } else {
+                this.setReviewMode(context.readOnly !== false);
             }
         },
 
@@ -1615,6 +1650,11 @@
 
         applyReplayRecord: function (payload = {}) {
             const entry = payload && typeof payload.entry === 'object' ? payload.entry : payload;
+            const entryExamId = entry && entry.examId != null ? String(entry.examId).trim() : '';
+            const currentExamId = this.examId != null ? String(this.examId).trim() : '';
+            if (entryExamId && currentExamId && entryExamId !== currentExamId) {
+                return;
+            }
             const replayResults = this.buildReplayResultsFromEntry(entry || {});
             if (payload.reviewSessionId) {
                 this.reviewSessionId = payload.reviewSessionId;
@@ -1622,12 +1662,26 @@
             if (Number.isInteger(payload.reviewEntryIndex)) {
                 this.reviewEntryIndex = payload.reviewEntryIndex;
             }
-
+            this.reviewViewMode = 'review';
             this.setReviewMode(payload.readOnly !== false);
             this.answers = Object.assign({}, replayResults.answers);
             this.correctAnswers = Object.assign({}, replayResults.correctAnswers);
             this.allQuestionIds = Object.keys(replayResults.answerComparison || {}).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
             this.applyReplayAnswersToDom(this.answers);
+            const replayMarks = Array.isArray(payload.markedQuestions)
+                ? payload.markedQuestions
+                : (Array.isArray(entry.markedQuestions)
+                    ? entry.markedQuestions
+                    : (Array.isArray(entry.metadata && entry.metadata.markedQuestions)
+                        ? entry.metadata.markedQuestions
+                        : []));
+            if (typeof window.setPracticeMarkedQuestions === 'function') {
+                try {
+                    window.setPracticeMarkedQuestions(replayMarks);
+                } catch (_) {
+                    // ignore mark replay failures
+                }
+            }
 
             const finalPayload = Object.assign({
                 examId: entry.examId || this.examId,
@@ -1721,6 +1775,8 @@
                         url: window.location.href,
                         title: document.title,
                         reviewMode: this.reviewMode,
+                        viewMode: this.reviewViewMode || (this.reviewMode ? 'review' : 'answering'),
+                        suiteReviewMode: this.suiteReviewMode === true,
                         readOnly: this.readOnly,
                         reviewSessionId: this.reviewSessionId || null,
                         reviewEntryIndex: this.reviewEntryIndex
@@ -1855,6 +1911,76 @@
                     return originalOpen(url, target, features);
                 };
             }
+
+            this._suiteBackGuardController = null;
+            this._suitePopstateHandler = null;
+            this._suiteHistoryGuardPushed = false;
+            this._suiteHistoryGuardToken = null;
+            this._suiteHistoryBypassPopstate = false;
+
+            const suiteBackGuardFactory = (
+                window.SuiteBackGuard && typeof window.SuiteBackGuard.create === 'function'
+            )
+                ? window.SuiteBackGuard.create
+                : (typeof window.createSuiteBackGuard === 'function' ? window.createSuiteBackGuard : null);
+
+            if (suiteBackGuardFactory) {
+                this._suiteBackGuardController = suiteBackGuardFactory({
+                    getSuiteSessionId: () => this.suiteSessionId || null,
+                    onBlocked: () => {
+                        this.notifySuiteCloseAttempt('history_back_blocked');
+                    }
+                });
+                if (
+                    this._suiteBackGuardController
+                    && typeof this._suiteBackGuardController.activate === 'function'
+                ) {
+                    this._suiteBackGuardController.activate();
+                    return;
+                }
+            }
+
+            // Fallback path when shared back guard helper is unavailable.
+            this._suiteHistoryGuardToken = `suite_guard_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+            this._suitePopstateHandler = (event) => {
+                if (this._suiteHistoryBypassPopstate) {
+                    return;
+                }
+                const currentToken = event && event.state && event.state.__suiteGuardToken;
+                if (currentToken && currentToken === this._suiteHistoryGuardToken) {
+                    return;
+                }
+                try {
+                    this._suiteHistoryBypassPopstate = true;
+                    const marker = Object.assign({}, (event && event.state && typeof event.state === 'object') ? event.state : {}, {
+                        __suiteGuard: true,
+                        __suiteGuardToken: this._suiteHistoryGuardToken,
+                        suiteSessionId: this.suiteSessionId || null,
+                        timestamp: Date.now()
+                    });
+                    window.history.pushState(marker, document.title, window.location.href);
+                    this.notifySuiteCloseAttempt('history_back_blocked');
+                } catch (_) {
+                    // ignore history failures
+                } finally {
+                    setTimeout(() => {
+                        this._suiteHistoryBypassPopstate = false;
+                    }, 0);
+                }
+            };
+            try {
+                const marker = Object.assign({}, (window.history.state && typeof window.history.state === 'object') ? window.history.state : {}, {
+                    __suiteGuard: true,
+                    __suiteGuardToken: this._suiteHistoryGuardToken,
+                    suiteSessionId: this.suiteSessionId || null,
+                    timestamp: Date.now()
+                });
+                window.history.pushState(marker, document.title, window.location.href);
+                this._suiteHistoryGuardPushed = true;
+            } catch (_) {
+                this._suiteHistoryGuardPushed = false;
+            }
+            window.addEventListener('popstate', this._suitePopstateHandler);
         },
 
         teardownSuiteGuards: function () {
@@ -1878,6 +2004,41 @@
                 } catch (_) { }
             }
 
+            if (this._suiteBackGuardController && typeof this._suiteBackGuardController.deactivate === 'function') {
+                try {
+                    this._suiteBackGuardController.deactivate();
+                } catch (_) {
+                    // ignore guard teardown failures
+                }
+            }
+            this._suiteBackGuardController = null;
+
+            if (this._suitePopstateHandler) {
+                try {
+                    window.removeEventListener('popstate', this._suitePopstateHandler);
+                } catch (_) { }
+            }
+            if (this._suiteHistoryGuardPushed) {
+                try {
+                    const state = window.history.state;
+                    const currentToken = state && state.__suiteGuardToken;
+                    if (currentToken && currentToken === this._suiteHistoryGuardToken) {
+                        const restored = Object.assign({}, state);
+                        delete restored.__suiteGuard;
+                        delete restored.__suiteGuardToken;
+                        delete restored.suiteSessionId;
+                        delete restored.timestamp;
+                        window.history.replaceState(restored, document.title, window.location.href);
+                    }
+                } catch (_) {
+                    // ignore restore failures
+                }
+            }
+            this._suitePopstateHandler = null;
+            this._suiteHistoryGuardPushed = false;
+            this._suiteHistoryGuardToken = null;
+            this._suiteHistoryBypassPopstate = false;
+
             this.suiteModeActive = false;
             this.suiteSessionId = null;
         },
@@ -1893,6 +2054,15 @@
 
         handleSuiteNavigation: function (data) {
             if (!data || !data.url) {
+                return;
+            }
+            const targetSuiteSessionId = data && typeof data.suiteSessionId === 'string'
+                ? data.suiteSessionId.trim()
+                : '';
+            const currentSuiteSessionId = this && typeof this.suiteSessionId === 'string'
+                ? this.suiteSessionId.trim()
+                : '';
+            if (targetSuiteSessionId && currentSuiteSessionId && targetSuiteSessionId !== currentSuiteSessionId) {
                 return;
             }
 
@@ -2061,6 +2231,16 @@
 
             // 最后的降级方案：返回页面类型
             return this.detectPageType();
+        },
+
+        extractSuiteSessionIdFromUrl: function () {
+            try {
+                const params = new URLSearchParams(window.location.search || '');
+                const suiteSessionId = params.get('suiteSessionId');
+                return suiteSessionId ? String(suiteSessionId).trim() : null;
+            } catch (_) {
+                return null;
+            }
         },
 
         resolveExamId: function () {
@@ -3652,6 +3832,11 @@
         },
 
         handleSubmit: function () {
+            const simulationMode = window.__UNIFIED_READING_SIMULATION_MODE__ === true;
+            if (simulationMode) {
+                console.info('[PracticeEnhancer] 模拟模式下忽略提交拦截，交由统一阅读页处理');
+                return;
+            }
             if (this.readOnly) {
                 console.info('[PracticeEnhancer] 回顾模式下忽略提交');
                 return;
@@ -3984,47 +4169,99 @@
             };
         },
 
-        compareAnswers: function (userAnswer, correctAnswer) {
-            if (userAnswer == null || correctAnswer == null) {
-                return false;
+        splitAnswerTokensLite: function (value) {
+            const core = window.AnswerMatchCore;
+            if (core && typeof core.splitAnswerTokens === 'function') {
+                return core.splitAnswerTokens(value);
             }
-
-            const normalizeItem = (value) => String(value).trim().toLowerCase();
-            const toNormalizedSet = (value) => {
-                if (Array.isArray(value)) {
-                    return Array.from(new Set(value.map(normalizeItem).filter(Boolean))).sort();
-                }
-
-                const str = normalizeItem(value);
-                if (!str) return [];
-
-                // 以逗号/分号作为多选分隔符；若无分隔符则按单值处理
-                const parts = str.split(/[;,]/).map(part => part.trim()).filter(Boolean);
-                if (parts.length <= 1) {
-                    return [str];
-                }
-
-                return Array.from(new Set(parts)).sort();
+            const normalize = (entry) => {
+                const text = String(entry == null ? '' : entry)
+                    .replace(/[“”]/g, '"')
+                    .replace(/[‘’]/g, "'")
+                    .replace(/[‐‑‒–—]/g, '-')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .replace(/^[\s"'`()[\]{}<>.,;:!?]+|[\s"'`()[\]{}<>.,;:!?]+$/g, '');
+                if (!text) return '';
+                const lowered = text.toLowerCase();
+                if (['true', 't', 'yes', 'y'].includes(lowered)) return 'true';
+                if (['false', 'f', 'no', 'n'].includes(lowered)) return 'false';
+                if (['ng', 'notgiven', 'not-given'].includes(lowered)) return 'not given';
+                if (/^[a-z]$/i.test(text)) return text.toUpperCase();
+                const leadingOption = text.match(/^([A-Za-z])(?:[.)])?\s+/);
+                return (leadingOption && text.length > 2) ? leadingOption[1].toUpperCase() : text;
             };
+            if (Array.isArray(value)) {
+                return Array.from(new Set(value.map(normalize).filter(Boolean)));
+            }
+            const raw = String(value == null ? '' : value)
+                .replace(/[“”]/g, '"')
+                .replace(/[‘’]/g, "'")
+                .replace(/[‐‑‒–—]/g, '-')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (!raw) {
+                return [];
+            }
+            let parts = [raw];
+            if (/^[A-Za-z](?:\s*[,/;，、]\s*[A-Za-z])+$/.test(raw)) {
+                parts = raw.split(/[,/;，、]/);
+            } else if (/^[A-Za-z](?:\s+[A-Za-z])+$/.test(raw)) {
+                parts = raw.split(/\s+/);
+            }
+            return Array.from(new Set(parts.map(normalize).filter(Boolean)));
+        },
 
-            const userSet = toNormalizedSet(userAnswer);
-            const correctSet = toNormalizedSet(correctAnswer);
-
-            if (userSet.length === 0 || correctSet.length === 0) {
+        compareAnswersFallbackLite: function (userAnswer, correctAnswer) {
+            const actual = this.splitAnswerTokensLite(userAnswer);
+            const expected = this.splitAnswerTokensLite(correctAnswer);
+            if (!expected.length && !actual.length) {
+                return null;
+            }
+            if (!expected.length || !actual.length) {
                 return false;
             }
-
-            if (userSet.length !== correctSet.length) {
-                return false;
-            }
-
-            for (let i = 0; i < userSet.length; i++) {
-                if (userSet[i] !== correctSet[i]) {
+            const core = window.AnswerMatchCore;
+            const areEquivalent = (left, right) => {
+                if (core && typeof core.areTokensEquivalent === 'function') {
+                    return core.areTokensEquivalent(left, right) === true;
+                }
+                if (left === right) {
+                    return true;
+                }
+                if (/^[A-Z]$/.test(left) || /^[A-Z]$/.test(right)) {
                     return false;
                 }
+                const looseLeft = String(left).toLowerCase().replace(/[^a-z0-9]+/g, '');
+                const looseRight = String(right).toLowerCase().replace(/[^a-z0-9]+/g, '');
+                return !!looseLeft && looseLeft === looseRight;
+            };
+            const compareSets = (leftValues, rightValues) => {
+                if (core && typeof core.compareTokenSets === 'function') {
+                    return core.compareTokenSets(leftValues, rightValues) === true;
+                }
+                const left = Array.from(new Set(leftValues || []));
+                const right = Array.from(new Set(rightValues || []));
+                return left.length === right.length
+                    && left.every((leftItem) => right.some((rightItem) => areEquivalent(leftItem, rightItem)));
+            };
+            if (Array.isArray(correctAnswer)) {
+                if (actual.length === 1) {
+                    return expected.some((token) => areEquivalent(token, actual[0]));
+                }
+                return compareSets(expected, actual);
             }
+            if (expected.length > 1 || actual.length > 1) {
+                return compareSets(expected, actual);
+            }
+            return areEquivalent(expected[0], actual[0]);
+        },
 
-            return true;
+        compareAnswers: function (userAnswer, correctAnswer) {
+            if (window.AnswerMatchCore && typeof window.AnswerMatchCore.compareAnswers === 'function') {
+                return window.AnswerMatchCore.compareAnswers(userAnswer, correctAnswer) === true;
+            }
+            return this.compareAnswersFallbackLite(userAnswer, correctAnswer);
         },
 
         extractScore: function () {
