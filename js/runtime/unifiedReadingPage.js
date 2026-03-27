@@ -13,15 +13,13 @@
     ]);
     const navStatus = new Map();
     const scriptCache = new Map();
-    const AFFIRMATIVE_MAP = new Map([
-        ['true', 'TRUE'],
-        ['false', 'FALSE'],
-        ['yes', 'YES'],
-        ['no', 'NO'],
-        ['not given', 'NOT GIVEN'],
-        ['notgiven', 'NOT GIVEN'],
-        ['ng', 'NOT GIVEN']
-    ]);
+    function getAnswerMatchCore() {
+        const core = global.AnswerMatchCore;
+        if (!core || typeof core !== 'object') {
+            return null;
+        }
+        return core;
+    }
 
     const state = {
         examId: null,
@@ -370,6 +368,9 @@
             return false;
         }
         if (html.includes('data-clone="true"') || html.includes("data-clone='true'")) {
+            return true;
+        }
+        if (/(nb[^a-z0-9]*you may use|可重复使用|可重复选|可多次使用)/i.test(html)) {
             return true;
         }
         return false;
@@ -854,7 +855,16 @@
     }
 
     function getTextualAnswer(questionId) {
-        const fields = document.querySelectorAll(`[name="${questionId}"]`);
+        const aliases = resolveAnswerAliases(questionId);
+        const fieldMap = new Map();
+        aliases.forEach((alias) => {
+            document.querySelectorAll(`[name="${alias}"]`).forEach((field) => {
+                if (!fieldMap.has(field)) {
+                    fieldMap.set(field, true);
+                }
+            });
+        });
+        const fields = Array.from(fieldMap.keys());
         const values = [];
         for (const field of fields) {
             if (field.type === 'radio') continue;
@@ -871,6 +881,18 @@
             }
         }
         if (!values.length) {
+            aliases.forEach((alias) => {
+                const inputById = document.getElementById(`${alias}_input`);
+                if (!inputById || !('value' in inputById)) {
+                    return;
+                }
+                const value = String(inputById.value || '').trim();
+                if (value) {
+                    values.push(value);
+                }
+            });
+        }
+        if (!values.length) {
             return '';
         }
         if (values.length === 1) {
@@ -880,31 +902,19 @@
     }
 
     function getDropzoneAnswer(questionId) {
-        const extractItemValue = (item) => normalizeDragValue(item);
-
-        // Find match dropzones
-        const direct = document.querySelector(
-            `.match-dropzone[data-question="${questionId}"], .drop-target-summary[data-question="${questionId}"], #${questionId}-dropzone, #${questionId}-target`
-        );
-        if (direct) {
-            const items = direct.querySelectorAll('.drag-item, .draggable-word, .card');
-            if (items.length > 0) {
-                return Array.from(items).map((item) => extractItemValue(item)).join(', ');
-            }
-            return String(direct.dataset.answerValue || '').trim();
+        const dropzone = findDropzoneByQuestionId(questionId);
+        if (!dropzone) {
+            return '';
         }
-
-        // Find paragraph dropzones
-        const anchor = document.getElementById(`${questionId}-anchor`);
-        const zone = anchor?.querySelector?.('.paragraph-dropzone');
-        if (zone) {
-            const items = zone.querySelectorAll('.drag-item, .draggable-word, .card');
-            if (items.length > 0) {
-                return Array.from(items).map((item) => extractItemValue(item)).join(', ');
-            }
-            return String(zone.dataset.answerValue || '').trim();
+        const explicitValue = String(dropzone.dataset.answerValue || '').trim();
+        if (explicitValue) {
+            return explicitValue;
         }
-        return '';
+        const items = dropzone.querySelectorAll('.drag-item, .draggable-word, .card');
+        if (!items.length) {
+            return '';
+        }
+        return Array.from(items).map((item) => normalizeDragValue(item)).filter(Boolean).join(', ');
     }
 
     function splitAnswerTokens(rawValue) {
@@ -923,9 +933,14 @@
         const normalized = normalizeQuestionId(questionId);
         if (!normalized) return [];
         const numeric = normalized.replace(/^q/i, '');
+        const displayMap = state.dataset?.questionDisplayMap || {};
+        const displayLabel = String(displayMap[normalized] || '').trim();
         return Array.from(new Set([
             normalized,
-            `question${numeric}`
+            numeric,
+            `question${numeric}`,
+            displayLabel,
+            displayLabel ? `q${displayLabel}` : ''
         ].filter(Boolean)));
     }
 
@@ -942,6 +957,8 @@
                 `.dropzone[data-target="${escaped}"]`,
                 `.dropzone[data-question="${escaped}"]`,
                 `.paragraph-dropzone[data-question="${escaped}"]`,
+                `.match-dropzone[data-target="${escaped}"]`,
+                `.paragraph-dropzone[data-target="${escaped}"]`,
                 `#${escaped}-dropzone`,
                 `#${escaped}-target`
             ].join(', ');
@@ -1050,7 +1067,11 @@
     }
 
     function normalizeAnswerValue(value) {
+        const core = getAnswerMatchCore();
         if (Array.isArray(value)) {
+            if (core && typeof core.splitAnswerTokens === 'function') {
+                return core.splitAnswerTokens(value);
+            }
             return value.map((entry) => canonicalizeAnswerToken(entry)).filter(Boolean);
         }
         if (value == null) return '';
@@ -1058,73 +1079,77 @@
     }
 
     function canonicalizeAnswerToken(value) {
+        const core = getAnswerMatchCore();
+        if (core && typeof core.normalizeToken === 'function') {
+            return core.normalizeToken(value);
+        }
         if (value == null) return '';
-        const cleaned = String(value).replace(/\s+/g, ' ').trim();
-        if (!cleaned) return '';
+        const cleaned = String(value)
+            .replace(/[“”]/g, '"')
+            .replace(/[‘’]/g, "'")
+            .replace(/[‐‑‒–—]/g, '-')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .replace(/^[\s"'`()[\]{}<>.,;:!?]+|[\s"'`()[\]{}<>.,;:!?]+$/g, '');
+        if (!cleaned) {
+            return '';
+        }
         const lowered = cleaned.toLowerCase();
-        if (AFFIRMATIVE_MAP.has(lowered)) {
-            return AFFIRMATIVE_MAP.get(lowered);
-        }
-        if (/^[a-z]$/i.test(cleaned)) {
-            return cleaned.toUpperCase();
-        }
-        const leading = cleaned.match(/^([A-Za-z])(?:[.)])?\s+/);
-        if (leading && cleaned.length > 2) {
-            return leading[1].toUpperCase();
+        if (['true', 't', 'yes', 'y'].includes(lowered)) return 'true';
+        if (['false', 'f', 'no', 'n'].includes(lowered)) return 'false';
+        if (['ng', 'notgiven', 'not-given'].includes(lowered)) return 'not given';
+        if (/^[a-z]$/i.test(cleaned)) return cleaned.toUpperCase();
+        const leadingOption = cleaned.match(/^([A-Za-z])(?:[.)])?\s+/);
+        if (leadingOption && cleaned.length > 2) {
+            return leadingOption[1].toUpperCase();
         }
         return cleaned;
     }
 
-    function maybeSplitAnswerList(value) {
-        if (Array.isArray(value)) {
-            return value.map((entry) => canonicalizeAnswerToken(entry)).filter(Boolean);
+    function compareAnswers(userAnswer, correctAnswer) {
+        const core = getAnswerMatchCore();
+        if (core && typeof core.compareAnswers === 'function') {
+            return core.compareAnswers(userAnswer, correctAnswer) === true;
         }
-        const normalized = canonicalizeAnswerToken(value);
-        if (!normalized) return [];
-        if (/^[A-Z](?:\s*,\s*[A-Z])+$/i.test(normalized)) {
-            return normalized.split(',').map((entry) => canonicalizeAnswerToken(entry)).filter(Boolean);
+        const toTokens = (value) => {
+            const source = Array.isArray(value) ? value : splitAnswerTokens(value);
+            return Array.from(new Set(
+                source.map((entry) => canonicalizeAnswerToken(entry)).filter(Boolean)
+            ));
+        };
+        const actualTokens = toTokens(userAnswer);
+        const expectedTokens = toTokens(correctAnswer);
+        if (!actualTokens.length && !expectedTokens.length) {
+            return null;
         }
-        return [normalized];
-    }
-
-    function compareAsSet(left, right) {
-        const normalizedLeft = left.map((entry) => canonicalizeAnswerToken(entry)).filter(Boolean);
-        const normalizedRight = right.map((entry) => canonicalizeAnswerToken(entry)).filter(Boolean);
-        if (normalizedLeft.length !== normalizedRight.length) {
+        if (!actualTokens.length || !expectedTokens.length) {
             return false;
         }
-        const sortedLeft = normalizedLeft.slice().sort((a, b) => a.localeCompare(b, 'en'));
-        const sortedRight = normalizedRight.slice().sort((a, b) => a.localeCompare(b, 'en'));
-        return sortedLeft.every((entry, index) => entry === sortedRight[index]);
-    }
-
-    function compareAnswers(userAnswer, correctAnswer) {
-        const normalizedCorrect = normalizeAnswerValue(correctAnswer);
-        const normalizedUser = normalizeAnswerValue(userAnswer);
-        if (Array.isArray(normalizedCorrect)) {
-            const expectedSet = normalizedCorrect;
-            const userSet = maybeSplitAnswerList(normalizedUser);
-            if (userSet.length > 1) {
-                return compareAsSet(expectedSet, userSet);
+        const tokenEquivalent = (left, right) => {
+            if (left === right) {
+                return true;
             }
-            const scalarUser = canonicalizeAnswerToken(userSet[0] || '');
-            if (!scalarUser) {
+            if (/^[A-Z]$/.test(left) || /^[A-Z]$/.test(right)) {
                 return false;
             }
-            return expectedSet.some((value) => canonicalizeAnswerToken(value) === scalarUser);
-        }
-        if (Array.isArray(normalizedUser)) {
-            if (normalizedUser.length !== 1) {
-                return false;
+            const looseLeft = String(left).toLowerCase().replace(/[^a-z0-9]+/g, '');
+            const looseRight = String(right).toLowerCase().replace(/[^a-z0-9]+/g, '');
+            return !!looseLeft && looseLeft === looseRight;
+        };
+        const tokenSetEqual = (leftValues, rightValues) => (
+            leftValues.length === rightValues.length
+            && leftValues.every((leftItem) => rightValues.some((rightItem) => tokenEquivalent(leftItem, rightItem)))
+        );
+        if (Array.isArray(correctAnswer)) {
+            if (actualTokens.length === 1) {
+                return expectedTokens.some((token) => tokenEquivalent(token, actualTokens[0]));
             }
-            return canonicalizeAnswerToken(normalizedCorrect) === canonicalizeAnswerToken(normalizedUser[0]);
+            return tokenSetEqual(actualTokens, expectedTokens);
         }
-        const expectedList = maybeSplitAnswerList(normalizedCorrect);
-        const actualList = maybeSplitAnswerList(normalizedUser);
-        if (expectedList.length > 1 || actualList.length > 1) {
-            return compareAsSet(expectedList, actualList);
+        if (actualTokens.length > 1 || expectedTokens.length > 1) {
+            return tokenSetEqual(actualTokens, expectedTokens);
         }
-        return canonicalizeAnswerToken(normalizedCorrect) === canonicalizeAnswerToken(normalizedUser);
+        return tokenEquivalent(actualTokens[0], expectedTokens[0]);
     }
 
     function questionWeight(correctAnswer) {
@@ -1529,7 +1554,6 @@
     function resetToAnsweringPresentation() {
         state.lastResults = null;
         state.submitted = false;
-        _lastReplaySignature = '';
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
@@ -1577,31 +1601,6 @@
         }
     }
 
-    let _lastReplaySignature = '';
-
-    function buildReplaySignature(entry = {}, fallbackExamId = '') {
-        const entryExamId = entry && entry.examId != null ? String(entry.examId).trim() : '';
-        const keyExamId = entryExamId || fallbackExamId || '';
-        const answers = entry && entry.answers && typeof entry.answers === 'object' ? entry.answers : {};
-        const comparison = entry && entry.answerComparison && typeof entry.answerComparison === 'object'
-            ? entry.answerComparison
-            : {};
-        const sortKeys = (obj) => Object.keys(obj).sort();
-        let answersKey = '';
-        let comparisonKey = '';
-        try {
-            answersKey = JSON.stringify(answers, sortKeys(answers));
-        } catch (_) {
-            answersKey = '';
-        }
-        try {
-            comparisonKey = JSON.stringify(comparison, sortKeys(comparison));
-        } catch (_) {
-            comparisonKey = '';
-        }
-        return `${keyExamId}::${answersKey}::${comparisonKey}`;
-    }
-
     async function applyReplayRecord(data = {}) {
         const entry = data.entry && typeof data.entry === 'object' ? data.entry : data;
         const entryExamId = entry && entry.examId != null ? String(entry.examId).trim() : '';
@@ -1609,13 +1608,14 @@
         if (entryExamId && currentExamId && entryExamId !== currentExamId) {
             return;
         }
-        const replaySignature = buildReplaySignature(entry, currentExamId);
-        if (replaySignature && replaySignature === _lastReplaySignature) {
-            return;
-        }
-        _lastReplaySignature = replaySignature;
-
         const replayResults = buildReplayResults(entry);
+        const replayMarks = Array.isArray(data.markedQuestions)
+            ? data.markedQuestions
+            : (Array.isArray(entry.markedQuestions)
+                ? entry.markedQuestions
+                : (Array.isArray(entry.metadata && entry.metadata.markedQuestions)
+                    ? entry.metadata.markedQuestions
+                    : []));
         if (data.reviewSessionId) {
             state.reviewSessionId = data.reviewSessionId;
         }
@@ -1631,6 +1631,13 @@
         await renderExplanations();
         updateNavStatuses(replayResults);
         setReadOnlyMode(data.readOnly !== false);
+        if (typeof global.setPracticeMarkedQuestions === 'function') {
+            try {
+                global.setPracticeMarkedQuestions(replayMarks);
+            } catch (_) {
+                // ignore mark replay failures
+            }
+        }
     }
 
     function buildEnvelope(type, payload) {
@@ -2166,7 +2173,10 @@
                 examType: 'reading',
                 practiceMode: state.suiteSessionId ? 'suite' : 'single',
                 renderMode: 'unified-reading',
-                dataKey: state.dataKey
+                dataKey: state.dataKey,
+                markedQuestions: (typeof global.getPracticeMarkedQuestions === 'function')
+                    ? global.getPracticeMarkedQuestions()
+                    : []
             }
         }, results));
         if (state.simulationMode && state.simulationCtx && state.simulationCtx.isLast) {
@@ -2302,6 +2312,11 @@
             return;
         }
         if (type === 'SUITE_NAVIGATE' && data.url) {
+            const targetSuiteSessionId = typeof data.suiteSessionId === 'string' ? data.suiteSessionId.trim() : '';
+            const currentSuiteSessionId = typeof state.suiteSessionId === 'string' ? state.suiteSessionId.trim() : '';
+            if (targetSuiteSessionId && currentSuiteSessionId && targetSuiteSessionId !== currentSuiteSessionId) {
+                return;
+            }
             global.location.href = data.url;
             return;
         }

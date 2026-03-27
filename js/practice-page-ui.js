@@ -3,6 +3,8 @@
  * 提供计时器、设置面板、笔记面板、文本高亮与面板拖拽等交互
  */
 (function () {
+    const QUESTION_ID_SUFFIX_PATTERN = /[-_](anchor|nav|target)$/i;
+
     document.addEventListener('DOMContentLoaded', function () {
         let settingsOpen = false;
         let notesOpen = false;
@@ -413,8 +415,6 @@
         const POOL_OPTION_SELECTOR = '.pool-items .drag-item, .cardpool .drag-item, .cardpool .card, #word-options .draggable-word';
         const DROP_ZONE_SELECTOR = '.paragraph-dropzone .dropped-items, .match-dropzone, .dropzone, .drop-target-summary';
         const GENERIC_DROP_ZONE_SELECTOR = '.dropzone, .drop-target-summary';
-        const QUESTION_ID_SUFFIX_PATTERN = /[-_](anchor|nav|target)$/i;
-
         function getPoolContainers() {
             return document.querySelectorAll(POOL_CONTAINER_SELECTOR);
         }
@@ -585,10 +585,118 @@
         }
 
         const navContainer = document.querySelector('.practice-nav');
+        const markedQuestions = new Set();
+        let markedStorageKey = null;
+
+        function resolveMarkedStorageKey() {
+            if (markedStorageKey) {
+                return markedStorageKey;
+            }
+            const bodyExamId = document.body && document.body.dataset
+                ? (document.body.dataset.examId || document.body.dataset.dataKey || '')
+                : '';
+            let queryExamId = '';
+            try {
+                const params = new URLSearchParams(window.location.search || '');
+                queryExamId = params.get('examId') || params.get('dataKey') || '';
+            } catch (_) {
+                queryExamId = '';
+            }
+            const examId = String(bodyExamId || queryExamId || window.__PRACTICE_EXAM_ID__ || 'unknown').trim();
+            markedStorageKey = `practice_marked_questions::${examId}`;
+            return markedStorageKey;
+        }
+
+        function persistMarkedQuestions() {
+            try {
+                window.sessionStorage.setItem(resolveMarkedStorageKey(), JSON.stringify(Array.from(markedQuestions)));
+            } catch (_) {
+                // ignore storage failures under file://
+            }
+        }
+
+        function restoreMarkedQuestions() {
+            try {
+                const raw = window.sessionStorage.getItem(resolveMarkedStorageKey());
+                if (!raw) {
+                    return;
+                }
+                const saved = JSON.parse(raw);
+                if (!Array.isArray(saved)) {
+                    return;
+                }
+                saved.forEach((value) => {
+                    const normalized = normalizeQuestionId(value);
+                    if (normalized) {
+                        markedQuestions.add(normalized);
+                    }
+                });
+            } catch (_) {
+                // ignore parse/storage errors
+            }
+        }
+
+        function applyMarkedClasses() {
+            if (!navContainer) {
+                return;
+            }
+            navContainer.querySelectorAll('.q-item').forEach((item) => {
+                const questionId = normalizeQuestionId(item.dataset.question || item.dataset.questionId || item.textContent || '');
+                if (!questionId) {
+                    return;
+                }
+                item.classList.toggle('marked', markedQuestions.has(questionId));
+                if (markedQuestions.has(questionId)) {
+                    item.setAttribute('title', '已标记（Shift+点击可取消）');
+                } else {
+                    item.removeAttribute('title');
+                }
+            });
+        }
+
+        function toggleMarkedQuestion(questionId) {
+            const normalized = normalizeQuestionId(questionId);
+            if (!normalized) {
+                return;
+            }
+            if (markedQuestions.has(normalized)) {
+                markedQuestions.delete(normalized);
+            } else {
+                markedQuestions.add(normalized);
+            }
+            persistMarkedQuestions();
+            applyMarkedClasses();
+        }
+
+        window.getPracticeMarkedQuestions = function getPracticeMarkedQuestions() {
+            return Array.from(markedQuestions);
+        };
+
+        window.setPracticeMarkedQuestions = function setPracticeMarkedQuestions(values) {
+            markedQuestions.clear();
+            if (Array.isArray(values)) {
+                values.forEach((value) => {
+                    const normalized = normalizeQuestionId(value);
+                    if (normalized) {
+                        markedQuestions.add(normalized);
+                    }
+                });
+            }
+            persistMarkedQuestions();
+            applyMarkedClasses();
+        };
+
         if (navContainer) {
+            restoreMarkedQuestions();
             navContainer.addEventListener('click', (event) => {
                 const item = event.target.closest('.q-item');
                 if (!item) {
+                    return;
+                }
+                const questionId = item.dataset.question || item.dataset.questionId || item.textContent;
+                if (event.shiftKey) {
+                    toggleMarkedQuestion(questionId);
+                    event.preventDefault();
                     return;
                 }
                 const explicitTarget = item.dataset.target || item.getAttribute('data-scroll-target');
@@ -609,6 +717,19 @@
                     event.preventDefault();
                 }
             });
+            navContainer.addEventListener('dblclick', (event) => {
+                const item = event.target.closest('.q-item');
+                if (!item) {
+                    return;
+                }
+                toggleMarkedQuestion(item.dataset.question || item.dataset.questionId || item.textContent);
+                event.preventDefault();
+            });
+            const navObserver = new MutationObserver(() => {
+                applyMarkedClasses();
+            });
+            navObserver.observe(navContainer, { childList: true, subtree: true });
+            applyMarkedClasses();
         }
 
         function disableAnswerInputs() {
@@ -695,6 +816,24 @@
             sourcePool: null,
             sourceAllowsReuse: false
         };
+        let clickSelectedItem = null;
+
+        function setClickSelectedItem(item) {
+            if (clickSelectedItem && clickSelectedItem !== item) {
+                clickSelectedItem.classList.remove('drag-click-selected');
+            }
+            clickSelectedItem = item || null;
+            if (clickSelectedItem) {
+                clickSelectedItem.classList.add('drag-click-selected');
+            }
+        }
+
+        function clearClickSelectedItem() {
+            if (clickSelectedItem) {
+                clickSelectedItem.classList.remove('drag-click-selected');
+            }
+            clickSelectedItem = null;
+        }
 
         function resetDragState() {
             if (dragState.item) {
@@ -825,6 +964,7 @@
                 handleAnswerInteraction(previousContainer);
             }
             handleAnswerInteraction(container);
+            clearClickSelectedItem();
         }
 
         document.addEventListener('dragstart', handleDragStart);
@@ -832,6 +972,52 @@
         document.addEventListener('dragover', handleDragOver);
         document.addEventListener('dragleave', handleDragLeave);
         document.addEventListener('drop', handleDrop);
+
+        function applyClickAssign(targetContainer) {
+            if (!clickSelectedItem || !targetContainer) return;
+            const sourceContainer = clickSelectedItem.parentElement;
+            const sourcePool = clickSelectedItem.closest(POOL_CONTAINER_SELECTOR) || getOriginPool(clickSelectedItem);
+            const sourceAllowsReuse = !!(sourcePool && detectPoolReuse(sourcePool));
+            dragState.item = clickSelectedItem;
+            dragState.sourceContainer = sourceContainer;
+            dragState.sourcePool = sourcePool;
+            dragState.sourceAllowsReuse = sourceAllowsReuse;
+
+            const draggedItem = resolveDraggedItem(targetContainer);
+            moveItemToContainer(draggedItem, targetContainer);
+            resetDragState();
+
+            if (sourceContainer && sourceContainer !== targetContainer) {
+                handleAnswerInteraction(sourceContainer);
+            }
+            handleAnswerInteraction(targetContainer);
+            clearClickSelectedItem();
+        }
+
+        document.addEventListener('click', (event) => {
+            const target = event.target instanceof HTMLElement ? event.target : null;
+            if (!target) return;
+
+            const dragItem = target.closest(ACTIVE_DRAG_ITEM_SELECTOR);
+            if (dragItem && dragItem instanceof HTMLElement) {
+                if (clickSelectedItem === dragItem) {
+                    clearClickSelectedItem();
+                } else {
+                    setClickSelectedItem(dragItem);
+                }
+                return;
+            }
+
+            const targetContainer = resolveDropContainer(target);
+            if (targetContainer && !isPoolContainer(targetContainer) && clickSelectedItem) {
+                applyClickAssign(targetContainer);
+                return;
+            }
+
+            if (clickSelectedItem) {
+                clearClickSelectedItem();
+            }
+        }, true);
 
         function resetPracticePage() {
             if (submissionLocked) {
@@ -886,8 +1072,10 @@
                 el.classList.remove('answer-correct', 'answer-wrong');
             });
             document.querySelectorAll('.practice-nav .q-item').forEach((item) => {
-                item.classList.remove('answered', 'correct', 'incorrect');
+                item.classList.remove('answered', 'correct', 'incorrect', 'marked');
             });
+            markedQuestions.clear();
+            persistMarkedQuestions();
             const resultsContainer = document.getElementById('results');
             if (resultsContainer) {
                 resultsContainer.innerHTML = '';
@@ -1051,6 +1239,10 @@
     background-color: #fecaca;
     color: #7f1d1d;
 }
+.practice-nav .q-item.marked {
+    box-shadow: inset 0 0 0 2px #f59e0b;
+    background-image: linear-gradient(180deg, rgba(245, 158, 11, 0.18), rgba(245, 158, 11, 0.06));
+}
 .answer-correct {
     background-color: #ecfccb !important;
     border-color: #65a30d !important;
@@ -1092,6 +1284,10 @@
 .drag-item-locked {
     opacity: 0.55;
     pointer-events: none;
+}
+.drag-click-selected {
+    outline: 2px solid #2563eb !important;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 .options label, .checkbox-group label {
     display: block;
@@ -1189,7 +1385,11 @@
     function setNavStatus(questionId, status) {
         const item = findNavItem(questionId);
         if (!item) return;
+        const isMarked = item.classList.contains('marked');
         item.classList.remove('answered', 'correct', 'incorrect');
+        if (isMarked) {
+            item.classList.add('marked');
+        }
         if (!status) return;
         if (status === 'answered') {
             item.classList.add('answered');

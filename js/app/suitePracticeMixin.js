@@ -2,6 +2,49 @@
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
 
+    function getSuitePreferenceUtils() {
+        return global.SuitePreferenceUtils || null;
+    }
+
+    function resolveSuitePreferenceForMixin(options = {}) {
+        const suitePreferenceUtils = getSuitePreferenceUtils();
+        if (suitePreferenceUtils && typeof suitePreferenceUtils.resolveSuitePreference === 'function') {
+            return suitePreferenceUtils.resolveSuitePreference(options);
+        }
+        let flowMode = String(options && options.flowMode || '').trim().toLowerCase();
+        if (!['classic', 'simulation', 'stationary'].includes(flowMode)) {
+            flowMode = 'classic';
+        }
+        let frequencyScope = String(options && options.frequencyScope || '').trim().toLowerCase();
+        if (!['high', 'high_medium', 'all'].includes(frequencyScope)) {
+            frequencyScope = 'all';
+        }
+        return {
+            flowMode,
+            frequencyScope,
+            autoAdvanceAfterSubmit: flowMode !== 'stationary'
+        };
+    }
+
+    function isFrequencyInScope(frequency, scope) {
+        const suitePreferenceUtils = getSuitePreferenceUtils();
+        if (suitePreferenceUtils && typeof suitePreferenceUtils.isFrequencyIncluded === 'function') {
+            return suitePreferenceUtils.isFrequencyIncluded(frequency, scope);
+        }
+        const normalizedScope = ['high', 'high_medium'].includes(scope) ? scope : 'all';
+        const normalizedFrequency = String(frequency == null ? '' : frequency).trim().toLowerCase();
+        if (!normalizedFrequency) {
+            return true;
+        }
+        if (normalizedScope === 'high') {
+            return ['high', '高频', 'ultra-high', '超高频'].includes(normalizedFrequency);
+        }
+        if (normalizedScope === 'high_medium') {
+            return ['high', 'medium', 'mid', '高频', '次高频', '中频'].includes(normalizedFrequency);
+        }
+        return true;
+    }
+
     const mixin = {
         initializeSuiteMode() {
             if (this._suiteModeReady) {
@@ -24,7 +67,9 @@
                 if (!this._suiteModeReady) {
                     this.initializeSuiteMode();
                 }
-                const flowMode = this._resolveSuiteFlowMode(options);
+                const suitePreference = this._resolveSuitePreference(options);
+                const flowMode = suitePreference.flowMode;
+                const frequencyScope = suitePreference.frequencyScope;
 
                 if (this.currentSuiteSession && this.currentSuiteSession.status === 'active') {
                     window.showMessage && window.showMessage('套题练习正在进行中，请先完成当前套题。', 'warning');
@@ -62,12 +107,19 @@
                     })
                     .filter(Boolean);
 
+                const frequencyFilteredIndex = normalizedIndex.filter(item => (
+                    this._isSuiteFrequencyIncluded(item && item.frequency, frequencyScope)
+                ));
+
                 const categories = ['P1', 'P2', 'P3'];
                 const sequence = [];
                 for (const category of categories) {
-                    const pool = normalizedIndex.filter(item => item.category === category);
+                    const pool = frequencyFilteredIndex.filter(item => item.category === category);
                     if (!pool.length) {
-                        window.showMessage && window.showMessage(`题库缺少 ${category} 阅读题目，无法开启套题练习。`, 'warning');
+                        const scopeLabel = frequencyScope === 'high'
+                            ? '仅高频'
+                            : (frequencyScope === 'high_medium' ? '高频+次高频' : '全部频率');
+                        window.showMessage && window.showMessage(`当前抽题范围（${scopeLabel}）缺少 ${category} 阅读题目，无法开启套题练习。`, 'warning');
                         return;
                     }
                     const picked = pool[Math.floor(Math.random() * pool.length)];
@@ -91,6 +143,7 @@
                     elapsedByExam: {},
                     globalTimerAnchorMs: Date.now(),
                     flowMode,
+                    frequencyScope,
                     autoAdvanceAfterSubmit: lockedAutoAdvance,
                     windowRef: null,
                     windowName: suiteWindowName
@@ -260,52 +313,24 @@
             return this._advanceSuiteToNext(session, '上一篇', null);
         },
 
+        _resolveSuitePreference(options = {}) {
+            return resolveSuitePreferenceForMixin(options);
+        },
+
         _resolveSuiteFlowMode(options = {}) {
-            const optionMode = options && typeof options.flowMode === 'string'
-                ? options.flowMode.trim().toLowerCase()
-                : '';
-            if (optionMode === 'classic' || optionMode === 'stationary' || optionMode === 'simulation') {
-                return optionMode;
-            }
-            const config = global.practiceConfig && typeof global.practiceConfig === 'object'
-                ? global.practiceConfig
-                : null;
-            const configMode = config && config.suite && typeof config.suite.flowMode === 'string'
-                ? config.suite.flowMode.trim().toLowerCase()
-                : '';
-            if (configMode === 'classic' || configMode === 'stationary' || configMode === 'simulation') {
-                return configMode;
-            }
-            try {
-                if (global.localStorage && typeof global.localStorage.getItem === 'function') {
-                    const persisted = String(global.localStorage.getItem('suite_flow_mode') || '').trim().toLowerCase();
-                    if (persisted === 'classic' || persisted === 'stationary' || persisted === 'simulation') {
-                        return persisted;
-                    }
-                }
-            } catch (_) {
-                // ignore read failures
-            }
-            return 'classic';
+            return this._resolveSuitePreference(options).flowMode;
+        },
+
+        _resolveSuiteFrequencyScope(options = {}) {
+            return this._resolveSuitePreference(options).frequencyScope;
+        },
+
+        _isSuiteFrequencyIncluded(frequency, scope) {
+            return isFrequencyInScope(frequency, scope);
         },
 
         _readSuiteAutoAdvancePreference() {
-            try {
-                const config = global.practiceConfig && typeof global.practiceConfig === 'object'
-                    ? global.practiceConfig
-                    : null;
-                if (config && config.suite && typeof config.suite.autoAdvanceAfterSubmit === 'boolean') {
-                    return config.suite.autoAdvanceAfterSubmit;
-                }
-                if (global.localStorage && typeof global.localStorage.getItem === 'function') {
-                    const stored = global.localStorage.getItem('suite_auto_advance_after_submit');
-                    if (stored === 'true') return true;
-                    if (stored === 'false') return false;
-                }
-            } catch (_) {
-                // ignore read failures for file:// or privacy mode
-            }
-            return true;
+            return this._resolveSuitePreference().autoAdvanceAfterSubmit !== false;
         },
 
         _shouldAutoAdvanceAfterSubmit() {
@@ -376,7 +401,8 @@
                 title: result.title,
                 answers: filteredAnswers,
                 answerComparison: filteredComparison,
-                scoreInfo: result.scoreInfo || {}
+                scoreInfo: result.scoreInfo || {},
+                markedQuestions: Array.isArray(result.markedQuestions) ? result.markedQuestions.slice() : []
             };
         },
 
@@ -443,6 +469,7 @@
                         data: {
                             suiteSessionId: session.id,
                             readOnly: true,
+                            markedQuestions: Array.isArray(replayEntry.markedQuestions) ? replayEntry.markedQuestions : [],
                             entry: replayEntry
                         }
                     }, '*');
@@ -1319,6 +1346,7 @@
                     scoreInfo: entry.scoreInfo,
                     answers: entry.answers,
                     answerComparison: entry.answerComparison,
+                    markedQuestions: Array.isArray(entry.markedQuestions) ? entry.markedQuestions.slice() : [],
                     rawData: entry.rawData || {}
                 }));
 
@@ -1522,6 +1550,9 @@
                 },
                 answers,
                 answerComparison: comparison,
+                markedQuestions: Array.isArray(rawData?.metadata?.markedQuestions)
+                    ? rawData.metadata.markedQuestions.slice()
+                    : (Array.isArray(rawData?.markedQuestions) ? rawData.markedQuestions.slice() : []),
                 rawData: rawData || {}
             };
         },
