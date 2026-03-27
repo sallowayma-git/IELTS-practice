@@ -2,6 +2,49 @@
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
 
+    function getSuitePreferenceUtils() {
+        return global.SuitePreferenceUtils || null;
+    }
+
+    function resolveSuitePreferenceForMixin(options = {}) {
+        const suitePreferenceUtils = getSuitePreferenceUtils();
+        if (suitePreferenceUtils && typeof suitePreferenceUtils.resolveSuitePreference === 'function') {
+            return suitePreferenceUtils.resolveSuitePreference(options);
+        }
+        let flowMode = String(options && options.flowMode || '').trim().toLowerCase();
+        if (!['classic', 'simulation', 'stationary'].includes(flowMode)) {
+            flowMode = 'classic';
+        }
+        let frequencyScope = String(options && options.frequencyScope || '').trim().toLowerCase();
+        if (!['high', 'high_medium', 'all'].includes(frequencyScope)) {
+            frequencyScope = 'all';
+        }
+        return {
+            flowMode,
+            frequencyScope,
+            autoAdvanceAfterSubmit: flowMode !== 'stationary'
+        };
+    }
+
+    function isFrequencyInScope(frequency, scope) {
+        const suitePreferenceUtils = getSuitePreferenceUtils();
+        if (suitePreferenceUtils && typeof suitePreferenceUtils.isFrequencyIncluded === 'function') {
+            return suitePreferenceUtils.isFrequencyIncluded(frequency, scope);
+        }
+        const normalizedScope = ['high', 'high_medium'].includes(scope) ? scope : 'all';
+        const normalizedFrequency = String(frequency == null ? '' : frequency).trim().toLowerCase();
+        if (!normalizedFrequency) {
+            return true;
+        }
+        if (normalizedScope === 'high') {
+            return ['high', '高频', 'ultra-high', '超高频'].includes(normalizedFrequency);
+        }
+        if (normalizedScope === 'high_medium') {
+            return ['high', 'medium', 'mid', '高频', '次高频', '中频'].includes(normalizedFrequency);
+        }
+        return true;
+    }
+
     const mixin = {
         initializeSuiteMode() {
             if (this._suiteModeReady) {
@@ -17,13 +60,16 @@
             }
         },
 
-        async startSuitePractice() {
+        async startSuitePractice(options = {}) {
             const suiteWindowName = 'ielts-suite-mode-tab';
 
             try {
                 if (!this._suiteModeReady) {
                     this.initializeSuiteMode();
                 }
+                const suitePreference = this._resolveSuitePreference(options);
+                const flowMode = suitePreference.flowMode;
+                const frequencyScope = suitePreference.frequencyScope;
 
                 if (this.currentSuiteSession && this.currentSuiteSession.status === 'active') {
                     window.showMessage && window.showMessage('套题练习正在进行中，请先完成当前套题。', 'warning');
@@ -61,12 +107,19 @@
                     })
                     .filter(Boolean);
 
+                const frequencyFilteredIndex = normalizedIndex.filter(item => (
+                    this._isSuiteFrequencyIncluded(item && item.frequency, frequencyScope)
+                ));
+
                 const categories = ['P1', 'P2', 'P3'];
                 const sequence = [];
                 for (const category of categories) {
-                    const pool = normalizedIndex.filter(item => item.category === category);
+                    const pool = frequencyFilteredIndex.filter(item => item.category === category);
                     if (!pool.length) {
-                        window.showMessage && window.showMessage(`题库缺少 ${category} 阅读题目，无法开启套题练习。`, 'warning');
+                        const scopeLabel = frequencyScope === 'high'
+                            ? '仅高频'
+                            : (frequencyScope === 'high_medium' ? '高频+次高频' : '全部频率');
+                        window.showMessage && window.showMessage(`当前抽题范围（${scopeLabel}）缺少 ${category} 阅读题目，无法开启套题练习。`, 'warning');
                         return;
                     }
                     const picked = pool[Math.floor(Math.random() * pool.length)];
@@ -76,6 +129,9 @@
                 this._clearSuiteHandshakes();
 
                 const suiteSessionId = this._generateSuiteSessionId();
+                const lockedAutoAdvance = flowMode === 'stationary'
+                    ? false
+                    : true;
                 const session = {
                     id: suiteSessionId,
                     status: 'initializing',
@@ -83,6 +139,12 @@
                     sequence,
                     currentIndex: 0,
                     results: [],
+                    draftsByExam: {},
+                    elapsedByExam: {},
+                    globalTimerAnchorMs: Date.now(),
+                    flowMode,
+                    frequencyScope,
+                    autoAdvanceAfterSubmit: lockedAutoAdvance,
                     windowRef: null,
                     windowName: suiteWindowName
                 };
@@ -91,7 +153,10 @@
                 this._registerSuiteSequence(session);
 
                 const firstEntry = sequence[0];
-                window.showMessage && window.showMessage('套题练习已启动，正在打开第一篇。', 'info');
+                const launchLabel = flowMode === 'stationary'
+                    ? '驻足模式'
+                    : (flowMode === 'simulation' ? '模拟模式' : '经典模式');
+                window.showMessage && window.showMessage(`${launchLabel}已启动，正在打开第一篇。`, 'info');
 
                 let examWindow = null;
                 try {
@@ -99,7 +164,9 @@
                         target: 'tab',
                         windowName: suiteWindowName,
                         suiteSessionId: suiteSessionId,
-                        sequenceIndex: 0
+                        suiteFlowMode: flowMode,
+                        sequenceIndex: 0,
+                        sequenceTotal: sequence.length
                     });
                 } catch (openError) {
                     console.error('[SuitePractice] 打开首篇失败:', openError);
@@ -124,7 +191,7 @@
             }
         },
 
-        async handleSuitePracticeComplete(examId, data) {
+        async handleSuitePracticeComplete(examId, data, sourceWindow = null) {
             // 首先检查是否为多套题模式（通过suiteId字段判断）
             if (data && data.suiteId) {
                 return await this.handleMultiSuitePracticeComplete(examId, data);
@@ -163,23 +230,66 @@
                 return false;
             }
 
-            const alreadyRecorded = session.results.some(entry => entry.examId === examId);
-            if (alreadyRecorded) {
+            const activeExamId = session.activeExamId ? String(session.activeExamId) : '';
+            if (activeExamId && activeExamId !== String(examId)) {
+                console.warn('[SuitePractice] 忽略非当前活动篇章的提交，防止错篇结算:', {
+                    activeExamId,
+                    submittedExamId: examId,
+                    sessionId: session.id
+                });
                 return true;
             }
 
             const normalized = this._normalizeSuiteResult(sequenceEntry.exam, data);
-            session.results.push(normalized);
+            this._upsertSuiteResult(session, examId, normalized);
             session.lastUpdate = Date.now();
             this.updateExamStatus && this.updateExamStatus(examId, 'completed');
+
+            // Save draft snapshot for this passage
+            session.draftsByExam[examId] = {
+                answers: data.answers || {},
+                highlights: data.highlights || [],
+                scrollY: data.scrollY || 0
+            };
+            if (Number.isFinite(Number(data && data.duration))) {
+                session.elapsedByExam[examId] = Math.max(0, Number(data.duration));
+            }
 
             const currentIndex = session.sequence.findIndex(item => item.examId === examId);
             if (currentIndex < 0) {
                 await this._abortSuiteSession(session, { reason: 'missing_sequence_index' });
                 return false;
             }
-            session.currentIndex = currentIndex + 1;
+            const shouldAutoAdvance = this._shouldAutoAdvanceAfterSubmit();
+            if (!shouldAutoAdvance) {
+                session.currentIndex = currentIndex;
+                session.activeExamId = examId;
+                session.pendingAdvance = {
+                    completedExamId: examId,
+                    finalReview: currentIndex >= session.sequence.length - 1,
+                    updatedAt: Date.now()
+                };
+                this._mirrorSessionToStorage(session);
+                const replayWindow = sourceWindow && !sourceWindow.closed
+                    ? sourceWindow
+                    : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
+                if (replayWindow) {
+                    await this._sendSuiteReviewState(session, examId, replayWindow);
+                }
+                return true;
+            }
 
+            session.currentIndex = currentIndex + 1;
+            session.pendingAdvance = null;
+            this._mirrorSessionToStorage(session);
+
+            // Last passage → finalize the entire simulation
+            if (session.currentIndex >= session.sequence.length) {
+                await this.finalizeSuiteRecord(session);
+                return true;
+            }
+
+            // Not last → advance to next passage
             if (typeof this.cleanupExamSession === 'function') {
                 try {
                     await this.cleanupExamSession(examId);
@@ -188,19 +298,333 @@
                 }
             }
 
-            const hasNext = session.currentIndex < session.sequence.length;
-            if (!hasNext) {
+            return this._advanceSuiteToNext(session, sequenceEntry.exam.title, examId);
+        },
+
+        async continueSuitePractice() {
+            // Legacy stub — simulation mode auto-advances, but kept for backward compat
+            const session = this.currentSuiteSession;
+            if (!session || session.status !== 'active') {
+                return false;
+            }
+            if (!(session.currentIndex < session.sequence.length)) {
+                return false;
+            }
+            return this._advanceSuiteToNext(session, '上一篇', null);
+        },
+
+        _resolveSuitePreference(options = {}) {
+            return resolveSuitePreferenceForMixin(options);
+        },
+
+        _resolveSuiteFlowMode(options = {}) {
+            return this._resolveSuitePreference(options).flowMode;
+        },
+
+        _resolveSuiteFrequencyScope(options = {}) {
+            return this._resolveSuitePreference(options).frequencyScope;
+        },
+
+        _isSuiteFrequencyIncluded(frequency, scope) {
+            return isFrequencyInScope(frequency, scope);
+        },
+
+        _readSuiteAutoAdvancePreference() {
+            return this._resolveSuitePreference().autoAdvanceAfterSubmit !== false;
+        },
+
+        _shouldAutoAdvanceAfterSubmit() {
+            const activeSession = this.currentSuiteSession;
+            if (activeSession && typeof activeSession.autoAdvanceAfterSubmit === 'boolean') {
+                return activeSession.autoAdvanceAfterSubmit;
+            }
+            return this._readSuiteAutoAdvancePreference();
+        },
+
+        _hasMeaningfulSuiteAnswer(value) {
+            if (Array.isArray(value)) {
+                return value.some(item => this._hasMeaningfulSuiteAnswer(item));
+            }
+            if (value == null) {
+                return false;
+            }
+            return String(value).trim() !== '';
+        },
+
+        _buildSuiteReplayEntry(session, examId) {
+            if (!session || !Array.isArray(session.results)) {
+                return null;
+            }
+            const result = session.results.find(item => item && item.examId === examId);
+            if (!result) {
+                return null;
+            }
+
+            const answerComparison = result.answerComparison && typeof result.answerComparison === 'object'
+                ? result.answerComparison
+                : {};
+            const answers = result.answers && typeof result.answers === 'object'
+                ? result.answers
+                : {};
+
+            const filteredComparison = {};
+            const filteredAnswers = {};
+
+            Object.keys(answerComparison).forEach((questionId) => {
+                const comparisonEntry = answerComparison[questionId];
+                if (!comparisonEntry || typeof comparisonEntry !== 'object') {
+                    return;
+                }
+                const userAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'userAnswer')
+                    ? comparisonEntry.userAnswer
+                    : answers[questionId];
+                if (!this._hasMeaningfulSuiteAnswer(userAnswer)) {
+                    return;
+                }
+                filteredComparison[questionId] = comparisonEntry;
+                filteredAnswers[questionId] = userAnswer;
+            });
+
+            Object.keys(answers).forEach((questionId) => {
+                if (Object.prototype.hasOwnProperty.call(filteredAnswers, questionId)) {
+                    return;
+                }
+                const value = answers[questionId];
+                if (!this._hasMeaningfulSuiteAnswer(value)) {
+                    return;
+                }
+                filteredAnswers[questionId] = value;
+            });
+
+            return {
+                examId: result.examId,
+                title: result.title,
+                answers: filteredAnswers,
+                answerComparison: filteredComparison,
+                scoreInfo: result.scoreInfo || {},
+                markedQuestions: Array.isArray(result.markedQuestions) ? result.markedQuestions.slice() : []
+            };
+        },
+
+        _buildSuiteReviewContext(session, examId) {
+            if (!session || !Array.isArray(session.sequence) || !session.sequence.length) {
+                return null;
+            }
+            const sequenceIndex = session.sequence.findIndex(item => item && item.examId === examId);
+            if (sequenceIndex < 0) {
+                return null;
+            }
+            const sequenceEntry = session.sequence[sequenceIndex] || {};
+            const hasResult = Array.isArray(session.results) && session.results.some(item => item && item.examId === examId);
+            const viewMode = hasResult ? 'review' : 'answering';
+            const isLast = sequenceIndex === session.sequence.length - 1;
+            const pendingAdvance = session.pendingAdvance && typeof session.pendingAdvance === 'object'
+                ? session.pendingAdvance
+                : null;
+            const allowFinalizeFromNav = Boolean(
+                viewMode === 'review'
+                && isLast
+                && pendingAdvance
+                && pendingAdvance.completedExamId === examId
+                && pendingAdvance.finalReview === true
+            );
+            return {
+                reviewSessionId: null,
+                suiteSessionId: session.id,
+                suiteReviewMode: true,
+                showNav: true,
+                viewMode,
+                index: sequenceIndex + 1,
+                currentIndex: sequenceIndex,
+                total: session.sequence.length,
+                canPrev: sequenceIndex > 0,
+                canNext: sequenceIndex < session.sequence.length - 1 || allowFinalizeFromNav,
+                finalizeOnNext: allowFinalizeFromNav,
+                title: (sequenceEntry.exam && sequenceEntry.exam.title) || sequenceEntry.examId || '',
+                examId: examId,
+                readOnly: viewMode === 'review'
+            };
+        },
+
+        async _sendSuiteReviewState(session, examId, targetWindow = null) {
+            if (!session || !examId) {
+                return false;
+            }
+            const contextPayload = this._buildSuiteReviewContext(session, examId);
+            if (!contextPayload) {
+                return false;
+            }
+            const replayEntry = this._buildSuiteReplayEntry(session, examId);
+            const resolvedWindow = targetWindow && !targetWindow.closed
+                ? targetWindow
+                : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
+            if (!resolvedWindow || resolvedWindow.closed) {
+                return false;
+            }
+            try {
+                const shouldReplay = contextPayload.viewMode === 'review';
+                if (shouldReplay && replayEntry) {
+                    resolvedWindow.postMessage({
+                        type: 'REPLAY_PRACTICE_RECORD',
+                        data: {
+                            suiteSessionId: session.id,
+                            readOnly: true,
+                            markedQuestions: Array.isArray(replayEntry.markedQuestions) ? replayEntry.markedQuestions : [],
+                            entry: replayEntry
+                        }
+                    }, '*');
+                }
+                resolvedWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, '*');
+                return true;
+            } catch (error) {
+                console.warn('[SuitePractice] 发送套题回看上下文失败:', error);
+                return false;
+            }
+        },
+
+        async _maybeRestoreSuiteReviewState(examId, targetWindow = null, windowInfo = null) {
+            if (!examId || this._shouldAutoAdvanceAfterSubmit()) {
+                return false;
+            }
+            const session = this.currentSuiteSession;
+            if (!session || session.status !== 'active' || !Array.isArray(session.sequence) || !session.sequence.length) {
+                return false;
+            }
+
+            const resolvedWindowInfo = (windowInfo && typeof windowInfo === 'object')
+                ? windowInfo
+                : (this.examWindows && this.examWindows.get(examId));
+            const mappedSessionId = this.suiteExamMap && this.suiteExamMap.has(examId)
+                ? this.suiteExamMap.get(examId)
+                : null;
+            const targetSessionId = resolvedWindowInfo && typeof resolvedWindowInfo.suiteSessionId === 'string'
+                ? resolvedWindowInfo.suiteSessionId
+                : '';
+            if ((mappedSessionId && mappedSessionId !== session.id) || (targetSessionId && targetSessionId !== session.id)) {
+                return false;
+            }
+            const inActiveSequence = session.sequence.some(item => item && item.examId === examId);
+            if (!inActiveSequence) {
+                return false;
+            }
+
+            const resolvedWindow = targetWindow && !targetWindow.closed
+                ? targetWindow
+                : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
+            if (!resolvedWindow || resolvedWindow.closed) {
+                return false;
+            }
+
+            session.activeExamId = examId;
+            return this._sendSuiteReviewState(session, examId, resolvedWindow);
+        },
+
+        async handleSuiteReviewNavigate(examId, data = {}, sourceWindow = null) {
+            if (this._shouldAutoAdvanceAfterSubmit()) {
+                return false;
+            }
+            const session = this.currentSuiteSession;
+            if (!session || session.status !== 'active' || !Array.isArray(session.sequence) || !session.sequence.length) {
+                return false;
+            }
+
+            const payloadSuiteSessionId = data && typeof data.suiteSessionId === 'string'
+                ? data.suiteSessionId.trim()
+                : '';
+            if (payloadSuiteSessionId && payloadSuiteSessionId !== session.id) {
+                return false;
+            }
+
+            const currentIndex = session.sequence.findIndex(item => item && item.examId === examId);
+            if (currentIndex < 0) {
+                return false;
+            }
+
+            const direction = String(data.direction || '').trim().toLowerCase();
+            let targetIndex = currentIndex;
+            if (direction === 'next') {
+                targetIndex += 1;
+            } else if (direction === 'prev' || direction === 'previous') {
+                targetIndex -= 1;
+            } else {
+                return false;
+            }
+
+            const hasCurrentResult = Array.isArray(session.results)
+                ? session.results.some(item => item && item.examId === examId)
+                : false;
+            const requestedFinalizeOnNext = Boolean(
+                direction === 'next'
+                && currentIndex === session.sequence.length - 1
+                && data
+                && data.finalizeOnNext === true
+                && hasCurrentResult
+            );
+            if (requestedFinalizeOnNext) {
+                session.pendingAdvance = null;
                 await this.finalizeSuiteRecord(session);
                 return true;
             }
 
+            if (targetIndex < 0 || targetIndex >= session.sequence.length) {
+                const canFinalize = Boolean(
+                    direction === 'next'
+                    && currentIndex === session.sequence.length - 1
+                    && session.pendingAdvance
+                    && session.pendingAdvance.completedExamId === examId
+                    && session.pendingAdvance.finalReview === true
+                );
+                if (canFinalize) {
+                    session.pendingAdvance = null;
+                    await this.finalizeSuiteRecord(session);
+                    return true;
+                }
+                return true;
+            }
+
+            const targetEntry = session.sequence[targetIndex];
+            if (!targetEntry || !targetEntry.examId) {
+                return false;
+            }
+
+            let targetWindow = sourceWindow && !sourceWindow.closed ? sourceWindow : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
+
+            if (targetEntry.examId !== examId || !targetWindow) {
+                targetWindow = await this.openExam(targetEntry.examId, {
+                    target: 'tab',
+                    windowName: session.windowName || 'ielts-suite-mode-tab',
+                    suiteSessionId: session.id,
+                    suiteFlowMode: session.flowMode || 'simulation',
+                    sequenceIndex: targetIndex,
+                    sequenceTotal: session.sequence.length,
+                    reuseWindow: targetWindow || undefined
+                });
+            }
+
+            if (!targetWindow || targetWindow.closed) {
+                return false;
+            }
+
+            session.windowRef = targetWindow;
+            session.activeExamId = targetEntry.examId;
+            this._focusSuiteWindow(targetWindow);
+            await this._sendSuiteReviewState(session, targetEntry.examId, targetWindow);
+            return true;
+        },
+
+        async _advanceSuiteToNext(session, completedTitle, skipExamIdForAbort) {
             if (typeof this.openExam !== 'function') {
                 window.showMessage && window.showMessage('无法继续套题练习，系统将恢复为普通模式。', 'warning');
-                await this._abortSuiteSession(session, { reason: 'missing_open_exam', skipExamId: examId });
+                await this._abortSuiteSession(session, { reason: 'missing_open_exam', skipExamId: skipExamIdForAbort || null });
                 return false;
             }
 
             const nextEntry = session.sequence[session.currentIndex];
+            if (!nextEntry || !nextEntry.examId) {
+                await this._abortSuiteSession(session, { reason: 'missing_next_entry', skipExamId: skipExamIdForAbort || null });
+                return false;
+            }
+
             session.activeExamId = nextEntry.examId;
             const windowName = session.windowName || 'ielts-suite-mode-tab';
             const reuseWindow = session.windowRef && !session.windowRef.closed ? session.windowRef : null;
@@ -211,7 +635,9 @@
                     target: 'tab',
                     windowName,
                     suiteSessionId: session.id,
-                    sequenceIndex: session.currentIndex
+                    suiteFlowMode: session.flowMode || 'simulation',
+                    sequenceIndex: session.currentIndex,
+                    sequenceTotal: session.sequence.length
                 };
 
                 if (candidateWindow && !candidateWindow.closed) {
@@ -232,7 +658,6 @@
             };
 
             let nextWindow = null;
-
             if (reuseWindow) {
                 nextWindow = await attemptOpen(reuseWindow);
             }
@@ -251,16 +676,257 @@
                     console.warn('[SuitePractice] 套题无法打开下一篇:', openError);
                 }
                 window.showMessage && window.showMessage('无法继续套题练习，系统将恢复为普通模式。', 'warning');
-                await this._abortSuiteSession(session, { reason: 'open_next_failed', skipExamId: examId });
+                await this._abortSuiteSession(session, { reason: 'open_next_failed', skipExamId: skipExamIdForAbort || null });
                 return false;
             }
 
             session.windowRef = nextWindow;
             this._ensureSuiteWindowGuard(session, session.windowRef);
             this._focusSuiteWindow(session.windowRef);
-
-            window.showMessage && window.showMessage(`已完成 ${sequenceEntry.exam.title}，继续下一篇 ${nextEntry.exam.title}。`, 'success');
+            this._mirrorSessionToStorage(session);
+            this._sendSimulationContext(session, nextEntry.examId, session.windowRef);
+            window.showMessage && window.showMessage(`已完成 ${completedTitle || '上一篇'}，继续下一篇 ${nextEntry.exam.title}。`, 'success');
             return true;
+        },
+
+        _mirrorSessionToStorage(session) {
+            if (!session) return;
+            try {
+                const snapshot = {
+                    id: session.id,
+                    sequence: session.sequence,
+                    currentIndex: session.currentIndex,
+                    draftsByExam: session.draftsByExam || {},
+                    elapsedByExam: session.elapsedByExam || {},
+                    globalTimerAnchorMs: session.globalTimerAnchorMs,
+                    flowMode: session.flowMode || 'simulation',
+                    autoAdvanceAfterSubmit: typeof session.autoAdvanceAfterSubmit === 'boolean'
+                        ? session.autoAdvanceAfterSubmit
+                        : true,
+                    results: (session.results || []).map(r => ({
+                        examId: r.examId, title: r.title, category: r.category,
+                        duration: r.duration, scoreInfo: r.scoreInfo,
+                        answers: r.answers, answerComparison: r.answerComparison
+                    })),
+                    startTime: session.startTime,
+                    activeExamId: session.activeExamId
+                };
+                if (global.sessionStorage) {
+                    global.sessionStorage.setItem('ielts_sim_session', JSON.stringify(snapshot));
+                }
+            } catch (_) { /* file:// may not support */ }
+        },
+
+        _restoreSessionFromStorage() {
+            try {
+                if (!global.sessionStorage) return null;
+                const raw = global.sessionStorage.getItem('ielts_sim_session');
+                if (!raw) return null;
+                const snapshot = JSON.parse(raw);
+                if (!snapshot || !snapshot.id || !Array.isArray(snapshot.sequence)) return null;
+                return snapshot;
+            } catch (_) { return null; }
+        },
+
+        _clearSessionStorage() {
+            try {
+                if (global.sessionStorage) {
+                    global.sessionStorage.removeItem('ielts_sim_session');
+                }
+            } catch (_) { /* ignore */ }
+        },
+
+        _sendSimulationContext(session, examId, targetWindow) {
+            if (!session || !examId || !targetWindow || targetWindow.closed) return false;
+            if (session.flowMode !== 'simulation') return false;
+            const idx = session.sequence.findIndex(e => e && e.examId === examId);
+            if (idx < 0) return false;
+            const draft = session.draftsByExam && session.draftsByExam[examId] || null;
+            const elapsed = Number.isFinite(Number(session.elapsedByExam && session.elapsedByExam[examId]))
+                ? Math.max(0, Number(session.elapsedByExam[examId]))
+                : 0;
+            const payload = {
+                type: 'SIMULATION_CONTEXT',
+                data: {
+                    suiteSessionId: session.id,
+                    flowMode: session.flowMode || 'simulation',
+                    examId,
+                    currentIndex: idx,
+                    total: session.sequence.length,
+                    isLast: idx === session.sequence.length - 1,
+                    canPrev: idx > 0,
+                    canNext: idx < session.sequence.length - 1,
+                    draft,
+                    elapsed,
+                    globalTimerAnchorMs: session.globalTimerAnchorMs
+                }
+            };
+            try {
+                targetWindow.postMessage(payload, '*');
+                return true;
+            } catch (e) {
+                console.warn('[SuitePractice] 发送模拟上下文失败:', e);
+                return false;
+            }
+        },
+
+        async _handleSimulationNavigate(examId, data, sourceWindow) {
+            const session = this.currentSuiteSession;
+            if (!session || session.status !== 'active') return false;
+            if (session.flowMode !== 'simulation') return false;
+            if (session.simulationNavigateLocked === true) return false;
+            const normalizedExamId = examId != null ? String(examId).trim() : '';
+            const activeExamId = session.activeExamId != null ? String(session.activeExamId).trim() : '';
+            if (!normalizedExamId) return false;
+            const currentIdx = session.sequence.findIndex(e => e && e.examId === normalizedExamId);
+            if (currentIdx < 0) return false;
+            // 自愈：若 activeExamId 漂移，但 currentIndex 已指向当前页面，则回正后继续处理。
+            if (activeExamId && normalizedExamId !== activeExamId) {
+                const allowSelfHeal = Number.isInteger(session.currentIndex)
+                    && session.currentIndex === currentIdx;
+                if (!allowSelfHeal) {
+                    return false;
+                }
+                session.activeExamId = normalizedExamId;
+            }
+            session.simulationNavigateLocked = true;
+            try {
+
+                // Save current draft before switching
+                if (data && data.draft) {
+                    session.draftsByExam[normalizedExamId] = data.draft;
+                }
+                if (data && typeof data.elapsed === 'number') {
+                    session.elapsedByExam[normalizedExamId] = data.elapsed;
+                }
+                const currentEntry = session.sequence.find(e => e && e.examId === normalizedExamId);
+                if (currentEntry && data && data.resultSnapshot) {
+                    const snapshot = {
+                        ...data.resultSnapshot,
+                        duration: Number.isFinite(Number(data.elapsed)) ? Number(data.elapsed) : data.resultSnapshot.duration
+                    };
+                    const normalizedSnapshot = this._normalizeSuiteResult(currentEntry.exam, snapshot);
+                    this._upsertSuiteResult(session, normalizedExamId, normalizedSnapshot);
+                }
+
+                const direction = String(data && data.direction || '').toLowerCase();
+                if (direction !== 'next' && direction !== 'prev' && direction !== 'previous') return false;
+                const targetIdx = direction === 'next' ? currentIdx + 1 : currentIdx - 1;
+                if (targetIdx < 0 || targetIdx >= session.sequence.length) return false;
+
+                const targetEntry = session.sequence[targetIdx];
+                if (!targetEntry || !targetEntry.examId) return false;
+
+                session.currentIndex = targetIdx;
+                session.activeExamId = targetEntry.examId;
+
+                const targetWindow = await this.openExam(targetEntry.examId, {
+                    target: 'tab',
+                    windowName: session.windowName || 'ielts-suite-mode-tab',
+                    suiteSessionId: session.id,
+                    suiteFlowMode: session.flowMode || 'simulation',
+                    sequenceIndex: targetIdx,
+                    sequenceTotal: session.sequence.length,
+                    reuseWindow: sourceWindow && !sourceWindow.closed ? sourceWindow : undefined
+                });
+
+                if (!targetWindow || targetWindow.closed) return false;
+
+                session.windowRef = targetWindow;
+                this._mirrorSessionToStorage(session);
+                this._sendSimulationContext(session, targetEntry.examId, targetWindow);
+                this._focusSuiteWindow(targetWindow);
+                return true;
+            } finally {
+                session.simulationNavigateLocked = false;
+            }
+        },
+
+        _upsertSuiteResult(session, examId, normalizedResult) {
+            if (!session || !Array.isArray(session.results) || !examId || !normalizedResult) {
+                return;
+            }
+            const existingIndex = session.results.findIndex(entry => entry && entry.examId === examId);
+            if (existingIndex >= 0) {
+                session.results[existingIndex] = normalizedResult;
+                return;
+            }
+            session.results.push(normalizedResult);
+        },
+
+        _handleSuiteSessionReady(examId) {
+            const session = this.currentSuiteSession;
+            if (!session || (session.status !== 'active' && session.status !== 'initializing') || !examId) {
+                return false;
+            }
+            if (session.flowMode !== 'simulation') {
+                return false;
+            }
+            if (!Array.isArray(session.sequence) || !session.sequence.length) {
+                return false;
+            }
+            const mappedSessionId = this.suiteExamMap && this.suiteExamMap.has(examId)
+                ? this.suiteExamMap.get(examId)
+                : null;
+            if (mappedSessionId && mappedSessionId !== session.id) {
+                return false;
+            }
+            const idx = session.sequence.findIndex(item => item && item.examId === examId);
+            if (idx < 0) {
+                return false;
+            }
+            const windowInfo = this.examWindows && this.examWindows.get(examId)
+                ? this.examWindows.get(examId)
+                : null;
+            const pageType = windowInfo && typeof windowInfo.pageType === 'string'
+                ? windowInfo.pageType.toLowerCase()
+                : '';
+            if (!pageType.includes('unified-reading')) {
+                return false;
+            }
+            let targetWindow = session.windowRef && !session.windowRef.closed ? session.windowRef : null;
+            if (windowInfo) {
+                const info = windowInfo;
+                if (info && info.window && !info.window.closed) {
+                    targetWindow = info.window;
+                }
+            }
+            if (!targetWindow || targetWindow.closed) {
+                return false;
+            }
+            const resolveWindowExamId = (target) => {
+                if (!target || target.closed) {
+                    return '';
+                }
+                try {
+                    const href = target.location && typeof target.location.href === 'string'
+                        ? target.location.href
+                        : '';
+                    if (!href || href === 'about:blank') {
+                        return '';
+                    }
+                    const parsed = new URL(href, (global && global.location && global.location.href) ? global.location.href : undefined);
+                    const value = parsed.searchParams.get('examId');
+                    return value ? String(value).trim() : '';
+                } catch (_) {
+                    return '';
+                }
+            };
+            const windowExamId = resolveWindowExamId(targetWindow);
+            if (windowExamId && windowExamId !== String(examId)) {
+                // 迟到的 SESSION_READY（窗口已切到其他篇）必须丢弃，避免 activeExamId 被回写错乱。
+                return false;
+            }
+            const activeExamId = session.activeExamId ? String(session.activeExamId) : '';
+            const indexAligned = Number.isInteger(session.currentIndex) && session.currentIndex === idx;
+            if (activeExamId && activeExamId !== String(examId) && !indexAligned) {
+                return false;
+            }
+            session.currentIndex = idx;
+            session.activeExamId = examId;
+            session.windowRef = targetWindow;
+            this._mirrorSessionToStorage(session);
+            return this._sendSimulationContext(session, examId, targetWindow);
         },
 
         /**
@@ -680,6 +1346,7 @@
                     scoreInfo: entry.scoreInfo,
                     answers: entry.answers,
                     answerComparison: entry.answerComparison,
+                    markedQuestions: Array.isArray(entry.markedQuestions) ? entry.markedQuestions.slice() : [],
                     rawData: entry.rawData || {}
                 }));
 
@@ -883,6 +1550,9 @@
                 },
                 answers,
                 answerComparison: comparison,
+                markedQuestions: Array.isArray(rawData?.metadata?.markedQuestions)
+                    ? rawData.metadata.markedQuestions.slice()
+                    : (Array.isArray(rawData?.markedQuestions) ? rawData.markedQuestions.slice() : []),
                 rawData: rawData || {}
             };
         },
@@ -1250,6 +1920,7 @@
             if (typeof this._clearSuiteHandshakes === 'function') {
                 this._clearSuiteHandshakes();
             }
+            this._clearSessionStorage();
         },
 
         async _abortSuiteSession(session, options = {}) {
