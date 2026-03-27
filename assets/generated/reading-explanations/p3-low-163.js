@@ -87,7 +87,7 @@
       "text": "答案：iv（Setting the limits of acceleration，设定加速度极限）\n解析：Paragraph B 围绕 “NASA 研究人类加速度承受极限、斯滕格尔规定设施加速度上限” 展开，核心是 “设定加速度安全极限”，与标题 iv 一致，因此选 iv。\n答案：viii（A different ride every time，每次体验不同）\n解析：Paragraph C 强调 “新一代旋转杯自由旋转，每次体验因乘客体重和位置不同而变化”，核心是 “体验独特性”，与标题 viii 一致，因此选 viii。\n答案：ii（Research can’t guarantee safety，研究无法保证安全）\n解析：Paragraph D 指出 “混乱型设施可能触发共振、承受意外压力，设计无法确保安全”，核心是 “安全无法保证”，与标题 ii 一致，因此选 ii。\n答案：iii（Unexplained symptoms，无法解释的症状）\n解析：Paragraph E 描述 “志愿者旋转后出现延迟头痛等症状，原因未明”，核心是 “无法解释的症状”，与标题 iii 一致，因此选 iii。\n答案：i（Less is more，少即是多）\n解析：Paragraph F 主张 “用一系列小加速度替代大加速度，低力度更愉悦”，核心是 “小加速度更有效”，与标题 i 一致，因此选 i。\n答案：vi（Gentle surprises，温和的惊喜）\n解析：Paragraph G 强调 “乐趣源于微小加速度变化等温和意外”，核心是 “温和惊喜”，与标题 vi 一致，因此选 vi。"
     },
     {
-      "sectionTitle": "2. 句子填空（Questions 33–37：NO MORE THAN TWO WORDS AND/OR A NUMBER）",
+      "sectionTitle": "2. 句子填空（Questions 33–37：NO MORE THAN THREE WORDS AND/OR A NUMBER）",
       "mode": "group",
       "items": [
         {

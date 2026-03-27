@@ -8,6 +8,7 @@ invoked locally or inside CI before changes are merged.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -15,7 +16,7 @@ from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -532,6 +533,41 @@ def _format_result(name: str, passed: bool, detail: str) -> dict:
 def _ensure_exists(path: Path) -> Tuple[bool, str]:
     exists = path.exists()
     return exists, ("已找到" if exists else "文件缺失")
+
+
+def _run_json_subprocess(
+    command: List[str],
+    timeout: int,
+    *,
+    env: Optional[Dict[str, str]] = None,
+    parse_mode: str = "stdout",
+) -> Tuple[bool, Any]:
+    try:
+        completed = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"执行超时（{timeout}秒）"
+    except subprocess.CalledProcessError as exc:
+        output_text = exc.stdout or exc.stderr or str(exc)
+        return False, f"执行失败: {output_text.strip()}"
+
+    if parse_mode == "last-line":
+        output_lines = [line.strip() for line in (completed.stdout or "").splitlines() if line.strip()]
+        parse_target = output_lines[-1] if output_lines else ""
+    else:
+        parse_target = completed.stdout.strip() or completed.stderr.strip()
+
+    try:
+        payload = json.loads(parse_target or "{}")
+    except json.JSONDecodeError as parse_error:
+        return False, f"输出解析失败: {parse_error}"
+    return True, payload
 
 
 def run_checks() -> Tuple[List[dict], bool]:
@@ -1230,6 +1266,7 @@ def run_checks() -> Tuple[List[dict], bool]:
         all_passed = False
 
     # Integration tests
+    deprecated_reading_source_dir = REPO_ROOT / "developer" / "reading-exams"
     integration_tests = [
         ("Reading migration snapshot integration test", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "readingMigrationSnapshot.test.js"),
         ("多套题提交流程集成测试", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "multiSuiteSubmission.test.js"),
@@ -1239,6 +1276,16 @@ def run_checks() -> Tuple[List[dict], bool]:
     ]
 
     for test_name, test_path in integration_tests:
+        if test_name == "Reading migration snapshot integration test" and not deprecated_reading_source_dir.exists():
+            results.append(
+                _format_result(
+                    test_name,
+                    True,
+                    "显式跳过：developer/reading-exams 目录已废弃，迁移快照用例不再执行",
+                )
+            )
+            continue
+
         if test_path.exists():
             try:
                 completed_integration = subprocess.run(
@@ -1321,6 +1368,60 @@ def run_checks() -> Tuple[List[dict], bool]:
         all_passed &= reading_audit_passed
     else:
         results.append(_format_result("Reading 逐题自动排查（quick）", False, "测试脚本缺失"))
+        all_passed = False
+
+    pdf_audit_script = REPO_ROOT / "developer" / "tests" / "ci" / "audit_pdf_checklist_and_mona.py"
+    if pdf_audit_script.exists():
+        pdf_audit_passed, pdf_audit_detail = _run_json_subprocess(
+            ["python3", str(pdf_audit_script)],
+            timeout=120,
+        )
+
+        results.append(_format_result("PDF 对账与回归审计", pdf_audit_passed, pdf_audit_detail))
+        all_passed &= pdf_audit_passed
+    else:
+        results.append(_format_result("PDF 对账与回归审计", False, "测试脚本缺失"))
+        all_passed = False
+
+    reading_integrity_script = REPO_ROOT / "developer" / "tests" / "ci" / "check_reading_data_integrity.py"
+    if reading_integrity_script.exists():
+        reading_integrity_passed, reading_integrity_detail = _run_json_subprocess(
+            ["python3", str(reading_integrity_script)],
+            timeout=30,
+            parse_mode="last-line",
+        )
+
+        results.append(_format_result("Reading 数据完整性校验", reading_integrity_passed, reading_integrity_detail))
+        all_passed &= reading_integrity_passed
+    else:
+        results.append(_format_result("Reading 数据完整性校验", False, "测试脚本缺失"))
+        all_passed = False
+
+    checklist_consistency_script = REPO_ROOT / "developer" / "tests" / "ci" / "check_checklist_consistency.py"
+    if checklist_consistency_script.exists():
+        checklist_env = os.environ.copy()
+        checklist_env["CHECKLIST_IGNORE_RUN_STATIC_CLAIM"] = "1"
+        checklist_consistency_ok, checklist_payload_or_error = _run_json_subprocess(
+            ["python3", str(checklist_consistency_script)],
+            timeout=30,
+            env=checklist_env,
+        )
+        if not checklist_consistency_ok:
+            checklist_consistency_passed = False
+            checklist_consistency_detail = checklist_payload_or_error
+        else:
+            checklist_payload = checklist_payload_or_error if isinstance(checklist_payload_or_error, dict) else {}
+            checklist_consistency_passed = (
+                not checklist_payload.get("summaryMismatches")
+                and not checklist_payload.get("claimMismatches")
+                and not checklist_payload.get("freshnessMismatches")
+            )
+            checklist_consistency_detail = checklist_payload
+
+        results.append(_format_result("Checklist 对账一致性校验", checklist_consistency_passed, checklist_consistency_detail))
+        all_passed &= checklist_consistency_passed
+    else:
+        results.append(_format_result("Checklist 对账一致性校验", False, "测试脚本缺失"))
         all_passed = False
 
     return results, all_passed
