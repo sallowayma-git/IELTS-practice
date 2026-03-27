@@ -8,13 +8,15 @@ invoked locally or inside CI before changes are merged.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
+from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -376,6 +378,165 @@ def _check_json_path_map(path: Path) -> Tuple[bool, str]:
     return False, "路径映射缺少 reading/listening root"
 
 
+def _extract_registered_payload(path: Path) -> Optional[dict]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception:
+        return None
+
+    match = re.search(
+        r"register\(\s*['\"]([^'\"]+)['\"]\s*,\s*(\{[\s\S]*\})\s*\)\s*;",
+        text,
+        re.MULTILINE,
+    )
+    if not match:
+        return None
+
+    try:
+        payload = json.loads(match.group(2))
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _normalize_title_for_similarity(title: str) -> str:
+    lowered = (title or "").strip().lower()
+    lowered = re.sub(r"\s+", " ", lowered)
+    lowered = re.sub(r"[^0-9a-z\u4e00-\u9fff ]+", "", lowered)
+    return lowered.strip()
+
+
+def _extract_exam_question_range(exam_payload: dict) -> Optional[Tuple[int, int]]:
+    display_map = exam_payload.get("questionDisplayMap")
+    if isinstance(display_map, dict):
+        numeric_values = []
+        for value in display_map.values():
+            try:
+                numeric_values.append(int(str(value).strip()))
+            except Exception:
+                continue
+        if numeric_values:
+            return min(numeric_values), max(numeric_values)
+
+    question_order = exam_payload.get("questionOrder")
+    if isinstance(question_order, list):
+        numeric_values = []
+        for item in question_order:
+            match = re.match(r"^q(\d+)$", str(item).strip(), re.IGNORECASE)
+            if match:
+                numeric_values.append(int(match.group(1)))
+        if numeric_values:
+            return min(numeric_values), max(numeric_values)
+    return None
+
+
+def _extract_explanation_question_range(explanation_payload: dict) -> Optional[Tuple[int, int]]:
+    question_sections = explanation_payload.get("questionExplanations")
+    if not isinstance(question_sections, list):
+        return None
+    starts: List[int] = []
+    ends: List[int] = []
+    for section in question_sections:
+        if not isinstance(section, dict):
+            continue
+        question_range = section.get("questionRange")
+        if not isinstance(question_range, dict):
+            continue
+        start = question_range.get("start")
+        end = question_range.get("end")
+        if isinstance(start, int) and isinstance(end, int):
+            starts.append(start)
+            ends.append(end)
+    if not starts or not ends:
+        return None
+    return min(starts), max(ends)
+
+
+def _check_reading_explanation_alignment() -> Tuple[bool, dict]:
+    exams_dir = REPO_ROOT / "assets" / "generated" / "reading-exams"
+    explanations_dir = REPO_ROOT / "assets" / "generated" / "reading-explanations"
+    if not exams_dir.exists() or not explanations_dir.exists():
+        return False, {"error": "reading-exams 或 reading-explanations 目录缺失"}
+
+    exam_payloads: Dict[str, dict] = {}
+    explanation_payloads: Dict[str, dict] = {}
+
+    for exam_file in sorted(exams_dir.glob("*.js")):
+        payload = _extract_registered_payload(exam_file)
+        if not payload:
+            continue
+        exam_id = str(payload.get("examId") or "").strip()
+        if exam_id:
+            exam_payloads[exam_id] = payload
+
+    for explanation_file in sorted(explanations_dir.glob("*.js")):
+        payload = _extract_registered_payload(explanation_file)
+        if not payload:
+            continue
+        exam_id = str(payload.get("examId") or "").strip()
+        if exam_id:
+            explanation_payloads[exam_id] = payload
+
+    missing_explanations = sorted([exam_id for exam_id in exam_payloads.keys() if exam_id not in explanation_payloads])
+    mismatches: List[dict] = []
+
+    for exam_id, explanation in explanation_payloads.items():
+        exam = exam_payloads.get(exam_id)
+        if not exam:
+            mismatches.append({
+                "examId": exam_id,
+                "reason": "explanation_orphan",
+                "detail": "存在解析，但找不到同 examId 的阅读题目",
+            })
+            continue
+
+        exam_meta = exam.get("meta") if isinstance(exam.get("meta"), dict) else {}
+        explanation_meta = explanation.get("meta") if isinstance(explanation.get("meta"), dict) else {}
+        exam_title = str(exam_meta.get("title") or "")
+        explanation_title = str(explanation_meta.get("title") or "")
+        normalized_exam_title = _normalize_title_for_similarity(exam_title)
+        normalized_explanation_title = _normalize_title_for_similarity(explanation_title)
+        similarity = SequenceMatcher(None, normalized_exam_title, normalized_explanation_title).ratio()
+        if normalized_exam_title and normalized_explanation_title and similarity < 0.45:
+            mismatches.append({
+                "examId": exam_id,
+                "reason": "title_similarity_low",
+                "detail": {
+                    "examTitle": exam_title,
+                    "explanationTitle": explanation_title,
+                    "similarity": round(similarity, 3),
+                },
+            })
+
+        exam_range = _extract_exam_question_range(exam)
+        explanation_range = _extract_explanation_question_range(explanation)
+        if exam_range and explanation_range:
+            exam_start, exam_end = exam_range
+            exp_start, exp_end = explanation_range
+            overlap_start = max(exam_start, exp_start)
+            overlap_end = min(exam_end, exp_end)
+            has_overlap = overlap_start <= overlap_end
+            if not has_overlap:
+                mismatches.append({
+                    "examId": exam_id,
+                    "reason": "question_range_mismatch",
+                    "detail": {
+                        "examRange": [exam_start, exam_end],
+                        "explanationRange": [exp_start, exp_end],
+                    },
+                })
+
+    passed = not mismatches
+    detail = {
+        "examCount": len(exam_payloads),
+        "explanationCount": len(explanation_payloads),
+        "missingExplanations": len(missing_explanations),
+        "mismatchCount": len(mismatches),
+        "mismatches": mismatches[:20],
+    }
+    return passed, detail
+
+
 def _format_result(name: str, passed: bool, detail: str) -> dict:
     return {
         "name": name,
@@ -387,6 +548,41 @@ def _format_result(name: str, passed: bool, detail: str) -> dict:
 def _ensure_exists(path: Path) -> Tuple[bool, str]:
     exists = path.exists()
     return exists, ("已找到" if exists else "文件缺失")
+
+
+def _run_json_subprocess(
+    command: List[str],
+    timeout: int,
+    *,
+    env: Optional[Dict[str, str]] = None,
+    parse_mode: str = "stdout",
+) -> Tuple[bool, Any]:
+    try:
+        completed = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"执行超时（{timeout}秒）"
+    except subprocess.CalledProcessError as exc:
+        output_text = exc.stdout or exc.stderr or str(exc)
+        return False, f"执行失败: {output_text.strip()}"
+
+    if parse_mode == "last-line":
+        output_lines = [line.strip() for line in (completed.stdout or "").splitlines() if line.strip()]
+        parse_target = output_lines[-1] if output_lines else ""
+    else:
+        parse_target = completed.stdout.strip() or completed.stderr.strip()
+
+    try:
+        payload = json.loads(parse_target or "{}")
+    except json.JSONDecodeError as parse_error:
+        return False, f"输出解析失败: {parse_error}"
+    return True, payload
 
 
 def run_checks() -> Tuple[List[dict], bool]:
@@ -661,6 +857,10 @@ def run_checks() -> Tuple[List[dict], bool]:
         ))
         all_passed &= legacy_listening_ref_absent
 
+    explanation_alignment_passed, explanation_alignment_detail = _check_reading_explanation_alignment()
+    results.append(_format_result("阅读题目-解析一致性校验", explanation_alignment_passed, explanation_alignment_detail))
+    all_passed &= explanation_alignment_passed
+
     practice_fixture = REPO_ROOT / "templates" / "ci-practice-fixtures" / "analysis-of-fear.html"
     fixture_exists, fixture_detail = _ensure_exists(practice_fixture)
     results.append(_format_result("练习页面测试模板存在性", fixture_exists, fixture_detail))
@@ -762,6 +962,101 @@ def run_checks() -> Tuple[List[dict], bool]:
         all_passed &= suite_passed
     else:
         results.append(_format_result("套题模式首篇衔接测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    suite_regression_test = REPO_ROOT / "developer" / "tests" / "js" / "suiteModeRegression.test.js"
+    if suite_regression_test.exists():
+        try:
+            completed_suite_regression = subprocess.run(
+                ["node", str(suite_regression_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            suite_regression_passed = False
+            suite_regression_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_suite_regression = completed_suite_regression.stdout.strip() or completed_suite_regression.stderr.strip()
+            try:
+                suite_regression_payload = json.loads(raw_suite_regression or "{}")
+            except json.JSONDecodeError as parse_error:
+                suite_regression_passed = False
+                suite_regression_detail = f"输出解析失败: {parse_error}"
+            else:
+                suite_regression_passed = suite_regression_payload.get("status") == "pass"
+                suite_regression_detail = suite_regression_payload.get("detail", suite_regression_payload)
+        results.append(_format_result("套题模式状态机回归测试", suite_regression_passed, suite_regression_detail))
+        all_passed &= suite_regression_passed
+    else:
+        results.append(_format_result("套题模式状态机回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    simulation_nb_drag_test = REPO_ROOT / "developer" / "tests" / "e2e" / "simulation_nb_drag_regression.py"
+    if simulation_nb_drag_test.exists():
+        try:
+            completed_sim_nb_drag = subprocess.run(
+                ["python3", str(simulation_nb_drag_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=240,
+            )
+        except subprocess.TimeoutExpired:
+            sim_nb_drag_passed = False
+            sim_nb_drag_detail = "执行超时（240秒）"
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            sim_nb_drag_passed = False
+            sim_nb_drag_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_sim_nb_drag = completed_sim_nb_drag.stdout.strip() or completed_sim_nb_drag.stderr.strip()
+            try:
+                sim_nb_drag_payload = json.loads(raw_sim_nb_drag or "{}")
+            except json.JSONDecodeError as parse_error:
+                sim_nb_drag_passed = False
+                sim_nb_drag_detail = f"输出解析失败: {parse_error}"
+            else:
+                sim_nb_drag_passed = sim_nb_drag_payload.get("status") == "pass"
+                sim_nb_drag_detail = sim_nb_drag_payload.get("detail", sim_nb_drag_payload)
+        results.append(_format_result("模拟模式 NB 拖拽回灌回归测试", sim_nb_drag_passed, sim_nb_drag_detail))
+        all_passed &= sim_nb_drag_passed
+    else:
+        results.append(_format_result("模拟模式 NB 拖拽回灌回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    simulation_roundtrip_restore_test = REPO_ROOT / "developer" / "tests" / "e2e" / "simulation_roundtrip_restore_regression.py"
+    if simulation_roundtrip_restore_test.exists():
+        try:
+            completed_sim_roundtrip_restore = subprocess.run(
+                ["python3", str(simulation_roundtrip_restore_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=360,
+            )
+        except subprocess.TimeoutExpired:
+            sim_roundtrip_restore_passed = False
+            sim_roundtrip_restore_detail = "执行超时（360秒）"
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            sim_roundtrip_restore_passed = False
+            sim_roundtrip_restore_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_sim_roundtrip_restore = completed_sim_roundtrip_restore.stdout.strip() or completed_sim_roundtrip_restore.stderr.strip()
+            try:
+                sim_roundtrip_restore_payload = json.loads(raw_sim_roundtrip_restore or "{}")
+            except json.JSONDecodeError as parse_error:
+                sim_roundtrip_restore_passed = False
+                sim_roundtrip_restore_detail = f"输出解析失败: {parse_error}"
+            else:
+                sim_roundtrip_restore_passed = sim_roundtrip_restore_payload.get("status") == "pass"
+                sim_roundtrip_restore_detail = sim_roundtrip_restore_payload.get("detail", sim_roundtrip_restore_payload)
+        results.append(_format_result("模拟模式切题回灌回归测试", sim_roundtrip_restore_passed, sim_roundtrip_restore_detail))
+        all_passed &= sim_roundtrip_restore_passed
+    else:
+        results.append(_format_result("模拟模式切题回灌回归测试", False, "测试脚本缺失"))
         all_passed = False
 
     inline_fallback_test = REPO_ROOT / "developer" / "tests" / "js" / "suiteInlineFallback.test.js"
@@ -998,6 +1293,7 @@ def run_checks() -> Tuple[List[dict], bool]:
         all_passed = False
 
     # Integration tests
+    deprecated_reading_source_dir = REPO_ROOT / "developer" / "reading-exams"
     integration_tests = [
         ("Reading migration snapshot integration test", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "readingMigrationSnapshot.test.js"),
         ("多套题提交流程集成测试", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "multiSuiteSubmission.test.js"),
@@ -1007,6 +1303,16 @@ def run_checks() -> Tuple[List[dict], bool]:
     ]
 
     for test_name, test_path in integration_tests:
+        if test_name == "Reading migration snapshot integration test" and not deprecated_reading_source_dir.exists():
+            results.append(
+                _format_result(
+                    test_name,
+                    True,
+                    "显式跳过：developer/reading-exams 目录已废弃，迁移快照用例不再执行",
+                )
+            )
+            continue
+
         if test_path.exists():
             try:
                 completed_integration = subprocess.run(
@@ -1089,6 +1395,60 @@ def run_checks() -> Tuple[List[dict], bool]:
         all_passed &= reading_audit_passed
     else:
         results.append(_format_result("Reading 逐题自动排查（quick）", False, "测试脚本缺失"))
+        all_passed = False
+
+    pdf_audit_script = REPO_ROOT / "developer" / "tests" / "ci" / "audit_pdf_checklist_and_mona.py"
+    if pdf_audit_script.exists():
+        pdf_audit_passed, pdf_audit_detail = _run_json_subprocess(
+            ["python3", str(pdf_audit_script)],
+            timeout=120,
+        )
+
+        results.append(_format_result("PDF 对账与回归审计", pdf_audit_passed, pdf_audit_detail))
+        all_passed &= pdf_audit_passed
+    else:
+        results.append(_format_result("PDF 对账与回归审计", False, "测试脚本缺失"))
+        all_passed = False
+
+    reading_integrity_script = REPO_ROOT / "developer" / "tests" / "ci" / "check_reading_data_integrity.py"
+    if reading_integrity_script.exists():
+        reading_integrity_passed, reading_integrity_detail = _run_json_subprocess(
+            ["python3", str(reading_integrity_script)],
+            timeout=30,
+            parse_mode="last-line",
+        )
+
+        results.append(_format_result("Reading 数据完整性校验", reading_integrity_passed, reading_integrity_detail))
+        all_passed &= reading_integrity_passed
+    else:
+        results.append(_format_result("Reading 数据完整性校验", False, "测试脚本缺失"))
+        all_passed = False
+
+    checklist_consistency_script = REPO_ROOT / "developer" / "tests" / "ci" / "check_checklist_consistency.py"
+    if checklist_consistency_script.exists():
+        checklist_env = os.environ.copy()
+        checklist_env["CHECKLIST_IGNORE_RUN_STATIC_CLAIM"] = "1"
+        checklist_consistency_ok, checklist_payload_or_error = _run_json_subprocess(
+            ["python3", str(checklist_consistency_script)],
+            timeout=30,
+            env=checklist_env,
+        )
+        if not checklist_consistency_ok:
+            checklist_consistency_passed = False
+            checklist_consistency_detail = checklist_payload_or_error
+        else:
+            checklist_payload = checklist_payload_or_error if isinstance(checklist_payload_or_error, dict) else {}
+            checklist_consistency_passed = (
+                not checklist_payload.get("summaryMismatches")
+                and not checklist_payload.get("claimMismatches")
+                and not checklist_payload.get("freshnessMismatches")
+            )
+            checklist_consistency_detail = checklist_payload
+
+        results.append(_format_result("Checklist 对账一致性校验", checklist_consistency_passed, checklist_consistency_detail))
+        all_passed &= checklist_consistency_passed
+    else:
+        results.append(_format_result("Checklist 对账一致性校验", False, "测试脚本缺失"))
         all_passed = False
 
     return results, all_passed

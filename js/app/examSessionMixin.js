@@ -2,6 +2,8 @@
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/practice-page-enhancer.js';
+    const ANSWER_MATCH_CORE_SCRIPT_PATH = './js/utils/answerMatchCore.js';
+    const SUITE_BACK_GUARD_SCRIPT_PATH = './js/utils/suiteBackGuard.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
 
     async function getActiveExamIndexSnapshot() {
@@ -128,6 +130,9 @@
                         examUrl = placeholderUrl;
                     }
                 }
+                if (guardOptions.suiteSessionId && readingLaunch && readingLaunch.mode === 'unified_html') {
+                    examUrl = this._appendSuiteContextToExamUrl(examUrl, guardOptions);
+                }
                 let examWindow = this.openExamWindow(examUrl, exam, guardOptions);
 
                 try {
@@ -149,6 +154,15 @@
                 if (options && options.suiteSessionId) {
                     const sessionInfo = this.ensureExamWindowSession(examId, examWindow);
                     sessionInfo.suiteSessionId = options.suiteSessionId;
+                    if (options.suiteFlowMode) {
+                        sessionInfo.suiteFlowMode = options.suiteFlowMode;
+                    }
+                    if (Number.isInteger(options.sequenceIndex)) {
+                        sessionInfo.suiteSequenceIndex = options.sequenceIndex;
+                    }
+                    if (Number.isInteger(options.sequenceTotal)) {
+                        sessionInfo.suiteSequenceTotal = options.sequenceTotal;
+                    }
                     this.examWindows && this.examWindows.set(examId, sessionInfo);
                 }
 
@@ -310,6 +324,36 @@
                 return new URL(rawUrl, 'http://localhost/').href;
             } catch (error) {
                 console.warn('[App] 无法解析题目URL为绝对路径:', error, rawUrl);
+                return rawUrl;
+            }
+        },
+
+        _appendSuiteContextToExamUrl(rawUrl, options = {}) {
+            if (!rawUrl) {
+                return rawUrl;
+            }
+            try {
+                const parsed = new URL(rawUrl, (window && window.location && window.location.href) ? window.location.href : undefined);
+                const safeSet = (key, value) => {
+                    if (value == null) {
+                        return;
+                    }
+                    const normalized = String(value).trim();
+                    if (!normalized) {
+                        return;
+                    }
+                    parsed.searchParams.set(key, normalized);
+                };
+                safeSet('suiteSessionId', options.suiteSessionId);
+                safeSet('suiteFlowMode', options.suiteFlowMode);
+                if (Number.isInteger(options.sequenceIndex)) {
+                    parsed.searchParams.set('suiteSequenceIndex', String(options.sequenceIndex));
+                }
+                if (Number.isInteger(options.sequenceTotal)) {
+                    parsed.searchParams.set('suiteSequenceTotal', String(options.sequenceTotal));
+                }
+                return parsed.toString();
+            } catch (_) {
                 return rawUrl;
             }
         },
@@ -534,6 +578,14 @@
                     ? `${resolved}&v=${PRACTICE_ENHANCER_BUILD_ID}`
                     : `${resolved}?v=${PRACTICE_ENHANCER_BUILD_ID}`;
             };
+            const ensureCoreScriptUrl = () => {
+                const resolved = this._ensureAbsoluteUrl(ANSWER_MATCH_CORE_SCRIPT_PATH);
+                return resolved || ANSWER_MATCH_CORE_SCRIPT_PATH;
+            };
+            const ensureBackGuardScriptUrl = () => {
+                const resolved = this._ensureAbsoluteUrl(SUITE_BACK_GUARD_SCRIPT_PATH);
+                return resolved || SUITE_BACK_GUARD_SCRIPT_PATH;
+            };
 
             const injectScript = () => {
                 try {
@@ -568,28 +620,118 @@
                     } catch (_) { }
 
                     const host = doc.head || doc.body;
-                    const scriptEl = doc.createElement('script');
-                    scriptEl.type = 'text/javascript';
-                    scriptEl.defer = true;
-                    scriptEl.src = ensureScriptUrl();
+                    const existingEnhancerScript = host.querySelector('script[data-practice-enhancer="true"]');
+                    if (existingEnhancerScript) {
+                        return;
+                    }
+                    let enhancerInjected = false;
+                    const appendEnhancer = () => {
+                        if (enhancerInjected || (examWindow.practicePageEnhancer && typeof examWindow.practicePageEnhancer.initialize === 'function')) {
+                            return;
+                        }
+                        enhancerInjected = true;
+                        const scriptEl = doc.createElement('script');
+                        scriptEl.type = 'text/javascript';
+                        scriptEl.defer = true;
+                        scriptEl.dataset.practiceEnhancer = 'true';
+                        scriptEl.src = ensureScriptUrl();
 
-                    scriptEl.onload = () => {
-                        setTimeout(() => {
-                            try {
-                                this.initializePracticeSession(examWindow, examId);
-                            } catch (sessionError) {
-                                console.warn('[DataInjection] 初始化练习会话失败:', sessionError);
+                        scriptEl.onload = () => {
+                            setTimeout(() => {
+                                try {
+                                    this.initializePracticeSession(examWindow, examId);
+                                } catch (sessionError) {
+                                    console.warn('[DataInjection] 初始化练习会话失败:', sessionError);
+                                }
+                            }, 80);
+                        };
+
+                        scriptEl.onerror = (loadError) => {
+                            console.warn('[DataInjection] 加载增强器失败，回退到内联脚本:', loadError);
+                            scriptEl.remove();
+                            this.injectInlineScript(examWindow, examId);
+                        };
+
+                        host.appendChild(scriptEl);
+                    };
+
+                    const waitForDependencyReady = (isReady, timeoutMs = 4500) => (
+                        new Promise((resolve) => {
+                            if (isReady()) {
+                                resolve(true);
+                                return;
                             }
-                        }, 80);
+                            const startedAt = Date.now();
+                            const poll = () => {
+                                if (isReady()) {
+                                    resolve(true);
+                                    return;
+                                }
+                                if ((Date.now() - startedAt) >= timeoutMs) {
+                                    resolve(false);
+                                    return;
+                                }
+                                setTimeout(poll, 40);
+                            };
+                            poll();
+                        })
+                    );
+
+                    const ensureDependencyScript = ({
+                        selector,
+                        dataKey,
+                        scriptUrl,
+                        isReady,
+                        timeoutMs = 4500
+                    }) => {
+                        if (isReady()) {
+                            return Promise.resolve(true);
+                        }
+                        const existingScript = host.querySelector(selector);
+                        if (!existingScript) {
+                            const scriptEl = doc.createElement('script');
+                            scriptEl.type = 'text/javascript';
+                            scriptEl.defer = true;
+                            scriptEl.dataset[dataKey] = 'true';
+                            scriptEl.src = scriptUrl;
+                            host.appendChild(scriptEl);
+                        }
+                        return waitForDependencyReady(isReady, timeoutMs);
                     };
 
-                    scriptEl.onerror = (loadError) => {
-                        console.warn('[DataInjection] 加载增强器失败，回退到内联脚本:', loadError);
-                        scriptEl.remove();
-                        this.injectInlineScript(examWindow, examId);
+                    const isAnswerMatchReady = () => {
+                        return !!(
+                            examWindow.AnswerMatchCore
+                            && typeof examWindow.AnswerMatchCore.compareAnswers === 'function'
+                        );
                     };
 
-                    host.appendChild(scriptEl);
+                    const isBackGuardReady = () => (
+                        typeof examWindow.createSuiteBackGuard === 'function'
+                        || (
+                            examWindow.SuiteBackGuard
+                            && typeof examWindow.SuiteBackGuard.create === 'function'
+                        )
+                    );
+
+                    Promise.all([
+                        ensureDependencyScript({
+                            selector: 'script[data-answer-match-core="true"]',
+                            dataKey: 'answerMatchCore',
+                            scriptUrl: ensureCoreScriptUrl(),
+                            isReady: isAnswerMatchReady,
+                            timeoutMs: 4500
+                        }),
+                        ensureDependencyScript({
+                            selector: 'script[data-suite-back-guard="true"]',
+                            dataKey: 'suiteBackGuard',
+                            scriptUrl: ensureBackGuardScriptUrl(),
+                            isReady: isBackGuardReady,
+                            timeoutMs: 2500
+                        })
+                    ]).finally(() => {
+                        appendEnhancer();
+                    });
                 } catch (error) {
                     console.error('[DataInjection] 注入增强器脚本时出错:', error);
                     this.injectInlineScript(examWindow, examId);
@@ -1023,6 +1165,9 @@
                 expectedSessionId: null,
                 origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : '',
                 suiteSessionId: (options && options.suiteSessionId) ? options.suiteSessionId : null,
+                suiteFlowMode: (options && options.suiteFlowMode) ? String(options.suiteFlowMode) : null,
+                suiteSequenceIndex: Number.isInteger(options && options.sequenceIndex) ? options.sequenceIndex : null,
+                suiteSequenceTotal: Number.isInteger(options && options.sequenceTotal) ? options.sequenceTotal : null,
                 reviewMode: Boolean(options && options.reviewMode),
                 reviewSessionId: options && options.reviewSessionId ? String(options.reviewSessionId) : null,
                 reviewEntryIndex: Number.isInteger(options && options.reviewEntryIndex) ? options.reviewEntryIndex : 0,
@@ -1129,7 +1274,11 @@
                     'ERROR_OCCURRED',
                     'REQUEST_INIT',
                     'SUITE_CLOSE_ATTEMPT',
-                    'REVIEW_NAVIGATE'
+                    'REVIEW_NAVIGATE',
+                    'SUITE_CONFIG_UPDATE',
+                    'SIMULATION_DRAFT_SYNC',
+                    'SIMULATION_NAVIGATE',
+                    'SIMULATION_SUBMIT'
                 ]);
 
                 const baseKeys = new Set(['type', 'messageType', 'action', 'event', 'data', 'payload', 'detail', 'args', 'source', 'message', 'messageData']);
@@ -1206,13 +1355,56 @@
                 return { type, data, sourceTag };
             };
 
+            const resolveWindowName = (targetWindow) => {
+                if (!targetWindow) {
+                    return '';
+                }
+                try {
+                    const rawName = typeof targetWindow.name === 'string'
+                        ? targetWindow.name
+                        : '';
+                    return rawName.trim();
+                } catch (_) {
+                    return '';
+                }
+            };
+
+            const isLikelySameWindowContext = (sourceWindow, expectedWindow) => {
+                if (!sourceWindow || !expectedWindow) {
+                    return false;
+                }
+                if (sourceWindow === expectedWindow) {
+                    return true;
+                }
+                const sourceName = resolveWindowName(sourceWindow);
+                const expectedName = resolveWindowName(expectedWindow);
+                if (sourceName && expectedName && sourceName === expectedName) {
+                    return true;
+                }
+                try {
+                    const sourceHref = sourceWindow.location && typeof sourceWindow.location.href === 'string'
+                        ? sourceWindow.location.href
+                        : '';
+                    const expectedHref = expectedWindow.location && typeof expectedWindow.location.href === 'string'
+                        ? expectedWindow.location.href
+                        : '';
+                    if (sourceHref && expectedHref && sourceHref === expectedHref && sourceHref !== 'about:blank') {
+                        return true;
+                    }
+                } catch (_) {
+                    // ignore cross-origin href checks
+                }
+                return false;
+            };
+
             const messageHandler = async (event) => {
                 // 取得当前题目窗口引用（可能在 handshake 期间被更新）
                 const storedInfo = (this.examWindows && this.examWindows.get(examId)) || {};
                 const expectedWindow = storedInfo.window || examWindow;
+                const sourceWindow = event ? (event.source || null) : null;
 
-                // 窗口来源不匹配直接拒绝，阻止其它 tab 注入消息
-                if (!event.source || !expectedWindow || event.source !== expectedWindow) {
+                // 缺少来源窗口直接拒绝
+                if (!sourceWindow || !expectedWindow) {
                     return;
                 }
 
@@ -1230,6 +1422,9 @@
                 }
 
                 const windowInfo = this.ensureExamWindowSession(examId, expectedWindow);
+                if (windowInfo && sourceWindow !== expectedWindow) {
+                    windowInfo.window = sourceWindow;
+                }
                 const expectedSessionId = windowInfo.expectedSessionId || '';
 
                 // 放宽消息源过滤，兼容 inline_collector 与 practice_page
@@ -1240,17 +1435,68 @@
                 }
 
                 const { type, data } = normalized;
+                const expectedExamId = String(examId);
+                const payloadExamId = data && data.examId != null ? String(data.examId) : '';
+                const payloadSuiteSessionId = data && typeof data.suiteSessionId === 'string'
+                    ? data.suiteSessionId.trim()
+                    : '';
+                const activeSuiteSessionId = this.currentSuiteSession && this.currentSuiteSession.id
+                    ? String(this.currentSuiteSession.id)
+                    : '';
+                const isExamInActiveSuite = Boolean(
+                    this.currentSuiteSession
+                    && Array.isArray(this.currentSuiteSession.sequence)
+                    && this.currentSuiteSession.sequence.some(item => item && String(item.examId) === expectedExamId)
+                );
+                const sourceMatched = isLikelySameWindowContext(sourceWindow, expectedWindow);
+                const allowSuiteSourceFallback = Boolean(
+                    !sourceMatched
+                    && payloadExamId
+                    && payloadExamId === expectedExamId
+                    && (
+                        (payloadSuiteSessionId && activeSuiteSessionId && payloadSuiteSessionId === activeSuiteSessionId)
+                        || isExamInActiveSuite
+                    )
+                );
+                if (!sourceMatched && !allowSuiteSourceFallback) {
+                    return;
+                }
+                const isSuiteFlowPayload = Boolean(
+                    (type === 'PRACTICE_COMPLETE'
+                        || type === 'SIMULATION_NAVIGATE'
+                        || type === 'SIMULATION_SUBMIT'
+                        || type === 'SESSION_READY')
+                    && payloadSuiteSessionId
+                    && activeSuiteSessionId
+                    && payloadSuiteSessionId === activeSuiteSessionId
+                    && payloadExamId
+                    && payloadExamId === expectedExamId
+                );
                 const payloadSessionId = data && typeof data.sessionId === 'string'
                     ? data.sessionId.trim()
                     : '';
 
                 if (payloadSessionId) {
                     if (expectedSessionId && payloadSessionId !== expectedSessionId) {
-                        return;
-                    }
-                    windowInfo.sessionId = payloadSessionId;
-                    if (!windowInfo.expectedSessionId) {
-                        windowInfo.expectedSessionId = payloadSessionId;
+                        const windowSuiteSessionId = windowInfo && typeof windowInfo.suiteSessionId === 'string'
+                            ? windowInfo.suiteSessionId.trim()
+                            : '';
+                        const allowSuiteSessionMismatch = Boolean(
+                            isSuiteFlowPayload
+                            && (
+                                (windowSuiteSessionId && windowSuiteSessionId === payloadSuiteSessionId)
+                                || isExamInActiveSuite
+                            )
+                        );
+                        if (!allowSuiteSessionMismatch) {
+                            return;
+                        }
+                        data.sessionId = expectedSessionId;
+                    } else {
+                        windowInfo.sessionId = payloadSessionId;
+                        if (!windowInfo.expectedSessionId) {
+                            windowInfo.expectedSessionId = payloadSessionId;
+                        }
                     }
                 } else if (type === 'PRACTICE_COMPLETE') {
                     if (!expectedSessionId) {
@@ -1259,12 +1505,9 @@
                     data.sessionId = expectedSessionId;
                 }
 
-                const expectedExamId = String(examId);
-                const payloadExamId = data && data.examId != null ? String(data.examId) : '';
                 if (payloadExamId && payloadExamId !== expectedExamId) {
-                    const derivedExamId = (payloadSessionId || expectedSessionId || '').split('_')[0];
                     const allowedLegacy = payloadExamId === 'session';
-                    if (derivedExamId !== expectedExamId && !allowedLegacy) {
+                    if (!allowedLegacy) {
                         return;
                     }
                 }
@@ -1292,6 +1535,11 @@
                     // 新增：处理数据采集器的消息
                     case 'SESSION_READY':
                         this.handleSessionReady(examId, data);
+                        if (typeof this._maybeRestoreSuiteReviewState === 'function') {
+                            this._maybeRestoreSuiteReviewState(examId, sourceWindow || expectedWindow, windowInfo).catch((restoreError) => {
+                                console.warn('[SuitePractice] 恢复回看态失败:', restoreError);
+                            });
+                        }
                         break;
                     case 'PROGRESS_UPDATE':
                         this.handleProgressUpdate(examId, data);
@@ -1305,24 +1553,98 @@
                             windowInfo.suiteSessionId = data.suiteSessionId;
                             this.examWindows && this.examWindows.set(examId, windowInfo);
                         }
-                        await this.handlePracticeComplete(examId, data);
+                        await this.handlePracticeComplete(examId, data, sourceWindow || expectedWindow);
                         break;
                     case 'ERROR_OCCURRED':
                         this.handleDataCollectionError(examId, data);
                         break;
                     case 'REQUEST_INIT':
-                        sendInitEnvelope(event.source || examWindow);
+                        sendInitEnvelope(sourceWindow || examWindow);
                         break;
                     case 'SUITE_CLOSE_ATTEMPT':
                         console.warn('[SuitePractice] 练习页尝试关闭套题窗口:', data);
                         break;
+                    case 'SUITE_CONFIG_UPDATE': {
+                        const autoAdvance = typeof data.autoAdvanceAfterSubmit === 'boolean'
+                            ? data.autoAdvanceAfterSubmit
+                            : true;
+                        if (!window.practiceConfig || typeof window.practiceConfig !== 'object') {
+                            window.practiceConfig = {};
+                        }
+                        if (!window.practiceConfig.suite || typeof window.practiceConfig.suite !== 'object') {
+                            window.practiceConfig.suite = {};
+                        }
+                        window.practiceConfig.suite.autoAdvanceAfterSubmit = autoAdvance;
+                        try {
+                            if (window.localStorage) {
+                                window.localStorage.setItem('suite_auto_advance_after_submit', String(autoAdvance));
+                            }
+                        } catch (_) {
+                            // ignore storage write failures
+                        }
+                        break;
+                    }
                     case 'REVIEW_NAVIGATE':
-                        await this.handleReviewReplayNavigate(examId, data, event.source || expectedWindow);
+                        if (data && typeof this.handleSuiteReviewNavigate === 'function') {
+                            const activeSuiteId = this.currentSuiteSession && this.currentSuiteSession.id
+                                ? String(this.currentSuiteSession.id)
+                                : '';
+                            const windowSuiteId = windowInfo && windowInfo.suiteSessionId
+                                ? String(windowInfo.suiteSessionId)
+                                : '';
+                            const isExplicitSuiteNavigate = data.suiteReviewMode === true;
+                            const isActiveSuiteWindow = Boolean(windowSuiteId && activeSuiteId && windowSuiteId === activeSuiteId);
+                            if (isExplicitSuiteNavigate || isActiveSuiteWindow) {
+                                const payloadExamId = data.examId != null ? String(data.examId).trim() : '';
+                                const hasPayloadExamInActiveSuite = Boolean(
+                                    payloadExamId
+                                    && this.currentSuiteSession
+                                    && Array.isArray(this.currentSuiteSession.sequence)
+                                    && this.currentSuiteSession.sequence.some(item => item && item.examId === payloadExamId)
+                                );
+                                const routedExamId = hasPayloadExamInActiveSuite ? payloadExamId : examId;
+                                const handledSuiteReview = await this.handleSuiteReviewNavigate(routedExamId, data, sourceWindow || expectedWindow);
+                                if (handledSuiteReview) {
+                                    break;
+                                }
+                            }
+                        }
+                        await this.handleReviewReplayNavigate(examId, data, sourceWindow || expectedWindow);
+                        break;
+                    case 'SIMULATION_DRAFT_SYNC':
+                        if (this.currentSuiteSession && data && data.draft) {
+                            this.currentSuiteSession.draftsByExam[examId] = data.draft;
+                            if (typeof this._mirrorSessionToStorage === 'function') {
+                                this._mirrorSessionToStorage(this.currentSuiteSession);
+                            }
+                        }
+                        break;
+                    case 'SIMULATION_NAVIGATE':
+                        if (typeof this._handleSimulationNavigate === 'function') {
+                            await this._handleSimulationNavigate(examId, data, sourceWindow || expectedWindow);
+                        }
+                        break;
+                    case 'SIMULATION_SUBMIT':
+                        if (windowInfo && windowInfo.reviewMode) {
+                            break;
+                        }
+                        await this.handlePracticeComplete(examId, data, sourceWindow || expectedWindow);
                         break;
                     default:
                 }
             };
 
+            if (this.messageHandlers && this.messageHandlers.has(examId)) {
+                try {
+                    const previousHandler = this.messageHandlers.get(examId);
+                    if (previousHandler) {
+                        window.removeEventListener('message', previousHandler);
+                    }
+                } catch (_) {
+                    // ignore stale listener cleanup errors
+                }
+                this.messageHandlers.delete(examId);
+            }
             window.addEventListener('message', messageHandler);
 
             // 存储消息处理器以便清理
@@ -1963,6 +2285,11 @@
                     startTime: entry.startTime || record.startTime || record.date || null,
                     endTime: entry.endTime || record.endTime || record.date || null,
                     duration: Number(entry.duration ?? record.duration) || 0,
+                    markedQuestions: Array.isArray(entry.markedQuestions)
+                        ? entry.markedQuestions.slice()
+                        : (Array.isArray(entryMetadata.markedQuestions)
+                            ? entryMetadata.markedQuestions.slice()
+                            : (Array.isArray(recordMetadata.markedQuestions) ? recordMetadata.markedQuestions.slice() : [])),
                     metadata: mergedMetadata
                 };
                 built.allQuestionIds = this._collectReplayQuestionIds(built);
@@ -2186,6 +2513,9 @@
                 parentOrigin: window.location.origin,
                 sessionId: info.expectedSessionId,
                 suiteSessionId: suiteSessionId || null,
+                suiteFlowMode: info.suiteFlowMode || null,
+                suiteSequenceIndex: Number.isInteger(info.suiteSequenceIndex) ? info.suiteSequenceIndex : null,
+                suiteSequenceTotal: Number.isInteger(info.suiteSequenceTotal) ? info.suiteSequenceTotal : null,
                 reviewMode: Boolean(info.reviewMode),
                 reviewSessionId: info.reviewSessionId ? String(info.reviewSessionId) : null,
                 reviewEntryIndex: Number.isInteger(info.reviewEntryIndex) ? info.reviewEntryIndex : 0,
@@ -2211,6 +2541,9 @@
                     status: 'active',
                     expectedSessionId: this.generateSessionId(examId),
                     origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : '',
+                    suiteFlowMode: null,
+                    suiteSequenceIndex: null,
+                    suiteSequenceTotal: null,
                     reviewMode: false,
                     reviewSessionId: null,
                     reviewEntryIndex: 0,
@@ -2384,6 +2717,15 @@
                 if (payload.suiteSessionId && !windowInfo.suiteSessionId) {
                     windowInfo.suiteSessionId = payload.suiteSessionId;
                 }
+                if (payload.suiteFlowMode && !windowInfo.suiteFlowMode) {
+                    windowInfo.suiteFlowMode = payload.suiteFlowMode;
+                }
+                if (Number.isInteger(payload.suiteSequenceIndex)) {
+                    windowInfo.suiteSequenceIndex = payload.suiteSequenceIndex;
+                }
+                if (Number.isInteger(payload.suiteSequenceTotal)) {
+                    windowInfo.suiteSequenceTotal = payload.suiteSequenceTotal;
+                }
                 if (payload.url) {
                     windowInfo.latestUrl = payload.url;
                 }
@@ -2455,7 +2797,7 @@
         /**
          * 处理练习完成（真实数据）
          */
-        async handlePracticeComplete(examId, data) {
+        async handlePracticeComplete(examId, data, sourceWindow = null) {
             if (data && !data.sessionId) {
                 data.sessionId = `${examId}_${Date.now()}`;
             }
@@ -2507,7 +2849,7 @@
 
             if (shouldDelegateToSuiteHandler && typeof this.handleSuitePracticeComplete === 'function') {
                 try {
-                    const handled = await this.handleSuitePracticeComplete(examId, data);
+                    const handled = await this.handleSuitePracticeComplete(examId, data, sourceWindow);
                     if (handled) {
                         return;
                     }
@@ -2920,7 +3262,7 @@
             if (this.suiteExamMap && this.suiteExamMap.has(examId) && this.currentSuiteSession && this.currentSuiteSession.status === 'active' && this.suiteExamMap.get(examId) === this.currentSuiteSession.id) {
                 window.showMessage && window.showMessage('套题练习窗口已关闭，套题模式将被中断并回退到普通模式。', 'warning');
                 if (typeof this._abortSuiteSession === 'function') {
-                    this._abortSuiteSession(this.currentSuiteSession, { skipExamId: examId }).catch(error => {
+                    this._abortSuiteSession(this.currentSuiteSession, {}).catch(error => {
                         console.error('[SuitePractice] 中断套题失败:', error);
                     });
                 }
