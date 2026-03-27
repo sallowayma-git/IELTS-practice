@@ -10,7 +10,7 @@
     "examId": "p3-medium-66",
     "title": "Mercator - The Map Maker 地理制图师",
     "category": "P3",
-    "sourceDoc": "P3 解析+1202高频_副本.md",
+    "sourceDoc": "ReadingPractice/PDF/158. P3 - Mercator - The Map Maker 地理制图师.pdf",
     "noteType": "翻译",
     "matchedTitle": "Mercator - The Map Maker 地理制图师"
   },
@@ -128,7 +128,7 @@
         },
         {
           "questionNumber": 37,
-          "text": "(3) 题目 37：...this produced 37 \\___\\___ at the northern and southern extremities （……这在南北两端产生了37 \\___\\___）\n答案：distortion\n解析：定位第6段。原文：\"Unfortunately, straightening the rhumbs caused areal distortion\"（不幸的是，拉直恒向线导致了面积扭曲）。",
+          "text": "(3) 题目 37：...this produced 37 \\___\\___ at the northern and southern extremities （……这在南北两端产生了37 \\___\\___）\n答案：areal distortion\n解析：定位第6段。原文：\"Unfortunately, straightening the rhumbs caused areal distortion\"（不幸的是，拉直恒向线导致了面积扭曲）。",
           "questionId": "q37"
         },
         {
@@ -143,7 +143,7 @@
         },
         {
           "questionNumber": 40,
-          "text": "(6) 题目 40：Various uses including the mapping of 40 \\___\\___ by state cartographers （各种用途，包括由国家制图师绘制40 \\___\\___的地图）\n答案：Britain\n解析：定位第10段。原文：\"In 1938, Mercator’s Projection was selected... to map Britain anew\"（1938年，英国地形测量局选择墨卡托投影法重新绘制英国地图）。\n好的，这是为您重新生成的这三篇文章的完整解析。为了方便您直接复制到Word中使用，已将题目对应的中文翻译句子进行了加粗处理（在Word中粘贴时请选择“保留源格式”或直接粘贴即可保留加粗效果）。",
+          "text": "(6) 题目 40：Various uses including the mapping of 40 \\___\\___ by state cartographers （各种用途，包括由国家制图师绘制40 \\___\\___的地图）\n答案：Britain\n解析：定位第10段。原文：\"In 1938, Mercator’s Projection was selected... to map Britain anew\"（1938年，英国地形测量局选择墨卡托投影法重新绘制英国地图）。",
           "questionId": "q40"
         }
       ],
@@ -151,7 +151,7 @@
         "start": 35,
         "end": 40
       },
-      "text": "答案：two-dimensional\n解析：定位第5段。原文：\"converting the spherical globe into a two-dimensional map\"（将球形地球转换为二维地图）。\n答案：straight line\n解析：定位第5段末尾。原文：\"how could the course of a ship... be represented as a straight line\"（如何将船的航线……表示为一条直线？）。这里讨论的是当时未解决的问题（Could not be shown）。\n答案：distortion\n解析：定位第6段。原文：\"Unfortunately, straightening the rhumbs caused areal distortion\"（不幸的是，拉直恒向线导致了面积扭曲）。\n答案：polar regions\n解析：定位第6段。原文：\"the polar regions occupied the full width of the map\"（极地地区占据了地图的全部宽度）。\n答案：navigation\n解析：定位第7段。原文：\"the map's title explaining that it was intended 'for use in navigation'\"（地图的标题解释说它是为了“用于航海”）。\n答案：Britain\n解析：定位第10段。原文：\"In 1938, Mercator’s Projection was selected... to map Britain anew\"（1938年，英国地形测量局选择墨卡托投影法重新绘制英国地图）。\n好的，这是为您重新生成的这三篇文章的完整解析。为了方便您直接复制到Word中使用，已将题目对应的中文翻译句子进行了加粗处理（在Word中粘贴时请选择“保留源格式”或直接粘贴即可保留加粗效果）。"
+      "text": "答案：two-dimensional\n解析：定位第5段。原文：\"converting the spherical globe into a two-dimensional map\"（将球形地球转换为二维地图）。\n答案：straight line\n解析：定位第5段末尾。原文：\"how could the course of a ship... be represented as a straight line\"（如何将船的航线……表示为一条直线？）。这里讨论的是当时未解决的问题（Could not be shown）。\n答案：areal distortion\n解析：定位第6段。原文：\"Unfortunately, straightening the rhumbs caused areal distortion\"（不幸的是，拉直恒向线导致了面积扭曲）。\n答案：polar regions\n解析：定位第6段。原文：\"the polar regions occupied the full width of the map\"（极地地区占据了地图的全部宽度）。\n答案：navigation\n解析：定位第7段。原文：\"the map's title explaining that it was intended 'for use in navigation'\"（地图的标题解释说它是为了“用于航海”）。\n答案：Britain\n解析：定位第10段。原文：\"In 1938, Mercator’s Projection was selected... to map Britain anew\"（1938年，英国地形测量局选择墨卡托投影法重新绘制英国地图）。"
     }
   ]
 }

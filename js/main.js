@@ -1647,6 +1647,25 @@ function updatePracticeView() {
         }
     }
 
+    const historyQuery = String(window.__practiceHistoryQuery || '').trim().toLowerCase();
+    if (historyQuery) {
+        recordsToShow = recordsToShow.filter((record) => {
+            if (!record) {
+                return false;
+            }
+            const fields = [
+                record.title,
+                record.examId,
+                record.category,
+                record.frequency,
+                record.metadata && record.metadata.examTitle,
+                record.metadata && record.metadata.category,
+                record.date
+            ];
+            return fields.some((field) => String(field || '').toLowerCase().includes(historyQuery));
+        });
+    }
+
     // --- 4. Render history list ---
     const renderer = window.PracticeHistoryRenderer;
     if (!renderer) {
@@ -1668,6 +1687,26 @@ function updatePracticeView() {
         practiceListScroller = renderResult.scroller;
     }
     refreshBulkDeleteButton();
+}
+
+function searchPracticeHistory(query) {
+    window.__practiceHistoryQuery = String(query || '').trim();
+    const clearButton = document.getElementById('history-search-clear-btn');
+    if (clearButton) {
+        clearButton.hidden = window.__practiceHistoryQuery.length === 0;
+    }
+    updatePracticeView();
+}
+
+function clearPracticeHistorySearch() {
+    const input = document.getElementById('history-search-input');
+    if (input) {
+        input.value = '';
+        try {
+            input.focus();
+        } catch (_) { }
+    }
+    searchPracticeHistory('');
 }
 
 function refreshBrowseProgressFromRecords(recordsOverride = null) {
@@ -2005,7 +2044,36 @@ function initializeBrowseView() {
     ensurePracticeRecordsSync('browse-view').then(() => {
         refreshBrowseProgressFromRecords();
     });
+    setupBrowseSortControl();
     loadExamList();
+}
+
+function setupBrowseSortControl() {
+    const sortSelect = document.getElementById('browse-sort-select');
+    if (!sortSelect || sortSelect.dataset.bound === 'true') {
+        return;
+    }
+    let savedMode = String(window.__browseSortMode || '').trim().toLowerCase();
+    if (!savedMode) {
+        try {
+            savedMode = String(window.localStorage.getItem('browse_sort_mode') || 'default').trim().toLowerCase();
+        } catch (_) {
+            savedMode = 'default';
+        }
+    }
+    sortSelect.value = savedMode === 'frequency-desc' ? 'frequency-desc' : 'default';
+    window.__browseSortMode = sortSelect.value;
+    sortSelect.addEventListener('change', () => {
+        const mode = String(sortSelect.value || 'default').trim().toLowerCase();
+        window.__browseSortMode = mode === 'frequency-desc' ? 'frequency-desc' : 'default';
+        try {
+            window.localStorage.setItem('browse_sort_mode', window.__browseSortMode);
+        } catch (_) {
+            // ignore storage failures
+        }
+        loadExamList();
+    });
+    sortSelect.dataset.bound = 'true';
 }
 
 // 全局桥接：HTML 按钮 onclick="browseCategory('P1','reading')"
@@ -2092,6 +2160,17 @@ function loadExamListFallback() {
             filtered = filtered.filter(function (exam) {
                 return typeof exam?.path === 'string' && exam.path.includes(basePathFilter);
             });
+        }
+
+        if (window.ExamActions && typeof window.ExamActions.applyBrowsePostFilters === 'function') {
+            filtered = window.ExamActions.applyBrowsePostFilters(filtered);
+        } else {
+            if (window.ExamActions && typeof window.ExamActions.deduplicateExams === 'function') {
+                filtered = window.ExamActions.deduplicateExams(filtered);
+            }
+            if (window.ExamActions && typeof window.ExamActions.applyExamSort === 'function') {
+                filtered = window.ExamActions.applyExamSort(filtered);
+            }
         }
 
         if (filtered.length === 0) {
