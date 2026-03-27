@@ -2,7 +2,7 @@
   "schemaVersion": "ReadingExamSourceV1",
   "examId": "p3-high-206",
   "meta": {
-    "title": "200 Years of Australian Landscapes at the Royal Academy in London 亚洲风景展【高】",
+    "title": "200 Years of Australian Landscapes at the Royal Academy in London 澳洲风景展【高】",
     "category": "P3",
     "frequency": "high"
   },

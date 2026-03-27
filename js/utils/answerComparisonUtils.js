@@ -41,23 +41,13 @@
         'undefined',
         'no-answer'
     ]);
-    const BOOLEAN_SYNONYMS = new Map([
-        ['true', 'true'],
-        ['t', 'true'],
-        ['yes', 'true'],
-        ['y', 'true'],
-        ['1', 'true'],
-        ['false', 'false'],
-        ['f', 'false'],
-        ['no', 'false'],
-        ['n', 'false'],
-        ['0', 'false']
-    ]);
-    const NOT_GIVEN_SYNONYMS = new Map([
-        ['ng', 'not given'],
-        ['notgiven', 'not given'],
-        ['not-given', 'not given']
-    ]);
+    function getAnswerMatchCore() {
+        const core = global.AnswerMatchCore;
+        if (!core || typeof core !== 'object') {
+            return null;
+        }
+        return core;
+    }
 
     function toStringKey(value) {
         if (value == null) {
@@ -192,14 +182,25 @@
             return { display: null, normalized: null };
         }
 
-        if (BOOLEAN_SYNONYMS.has(lowered)) {
-            const mapped = BOOLEAN_SYNONYMS.get(lowered);
-            return { display: mapped === 'true' ? 'True' : 'False', normalized: mapped };
+        const core = getAnswerMatchCore();
+        if (core && typeof core.splitAnswerTokens === 'function') {
+            const tokens = core.splitAnswerTokens(collapsed);
+            if (!Array.isArray(tokens) || !tokens.length) {
+                return { display: null, normalized: null };
+            }
+            if (tokens.length === 1) {
+                const normalizedText = String(tokens[0]);
+                return { display: normalizedText, normalized: normalizedText };
+            }
+            return { display: tokens.join(', '), normalized: tokens.slice() };
         }
-
-        if (NOT_GIVEN_SYNONYMS.has(lowered)) {
-            const mapped = NOT_GIVEN_SYNONYMS.get(lowered);
-            return { display: mapped, normalized: mapped };
+        if (core && typeof core.normalizeToken === 'function') {
+            const normalized = core.normalizeToken(collapsed);
+            if (!normalized) {
+                return { display: null, normalized: null };
+            }
+            const normalizedText = String(normalized);
+            return { display: normalizedText, normalized: normalizedText };
         }
 
         return { display: collapsed, normalized: lowered };
@@ -222,7 +223,11 @@
             return false;
         }
 
-        return userInfo.normalized === correctInfo.normalized;
+        const core = getAnswerMatchCore();
+        if (core && typeof core.compareAnswers === 'function') {
+            return core.compareAnswers(userInfo.normalized, correctInfo.normalized) === true;
+        }
+        return String(userInfo.normalized) === String(correctInfo.normalized);
     }
 
     function mergeSourceMaps(sources) {

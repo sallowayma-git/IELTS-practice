@@ -71,13 +71,21 @@
             </div>
 
             <div class="search-box">
-                <input type="text" class="search-input" id="exam-search-input" placeholder="搜索题目..." aria-label="搜索题目" onkeyup="searchExams(this.value)">
-                <button type="button" class="search-clear-btn" id="search-clear-btn" aria-label="清除搜索" hidden onclick="clearSearch()">
-                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
+                <div class="search-row">
+                    <div class="search-input-wrap">
+                        <input type="text" class="search-input" id="exam-search-input" placeholder="搜索题目..." aria-label="搜索题目" onkeyup="searchExams(this.value)">
+                        <button type="button" class="search-clear-btn" id="search-clear-btn" aria-label="清除搜索" hidden onclick="clearSearch()">
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    <select id="browse-sort-select" class="browse-sort-select" aria-label="题库排序">
+                        <option value="default">默认排序</option>
+                        <option value="frequency-desc">频率高→低</option>
+                    </select>
+                </div>
             </div>
 
             <div id="exam-list-container"></div>
@@ -130,6 +138,17 @@
                             批量删除</button>
                         <button class="btn btn-warning hero-btn hero-btn--warn" onclick="clearPracticeData()">🗑️
                             清除记录</button>
+                    </div>
+                </div>
+                <div class="practice-history-search-row">
+                    <div class="search-input-wrap">
+                        <input type="text" class="search-input" id="history-search-input" placeholder="搜索练习记录（标题/分类/日期）..." aria-label="搜索练习记录" oninput="searchPracticeHistory(this.value)">
+                        <button type="button" class="search-clear-btn history-search-clear-btn" id="history-search-clear-btn" aria-label="清除练习记录搜索" hidden onclick="clearPracticeHistorySearch()">
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
                     </div>
                 </div>
 
@@ -446,6 +465,7 @@
     <script src="js/presentation/shuiBackground.js" defer></script>
     <script src="js/runtime/bootScreen.js" defer></script>
     <script src="js/runtime/lazyLoader.js" defer></script>
+    <script src="js/utils/suitePreference.js" defer></script>
     <script src="js/presentation/app-actions.js" defer></script>
     <script src="js/presentation/developerTeamModal.js" defer></script>
 

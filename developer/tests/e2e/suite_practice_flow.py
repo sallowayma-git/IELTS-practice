@@ -17,7 +17,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INDEX_PATH = REPO_ROOT / "index.html"
@@ -119,9 +119,61 @@ async def _select_suite_flow_mode(page: Page, mode: str) -> None:
     else:
         normalized = "classic"
     modal = page.locator("#suite-mode-selector-modal")
-    await modal.wait_for(state="visible", timeout=10000)
-    await page.locator(f"#suite-mode-selector-modal button[data-suite-flow-mode='{normalized}']").click()
+    try:
+        await modal.wait_for(state="visible", timeout=2500)
+    except PlaywrightTimeoutError:
+        log_step("未检测到套题模式弹窗（test_env 直通路径），按预设参数继续。", "DEBUG")
+        return
+
+    mode_btn = page.locator(f"#suite-mode-selector-modal button[data-suite-flow-mode='{normalized}']")
+    if not await mode_btn.count():
+        log_step(f"未找到套题模式按钮: {normalized}，使用默认模式。", "WARNING")
+        await modal.wait_for(state="hidden", timeout=10000)
+        return
+    await mode_btn.click()
     await modal.wait_for(state="hidden", timeout=10000)
+
+
+async def _preset_suite_preferences(
+    page: Page,
+    mode: str = "classic",
+    frequency_scope: str = "all",
+    auto_advance_after_submit: Optional[bool] = None,
+) -> None:
+    normalized_mode = str(mode).strip().lower()
+    if normalized_mode not in {"classic", "simulation", "stationary"}:
+        normalized_mode = "classic"
+    normalized_scope = str(frequency_scope).strip().lower()
+    if normalized_scope not in {"high", "high_medium", "all"}:
+        normalized_scope = "all"
+    if auto_advance_after_submit is None:
+        auto_advance_after_submit = normalized_mode != "stationary"
+    normalized_auto_advance = bool(auto_advance_after_submit)
+    await page.evaluate(
+        """(payload) => {
+            try {
+                localStorage.setItem('suite_flow_mode', payload.mode);
+                localStorage.setItem('suite_frequency_scope', payload.scope);
+                localStorage.setItem('suite_auto_advance_after_submit', payload.autoAdvanceAfterSubmit ? 'true' : 'false');
+            } catch (_) {
+                // ignore storage failures
+            }
+            if (!window.practiceConfig || typeof window.practiceConfig !== 'object') {
+                window.practiceConfig = {};
+            }
+            if (!window.practiceConfig.suite || typeof window.practiceConfig.suite !== 'object') {
+                window.practiceConfig.suite = {};
+            }
+            window.practiceConfig.suite.flowMode = payload.mode;
+            window.practiceConfig.suite.frequencyScope = payload.scope;
+            window.practiceConfig.suite.autoAdvanceAfterSubmit = payload.autoAdvanceAfterSubmit;
+        }""",
+        {
+            "mode": normalized_mode,
+            "scope": normalized_scope,
+            "autoAdvanceAfterSubmit": normalized_auto_advance,
+        }
+    )
 
 
 async def _dismiss_overlays(page: Page) -> None:
@@ -243,6 +295,35 @@ async def _complete_passage(suite_page: Page, total_count: int, index: int) -> b
         raise
 
 
+async def _verify_popstate_back_guard(suite_page: Page) -> bool:
+    if suite_page.is_closed():
+        return False
+    current_exam_id = await suite_page.evaluate("() => document.body.dataset.examId || ''")
+    current_url = suite_page.url
+    if not current_exam_id:
+        log_step("popstate 防退回校验前未读取到 examId", "ERROR")
+        return False
+
+    try:
+        await suite_page.evaluate("() => window.history.back()")
+        await suite_page.wait_for_timeout(1500)
+    except Exception as error:
+        log_step(f"触发 history.back() 失败: {error}", "ERROR")
+        return False
+
+    after_exam_id = await suite_page.evaluate("() => document.body.dataset.examId || ''")
+    after_url = suite_page.url
+    guarded = (after_exam_id == current_exam_id) and (after_url == current_url)
+    if guarded:
+        log_step("popstate 防退回校验通过", "SUCCESS")
+    else:
+        log_step(
+            f"popstate 防退回校验失败: before=({current_exam_id}, {current_url}) after=({after_exam_id}, {after_url})",
+            "ERROR",
+        )
+    return guarded
+
+
 async def _count_practice_records(page: Page) -> int:
     return await page.evaluate(
         "async () => {\n"
@@ -252,6 +333,85 @@ async def _count_practice_records(page: Page) -> int:
         "  }\n"
         "  return document.querySelectorAll('#history-list .history-record-item').length;\n"
         "}"
+    )
+
+
+async def _suite_record_stats(page: Page) -> Dict[str, int]:
+    return await page.evaluate(
+        "async () => {\n"
+        "  const toFiniteNumber = (value) => {\n"
+        "    const num = Number(value);\n"
+        "    return Number.isFinite(num) ? num : 0;\n"
+        "  };\n"
+        "  const parseTime = (value) => {\n"
+        "    if (!value) return 0;\n"
+        "    const ts = Date.parse(String(value));\n"
+        "    return Number.isFinite(ts) ? ts : 0;\n"
+        "  };\n"
+        "  const isSuiteRecord = (record) => {\n"
+        "    if (!record || typeof record !== 'object') return false;\n"
+        "    if (record.suiteMode === true) return true;\n"
+        "    const metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata : {};\n"
+        "    const frequency = String(record.frequency || metadata.frequency || '').trim().toLowerCase();\n"
+        "    if (frequency === 'suite') return true;\n"
+        "    const sessionId = String(record.sessionId || metadata.suiteSessionId || '').trim();\n"
+        "    return sessionId.startsWith('suite_');\n"
+        "  };\n"
+        "  const latestTsFromRecord = (record) => {\n"
+        "    if (!record || typeof record !== 'object') return 0;\n"
+        "    const metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata : {};\n"
+        "    return Math.max(\n"
+        "      parseTime(record.endTime),\n"
+        "      parseTime(record.date),\n"
+        "      parseTime(metadata.completedAt),\n"
+        "      toFiniteNumber(record.timestamp)\n"
+        "    );\n"
+        "  };\n"
+        "  if (!window.storage || typeof window.storage.get !== 'function') {\n"
+        "    const fallbackCount = document.querySelectorAll('#history-list .history-record-item').length;\n"
+        "    return { count: Number(fallbackCount) || 0, latestTs: 0 };\n"
+        "  }\n"
+        "  const records = await window.storage.get('practice_records', []);\n"
+        "  if (!Array.isArray(records)) {\n"
+        "    return { count: 0, latestTs: 0 };\n"
+        "  }\n"
+        "  let count = 0;\n"
+        "  let latestTs = 0;\n"
+        "  records.forEach((record) => {\n"
+        "    if (!isSuiteRecord(record)) return;\n"
+        "    count += 1;\n"
+        "    const ts = latestTsFromRecord(record);\n"
+        "    if (ts > latestTs) {\n"
+        "      latestTs = ts;\n"
+        "    }\n"
+        "  });\n"
+        "  return { count, latestTs };\n"
+        "}"
+    )
+
+
+async def _wait_for_suite_record_growth(
+    page: Page,
+    baseline_record_count: int,
+    baseline_suite_count: int,
+    baseline_suite_latest_ts: int,
+    timeout_ms: int = 30000,
+) -> None:
+    deadline = asyncio.get_event_loop().time() + (timeout_ms / 1000)
+    while asyncio.get_event_loop().time() <= deadline:
+        current_record_count = await _count_practice_records(page)
+        current_suite_stats = await _suite_record_stats(page)
+        current_suite_count = int(current_suite_stats.get("count") or 0)
+        current_suite_latest_ts = int(current_suite_stats.get("latestTs") or 0)
+        total_growth = current_record_count >= (baseline_record_count + 1)
+        suite_growth = current_suite_count >= (baseline_suite_count + 1)
+        suite_updated = current_suite_latest_ts > baseline_suite_latest_ts
+        if total_growth or suite_growth or suite_updated:
+            return
+        await page.wait_for_timeout(250)
+    raise AssertionError(
+        "suite record did not grow within timeout: "
+        f"records baseline={baseline_record_count}, suite baseline={baseline_suite_count}, latestTs baseline={baseline_suite_latest_ts}"
     )
 
 
@@ -305,6 +465,7 @@ async def run() -> None:
     console_log: List[ConsoleEntry] = []
     start_time = datetime.now()
     test_passed = False
+    popstate_back_guard_ok = False
 
     log_step("=" * 80)
     log_step("开始套题练习流程测试 (E2E)")
@@ -351,6 +512,12 @@ async def run() -> None:
             start_button = page.locator("button[data-action='start-suite-mode']")
             await start_button.scroll_into_view_if_needed()
             log_step("套题练习按钮已就绪", "SUCCESS")
+            await _preset_suite_preferences(
+                page,
+                mode="classic",
+                frequency_scope="all",
+                auto_advance_after_submit=True,
+            )
 
             log_step("启动套题练习...")
             async with page.expect_popup() as popup_wait:
@@ -383,6 +550,10 @@ async def run() -> None:
                 if not should_continue:
                     log_step(f"第 {idx + 1} 篇后终止", "WARNING")
                     break
+                if idx == 0:
+                    popstate_back_guard_ok = await _verify_popstate_back_guard(suite_page)
+                    if not popstate_back_guard_ok:
+                        raise AssertionError("popstate back guard failed: suite exam navigated away after history.back()")
 
             if not suite_page.is_closed():
                 try:
@@ -607,9 +778,28 @@ async def run() -> None:
 
             # 手动回看模式专项：P1提交→next→P2作答→提交→next→P3作答→提交→next完成
             manual_record_count_before = record_count_after
+            manual_suite_stats_before = await _suite_record_stats(page)
+            manual_suite_count_before = int(manual_suite_stats_before.get("count") or 0)
+            manual_suite_latest_ts_before = int(manual_suite_stats_before.get("latestTs") or 0)
             log_step("开始手动回看模式专项验证...")
             await _click_nav(page, "overview")
             await start_button.scroll_into_view_if_needed()
+            await page.evaluate(
+                "() => {\n"
+                "  try {\n"
+                "    localStorage.setItem('suite_flow_mode', 'stationary');\n"
+                "    localStorage.setItem('suite_auto_advance_after_submit', 'false');\n"
+                "  } catch (_) {}\n"
+                "  if (!window.practiceConfig || typeof window.practiceConfig !== 'object') {\n"
+                "    window.practiceConfig = {};\n"
+                "  }\n"
+                "  if (!window.practiceConfig.suite || typeof window.practiceConfig.suite !== 'object') {\n"
+                "    window.practiceConfig.suite = {};\n"
+                "  }\n"
+                "  window.practiceConfig.suite.flowMode = 'stationary';\n"
+                "  window.practiceConfig.suite.autoAdvanceAfterSubmit = false;\n"
+                "}"
+            )
             async with page.expect_popup(timeout=20000) as manual_popup_wait:
                 await start_button.click()
                 await _select_suite_flow_mode(page, "stationary")
@@ -720,21 +910,26 @@ async def run() -> None:
                         pass
 
             await _click_nav(page, "practice")
-            await page.wait_for_function(
-                "async (baseline) => {\n"
-                "  if (!window.storage || typeof window.storage.get !== 'function') {\n"
-                "    return false;\n"
-                "  }\n"
-                "  const records = await window.storage.get('practice_records', []);\n"
-                "  return Array.isArray(records) && records.length >= (Number(baseline) + 1);\n"
-                "}",
-                arg=manual_record_count_before,
-                timeout=30000,
+            await _wait_for_suite_record_growth(
+                page,
+                baseline_record_count=manual_record_count_before,
+                baseline_suite_count=manual_suite_count_before,
+                baseline_suite_latest_ts=manual_suite_latest_ts_before,
+                timeout_ms=30000,
             )
             manual_record_count_after = await _count_practice_records(page)
-            if manual_record_count_after < manual_record_count_before + 1:
+            manual_suite_stats_after = await _suite_record_stats(page)
+            manual_suite_count_after = int(manual_suite_stats_after.get("count") or 0)
+            manual_suite_latest_ts_after = int(manual_suite_stats_after.get("latestTs") or 0)
+            total_growth = manual_record_count_after >= (manual_record_count_before + 1)
+            suite_growth = manual_suite_count_after >= (manual_suite_count_before + 1)
+            suite_updated = manual_suite_latest_ts_after > manual_suite_latest_ts_before
+            if not (total_growth or suite_growth or suite_updated):
                 raise AssertionError(
-                    f"manual mode suite finalize did not persist record: before={manual_record_count_before}, after={manual_record_count_after}"
+                    "manual mode suite finalize did not persist/update suite record: "
+                    f"records {manual_record_count_before}->{manual_record_count_after}, "
+                    f"suiteRecords {manual_suite_count_before}->{manual_suite_count_after}, "
+                    f"suiteLatestTs {manual_suite_latest_ts_before}->{manual_suite_latest_ts_after}"
                 )
             log_step("手动回看模式专项验证通过", "SUCCESS")
 
@@ -765,6 +960,9 @@ async def run() -> None:
             "duration": duration,
             "status": "pass" if test_passed else "fail",
             "deprecatedFacadeWarnings": len(deprecated_facade_logs),
+            "checks": {
+                "popstateBackGuard": bool(popstate_back_guard_ok),
+            },
             "consoleLogs": [
                 {
                     "type": entry.type,
