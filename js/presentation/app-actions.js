@@ -115,68 +115,74 @@
     // ============================================================================
 
     function startSuitePractice() {
-        function ensurePracticeConfig() {
-            if (!global.practiceConfig || typeof global.practiceConfig !== 'object') {
-                global.practiceConfig = {};
-            }
-            if (!global.practiceConfig.suite || typeof global.practiceConfig.suite !== 'object') {
-                global.practiceConfig.suite = {};
-            }
-            return global.practiceConfig;
+        function getSuitePreferenceUtils() {
+            return global.SuitePreferenceUtils || null;
         }
 
-        function resolveSuiteFlowMode() {
-            var config = ensurePracticeConfig();
-            if (typeof config.suite.flowMode === 'string') {
-                var inMemoryMode = config.suite.flowMode.trim().toLowerCase();
-                if (inMemoryMode === 'classic' || inMemoryMode === 'stationary' || inMemoryMode === 'simulation') {
-                    return inMemoryMode;
-                }
+        function resolveSuitePreference(overrides) {
+            var suitePreferenceUtils = getSuitePreferenceUtils();
+            if (suitePreferenceUtils && typeof suitePreferenceUtils.resolveSuitePreference === 'function') {
+                return suitePreferenceUtils.resolveSuitePreference(overrides || {});
             }
-            try {
-                if (global.localStorage && typeof global.localStorage.getItem === 'function') {
-                    var persistedMode = String(global.localStorage.getItem('suite_flow_mode') || '').trim().toLowerCase();
-                    if (persistedMode === 'classic' || persistedMode === 'stationary' || persistedMode === 'simulation') {
-                        config.suite.flowMode = persistedMode;
-                        return persistedMode;
-                    }
-                }
-            } catch (_) {
-                // ignore storage errors
+            var flowMode = String(overrides && overrides.flowMode || '').trim().toLowerCase();
+            if (flowMode !== 'classic' && flowMode !== 'simulation' && flowMode !== 'stationary') {
+                flowMode = 'classic';
             }
-            config.suite.flowMode = 'classic';
-            return 'classic';
+            var frequencyScope = String(overrides && overrides.frequencyScope || '').trim().toLowerCase();
+            if (frequencyScope !== 'high' && frequencyScope !== 'high_medium' && frequencyScope !== 'all') {
+                frequencyScope = 'all';
+            }
+            return {
+                flowMode: flowMode,
+                frequencyScope: frequencyScope,
+                autoAdvanceAfterSubmit: flowMode !== 'stationary'
+            };
+        }
+
+        function persistSuitePreference(partial) {
+            var suitePreferenceUtils = getSuitePreferenceUtils();
+            if (suitePreferenceUtils && typeof suitePreferenceUtils.persistSuitePreference === 'function') {
+                return suitePreferenceUtils.persistSuitePreference(partial || {});
+            }
+            return resolveSuitePreference(partial || {});
         }
 
         function persistSuiteFlowMode(mode) {
-            var normalized = mode === 'stationary'
-                ? 'stationary'
-                : (mode === 'simulation' ? 'simulation' : 'classic');
-            var config = ensurePracticeConfig();
-            config.suite.flowMode = normalized;
-            config.suite.autoAdvanceAfterSubmit = normalized === 'classic';
-            if (normalized === 'simulation') {
-                config.suite.autoAdvanceAfterSubmit = true;
-            }
-            try {
-                if (global.localStorage && typeof global.localStorage.setItem === 'function') {
-                    global.localStorage.setItem('suite_flow_mode', normalized);
-                    global.localStorage.setItem(
-                        'suite_auto_advance_after_submit',
-                        normalized === 'classic' ? 'true' : 'false'
-                    );
-                }
-            } catch (_) {
-                // ignore storage errors
-            }
-            return normalized;
+            var persisted = persistSuitePreference({ flowMode: mode });
+            return persisted.flowMode || 'classic';
+        }
+
+        function persistSuiteFrequencyScope(scope) {
+            var persisted = persistSuitePreference({ frequencyScope: scope });
+            return persisted.frequencyScope || 'all';
         }
 
         function promptSuiteModeSelection() {
             return new Promise(function resolveSelection(resolve) {
-                var preselected = resolveSuiteFlowMode();
+                var preselectedPreference = resolveSuitePreference();
+                var preselected = preselectedPreference.flowMode || 'classic';
+                var preselectedScope = preselectedPreference.frequencyScope || 'all';
+                var search = '';
+                try {
+                    search = String(global.location && global.location.search || '').toLowerCase();
+                } catch (_) {
+                    search = '';
+                }
+                var isTestEnv = search.indexOf('test_env=1') !== -1
+                    || search.indexOf('suite_test=1') !== -1
+                    || search.indexOf('ci=1') !== -1;
+                if (isTestEnv) {
+                    resolve({
+                        flowMode: preselected,
+                        frequencyScope: preselectedScope
+                    });
+                    return;
+                }
                 if (!global.document || !global.document.body) {
-                    resolve(preselected);
+                    resolve({
+                        flowMode: preselected,
+                        frequencyScope: preselectedScope
+                    });
                     return;
                 }
                 var host = global.document.getElementById('suite-mode-selector-modal');
@@ -195,6 +201,14 @@
                     '<button type="button" data-suite-flow-mode="classic" style="padding:11px 12px;border:1px solid #0ea5e9;border-radius:8px;background:#f0f9ff;color:#0c4a6e;font-weight:700;cursor:pointer;text-align:left;">经典模式（自动跳转）</button>',
                     '<button type="button" data-suite-flow-mode="stationary" style="padding:11px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;color:#0f172a;font-weight:700;cursor:pointer;text-align:left;">驻足模式（提交后停留回看）</button>',
                     '</div>',
+                    '<div style="margin-top:12px;">',
+                    '<label for="suite-frequency-scope" style="display:block;margin-bottom:6px;font-size:12px;color:#334155;">抽题范围</label>',
+                    '<select id="suite-frequency-scope" style="width:100%;padding:9px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;color:#0f172a;">',
+                    '<option value="high_medium">高频 + 次高频</option>',
+                    '<option value="high">仅高频</option>',
+                    '<option value="all">全部频率（默认）</option>',
+                    '</select>',
+                    '</div>',
                     '<div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px;">',
                     '<button type="button" data-suite-flow-cancel="1" style="padding:8px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#475569;cursor:pointer;">取消</button>',
                     '</div>',
@@ -208,14 +222,24 @@
                     });
                 };
                 markSelected(preselected);
+                var scopeSelect = host.querySelector('#suite-frequency-scope');
+                if (scopeSelect) {
+                    scopeSelect.value = preselectedScope;
+                }
                 host.addEventListener('click', function onClick(event) {
                     var target = event.target && event.target.closest ? event.target.closest('button') : null;
                     if (!target) return;
                     var mode = target.getAttribute('data-suite-flow-mode');
                     if (mode) {
                         var normalized = persistSuiteFlowMode(mode);
+                        var selectedScope = scopeSelect && scopeSelect.value
+                            ? persistSuiteFrequencyScope(scopeSelect.value)
+                            : persistSuiteFrequencyScope(preselectedScope);
                         if (host.parentNode) host.parentNode.removeChild(host);
-                        resolve(normalized);
+                        resolve({
+                            flowMode: normalized,
+                            frequencyScope: selectedScope
+                        });
                         return;
                     }
                     if (target.hasAttribute('data-suite-flow-cancel')) {
@@ -232,14 +256,17 @@
             : ensurePracticeSuite();
 
         return Promise.resolve(ensureSuiteReady).then(function afterReady() {
-            return promptSuiteModeSelection().then(function handleMode(mode) {
-                if (!mode) {
+            return promptSuiteModeSelection().then(function handleMode(selection) {
+                if (!selection || !selection.flowMode) {
                     return undefined;
                 }
             var appInstance = global.app;
             if (appInstance && typeof appInstance.startSuitePractice === 'function') {
                 try {
-                        return appInstance.startSuitePractice({ flowMode: mode });
+                        return appInstance.startSuitePractice({
+                            flowMode: selection.flowMode,
+                            frequencyScope: selection.frequencyScope
+                        });
                 } catch (error) {
                     console.error('[AppActions] 套题模式启动失败', error);
                     if (typeof global.showMessage === 'function') {

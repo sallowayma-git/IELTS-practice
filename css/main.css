@@ -2751,6 +2751,18 @@ body.no-scroll {
     position: relative;
 }
 
+.search-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.search-input-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .search-input {
     width: 100%;
     padding: var(--space-md) 45px var(--space-md) var(--space-lg);
@@ -2791,6 +2803,10 @@ body.no-scroll {
     z-index: 2;
 }
 
+.search-input-wrap .search-clear-btn {
+    right: 12px;
+}
+
 .search-clear-btn:hover {
     background: var(--color-gray-200);
     color: var(--color-gray-700);
@@ -2816,6 +2832,22 @@ body.no-scroll {
 .search-input::placeholder {
     color: var(--color-gray-400);
     font-weight: var(--font-weight-normal);
+}
+
+.browse-sort-select {
+    min-width: 150px;
+    padding: var(--space-md) var(--space-lg);
+    border: 1px solid var(--color-gray-300);
+    border-radius: var(--border-radius-lg);
+    background: var(--color-white);
+    color: var(--color-gray-900);
+    font-size: var(--font-size-sm);
+    outline: none;
+    cursor: pointer;
+}
+
+.browse-sort-select:focus {
+    border-color: var(--color-brand-primary);
 }
 
 
@@ -2887,6 +2919,14 @@ body.no-scroll {
 
 .practice-history>div:first-of-type>div:last-child {
     margin-left: auto;
+}
+
+.practice-history-search-row {
+    margin: 8px 0 14px;
+}
+
+.history-search-clear-btn {
+    right: 10px;
 }
 
 .practice-history-list,
@@ -3162,6 +3202,15 @@ body.no-scroll {
     .search-input {
         font-size: 16px;
         /* 防止iOS缩放 */
+    }
+
+    .search-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .browse-sort-select {
+        width: 100%;
     }
 
     .practice-stats {
@@ -6253,3 +6302,48 @@ body.theme-blue ::-webkit-scrollbar-thumb {
 .achievement-card.tier-1 .achievement-icon { text-shadow: 0 2px 4px rgba(205, 127, 50, 0.3); }
 .achievement-card.tier-2 .achievement-icon { text-shadow: 0 2px 4px rgba(192, 192, 192, 0.3); }
 .achievement-card.tier-3 .achievement-icon { text-shadow: 0 2px 4px rgba(255, 215, 0, 0.3); }
+/* Reading exam layout safeguards */
+.diagram-container {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.diagram-container img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.diagram-container--elephant {
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.diagram-image--elephant {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .diagram-container--elephant {
+    max-width: 100%;
+  }
+
+  .diagram-image--elephant {
+    max-width: 100%;
+  }
+}
+
+.mcq-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mcq-options label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.5;
+}

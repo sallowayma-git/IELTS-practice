@@ -282,6 +282,7 @@
     占位页将继续向父页面发送 SESSION_READY / PRACTICE_COMPLETE 消息，保障套题练习与练习记录聚合流程正常执行。
 </footer>
 <script src="../js/utils/environmentDetector.js"></script>
+<script src="../js/utils/suiteBackGuard.js"></script>
 <script>
 (function() {
     const opener = window.opener || window.parent;
@@ -339,6 +340,7 @@
         forceReadyBtn: document.getElementById('force-ready-btn'),
         log: document.getElementById('event-log')
     };
+    let suiteBackGuardController = null;
 
     function ensureReviewNavBar() {
         let bar = document.getElementById('practice-review-nav');
@@ -450,9 +452,8 @@
             : '当前题目无法加载，系统已切换到占位练习页。';
         dom.metaExam.textContent = examId || '未提供';
         dom.metaCategory.textContent = category || 'P1';
-        if (suiteSessionId) {
-            dom.metaSuite.textContent = suiteSessionId;
-        }
+        dom.metaSuite.textContent = suiteSessionId || '-';
+        updateSuiteBackGuard();
         dom.metaScore.textContent = `正确 ${state.correctCount} / 总题数 ${state.totalCount}（${Math.round((state.correctCount / state.totalCount) * 100)}%）`;
         dom.metaDuration.textContent = '~12 分钟';
         applyFallbackManualNavContext();
@@ -491,6 +492,65 @@
         } catch (error) {
             log(`发送 ${type} 消息失败: ${error}`, 'error');
         }
+    }
+
+    function notifySuiteCloseAttempt(reason) {
+        if (!state.suiteSessionId) {
+            return;
+        }
+        postMessage('SUITE_CLOSE_ATTEMPT', {
+            reason: reason || 'unknown'
+        });
+    }
+
+    function installSuiteBackGuard() {
+        if (suiteBackGuardController || !state.suiteSessionId) {
+            return;
+        }
+        const factory = (
+            window.SuiteBackGuard && typeof window.SuiteBackGuard.create === 'function'
+        )
+            ? window.SuiteBackGuard.create
+            : (typeof window.createSuiteBackGuard === 'function' ? window.createSuiteBackGuard : null);
+        if (!factory) {
+            log('SuiteBackGuard 未就绪，跳过防退回守护。', 'warn');
+            return;
+        }
+        suiteBackGuardController = factory({
+            getSuiteSessionId: () => state.suiteSessionId || null,
+            onBlocked: () => {
+                notifySuiteCloseAttempt('history_back_blocked');
+                log('已拦截历史后退，保持当前篇。', 'warn');
+            }
+        });
+        if (!suiteBackGuardController || typeof suiteBackGuardController.activate !== 'function') {
+            suiteBackGuardController = null;
+            log('SuiteBackGuard 工厂返回无效控制器，跳过防退回守护。', 'warn');
+            return;
+        }
+        suiteBackGuardController.activate();
+    }
+
+    function teardownSuiteBackGuard() {
+        if (!suiteBackGuardController) {
+            return;
+        }
+        if (typeof suiteBackGuardController.deactivate === 'function') {
+            try {
+                suiteBackGuardController.deactivate();
+            } catch (_) {
+                // ignore teardown failures
+            }
+        }
+        suiteBackGuardController = null;
+    }
+
+    function updateSuiteBackGuard() {
+        if (state.suiteSessionId) {
+            installSuiteBackGuard();
+            return;
+        }
+        teardownSuiteBackGuard();
     }
 
     function setReadOnlyMode(readOnly) {
@@ -693,6 +753,7 @@
                 state.suiteSessionId = data.suiteSessionId;
                 dom.metaSuite.textContent = data.suiteSessionId;
             }
+            updateSuiteBackGuard();
             if (data.examId) {
                 state.examId = data.examId;
                 document.body.dataset.examId = data.examId;
@@ -740,6 +801,7 @@
             const nextUrl = data.url || '';
             if (nextUrl) {
                 try {
+                    teardownSuiteBackGuard();
                     window.location.href = nextUrl;
                 } catch (error) {
                     log('跳转下一篇失败: ' + error, 'error');
@@ -766,6 +828,8 @@
     });
 
     window.addEventListener('message', handleIncoming);
+    window.addEventListener('beforeunload', teardownSuiteBackGuard);
+    window.addEventListener('pagehide', teardownSuiteBackGuard);
 
     parseParams();
     setReadOnlyMode(false);
