@@ -2834,20 +2834,47 @@ body.no-scroll {
     font-weight: var(--font-weight-normal);
 }
 
+.browse-sort-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.browse-sort-icon {
+    position: absolute;
+    right: 14px;
+    pointer-events: none;
+    color: var(--color-gray-500);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .browse-sort-select {
     min-width: 150px;
-    padding: var(--space-md) var(--space-lg);
+    appearance: none;
+    -webkit-appearance: none;
+    padding: var(--space-md) 36px var(--space-md) var(--space-lg);
     border: 1px solid var(--color-gray-300);
     border-radius: var(--border-radius-lg);
     background: var(--color-white);
     color: var(--color-gray-900);
     font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
     outline: none;
     cursor: pointer;
+    transition: all var(--transition-normal);
+    box-shadow: var(--shadow-sm);
+}
+
+.browse-sort-select:hover {
+    border-color: var(--color-gray-400);
 }
 
 .browse-sort-select:focus {
     border-color: var(--color-brand-primary);
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
 }
 
 
