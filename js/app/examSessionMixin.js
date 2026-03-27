@@ -2,6 +2,8 @@
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/practice-page-enhancer.js';
+    const ANSWER_MATCH_CORE_SCRIPT_PATH = './js/utils/answerMatchCore.js';
+    const SUITE_BACK_GUARD_SCRIPT_PATH = './js/utils/suiteBackGuard.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
 
     async function getActiveExamIndexSnapshot() {
@@ -576,6 +578,14 @@
                     ? `${resolved}&v=${PRACTICE_ENHANCER_BUILD_ID}`
                     : `${resolved}?v=${PRACTICE_ENHANCER_BUILD_ID}`;
             };
+            const ensureCoreScriptUrl = () => {
+                const resolved = this._ensureAbsoluteUrl(ANSWER_MATCH_CORE_SCRIPT_PATH);
+                return resolved || ANSWER_MATCH_CORE_SCRIPT_PATH;
+            };
+            const ensureBackGuardScriptUrl = () => {
+                const resolved = this._ensureAbsoluteUrl(SUITE_BACK_GUARD_SCRIPT_PATH);
+                return resolved || SUITE_BACK_GUARD_SCRIPT_PATH;
+            };
 
             const injectScript = () => {
                 try {
@@ -614,29 +624,114 @@
                     if (existingEnhancerScript) {
                         return;
                     }
-                    const scriptEl = doc.createElement('script');
-                    scriptEl.type = 'text/javascript';
-                    scriptEl.defer = true;
-                    scriptEl.dataset.practiceEnhancer = 'true';
-                    scriptEl.src = ensureScriptUrl();
+                    let enhancerInjected = false;
+                    const appendEnhancer = () => {
+                        if (enhancerInjected || (examWindow.practicePageEnhancer && typeof examWindow.practicePageEnhancer.initialize === 'function')) {
+                            return;
+                        }
+                        enhancerInjected = true;
+                        const scriptEl = doc.createElement('script');
+                        scriptEl.type = 'text/javascript';
+                        scriptEl.defer = true;
+                        scriptEl.dataset.practiceEnhancer = 'true';
+                        scriptEl.src = ensureScriptUrl();
 
-                    scriptEl.onload = () => {
-                        setTimeout(() => {
-                            try {
-                                this.initializePracticeSession(examWindow, examId);
-                            } catch (sessionError) {
-                                console.warn('[DataInjection] 初始化练习会话失败:', sessionError);
+                        scriptEl.onload = () => {
+                            setTimeout(() => {
+                                try {
+                                    this.initializePracticeSession(examWindow, examId);
+                                } catch (sessionError) {
+                                    console.warn('[DataInjection] 初始化练习会话失败:', sessionError);
+                                }
+                            }, 80);
+                        };
+
+                        scriptEl.onerror = (loadError) => {
+                            console.warn('[DataInjection] 加载增强器失败，回退到内联脚本:', loadError);
+                            scriptEl.remove();
+                            this.injectInlineScript(examWindow, examId);
+                        };
+
+                        host.appendChild(scriptEl);
+                    };
+
+                    const waitForDependencyReady = (isReady, timeoutMs = 4500) => (
+                        new Promise((resolve) => {
+                            if (isReady()) {
+                                resolve(true);
+                                return;
                             }
-                        }, 80);
+                            const startedAt = Date.now();
+                            const poll = () => {
+                                if (isReady()) {
+                                    resolve(true);
+                                    return;
+                                }
+                                if ((Date.now() - startedAt) >= timeoutMs) {
+                                    resolve(false);
+                                    return;
+                                }
+                                setTimeout(poll, 40);
+                            };
+                            poll();
+                        })
+                    );
+
+                    const ensureDependencyScript = ({
+                        selector,
+                        dataKey,
+                        scriptUrl,
+                        isReady,
+                        timeoutMs = 4500
+                    }) => {
+                        if (isReady()) {
+                            return Promise.resolve(true);
+                        }
+                        const existingScript = host.querySelector(selector);
+                        if (!existingScript) {
+                            const scriptEl = doc.createElement('script');
+                            scriptEl.type = 'text/javascript';
+                            scriptEl.defer = true;
+                            scriptEl.dataset[dataKey] = 'true';
+                            scriptEl.src = scriptUrl;
+                            host.appendChild(scriptEl);
+                        }
+                        return waitForDependencyReady(isReady, timeoutMs);
                     };
 
-                    scriptEl.onerror = (loadError) => {
-                        console.warn('[DataInjection] 加载增强器失败，回退到内联脚本:', loadError);
-                        scriptEl.remove();
-                        this.injectInlineScript(examWindow, examId);
+                    const isAnswerMatchReady = () => {
+                        return !!(
+                            examWindow.AnswerMatchCore
+                            && typeof examWindow.AnswerMatchCore.compareAnswers === 'function'
+                        );
                     };
 
-                    host.appendChild(scriptEl);
+                    const isBackGuardReady = () => (
+                        typeof examWindow.createSuiteBackGuard === 'function'
+                        || (
+                            examWindow.SuiteBackGuard
+                            && typeof examWindow.SuiteBackGuard.create === 'function'
+                        )
+                    );
+
+                    Promise.all([
+                        ensureDependencyScript({
+                            selector: 'script[data-answer-match-core="true"]',
+                            dataKey: 'answerMatchCore',
+                            scriptUrl: ensureCoreScriptUrl(),
+                            isReady: isAnswerMatchReady,
+                            timeoutMs: 4500
+                        }),
+                        ensureDependencyScript({
+                            selector: 'script[data-suite-back-guard="true"]',
+                            dataKey: 'suiteBackGuard',
+                            scriptUrl: ensureBackGuardScriptUrl(),
+                            isReady: isBackGuardReady,
+                            timeoutMs: 2500
+                        })
+                    ]).finally(() => {
+                        appendEnhancer();
+                    });
                 } catch (error) {
                     console.error('[DataInjection] 注入增强器脚本时出错:', error);
                     this.injectInlineScript(examWindow, examId);
@@ -2190,6 +2285,11 @@
                     startTime: entry.startTime || record.startTime || record.date || null,
                     endTime: entry.endTime || record.endTime || record.date || null,
                     duration: Number(entry.duration ?? record.duration) || 0,
+                    markedQuestions: Array.isArray(entry.markedQuestions)
+                        ? entry.markedQuestions.slice()
+                        : (Array.isArray(entryMetadata.markedQuestions)
+                            ? entryMetadata.markedQuestions.slice()
+                            : (Array.isArray(recordMetadata.markedQuestions) ? recordMetadata.markedQuestions.slice() : [])),
                     metadata: mergedMetadata
                 };
                 built.allQuestionIds = this._collectReplayQuestionIds(built);
