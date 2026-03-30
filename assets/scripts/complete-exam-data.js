@@ -538,8 +538,8 @@ window.completeExamIndex = [
         path: '睡着过项目组/2. 所有文章(11.20)[192篇]/142. P2 - Born to Trade 交易的本能/',
         filename: '142. P2 - Born to Trade 交易的本能.html',
         hasHtml: true,
-        hasPdf: false,
-        pdfFilename: '',
+        hasPdf: true,
+        pdfFilename: 'ReadingPractice/PDF/142. P2 - Born to Trade 交易的本能.pdf',
     },
     {
         id: 'p2-low-50',
