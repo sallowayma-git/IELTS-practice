@@ -1000,6 +1000,30 @@
     "title": "Mercator - The Map Maker 地理制图师",
     "sourceDoc": "P3 解析+1202高频_副本.md",
     "matchedTitle": "Mercator - The Map Maker 地理制图师"
+  },
+  "p1-high-227": {
+    "examId": "p1-high-227",
+    "dataKey": "p1-high-227",
+    "script": "../reading-explanations/p1-high-227.js",
+    "title": "The Whale Goes to Court 鲸鱼油",
+    "sourceDoc": "227. P1 - The Whale Goes to Court 鲸鱼油.pdf",
+    "matchedTitle": "The Whale Goes to Court 鲸鱼油"
+  },
+  "p2-high-225": {
+    "examId": "p2-high-225",
+    "dataKey": "p2-high-225",
+    "script": "../reading-explanations/p2-high-225.js",
+    "title": "The problem of graffiti 涂鸦之困",
+    "sourceDoc": "225. P2 - The problem of graffiti 涂鸦之困.pdf",
+    "matchedTitle": "The problem of graffiti 涂鸦之困"
+  },
+  "p3-high-228": {
+    "examId": "p3-high-228",
+    "dataKey": "p3-high-228",
+    "script": "../reading-explanations/p3-high-228.js",
+    "title": "On art and artists 艺术与艺术家",
+    "sourceDoc": "228. P3 - On art and artists 艺术与艺术家.pdf",
+    "matchedTitle": "On art and artists 艺术与艺术家"
   }
 };
 })(typeof window !== "undefined" ? window : globalThis);
