@@ -10,9 +10,9 @@
     "examId": "p1-high-171",
     "title": "Fishbourne Roman Palace 罗马宫殿",
     "category": "P1",
-    "sourceDoc": "P1 1-32之_副本.md",
-    "noteType": "总结",
-    "matchedTitle": "Fishbourne Roman Palace 罗马宫殿【次】"
+    "sourceDoc": "8. P1 - Fishbourne Roman Palace 罗马宫殿.pdf",
+    "noteType": "翻译+解析",
+    "matchedTitle": "Fishbourne Roman Palace 罗马宫殿"
   },
   "passageNotes": [
     {
@@ -46,37 +46,37 @@
   ],
   "questionExplanations": [
     {
-      "sectionTitle": "1. 判断题（Questions 1–6：TRUE/FALSE/NOT GIVEN）",
-      "mode": "per_question",
+      "sectionTitle": "1. 判断正误（Questions 1–6）",
+      "mode": "group",
       "items": [
         {
           "questionNumber": 1,
-          "text": "（1）题目 1：Fishbourne Palace was the first structure to be built on its site.\n题目翻译：菲什伯恩宫殿是其遗址上建造的首个建筑。\n答案：FALSE（错误）\n解析：定位 Paragraph 1 中 “on the site of Roman army grain stores that had been established after the invasion during the reign of the Roman Emperor Claudius in 43 AD” 和 Paragraph 4 中 “The first buildings to be erected on the site were constructed in the early part of the conquest in 43 AD... Later, two timber buildings were constructed”，说明宫殿原址此前有罗马军队谷物仓库和木结构建筑，宫殿并非首个建筑，与题干描述矛盾，因此判定为 FALSE。",
+          "text": "题目：Fishbourne Palace was the first structure to be built on its site.\n题目翻译：菲什伯恩宫殿是该遗址上最早建成的建筑。\n答案：FALSE\n解析：文章写明 43AD 征服初期就有更早建筑，之后还有木结构建筑和石屋，宫殿并非第一座建筑。",
           "questionId": "q1"
         },
         {
           "questionNumber": 2,
-          "text": "（2）题目 2：Fishbourne Palace was renovated more than once.\n题目翻译：菲什伯恩宫殿改建不止一次。\n答案：TRUE（正确）\n解析：定位 Paragraph 1 中 “there were extensive alterations in the 2nd and 3rd centuries AD... More alterations were in progress when the palace burnt down in around 270 AD” 和 Paragraph 6 中 “was extensively re-planned early in the 2nd century AD... Further redevelopment was begun in the late 3rd century AD”，说明宫殿在 2-3 世纪、2 世纪初、3 世纪末多次改建，与题干 “改建不止一次” 描述一致，因此判定为 TRUE。",
+          "text": "题目：Fishbourne Palace was renovated more than once.\n题目翻译：菲什伯恩宫殿经历过不止一次改建。\n答案：TRUE\n解析：原文指出 2 世纪和 3 世纪都有大规模改建，且 270AD 前仍在继续改造，明显超过一次。",
           "questionId": "q2"
         },
         {
           "questionNumber": 3,
-          "text": "（3）题目 3：Fishbourne Palace was large in comparison with Roman palaces in Italy.\n题目翻译：与意大利的罗马宫殿相比，菲什伯恩宫殿规模更大。\n答案：FALSE（错误）\n解析：定位 Paragraph 3 中 “Fishbourne Palace would have been approximately equivalent to some of the great Roman palaces of Italy”，说明宫殿规模与意大利部分罗马宫殿 “大致相当”，而非 “更大”，与题干描述矛盾，因此判定为 FALSE。",
+          "text": "题目：Fishbourne Palace was large in comparison with Roman palaces in Italy.\n题目翻译：与意大利的罗马宫殿相比，菲什伯恩宫殿规模很大。\n答案：FALSE\n解析：文中是“approximately equivalent to some of the great Roman palaces of Italy”，强调与部分意大利宫殿大致相当，并未支持题干这种泛化比较结论。",
           "questionId": "q3"
         },
         {
           "questionNumber": 4,
-          "text": "（4）题目 4：Research is continuing in the area close to Fishbourne Palace.\n题目翻译：菲什伯恩宫殿附近区域的研究仍在继续。\n答案：TRUE（正确）\n解析：定位 Paragraph 3 中 “A team of volunteers and professional archaeologists is involved in an ongoing archaeological excavation on the site of nearby, possibly military, buildings”，“ongoing archaeological excavation” 意为 “持续的考古挖掘”，即研究在继续，与题干描述一致，因此判定为 TRUE。",
+          "text": "题目：Research is continuing in the area close to Fishbourne Palace.\n题目翻译：菲什伯恩宫殿附近区域的研究仍在继续。\n答案：TRUE\n解析：文章明确写到志愿者和专业考古学家正在附近遗址持续发掘，和题干一致。",
           "questionId": "q4"
         },
         {
           "questionNumber": 5,
-          "text": "（5）题目 5：Researchers agree on the identity of the person for whom Fishbourne Palace was constructed.\n题目翻译：研究者就菲什伯恩宫殿的建造对象身份达成一致。\n答案：FALSE（错误）\n解析：定位 Paragraph 5-6 中 “there are a number of theories... one proposed by Professor Cunliffe is that... Another theory is that... Additional theories suggest that...”，说明研究者对建造对象有多种推测（科吉杜布努斯、卢库卢斯、维里卡、卡图阿斯），并未达成一致，与题干描述矛盾，因此判定为 FALSE。",
+          "text": "题目：Researchers agree on the identity of the person for whom Fishbourne Palace was constructed.\n题目翻译：研究者对菲什伯恩宫殿最初为谁建造已经达成一致。\n答案：FALSE\n解析：原文列出多种相互竞争的主人理论（Cogidubnus、Lucullus、Verica、Catuarus），不存在一致意见。",
           "questionId": "q5"
         },
         {
           "questionNumber": 6,
-          "text": "（6）题目 6：Fishbourne Palace was burnt down by local people.\n题目翻译：菲什伯恩宫殿被当地人焚毁。\n答案：NOT GIVEN（未提及）\n解析：Paragraph 1 和 Paragraph 6 仅提到宫殿 “burnt down in around 270 AD”，但未说明 “起火原因” 或 “纵火者是否为当地人”，无相关信息，因此判定为 NOT GIVEN。",
+          "text": "题目：Fishbourne Palace was burnt down by local people.\n题目翻译：菲什伯恩宫殿是被当地人烧毁的。\n答案：NOT GIVEN\n解析：文章只说宫殿约在 270AD 焚毁，没有给出纵火者身份或是否由当地人造成。",
           "questionId": "q6"
         }
       ],
@@ -84,55 +84,65 @@
         "start": 1,
         "end": 6
       },
-      "text": "题目翻译：菲什伯恩宫殿是其遗址上建造的首个建筑。\n答案：FALSE（错误）\n解析：定位 Paragraph 1 中 “on the site of Roman army grain stores that had been established after the invasion during the reign of the Roman Emperor Claudius in 43 AD” 和 Paragraph 4 中 “The first buildings to be erected on the site were constructed in the early part of the conquest in 43 AD... Later, two timber buildings were constructed”，说明宫殿原址此前有罗马军队谷物仓库和木结构建筑，宫殿并非首个建筑，与题干描述矛盾，因此判定为 FALSE。\n题目翻译：菲什伯恩宫殿改建不止一次。\n答案：TRUE（正确）\n解析：定位 Paragraph 1 中 “there were extensive alterations in the 2nd and 3rd centuries AD... More alterations were in progress when the palace burnt down in around 270 AD” 和 Paragraph 6 中 “was extensively re-planned early in the 2nd century AD... Further redevelopment was begun in the late 3rd century AD”，说明宫殿在 2-3 世纪、2 世纪初、3 世纪末多次改建，与题干 “改建不止一次” 描述一致，因此判定为 TRUE。\n题目翻译：与意大利的罗马宫殿相比，菲什伯恩宫殿规模更大。\n答案：FALSE（错误）\n解析：定位 Paragraph 3 中 “Fishbourne Palace would have been approximately equivalent to some of the great Roman palaces of Italy”，说明宫殿规模与意大利部分罗马宫殿 “大致相当”，而非 “更大”，与题干描述矛盾，因此判定为 FALSE。\n题目翻译：菲什伯恩宫殿附近区域的研究仍在继续。\n答案：TRUE（正确）\n解析：定位 Paragraph 3 中 “A team of volunteers and professional archaeologists is involved in an ongoing archaeological excavation on the site of nearby, possibly military, buildings”，“ongoing archaeological excavation” 意为 “持续的考古挖掘”，即研究在继续，与题干描述一致，因此判定为 TRUE。\n题目翻译：研究者就菲什伯恩宫殿的建造对象身份达成一致。\n答案：FALSE（错误）\n解析：定位 Paragraph 5-6 中 “there are a number of theories... one proposed by Professor Cunliffe is that... Another theory is that... Additional theories suggest that...”，说明研究者对建造对象有多种推测（科吉杜布努斯、卢库卢斯、维里卡、卡图阿斯），并未达成一致，与题干描述矛盾，因此判定为 FALSE。\n题目翻译：菲什伯恩宫殿被当地人焚毁。\n答案：NOT GIVEN（未提及）\n解析：Paragraph 1 和 Paragraph 6 仅提到宫殿 “burnt down in around 270 AD”，但未说明 “起火原因” 或 “纵火者是否为当地人”，无相关信息，因此判定为 NOT GIVEN。"
+      "text": "题目 1：宫殿是否为遗址首座建筑。答案：FALSE。解析：早于宫殿的建筑已在 43AD 存在。\n题目 2：宫殿是否多次改建。答案：TRUE。解析：2、3 世纪均有改建且后期仍在施工。\n题目 3：宫殿是否在与意大利宫殿比较中可直接判为“很大”。答案：FALSE。解析：原文表述是与部分宫殿大致相当。\n题目 4：附近研究是否仍在继续。答案：TRUE。解析：附近遗址持续发掘。\n题目 5：建造对象身份是否已达成一致。答案：FALSE。解析：存在多套互斥理论。\n题目 6：是否由当地人焚毁。答案：NOT GIVEN。解析：原文未交代纵火主体。"
     },
     {
-      "sectionTitle": "2. 笔记填空题（Questions 7–13：NO MORE THAN TWO WORDS AND/OR A NUMBER）",
+      "sectionTitle": "2. 笔记填空（Questions 7–11）",
       "mode": "group",
       "items": [
         {
           "questionNumber": 7,
-          "text": "（1）题目 7：Construction - The first buildings on the site contained food for the \\___\\___\n题目翻译：建造背景 —— 遗址上最早的建筑储存供_\\___\\__食用的食物\n答案：Roman army（罗马军队）\n解析：定位 Paragraph 1 中 “on the site of Roman army grain stores that had been established after the invasion”，最早的建筑是 “罗马军队（Roman army）” 的谷物仓库，即储存供罗马军队食用的粮食，因此答案为 “Roman army”。",
+          "text": "题目：The first buildings on the site contained food for the ____.\n题目翻译：该遗址最早建筑中储存的是供 ____ 使用的粮食。\n答案：Roman army\n解析：首段写明该地最初是罗马入侵后建立的“Roman army grain stores”，对应 Roman army。",
           "questionId": "q7"
         },
         {
           "questionNumber": 8,
-          "text": "（2）题目 8：Construction - The palace building surrounded \\___\\___\n题目翻译：建造背景 —— 宫殿建筑环绕_\\___\\__而建\n答案：formal gardens（正式花园）\n解析：定位 Paragraph 1 中 “The rectangular palace was built around formal gardens”，“built around” 意为 “环绕…… 建造”，即宫殿环绕 “正式花园”，因此答案为 “formal gardens”。",
+          "text": "题目：The palace building surrounded ____.\n题目翻译：宫殿建筑围绕着 ____ 建造。\n答案：formal gardens\n解析：原文原句是 “The rectangular palace was built around formal gardens.”，直接定位。",
           "questionId": "q8"
         },
         {
           "questionNumber": 9,
-          "text": "（3）题目 9：Construction - In the 2nd and 3rd centuries colour was added to the \\___\\___ of the palace.\n题目翻译：建造背景 ——2-3 世纪时，宫殿的_\\___\\__被添加了色彩\n答案：mosaic floors（马赛克地板）\n解析：定位 Paragraph 1 中 “many of the original black-and-white mosaic floors being overlaid with more sophisticated coloured ones”，可知 2-3 世纪时，宫殿的 “马赛克地板（mosaic floors）” 从黑白改为彩色，即添加了色彩，因此答案为 “mosaic floors”。",
+          "text": "题目：In the 2nd and 3rd centuries colour was added to the ____ of the palace.\n题目翻译：在 2-3 世纪，宫殿的 ____ 被加入了彩色装饰。\n答案：mosaic floors\n解析：文中说明黑白马赛克地面被更复杂的彩色马赛克覆盖，关键词即 mosaic floors。",
           "questionId": "q9"
         },
         {
           "questionNumber": 10,
-          "text": "（4）题目 10：Discovery - The first part of the palace to be found was part of a \\___\\___\n题目翻译：发现过程 —— 宫殿首次被发现的部分是_\\___\\__的一部分\n答案：wall（墙）\n解析：定位 Paragraph 2 中 “it was not until 1960 that the archaeologist Barry Cunliffe... first systematically excavated the site, after workmen had accidentally uncovered a wall while they were laying a water main”，工人首次发现的宫殿部分是 “一堵墙（wall）”，因此答案为 “wall”。",
+          "text": "题目：The first part of the palace to be found was part of a ____.\n题目翻译：最先被发现的宫殿遗迹是一段 ____。\n答案：wall\n解析：第二段写到工人铺设水管时“accidentally uncovered a wall”，因此填 wall。",
           "questionId": "q10"
         },
         {
           "questionNumber": 11,
-          "text": "（5）题目 11：Possible inhabitants - Sallustius Lucullus - he may have lived there until approximately \\___\\___ AD.\n题目翻译：可能的居住者 —— 萨卢斯提乌斯・卢库卢斯 —— 他可能在那里居住到约_\\___\\__ AD\n答案：93（93 年）\n解析：定位 Paragraph 5 中 “the Roman historian Suetonius records that Lucullus was executed by the Emperor Domitian in or shortly after 93 AD”，卢库卢斯在 93AD 或之后被处决，若宫殿为他建造，他可能居住到 “93AD” 左右，因此答案为 “93”。",
+          "text": "题目：Sallustius Lucullus may have lived there until approximately ____ AD.\n题目翻译：Sallustius Lucullus 可能在大约 ____ 年前后仍居住于此。\n答案：93\n解析：文中依据史家 Suetonius 记载，Lucullus 于 93AD 或之后不久被处决，因此空格对应 93。",
           "questionId": "q11"
-        },
-        {
-          "questionNumber": 12,
-          "text": "（6）题目 12：Possible inhabitants - Catuarus - his \\___\\___ was found there.\n题目翻译：可能的居住者 —— 卡图阿斯 —— 他的_\\___\\__在那里被发现\n答案：gold ring（金戒指）\n解析：定位 Paragraph 6 中 “Tiberius Claudius Catuarus, following the recent discovery of a gold ring belonging to him”，卡图阿斯的 “金戒指（gold ring）” 在遗址被发现，因此答案为 “gold ring”。",
-          "questionId": "q12"
-        },
-        {
-          "questionNumber": 13,
-          "text": "（7）题目 13：Present Day - A \\___\\___ has been built on the site to help protect it.\n题目翻译：如今 —— 为保护遗址，在原址建造了一座_\\___\\__\n答案：modern museum（现代博物馆）\n解析：定位 Paragraph 7 中 “A modern museum has been built by the Sussex Archaeological Society, incorporating most of the visible remains”，为保护遗迹建造了 “现代博物馆（modern museum）”，因此答案为 “modern museum”。",
-          "questionId": "q13"
         }
       ],
       "questionRange": {
         "start": 7,
+        "end": 11
+      },
+      "text": "题目 7：最早建筑储粮对象。答案：Roman army。解析：来自 Roman army grain stores。\n题目 8：宫殿围绕何物建造。答案：formal gardens。解析：built around formal gardens。\n题目 9：被加上彩色的是哪一部分。答案：mosaic floors。解析：黑白马赛克地板被彩色覆盖。\n题目 10：最早被发现的是哪类遗迹。答案：wall。解析：工人先发现一堵墙。\n题目 11：Lucullus 可能住到大约哪一年。答案：93。解析：93AD 或稍后被处决。"
+    },
+    {
+      "sectionTitle": "多项选择（Questions 12–13）",
+      "mode": "group",
+      "items": [
+        {
+          "questionNumber": 12,
+          "text": "题目：Catuarus - his ____ was found there.\n题目翻译：关于 Catuarus：在那里发现了他的 ____。\n答案：ring\n解析：文中写到“following the recent discovery of a gold ring belonging to him”，可填 ring（gold ring 也可）。",
+          "questionId": "q12"
+        },
+        {
+          "questionNumber": 13,
+          "text": "题目：A ____ has been built on the site to help protect it.\n题目翻译：现场已建成一座 ____ 来帮助保护遗址。\n答案：museum\n解析：末段写明遗址建有现代博物馆保护可见遗迹，因此 museum（modern museum 也可）成立。",
+          "questionId": "q13"
+        }
+      ],
+      "questionRange": {
+        "start": 12,
         "end": 13
       },
-      "text": "题目翻译：建造背景 —— 遗址上最早的建筑储存供_\\___\\__食用的食物\n答案：Roman army（罗马军队）\n解析：定位 Paragraph 1 中 “on the site of Roman army grain stores that had been established after the invasion”，最早的建筑是 “罗马军队（Roman army）” 的谷物仓库，即储存供罗马军队食用的粮食，因此答案为 “Roman army”。\n题目翻译：建造背景 —— 宫殿建筑环绕_\\___\\__而建\n答案：formal gardens（正式花园）\n解析：定位 Paragraph 1 中 “The rectangular palace was built around formal gardens”，“built around” 意为 “环绕…… 建造”，即宫殿环绕 “正式花园”，因此答案为 “formal gardens”。\n题目翻译：建造背景 ——2-3 世纪时，宫殿的_\\___\\__被添加了色彩\n答案：mosaic floors（马赛克地板）\n解析：定位 Paragraph 1 中 “many of the original black-and-white mosaic floors being overlaid with more sophisticated coloured ones”，可知 2-3 世纪时，宫殿的 “马赛克地板（mosaic floors）” 从黑白改为彩色，即添加了色彩，因此答案为 “mosaic floors”。\n题目翻译：发现过程 —— 宫殿首次被发现的部分是_\\___\\__的一部分\n答案：wall（墙）\n解析：定位 Paragraph 2 中 “it was not until 1960 that the archaeologist Barry Cunliffe... first systematically excavated the site, after workmen had accidentally uncovered a wall while they were laying a water main”，工人首次发现的宫殿部分是 “一堵墙（wall）”，因此答案为 “wall”。\n题目翻译：可能的居住者 —— 萨卢斯提乌斯・卢库卢斯 —— 他可能在那里居住到约_\\___\\__ AD\n答案：93（93 年）\n解析：定位 Paragraph 5 中 “the Roman historian Suetonius records that Lucullus was executed by the Emperor Domitian in or shortly after 93 AD”，卢库卢斯在 93AD 或之后被处决，若宫殿为他建造，他可能居住到 “93AD” 左右，因此答案为 “93”。\n题目翻译：可能的居住者 —— 卡图阿斯 —— 他的_\\___\\__在那里被发现\n答案：gold ring（金戒指）\n解析：定位 Paragraph 6 中 “Tiberius Claudius Catuarus, following the recent discovery of a gold ring belonging to him”，卡图阿斯的 “金戒指（gold ring）” 在遗址被发现，因此答案为 “gold ring”。\n题目翻译：如今 —— 为保护遗址，在原址建造了一座_\\___\\__\n答案：modern museum（现代博物馆）\n解析：定位 Paragraph 7 中 “A modern museum has been built by the Sussex Archaeological Society, incorporating most of the visible remains”，为保护遗迹建造了 “现代博物馆（modern museum）”，因此答案为 “modern museum”。"
+      "text": "题目 12：Catuarus 被发现的物件。答案：ring。解析：原文是 gold ring。\n题目 13：遗址上建成的保护设施。答案：museum。解析：现代博物馆用于保护遗迹。"
     }
   ]
-}
-  );
+});
 })(typeof window !== "undefined" ? window : globalThis);
