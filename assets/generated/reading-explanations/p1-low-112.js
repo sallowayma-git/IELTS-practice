@@ -10,8 +10,8 @@
     "examId": "p1-low-112",
     "title": "The Tuatara of New Zealand 新西兰蜥蜴",
     "category": "P1",
-    "sourceDoc": "P1 1-32之_副本.md",
-    "noteType": "总结",
+    "sourceDoc": "26. P1 - The Tuatara of New Zealand 新西兰蜥蜴.pdf",
+    "noteType": "翻译+解析",
     "matchedTitle": "The Tuatara of New Zealand 新西兰蜥蜴"
   },
   "passageNotes": [
@@ -50,37 +50,37 @@
   ],
   "questionExplanations": [
     {
-      "sectionTitle": "1. 判断题（Questions 1–6：TRUE/FALSE/NOT GIVEN）",
-      "mode": "per_question",
+      "sectionTitle": "1. 判断正误（Questions 1–6）",
+      "mode": "group",
       "items": [
         {
           "questionNumber": 1,
-          "text": "（1）题目 1：The two living species of tuatara look alike.\n题目翻译：两种现存楔齿蜥外形相似。\n答案：TRUE（正确）\n解析：定位 Paragraph 1 中 “Although the two species appear similar, they have genetic differences”，“appear similar” 对应 “look alike”，明确提到两种楔齿蜥外形相似，与题干描述一致，因此判定为 TRUE。",
+          "text": "题目：The two living species of tuatara look alike.\n题目翻译：现存的两种楔齿蜥外观相似。\n答案：TRUE\n解析：首段明确说两种“appear similar”，同时补充二者存在基因差异，因此“外观相似”成立。",
           "questionId": "q1"
         },
         {
           "questionNumber": 2,
-          "text": "（2）题目 2：Many tuatara bones that have been discovered are millions of years old.\n题目翻译：已发现的许多楔齿蜥骨骼有几百万年历史。\n答案：FALSE（错误）\n解析：定位 Paragraph 1 中 “Tuatara bones have been found in many parts of New Zealand; where dated, they are usually a few hundred to 5,000 years old”，明确提到骨骼年代多为 “几百年至 5000 年前”，而非 “几百万年”，与题干描述矛盾，因此判定为 FALSE。",
+          "text": "题目：Many tuatara bones that have been discovered are millions of years old.\n题目翻译：许多已发现的楔齿蜥骨骼已有数百万年历史。\n答案：FALSE\n解析：原文说这些骨骼在可测年代中通常是“几百年到 5000 年”，并非“数百万年”。",
           "questionId": "q2"
         },
         {
           "questionNumber": 3,
-          "text": "（3）题目 3：The tails of male tuatara are a different colour from those of female tuatara.\n题目翻译：雄性楔齿蜥的尾巴与雌性颜色不同。\n答案：NOT GIVEN（未提及）\n解析：文章仅在 Paragraph 2 中提到 “雄性尾部脊状突起更发达”，未涉及 “尾巴颜色差异”，无相关信息，因此判定为 NOT GIVEN。",
+          "text": "题目：The tails of male tuatara are a different colour from those of female tuatara.\n题目翻译：雄性楔齿蜥的尾巴颜色与雌性不同。\n答案：NOT GIVEN\n解析：文章只提到雄性体型更大、脊状突起更发达，没有提到尾巴“颜色差异”。",
           "questionId": "q3"
         },
         {
           "questionNumber": 4,
-          "text": "（4）题目 4：The female tuatara lays her eggs in a burrow.\n题目翻译：雌性楔齿蜥在洞穴中产卵。\n答案：FALSE（错误）\n解析：定位 Paragraph 3 中 “the female usually lays 6–10 eggs the following spring in a shallow ground-level nest”，明确提到雌蜥在 “地面浅巢” 产卵，而非 “洞穴（burrow）”，与题干描述矛盾，因此判定为 FALSE。",
+          "text": "题目：The female tuatara lays her eggs in a burrow.\n题目翻译：雌性楔齿蜥在洞穴中产卵。\n答案：FALSE\n解析：文中写雌蜥在“地面浅巢”产卵，守巢后才返回地下洞穴，因此产卵地点不是 burrow。",
           "questionId": "q4"
         },
         {
           "questionNumber": 5,
-          "text": "（5）题目 5：There are more female hatchlings than male hatchlings.\n题目翻译：雌性幼蜥数量多于雄性幼蜥。\n答案：NOT GIVEN（未提及）\n解析：Paragraph 3 仅说明 “温度决定性别（暖→雄，凉→雌）”，未给出 “整体雌雄幼蜥数量对比”，无相关信息，因此判定为 NOT GIVEN。",
+          "text": "题目：There are more female hatchlings than male hatchlings.\n题目翻译：孵化出的雌性幼体数量多于雄性幼体。\n答案：NOT GIVEN\n解析：原文仅说温度影响性别倾向（高温偏雄、低温偏雌），没有给出总体数量比较。",
           "questionId": "q5"
         },
         {
           "questionNumber": 6,
-          "text": "（6）题目 6：Once they have hatched, young tuatara have to look after themselves.\n题目翻译：幼蜥孵化后需自行照顾自己。\n答案：TRUE（正确）\n解析：定位 Paragraph 3 中 “The hatchlings receive no parental care and must find their own food”，“receive no parental care” 对应 “have to look after themselves”，明确提到幼蜥无亲代抚育，需自行生存，与题干描述一致，因此判定为 TRUE。",
+          "text": "题目：Once they have hatched, young tuatara have to look after themselves.\n题目翻译：楔齿蜥幼体孵化后必须自己生存。\n答案：TRUE\n解析：段落直接说明幼体“receive no parental care and must find their own food”。",
           "questionId": "q6"
         }
       ],
@@ -88,45 +88,45 @@
         "start": 1,
         "end": 6
       },
-      "text": "题目翻译：两种现存楔齿蜥外形相似。\n答案：TRUE（正确）\n解析：定位 Paragraph 1 中 “Although the two species appear similar, they have genetic differences”，“appear similar” 对应 “look alike”，明确提到两种楔齿蜥外形相似，与题干描述一致，因此判定为 TRUE。\n题目翻译：已发现的许多楔齿蜥骨骼有几百万年历史。\n答案：FALSE（错误）\n解析：定位 Paragraph 1 中 “Tuatara bones have been found in many parts of New Zealand; where dated, they are usually a few hundred to 5,000 years old”，明确提到骨骼年代多为 “几百年至 5000 年前”，而非 “几百万年”，与题干描述矛盾，因此判定为 FALSE。\n题目翻译：雄性楔齿蜥的尾巴与雌性颜色不同。\n答案：NOT GIVEN（未提及）\n解析：文章仅在 Paragraph 2 中提到 “雄性尾部脊状突起更发达”，未涉及 “尾巴颜色差异”，无相关信息，因此判定为 NOT GIVEN。\n题目翻译：雌性楔齿蜥在洞穴中产卵。\n答案：FALSE（错误）\n解析：定位 Paragraph 3 中 “the female usually lays 6–10 eggs the following spring in a shallow ground-level nest”，明确提到雌蜥在 “地面浅巢” 产卵，而非 “洞穴（burrow）”，与题干描述矛盾，因此判定为 FALSE。\n题目翻译：雌性幼蜥数量多于雄性幼蜥。\n答案：NOT GIVEN（未提及）\n解析：Paragraph 3 仅说明 “温度决定性别（暖→雄，凉→雌）”，未给出 “整体雌雄幼蜥数量对比”，无相关信息，因此判定为 NOT GIVEN。\n题目翻译：幼蜥孵化后需自行照顾自己。\n答案：TRUE（正确）\n解析：定位 Paragraph 3 中 “The hatchlings receive no parental care and must find their own food”，“receive no parental care” 对应 “have to look after themselves”，明确提到幼蜥无亲代抚育，需自行生存，与题干描述一致，因此判定为 TRUE。"
+      "text": "题目 1：两种现存楔齿蜥外观相似。答案 TRUE。\n题目 2：化石年代不是百万年级，而是几百到 5000 年。答案 FALSE。\n题目 3：文中未提尾巴颜色差异。答案 NOT GIVEN。\n题目 4：产卵在地面浅巢，不在洞穴。答案 FALSE。\n题目 5：未给总体雌雄幼体数量对比。答案 NOT GIVEN。\n题目 6：幼体没有亲代照料，需自理。答案 TRUE。"
     },
     {
-      "sectionTitle": "2. 笔记填空题（Questions 7–13：ONE WORD AND/OR A NUMBER）",
+      "sectionTitle": "2. 笔记填空（Questions 7–13）",
       "mode": "group",
       "items": [
         {
           "questionNumber": 7,
-          "text": "（1）题目 7：Lifespan - many live to at least \\___\\____ years\n题目翻译：寿命 - 许多存活至少_\\___\\___年\n答案：80（80 年）\n解析：定位 Paragraph 4 中 “many individuals have lived to 80 years while still looking vigorous and healthy”，明确提到许多楔齿蜥存活至 80 岁，因此答案为 “80”。",
+          "text": "题目：many live to at least ______ years.\n题目翻译：许多个体至少活到 ______ 岁。\n答案：80\n解析：文中写 many individuals have lived to 80 years，且仍较有活力。",
           "questionId": "q7"
         },
         {
           "questionNumber": 8,
-          "text": "（2）题目 8：Behaviour - attack other creatures with their \\___\\____\n题目翻译：行为 - 用_\\___\\___攻击其他生物\n答案：teeth（牙齿）\n解析：定位 Paragraph 4 中 “Their teeth are their chief weapons, and a bite can cause serious injury”，明确提到牙齿是主要武器，因此答案为 “teeth”。",
+          "text": "题目：attack other creatures with their ______.\n题目翻译：它们用自己的 ______ 攻击其他生物。\n答案：teeth\n解析：原文明确说牙齿是其主要武器（Their teeth are their chief weapons）。",
           "questionId": "q8"
         },
         {
           "questionNumber": 9,
-          "text": "（3）题目 9：Behaviour - eat young \\___\\____ that share the same burrows, as well as invertebrates and reptiles\n题目翻译：行为 - 食用与它们共享洞穴的幼_\\___\\___，以及无脊椎动物和爬行动物\n答案：seabirds（海鸟）\n解析：定位 Paragraph 4 中 “feeding on invertebrates, lizards and the baby seabirds with which they often share burrows”，“baby seabirds” 对应 “young seabirds”，因此答案为 “seabirds”。",
+          "text": "题目：eat young ______ that share the same burrows.\n题目翻译：它们会吃与其共用洞穴的幼年 ______。\n答案：seabirds\n解析：食性段落写它们会捕食 baby seabirds。",
           "questionId": "q9"
         },
         {
           "questionNumber": 10,
-          "text": "（4）题目 10：Population - abundant until rats were introduced by \\___\\____ people\n题目翻译：种群 - 数量丰富，直到_\\___\\___人引入老鼠\n答案：Polynesian（波利尼西亚）\n解析：定位 Paragraph 5 中 “when Polynesian settlers arrived (about 1250–1300 AD) they brought Pacific rats, which killed tuatara”，明确提到波利尼西亚人引入老鼠，因此答案为 “Polynesian”。",
+          "text": "题目：rats were introduced by ______ people.\n题目翻译：老鼠是由 ______ 人带入的。\n答案：Polynesian\n解析：历史段落写波利尼西亚定居者到来时带来了太平洋鼠。",
           "questionId": "q10"
         },
         {
           "questionNumber": 11,
-          "text": "（5）题目 11：Population - by the 1840s, hardly any tuatara were found on the \\___\\____\n题目翻译：种群 - 到 19 世纪 40 年代，\\___\\___\\_几乎找不到楔齿蜥\n答案：mainland（大陆）\n解析：定位 Paragraph 5 中 “By the time of European settlement in the 1840s, tuatara were almost extinct on the mainland”，明确提到 19 世纪 40 年代大陆楔齿蜥几乎灭绝，因此答案为 “mainland”。",
+          "text": "题目：by the 1840s, hardly any tuatara were found on the ______.\n题目翻译：到 19 世纪 40 年代，______ 上几乎看不到楔齿蜥。\n答案：mainland\n解析：文中指出欧洲人定居时，楔齿蜥在新西兰大陆几乎灭绝。",
           "questionId": "q11"
         },
         {
           "questionNumber": 12,
-          "text": "（6）题目 12：Population - islands off the north-eastern coast and in Cook Strait are now home to the \\___\\____ tuatara\n题目翻译：种群 - 东北海岸和库克海峡的岛屿现为_\\___\\___楔齿蜥的栖息地\n答案：common（普通）\n解析：定位 Paragraph 6 中 “A few, such as the Poor Knights Islands off the northeastern coast of New Zealand and some islands in Cook Strait, still support the common tuatara”，明确提到这些岛屿栖息着 “普通楔齿蜥”，因此答案为 “common”。",
+          "text": "题目：islands off the north-eastern coast and in Cook Strait are now home to the ______ tuatara.\n题目翻译：东北近海与库克海峡的岛屿如今栖息的是 ______ 楔齿蜥。\n答案：common\n解析：该处提到这些岛屿仍支持 common tuatara。",
           "questionId": "q12"
         },
         {
           "questionNumber": 13,
-          "text": "（7）题目 13：Population - density of tuatara on Stephens Island is up to \\___\\____ per hectare\n题目翻译：种群 - 斯蒂芬斯岛的楔齿蜥密度高达每公顷_\\___\\___只\n答案：2,500（2500 只）\n解析：定位 Paragraph 7 中 “the largest population is on Stephens Island, where numbers reach up to 2,500 per hectare in some areas”，明确提到该岛部分区域密度达每公顷 2500 只，因此答案为 “2,500”。",
+          "text": "题目：density of tuatara on Stephens Island is up to ______ per hectare.\n题目翻译：斯蒂芬斯岛楔齿蜥密度可达每公顷 ______。\n答案：2500\n解析：原文给出的上限是 up to 2,500 per hectare。",
           "questionId": "q13"
         }
       ],
@@ -134,9 +134,8 @@
         "start": 7,
         "end": 13
       },
-      "text": "题目翻译：寿命 - 许多存活至少_\\___\\___年\n答案：80（80 年）\n解析：定位 Paragraph 4 中 “many individuals have lived to 80 years while still looking vigorous and healthy”，明确提到许多楔齿蜥存活至 80 岁，因此答案为 “80”。\n题目翻译：行为 - 用_\\___\\___攻击其他生物\n答案：teeth（牙齿）\n解析：定位 Paragraph 4 中 “Their teeth are their chief weapons, and a bite can cause serious injury”，明确提到牙齿是主要武器，因此答案为 “teeth”。\n题目翻译：行为 - 食用与它们共享洞穴的幼_\\___\\___，以及无脊椎动物和爬行动物\n答案：seabirds（海鸟）\n解析：定位 Paragraph 4 中 “feeding on invertebrates, lizards and the baby seabirds with which they often share burrows”，“baby seabirds” 对应 “young seabirds”，因此答案为 “seabirds”。\n题目翻译：种群 - 数量丰富，直到_\\___\\___人引入老鼠\n答案：Polynesian（波利尼西亚）\n解析：定位 Paragraph 5 中 “when Polynesian settlers arrived (about 1250–1300 AD) they brought Pacific rats, which killed tuatara”，明确提到波利尼西亚人引入老鼠，因此答案为 “Polynesian”。\n题目翻译：种群 - 到 19 世纪 40 年代，\\___\\___\\_几乎找不到楔齿蜥\n答案：mainland（大陆）\n解析：定位 Paragraph 5 中 “By the time of European settlement in the 1840s, tuatara were almost extinct on the mainland”，明确提到 19 世纪 40 年代大陆楔齿蜥几乎灭绝，因此答案为 “mainland”。\n题目翻译：种群 - 东北海岸和库克海峡的岛屿现为_\\___\\___楔齿蜥的栖息地\n答案：common（普通）\n解析：定位 Paragraph 6 中 “A few, such as the Poor Knights Islands off the northeastern coast of New Zealand and some islands in Cook Strait, still support the common tuatara”，明确提到这些岛屿栖息着 “普通楔齿蜥”，因此答案为 “common”。\n题目翻译：种群 - 斯蒂芬斯岛的楔齿蜥密度高达每公顷_\\___\\___只\n答案：2,500（2500 只）\n解析：定位 Paragraph 7 中 “the largest population is on Stephens Island, where numbers reach up to 2,500 per hectare in some areas”，明确提到该岛部分区域密度达每公顷 2500 只，因此答案为 “2,500”。"
+      "text": "题目 7：寿命可到 80 岁。答案 80。\n题目 8：攻击主要依靠牙齿。答案 teeth。\n题目 9：会吃幼海鸟。答案 seabirds。\n题目 10：老鼠由 Polynesian 定居者带入。答案 Polynesian。\n题目 11：到 1840 年代大陆几近绝迹。答案 mainland。\n题目 12：对应物种为 common tuatara。答案 common。\n题目 13：斯蒂芬斯岛最高密度 2500/公顷。答案 2500。"
     }
   ]
-}
-  );
+});
 })(typeof window !== "undefined" ? window : globalThis);
