@@ -135,17 +135,17 @@
         {
           "questionNumber": 27,
           "text": "题目：In a study that took place on a train, volunteers approached people who were regular ______.\n题目翻译：在一项火车研究中，志愿者接触的是固定的 ______。\n答案：commuters\n解析：D 段写 volunteers talked with other commuters who usually took the same train，答案是 commuters。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "题目：In an experiment in an art gallery, people related more to the ______ when they were drawn into a conversation.\n题目翻译：在美术馆实验中，被拉入对话后，人们与 ______ 的联系更强。\n答案：paintings\n解析：E 段指出画廊访客交谈后 felt happier and more connected to the paintings，因此填 paintings。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "题目：Introverted people found it helpful to be given ______ which they could use to start conversations.\n题目翻译：内向者发现，给他们提供可用于开启对话的 ______ 会有帮助。\n答案：topics\n解析：F 段说低好奇心者在被提供 topics 后更容易建立亲近感，答案是 topics。",
-          "questionId": "q16"
+          "questionId": "q3"
         }
       ],
       "questionRange": {
