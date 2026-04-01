@@ -32,27 +32,27 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：What are we told about the Europeans who arrived in 1769?（关于 1769 年抵达的欧洲人，文中有何信息？）\n答案：C（They had no interest in the tuatara. 他们对楔齿蜥无兴趣）\n解析：定位 Paragraph 2 中 “The naturalists who came with the explorers disregarded the tuatara”，“博物学家忽视楔齿蜥” 即 “对其无兴趣”，因此选 C。A（认为只有一座大岛）、B（非为研究自然史而来）、D（将楔齿蜥标本送博物馆）均与原文矛盾。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：What does the writer say about Albert Gunther in the third paragraph?（作者在第三段中关于阿尔伯特・冈瑟有何描述？）\n答案：B（He was typical of his generation of scientists. 他是同时代科学家的典型代表）\n解析：定位 Paragraph 3 中 “He and his contemporaries were products of their age, strongly influenced by Charles Darwin’s theory”，“冈瑟的观点与同时代人一致，受达尔文理论影响” 即 “典型代表”，因此选 B。A（认为楔齿蜥可卖高价）、C（不同意达尔文理论）、D（想阻止楔齿蜥灭绝）均与原文矛盾。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：What did Albert Gunther think about the rats in New Zealand?（阿尔伯特・冈瑟对新西兰的老鼠有何看法？）\n答案：B（There was one species of rat. 只有一种老鼠）\n解析：定位 Paragraph 4 中 “Gunther failed to recognise the distinction, believing all rats to be a relatively recent introduction”，“冈瑟未区分两种老鼠，认为所有老鼠都是同一类” 即 “只有一种老鼠”，因此选 B。A（老鼠不吃楔齿蜥）、C（老鼠一直存在于新西兰）、D（被波利尼西亚人消灭）均与原文矛盾。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：What did Ian Crook conclude from his research?（伊恩・克鲁克从研究中得出什么结论？）\n答案：D（Rats and tuatara cannot live together. 老鼠和楔齿蜥无法共存）\n解析：定位 Paragraph 5 中 “Tuatara thrive on offshore islands with no rats. Tuatara never survived on islands with ship’s rats... the small populations represent extinctions in progress”，“无鼠则楔齿蜥繁荣，有鼠则楔齿蜥灭绝” 即 “无法共存”，因此选 D。A（楔齿蜥在小岛安全）、B（船运鼠比 kiore 鼠更危险）、C（kiore 鼠不能游泳到近海小岛）均未提及。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：What were the findings of Richard Holdaway’s research?（理查德・霍尔达威的研究有何发现？）\n答案：D（Rats caused extinctions before any humans settled. 人类定居前，老鼠已导致物种灭绝）\n解析：定位 Paragraph 6 中 “the rats were agents of ecological warfare, exterminating perhaps 1,000–3,000 species. Thus, tuatara and many other species were already rare or extinct when permanent human inhabitants- the Maori-arrived around 1300”，“人类定居前老鼠已导致大量物种灭绝”，因此选 D。A（毛利人定居时间比之前认为的更晚）、B（首批波利尼西亚探险家建立永久定居点）、C（船运鼠是新西兰最古老的老鼠物种）均与原文矛盾。",
-          "questionId": "q31"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -68,22 +68,22 @@
         {
           "questionNumber": 32,
           "text": "（1）题目 32：The available research supports Holdaway’s theory but it has not been proved.（现有研究支持霍尔达威的理论，但尚未证实。）\n答案：YES（正确）\n解析：定位 Paragraph 6 中 “This hypothesis is still being debated, but the evidence continues to accumulate in its favour”，“证据不断增多但仍有争议” 即 “支持但未证实”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（2）题目 33：Nowadays, it is possible to totally destroy a population of rats on a small island.（如今，完全消灭小岛上的老鼠种群是可能的。）\n答案：YES（正确）\n解析：定位 Paragraph 7 中 “Eradication of rats from any given environment was believed to be virtually impossible until about 1980, but since then has become routine”，“如今根除老鼠已成为常规操作” 即 “完全消灭小岛上的老鼠种群可能”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（3）题目 34：Crook was the first person to recognise the potential of offshore islands as sanctuaries.（克鲁克是首位认识到近海小岛作为庇护所潜力的人。）\n答案：NOT GIVEN（未提及）\n解析：全文仅提到 “克鲁克发现无鼠小岛楔齿蜥数量繁荣”，未提及 “他是否是首位认识到小岛庇护所潜力的人”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（4）题目 35：Tuatara numbers are continuing to fall.（楔齿蜥数量仍在持续下降。）\n答案：NO（错误）\n解析：定位 Paragraph 7 中 “for the first time in 1,800 years the decline has been reversed”，“数量下降已逆转” 与题干 “持续下降” 描述矛盾，因此判定为 NO。",
-          "questionId": "q35"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -99,27 +99,27 @@
         {
           "questionNumber": 36,
           "text": "（1）题目 36：The most important result of the tuatara research is that it frees our _.（楔齿蜥研究最重要的成果是解放了我们的_。）\n答案：B（creative thought，创造性思维）\n解析：定位 Paragraph 8 中 “the truly significant outcome of this research is that it liberates the imagination”，“解放想象力” 对应 “frees our creative thought”，因此选 B。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（2）题目 37：For example, there are many similarities between rats and \\___\\___\\_.（例如，老鼠与_\\___\\___有许多相似之处。）\n答案：D（trout，鳟鱼）\n解析：定位 Paragraph 8 中 “our rivers, for example, are full of surrogate rats, in the form of introduced species of fish called trout”，“鳟鱼是老鼠的‘替代品’” 即 “两者有相似之处（均为引入物种，取代原生生物）”，因此选 D。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（3）题目 38：Should we now go further and consider reintroducing \\___\\____ to our mainland rivers?（我们现在是否应更进一步，考虑向大陆河流重新引入_\\___\\___？）\n答案：G（native fish，原生鱼类）\n解析：定位 Paragraph 8 中 “Will such knowledge lead to the creation of mainland ‘aquatic islands’ where we can once again establish those species of indigenous fish that used to live in our rivers?”，“重新引入曾生活在河流中的原生鱼类” 对应 “reintroducing native fish”，因此选 G。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（4）题目 39：Perhaps our children will come to believe in the \\___\\____ of species, in the same way that our generation refuses to accept _.（或许我们的后代会相信物种的_，就像我们这代人拒绝接受_\\___\\___一样。）\n答案：F（restoration，恢复）；H（extinction，灭绝）\n解析：定位 Paragraph 9 中 “Just as we no longer tolerate extinction, in the future we may no longer accept a mainland devoid of the biological wonders of our past such as tuatara. Conservation is thus not primarily about the past but about imagining and then creating the future we wish for our children and ourselves”，“我们拒绝接受灭绝，后代可能相信物种可恢复”，因此依次填 “restoration”“extinction”。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（5）题目 40：in the same way that our generation refuses to accept \\___\\___\\_.（就像我们这代人拒绝接受_\\___\\___一样。）\n答案：H（extinction，灭绝）\n解析：定位 Paragraph 9 中 “Just as we no longer tolerate extinction”，“拒绝容忍灭绝” 对应 “refuses to accept extinction”，因此选 H。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

@@ -48,27 +48,27 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：What does the writer suggest about game-theory software in the first paragraph?（作者在第一段中对博弈论软件有何暗示？）\n答案：C（This software anticipates the outcome of future events. 该软件可预测未来事件结果）\n解析：定位 Paragraph 1 中 “Game-theory software then evaluates the ability of each of those players to influence others, and hence predicts the course of events”，“predicts the course of events” 对应 “anticipates the outcome of future events”，因此选 C。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：Reinier van Oosten says predicting what people will do works best if（赖尼尔・范奥斯特认为，在何种情况下预测人类行为最准确？）\n答案：D（profit is the primary motivator. 利润是主要动机）\n解析：定位 Paragraph 2 中 “However, sorting out people’s motivations is much easier when making money is the main object”，“making money is the main object” 对应 “profit is the primary motivator”，因此选 D。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：After using game-theory software in 2006, Dr Milgrom instructed his clients to（2006 年使用博弈论软件后，米尔格罗姆博士指导客户如何做？）\n答案：D（purchase a mix of licences. 购买多种牌照）\n解析：定位 Paragraph 3 中 “Milgrom’s clients were then directed to obtain a collection of smaller, less-expensive licences instead”，“a collection of smaller licences” 对应 “a mix of licences”，因此选 D。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：The writer refers to Stephen Black’s ice-cream-seller example in order to（作者提及斯蒂芬・布莱克的冰淇淋卖家案例，目的是什么？）\n答案：A（show the impact new competitors have on business. 展示新竞争者对企业的影响）\n解析：定位 Paragraph 4 中 “Introduce a third seller, however, and the stifling equilibrium is broken as relocations and pricing changes energise the market”，案例核心是 “新竞争者打破僵局”，因此选 A。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：Ponsatí believes business negotiations are more likely to progress if（庞萨蒂认为，在何种情况下商业谈判更可能推进？）\n答案：B（mediators or computers take over the bargaining process. 调解人或计算机接管谈判流程）\n解析：定位 Paragraph 5 中 “difficult negotiations can often be pushed along by neutral mediators... if a human mediator was not trusted, affordable, or available, a computer could do the job instead”，明确提到 “调解人或计算机推动谈判”，因此选 B。",
-          "questionId": "q31"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -84,22 +84,22 @@
         {
           "questionNumber": 32,
           "text": "（1）题目 32：Game-theory software may be unhelpful when dealing with political issues.（博弈论软件处理政治议题时可能无效）\n答案：YES（正确）\n解析：定位 Paragraph 2 中 “feeding software with accurate data on all the players involved is especially tricky for political matters... predictions may become unreliable when people unexpectedly give in to ‘non-rational emotions’”，“tricky”“unreliable” 对应 “may be unhelpful”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（2）题目 33：Dr Milgrom was confident about applying his software to an auction in 2006.（米尔格罗姆博士 2006 年对将软件应用于拍卖充满信心）\n答案：NO（错误）\n解析：定位 Paragraph 3 中 “He was apprehensive at first, but the result was a triumph”，“apprehensive”（担忧）与题干 “confident”（自信）描述矛盾，因此判定为 NO。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（3）题目 34：Dr Ponsatí believes ‘mediation machines’ are an inappropriate method of negotiation in areas other than business.（庞萨蒂博士认为 “调解机器” 在商业以外领域不适用）\n答案：NOT GIVEN（未提及）\n解析：Paragraph 5 仅提到 “调解机器可推动谈判”，未讨论 “商业以外领域是否适用”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（4）题目 35：Military organisations refuse to accept that software based on game theory could prevent wars.（军方拒绝承认博弈论软件可预防战争）\n答案：NOT GIVEN（未提及）\n解析：Paragraph 6 提到 “学者设想软件可避免战争”，但未提及 “军方拒绝承认”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q35"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -115,27 +115,27 @@
         {
           "questionNumber": 36,
           "text": "（1）题目 36：According to Reinier van Oosten, game-theory software fails when（根据赖尼尔・范奥斯特的观点，博弈论软件在何种情况下失效？）\n答案：E（people allow their feelings to influence decisions. 人们让情感影响决策时）\n解析：定位 Paragraph 2 中 “predictions may become unreliable when people unexpectedly give in to ‘non-rational emotions’, such as hatred, rather than pursuing what is apparently in their best interests”，“non-rational emotions” 对应 “feelings influence decisions”，因此选 E。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（2）题目 37：Dr Milgrom’s software is successful in detecting if（米尔格罗姆博士的软件能成功探测什么情况？）\n答案：A（something is thought to be worth more than it really is. 某物被高估时）\n解析：定位 Paragraph 3 中 “the software estimated the secret values bidders placed on specific licences, and determined that certain big licences were being over-valued”，“over-valued” 对应 “thought to be worth more than it really is”，因此选 A。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（3）题目 38：Dr Black’s game-theory software is a helpful tool when（布莱克博士的博弈论软件在何种情况下是有用工具？）\n答案：D（businesses consider possible future developments. 企业考量未来可能发展时）\n解析：定位 Paragraph 4 中 “the use of modelling makes clients more inclined to look at future repercussions when making business decisions”，“look at future repercussions” 对应 “consider possible future developments”，因此选 D。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（4）题目 39：According to Dr Ponsatí, negotiators fall behind if（根据庞萨蒂博士的观点，谈判者在何种情况下会落后？）\n答案：C（too much information is given to the other parties early on. 过早向对方透露过多信息时）\n解析：定位 Paragraph 5 中 “the first side to disclose the maximum amount that it is willing to pay loses considerable bargaining power. Without leverage, it can be pushed backward in the bargaining process”，“disclose the maximum amount early on” 对应 “too much information is given early on”，因此选 C。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（5）题目 40：Dr Ponsatí’s mediation machine is useful when（庞萨蒂博士的调解机器在何种情况下有用？）\n答案：B（discussions between the parties begin to break down. 双方讨论陷入僵局时）\n解析：定位 Paragraph 5 中 “if neither side reveals the concessions it is prepared to make, negotiations can become very slow or collapse... difficult negotiations can often be pushed along by neutral mediators... a computer could do the job instead”，“become very slow or collapse” 对应 “begin to break down”，因此选 B。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

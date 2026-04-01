@@ -52,27 +52,27 @@
         {
           "questionNumber": 22,
           "text": "(1) 题目 22：The classical approach relied upon managers having incorrect views about workers. （古典方法依赖于管理者对工人持有不正确的看法。）\n答案：B (Douglas McGregor)\n解析：第七段，McGregor的X理论指出，古典方法的垂直分工源于对工人的“negative and false assumptions”（消极和错误的假设）。",
-          "questionId": "q22"
+          "questionId": "q9"
         },
         {
           "questionNumber": 23,
           "text": "(2) 题目 23：In the best organisational model, there is shared decision-making and interaction between teams at work. （在最佳组织模型中，工作团队之间存在共享决策和互动。）\n答案：D (Rensis Likert)\n解析：第十段，Likert的理想模型System 4的特点是“extensive participation in decision-making and problem-solving groups”以及团队间的沟通机制。",
-          "questionId": "q23"
+          "questionId": "q10"
         },
         {
           "questionNumber": 24,
           "text": "(3) 题目 24：In an efficient organisation, workers develop expertise in particular areas. （在一个高效的组织中，工人在特定领域发展专长。）\n答案：A (Max Weber)\n解析：第二段，根据Weber，高效组织的特点是“the specialisation of tasks”（任务专业化）。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "(4) 题目 25：An organisation must take into account the emotional demands of people. （一个组织必须考虑到人的情感需求。）\n答案：C (Chris Argyris)\n解析：第八段，Argyris主张一种“acknowledged human needs and feelings”（承认人的需求和感受）的组织设计。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "(5) 题目 26：The classical approach allowed workers' skills to be assessed in a straightforward way. （古典方法使得工人的技能能够以一种直接的方式被评估。）\n答案：A (Max Weber)\n解析：第三段，Weber认为“clearly specified authority and responsibility made performance easier to evaluate and reward.”（明确的权责使绩效评估和奖励更容易）。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

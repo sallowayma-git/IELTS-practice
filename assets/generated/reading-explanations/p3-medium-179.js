@@ -56,32 +56,32 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：Martian evidence found on Earth（在地球上发现的火星证据）\n答案：D\n解析：定位 Paragraph D 中 “A Martian meteorite found on Earth raised fresh doubts about the above analysis. Meteorite ALH 84001 was discovered in December 1984 in Antarctica”，明确提到 “在地球南极发现火星陨石”，与题干对应，因此答案为 D。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：Mars and Earth may share the same origin of life（火星与地球可能有相同的生命起源）\n答案：H\n解析：定位 Paragraph H 中 “If samples on Mars were found to use DNA-as Earthly life does-it would be extremely unlikely that such a specialised, complex molecule could have evolved independently on two planets. This would indicate a common origin for Martian and Earth life”，明确讨论 “生命同源”，与题干对应，因此答案为 H。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：Detailed depiction of large-scale agricultural constructions（对大规模农业设施的详细描绘）\n答案：A\n解析：定位 Paragraph A 中 “Lowell was convinced a great network of canals had been dug to irrigate crops... Drawings and globes he made show a network of canals and oases all over the planet”，“运河网络用于灌溉作物” 即 “农业设施”，与题干对应，因此答案为 A。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：A project that aims to detect life under conditions similar to those on Mars（旨在在类似火星的条件下探测生命的项目）\n答案：G\n解析：定位 Paragraph G 中 “Researchers from the Center for Astrobiology (Spain) and the Catholic University of the North in Chile have found an oasis of micro-organisms two metres below the surface of the Atacama Desert. SOLID, a life-detection instrument, could be used in environments similar to Martian sub-soil”，“在阿塔卡马沙漠用 SOLID 探测生命，该仪器可用于类似火星的环境”，与题干对应，因此答案为 G。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：Mars has undergone drastic climatic transformation（火星经历了剧烈的气候转变）\n答案：E\n解析：定位 Paragraph E 中 “According to scientists’ evaluation, Mars’s climate gradually transitioned from warm and wet to cold and dry after the magnetic field vanished”，“从温暖湿润变为寒冷干燥” 即 “剧烈气候转变”，与题干对应，因此答案为 E。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（6）题目 32：Scientific attempts to locate liquid water on Mars（寻找火星液态水的科学尝试）\n答案：F\n解析：定位 Paragraph F 中 “NASA’s recent missions have focused on another question: whether Mars had lakes or oceans of liquid water on its surface in the ancient past... the 2004 Mars Exploration Rovers were designed not to look for present or past life, but for evidence of ancient liquid water”，明确提到 “寻找古代液态水的科学任务”，与题干对应，因此答案为 F。",
-          "questionId": "q32"
+          "questionId": "q6"
         }
       ],
       "questionRange": {
@@ -97,22 +97,22 @@
         {
           "questionNumber": 33,
           "text": "（1）题目 33：How did Percival Lowell describe Mars in this passage?（文中珀西瓦尔・洛厄尔如何描述火星？）\n答案：C（There are clear traces of water and agriculture similar to Earth’s. 存在类似地球的水和农业痕迹）\n解析：定位 Paragraph A 中 “Lowell was convinced a great network of canals had been dug to irrigate crops for the Martian race. He suggested that each canal had fertile vegetation on either side”，“运河灌溉作物、两侧有植被” 对应 “水和农业痕迹”，因此选 C。A（亚利桑那州是最佳观测地）、B（火星运河比地球宽）、D（通过望远镜看到活动的火星生物）均未提及。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（2）题目 34：How did people change their view of Mars from the 19th century onwards?（19 世纪起，人们对火星的看法如何改变？）\n答案：B（They absorbed new ideas through literary works. 通过文学作品吸收新观点）\n解析：定位 Paragraph B 中 “In 1898, H. G. Wells wrote... In 1917, Edgar Rice Burroughs wrote... Strange beings and rampaging Martian monsters gripped the public’s imagination”，“威尔斯、巴勒斯的文学作品塑造公众对火星的想象”，因此选 B。A（经历真实火星入侵）、C（通过著名广播节目学习新观点）（仅 1938 年单次事件，非 “19 世纪起” 的整体改变）、D（参加知名作家的公开讲座）均未提及。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（3）题目 35：According to the probes sent in the 1960s, which statement about Mars is correct?（根据 1960 年代发射的探测器，关于火星的正确描述是？）\n答案：B（It appeared far less dynamic than Earth. 看起来远不如地球有活力）\n解析：定位 Paragraph C 中 “The first images sent back from Mars came from Mariner 4 in July 1965. They showed a cratered and barren landscape, more like the surface of our Moon than Earth”，“布满陨石坑、荒芜（类似月球）” 对应 “less dynamic than Earth”，因此选 B。A（地表布满岩石和河流）、C（含与月球完全相同的物质）、D（图像与后续探测器完全不同）均与原文矛盾。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "（4）题目 36：What is the implication of the project using the technology called SOLID in the Atacama Desert?（在阿塔卡马沙漠使用 SOLID 技术的项目有何意义？）\n答案：A（It could be employed to explore organisms under Martian-like conditions. 可用于在类似火星的条件下探索生物）\n解析：定位 Paragraph G 中 “‘If similar microbes, or their remains, exist on Mars under comparable conditions, we could detect them with instruments like SOLID,’ Parro added”，“SOLID 可用于火星类似环境的生命探测”，因此选 A。B（无法用于类似火星环境的生命识别）、C（阿塔卡马沙漠是地球唯一适合此类生物的地方）、D（未在阿塔卡马沙漠发现生命）均与原文矛盾。",
-          "questionId": "q36"
+          "questionId": "q10"
         }
       ],
       "questionRange": {
@@ -128,22 +128,22 @@
         {
           "questionNumber": 37,
           "text": "（1）题目 37：According to The War of the Worlds, Martian technology surpassed that of humans in every field at the time.（根据《世界大战》，火星人的技术在当时所有领域都超越人类）\n答案：NOT GIVEN（未提及）\n解析：定位 Paragraph B 中 “They use highly advanced technology (advanced for 1898) to crush human resistance”，“在 1898 年来看先进”，未提及 “所有领域超越人类”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（2）题目 38：The evidence supplied by the Viking probes has never been challenged.（海盗号探测器提供的证据从未被质疑）\n答案：FALSE（错误）\n解析：定位 Paragraph D 中 “A Martian meteorite found on Earth raised fresh doubts about the above analysis”，“above analysis” 即 “海盗号未发现生命的结论”，“引发质疑” 与题干 “从未被质疑” 描述矛盾，因此判定为 FALSE。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（3）题目 39：Analysis of a meteorite from Mars discovered a substance associated with certain germs.（对火星陨石的分析发现一种与特定细菌相关的物质）\n答案：TRUE（正确）\n解析：定位 Paragraph D 中 “NASA’s compositional analysis revealed a kind of magnetite that on Earth is only found in association with certain micro-organisms”，“磁铁矿仅与特定微生物相关” 对应 “与特定细菌相关的物质”，与题干描述一致，因此判定为 TRUE。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（4）题目 40：According to Víctor Parro, their project will be sent to Mars once DNA-based life has been identified on Earth.（根据维克多・帕罗的观点，一旦在地球发现基于 DNA 的生命，他们的项目将被送往火星）\n答案：NOT GIVEN（未提及）\n解析：Paragraph G 仅提到 “若火星存在类似微生物，可用 SOLID 探测”，未提及 “在地球发现 DNA 生命后送项目到火星”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

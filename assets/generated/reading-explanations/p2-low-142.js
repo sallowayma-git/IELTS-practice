@@ -52,37 +52,37 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：Section A\n答案：v（The importance of the fashion industry，时尚产业的重要性）\n解析：Paragraph A 强调时尚产业 “全球性、高价值、占世界经济重要份额”，核心是 “产业重要性”，与标题 v 一致，因此选 v。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：Section B\n答案：ii（The rise of the fashion industry，时尚产业的兴起）\n解析：Paragraph B 回顾 “19 世纪手工制作→20 世纪批量生产→全球化” 的发展历程，核心是 “产业兴起与演变”，与标题 ii 一致，因此选 ii。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：Section C\n答案：iv（Producing materials with a range of features，生产具备多种特性的面料）\n解析：Paragraph C 描述面料的 “纤维种类（天然 / 合成 / 环保）、功能（吸湿 / 防污等）、视觉效果”，核心是 “面料生产与特性”，与标题 iv 一致，因此选 iv。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：Section D\n答案：i（How new clothing styles are created，新服装款式的创作方式）\n解析：Paragraph D 聚焦 “设计师灵感来源、设计方法（传统 / 计算机辅助）”，核心是 “款式创作”，与标题 i 一致，因此选 i。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：Section E\n答案：viii（Making patterns for people with different figures，为不同体型人群制作纸样）\n解析：Paragraph E 围绕 “服装模板制作、适配不同体型的挑战”，核心是 “纸样与体型适配”，与标题 viii 一致，因此选 viii。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（6）题目 19：Section F\n答案：iii（Joining the garment pieces together，服装裁片的组装）\n解析：Paragraph F 详细描述 “服装组装、后整理流程”，核心是 “裁片组装成服装”，与标题 iii 一致，因此选 iii。",
-          "questionId": "q19"
+          "questionId": "q6"
         },
         {
           "questionNumber": 20,
           "text": "（7）题目 20：Section G\n答案：vi（Factors affecting international commerce，影响国际贸易的因素）\n解析：Paragraph G 讨论 “贸易配额、关税、自由贸易、运输方式” 对时尚产业国际贸易的影响，核心是 “国际贸易影响因素”，与标题 vi 一致，因此选 vi。",
-          "questionId": "q20"
+          "questionId": "q7"
         }
       ],
       "questionRange": {
@@ -98,22 +98,22 @@
         {
           "questionNumber": 21,
           "text": "（1）题目 21：This development was partly due to inventions like the \\___\\___.\n题目翻译：这一发展部分归功于_\\___\\__等发明。\n答案：sewing machine（缝纫机）\n解析：定位 Paragraph B 中 “with the development of new technologies such as the sewing machine”，明确提到 “缝纫机” 是关键发明，因此答案为 “sewing machine”。",
-          "questionId": "q21"
+          "questionId": "q8"
         },
         {
           "questionNumber": 22,
           "text": "（2）题目 22：It was also the result of general changes in manufacturing systems, as well as the spread of shops like \\___\\___.\n题目翻译：这也源于制造体系的整体变革，以及_\\___\\__等店铺的普及。\n答案：department stores（百货公司）\n解析：定位 Paragraph B 中 “the growth of department stores and other retail outlets”，明确提到 “百货公司” 是零售渠道的重要组成，因此答案为 “department stores”。",
-          "questionId": "q22"
+          "questionId": "q9"
         },
         {
           "questionNumber": 23,
           "text": "（3）题目 23：The changes also led to the standardisation of sizes and \\___\\___.\n题目翻译：这些变革还推动了尺码和_\\___\\__的标准化。\n答案：fixed prices（固定价格）\n解析：定位 Paragraph B 中 “clothing had increasingly come to be mass-produced in standard sizes and sold at fixed prices”，明确提到 “固定价格” 与尺码同时标准化，因此答案为 “fixed prices”。",
-          "questionId": "q23"
+          "questionId": "q10"
         },
         {
           "questionNumber": 24,
           "text": "（4）题目 24：Today, despite the fact that the fashion industry originated in \\___\\___, it has become a truly international enterprise.\n题目翻译：如今，尽管时尚产业起源于_\\___\\__，但已成为真正的全球性产业。\n答案：Europe（欧洲）\n解析：定位 Paragraph B 中 “Although the fashion industry developed first in Europe, today it is highly globalised”，明确提到起源地为 “欧洲”，因此答案为 “Europe”。",
-          "questionId": "q24"
+          "questionId": "q11"
         }
       ],
       "questionRange": {
