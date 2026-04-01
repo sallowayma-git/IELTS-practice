@@ -52,37 +52,37 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：Paragraph A\n答案：v（Some common social functions of flowers，花卉的常见社会功能）\n解析：Paragraph A 列举 “安慰、庆祝、求爱、道歉” 等送花场景，核心是 “花卉的社会功能”，与标题 v 一致，因此选 v。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：Paragraph B\n答案：iv（Becoming more open about personal matters，更愿意分享个人事务）\n解析：Paragraph B 强调 “收花者更愿意回答社交圈及私密对话问题”，核心是 “分享个人事务”，与标题 iv 一致，因此选 iv。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：Paragraph C\n答案：vii（Bridging the gap between strangers in an enclosed space，缩小封闭空间中陌生人的距离）\n解析：Paragraph C 描述 “电梯中收花者缩小人际距离、促进陌生人交流”，核心是 “封闭空间中陌生人亲近”，与标题 vii 一致，因此选 vii。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：Paragraph D\n答案：ii（Some surprisingly strong responses to flowers，对花卉的意外强烈反应）\n解析：Paragraph D 提到 “受试者拥抱送花者、邀请家访” 等强烈反应，核心是 “强烈反应”，与标题 ii 一致，因此选 ii。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：Paragraph E\n答案：viii（An imperfect theory，不完美的理论）\n解析：Paragraph E 指出进化假说的 “缺陷（艳丽花卉多来自无食用植物）”，核心是 “理论不完美”，与标题 viii 一致，因此选 viii。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（6）题目 32：Paragraph F\n答案：vi（Sensory appeal versus practical purpose of flowers，花卉的感官吸引力与实用目的对比）\n解析：Paragraph F 对比 “花卉的感官特征（颜色、纹理）” 与 “原始实用价值（识别食物）”，核心是 “感官与实用对比”，与标题 vi 一致，因此选 vi。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（7）题目 33：Paragraph G\n答案：iii（A mutually beneficial relationship? 互利关系？）\n解析：Paragraph G 提出 “人类利用花卉，花卉也利用人类传播”，核心是 “互利可能”，与标题 iii 一致，因此选 iii。",
-          "questionId": "q33"
+          "questionId": "q7"
         }
       ],
       "questionRange": {
@@ -98,22 +98,22 @@
         {
           "questionNumber": 34,
           "text": "（1）题目 34：The study focused on participants’ short-term reaction to receiving flowers.（研究聚焦受试者收花的短期反应）\n答案：B（the second study，第二项研究）\n解析：定位 Paragraph C 中 “observed participants being handed single flowers... inside an elevator”，电梯场景为即时反应，聚焦 “短期反应”，因此选 B。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（2）题目 35：Participants were deliberately misled as to the aim of the study.（受试者被故意误导研究目的）\n答案：A（the first study，第一项研究）\n解析：定位 Paragraph B 中 “The women were unaware that the study was about the effect of the flowers on their emotions. They were told that it was a study about their daily moods”，明确提到 “隐瞒真实目的，误导受试者”，因此选 A。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "（3）题目 36：Receiving flowers had a notable effect on participants’ mental capacities.（收花对受试者心智能力有显著影响）\n答案：C（the third study，第三项研究）\n解析：定位 Paragraph D 中 “reliable improvements in other measures of cognitive function, like memory”，“cognitive function（认知功能）” 对应 “mental capacities”，因此选 C。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（4）题目 37：Male and female responses were more uniform than expected.（男女性反应比预期更一致）\n答案：B（the second study，第二项研究）\n解析：定位 Paragraph C 中 “Contrary to predictions regarding gender differences, both men and women presented with flowers were more likely to smile, to stand closer and to initiate conversation”，“contrary to predictions regarding gender differences” 表明 “反应比预期更一致”，因此选 B。",
-          "questionId": "q37"
+          "questionId": "q11"
         }
       ],
       "questionRange": {
@@ -129,17 +129,17 @@
         {
           "questionNumber": 38,
           "text": "（1）题目 38：The presence of flowers might indicate a potential source of \\___\\___ in a particular location.\n题目翻译：某处出现花卉可能预示潜在的_\\___\\__来源。\n答案：food（食物）\n解析：定位 Paragraph E 中 “finding them in a particular location predicted future food supplies”，“food supplies” 对应 “source of food”，因此答案为 “food”。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（2）题目 39：primitive humans would search for such signs when looking for a suitable site to raise their \\___\\___.\n题目翻译：早期人类寻找合适地点抚育_\\___\\__时，会寻找这类线索。\n答案：children（孩子）\n解析：定位 Paragraph E 中 “possibly a better place to rear children”，“rear children” 对应 “raise their children”，因此答案为 “children”。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（3）题目 40：the plants producing the most attractive flowers do not usually have fruit which is \\___\\___.\n题目翻译：开出最艳丽花朵的植物，通常不结_\\___\\__果实。\n答案：edible（可食用的）\n解析：定位 Paragraph E 中 “the showy flowers which humans seem to find most visually attractive are generally found on those plants which yield no edible products”，“no edible products” 对应 “fruit which is not edible”，因此答案为 “edible”。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

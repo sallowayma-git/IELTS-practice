@@ -48,32 +48,32 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：First, using the native language gives them a realistic base in a different language-speaking country, but problems turn up when they deal with overseas \\___\\___.（首先，使用母语在非母语国家提供现实基础，但与海外_\\___\\__打交道时问题出现。）\n答案：B（clients，客户）\n解析：定位 Paragraph 2 中 “a survey of British exporting companies found that over a third used English exclusively in dealings with foreign customers”，“foreign customers” 对应 “overseas clients”，因此选 B。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：For example, when translating key \\___\\___, differences inevitably arise because of rules in different countries.（例如，翻译关键_\\___\\__时，因各国规则不同，差异不可避免。）\n答案：F（documents，文件）\n解析：定位 Paragraph 2 中 “Contracts, rules and legislation are invariably written in the local language”，“contracts, legislation” 对应 “key documents”，因此选 F。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：Another way is to rely on a combination of spoken language and \\___\\___.（另一种方法是依赖口语与_\\___\\__的结合。）\n答案：A（gestures，手势）\n解析：定位 Paragraph 3 中 “relying on a mix of languages, pidgins and gestures to communicate”，明确提到 “手势”，因此选 A。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：yet a report noted that over one-tenth of business \\___\\___ were processed in a party-language setting.（但一份报告指出，超 1/10 的商业_\\___\\__在混合语言环境中进行。）\n答案：C（transactions，交易）\n解析：定位 Paragraph 3 中 “16 % of international business transactions are conducted in a ‘cocktail of languages’”，“16%” 对应 “over one-tenth”，“conducted” 对应 “processed”，因此选 C。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：A third way is to hire translators. However, this is .（第三种方法是雇佣翻译，但这很。）\n答案：L（costly，昂贵的）\n解析：定位 Paragraph 4 中 “this is by no means an end to the language barrier. For a start these services can be very expensive”，“very expensive” 对应 “costly”，因此选 L。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（6）题目 32：besides, if they are not well-prepared, they have to engage in \\___\\___ work.（此外，若准备不足，他们不得不进行_\\___\\__工作。）\n答案：D（assumption，推测）\n解析：定位 Paragraph 4 中 “unless there has been considerable pre-explanation... interpreters must use initiative and guess-work”，“guess-work” 对应 “assumption”，因此选 D。",
-          "questionId": "q32"
+          "questionId": "q6"
         }
       ],
       "questionRange": {
@@ -89,37 +89,37 @@
         {
           "questionNumber": 33,
           "text": "（1）题目 33：What “understandable reaction” does the author say companies show when facing a skills shortage?（作者称企业面临技能短缺时，会表现出什么 “合理反应”？）\n答案：personnel development（人员发展）\n解析：定位 Paragraph 5 中 “The immediate and understandable reaction to any skills shortage is to consider personnel development”，明确提到 “人员发展”，因此答案为 “personnel development”。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（2）题目 34：During an economic depression, how does the writer label language training in firms?（经济低迷时，作者将企业语言培训归为哪类事物？）\n答案：a luxury（奢侈品）\n解析：定位 Paragraph 5 中 “when belts tighten, training is one of the first luxuries to be pared down”，明确提到 “奢侈品”，因此答案为 “a luxury”。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（3）题目 35：What has Volkswagen Group provided as an example for other multinationals?（大众汽车集团为其他跨国公司提供了什么范例？）\n答案：a language strategy（语言策略）\n解析：定位 Paragraph 6 中 “One notable and committed leader in language training is the Volkswagen Group... it has developed a language strategy that can be regarded as a model of professional management”，明确提到 “语言策略”，因此答案为 “a language strategy”。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "（4）题目 36：In Volkswagen, language training is regarded as what kind of solution?（在大众汽车，语言培训被视为哪类解决方案？）\n答案：strategic（战略性的）\n解析：定位 Paragraph 6 中 “Volkswagen treats language training as a strategic solution, not a tactical one”，明确提到 “战略性的”，因此答案为 “strategic”。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（5）题目 37：How many stages are required to progress from basics to full competence?（从基础到完全胜任需多少阶段？）\n答案：six（六个）\n解析：定位 Paragraph 6 中 “Progressing from ‘basics’ to full ‘communication competence’ requires completion of six language stages”，明确提到 “六个阶段”，因此答案为 “six”。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（6）题目 38：Roughly how long does each refresher course take?（每个复习课程大约需要多久？）\n答案：90 hours（90 小时）\n解析：定位 Paragraph 6 中 “each demanding roughly 90 hours of classroom refresher work”，明确提到 “90 小时”，因此答案为 “90 hours”。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（7）题目 39：At least how long is needed for a specialist to work effectively in a foreign language?（专业人员用外语有效工作至少需要多久？）\n答案：three years（三年）\n解析：定位 Paragraph 6 中 “expects a minimum of three years of fairly intensive study before an accountant, engineer, buyer or salesperson can work effectively in a foreign language”，明确提到 “三年”，因此答案为 “three years”。",
-          "questionId": "q39"
+          "questionId": "q13"
         }
       ],
       "questionRange": {
@@ -135,7 +135,7 @@
         {
           "questionNumber": 40,
           "text": "题目 40：What is the main function of this passage?（本文的主要功能是什么？）\n答案：C（Evaluate various approaches to the language barrier in multinational companies. 评估跨国公司应对语言障碍的多种方法）\n解析：全文依次分析 “依赖通用语、功能性多语制、外部翻译、人员培训” 四种策略的优劣，A “仅揭示问题”、B “仅列举案例”、D “仅强调培训” 均片面，因此选 C。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

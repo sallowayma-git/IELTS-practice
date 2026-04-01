@@ -64,32 +64,32 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：All of the body is able to recover during one type of sleep.（整个身体可在某类睡眠中恢复）\n答案：C（Meir Siegel，梅尔・西格尔）\n解析：定位 Paragraph 5 中 “Professor Meir Siegel... provides an opportunity to repair the body cells damaged during wakefulness”，西格尔认为 NREM 睡眠能修复全身受损细胞，即 “整个身体在这类睡眠中恢复”，因此选 C。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：The brain benefits from one type of sleep during an early stage of life.（生命早期，大脑从某类睡眠中获益）\n答案：F（Michel Jouvet，米歇尔・朱维）\n解析：定位 Paragraph 9 中 “Michel Jouvet believes that the intense activity seen in the brain during REM sleep is essential to neural development before birth”，朱维指出 REM 睡眠对胎儿（生命早期）的神经发育至关重要，即 “大脑从中获益”，因此选 F。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：Humans spend more time asleep than engaged in any other activity.（人类花在睡眠上的时间比任何其他活动都多）\n答案：A（Paul Martin，保罗・马丁）\n解析：定位 Paragraph 1 中 “Paul Martin... ‘When you die, a bigger slice of your existence will have passed in this state (sleep) than in... any other activity’”，马丁直接提出 “睡眠时长超过其他任何活动”，因此选 A。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：It is likely that the purpose of one type of sleep has altered over time.（某类睡眠的目的可能随时间改变）\n答案：D（Jim Horne，吉姆・霍恩）\n解析：定位 Paragraph 6 中 “Jim Horne... ‘The functions of NREM sleep have probably changed with evolution, maybe beginning as an energy conserver and culminating, in humans, as a facilitator for the recovery of high-level brain function’”，霍恩认为 NREM 睡眠的功能随进化改变，即 “目的随时间改变”，因此选 D。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：Brain activity during one type of sleep is similar to that when people are awake.（某类睡眠期间的大脑活动与清醒时类似）\n答案：B（Nathaniel Kleitman，纳撒尼尔・克莱特曼）\n解析：定位 Paragraph 3 中 “Kleitman... noticed it was marked by periods of rapid eye movement... accompanied by a frenzy of brain activity akin to that seen during periods of consciousness”，克莱特曼发现 REM 睡眠的大脑活动与清醒时类似，因此选 B。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（6）题目 32：One type of sleep enables an individual to learn from past experience.（某类睡眠帮助人从过往经历中学习）\n答案：E（Claudio Stampi，克劳迪奥・斯坦皮）\n解析：定位 Paragraph 7 中 “According to Dr Claudio, when we are deprived of REM sleep, memory consolidation is compromised... ‘We need it to reprocess what has happened during the previous period of wakefulness in order to store information that is useful’”，克劳迪奥指出 REM 睡眠能重新处理过往经历、储存有用信息，即 “帮助从过往经历学习”，因此选 E。",
-          "questionId": "q32"
+          "questionId": "q6"
         }
       ],
       "questionRange": {
@@ -105,37 +105,37 @@
         {
           "questionNumber": 33,
           "text": "（1）题目 33：biological advantages of sleep not clear – this makes it different from either \\___\\___ or eating.（睡眠的生理优势不明确 —— 这使其不同于_\\___\\__或进食。）\n答案：breathing（呼吸）\n解析：定位 Paragraph 1 中 “Unlike breathing or eating, the biological benefits of sleep are not immediately obvious”，“呼吸” 与 “进食” 并列，且生理优势明确，因此答案为 “breathing”。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（2）题目 34：aspects of sleep that most creatures share: ... sleep longer when they are \\___\\___.（多数生物共有的睡眠特征：……\\___\\___时睡得更久。）\n答案：babies（幼年 / 婴儿时期）\n解析：定位 Paragraph 2 中 “Like us, other animals... sleep more as babies”，“幼年时睡得更久” 是多数生物的共性，因此答案为 “babies”。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（3）题目 35：scientists once believed that \\___\\___ stopped during sleep – now know it takes place but not in a uniform way.（科学家曾认为睡眠时_\\___\\__停止 —— 如今发现其仍发生，但并非均匀进行。）\n答案：brain activity（大脑活动）\n解析：定位 Paragraph 3 中 “scientists assumed it was a passive state in which brain activity ceased... We now know that brain activity is far from uniform while we sleep”，“大脑活动” 是科学家曾认为睡眠时会停止的对象，因此答案为 “brain activity”。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "（4）题目 36：now possible to prove that amount of NREM sleep rises with \\___\\___.（现已证实 NREM 睡眠时长随_\\___\\__增加。）\n答案：exercise（运动）\n解析：定位 Paragraph 5 中 “it has been shown that NREM sleep does indeed increase after vigorous exercise”，“剧烈运动后 NREM 睡眠增加”，因此答案为 “exercise”。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（5）题目 37：the metabolic rate and the \\___\\___ of the brain fall during NREM sleep.（NREM 睡眠期间，代谢率和大脑_\\___\\__下降。）\n答案：temperature（温度）\n解析：定位 Paragraph 5 中 “The decrease both in metabolic rate and in brain temperature occurring during NREM sleep”，“脑温下降” 是 NREM 睡眠的特征之一，因此答案为 “temperature”。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（6）题目 38：mysteries of REM sleep may become clearer as the \\___\\___ improve.（随着_\\___\\__的改进，REM 睡眠的谜团可能更清晰。）\n答案：scanning techniques（扫描技术）\n解析：定位 Paragraph 10 中 “as scanning techniques become more refined, the brain regions underlying the two types of sleep will be better understood”，“扫描技术精进” 有助于解开 REM 睡眠的谜团，因此答案为 “scanning techniques”。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（7）题目 39：it is unlikely that a \\___\\___ will ever replace the need for sleep.（\\___\\___不太可能替代睡眠需求。）\n答案：drug（药物）\n解析：定位 Paragraph 10 中 “It's highly improbable that any new drug could enable us to avoid it and remain healthy for any length of time”，“药物无法让人无需睡眠仍保持健康”，因此答案为 “drug”。",
-          "questionId": "q39"
+          "questionId": "q13"
         }
       ],
       "questionRange": {
@@ -151,7 +151,7 @@
         {
           "questionNumber": 40,
           "text": "题目 40：The writer’s main aim in this passage is to（作者的主要目的是？）\n答案：D（describe the differences between two types of sleep. 描述两种睡眠的差异）\n解析：全文围绕 NREM 和 REM 两种睡眠展开，对比其 “进化起源（原始爬行动物无 REM 睡眠）、大脑活动（NREM 休息，REM 活跃）、功能（NREM 修复，REM 助记忆 / 神经发育）”，核心是 “描述两种睡眠的差异”，因此选 D。A（比较动物与人类睡眠时的大脑活动）、B（解释为何有人需要更多睡眠）、C（解释为何有些梦易被遗忘）均偏离主旨。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

@@ -56,32 +56,32 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：a description of how rapid change has a negative effect on people（描述快速变化对人类的负面影响）\n答案：C\n解析：定位 Paragraph C 中 “The rate of technological progress far exceeds the rate of psychological evolution, leaving us ill-equipped to cope with our lifestyles, which in turn leads to increased stress”，明确描述 “技术进步过快导致人类适应困难、压力增加”，与题干对应，因此答案为 C。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：a reference to an architect whose designs were uncharacteristic of biophilia（提及一位设计不符合亲自然理念的建筑师）\n答案：B\n解析：定位 Paragraph B 中 “Le Corbusier... box-like blocks of flats”，指出勒・柯布西耶设计的盒状公寓楼 “缺乏自然元素，不符合亲自然理念”，与题干对应，因此答案为 B。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：a definition of the two main aims of biophilia（亲自然理念两大核心目标的定义）\n答案：A\n解析：定位 Paragraph A 中 “The premise of biophilic design is to avoid or minimise harmful impacts on the natural environment and, equally importantly, to provide and restore beneficial contacts between people and nature in the built environment”，明确定义 “两大目标：减少环境危害、恢复人与自然联系”，与题干对应，因此答案为 A。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：a positive claim about early forms of architecture（对早期建筑的正面评价）\n答案：H\n解析：定位 Paragraph H 中 “Ancient architects... were almost always more in touch with the earth than Western society is today. They mimicked nature’s forms, producing magnificent structures that still awe us”，正面评价 “古代建筑与自然联系紧密、形态模仿自然、宏伟壮观”，与题干对应，因此答案为 H。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：a reference to the fact that many architects are too focused on innovation（提及许多建筑师过度关注创新）\n答案：B\n解析：定位 Paragraph B 中 “All too often, architects put creative originality before the needs of the people who must live and work in their futuristic constructions”，“creative originality” 对应 “innovation”，指出建筑师 “将创新置于使用者需求之上”，与题干对应，因此答案为 B。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（6）题目 19：a description of features which conserve energy in a biophilic design（描述亲自然设计中的节能特征）\n答案：F\n解析：定位 Paragraph F 中 “It harnesses solar power, utilises both active and passive air systems, and monitors the weather to adapt to conditions”，描述 “利用太阳能、主动 / 被动通风、随天气调整” 等节能特征，与题干对应，因此答案为 F。",
-          "questionId": "q19"
+          "questionId": "q6"
         }
       ],
       "questionRange": {
@@ -97,27 +97,27 @@
         {
           "questionNumber": 20,
           "text": "（1）题目 20：In the modern world, \\___\\___\\____ advancements are happening so quickly that humans are unable to adjust to them.\n题目翻译：现代社会，\\___\\___\\___\\_进步速度过快，人类难以适应。\n答案：technological（技术的）\n解析：定位 Paragraph C 中 “The rate of technological progress far exceeds the rate of psychological evolution, leaving us ill-equipped to cope”，“progress” 对应 “advancements”，明确提到 “技术进步过快”，因此答案为 “technological”。",
-          "questionId": "q20"
+          "questionId": "q7"
         },
         {
           "questionNumber": 21,
           "text": "（2）题目 21：Biophilia can help us deal with the \\___\\___\\____ caused by the difficulties of our current lifestyles.\n题目翻译：亲自然设计可帮助我们应对当前生活方式困境带来的_\\___\\___\\___。\n答案：stress（压力）\n解析：定位 Paragraph C 中 “which in turn leads to increased stress. Because biophilia attempts to integrate basic and current needs, it can alleviate the difficulties”，“alleviate the difficulties” 对应 “deal with”，明确提到亲自然设计缓解 “压力”，因此答案为 “stress”。",
-          "questionId": "q21"
+          "questionId": "q8"
         },
         {
           "questionNumber": 22,
           "text": "（3）题目 22：People instinctively feel more comfortable in places which have plenty of \\___\\___\\___\\_, something which is necessary for health and well-being.\n题目翻译：人类本能地在_\\___\\___\\___充足的地方感到更舒适，这对健康和幸福至关重要。\n答案：sunlight（阳光）\n解析：定位 Paragraph C 中 “one crucial element of the natural landscape for human health is sunlight. We are evolutionarily programmed to respond positively to sunny areas”，明确提到 “阳光充足的地方让人舒适”，因此答案为 “sunlight”。",
-          "questionId": "q22"
+          "questionId": "q9"
         },
         {
           "questionNumber": 23,
           "text": "（4）题目 23：An experiment designed to test the effect of nature on patient recovery times found that those who could see a \\___\\___\\____ made a faster recovery.\n题目翻译：一项测试自然对患者康复时间影响的实验发现，能看到_\\___\\___\\___的患者恢复更快。\n答案：tree（树）\n解析：定位 Paragraph D 中 “One group had a view of a tree; the others had a window looking onto a brick wall. The first group had shorter hospital stays”，明确提到 “看树的患者恢复更快”，因此答案为 “tree”。",
-          "questionId": "q23"
+          "questionId": "q10"
         },
         {
           "questionNumber": 24,
           "text": "（5）题目 24：There is a biophilic design feature in the University of Guelph-Humber building which improves the quality of the \\___\\___\\___\\_.\n题目翻译：圭尔夫 - 亨伯大学建筑中有一项亲自然设计特征，可改善_\\___\\___\\___质量。\n答案：air（空气）\n解析：定位 Paragraph G 中 “The wall purifies the air and has the potential to fulfil the building’s fresh-air-intake requirements”，明确提到 “生物墙净化空气，改善空气质量”，因此答案为 “air”。",
-          "questionId": "q24"
+          "questionId": "q11"
         }
       ],
       "questionRange": {

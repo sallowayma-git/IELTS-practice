@@ -52,37 +52,37 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：Paragraph A\n答案：iv（Physical characteristics that allow birds to migrate，使鸟类能够迁徙的生理特征）\n解析：Paragraph A 详细列举鸟类的 “轻质骨骼、特殊羽毛、高效呼吸、脂肪积累” 等生理结构，核心是 “支持迁徙的生理特征”，与标题 iv 一致，因此选 iv。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：Paragraph B\n答案：v（The main reason why birds migrate，鸟类迁徙的主要原因）\n解析：Paragraph B 开篇即指出 “鸟类迁徙的根本原因是冬季寻找充足食物”，核心是 “迁徙的主要原因”，与标题 v 一致，因此选 v。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：Paragraph C\n答案：ii（The unexplained rejection of closer feeding grounds，无法解释的对更近觅食地的排斥）\n解析：Paragraph C 强调 “鸟类迁徙远超必要距离，飞越适宜栖息地却不停留”，核心是 “无法解释为何排斥近觅食地”，与标题 ii 一致，因此选 ii。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：Paragraph D\n答案：x（Mysterious migration despite lack of teaching，无教导却能完成的神秘迁徙）\n解析：Paragraph D 以布谷鸟为例，描述 “幼鸟无亲鸟引导仍能精准迁徙”，核心是 “无教导的神秘迁徙”，与标题 x 一致，因此选 x。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：Paragraph E\n答案：vii（Research findings on how birds migrate，关于鸟类如何迁徙的研究发现）\n解析：Paragraph E 呈现 “鸟类通过太阳星辰、地球磁场导航” 等研究证据，核心是 “迁徙机制的研究发现”，与标题 vii 一致，因此选 vii。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（6）题目 19：Paragraph F\n答案：i（The best moment to migrate，最佳迁徙时机）\n解析：Paragraph F 围绕 “适时出发的重要性（结合天气预报、利用顺风）” 展开，核心是 “最佳迁徙时机”，与标题 i 一致，因此选 i。",
-          "questionId": "q19"
+          "questionId": "q6"
         },
         {
           "questionNumber": 20,
           "text": "（7）题目 20：Paragraph G\n答案：viii（Successful migration despite the trouble of wind，尽管有风干扰仍成功迁徙）\n解析：Paragraph G 列举 “剪水鹱逆风返回、北美鸟类被风吹至欧洲仍能返程”，核心是 “有风干扰仍成功迁徙”，与标题 viii 一致，因此选 viii。",
-          "questionId": "q20"
+          "questionId": "q7"
         }
       ],
       "questionRange": {
@@ -108,22 +108,22 @@
         {
           "questionNumber": 23,
           "text": "（1）题目 23：It is a great mystery that young birds like cuckoos can find their wintering grounds without \\___\\___\\___\\_.\n题目翻译：像布谷鸟这样的幼鸟能在没有_\\___\\___\\___的情况下找到越冬地，这是一个巨大谜团。\n答案：parental guidance（亲鸟引导）\n解析：定位 Paragraph D 中 “how young birds know how to find the traditional wintering areas without parental guidance”，明确提到幼鸟无 “亲鸟引导” 仍能找到越冬地，因此答案为 “parental guidance”。",
-          "questionId": "q23"
+          "questionId": "q10"
         },
         {
           "questionNumber": 24,
           "text": "（2）题目 24：Evidence shows birds can tell directions like a \\___\\___\\____ by observing the sun and the stars.\n题目翻译：证据表明，鸟类可通过观察太阳和星辰辨别方向，如同使用_\\___\\___\\___。\n答案：compass（指南针）\n解析：定位 Paragraph E 中 “birds use the positions of the sun and stars to obtain compass directions”，“obtain compass directions” 对应 “tell directions like a compass”，因此答案为 “compass”。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（3）题目 25：One advantage for birds flying at night is that they can avoid contact with \\___\\___\\___\\_.\n题目翻译：鸟类夜间飞行的一个优势是能避免接触_\\___\\___\\___。\n答案：(daytime) predators（日间捕食者）\n解析：定位 Paragraph E 中 “Traveling at night provides other benefits. Daytime predators are avoided”，明确提到夜间飞行可避开 “日间捕食者”，因此答案为 “(daytime) predators”（括号内词汇可省略，仅填 “predators” 也符合要求）。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（4）题目 26：Laboratory tests show that birds can detect weather without \\___\\___\\____ signs.\n题目翻译：实验室测试显示，鸟类能在没有_\\___\\___\\___迹象的情况下感知天气变化。\n答案：visible（可见的）\n解析：定位 Paragraph F 中 “Often birds react to weather changes before there is any visible sign of them”，“before there is any visible sign” 对应 “without visible signs”，因此答案为 “visible”。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {
