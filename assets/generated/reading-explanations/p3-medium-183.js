@@ -56,27 +56,27 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：Less attention will be paid to each task when more than one task is attempted at the same time.（同时尝试多项任务时，每项任务获得的注意力会减少）\n答案：B（Ernst Pöppel，恩斯特・珀佩尔）\n解析：定位 Paragraph 4 中 “Ernst Pöppel... believes that it is impossible to carry out two or three different tasks simultaneously with the same degree of concentration”，“无法同时高度专注多项任务” 对应 “每项任务注意力减少”，因此选 B。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：Repeated changes of task mean that the brain will take a while to adjust.（频繁切换任务意味着大脑需时间适应）\n答案：C（David E. Meyer，戴维・E・迈耶）\n解析：定位 Paragraph 6 中 “David E. Meyer... Each switchover from one task to another meant re-thinking and thus involved additional neural resources... it takes the brain longer to adapt when switching rapidly back to an interrupted task”，“切换需重新思考、适应时间长” 对应 “需时间调整”，因此选 C。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：Using the skills required for one task may make performing another one more difficult.（使用一项任务所需的技能可能使另一项任务更难完成）\n答案：A（John Ridley Stroop，约翰・里德利・斯特鲁普）\n解析：定位 Paragraph 3 中 “John Ridley Stroop reported that processing information from one task could cause interference with another... when study participants were asked to name the colour of a word... printed in a different colour – they experienced difficulty”，“一项任务（阅读）干扰另一项任务（颜色命名）” 对应 “技能使用导致另一任务困难”，因此选 A。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：When multitasking, the brain can only focus on single tasks for very short periods.（多任务时，大脑仅能短时间专注单项任务）\n答案：B（Ernst Pöppel，恩斯特・珀佩尔）\n解析：定位 Paragraph 5 中 “Ernst Pöppel... processing... actually take place in ‘three-second windows’... a person can concentrate on a conversation for three seconds, then for three seconds on a crying child, and three seconds on a computer screen”，“三秒窗口内专注单项任务” 对应 “短时间专注”，因此选 B。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：Multitasking can lead to a medical problem.（多任务可能导致健康问题）\n答案：D（Edward Hallowell & John Ratey，爱德华・哈洛威尔与约翰・拉蒂）\n解析：定位 Paragraph 8 中 “Edward Hallowell and John Ratey... say that multitasking can bring about a brain condition that causes sufferers to constantly seek new information while having difficulties concentrating on its content”，“导致大脑状况异常” 对应 “medical problem”，因此选 D。",
-          "questionId": "q31"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -92,17 +92,17 @@
         {
           "questionNumber": 32,
           "text": "（1）题目 32：What is suggested about the worker in the opening paragraph?（开篇段落暗示该员工如何？）\n答案：B（He feels overwhelmed by his workload. 他因工作负荷感到不堪重负）\n解析：定位 Paragraph 1 中 “You arrive at the office, review your to-do list and start to feel a headache coming on. You resolve to tackle the items as quickly as possible”，“看到待办清单头痛” 暗示 “工作负荷压垮人”，因此选 B。A（焦虑导致前一晚失眠）、C（经理表达不满）、D（认为工作枯燥）均未提及。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（2）题目 33：Drivers and air-traffic controllers are mentioned in the passage because they（文中提及驾驶员和空中交通管制员的原因是？）\n答案：D（cannot afford to make mistakes. 不能犯错）\n解析：定位 Paragraph 2 中 “the possible dangers of divided attention for drivers, air-traffic controllers and others who handle machinery”，“注意力分散的危险” 暗示 “他们犯错代价高，不能犯错”，因此选 D。A（需同时完成多项任务）、B（无法保持专注）、C（高效利用时间）均未提及。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（3）题目 34：In John Ridley Stroop’s experiment, participants found it difficult to（在约翰・里德利・斯特鲁普的实验中，受试者发现什么困难？）\n答案：C（read out the name of one colour printed in another colour. 读出用另一种颜色印刷的颜色词的名称）\n解析：定位 Paragraph 3 中 “when study participants were asked to name the colour of a word – such as ‘green’ – printed in a different colour – red, for example – they experienced difficulty saying the name of the colour”，“说出颜色词的印刷颜色困难” 对应选项 C，因此选 C。",
-          "questionId": "q34"
+          "questionId": "q8"
         }
       ],
       "questionRange": {
@@ -118,22 +118,22 @@
         {
           "questionNumber": 35,
           "text": "（1）题目 35：The area most affected is the prefrontal cortex, which is found to the rear of the \\___\\___（受影响最大的区域是前额叶皮层，位于_\\___\\__后方）\n答案：forehead（额头）\n解析：定位 Paragraph 7 中 “Located behind the forehead, the prefrontal cortex – which neuroscientists call the ‘executive’ part of the brain”，“位于额头后方”，因此答案为 “forehead”。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "（2）题目 36：the part of the brain which judges tasks, then puts them in order of importance and allocates \\___\\___（大脑中评估任务、排序并分配_\\___\\__的部分）\n答案：mental resources（心理资源）\n解析：定位 Paragraph 7 中 “assess tasks, prioritise them and assign mental resources”，“分配心理资源”，因此答案为 “mental resources”。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（3）题目 37：If any \\___\\___ in the hippocampus are affected, people may have problems with storing \\___\\___（若海马体中的任何_\\___\\__受影响，人们可能在储存_\\___\\__方面有困难）\n答案：cells（细胞）；new memories（新记忆）\n解析：定位 Paragraph 7 中 “this stress can also affect brain cells in another region, the hippocampus, which is important for forming new memories”，“海马体细胞受影响，影响新记忆形成”，因此依次填 “cells”“new memories”。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（4）题目 38：as well as learning \\___\\___（以及学习_\\___\\__方面有困难）\n答案：new skills（新技能）\n解析：定位 Paragraph 7 中 “damage in that area also makes it difficult for a person to acquire new skills”，“学习新技能困难”，因此答案为 “new skills”。",
-          "questionId": "q38"
+          "questionId": "q12"
         }
       ],
       "questionRange": {
@@ -149,7 +149,7 @@
         {
           "questionNumber": 40,
           "text": "题目 40：The main aim of this passage is to（本文主要目的是？）\n答案：B（challenge widely held opinions on multitasking. 挑战关于多任务的普遍观点）\n解析：全文先描述 “多任务是成功关键” 的普遍认知，再通过多项研究（斯特鲁普、珀佩尔、迈耶等）证明 “多任务低效且有害”，核心是 “挑战普遍观点”，因此选 B。A（描述多任务有用的领域）、C（展示多任务造成的身体损伤）、D（呼吁开展更多多任务心理学实验）均偏离主旨。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

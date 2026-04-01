@@ -32,17 +32,17 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：lifting mechanism - \\___\\___\n题目翻译：提升装置 - \\___\\___\n答案：chain（链条）\n解析：定位 Paragraph 2 中 “The traditional lifting mechanism is a long length of chain running up the hill under the track”，明确提到提升装置的核心是 “链条”，因此答案为 “chain”。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：gear（齿轮）\n题目翻译：\\___\\___（位于提升坡顶部和底部，带动链条运转）\n答案：gear（齿轮）\n解析：定位 Paragraph 2 中 “The chain is fastened in a loop, which is wound around a gear at the top of the hill and another one at the bottom”，明确提到 “齿轮” 带动链条，因此答案为 “gear”。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：\\___\\___（过山车从提升坡顶部释放后开始的动作）\n答案：descent（下滑）\n解析：定位 Paragraph 2 中 “At the summit, the train is released and starts its descent”，明确提到顶部释放后开始 “下滑”，因此答案为 “descent”。",
-          "questionId": "q16"
+          "questionId": "q3"
         }
       ],
       "questionRange": {
@@ -58,27 +58,27 @@
         {
           "questionNumber": 17,
           "text": "（1）题目 17：Modern roller coasters are descended from 16th-century Russian slides with a surface of \\___\\___ .\n题目翻译：现代过山车起源于 16 世纪俄罗斯表面为_\\___\\__的滑梯。\n答案：ice（冰）\n解析：定位 Paragraph 6 中 “Their direct ancestors were ice slides, popular in Russia in the 16th and 17th centuries. They consisted of a long, steep, wooden slide covered in ice”，明确提到表面为 “冰”，因此答案为 “ice”。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（2）题目 18：In France, because of the higher temperatures, the wooden surface on the slides was \\___\\___ .\n题目翻译：在法国，因温度较高，滑梯的木质表面被_\\___\\__。\n答案：waxed（涂蜡）\n解析：定位 Paragraph 7 中 “the warmer climate would melt the ice, so the French started building waxed slides instead”，明确提到表面 “涂蜡”，因此答案为 “waxed”。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（3）题目 19：\\___\\___ were attached to the cars to ease the descent.\n题目翻译：车厢上加装_\\___\\__以助力下滑。\n答案：wheels（轮子）\n解析：定位 Paragraph 7 中 “To help the sleds move down these slides, they added wheels”，明确提到加装 “轮子”，因此答案为 “wheels”。",
-          "questionId": "q19"
+          "questionId": "q6"
         },
         {
           "questionNumber": 20,
           "text": "（4）题目 20：The first US roller coaster was used for transporting \\___\\___ down a mountainside in carts.\n题目翻译：美国首座过山车最初用于用车厢将_\\___\\__运下山。\n答案：coal（煤炭）\n解析：定位 Paragraph 8 中 “the first American roller coaster was built... originally to provide an easy way to send coal to the railway 29 km down the mountain”，明确提到运输 “煤炭”，因此答案为 “coal”。",
-          "questionId": "q20"
+          "questionId": "q7"
         },
         {
           "questionNumber": 21,
           "text": "（5）题目 21：Initially, these were pulled by mules, but in time power was produced by \\___\\___ .\n题目翻译：起初由骡子拉动，后来动力由_\\___\\__提供。\n答案：steam engines（蒸汽机）\n解析：定位 Paragraph 8 中 “They were eventually replaced with steam engines to make the system more efficient”，明确提到 “蒸汽机”，因此答案为 “steam engines”。",
-          "questionId": "q21"
+          "questionId": "q8"
         }
       ],
       "questionRange": {
@@ -94,27 +94,27 @@
         {
           "questionNumber": 22,
           "text": "（1）题目 22：The earliest modifications to the basic slide were made in France.（对基础滑梯的最早改造在法国进行）\n答案：TRUE（正确）\n解析：定位 Paragraph 7 中 “It seems that the idea was then imported into France... the French started building waxed slides instead... added wheels... in 1817, for the first time, a train was attached to the track”，明确提到法国首次改造滑梯（蜡面、加轮子、带轨道），与题干描述一致，因此判定为 TRUE。",
-          "questionId": "q22"
+          "questionId": "q9"
         },
         {
           "questionNumber": 23,
           "text": "（2）题目 23：Roller coasters continued to increase in popularity throughout the 1920s and 1930s.（20 世纪 20-30 年代，过山车 popularity 持续上升）\n答案：FALSE（错误）\n解析：定位 Paragraph 10 中 “By the 1920s, roller coasters were in full swing... Following the Great Depression, a decline in roller-coaster production began in the early 1930s”，明确提到 30 年代初开始衰落，与题干 “持续上升” 描述矛盾，因此判定为 FALSE。",
-          "questionId": "q23"
+          "questionId": "q10"
         },
         {
           "questionNumber": 24,
           "text": "（3）题目 24：New roller-coaster technology was introduced in the 1970s in response to public demand.（1970 年代推出过山车新技术是为响应公众需求）\n答案：NOT GIVEN（未提及）\n解析：Paragraph 11 仅提到 “1970-80 年代推出管状钢过山车”，未提及 “响应公众需求”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（4）题目 25：Roller coasters were less popular for most of the 1980s than in the 1970s and 1990s.（20 世纪 80 年代大部分时间，过山车 popularity 低于 70 年代和 90 年代）\n答案：TRUE（正确）\n解析：定位 Paragraph 11 中 “a second roller-coaster boom in the 1970s and the beginning of the 1980s... This was followed by a decline in interest for the rest of the decade, but since the early 1990s the amusement-park industry has experienced another coaster boom”，明确提到 80 年代后期兴趣下降，70 年代和 90 年代为热潮，与题干描述一致，因此判定为 TRUE。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（5）题目 26：The design of roller-coaster rides became more varied in the 1990s.（20 世纪 90 年代，过山车设计变得更多样）\n答案：TRUE（正确）\n解析：定位 Paragraph 11 中 “since the early 1990s... New launching techniques and other technological developments have opened up a world of options for designers”，明确提到 90 年代技术进步让设计更多样，与题干描述一致，因此判定为 TRUE。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

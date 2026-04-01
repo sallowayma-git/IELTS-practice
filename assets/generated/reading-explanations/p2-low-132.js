@@ -56,27 +56,27 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：First type - Birds rely on their sophisticated \\___\\___ . However, they are generally most successful if they are released within their feeding territory.\n题目翻译：第一类归巢行为 —— 鸟类依赖发达的_\\___\\__。但通常在觅食领地内放飞时，它们的归巢成功率最高。\n答案：visual memory（视觉记忆）\n解析：定位 Paragraph C 中 “Such birds possess a highly developed visual memory, as experiments with pigeons have shown”，明确提到第一类归巢依赖 “视觉记忆”，因此答案为 “visual memory”。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：Second type - Birds select their accustomed \\___\\___ , no matter where they are released.\n题目翻译：第二类归巢行为 —— 无论在哪放飞，鸟类都会选择惯常的_\\___\\__。\n答案：migration direction（迁徙方向）\n解析：定位 Paragraph D 中 “They appear to choose their normal migration direction even if they are released in a different place from their usual starting point”，明确提到第二类鸟类选择 “常规迁徙方向”，因此答案为 “migration direction”。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：Second type - As a result, they may miss their \\___\\___ .\n题目翻译：第二类归巢行为 —— 因此，它们可能错过_\\___\\__。\n答案：destination（目的地）\n解析：定位 Paragraph D 中 “if they are released further to the west, they maintain the correct direction but fly west of their destination, and so fail to arrive”，明确提到偏离方向会错过 “目的地”，因此答案为 “destination”。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：Third type - Birds orientate correctly, even when they are released in an unfamiliar place and have no \\___\\___ to make use of.\n题目翻译：第三类归巢行为 —— 即便在陌生地点放飞且无_\\___\\__可用，鸟类仍能正确定位。\n答案：landmarks（地标）\n解析：定位 Paragraph E 中 “for the albatross clearly couldn’t rely on any landmarks over the vast expanse of the Pacific Ocean”，明确提到第三类鸟类无需 “地标”，因此答案为 “landmarks”。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：Third type - One bird with this type of skill is the \\___\\___ .\n题目翻译：第三类归巢行为 —— 具备这类能力的鸟类之一是_\\___\\__。\n答案：Laysan albatross（莱桑信天翁）\n解析：定位 Paragraph E 中 “In one example, a Laysan albatross returned to its nesting area... This is a perfect example of the third type of homing”，明确提到莱桑信天翁是第三类归巢的案例，因此答案为 “Laysan albatross”。",
-          "questionId": "q18"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -92,22 +92,22 @@
         {
           "questionNumber": 19,
           "text": "（1）题目 19：the effects of distance on some birds’ ability to find their nests（距离对部分鸟类归巢能力的影响）\n答案：C\n解析：定位 Paragraph C 中 “If the birds are transported 800 kilometres from their nest, it is only by good fortune that they find their way back... Released within this area, the birds soon make their return; release them outside it and far fewer return”，明确讨论 “距离增加导致归巢成功率下降”，与题干对应，因此答案为 C。",
-          "questionId": "q19"
+          "questionId": "q6"
         },
         {
           "questionNumber": 20,
           "text": "（2）题目 20：a methodology for testing the general ability of birds to find their nests（测试鸟类归巢能力的通用方法）\n答案：B\n解析：定位 Paragraph B 中 “Birds are caught... taken to some spot, released, and the percentage of returns is recorded. The distance can be varied, and the direction, as well as the method of transporting them, and then the influence of climatic and other factors... can be studied”，详细描述 “捕捉 - 放飞 - 记录 - 变量控制” 的测试方法，与题干对应，因此答案为 B。",
-          "questionId": "q20"
+          "questionId": "q7"
         },
         {
           "questionNumber": 21,
           "text": "（3）题目 21：one aspect of physical ability in humans and birds（人类与鸟类在某一身体能力上的对比）\n答案：C\n解析：定位 Paragraph C 中 “Birds’ eyes have a power of resolution two to three times greater than ours, enabling them to pick up very fine details”，对比人类与鸟类的 “视觉分辨率”，与题干对应，因此答案为 C。",
-          "questionId": "q21"
+          "questionId": "q8"
         },
         {
           "questionNumber": 22,
           "text": "（4）题目 22：how some birds’ migration was delayed for experimental purposes（为实验目的延迟部分鸟类迁徙的方法）\n答案：G\n解析：定位 Paragraph G 中 “Schüz caught first-year European storks and released them later, after the departure of the adult storks at a time when they normally make their south-west autumn migration to Africa”，明确提到 “捕捉幼鹳，在成年鹳迁徙后放飞” 以延迟其迁徙，与题干对应，因此答案为 G。",
-          "questionId": "q22"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -123,22 +123,22 @@
         {
           "questionNumber": 23,
           "text": "（1）题目 23：Domestic pigeon（家鸽）\n答案：C（the ability to remember things seen previously，记忆曾见事物的能力）\n解析：定位 Paragraph C 中 “Domestic pigeons have been trained to peck at a certain point on an aerial photograph... four years later the birds were still able to respond to this training”，明确提到家鸽能长期记忆航拍照片上的特定位置，因此选 C。",
-          "questionId": "q23"
+          "questionId": "q10"
         },
         {
           "questionNumber": 24,
           "text": "（2）题目 24：Alpine swift（高山雨燕）\n答案：F（a high success rate in finding nests，高归巢成功率）\n解析：定位 Paragraph F 中 “Great migrants such as the swift have the highest percentage of returns. In one case, seven out of nine Alpine swifts were recaptured at their nests after being displaced some 1,400 kilometres”，明确提到高山雨燕归巢成功率高，因此选 F。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（3）题目 25：European stork（欧洲白鹳）\n答案：A（an ability to orientate without previous training，无需训练的定位能力）\n解析：定位 Paragraph G 中 “in spite of the fact that there were no adults to guide them, the birds unanimously headed south-west”，明确提到幼鹳无引导仍能正确定位，因此选 A。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（4）题目 26：Starling（椋鸟）\n答案：D（the effect of age on homing ability，年龄对归巢能力的影响）\n解析：定位 Paragraph H 中 “the adults... found their wintering area by modifying their direction by 90 degrees, whereas the juveniles sought their winter quarters to the south-east of their real position”，明确对比成年与幼年椋鸟的归巢差异，因此选 D。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

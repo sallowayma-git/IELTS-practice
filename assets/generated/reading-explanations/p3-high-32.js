@@ -52,32 +52,32 @@
         {
           "questionNumber": 27,
           "text": "(1) 题目 27：What is the writer's main point in the first paragraph? （第一段作者的中心观点是什么？）\n答案：D\n解析：第一段先交代奥斯卡的科技奖，再说斯坦福团队获奖，最后点题：“They were part of a growing cohort of computer scientists that has become fundamental to moviemaking.”（他们属于一个不断壮大的计算机科学家群体，这个群体已成为电影制作的基础。）这说明计算机科学家已成为电影产业的关键组成部分。A、B、C都与段落主旨不符，只有D选项（计算机科学家正成为电影业至关重要的一部分）概括了其地位日益重要的核心观点。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "(2) 题目 28：When describing the way computer-generated imagery changes actors' appearance, what does the writer suggest? （在描述CGI改变演员外貌的方式时，作者暗示了什么？）\n答案：A\n解析：定位第二段 “At least, it is possible if the altered actors are not filmed too closely... the effect is less convincing when seen close up.” （至少，如果被改变的演员不是在特写镜头下拍摄，这是可能的……近看时效果不那么令人信服。）这句话明确指出，CGI效果在远距离观看时更好，近看则不那么逼真，因此A选项（CGI在远距离看效果最好）是正确的。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "(3) 题目 29：What does the writer suggest about the scientists' attitude to their work in the fourth paragraph? （在第四段，作者暗示了这些科学家对工作的态度是什么？）\n答案：A\n解析：定位第四段 “Despite their award, the scientists... continued their search for perfection, as they did not feel that they had yet satisfactorily recreated the subtle ways light is reflected.” （尽管获得了奖项，科学家们……继续追求完美，因为他们认为尚未满意地再现光的微妙反射方式。）这体现了他们力求逼真、尽可能接近现实的动机，因此A选项（他们的动机是尽可能地接近现实）是正确的。B（谋求名声）、D（寻求经费）均未提及；C（医学应用兴趣）不是该段描述他们态度的核心。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "(40) 题目 30：What are we told about computerised tomography? （关于计算机断层扫描（CT），文中告知了我们什么？）\n答案：B\n解析：定位第四段 “Like classical radiology, it uses X-rays, but because the image is constructed inside a computer...” （像传统放射学一样，它使用X射线；但它的成像是……在计算机内构建的……）。关键信息是它使用X射线，与“X光片/传统放射学”有相似之处，因此B选项（它在工作方式上与X射线相似）是正确的。A（刚被医生使用）、C（电影人多年用于打光）、D（可用传统放射设备实施）均与原文不符。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "(5) 题目 31：Which of these advantages does the writer attribute to the current use of computerised tomography? （作者将以下哪项优势归因于当前CT的用途？）\n答案：B\n解析：定位第五段 “...pieces of fabric... can then be patched together to form an entire garment inside a computer, in the same way that a small group of actors can be made to look like hundreds of people gathered together.” （……这些小块织物可以在计算机里拼接成一整件服装，就像可以把一小群演员做成看起来像几百人聚集在一起。）这里把当前能做的优势（用小块织物拼接成整件衣服）比喻为“把少数人变成一群人”，与B选项（它可以让少数人看起来像一群人）的比喻完全对应。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "(6) 题目 32：The writer mentions Kavita Bala in order to （作者提到卡维塔·巴拉是为了……）\n答案：D\n解析：定位第六段 “...the technology might have an application in online retailing...”。在讨论完电影制作后，作者引用巴拉的话，引出了该技术在“网络零售”领域的应用。这是一个电影行业之外的应用示例，因此D选项（展示CGI在电影业之外的一个用途）是正确的。",
-          "questionId": "q32"
+          "questionId": "q6"
         }
       ],
       "questionRange": {
@@ -93,22 +93,22 @@
         {
           "questionNumber": 33,
           "text": "(1) 题目 33：It used to be unusual for university researchers to receive a cinematography award. （过去大学研究者获得电影类大奖并不常见。）\n答案：YES\n解析：定位第一段 “In 2004 a notable event took place: the academic world met the cinematographic world when researchers from Stanford... were awarded an Oscar.” （2004年发生了一件引人注目的事情：学术界与电影界相遇——斯坦福的研究人员获得了奥斯卡奖。）“notable event”（引人注目的事）和“两界相遇”的措辞暗示了这种情况在以前是罕见的，因此该陈述正确。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "(2) 题目 34：CGI is popular among ageing actors. （CGI在年长演员中很受欢迎。）\n答案：NOT GIVEN\n解析：定位第二段 “Films have shown... make actors look younger or older...” （电影表明……可以让演员看起来更年轻或更年长……）。文中只说CGI技术可以做到让演员改变年龄外观，但并未提及年长演员是否喜欢或普遍使用这项技术，即没有评价其“受欢迎”程度。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "(3) 题目 35：The scientists' success in generating images of complete CGI garments has won them many awards. （科学家们用完整CGI服装成像的成功为他们赢得了许多奖项。）\n答案：NOT GIVEN\n解析：文中提到科学家因模拟皮肤的“半透明”效果而获奖，并在第五段提到他们成功记录了“小块织物”的结构以拼接成服装，但并未提及他们因为后者（生成完整服装）而赢得了任何奖项。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "(4) 题目 36：It will be a long time before computerised tomographic imaging of fabric is used by filmmakers. （电影制作人要使用织物的CT成像还要等很长时间。）\n答案：NO\n解析：定位第五段 “...may take some years to be able to use computerized tomographic imaging of skin; for the moment the movement of a virtual cloak... should look far more realistic.” （……要把CT成像用于皮肤可能还需要几年；就目前而言，虚拟斗篷的运动……应当更逼真。）这句话明确指出，“要等几年”的对象是皮肤（skin），而织物（fabric）的CT成像数据在当下已经能让衣物运动更逼真了。因此，该陈述与原文信息相矛盾。",
-          "questionId": "q36"
+          "questionId": "q10"
         }
       ],
       "questionRange": {
@@ -124,22 +124,22 @@
         {
           "questionNumber": 37,
           "text": "(1) 题目 37：Marschner and his colleagues were the first to apply an understanding of how 37 \\___\\___ interacts with human skin. （马什纳和他的同事率先将关于光线如何与人类皮肤相互作用的理解应用于CGI。）\n答案：A light\n解析：概要句中的“interacts with human skin”（与皮肤相互作用）对应第三段对次表面散射的解释：“this is when light penetrates skin and then scatters...” （这指的是光线穿透皮肤然后散射的过程）。这个过程的主体是light（光线）。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "(2) 题目 38：Their CGI model is based on a novel application of principles of 38 \\___\\___ which had previously been applied in other scientific research. （他们的CGI模型基于对数学原理的全新应用，而这些原理先前已用于其他科学研究。）\n答案：F mathematics\n解析：定位第三段 “...the mathematics for the model goes back many decades to the time when it was used in astrophysics.” （……该模型所用的数学可追溯到曾用于天体物理学的年代。）先前被用于“其他科学研究”（天体物理学）的是这套mathematics（数学）原理。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "(3) 题目 39：The importance of CGI to the film industry has led to the 39 \\___\\___ of Marschner's model by special-effects studios. （CGI对电影业的重要性已导致特效工作室对马什纳模型的使用。）\n答案：D use\n解析：定位第三段 “...within two years... all the major special-effects studios had incorporated it into their digital rendering systems.” （……两年内，所有主要特效工作室都把它并入了自己的数字渲染系统。）“incorporated into”（并入）在这里的含义就是“采用、使用”，与选项中的 use（使用）意思最为接近。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "(40) 题目 40：Marschner's model has led to the 40 \\___\\___ of cinematography. （马什纳的模型带来了电影摄影的改进。）\n答案：G improvement\n解析：定位第五段 “Cinematography will benefit from this because... the movement of a virtual cloak... should look far more realistic.” （电影摄影将因此受益，因为……虚拟服装等看起来会真实得多。）“will benefit from”（将受益）意味着会带来好处或提升，即 improvement（改进、提升）。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

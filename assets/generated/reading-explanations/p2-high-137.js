@@ -48,32 +48,32 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：Paragraph A\n答案：vi（Why natural scientists are interested in studying urban areas，自然科学家研究城市区域的原因）\n解析：Paragraph A 围绕 “城市化扩张背景下，研究城市生态的必要性” 展开，引用霍楚利的观点强调研究意义，核心是 “科学家研究城市的原因”，与标题 vi 一致，因此选 vi。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：Paragraph B\n答案：iv（A creature which likes rubbish，喜欢垃圾的生物）\n解析：Paragraph B 详细描述白鹮 “翻找垃圾桶、以垃圾为食” 的习性，核心是 “喜欢垃圾的生物”，与标题 iv 一致，因此选 iv。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：Paragraph C\n答案：vii（Changes in the urban built environments encourage particular species，城市建成环境变化促进特定物种生存）\n解析：Paragraph C 指出 “后院景观改造” 导致小型鸟类减少、噪钟鹊增多，核心是 “环境变化对物种的影响”，与标题 vii 一致，因此选 vii。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：Paragraph D\n答案：iii（Insects that thrive in urban areas，在城市繁荣的昆虫）\n解析：Paragraph D 聚焦蜘蛛、蝴蝶、蚂蚁等无脊椎动物在城市的生存状态，核心是 “城市中的昆虫”，与标题 iii 一致，因此选 iii。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：Paragraph E\n答案：i（The behaviour of a small animal expanding its territory，小型动物扩张领地的行为）\n解析：Paragraph E 描述长鼻袋狸从灌丛进入郊区后院，核心是 “小型动物扩张领地”，与标题 i 一致，因此选 i。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（6）题目 19：Paragraph F\n答案：ii（The urban environment encouraging the spread of imported flora and fauna，城市环境促进外来动植物传播）\n解析：Paragraph F 说明混凝土和雨水系统帮助外来杂草和物种扩散，核心是 “城市促进外来物种传播”，与标题 ii 一致，因此选 ii。",
-          "questionId": "q19"
+          "questionId": "q6"
         }
       ],
       "questionRange": {
@@ -89,22 +89,22 @@
         {
           "questionNumber": 20,
           "text": "（1）题目 20：It is not clear why one small animal is moving from its natural environment.（某小型动物离开自然环境的原因不明）\n答案：D（Catherine Price，凯瑟琳・普莱斯）\n解析：定位 Paragraph E 中 “Catherine Price... ‘We don’t know if it’s an overflow from the park, or if they’ve got particular survival traits that allow them to evade dogs and cats’”，明确提到普莱斯不确定长鼻袋狸进入城市的原因，因此选 D。",
-          "questionId": "q20"
+          "questionId": "q7"
         },
         {
           "questionNumber": 21,
           "text": "（2）题目 21：Hot weather might positively affect the health of a species.（炎热天气可能对某物种健康有益）\n答案：A（Dieter Hochuli，迪特尔・霍楚利）\n解析：定位 Paragraph D 中 “Dieter Hochuli... ‘We’re trying to determine whether it’s more food or the urban heat – as it’s up to four degrees warmer in the city’”，明确提到霍楚利研究 “城市高温是否让蜘蛛更健康”，因此选 A。",
-          "questionId": "q21"
+          "questionId": "q8"
         },
         {
           "questionNumber": 22,
           "text": "（3）题目 22：Sydney’s residential gardens suit some species better than others.（悉尼的住宅花园更适合部分物种）\n答案：C（Richard Major，理查德・梅杰）\n解析：定位 Paragraph C 中 “Richard Major... ‘They’re a real winner in cities... the predominant driver in the decline of small birds is that we’ve made a suitable environment for native noisy miners’”，明确提到梅杰指出花园更适合噪钟鹊，因此选 C。",
-          "questionId": "q22"
+          "questionId": "q9"
         },
         {
           "questionNumber": 23,
           "text": "（4）题目 23：Research into the natural world’s responses to urban settings is vital.（研究自然界对城市环境的反应至关重要）\n答案：A（Dieter Hochuli，迪特尔・霍楚利）\n解析：定位 Paragraph A 中 “Dieter Hochuli... ‘we need to understand how cities are changing the ecology of the systems they are built on, and how plants and animals are adapting to them’”，明确提到霍楚利强调该研究的重要性，因此选 A。",
-          "questionId": "q23"
+          "questionId": "q10"
         }
       ],
       "questionRange": {
@@ -120,17 +120,17 @@
         {
           "questionNumber": 24,
           "text": "（1）题目 24：Examples of successful ‘city dwellers’ include small, non-native rats and non-native insects such as \\___\\___\\__.\n题目翻译：成功的 “城市居民” 例子包括外来小家鼠和外来昆虫，如_\\___\\___\\_。\n答案：cockroaches（蟑螂）\n解析：定位 Paragraph F 中 “Non-native species such as black rodents, cockroaches and foxes have developed survival strategies too”，明确提到外来昆虫为 “蟑螂”，因此答案为 “cockroaches”。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（2）题目 25：Michelle Leishman... has proven that Sydney’s large areas of \\___\\___\\__ and its drainage network favour the growth of weeds.\n题目翻译：米歇尔・利什曼…… 已证实悉尼大面积的_\\___\\___\\_及其排水系统有利于杂草生长。\n答案：concrete（混凝土）\n解析：定位 Paragraph F 中 “Michelle Leishman... Sydney’s huge stretches of impermeable concrete, together with the storm-water system, have helped weeds infiltrate”，明确提到 “混凝土”，因此答案为 “concrete”。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（3）题目 26：Water gathers \\___\\___\\__ as it passes from gardens and streets into the city drainage network.\n题目翻译：水从花园和街道流入城市排水系统时，会收集_\\___\\___\\_。\n答案：chemicals（化学物质）\n解析：定位 Paragraph F 中 “as rain washes over backyards and roadways, it collects chemicals which enter the storm-water system”，明确提到 “化学物质”，因此答案为 “chemicals”。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

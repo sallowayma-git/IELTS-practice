@@ -48,22 +48,22 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：In the first paragraph, the writer points out that（作者在第一段指出什么？）\n答案：B（most humans develop strategies for dealing with fear. 多数人会发展出应对恐惧的策略）\n解析：定位 Paragraph 1 中 “Over the years, the majority of people acquire a range of skills for coping with frightening situations”，“acquire a range of skills” 对应 “develop strategies”，因此选 B。A（恐惧与压力是不同感受）、C（工作情境比其他情境更易引发恐惧）、D（有人从未经历恐惧）均未提及。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：When discussing the use of rhesus monkeys as experimental subjects, the writer notes that（讨论恒河猴作为实验对象时，作者指出什么？）\n答案：C（their mental growth resembles that of humans. 它们的心理发育与人类相似）\n解析：定位 Paragraph 2 中 “These animals undergo many of the same physiological and psychological developmental stages that humans do, but in a more compressed time span”，“same... psychological developmental stages” 对应 “mental growth resembles that of humans”，因此选 C。A（对恐惧反应比人类快）、B（比人类更易受恐惧影响）、D（大脑运作比人类慢）均未提及。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：Which of the following did Kalin and Shelton outline as the second stage in their research project?（卡林与谢尔顿将以下哪项列为研究项目的第二阶段？）\n答案：D（the study of reactions to fear in monkeys of different ages. 研究不同年龄猴子对恐惧的反应）\n解析：定位 Paragraph 3 中 “With such information in hand, they could then proceed to determine the age at which monkeys begin to match defensive behaviors selectively to specific cues”，研究框架为 “1 找线索与行为→2 确定不同年龄反应→3 定位脑区”，第二阶段对应 “不同年龄反应研究”，因此选 D。A（识别猴子的焦虑表现）、B（识别引发猴子压力的情境）是第一阶段，C（分析猴子大脑发育）是第三阶段。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：In the fourth paragraph, the writer notes that the three related situations（作者在第四段指出，三种相关情境如何？）\n答案：A（reflect common experiences for infant humans and monkeys. 反映人类婴儿与猴子幼崽的常见经历）\n解析：定位 Paragraph 4 中 “These positions are no more frightening than those that primates encounter frequently in the wild, or those that human infants meet whenever they are left at a day-care centre”，“灵长类野外经历、人类婴儿托儿所经历” 对应 “common experiences for infant humans and monkeys”，因此选 A。B（凸显猴子与人类婴儿照料的相似性）、C（预计比人类婴儿更让猴子困扰）、D（按对幼猴的潜在影响分级）均未提及。",
-          "questionId": "q30"
+          "questionId": "q4"
         }
       ],
       "questionRange": {
@@ -79,27 +79,27 @@
         {
           "questionNumber": 31,
           "text": "（1）题目 31：aggressive facial expressions（攻击性面部表情）\n答案：C（stare condition，对视情境）\n解析：定位 Paragraph 5 中 “the stare condition evoked a third set of responses. The monkeys made several hostile gestures: barking... and staring back”，“敌意姿态（回视）” 对应 “攻击性面部表情”，因此选 C。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（2）题目 32：prolonged stillness（长时间静止）\n答案：B（no-eye-contact condition，无对视情境）\n解析：定位 Paragraph 5 中 “in the more frightening no-eye-contact situation, the monkeys reduced their activity greatly and sometimes froze for extended periods of time”，“长时间冻结（静止）” 对应 “prolonged stillness”，因此选 B。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（3）题目 33：a combination of contradictory signals（矛盾信号的混合）\n答案：C（stare condition，对视情境）\n解析：定位 Paragraph 5 中 “sometimes the animals mixed the threatening displays with submissive ones, such as fear grimaces... or grinding of teeth”，“威胁与顺从行为混合” 对应 “contradictory signals”，因此选 C。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（4）题目 34：appeals for maternal protection（寻求母亲保护的诉求）\n答案：A（alone condition，独处情境）\n解析：定位 Paragraph 5 中 “when an infant monkey is separated from its mother, it yearns to regain the closeness and security provided by nearness to the parent. These responses help to draw the mother’s attention”，“吸引母亲注意” 对应 “appeals for maternal protection”，因此选 A。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（5）题目 35：the production of soft sounds（发出轻柔声音）\n答案：A（alone condition，独处情境）\n解析：定位 Paragraph 5 中 “in the alone condition, most monkeys became very active and emitted frequent gentle ‘coo’ calls”，“轻柔咕咕声” 对应 “soft sounds”，因此选 A。",
-          "questionId": "q35"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -115,27 +115,27 @@
         {
           "questionNumber": 36,
           "text": "（1）题目 36：Once they had identified three types of defensive behaviour, Kalin and Shelton grouped the monkeys according to their \\___\\___.（识别三种防御行为后，卡林与谢尔顿根据猴子的_\\___\\__对其分组。）\n答案：age（年龄）\n解析：定位 Paragraph 6 中 “determining when infant monkeys first begin to apply them effectively... they examined four groups of infant monkeys ranging in age up to 12 weeks old”，“按年龄分组”，因此答案为 “age”。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（2）题目 37：They videotaped their results and found that monkeys as young as \\___\\___ reacted to the cues but in a haphazard fashion.（他们录制结果，发现仅_\\___\\__大的猴子会对线索做出反应，但行为随机。）\n答案：two weeks（两周）\n解析：定位 Paragraph 6 中 “infants in the youngest group (no more than two weeks old) engaged in defensive behaviours, but they lacked some motor control and seemed to act randomly”，“最小组为两周大”，因此答案为 “two weeks”。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（3）题目 38：The researchers noted that they seemed to be unaware of the \\___\\___ who were around them.（研究者注意到，这些猴子似乎未注意到周围的_\\___\\__。）\n答案：human beings（人类）\n解析：定位 Paragraph 6 中 “as if they had not noticed the human beings that were present”，“未注意到在场人类”，因此答案为 “human beings”。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（4）题目 39：Despite demonstrating , the monkeys in the middle groups failed to react in ways corresponding to the experimental situation.（尽管表现出，中间组的猴子仍未做出与实验情境对应的反应。）\n答案：good motor control（良好的运动控制）\n解析：定位 Paragraph 6 中 “Babies in the two intermediate-age groups had good motor control, but their actions seemed unrelated to the test condition”，“中间组运动控制良好”，因此答案为 “good motor control”。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（5）题目 40：The oldest group, however, reacted in the same way as \\___\\___.（然而，最大组的反应与_\\___\\__一致。）\n答案：mature monkeys（成年猴子）\n解析：定位 Paragraph 6 中 “only animals in the oldest group (nine- to 12-week-old)... their reactions were both appropriate and identical to those of mature monkeys”，“与成年猴子反应一致”，因此答案为 “mature monkeys”。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

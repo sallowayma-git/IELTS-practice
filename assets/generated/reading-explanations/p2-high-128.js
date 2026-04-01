@@ -48,27 +48,27 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：a reference to a domestic situation that does not require multitasking（提及无需多任务处理的家庭场景）\n答案：B\n解析：定位 Paragraph B 中 “In the old days, a traditional wall phone would ring, and the housewife would have to stop her activities to answer it. When it rang, the housewife would sit down with her legs up and chat, with no laundry, sweeping or answering the door”，描述过去家庭主妇接固定电话时 “停下所有家务，专注通话”，即无需多任务，与题干对应，因此答案为 B。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：a possible explanation of why we always multitask（多任务行为频繁发生的可能原因）\n答案：E\n解析：定位 Paragraph E 中 “With cellphones and computers at our sides at all times, people will never run out of distractions. The format of media... is also shortening, so people are used to paying attention to information for a very short time”，明确将 “随身电子设备”“短格式媒体” 视为多任务频繁的原因，与题干对应，因此答案为 E。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：a practical solution to multitasking in the work environment（职场多任务问题的可行解决方案）\n答案：F\n解析：定位 Paragraph F 中 “certain common workplace situations-such as group meetings-would be more efficient if we banned cellphones... Instead of arriving at the office and checking all of your e-mails... you could dedicate an hour to a single task first thing in the morning”，提出 “会议禁用手机”“早晨专注单任务” 等具体方案，与题干对应，因此答案为 F。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：relating multitasking to the size of the prefrontal cortex（将多任务能力与前额叶皮层大小关联）\n答案：C\n解析：定位 Paragraph C 中 “He found that for humans, it constitutes one-third of the brain, whereas it is only 4 – 5 percent in dogs and about 15 percent in monkeys. Because this cortex is larger in humans, it allows a person to be more flexible and accurate in multitasking”，明确将前额叶皮层大小与多任务能力关联，与题干对应，因此答案为 C。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：more time spent doing two tasks at the same time than doing one task at a time（同时做两项任务比单独做一项任务耗时更长）\n答案：D\n解析：定位 Paragraph D 中 “overall the task took more time than if the person had focused on a single task”，明确提到双任务总耗时更长，与题干对应，因此答案为 D。",
-          "questionId": "q18"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -84,27 +84,27 @@
         {
           "questionNumber": 19,
           "text": "（1）题目 19：When faced with multiple visual stimuli, one can only concentrate on one of them.（面对多种视觉刺激时，人只能专注于其中一种）\n答案：B（Earl Miller，厄尔・米勒）\n解析：定位 Paragraph C 中 “Miller then attached sensors to the patients’ heads... What he found was that the brain neurons lit up in singular areas one at a time-never simultaneously”，明确提到米勒发现视觉刺激下大脑每次仅专注一项，因此选 B。",
-          "questionId": "q19"
+          "questionId": "q6"
         },
         {
           "questionNumber": 20,
           "text": "（2）题目 20：Doing two things together may be faster but not better.（同时做两件事可能更快但效率更低）\n答案：D（Gloria Mark，格洛丽亚・马克）\n解析：定位 Paragraph E 中 “She found that doing different jobs at the same time may actually save time. However, despite the fact that they are faster, it does not mean they are more efficient”，明确提到马克认为双任务 “快但效率低”，因此选 D。",
-          "questionId": "q20"
+          "questionId": "q7"
         },
         {
           "questionNumber": 21,
           "text": "（3）题目 21：People never really do two things together even if you think you do.（即便自认为在同时做事，实际也并非如此）\n答案：A（Thomas Lehman，托马斯・莱曼）\n解析：定位 Paragraph A 中 “Thomas Lehman... believes people never really do multiple things simultaneously”，明确提到莱曼认为人类无法真正同时处理双任务，因此选 A。",
-          "questionId": "q21"
+          "questionId": "q8"
         },
         {
           "questionNumber": 22,
           "text": "（4）题目 22：The causes of multitasking lie in the environment.（多任务的原因在于环境）\n答案：D（Gloria Mark，格洛丽亚・马克）\n解析：定位 Paragraph E 中 “With cellphones and computers at our sides at all times, people will never run out of distractions... new technology may be the problem”，明确提到马克将多任务归因于 “环境中的技术干扰”，因此选 D。",
-          "questionId": "q22"
+          "questionId": "q9"
         },
         {
           "questionNumber": 23,
           "text": "（5）题目 23：Even minor changes in the workplace will improve work efficiency.（职场微小调整即可提升效率）\n答案：E（Edward Hallowell，爱德华・哈洛威尔）\n解析：定位 Paragraph F 中 “Edward Hallowell said that people are losing a lot of efficiency... the changes made to the workplace do not have to be dramatic”，明确提到哈洛威尔认为 “无需剧烈变革，微小调整即可”，因此选 E。",
-          "questionId": "q23"
+          "questionId": "q10"
         }
       ],
       "questionRange": {
@@ -120,17 +120,17 @@
         {
           "questionNumber": 24,
           "text": "（1）题目 24：A term used to refer to a situation when you are reading a text and cannot focus on your surroundings is \\___\\___\\__.\n题目翻译：用于描述 “阅读文本时无法专注于周围” 的术语是_\\___\\___\\_。\n答案：email voice（邮件式走神）\n解析：定位 Paragraph A 中 “we all have experienced times when we talk with friends and they are not responding properly... maybe they are reading a text on their smartphone... Lehman called this phenomenon ‘email voice’”，明确提到该术语为 “email voice”，因此答案为 “email voice”。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（2）题目 25：The \\___\\___\\__ part of the brain controls multitasking.\n题目翻译：大脑的_\\___\\___\\_部位控制多任务处理。\n答案：prefrontal cortex（前额叶皮层）\n解析：定位 Paragraph C 中 “Earl Miller... studied the prefrontal cortex, which guides the brain while a person is multitasking”，明确提到 “前额叶皮层” 控制多任务，因此答案为 “prefrontal cortex”。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（3）题目 26：The practical solution to multitasking at work is not to allow the use of cellphones in \\___\\___\\__.\n题目翻译：职场多任务的可行解决方案是在_\\___\\___\\_中禁止使用手机。\n答案：group meetings（小组会议）\n解析：定位 Paragraph F 中 “certain common workplace situations-such as group meetings-would be more efficient if we banned cellphones”，明确提到 “会议中禁用手机”，因此答案为 “group meetings”。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {
