@@ -56,32 +56,32 @@
           {
             "questionNumber": 27,
             "text": "(1) 题目 27：The writer changed her mind about spending time in Tasmania.\n题目翻译：作者对花时间在塔斯马尼亚的想法发生了改变。\n答案：YES\n解析：定位 Paragraph A 中 \"As an eighteen-year-old... moving to the 'mainland' could not happen soon enough. Now, ten years later, I look forward to going home.\" 作者从18岁时迫不及待想离开塔斯马尼亚，到十年后期待回家，明确表达了态度的转变，与题干一致，因此判定为 YES。",
-            "questionId": "q27"
+            "questionId": "q1"
           },
           {
             "questionNumber": 28,
             "text": "(2) 题目 28：Andrew Bain believes that the effect MONA had on Hobart was immediate.\n题目翻译：安德鲁・贝恩认为MONA对霍巴特的影响是立竿见影的。\n答案：YES\n解析：定位 Paragraph B 中 Andrew Bain 的引文 \"In a virtual blink, Hobart's cultural landscape has been transformed\"，其中 \"In a virtual blink\"（几乎在一眨眼的工夫）明确表达了影响是迅速发生的，与题干 \"immediate\"（立即的）一致，因此判定为 YES。",
-            "questionId": "q28"
+            "questionId": "q2"
           },
           {
             "questionNumber": 29,
             "text": "(3) 题目 29：Other factors have contributed as much as MONA to Hobart's transformation.\n题目翻译：其他因素对霍巴特的转型的贡献与MONA一样多。\n答案：NO\n解析：定位 Paragraph B 末尾 \"MONA is said to have been solely instrumental in the reinvention of Hobart as a cultural hub\"，\"solely instrumental\" 意为 MONA 是唯一关键因素，这与题干中“其他因素也有同等贡献”矛盾，因此判定为 NO。",
-            "questionId": "q29"
+            "questionId": "q3"
           },
           {
             "questionNumber": 30,
             "text": "(4) 题目 30：The Tourism Industry Council of Tasmania works closely with the director of MONA.\n题目翻译：塔斯马尼亚旅游业理事会与MONA馆长密切合作。\n答案：NOT GIVEN\n解析：Paragraph C 提到了旅游业理事会秘书长 Luke Martin 对 MONA 受欢迎程度的评论，但全文没有提及理事会与 MONA 馆长之间是否存在合作关系，无相关信息，因此判定为 NOT GIVEN。",
-            "questionId": "q30"
+            "questionId": "q4"
           },
           {
             "questionNumber": 31,
             "text": "(5) 题目 31：Many local residents are writing to The Mercury expressing concern about the length of tourists' stays in Hobart.\n题目翻译：许多当地居民写信给《水星报》表达对游客在霍巴特停留时长的担忧。\n答案：NOT GIVEN\n解析：Paragraph C 提到《水星报》报道了人们对游客停留时长的担忧（\"concern about how long people are staying in Tasmania\"），但文中并未提及当地居民是否在写给该报表达担忧，无相关信息，因此判定为 NOT GIVEN。",
-            "questionId": "q31"
+            "questionId": "q5"
           },
           {
             "questionNumber": 32,
             "text": "(6) 题目 32：Tourists now regard MONA as a starting point for longer trips in Tasmania.\n题目翻译：游客现在将MONA视为在塔斯马尼亚进行更长旅行的起点。\n答案：NO\n解析：定位 Paragraph C 中 \"Rather than spending a week in the state... people are making short stays in Hobart only to visit the gallery\"，实际情况是游客只短暂停留在霍巴特看画廊，而不是把 MONA 作为更长行程的起点。同时段落提到 \"The next challenge for the state is how to entice holiday-makers to stay longer\"，说明这还是一个未解决的挑战，与题干矛盾，因此判定为 NO。",
-            "questionId": "q32"
+            "questionId": "q6"
           }
         ],
         "questionRange": {
@@ -97,27 +97,27 @@
           {
             "questionNumber": 33,
             "text": "(1) 题目 33：Luke Martin plans to promote tourism in Tasmania by\n题目翻译：卢克・马丁计划通过以下方式促进塔斯马尼亚旅游业：\n答案：B （combining trips to MONA with visits to other galleries.）\n解析：定位 Paragraph D 中 \"packaging up MONA with visits to other galleries\"，Luke Martin 正在考虑将 MONA 与其他画廊参观打包组合成旅游路线，与选项 B（结合MONA和其他画廊之旅）一致，因此选择 B。",
-            "questionId": "q33"
+            "questionId": "q7"
           },
           {
             "questionNumber": 34,
             "text": "(2) 题目 34：According to the writer, what is especially interesting about MONA?\n题目翻译：根据作者，MONA特别引人注目的是什么？\n答案：A （the man who founded the gallery）\n解析：定位 Paragraph E 中 \"MONA's 'wow factor' comes from the notoriety of David Walsh, the museum's millionaire founder, and his choice of unusual artworks\"。作者认为 MONA 最吸引人的是创始人大卫・沃尔什的名声和他的选择，因此选择 A（画廊的创始人）。",
-            "questionId": "q34"
+            "questionId": "q8"
           },
           {
             "questionNumber": 35,
             "text": "(3) 题目 35：Why do visitors spend a long time at the gallery?\n题目翻译：为什么游客在画廊停留很长时间？\n答案：D （The gallery has a physical effect on visitors.）\n解析：定位 Paragraph F 中 \"the gallery engages all of the senses, and visitors often pause to experience the effect each artwork has on them\"。画廊调动了感官，游客停下来体验每件作品的影响，这与选项 D（画廊对参观者产生生理效果）一致，因此选择 D。",
-            "questionId": "q35"
+            "questionId": "q9"
           },
           {
             "questionNumber": 36,
             "text": "(4) 题目 36：What does the writer say about the visitors to MONA?\n题目翻译：作者说MONA的参观者是什么样的？\n答案：B （A wide variety of people are interested in MONA.）\n解析：定位 Paragraph F 中 \"People from all kinds of socioeconomic backgrounds are curious about what lies within\"。来自各种社会经济背景的人都对 MONA 感兴趣，不仅仅是普通画廊常客，这与选项 B（各种各样的人都感兴趣）一致，因此选择 B。",
-            "questionId": "q36"
+            "questionId": "q10"
           },
           {
             "questionNumber": 37,
             "text": "(5) 题目 37：Why does the writer mention the coins at MONA?\n题目翻译：作者为什么提到MONA的硬币？\n答案：D （to express admiration for the way that the exhibits are presented.）\n解析：定位 Paragraph G 中 Walsh 将古董（古老硬币）与 20-21 世纪的作品并置，作者认为这种策展策略产生了有趣的结果——让人更强烈地感受到古人是伟大的当代艺术家。这是对手法（exhibit presentation）的赞赏，因此选择 D。",
-            "questionId": "q37"
+            "questionId": "q11"
           }
         ],
         "questionRange": {
@@ -133,17 +133,17 @@
           {
             "questionNumber": 38,
             "text": "(1) 题目 38：While MONA may lack the 38 \\___\\___ effect of the Guggenheim...\n题目翻译：虽然MONA可能缺少古根海姆的38 \\___\\___效果……\n答案：C （visual）\n解析：定位 Paragraph H 中 MONA 不像古根海姆那样有 \"shimmering metal surfaces\"（闪亮的金属表面）那般震撼，这种震撼是视觉上的。\"Visual effect\" 对应选项 C（visual），表示 MONA 缺少古根海姆那种视觉上的冲击力。",
-            "questionId": "q38"
+            "questionId": "q12"
           },
           {
             "questionNumber": 39,
             "text": "(2) 题目 39：...with MONA there was a major 39 \\___\\___ that needed to be dealt with...\n题目翻译：……对于MONA来说，有一个主要的39 \\___\\___需要处理……\n答案：A （challenge）\n解析：定位 Paragraph H 中 Walsh 解释 FJN 设计 MONA 时解决了一个问题：\"how to do a project of that scale underground\"（如何在地下完成如此规模的项目）。这是一个需要解决的挑战。\"Challenge\" 对应选项 A。",
-            "questionId": "q39"
+            "questionId": "q13"
           },
           {
             "questionNumber": 40,
             "text": "(3) 题目 40：It remains to be seen how the 40 \\___\\___ of David Walsh will be expanded upon in Tasmania.\n题目翻译：大卫・沃尔什的40 \\___\\___将如何在塔斯马尼亚被继续拓展还有待观察。\n答案：D （contribution）\n解析：定位 Paragraph H 末尾 \"how Tasmania will build on David Walsh's input to its cultural landscape\"，\"input\" 即投入/贡献，对应选项 D（contribution）。",
-            "questionId": "q40"
+            "questionId": "q14"
           }
         ],
         "questionRange": {
