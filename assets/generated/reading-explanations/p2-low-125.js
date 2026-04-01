@@ -48,22 +48,22 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：possible reasons why the site of Mersa Gawasis was abandoned（梅尔萨・加瓦西斯遗址被废弃的可能原因）\n答案：F\n解析：定位 Paragraph F 中 “After that Mersa Gawasis fell out of use, probably because either there was no longer enough water in the lagoon to float ships, overland links improved, or alternative sites were found”，明确列出 “潟湖缺水、陆路改善、替代港口” 三个可能原因，与题干对应，因此答案为 F。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：mention of a lack of agreement about an archaeological discovery（提及对某考古发现的意见分歧）\n答案：A\n解析：定位 Paragraph A 中 “The exact meaning of these detailed carvings has divided Egyptologists ever since they were discovered in the mid-19th century. Some people have argued that Punt was not on the sea, or was a fictitious place altogether”，明确提到埃及学家对 “神庙雕刻含义” 存在分歧，与题干对应，因此答案为 A。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：reference to a study which involved copying ancient Egyptian boat-building techniques（提及一项复制古埃及造船技术的研究）\n答案：E\n解析：定位 Paragraph E 中 “Cheryl Ward... spent three years building a full-scale reconstruction of a ship that would have docked in the lagoon of Mersa Gawasis”，“full-scale reconstruction” 对应 “copying ancient Egyptian boat-building techniques”，与题干对应，因此答案为 E。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：a reason why the ancient Egyptians needed to import goods by sea（古埃及人需通过海路进口物资的原因）\n答案：F\n解析：定位 Paragraph F 中 “ancient Egypt’s ocean voyages were most likely an exception to the usual modes of trade, born out of a necessity to obtain precious materials such as incense and aromatic resins... a hostile new kingdom to the south cut Egypt off from its supply of exotic materials”，明确提到 “需获取珍贵物资且陆路被切断” 是海路进口的原因，与题干对应，因此答案为 F。",
-          "questionId": "q17"
+          "questionId": "q4"
         }
       ],
       "questionRange": {
@@ -79,22 +79,22 @@
         {
           "questionNumber": 18,
           "text": "（1）题目 18：Illustrations of merchant ships sailing from Punt were found on wall carvings in an ancient \\___\\___ in Egypt.\n题目翻译：描绘从蓬特返航商船的图案，发现于埃及一座古老_\\___\\__的墙上雕刻中。\n答案：temple（神庙）\n解析：定位 Paragraph A 中 “The scenes carved into a wall of an Egyptian temple dating from the 15th century BC tell of a remarkable sea voyage from a mysterious land known as Punt”，明确提到雕刻位于 “神庙” 墙上，因此答案为 “temple”。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（2）题目 19：Bard and Fattovich hoped to find evidence of a \\___\\___ in the area of Mersa Gawasis.\n题目翻译：巴德与法托维奇希望在梅尔萨・加瓦西斯地区找到_\\___\\__的证据。\n答案：harbour（港口）\n解析：定位 Paragraph B 中 “They were searching for signs of a harbour that might have sheltered merchant ships like those depicted in the wall carvings”，“searching for signs of” 对应 “hoped to find evidence of”，明确提到寻找 “港口” 证据，因此答案为 “harbour”。",
-          "questionId": "q19"
+          "questionId": "q6"
         },
         {
           "questionNumber": 20,
           "text": "（3）题目 20：When Bard first discovered a cave at Mersa Gawasis, the shape of its \\___\\___ indicated that it was man-made.\n题目翻译：巴德首次在梅尔萨・加瓦西斯发现洞穴时，其_\\___\\__的形状表明它是人工开凿的。\n答案：entrance（入口）\n解析：定位 Paragraph B 中 “The cave’s entrance was carved into an exact rectangle and was clearly not a natural formation”，明确提到 “洞口（entrance）的规整形状” 证明是人工开凿，因此答案为 “entrance”。",
-          "questionId": "q20"
+          "questionId": "q7"
         },
         {
           "questionNumber": 21,
           "text": "（4）题目 21：Bard and Fattovich discovered a considerable number of objects that had been made by small sea creatures known as \\___\\___.\n题目翻译：巴德与法托维奇发现大量由名为_\\___\\__的小型海洋生物蛀蚀的物品。\n答案：shipworms（船蛆）\n解析：定位 Paragraph C 中 “Many of the artefacts found were full of holes-the work of tiny marine animals known as shipworms”，明确提到物品上的孔洞由 “船蛆（shipworms）” 造成，因此答案为 “shipworms”。",
-          "questionId": "q21"
+          "questionId": "q8"
         }
       ],
       "questionRange": {
@@ -110,27 +110,27 @@
         {
           "questionNumber": 22,
           "text": "（1）题目 22：Ancient Egyptian sea voyages were probably relatively infrequent.（古埃及海洋远航可能相对罕见）\n答案：C（Rodolfo Fattovich，鲁道夫・法托维奇）\n解析：定位 Paragraph F 中 “Fattovich suggests that there were probably only 15 to 20 expeditions over some 400 years-about one every two decades”，明确提到法托维奇认为 “400 年仅 15-20 次远征”，即远航罕见，因此选 C。",
-          "questionId": "q22"
+          "questionId": "q9"
         },
         {
           "questionNumber": 23,
           "text": "（2）题目 23：It is now certain that the ancient Egyptians sailed to Punt.（现在可以确定古埃及人曾航行至蓬特）\n答案：A（John Baines，约翰・贝恩斯）\n解析：定位 Paragraph A 中 “John Baines... ‘These finds remove all doubt that you reach Punt by sea’”，“remove all doubt” 对应 “now certain”，明确提到贝恩斯认为证据证明埃及人航行至蓬特，因此选 A。",
-          "questionId": "q23"
+          "questionId": "q10"
         },
         {
           "questionNumber": 24,
           "text": "（3）题目 24：During a certain period, Egyptians were forced to use sea rather than overland trade routes.（某一时期，埃及人被迫采用海路而非陆路贸易路线）\n答案：B（Kathryn Bard，凯瑟琳・巴德）\n解析：定位 Paragraph F 中 “Bard says. ‘If they could have gone overland, it would have been much easier... But geopolitically, they had no other choice’”，明确提到巴德认为 “地缘政治迫使埃及人选择海路”，因此选 B。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（4）题目 25：It has been suggested that Punt never existed.（有人认为蓬特从未存在）\n答案：A（John Baines，约翰・贝恩斯）\n解析：定位 Paragraph A 中 “John Baines... ‘Some people have argued that Punt was not on the sea, or was a fictitious place altogether’”，“fictitious place” 对应 “never existed”，明确提到贝恩斯提及 “有人认为蓬特是虚构之地”，因此选 A。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（5）题目 26：The construction of ancient Egyptian ships was unlike any other.（古埃及船只的建造方式独一无二）\n答案：D（Cheryl Ward，谢丽尔・沃德）\n解析：定位 Paragraph E 中 “Cheryl Ward... ‘From the very beginning, the Egyptians were building boats that could be disassembled, and that makes them different from anyone else’”，“different from anyone else” 对应 “unlike any other”，明确提到沃德认为埃及船只建造方式独特，因此选 D。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

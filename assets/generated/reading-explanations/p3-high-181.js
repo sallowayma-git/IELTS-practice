@@ -60,32 +60,32 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：A description of Shanley’s initial data collection（尚利最初数据收集的描述）\n答案：D\n解析：定位 Paragraph D 中 “Six years of field research yielded a mass of data on their flowering and fruiting behaviour. During 1993 and 1994, 30 families weighed everything they used from the forest – game, fruit, fibre, medicinal plants – and documented its source”，明确描述 “1993-1994 年 30 户家庭称重记录资源” 这一 “最初数据收集” 过程，与题干对应，因此答案为 D。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：Why a government official also contributes to the book（政府官员为何也为该书出力）\n答案：A\n解析：定位 Paragraph A 中 “The second edition was produced at the request of politicians in western Amazonia... Brazil’s environment minister, Marina Silva, has written the foreword”，“应政界请求出版第二版，部长作序” 解释 “政府官员出力的原因”，与题干对应，因此答案为 A。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：Reasons why the community asked Shanley to conduct the research（社区请求尚利开展研究的原因）\n答案：C\n解析：定位 Paragraph C 中 “The Rural Workers’ Union wanted to know whether harvesting wild fruits would make economic sense... the union was keen to discover whether it made more sense conserving the forest for subsistence use and the possible sale of fruit... than selling trees for timber”，明确说明 “工会想确认果实采集是否比卖木材更经济” 这一 “请求原因”，与题干对应，因此答案为 C。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：Reference to the starting point of her research（提及她研究的起点）\n答案：B\n解析：定位 Paragraph B 中 “Shanley’s work on the book began a decade ago, with a plea for help from the Rural Workers’ Union of Paragominas”，“十年前受工会请求开始” 明确 “研究起点”，与题干对应，因此答案为 B。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：Two factors that alter food consumption patterns（改变饮食消费模式的两个因素）\n答案：E\n解析：定位 Paragraph E 中 “After three logging sales and a major fire in 1997... The fire and logging also changed the nature of the caboclo diet”，“伐木和火灾” 是改变饮食模式的两个因素，与题干对应，因此答案为 E。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（6）题目 32：Why the book is successful（该书成功的原因）\n答案：I\n解析：定位 Paragraph I 中 “Its success is largely due to the fact that people with poor literacy skills can understand much of the information it contains about the non-timber forest products, thanks to its illustrations, anecdotes, stories and songs... it does provide them with choices”，明确说明 “低识字率友好设计、提供选择” 等成功原因，与题干对应，因此答案为 I。",
-          "questionId": "q32"
+          "questionId": "q6"
         }
       ],
       "questionRange": {
@@ -101,42 +101,42 @@
         {
           "questionNumber": 33,
           "text": "（1）题目 33：Forest fire has caused local villagers to consume less: （火灾导致当地村民减少消费：）\n答案：forest fruit（森林果实）\n解析：定位 Paragraph E 中 “Average annual household consumption of forest fruit had fallen from 89 to 28 kilograms between 1993 and 1999”，“果实消费量下降”，因此答案为 “forest fruit”。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（2）题目 34：（）\n答案：fibre（纤维）\n解析：定位 Paragraph E 中 “Over the same period, fibre use also dropped from around 20 to 4 kilograms”，“纤维使用量下降”，因此答案为 “fibre”。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（3）题目 35：There is the least amount of game hunted under \\___\\___（\\___\\___树下捕获的猎物最少）\n答案：uxi (trees)（乌西树）\n解析：定位 Paragraph F 中 “under uxi, four species weighing 38 kilogrammes”，“乌西树下猎物仅 38 公斤，为最少”，因此答案为 “uxi (trees)”。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "（4）题目 36：yield is also （产量也）\n答案：unpredictable（不可预测）\n解析：定位 Paragraph G 中 “Fruiting patterns of trees such as uxi were unpredictable”，“乌西树结果模式不可预测”，因此答案为 “unpredictable”。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（5）题目 37：Thus, it is more reasonable to keep （因此，更合理的做法是保留）\n答案：piquia trees（皮奎亚树）\n解析：定位 Paragraph F 中 “selling piquia trees to loggers for a few dollars made little sense... Their local value lies in providing a prized fruit, as well as flowers which attract more game than any other species”，“皮奎亚树价值高，应保留”，因此答案为 “piquia trees”。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（6）题目 38：All the trees can also be used for \\___\\___ besides selling them to loggers.（除卖给伐木公司外，所有树木还可用于_\\___\\__）\n答案：subsistence（自给自足）\n解析：定位 Paragraph H 中 “they are critical for subsistence, something that is often ignored in much of the current research on NTFPs”，“树木对自给自足至关重要”，因此答案为 “subsistence”。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（7）题目 39：But this is often ignored, because most research usually focuses on the \\___\\___ of the trees.（但这常被忽视，因多数研究通常聚焦树木的_\\___\\__）\n答案：commercial potential（商业潜力）\n解析：定位 Paragraph H 中 “current research on NTFPs, which tends to focus on their commercial potential”，“研究聚焦商业潜力”，因此答案为 “commercial potential”。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（8）题目 40：The purpose of the book: To give information about \\___\\___（该书目的：提供关于_\\___\\__的信息）\n答案：non-timber forest products（非木材森林产品）\n解析：定位 Paragraph I 中 “understand much of the information it contains about the non-timber forest products”，“提供非木材森林产品信息”，因此答案为 “non-timber forest products”。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

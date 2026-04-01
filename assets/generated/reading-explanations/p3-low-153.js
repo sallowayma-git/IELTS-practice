@@ -56,27 +56,27 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：What is the writer’s main point in the first paragraph?（作者在第一段的主要观点是什么？）\n答案：C（The most difficult projects for architects are public buildings. 建筑师最困难的项目是公共建筑）\n解析：定位 Paragraph 1 中 “the situation is much worse when architects work on municipal buildings”，“municipal buildings” 对应 “public buildings”，明确提到 “公共建筑项目更困难”，因此选 C。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：The Auckland Gallery project was particularly difficult because（奥克兰美术馆项目特别困难的原因是什么？）\n答案：D（it involved renovating the existing building and adding a new one. 项目需翻新旧建筑并加建新建筑）\n解析：定位 Paragraph 2 中 “The major challenge of the gallery renovation project was that it involved two parts. The first was to restore the heritage building... The second was to deliver a new extension”，明确提到 “两部分任务（翻新 + 新建）是核心挑战”，因此选 D。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：What disturbing information did the architects find out from the survey of young people?（建筑师从年轻人调查中发现的令人担忧的信息是什么？）\n答案：A（They did not visit the gallery because of the way it made them feel. 年轻人因对美术馆的感受不佳而不去参观）\n解析：定位 Paragraph 3 中 “‘threshold fear’ – where certain groups are intimidated from entering certain spaces by their off-putting atmosphere – was the institution’s undoing... For those young people Auckland Art Gallery was undemocratic, ‘dusty’ and ‘cold’ – the epitome of threshold fear”，明确提到 “年轻人因‘门槛恐惧’（氛围排斥）而不参观”，因此选 A。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：What point is the writer making when he says that 16 % of the sample group did not know where the museum was?（作者提到 16% 的受访者不知美术馆位置，是为了说明什么？）\n答案：B（The gallery was not reaching out to involve young people. 美术馆未能触达并吸引年轻人）\n解析：定位 Paragraph 3 中 “16 % of the sample group had no idea where it even was, despite being interviewed on the pavement right outside it. Clearly, the gallery was fatally out of step”，结合上下文 “惠灵顿博物馆成功吸引年轻人”，作者强调 “奥克兰美术馆未能触达年轻人”，因此选 B。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：Māori artists were used on this project to（项目聘用毛利艺术家的目的是什么？）\n答案：C（make sure the gallery respects Māori culture. 确保美术馆尊重毛利文化）\n解析：定位 Paragraph 5 中 “fellow artist Bernard Makoare was a consultant, ensuring the gallery emphasised Māori beliefs”，明确提到 “聘用毛利艺术家是为了体现毛利信仰，尊重毛利文化”，因此选 C。",
-          "questionId": "q31"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -92,27 +92,27 @@
         {
           "questionNumber": 32,
           "text": "（1）题目 32：Before the renovation, the Auckland Art Gallery was regarded as an elitist institution.（翻新前，奥克兰美术馆被视为精英机构）\n答案：YES（正确）\n解析：定位 Paragraph 2 中 “for many, Auckland Art Gallery was just an old building that served a limited range of patrons with highbrow interests” 和 Paragraph 3 中 “undemocratic”，“服务高端兴趣、不民主” 对应 “精英机构”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（2）题目 33：Stephen King’s intervention in the project shows his understanding of the architects’ use of kauri.（斯蒂芬・金对项目的干预体现了他对建筑师使用贝壳杉的理解）\n答案：NO（错误）\n解析：定位 Paragraph 5 中 “However, the kauri that was used here was from the forest floor, and King’s misconceptions sum up the prejudice that surrounded the project”，明确提到 “金的批评是误解，体现偏见”，与题干 “理解” 描述矛盾，因此判定为 NO。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（3）题目 34：The way the building interacts with its surroundings is a triumph.（建筑与周边环境的互动是一大成功）\n答案：YES（正确）\n解析：定位 Paragraph 6 中 “yet the project’s relationship with parkland is one of the most successful outcomes. Impact is not only minimal, but improves the park’s social function”，明确提到 “与公园的互动是最大成功之一”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（4）题目 35：The glass screen along the east wall was one of the most costly items in the rebuild.（东侧玻璃墙是重建中最昂贵的项目之一）\n答案：NOT GIVEN（未提及）\n解析：全文仅描述东侧玻璃墙的 “视觉效果与功能”，未提及 “成本”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "（5）题目 36：The design of the extension to the Auckland Art Gallery is similar to the design of ‘white cube’ galleries in other parts of the world.（奥克兰美术馆扩建部分的设计与全球 “白盒子美术馆” 相似）\n答案：NO（错误）\n解析：定位 Paragraph 6 中 “a far cry from both ‘white cube’ galleries worldwide – the plain boxes where paintings are hung in antiseptic white surroundings”，“a far cry from”（截然不同）与题干 “similar”（相似）描述矛盾，因此判定为 NO。",
-          "questionId": "q36"
+          "questionId": "q10"
         }
       ],
       "questionRange": {
@@ -128,22 +128,22 @@
         {
           "questionNumber": 37,
           "text": "（1）题目 37：The destruction of Edwardian ornamentation（爱德华时期装饰的损坏）\n答案：F（was the result of earlier attempts to modernise the building. 是早期建筑现代化尝试的结果）\n解析：定位 Paragraph 7 中 “in disrepair after its characteristic early-twentieth-century Edwardian decoration had been stripped out or walked away in previous renovations”，“previous renovations” 对应 “earlier attempts to modernise”，因此选 F。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（2）题目 38：It is extraordinary that a limited number of photographs（少量照片竟能……，这很不寻常）\n答案：C（was the clue to rebuilding the Mackelvie Gallery successfully. 是成功重建麦凯维画廊的线索）\n解析：定位 Paragraph 7 中 “Remarkably, the Mackelvie space has been reconstructed from two old photos”，“Remarkably” 对应 “extraordinary”，“two old photos” 对应 “a limited number of photographs”，因此选 C。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（3）题目 39：The problem of having so many floor levels to deal with（需处理多种地面高度的问题）\n答案：A（resulted in work being done in the opposite direction to that usually followed. 导致施工方向与常规相反）\n解析：定位 Paragraph 7 中 “the problem of multiple floor levels was so serious that scaffolding had to be erected at the highest level, with work progressing downwards, the reverse of normal practice”，“reverse of normal practice” 对应 “opposite direction to that usually followed”，因此选 A。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（4）题目 40：The glass flooring in the Mackelvie Gallery which reveals old features（麦凯维画廊中显露旧建筑特征的玻璃地板）\n答案：E（means that you should be able to tell whether you are in the old wing or the new one. 能让你辨别身处旧翼还是新翼）\n解析：定位 Paragraph 7 中 “the lowest level visible under glass embedded in the new floor. The building itself is artwork, while elsewhere columns from the old gallery have been exposed in the walls of the new wing”，玻璃地板显露旧地面，结合新馆墙体中显露的旧柱，可帮助辨别新旧区域，因此选 E。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

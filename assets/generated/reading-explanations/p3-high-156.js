@@ -56,22 +56,22 @@
         {
           "questionNumber": 28,
           "text": "（1）题目 28：\\___\\___ bones in inner ear（内耳中的_\\___\\__骨）\n题目翻译：内耳中的_\\___\\__骨\n答案：hammer（锤骨）\n解析：定位 Paragraph 2 中 “The hammer bone in an elephant’s inner ear is proportionally huge for a mammal”，明确提到内耳中的 “锤骨”，因此答案为 “hammer”。",
-          "questionId": "q28"
+          "questionId": "q1"
         },
         {
           "questionNumber": 29,
           "text": "（2）题目 29：an extremely large （极其庞大的）\n题目翻译：极其庞大的_\\___\\__\n答案：body（身躯）\n解析：定位 Paragraph 3 中 “Their massive bodies, which enable them to give out low-frequency sounds... serve as ideal frames for receiving ground vibrations”，“massive bodies” 对应 “extremely large body”，因此答案为 “body”。",
-          "questionId": "q29"
+          "questionId": "q2"
         },
         {
           "questionNumber": 30,
           "text": "（3）题目 30：toe and fatty （脚趾和脂肪）\n题目翻译：脚趾和脂肪_\\___\\__\n答案：pad（垫）\n解析：定位 Paragraph 3 中 “the elephant’s toe bones are set in a fatty pad”，明确提到 “脂肪垫”，因此答案为 “pad”。",
-          "questionId": "q30"
+          "questionId": "q3"
         },
         {
           "questionNumber": 31,
           "text": "（4）题目 31：big sized brain skull with many （大尺寸大脑，颅骨有许多）\n题目翻译：大尺寸大脑，颅骨有许多_\\___\\__\n答案：sinus cavities（鼻窦腔）\n解析：定位 Paragraph 3 中 “The front of the skull is riddled with sinus cavities”，明确提到 “鼻窦腔”，因此答案为 “sinus cavities”。",
-          "questionId": "q31"
+          "questionId": "q4"
         }
       ],
       "questionRange": {
@@ -87,37 +87,37 @@
         {
           "questionNumber": 32,
           "text": "（1）题目 32：O’Connell-Rodwell proposes that elephants are ‘listening’ with their \\___\\___.\n题目翻译：奥康奈尔 - 罗德韦尔提出，大象用_\\___\\__“聆听”。\n答案：trunks and feet（象鼻和脚）\n解析：定位 Paragraph 4 中 “O’ Connell-Rodwell suggests that the pachyderms are ‘listening’ with their trunks and feet instead of (or in addition to) their ears”，明确提到 “象鼻和脚”，因此答案为 “trunks and feet”。",
-          "questionId": "q32"
+          "questionId": "q5"
         },
         {
           "questionNumber": 33,
           "text": "（2）题目 33：by two kinds of nerve endings that respond to vibrations with both \\___\\___ frequency and slightly higher frequencies.\n题目翻译：通过两种神经末梢，分别响应_\\___\\__频率和稍高频的振动。\n答案：infrasonic（次声）\n解析：定位 Paragraph 4 中 “Both trunk and feet contain two types of nerve endings that are sensitive to pressure-one detects infrasonic vibration and the other responds to vibrations of slightly higher frequencies”，明确提到 “次声频率”，因此答案为 “infrasonic”。",
-          "questionId": "q33"
+          "questionId": "q6"
         },
         {
           "questionNumber": 34,
           "text": "（3）题目 34：O’Connell-Rodwell’s work is at the combination of geophysics, neurophysiology and \\___\\___.\n题目翻译：奥康奈尔 - 罗德韦尔的研究涉及地球物理学、神经生理学与_\\___\\__的交叉。\n答案：ecology（生态学）\n解析：定位 Paragraph 4 中 “‘Our work is really at the interface of geophysics, neurophysiology and ecology,’ she says”，明确提到 “生态学”，因此答案为 “ecology”。",
-          "questionId": "q34"
+          "questionId": "q7"
         },
         {
           "questionNumber": 35,
           "text": "（4）题目 35：O’Connell-Rodwell was the first person to indicate that a large land animal would send and receive \\___\\___ too.\n题目翻译：奥康奈尔 - 罗德韦尔首次指出，大型陆地动物也能发送和接收_\\___\\__。\n答案：seismic signals（地震信号）\n解析：定位 Paragraph 5 中 “O’ Connell-Rodwell was the first to argue that a giant land animal is also sending and receiving seismic signals”，明确提到 “地震信号”，因此答案为 “seismic signals”。",
-          "questionId": "q35"
+          "questionId": "q8"
         },
         {
           "questionNumber": 36,
           "text": "（5）题目 36：which might prove the existence of other communicative approaches besides \\___\\___.\n题目翻译：这可能证明除_\\___\\__外，还存在其他交流方式。\n答案：auditory communication（听觉交流）\n解析：定位 Paragraph 5 中 “‘I found it fascinating, and it made me think that perhaps auditory communication is not the only thing going on’”，明确提到 “听觉交流”，因此答案为 “auditory communication”。",
-          "questionId": "q36"
+          "questionId": "q9"
         },
         {
           "questionNumber": 37,
           "text": "（6）题目 37：especially when elephant herds are finding a \\___\\___ or are warning of predators.\n题目翻译：尤其当象群寻找_\\___\\__或预警天敌时。\n答案：mate（配偶）\n解析：定位 Paragraph 6 中 “It is already difficult for an elephant to find a mate in such a vast wilderness”，明确提到 “寻找配偶”，因此答案为 “mate”。",
-          "questionId": "q37"
+          "questionId": "q10"
         },
         {
           "questionNumber": 38,
           "text": "（7）题目 38：the results of our 2002 study showed us that elephants could detect warning calls through the \\___\\___.\n题目翻译：2002 年研究结果显示，大象能通过_\\___\\__探测警报声。\n答案：ground（地面）\n解析：定位 Paragraph 7 中 “‘The outcomes of our 2002 study revealed that elephants could indeed sense warning signals through the ground,’ O’ Connell-Rodwell observes”，明确提到 “地面”，因此答案为 “ground”。",
-          "questionId": "q38"
+          "questionId": "q11"
         }
       ],
       "questionRange": {
@@ -133,12 +133,12 @@
         {
           "questionNumber": 39,
           "text": "（1）题目 39：According to the passage, it is determined that an elephant needs to communicate over long distances for its survival（文中指出，大象为生存需长距离交流的情况是？）\n答案：A（when a threatening predator appears. 有威胁性天敌出现时）\n解析：定位 Paragraph 6 中 “Breeding herds also adopt low-frequency sounds to warn of predators... calves are vulnerable and susceptible to attacks from lions and hyenas. At the sight of a predator, older herd members clump together to protect the young before running away”，明确提到 “天敌出现时需警报交流，关乎幼象生存”，因此选 A。",
-          "questionId": "q39"
+          "questionId": "q12"
         },
         {
           "questionNumber": 40,
           "text": "（2）题目 40：What is the author’s attitude toward the experiment using three different recordings in the last paragraph?（作者对最后一段中使用三种录音的实验持何种态度？）\n答案：A（The outcome is definitely out of the original expectation. 结果完全超出原预期）\n解析：定位 Paragraph 8 中 “However, the fascinating finding is that the anti-predator call from Kenya-unfamiliar to them-caused them to gather, tense up and rumble aggressively as well; but they didn’t always flee. I didn’t expect the results to be that clear-cut”，“didn’t expect the results to be that clear-cut” 表明 “结果比预期更明确，超出预期”，因此选 A。",
-          "questionId": "q40"
+          "questionId": "q13"
         }
       ],
       "questionRange": {
