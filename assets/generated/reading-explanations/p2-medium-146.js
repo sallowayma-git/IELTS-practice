@@ -48,27 +48,27 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：The thylacine was a dog-like animal which had a \\___\\___ coat and was carnivorous.\n题目翻译：袋狼外形似狗，皮毛_\\___\\__且为食肉动物。\n答案：striped（有条纹的）\n解析：定位 Paragraph 1 中 “It was given the name ‘tiger’ because it had striped fur”，明确提到 “皮毛有条纹”，因此答案为 “striped”。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：It was originally spread widely throughout the mainland of \\___\\___.\n题目翻译：袋狼最初广泛分布于_\\___\\__大陆。\n答案：Australia（澳大利亚）\n解析：定位 Paragraph 1 中 “many types of thylacine roamed across Australia”，明确提到 “澳大利亚大陆”，因此答案为 “Australia”。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：However, the number of thylacine decreased in that area around \\___\\___ ago because of climate change.\n题目翻译：但约_\\___\\__前，因气候变化，该地区袋狼数量下降。\n答案：12 million years（1200 万年）\n解析：定位 Paragraph 2 中 “when a period of climate change cooled Australia about 12 million years ago, the numbers of these ancient thylacines began to decline”，明确提到 “1200 万年前”，因此答案为 “12 million years”。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：In the end, thylacines were found only on the island of \\___\\___.\n题目翻译：最终，袋狼仅在_\\___\\__岛被发现。\n答案：Tasmania（塔斯马尼亚）\n解析：定位 Paragraph 2 中 “Tasmania, a large island to the south of Australia, became the last remaining place where thylacines existed”，明确提到 “塔斯马尼亚岛”，因此答案为 “Tasmania”。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：until the arrival of \\___\\___ with their farming practices brought about a drastic reduction in thylacine numbers.\n题目翻译：直到_\\___\\__及其农业活动到来，导致袋狼数量骤降。\n答案：Europeans（欧洲人）\n解析：定位 Paragraph 2 中 “until Europeans-with sheep, dogs and a great indifference to native flora and fauna-seem to have brought about their extinction”，明确提到 “欧洲人”，因此答案为 “Europeans”。",
-          "questionId": "q18"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -84,32 +84,32 @@
         {
           "questionNumber": 19,
           "text": "（1）题目 19：There is no longer any hope of finding a surviving Tasmanian tiger.（找到存活袋狼已无希望）\n答案：B（Randolph Rose，伦道夫・罗斯）\n解析：定位 Paragraph 4 中 “Randolph Rose... ‘Take it from me, the tiger is gone’”，明确提到罗斯认为袋狼已灭绝，因此选 B。",
-          "questionId": "q19"
+          "questionId": "q6"
         },
         {
           "questionNumber": 20,
           "text": "（2）题目 20：It would be preferable not to disturb any surviving Tasmanian tigers.（最好不打扰任何存活的袋狼）\n答案：A（Hans Naarding，汉斯・纳尔丁）\n解析：定位 Paragraph 6 中 “Hans Naarding... ‘If there are thylacines out there, they are better off right where they are’”，明确提到纳尔丁认为 “袋狼应留在原地”，因此选 A。",
-          "questionId": "q20"
+          "questionId": "q7"
         },
         {
           "questionNumber": 21,
           "text": "（3）题目 21：Many who claim to have seen Tasmanian tigers are not objective witnesses.（许多声称目击袋狼的人并非客观目击者）\n答案：D（Nick Mooney，尼克・穆尼）\n解析：定位 Paragraph 5 中 “Nick Mooney... many sincere seekers are victims of obsession... it is a blind optimism”，明确提到穆尼认为目击者 “过度乐观、不客观”，因此选 D。",
-          "questionId": "q21"
+          "questionId": "q8"
         },
         {
           "questionNumber": 22,
           "text": "（4）题目 22：Expert estimates of numbers needed to ensure species survival may be inaccurate.（专家对物种存活所需数量的估计可能不准确）\n答案：C（David Pemberton，戴维・彭伯顿）\n解析：定位 Paragraph 4 中 “David Pemberton... despite scientific thinking that a relatively large population is required to sustain a species, ‘the Florida panther is down to a dozen or so animals... it’s still ticking along’”，明确提到彭伯顿以佛罗里达美洲狮为例，质疑 “需大量种群” 的观点，因此选 C。",
-          "questionId": "q22"
+          "questionId": "q9"
         },
         {
           "questionNumber": 23,
           "text": "（5）题目 23：There is a great deal of international interest in Tasmanian tiger stories.（全球对袋狼相关报道兴趣浓厚）\n答案：A（Hans Naarding，汉斯・纳尔丁）\n解析：定位 Paragraph 3 中 “Hans Naarding... I was besieged by television crews, including four or five from Japan, and others from the United Kingdom, Germany, New Zealand and South America”，明确提到国际媒体关注，因此选 A。",
-          "questionId": "q23"
+          "questionId": "q10"
         },
         {
           "questionNumber": 24,
           "text": "（6）题目 24：Some fresh evidence provided by a visitor to Tasmania seems credible.（某塔斯马尼亚游客提供的新证据看似可信）\n答案：D（Nick Mooney，尼克・穆尼）\n解析：定位 Paragraph 5 中 “Nick Mooney... this particular account of a sighting and the photographs submitted as proof amount to one of the most convincing cases for the species’ survival that I have seen”，明确提到穆尼认为游客提供的证据 “可信”，因此选 D。",
-          "questionId": "q24"
+          "questionId": "q11"
         }
       ],
       "questionRange": {
@@ -125,12 +125,12 @@
         {
           "questionNumber": 25,
           "text": "（1）题目 25：Has Naarding’s sighting of a Tasmanian tiger resulted in（纳尔丁的袋狼目击事件导致了什么？）\n答案：B（an extensive follow-up. 大规模后续搜寻）\n解析：定位 Paragraph 4 中 “Government and private search parties combed the region, but no further sightings were made”，明确提到 “政府和私人搜寻队大规模搜寻”，因此选 B。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（2）题目 26：The example of the coelacanth is used to show that（腔棘鱼的例子用于说明什么？）\n答案：D（opinions regarding the extinction of animal species can be mistaken. Shakespeare's）\n解析：定位 Paragraph 4 中 “the strange fish known as the coelacanth... was thought to have died out with the dinosaurs 70 million years ago, until a specimen was dragged to the surface in a shark net off the coast of South Africa in 1938”，明确提到腔棘鱼 “被认为已灭绝却重现”，用于说明 “灭绝判断可能错误”，因此选 D。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

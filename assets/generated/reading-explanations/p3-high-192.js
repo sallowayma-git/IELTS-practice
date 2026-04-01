@@ -64,22 +64,22 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：It is uncertain when the Voynich manuscript was written.（伏尼契手稿的写作时间不确定）\n答案：TRUE（正确）\n解析：定位 Paragraph 1 中 “containing 240-odd pages of drawings and text of unknown age and authorship”，“年代未知（unknown age）” 即 “写作时间不确定”，与题干描述一致，因此判定为 TRUE。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：Wilfrid Voynich donated the manuscript to the Beinecke Library.（威尔弗里德・伏尼契将手稿捐赠给拜内克图书馆）\n答案：NOT GIVEN（未提及）\n解析：Paragraph 1 仅提到 “Wilfrid Voynich, who bought the manuscript from a Jesuit college in Italy in 1912”，“伏尼契 1912 年买下手稿”，未提及 “捐赠给图书馆”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：Interest in the Voynich manuscript extends beyond that of academics and professional codebreakers.（对伏尼契手稿的兴趣超出学者和专业密码破译员的范围）\n答案：TRUE（正确）\n解析：定位 Paragraph 2 中 “the manuscript has attracted the attention of everyone from amateur dabblers to top code-breakers”，“从业余爱好者到顶尖破译员” 即 “兴趣超出学者和专业人员”，与题干描述一致，因此判定为 TRUE。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：The text of the Voynich manuscript contains just under 70 symbols.（伏尼契手稿文本包含不到 70 个符号）\n答案：FALSE（错误）\n解析：定位 Paragraph 4 中 “It is possible to make out more than 70 distinct symbols among the 170,000-character text”，“超过 70 个不同符号” 与题干 “不到 70 个” 描述矛盾，因此判定为 FALSE。",
-          "questionId": "q30"
+          "questionId": "q4"
         }
       ],
       "questionRange": {
@@ -95,22 +95,22 @@
         {
           "questionNumber": 31,
           "text": "（1）题目 31：The number of times that some words occur makes it unlikely that the manuscript is based on an authentic language.（部分单词的出现次数让手稿不太可能基于真实语言）\n答案：D（William Friedman，威廉・弗里德曼）\n解析：定位 Paragraph 4 中 “Friedman discovered that some words and phrases appeared more often than expected in a standard language, casting doubt on claims that the manuscript concealed a real language”，弗里德曼发现 “单词出现频率异常，怀疑非真实语言”，因此选 D。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（2）题目 32：Unlike some other similar objects of fascination, people can gain direct access to the Voynich manuscript.（与其他类似热门谜团不同，人们可直接接触伏尼契手稿）\n答案：A（Gordon Rugg，戈登・拉格）\n解析：定位 Paragraph 2 中 “Dr Gordon Rugg... ‘Most other mysteries involve second-hand reports, but this is one that you can see for yourself’”，拉格指出 “手稿可亲眼看到，与其他依赖二手报道的谜团不同”，因此选 A。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（3）题目 33：The person who wrote the manuscript may not have been entirely sane.（手稿作者可能并非完全神志清醒）\n答案：E（Rob Churchill，罗布・丘吉尔）\n解析：定位 Paragraph 9 中 “others, such as Churchill, have suggested that the sheer weirdness of the illustrations and text hints at an author who had lost touch with reality”，丘吉尔认为 “图文怪异暗示作者脱离现实（神志不清）”，因此选 E。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（4）题目 34：It is likely that the author of the manuscript is the same person as suggested by Wilfrid Voynich.（手稿作者可能与威尔弗里德・伏尼契提出的一致）\n答案：C（William Newbold，威廉・纽博尔德）\n解析：定位 Paragraph 3 中 “Voynich himself believed that the manuscript was the work of the 13th-century English monk Roger Bacon... in 1921 Voynich’s view... appeared to win support from the work of William Newbold”，纽博尔德的研究曾支持伏尼契 “作者是培根” 的观点，因此选 C。",
-          "questionId": "q34"
+          "questionId": "q8"
         }
       ],
       "questionRange": {
@@ -126,27 +126,27 @@
         {
           "questionNumber": 35,
           "text": "（1）题目 35：William Newbold believed that the author of the Voynich manuscript had been able to look at cells through a \\___\\___.（威廉・纽博尔德认为伏尼契手稿的作者曾能通过_\\___\\__观察细胞。）\n答案：microscope（显微镜）\n解析：定位 Paragraph 3 中 “the manuscript proved that Bacon had access to a microscope centuries before they were supposedly first invented. The claim that this medieval monk had observed living cells”，“使用显微镜观察细胞”，因此答案为 “microscope”。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "（2）题目 36：William Friedman concluded that the manuscript was written in an artificial language that was based on \\___\\___.（威廉・弗里德曼认为手稿是用基于_\\___\\__的人造语言写成的。）\n答案：concepts（概念）\n解析：定位 Paragraph 5 中 “‘Voynichese’ is some sort of specially created artificial language, whose words are devised from concepts rather than linguistics”，“词汇基于概念”，因此答案为 “concepts”。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（3）题目 37：He couldn’t find out the meaning of this language but he believed that the \\___\\___ would continue to bring advances in code-breaking.（他无法解读这种语言的含义，但相信_\\___\\__将持续为密码破译带来进展。）\n答案：computer（计算机）\n解析：定位 Paragraph 6 中 “he suspected that major insights would come from using the device that had already transformed code-breaking: the computer”，“计算机是密码破译的关键工具”，因此答案为 “computer”。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（4）题目 38：Dr Gabriel Landini used a system known as \\___\\___ in his research, and claims to have demonstrated the presence of genuine words.（加布里埃尔・兰迪尼博士在研究中使用了名为_\\___\\__的系统，声称证明了真实单词的存在。）\n答案：spectral analysis（频谱分析）\n解析：定位 Paragraph 7 中 “Dr Gabriel Landini... published the results of his study of the manuscript using a pattern-detecting method called spectral analysis. This revealed evidence that the manuscript contains genuine words”，“使用频谱分析发现真实单词”，因此答案为 “spectral analysis”。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（5）题目 39：Dr Gordon Rugg’s system involved a grille, that made it possible to quickly select symbols that appeared in a \\___\\___.（戈登・拉格博士的系统使用了格栅，能快速从_\\___\\__中选取出现的符号。）\n答案：table（表格）\n解析：定位 Paragraph 8 中 “using a system first published by the Italian mathematician Girolamo Cardano in 1150, in which a specially constructed grille is used to pick out symbols from a table”，“从表格中选取符号”，因此答案为 “table”。",
-          "questionId": "q39"
+          "questionId": "q13"
         }
       ],
       "questionRange": {
@@ -162,7 +162,7 @@
         {
           "questionNumber": 40,
           "text": "题目 40：The writer’s main aim in this passage is to（作者的主要目的是？）\n答案：C（describe the numerous attempts to decode the manuscript. 描述破译手稿的诸多尝试）\n解析：全文依次介绍 “伏尼契、纽博尔德、弗里德曼、兰迪尼、赞德贝根、拉格” 等不同研究者的破译方法与结论，核心是 “描述众多破译尝试”，因此选 C。A（解释手稿含义）、B（确定作者身份）、D（识别媒体关注度最高的研究）均未实现，因此排除。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

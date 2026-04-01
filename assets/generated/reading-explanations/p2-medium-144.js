@@ -44,27 +44,27 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：Section A\n答案：v（An achievable goal, not an impossible dream，可实现的目标，非遥不可及的梦想）\n解析：Paragraph A 强调 “现有技术可行、十年内可完成”，核心是 “计划可行性”，与标题 v 一致，因此选 v。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：Section B\n答案：viii（Practical, economic and research justifications，务实、经济与科研层面的合理性）\n解析：Paragraph B 从 “缩短航程（务实）、降低成本（经济）、科研价值” 三方面阐述计划优势，核心是 “合理性论证”，与标题 viii 一致，因此选 viii。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：Section C\n答案：i（The need for skill and care，对技术与谨慎的需求）\n解析：Paragraph C 强调 “控制小行星需精准技术、避免出错”，核心是 “技术与谨慎”，与标题 i 一致，因此选 i。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：Section D\n答案：vii（Beginning with a less challenging task，从较简单任务入手）\n解析：Paragraph D 提出 “先捕获小型小行星练手”，核心是 “先易后难”，与标题 vii 一致，因此选 vii。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：Section E\n答案：iv（Obtaining support for the project，为项目争取支持）\n解析：Paragraph E 讨论 “说服纳税人、吸引私营企业投资”，核心是 “争取支持”，与标题 iv 一致，因此选 iv。",
-          "questionId": "q18"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -80,22 +80,22 @@
         {
           "questionNumber": 19,
           "text": "（1）题目 19：Louis Friedman（路易斯・弗里德曼）\n答案：E（The skill gained could save Earth from future danger. 获得的技术可在未来保护地球）\n解析：定位 Paragraph B 中 “Louis Friedman... the mission would teach engineers how to capture an unco-operative target, which could be useful practice for planetary-defence missions”，明确提到技术可用于行星防御，因此选 E。",
-          "questionId": "q19"
+          "questionId": "q6"
         },
         {
           "questionNumber": 20,
           "text": "（2）题目 20：Rusty Schweickart（拉斯蒂・施韦卡特）\n答案：D（An asteroid’s weight makes the project extremely challenging. 小行星重量使项目极具挑战性）\n解析：定位 Paragraph C 中 “Rusty Schweickart... shifting such a hefty and substantial target would not be easy”，明确提到 “小行星重量大，移动困难”，因此选 D。",
-          "questionId": "q20"
+          "questionId": "q7"
         },
         {
           "questionNumber": 21,
           "text": "（3）题目 21：Dan Mazanek（丹・马扎内克）\n答案：B（It might be difficult to arouse interest in an asteroid of limited size. 小型小行星可能难以激发兴趣）\n解析：定位 Paragraph D 中 “Dan Mazanek... NASA isn’t going to want to go to something that is smaller than our spaceships”，明确提到 “NASA 对小型小行星不感兴趣”，因此选 B。",
-          "questionId": "q21"
+          "questionId": "q8"
         },
         {
           "questionNumber": 22,
           "text": "（4）题目 22：Joseph A. Nuth（约瑟夫・努斯）\n答案：G（Capturing an asteroid would not be an efficient method of research. 捕获小行星并非高效研究方式）\n解析：定位 Paragraph E 中 “Joseph A. Nuth... Investigations of asteroids can be done much more cheaply with an unmanned spacecraft”，明确提到 “无人探测器更廉价高效”，因此选 G。",
-          "questionId": "q22"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -111,22 +111,22 @@
         {
           "questionNumber": 23,
           "text": "（1）题目 23：An asteroid could also act as a \\___\\___ for further space travel and exploration.\n题目翻译：小行星还可作为进一步太空旅行和探索的_\\___\\__。\n答案：base（基地）\n解析：定位 Paragraph B 中 “An asteroid would provide a stationary base from which to launch missions further into space”，明确提到 “基地”，因此答案为 “base”。",
-          "questionId": "q23"
+          "questionId": "q10"
         },
         {
           "questionNumber": 24,
           "text": "（2）题目 24：The fact that an asteroid would have weaker \\___\\___ would allow easier movement of resources.\n题目翻译：小行星_\\___\\__较弱，这一特点使资源运输更便捷。\n答案：gravity（引力）\n解析：定位 Paragraph B 中 “since this would be far weaker on an asteroid... materials mined there could be more easily taken off”，“this” 指代前文 “地球引力”，明确提到小行星 “引力弱”，因此答案为 “gravity”。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（3）题目 25：These resources include \\___\\___ which could be used in space or on Earth, and which could be consumed or used as a source of power.\n题目翻译：这些资源包括可在太空或地球使用、可消耗或作为能源的_\\___\\__。\n答案：metals（金属）\n解析：定位 Paragraph B 中 “Some are rich in metals, which can be mined and used to build space-based habitats, or brought back to Earth”，明确提到 “金属”，因此答案为 “metals”。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（4）题目 26：These resources include \\___\\___ which could be used for life-support or broken down into fuel.\n题目翻译：这些资源包括可用于生命保障或分解为燃料的_\\___\\__。\n答案：water（水）\n解析：定位 Paragraph B 中 “Others are up to one-quarter water, which could be used for life-support or broken down into hydrogen and oxygen to make fuel”，明确提到 “水”，因此答案为 “water”。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

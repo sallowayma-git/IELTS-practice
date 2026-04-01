@@ -60,32 +60,32 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：Through his observations of yawns, Provine was able to confirm that \\___\\____ do not exist.（通过观察呵欠，普罗文证实_\\___\\___不存在。）\n答案：K（half-yawns，半呵欠）\n解析：定位 Paragraph 3 中 “There are no half-yawns: this is an example of the typical intensity of fixed-action patterns”，“不存在半呵欠”，因此选 K。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：Just like a \\___\\___\\_, yawns cannot be interrupted after they have begun.（就像_\\___\\___一样，呵欠一旦开始就无法中断。）\n答案：H（sneeze，喷嚏）\n解析：定位 Paragraph 3 中 “but, once started, a yawn progresses with the inevitability of a sneeze”，“呵欠像喷嚏一样无法中断”，因此选 H。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：This is because yawns occur as a \\___\\____ rather than a stimulus–response, as was previously thought.（这是因为呵欠以_\\___\\___形式发生，而非如之前认为的 “刺激 - 反应”。）\n答案：D（fixed-action pattern，固定动作模式）\n解析：定位 Paragraph 3 中 “It is an excellent example of the instinctive fixed-action pattern of classical animal-behaviour study”，“呵欠是固定动作模式”，因此选 D。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：In measuring the time taken to yawn, Provine found that a typical yawn lasts about _._（测量呵欠持续时间时，普罗文发现典型呵欠持续约。）\n答案：J（6 seconds，6 秒）\n解析：定位 Paragraph 3 中 “The standard yawn runs its course over about six seconds on average”，“平均持续 6 秒”，因此选 J。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：He also found that it is common for people to yawn a number of times in quick succession, with the yawns usually being around \\___\\____ apart.（他还发现，人们常连续打多个呵欠，间隔通常约_\\___\\___。）\n答案：E（68 seconds，68 秒）\n解析：定位 Paragraph 3 中 “yawns can come in bouts with a highly variable inter-yawn interval, which is generally about 68 seconds”，“间隔通常 68 秒”，因此选 E。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（6）题目 32：When studying whether length and rate were connected, Provine concluded that people who yawn less do not necessarily produce \\___\\____ to make up for this.（研究呵欠长度与频率是否相关时，普罗文认为，呵欠少的人不一定会通过_\\___\\___来补偿。）\n答案：B（long yawns，长呵欠）\n解析：定位 Paragraph 3 中 “there is no relation between yawn frequency and duration: producers of short or long yawns do not compensate by yawning more or less often”，“频率与长度无关，少呵欠者不会用长呵欠补偿”，因此选 B。",
-          "questionId": "q32"
+          "questionId": "q6"
         }
       ],
       "questionRange": {
@@ -101,27 +101,27 @@
         {
           "questionNumber": 33,
           "text": "（1）题目 33：What did Provine conclude from his closed-nose yawn experiment?（普罗文从闭鼻呵欠实验中得出什么结论？）\n答案：B（You can yawn without breathing through your nose. 不用鼻子呼吸也能打呵欠）\n解析：定位 Paragraph 4 中 “Most subjects report being able to perform perfectly normal closed-nose yawns. This indicates that the inhalation... need not involve the nostrils”，“闭鼻呵欠正常，无需鼻孔参与”，因此选 B。A（结束呵欠需用鼻孔）、C（用鼻子呼吸会产生无声呵欠）、D（鼻子在呵欠中的作用需进一步研究）均与原文矛盾。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（2）题目 34：Provine’s clenched-teeth yawn experiment shows that（普罗文的咬牙呵欠实验表明？）\n答案：C（you have to be able to open your mouth wide to yawn. 打呵欠必须张大嘴）\n解析：定位 Paragraph 5 中 “this shows that gaping of the jaws is an essential component of the fixed-action pattern of the yawn, and unless it is accomplished, the programme will not run to completion”，“下巴张大是呵欠的必要部分，否则无法完成”，因此选 C。A（呵欠与疲劳无关）、B（呵欠等同于深呼吸）、D（咬牙呼吸与用鼻子呼吸一样高效）均与原文矛盾。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（3）题目 35：The nose-yawn experiment was used to test whether yawning（鼻呵欠实验用于测试呵欠是否？）\n答案：D（can be accomplished only through the nose. 仅通过鼻子就能完成）\n解析：定位 Paragraph 6 中 “This variant tests the adequacy of the nasal airway to sustain a yawn. Unlike normal breathing... yawning is impossible via nasal inhalation alone”，“测试鼻腔能否支撑呵欠，发现仅用鼻子无法完成”，因此选 D。A（开始后可停止）、B（是运动程序的结果）、C（涉及吸气和呼气）均非实验目的。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "（4）题目 36：In people paralysed on one side because of brain damage（因脑损伤导致单侧瘫痪的人身上？）\n答案：C（movement in the paralysed arm is stimulated by yawning. 呵欠会刺激瘫痪手臂运动）\n解析：定位 Paragraph 8 中 “when these people yawn, they are startled and mystified to observe that their otherwise paralysed arm rises and flexes automatically”，“呵欠时瘫痪手臂自动抬起弯曲”，因此选 C。A（呵欠可能仅涉及面部单侧）、B（呵欠反应预示恢复）、D（呵欠可作为预防肌肉萎缩的运动）均与原文矛盾。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（5）题目 37：In the last paragraph, the writer concludes that（最后一段中，作者得出什么结论？）\n答案：B（we yawn in spite of the development of our species. 尽管人类物种进化，我们仍会打呵欠）\n解析：定位 Paragraph 9 中 “Yawning is also a reminder that ancient and unconscious behaviour linking us to the animal world lurks beneath the veneer of culture, rationality and language”，“呵欠是连接人类与动物的古老行为，隐藏在文明表象下”，即 “尽管进化仍会呵欠”，因此选 B。A（呵欠是无聊信号）、C（呵欠比想象中更被动）、D（大脑活动低时会被刺激呵欠）均未提及。",
-          "questionId": "q37"
+          "questionId": "q11"
         }
       ],
       "questionRange": {
@@ -137,17 +137,17 @@
         {
           "questionNumber": 38,
           "text": "（1）题目 38：Research students were initially reluctant to appreciate the value of Provine’s studies.（研究生最初不愿认可普罗文研究的价值）\n答案：YES（正确）\n解析：定位 Paragraph 1 中 “it was difficult for him to convince research students of the merits of ‘yawning science’”，“难以说服研究生认可‘呵欠科学’的价值”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（2）题目 39：When fetuses yawn and stretch, they are learning how to control movement.（胎儿呵欠和拉伸时，在学习控制运动）\n答案：NOT GIVEN（未提及）\n解析：Paragraph 8 仅提到 “观察到胎儿呵欠与拉伸的关联”，未提及 “学习控制运动”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（3）题目 40：According to Provine, referring to only one function is probably inadequate to explain why people yawn.（普罗文认为，仅用一种功能解释人类呵欠可能不够）\n答案：YES（正确）\n解析：定位 Paragraph 9 中 “Provine speculated that, in general, yawning may have many functions, and selecting a single function from the available options may be an unrealistic goal”，“呵欠可能有多种功能，选一种不现实”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

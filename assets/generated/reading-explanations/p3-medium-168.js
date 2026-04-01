@@ -56,27 +56,27 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：the fact that there may be too much information to cope with（信息可能过多难以处理的事实）\n答案：F\n解析：定位 Paragraph F 中 “Running out of information is not a problem, but drowning in it is... bombarded with one million to one billion new numbers each week”，明确提到 “信息过剩”，与题干对应，因此答案为 F。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：the relevance of generating repeat business（产生回头客的重要性）\n答案：A\n解析：定位 Paragraph A 中 “customers must gain and retain their perceptions of value from the brands they buy over a long time frame... customers must see value in returning continually to the stores”，明确提到 “长期价值、持续回购”，与题干对应，因此答案为 A。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：an example of personalised marketing（个性化营销的例子）\n答案：B\n解析：定位 Paragraph B 中 “the subscriber-TV music channel Channel \\[V\\] encourages its viewers to sign up for text messages and email alerts that tell them when their favourite artists and songs are about to be broadcast”，“根据用户喜好发送提醒” 是个性化营销，与题干对应，因此答案为 B。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：an illustration of a situation where commissioning new information research might not be advisable（委托新信息调研可能不明智的情况示例）\n答案：H\n解析：定位 Paragraph H 中 “if an organisation estimates that launching a new product without any further information will yield a profit of $500,000, then it would be foolish to spend $30,000 for additional information that would increase the profit to only $525,000”，明确举例 “调研成本超过收益”，与题干对应，因此答案为 H。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：how the greater wealth of customers enables them to select from a broader range of products（客户更富裕如何使其能从更广泛产品中选择）\n答案：D\n解析：定位 Paragraph D 中 “As household incomes increase, choice widens and buyers become better at discriminating”，明确提到 “收入增加→选择范围扩大”，与题干对应，因此答案为 D。",
-          "questionId": "q31"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -92,27 +92,27 @@
         {
           "questionNumber": 32,
           "text": "（1）题目 32：The majority of marketing statistics are gathered by government agencies.（多数营销数据由政府机构收集）\n答案：NO（错误）\n解析：定位 Paragraph C 中 “While some of the information used is gathered by government bodies... most of it is purposefully gathered by marketing organisations for client companies”，“多数由营销组织收集” 与题干 “多数由政府收集” 描述矛盾，因此判定为 NO。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（2）题目 33：The move from an industrial to an information-based economy has happened more quickly in New Zealand than in Australia.（新西兰从工业经济转向信息经济的速度比澳大利亚快）\n答案：NOT GIVEN（未提及）\n解析：Paragraph E 仅提到 “澳大利亚、新西兰均在转型”，未比较速度，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（3）题目 34：Employees sometimes hide information that gives a poor impression of them.（员工有时会隐瞒对自己不利的信息）\n答案：YES（正确）\n解析：定位 Paragraph F 中 “subordinates may withhold information they believe will reflect badly on their performance”，“隐瞒负面信息” 与题干描述一致，因此判定为 YES。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（4）题目 35：Managers frequently fail to make good use of the information they receive.（管理者常未善用收到的信息）\n答案：YES（正确）\n解析：定位 Paragraph F 中 “Although marketing organisations have greater capacity to provide managers with information, they often do not use it well”，“常未善用信息” 与题干描述一致，因此判定为 YES。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "（5）题目 36：Marketing information has to be used to be valuable.（营销信息必须被使用才有价值）\n答案：YES（正确）\n解析：定位 Paragraph H 中 “By itself, information is valueless – its value comes from its use”，“价值源于使用” 与题干描述一致，因此判定为 YES。",
-          "questionId": "q36"
+          "questionId": "q10"
         }
       ],
       "questionRange": {
@@ -128,22 +128,22 @@
         {
           "questionNumber": 37,
           "text": "（1）题目 37：The MIS begins and ends with .（营销信息系统始于并终于。）\n答案：marketing managers（营销管理者）\n解析：定位 Paragraph G 中 “The MIS begins and ends with marketing managers”，明确提到 “营销管理者”，因此答案为 “marketing managers”。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（2）题目 38：First, it interacts with these managers to assess the \\___\\___ they have.（首先，系统与这些管理者互动，评估他们的_\\___\\__。）\n答案：information needs（信息需求）\n解析：定位 Paragraph G 中 “it interacts with these managers to assess the information needs they have”，明确提到 “信息需求”，因此答案为 “information needs”。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（3）题目 39：Next, it develops the needed information from , marketing intelligence activities and the research process.（其次，系统从、营销情报活动和调研过程中获取所需信息。）\n答案：internal records（内部记录）\n解析：定位 Paragraph G 中 “it develops the needed information from internal records, marketing intelligence activities and the research process”，明确提到 “内部记录”，因此答案为 “internal records”。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（4）题目 40：The analysis unit processes the data to make it more useful.（\\___\\___处理数据以提升其可用性。）\n答案：analysis unit（分析单元）\n解析：定位 Paragraph G 中 “The analysis unit processes the data to make it more useful”，明确提到 “分析单元”，因此答案为 “analysis unit”。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

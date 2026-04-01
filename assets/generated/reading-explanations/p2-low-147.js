@@ -52,32 +52,32 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：uncertainty why an author would wish to remain anonymous（某作者希望匿名的原因不明）\n答案：C\n解析：定位 Paragraph C 中 “Bacon's possible motivation for not wanting to be known as the author of such masterpieces is far from clear”，明确提到 “培根匿名动机不明”，与题干对应，因此答案为 C。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：a reference to the continuing popularity of Shakespeare's work（提及莎士比亚作品的持续受欢迎）\n答案：A\n解析：定位 Paragraph A 中 “Even today, almost 400 years after his death, the works of the famous English dramatist William Shakespeare have lost none of their appeal”，明确提到 “作品魅力不减”，与题干对应，因此答案为 A。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：the reasons why a particular researcher's approach proved unsatisfactory（某研究者方法不理想的原因）\n答案：C\n解析：定位 Paragraph C 中 “Mendenhall lumped all their works together... His focus on word length as the sole ‘fingerprint’... he was too far ahead of his time - he was attempting a task that cried out for the kind of computers not even conceivable over 100 years ago”，详细列举门登霍尔研究的三大缺陷（样本混杂、指标单一、缺乏计算机），与题干对应，因此答案为 C。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：mention of the time when the use of stylometry was first proposed（提及文体计量法首次被提出的时间）\n答案：B\n解析：定位 Paragraph B 中 “The idea of using these basic scientific techniques to probe questions of authorship dates back to 1851, when the Victorian mathematician Augustus de Morgan suggested that different authors might be identified through the frequency with which they used words of different lengths”，明确提到 “1851 年首次提出”，与题干对应，因此答案为 B。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：support for the opinion that Shakespeare became more skillful as he grew older（支持 “莎士比亚随年龄增长技艺更精湛” 的观点）\n答案：G\n解析：定位 Paragraph G 中 “the results to date are in line with the growing view of Shakespeare as a hardworking professional who perfected his skills throughout his career”，明确提到 “现有结果支持莎士比亚职业生涯中不断精进”，与题干对应，因此答案为 G。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（6）题目 19：a similarity between Shakespeare and a scientist with exceptional ability（莎士比亚与一位天才科学家的相似之处）\n答案：A\n解析：定位 Paragraph A 中 “Shakespeare was a genius whose gift is no more suspicious than that of the physicist Albert Einstein, the German salesman's son who devised the theory of relativity”，明确将莎士比亚与爱因斯坦的 “天赋” 类比，与题干对应，因此答案为 A。",
-          "questionId": "q19"
+          "questionId": "q6"
         }
       ],
       "questionRange": {
@@ -93,17 +93,17 @@
         {
           "questionNumber": 20,
           "text": "（1）题目 20：It has always been uncertain whether he worked in \\___\\___ with others or not.\n题目翻译：人们一直不确定他是否与他人_\\___\\__创作。\n答案：collaboration（合作）\n解析：定位 Paragraph D 中 “Was he a lone genius or was his work the result of collaboration?”，明确提到 “合作” 这一核心争议，因此答案为 “collaboration”。",
-          "questionId": "q20"
+          "questionId": "q7"
         },
         {
           "questionNumber": 21,
           "text": "（2）题目 21：Current stylometric analysis has been made possible by the invention of \\___\\___.\n题目翻译：\\___\\___的发明，使现代文体计量分析成为可能。\n答案：computers（计算机）\n解析：定位 Paragraph D 中 “The text-crunching power of computers allows researchers to pinpoint phrases, words or even individual letters by their frequency”，明确提到 “计算机的文本处理能力是关键”，因此答案为 “computers”。",
-          "questionId": "q21"
+          "questionId": "q8"
         },
         {
           "questionNumber": 22,
           "text": "（3）题目 22：By using stylometric analysis of particular characteristics and pattern recognition systems, a so-called \\___\\___ of a writer can be identified.\n题目翻译：通过对特定特征的文体计量分析和模式识别系统，可识别作者的所谓_\\___\\__。\n答案：fingerprint（指纹）\n解析：定位 Paragraph D 中 “Pattern recognition techniques are then used to develop a ‘fingerprint’ for each author”，明确提到 “风格指纹” 这一术语，因此答案为 “fingerprint”。",
-          "questionId": "q22"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -119,22 +119,22 @@
         {
           "questionNumber": 23,
           "text": "（1）题目 23：People search for a more distinguished author because they cannot accept that a normal individual could write such brilliant plays.（人们寻找更显赫的作者，因无法接受普通人能写出如此杰出的戏剧）\n答案：C（Professor Kate McCluskey，凯特・麦克卢斯基教授）\n解析：定位 Paragraph E 中 “Kate McCluskey... ‘I think these claims were driven initially by a sense that Shakespeare is too “important” to be an ordinary person’”，明确提到麦克卢斯基认为质疑源于 “无法接受莎士比亚是普通人”，因此选 C。",
-          "questionId": "q23"
+          "questionId": "q10"
         },
         {
           "questionNumber": 24,
           "text": "（2）题目 24：It should be possible to recognise writers by examining the number of letters in the words they use.（通过分析作者使用单词的字母数量，应能识别其身份）\n答案：A（Thomas Mendenhall，托马斯・门登霍尔）\n解析：定位 Paragraph B 中 “Thomas Mendenhall... decided to use word length to investigate one of the oldest controversies” 和 Paragraph C 中 “His focus on word length as the sole ‘fingerprint’”，明确提到门登霍尔主张 “用词长（字母数量）识别作者”，因此选 A。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（3）题目 25：The fact that Shakespeare's works are likely to have been altered over the years raises doubts about any stylometric analysis.（莎士比亚作品多年来可能被修改，这使文体计量分析的可信度存疑）\n答案：E（Dr Markus Dahl，马库斯・达尔博士）\n解析：定位 Paragraph G 中 “Markus Dahl... ‘If they have been edited, amended or shortened, then the data from them is highly compromised’”，明确提到达尔认为 “文本修改会降低分析可信度”，因此选 E。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（4）题目 26：Analysis proves that Shakespeare's style differs from those of writers who have been suggested as the authors of the plays.（分析证明，莎士比亚的风格与被认为是作品真作者的人不同）\n答案：B（Ward Elliott and Robert Valenza，沃德・埃利奥特与罗伯特・瓦伦扎）\n解析：定位 Paragraph E 中 “Elliott and Valenza... found that none of the claimants had a stylometric ‘fingerprint’ similar to that of Shakespeare”，明确提到两人研究发现 “疑似真作者与莎士比亚风格无相似性”，因此选 B。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

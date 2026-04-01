@@ -56,32 +56,32 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：a suggestion that people have moved numerous species across the globe throughout history（提及人类历史上不断在全球迁移物种）\n答案：C\n解析：定位 Paragraph C 中 “Humans have always transferred a variety of species from one region to another”，明确提到 “人类历史上一直迁移物种”，与题干对应，因此答案为 C。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：an example of how an ecosystem can be damaged very rapidly（生态系统快速受损的例子）\n答案：E\n解析：定位 Paragraph E 中 “when the invading jellyfish underwent a population explosion in the space of just six years, the entire marine ecosystem was transformed”，明确提到 “六年内生态系统剧变”，与题干对应，因此答案为 E。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：a description of what can be done to restrict the spread of invasive species（限制入侵物种扩散的措施描述）\n答案：H\n解析：定位 Paragraph H 中 “plant native plants... learn to identify invasive species... regularly cleaning clothing, boots, boats...”，详细列举个人可采取的限制措施，与题干对应，因此答案为 H。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：a reference to the lack of research on the effects of some invasive species（提及对部分入侵物种影响的研究缺失）\n答案：F\n解析：定位 Paragraph F 中 “The impact of the water hyacinth on native water plants is largely unstudied, as is unfortunately the case for most ecosystems invaded by new plant species”，明确提到 “水葫芦影响研究缺失”，与题干对应，因此答案为 F。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：a mention of a current lack of public awareness of the problem of invasive species（提及当前公众对入侵物种问题的认知不足）\n答案：G\n解析：定位 Paragraph G 中 “ordinary people outside the scientific community have a very limited understanding of the threat posed by invasive species”，明确提到 “公众认知有限”，与题干对应，因此答案为 G。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（6）题目 19：an indication that an introduced species may benefit a specific ecosystem（提及引入物种可能对特定生态系统有益）\n答案：D\n解析：定位 Paragraph D 中 “Some scientists have even argued that in these cases the introduction enhances the diversity of animal and plant life in that specific area”，明确提到 “部分引入物种增加区域生物多样性”，与题干对应，因此答案为 D。",
-          "questionId": "q19"
+          "questionId": "q6"
         }
       ],
       "questionRange": {
@@ -117,17 +117,17 @@
         {
           "questionNumber": 24,
           "text": "（1）题目 24：Kudzu has reduced the \\___\\___ of certain areas in the south-east of the USA.\n题目翻译：葛藤降低了美国东南部部分地区的_\\___\\__。\n答案：biodiversity（生物多样性）\n解析：定位 Paragraph B 中 “invasive species threaten biodiversity... kudzu... replace a habitat that had a wide range of plants with a monoculture”，明确提到葛藤导致 “生物多样性降低”，因此答案为 “biodiversity”。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（2）题目 25：Some introduced species present a low level of threat if they remain within a small area and do not disturb the \\___\\___ of the surrounding ecosystem.\n题目翻译：部分引入物种若局限在小范围且不破坏周边生态系统的_\\___\\__，威胁程度较低。\n答案：equilibrium（平衡）\n解析：定位 Paragraph D 中 “without upsetting the ecological equilibrium of the area”，明确提到 “不破坏生态平衡”，因此答案为 “equilibrium”。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（3）题目 26：The effect of invasive jellyfish in the Black Sea was greater than that \\___\\___ from factories.\n题目翻译：黑海入侵水母的影响比工厂排放的_\\___\\__更大。\n答案：waste（废物）\n解析：定位 Paragraph E 中 “The Black Sea has levels of industrial waste... The jellyfish had a more serious impact... than the heavily polluted water”，明确提到 “工业废物”，因此答案为 “waste”。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

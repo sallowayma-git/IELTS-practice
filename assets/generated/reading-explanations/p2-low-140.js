@@ -56,37 +56,37 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：a description of a barrier designed to stop dingoes, which also divides two kinds of non-native animals（描述用于阻挡野犬、同时分隔两种外来动物的屏障）\n答案：E\n解析：定位 Paragraph E 中 “the world’s longest fence... it is there to keep dingoes out of southeast... the fence separates the main types of livestock... To the northwest... cattle predominate; to the southwest, sheep fill the landscape”，明确提到围栏 “阻挡野犬、分隔牛和羊”，与题干对应，因此答案为 E。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：how dingoes ensure that rival species do not dominate（野犬如何防止竞争物种占据优势）\n答案：D\n解析：定位 Paragraph D 中 “dingoes are the solution... because they keep cat and fox populations under control. Besides regularly eating the smaller predators, dingoes will kill them simply to lessen competition”，明确提到野犬 “捕食或竞争性捕杀猫和狐”，与题干对应，因此答案为 D。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：a reference to a widespread non-native species that other animals feed on（提及一种被其他动物捕食的广泛分布的外来物种）\n答案：C\n解析：定位 Paragraph C 中 “rabbits had covered most of the mainland. Rabbits provide huge prey base for two other introduced species: the feral cat and the red fox”，明确提到 “兔子是广泛分布的外来猎物”，与题干对应，因此答案为 C。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：a mention of the dingo’s arrival in Australia（提及野犬抵达澳大利亚的情况）\n答案：B\n解析：定位 Paragraph B 中 “About 4,000 years ago, Asian sailors introduced dingoes to Australia”，明确提到野犬 “4000 年前由亚洲水手引入”，与题干对应，因此答案为 B。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：research which has proved that dingoes have resorted to eating young livestock（证明野犬转而捕食幼年家畜的研究）\n答案：F\n解析：定位 Paragraph F 中 “a study in Queensland suggests that dingoes don’t even prey heavily on the newborn calves unless... some of the highest rates of calf predation occurred in areas that had been baited”，明确提到研究发现 “诱杀区域野犬捕食小牛”，与题干对应，因此答案为 F。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（6）题目 19：a description of a method used to kill dingoes（描述用于捕杀野犬的方法）\n答案：A\n解析：定位 Paragraph A 中 “drop 1,000 small pieces of meat, one by one, onto the scrubland below, each piece laced with poison; this practice is known as baiting”，明确描述 “毒肉诱杀” 方法，与题干对应，因此答案为 A。",
-          "questionId": "q19"
+          "questionId": "q6"
         },
         {
           "questionNumber": 20,
           "text": "（7）题目 20：the way that the structure of dingo groups affects how quickly their numbers grow（野犬群体结构影响其数量增长速度的方式）\n答案：D\n解析：定位 Paragraph D 中 “Dingo packs live in large, stable territories and generally have only one fertile female, which limits their rate of increase”，明确提到 “仅一只可繁殖雌性限制数量增长”，与题干对应，因此答案为 D。",
-          "questionId": "q20"
+          "questionId": "q7"
         }
       ],
       "questionRange": {
@@ -102,17 +102,17 @@
         {
           "questionNumber": 21,
           "text": "（1）题目 21：Dingoes tend to hunt native animals rather than hunting other non-native predators.（野犬更倾向捕食原生动物，而非其他外来捕食者）\n答案：D（Mark Clifford，马克・克利福德）\n解析：定位 Paragraph G 中 “Mark Clifford... he is not convinced that they manage to catch cats that often, believing they are more likely to catch small native animals instead”，明确提到克利福德认为野犬更易捕食原生动物，因此选 D。",
-          "questionId": "q21"
+          "questionId": "q8"
         },
         {
           "questionNumber": 22,
           "text": "（2）题目 22：The presence of dingoes puts the income of some people at risk.（野犬的存在威胁部分人的收入）\n答案：A（Stuart McKechnie，斯图尔特・麦基奇尼）\n解析：定位 Paragraph A 中 “Stuart McKechnie... complains that graziers’ livelihoods are threatened when dingoes prey on cattle”，明确提到麦基奇尼认为野犬威胁牧民收入，因此选 A。",
-          "questionId": "q22"
+          "questionId": "q9"
         },
         {
           "questionNumber": 23,
           "text": "（3）题目 23：Dingoes have had little impact on the dying out of animal species in Australia.（野犬对澳大利亚物种灭绝影响甚微）\n答案：B（Chris Johnson，克里斯・约翰逊）\n解析：定位 Paragraph D 中 “Chris Johnson... In the 4,000 years that dingoes have been Australia, they have contributed to few, if any, extinctions”，明确提到约翰逊认为野犬几乎未导致物种灭绝，因此选 B。",
-          "questionId": "q23"
+          "questionId": "q10"
         }
       ],
       "questionRange": {
@@ -128,17 +128,17 @@
         {
           "questionNumber": 24,
           "text": "（1）题目 24：The dingo replaced the \\___\\___ as the main predatory animal in Australia.\n题目翻译：野犬取代_\\___\\__成为澳大利亚主要捕食动物。\n答案：Tasmanian tiger（袋狼）\n解析：定位 Paragraph B 中 “as the Tasmanian tiger disappeared completely from Australia, dingoes became Australia’s top predators”，明确提到野犬取代 “袋狼”，因此答案为 “Tasmanian tiger”。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（2）题目 25：Foxes and cats are more likely to hunt native animals when there are fewer \\___\\___.\n题目翻译：当_\\___\\__数量减少时，狐和猫更可能捕食原生动物。\n答案：rabbits（兔子）\n解析：定位 Paragraph C 中 “when bad seasons follow, rabbit numbers are significantly reduced – and the dwindling but still large fox and cat populations are left with little to eat besides native mammals”，明确提到 “兔子减少导致狐和猫捕食原生动物”，因此答案为 “rabbits”。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（3）题目 26：Australian animals reproduce at a slow rate as a natural way of avoiding \\___\\___.\n题目翻译：澳大利亚动物繁殖缓慢，这是避免_\\___\\__的自然方式。\n答案：overpopulation（过度繁殖）\n解析：定位 Paragraph D 中 “Australian mammals generally reproduce much more slowly... an adaption to prevent overpopulation in the arid environment”，明确提到 “缓慢繁殖是避免过度繁殖的适应策略”，因此答案为 “overpopulation”。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {
