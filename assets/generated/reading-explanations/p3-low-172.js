@@ -56,22 +56,22 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：What is the writer doing in the first paragraph?（作者在第一段的主要行为是？）\n答案：C（considering the influence of gallery design on art appreciation. 探讨美术馆设计对艺术欣赏的影响）\n解析：定位 Paragraph 1 中 “Do any of these newly developed spaces indicate a fundamental shift in the ways we engage with art...? A clear sense of this can be gained by considering the 2003 redevelopment of the National Gallery of Victoria... in the light of the aspirations embodied in the original building”，核心是 “通过 NGV 新旧建筑对比，探讨空间设计是否改变人类与艺术的互动方式（即设计对艺术欣赏的影响）”，因此选 C。A（单纯对比新旧 NGV）、B（描述艺术博物馆在澳大利亚文化中的角色）、D（宣称展厅设计几乎无变化）均偏离主旨。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：The writer criticises the old NGV because（作者批评旧 NGV 的原因是？）\n答案：B（the building tended to make art seem remote. 建筑使艺术显得疏离）\n解析：定位 Paragraph 4 中 “the huge expanse of the exterior’s windowless wall and the surrounding moat, which creates a rather unwelcoming expression of the museum as a temple of culture set apart from the everyday world”，“set apart from the everyday world”（脱离日常生活）对应 “make art seem remote”（艺术显得疏离），因此选 B。A（永久藏品陈列差）、C（忽视亚洲及太平洋艺术）、D（大厅像商店）均与原文矛盾或未提及。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：What does the writer notice about the new NGV?（作者对新 NGV 有何发现？）\n答案：C（He is frustrated because the art is obscured by the entrance. 因入口区域遮挡艺术展品而感到沮丧）\n解析：定位 Paragraph 5 中 “We are not allowed to see the exhibitions until we have completed the necessary inductions. We are greeted by a hugely expanded cloakroom screening off our vision to the right... Above us is the cafe and to our left we cannot escape the NGV shop... But where has the art gone?”，明确表达 “入口区域（衣帽间、商店等）遮挡艺术展品，找不到艺术的位置” 的沮丧，因此选 C。A（售票处位置合理）、B（不满被迫快速移动）、D（翻新未跟上国际趋势）均与原文不符。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：The writer argues that rental ‘blockbuster’ exhibitions（作者认为租赁式 “重磅展览” 如何？）\n答案：B（are a financial necessity. 是财务必需）\n解析：定位 Paragraph 7 中 “Entrance to the NGV permanent collection is now free, so the NGV needs something to keep the paying public coming back. The answer lies in the international ‘blockbuster’ exhibition”，“免费开放永久藏品后，需重磅展览吸引付费游客” 说明其 “财务必要性”，因此选 B。A（应更便宜）、C（应增加数量）、D（使博物馆展览项目具独创性）均与原文矛盾（原文提到展览 “千篇一律”）。",
-          "questionId": "q30"
+          "questionId": "q4"
         }
       ],
       "questionRange": {
@@ -87,27 +87,27 @@
         {
           "questionNumber": 31,
           "text": "（1）题目 31：Roy Grounds’s design failed to recognise the importance of functions and performances in museums.（罗伊・格朗兹的设计未认识到博物馆中活动与表演的重要性）\n答案：NO（错误）\n解析：定位 Paragraph 2 中 “its vast Great Hall, which represented an unprecedented emphasis on the ancillary roles of corporate functions and public performances in the contemporary museum”，“unprecedented emphasis”（前所未有的重视）与题干 “failed to recognise”（未认识到）描述矛盾，因此判定为 NO。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（2）题目 32：Mario Bellini’s new NGV rejects international museum design trends.（马里奥・贝里尼设计的新 NGV 违背了国际博物馆设计趋势）\n答案：NO（错误）\n解析：定位 Paragraph 5 中 “his design reflects what the new, improved, twenty-first century global museum feels it should be emphasising to its visitors”，“reflects global museum... emphasising”（体现全球博物馆的重点）与题干 “rejects international trends”（违背国际趋势）描述矛盾，因此判定为 NO。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（3）题目 33：Mario Bellini’s work on subsequent museum projects has been less successful than that on the NGV.（马里奥・贝里尼后续博物馆项目的作品不如其在 NGV 的设计成功）\n答案：NOT GIVEN（未提及）\n解析：全文仅讨论贝里尼对 NGV 的翻新设计，未提及 “其后续博物馆项目及成功率”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（4）题目 34：The NGV monitors the number of first-time visitors to permanent collections.（NGV 会统计永久藏品的首次访客数量）\n答案：NOT GIVEN（未提及）\n解析：Paragraph 6 提到 “展厅为新老访客提供互动方式”，但未提及 “统计首次访客数量”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（5）题目 35：Too much change may have negative impacts on museums.（过度变革可能对博物馆产生负面影响）\n答案：YES（正确）\n解析：定位 Paragraph 8 中 “the effect of too much innovation in museums can be disastrous”，“disastrous”（灾难性的）对应 “negative impacts”（负面影响），与题干描述一致，因此判定为 YES。",
-          "questionId": "q35"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -123,27 +123,27 @@
         {
           "questionNumber": 36,
           "text": "（1）题目 36：If a large space is available in the museum,（若博物馆有大空间可用，会如何？）\n答案：F（it will have the capability of increasing revenue. 具备增加收入的能力）\n解析：定位 Paragraph 3 中 “the Great Hall... represent an unprecedented emphasis on the ancillary roles of corporate functions... generate additional funds via room hire”，“大空间可通过租赁用于企业活动创收” 对应 “increasing revenue”，因此选 F。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（2）题目 37：If children are allowed to move freely in parts of the gallery,（若允许儿童在展厅部分区域自由活动，会如何？）\n答案：E（this will encourage museum visitors in the future. 这将鼓励未来的博物馆访客）\n解析：定位 Paragraph 3 中 “the Great Hall has for forty years provided an area for children to roam at large... As an unintimidating introduction to the lifelong rigours of visiting art museums, its impact on attendance cannot be overestimated”，“无压力的童年体验促进终身参观” 对应 “encourage museum visitors in the future”，因此选 E。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（3）题目 38：If too much emphasis is placed on the museum building itself,（若过度强调博物馆建筑本身，会如何？）\n答案：C（the art loses its importance. 艺术会失去重要性）\n解析：定位 Paragraph 6 中 “the mainstay elements of a permanent collection can become all too easily lost in the increased prominence that these rebranding exercises tend to place on the more glamorously spectacular aspects of the institution itself... new buildings that supplant the artworks inside them to become the major attractions themselves”，“建筑取代艺术品成为核心吸引力” 对应 “the art loses its importance”，因此选 C。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（4）题目 39：If there is an over-reliance on ‘blockbuster’ exhibitions,（若过度依赖 “重磅展览”，会如何？）\n答案：A（the museum programme will lose its individuality. 博物馆展览项目会失去独特性）\n解析：定位 Paragraph 7 中 “the prevalence of these ‘rental’ blockbusters cannot but help introduce a certain ‘off the rack’ feeling to the institution’s exhibition programme”，“off the rack feeling”（千篇一律感）对应 “lose its individuality”（失去独特性），因此选 A。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（5）题目 40：If the NGV wants to continue to be successful,（若 NGV 想持续成功，需如何？）\n答案：D（it will have to balance opposing demands. 需平衡相互矛盾的需求）\n解析：定位 Paragraph 8 中 “even the most adroit organisation, as the NGV assuredly is, needs to be able to juggle numerous, often conflicting priorities: the need to advance scholarship, on the one hand, versus the imperative of access on the other; the need to introduce audiences to new areas, versus the necessity of luring them in with instant brand recognition”，“juggle conflicting priorities”（平衡矛盾优先级）对应 “balance opposing demands”，因此选 D。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

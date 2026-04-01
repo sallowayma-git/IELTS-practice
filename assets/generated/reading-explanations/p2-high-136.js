@@ -48,32 +48,32 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：Paragraph A\n答案：iv（A surprising approach to waste disposal by several countries，多个国家出人意料的垃圾处理方式）\n解析：Paragraph A 先否定焚烧，再指出挪威、德国等国大量焚烧垃圾，核心是 “意外的处理方式”，与标题 iv 一致，因此选 iv。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：Paragraph B\n答案：vii（A number of justifications for the use of incineration，支持焚烧的多条理由）\n解析：Paragraph B 列举 “技术进步减少排放、避免填埋影响、快速解决问题” 等支持理由，核心是 “支持焚烧的论证”，与标题 vii 一致，因此选 vii。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：Paragraph C\n答案：vi（Arguments against incineration from a country that uses it，使用焚烧国家的反对观点）\n解析：Paragraph C 以挪威（使用焚烧）的环保人士为例，提出 “刺激垃圾需求、无法推动回收” 等反对意见，核心是 “使用国的反对声音”，与标题 vi 一致，因此选 vi。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：Paragraph D\n答案：i（New terminology reflecting changing attitudes to waste disposal，反映垃圾处理态度变化的新术语）\n解析：Paragraph D 介绍 “从摇篮到摇篮”“零废弃” 等新术语，体现理念更新，核心是 “术语与态度变化”，与标题 i 一致，因此选 i。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：Paragraph E\n答案：v（Difficult choices for individuals and businesses，个人与企业的艰难选择）\n解析：Paragraph E 讨论 “个人减少购买与零售商利润”“超市备货与垃圾处理” 的权衡，核心是 “艰难选择”，与标题 v 一致，因此选 v。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（6）题目 19：Paragraph F\n答案：ii（Fundamental changes in behaviour in the past and future，过去与未来行为的根本变化）\n解析：Paragraph F 对比 80 年代与现在的消费和回收行为，展望未来需结合价值观推动环保，核心是 “行为变化”，与标题 ii 一致，因此选 ii。",
-          "questionId": "q19"
+          "questionId": "q6"
         }
       ],
       "questionRange": {
@@ -89,22 +89,22 @@
         {
           "questionNumber": 20,
           "text": "（1）题目 20：Ted Michaels（泰德・迈克尔斯）\n答案：F（Incineration of waste is now relatively harmless to the environment，如今垃圾焚烧对环境相对无害）\n解析：定位 Paragraph B 中 “Ted Michaels... ‘There has been constant evolution in combustion engineering and emissions-control technology, and the output from these facilities is now minuscule’”，明确提到排放量极小，相对无害，因此选 F。",
-          "questionId": "q20"
+          "questionId": "q7"
         },
         {
           "questionNumber": 21,
           "text": "（2）题目 21：Joergen Fenhann（约尔根・芬汉）\n答案：C（Greater consumerism leads to higher levels of waste，消费主义加剧导致垃圾量增加）\n解析：定位 Paragraph C 中 “Joergen Fenhann... ‘The more you develop, the more you produce, buy and throw away’”，明确提到消费主义与垃圾量正相关，因此选 C。",
-          "questionId": "q21"
+          "questionId": "q8"
         },
         {
           "questionNumber": 22,
           "text": "（3）题目 22：Joan Marc Simon（琼・马克・西蒙）\n答案：D（Proper systems are needed for the recycling of environmentally-friendly products，环保产品的回收需完善系统）\n解析：定位 Paragraph D 中 “Joan Marc Simon... without the right mechanisms in place ‘nothing guarantees that this bottle will end up being properly collected and treated in the appropriate recycling facility’”，明确提到需完善系统，因此选 D。",
-          "questionId": "q22"
+          "questionId": "q9"
         },
         {
           "questionNumber": 23,
           "text": "（4）题目 23：Tim Burns（蒂姆・伯恩斯）\n答案：G（Efforts to reduce waste may affect profits for some types of companies，减少垃圾的努力可能影响部分企业利润）\n解析：定位 Paragraph E 中 “Tim Burns... ‘you do that, then that’s money the retailers don’t get... Supermarkets... pay to dispose of a lot of food, but that cost is less to them than the cost in brand damage of having empty shelves’”，明确提到减少浪费影响零售商利润，因此选 G。",
-          "questionId": "q23"
+          "questionId": "q10"
         }
       ],
       "questionRange": {
@@ -120,17 +120,17 @@
         {
           "questionNumber": 24,
           "text": "（1）题目 24：There has, for example, been unexpected growth in waste from \\___\\___\\____ products.\n题目翻译：例如，来自_\\___\\___\\___产品的垃圾出现意外增长。\n答案：electronic（电子）\n解析：定位 Paragraph F 中 “Nobody would have said there would be so much electronic waste”，明确提到 “电子垃圾” 增长，因此答案为 “electronic”。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（2）题目 25：He suggests that the need to protect the environment should be linked to basic values, and adds that it might be better if consumers had more influence over \\___\\___\\____ .\n题目翻译：他建议将环保需求与基本价值观结合，并补充称，若消费者对_\\___\\___\\___有更大影响力，情况可能更好。\n答案：business（企业）\n解析：定位 Paragraph F 中 “We need to look at whether it’s business that drives consumers or the other way around”，明确提到 “企业与消费者的相互影响”，因此答案为 “business”。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（3）题目 26：... and more direction was provided by \\___\\___\\____ .\n题目翻译：且由_\\___\\___\\___提供更多指导。\n答案：government（政府）\n解析：定位 Paragraph F 中 “You need government to play a leadership role”，明确提到 “政府发挥领导作用”，因此答案为 “government”。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {
