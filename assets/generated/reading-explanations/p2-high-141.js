@@ -56,32 +56,32 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：two things at which leaf-cutter ants have succeeded but humans have failed.（切叶蚁做到但人类未能做到的两件事）\n答案：H\n解析：定位 Paragraph H 中 “the leaf-cutter ants are accomplishing feats beyond the power of humans: they are growing a monocultural crop year after year without disaster, and they are using an antibiotic apparently so wisely that... they are not provoking antibiotic resistance”，明确提到 “单一作物无灾害、抗生素无耐药性” 两件事，与题干对应，因此答案为 H。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：a comparison between the nests of leaf-cutter ants and lower attine ants.（切叶蚁与下位阿庭蚁巢穴的对比）\n答案：C\n解析：定位 Paragraph C 中 “the leaf-cutters use fresh vegetation; the other groups... known as the lower attines... their nests are smaller and their techniques more primitive”，明确对比 “巢穴大小、食材、技术”，与题干对应，因此答案为 C。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：an assessment of the impact leaf-cutter ants have on their environment.（切叶蚁对环境影响的评估）\n答案：B\n解析：定位 Paragraph B 中 “These ant communities are the dominant plant-eaters of the Neotropics... 15 percent of the leaf production of tropical forests disappears down the nests of leaf-cutter ants”，量化评估 “15% 叶片产量被利用”，与题干对应，因此答案为 B。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：the effect Escovopsis has on ant communities.（Escovopsis 对蚂蚁社群的影响）\n答案：F\n解析：定位 Paragraph F 中 “Escovopsis is a deadly disease that can devastate a fungus garden in a couple of days... the ants associated with the garden just starve to death... within two years some 60 percent become infected”，明确描述 “摧毁农场、蚂蚁饿死、高感染率”，与题干对应，因此答案为 F。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：the advantage for lower attine ants of growing a range of fungi.（下位阿庭蚁培育多种真菌的优势）\n答案：G\n解析：定位 Paragraph G 中 “there is now a possible reason for the different varieties of fungus in the lower attine mushroom gardens - to stay one step ahead of the relentless Escovopsis”，明确提到 “多样化真菌帮助躲避 Escovopsis”，与题干对应，因此答案为 G。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（6）题目 19：the discovery of the age of the attine-ant fungi.（阿庭蚁真菌培育年代的发现）\n答案：D\n解析：定位 Paragraph D 中 “the leaf-cutters’ fungus was descended from a single pure strain, propagated for at least 23 million years”，明确提到 “2300 万年” 这一年代，与题干对应，因此答案为 D。",
-          "questionId": "q19"
+          "questionId": "q6"
         }
       ],
       "questionRange": {
@@ -97,27 +97,27 @@
         {
           "questionNumber": 20,
           "text": "（1）题目 20：the use of dead vegetation to cultivate their fungus（用枯死植被培育真菌）\n答案：B（Lower attines，下位阿庭蚁）\n解析：定位 Paragraph C 中 “the lower attines... feed their gardens with similar leaves that have fallen on the ground and insects that lie on the forest floor”，明确提到下位阿庭蚁用落叶，因此选 B。",
-          "questionId": "q20"
+          "questionId": "q7"
         },
         {
           "questionNumber": 21,
           "text": "（2）题目 21：very small ants that keep the fungus free of foreign organisms（小型蚂蚁清除真菌中的外来生物）\n答案：A（Leaf-cutting ants，切叶蚁）\n解析：定位 Paragraph C 中 “miniature workers to seed them with fungus and clean off alien growths”，明确提到切叶蚁的小型工蚁负责清洁，因此选 A。",
-          "questionId": "q21"
+          "questionId": "q8"
         },
         {
           "questionNumber": 22,
           "text": "（3）题目 22：the ability to safely eat harmful plants（安全食用有害植物的能力）\n答案：C（Both，两者皆是）\n解析：定位 Paragraph B 中 “The attine ants’ achievement is remarkable because it allows them to consume... the harvest of tropical forests whose leaves are laden with poisonous chemicals”，“attine ants” 涵盖切叶蚁和下位阿庭蚁，因此选 C。",
-          "questionId": "q22"
+          "questionId": "q9"
         },
         {
           "questionNumber": 23,
           "text": "（4）题目 23：the cultivation of a single fungus（培育单一真菌）\n答案：A（Leaf-cutting ants，切叶蚁）\n解析：定位 Paragraph D 中 “the leaf-cutters’ fungus was descended from a single pure strain”，明确提到切叶蚁培育纯菌株，因此选 A。",
-          "questionId": "q23"
+          "questionId": "q10"
         },
         {
           "questionNumber": 24,
           "text": "（5）题目 24：a nest with a very large number of rooms for growing fungus（有大量真菌培育室的巢穴）\n答案：A（Leaf-cutting ants，切叶蚁）\n解析：定位 Paragraph A 中 “A single leaf-cutter nest may contain a thousand such chambers”，明确提到切叶蚁巢穴有上千个培育室，因此选 A。",
-          "questionId": "q24"
+          "questionId": "q11"
         }
       ],
       "questionRange": {
@@ -133,12 +133,12 @@
         {
           "questionNumber": 25,
           "text": "（1）题目 25：What does the writer say about Cameron Currie’s research?（作者如何评价柯里的研究？）\n答案：B（Earlier studies did not support his theory. 早期研究不支持他的理论）\n解析：定位 Paragraph E 中 “a century of ant research had provided no evidence for his idea. Textbooks describe how leaf-cutter ants scrupulously weed their gardens of all foreign organisms”，明确提到早期研究和教科书均不支持柯里的 “存在寄生虫” 理论，因此选 B。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（2）题目 26：Using a microscope, Currie was the first to discover that the body of attine ants（通过显微镜，柯里首次发现阿庭蚁体表……）\n答案：D（has a substance useful to humans. 有对人类有用的物质）\n解析：定位 Paragraph H 中 “Currie discovered a specialised patch on the ants’ bodies that harbours a particular kind of bacterium... the source of half the antibiotics used in medicine”，明确提到细菌是人类抗生素的来源，即 “对人类有用的物质”，因此选 D。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

@@ -56,22 +56,22 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：In the first paragraph, the writer suggests that a talented musician is someone（作者在第一段中暗示，有天赋的音乐家是？）\n答案：B（whose brain structure is unlike that of other people. 大脑结构与常人不同的人）\n解析：定位 Paragraph 1 中 “or are they based on innate brain structure - what we refer to as talent? Talent can be defined as something that originates in genetic structures”，“天赋即先天大脑结构 / 基因结构差异”，因此选 B。A（意识到自己与他人不同的人）、C（童年早期表现极佳的人）、D（基本技能比常人更多样的人）均与原文矛盾。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：According to the writer, what is unclear about the findings of Gottfried Schlaug?（作者认为戈特弗里德・施劳格的发现中，不明确的是什么？）\n答案：C（whether a feature of the brain is a cause or an effect of a musical skill. 大脑特征是音乐技能的原因还是结果）\n解析：定位 Paragraph 3 中 “it’s not clear if it starts out larger in people who eventually acquire AP, or if the acquisition of AP makes the planum increase in size”，“无法确定颞平面大是绝对音高的原因还是结果”，因此选 C。A（大脑哪部分与特定音乐技能相关）、B（哪种音乐技能导致大脑最大变化）、D（部分人学习音乐技能是否更易）均与原文矛盾。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：According to the writer, what has been established by studies of violin players?（作者认为，对小提琴手的研究确定了什么？）\n答案：A（Changes may occur in the brain following violin practice. 练习小提琴后大脑可能发生变化）\n解析：定位 Paragraph 4 中 “Studies of violin players have shown that the region of the brain responsible for controlling the movement of the left hand... increases in size as a result of practice”，“练习导致控制左手的脑区变大”，即 “大脑发生变化”，因此选 A。B（左撇子小提琴手大脑结构与常人不同）、C（小提琴手手型由基因决定）、D（小提琴手天生有特定大脑结构）均与原文矛盾。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：According to the writer, findings on the amount of practice done by expert musicians suggest that（作者认为，关于音乐专家练习量的发现表明？）\n答案：A（talent may have little to do with expertise. 天赋可能与专长关系不大）\n解析：定位 Paragraph 5 中 “the students who achieved the highest performance ratings had practised the most, irrespective of which talent group they had been assigned to, suggesting that practice does not merely correlate with achievement, but causes it”，“表现最佳者练习量最大，与天赋分组无关”，即 “天赋与专长关系不大”，因此选 A。B（练习可能阻碍天赋发展）、C（教师无法识别天赋）、D（专长与教学质量相关）均与原文矛盾。",
-          "questionId": "q30"
+          "questionId": "q4"
         }
       ],
       "questionRange": {
@@ -87,32 +87,32 @@
         {
           "questionNumber": 31,
           "text": "（1）题目 31：Anders Ericsson’s work with cognitive psychology has influenced other researchers.（安德斯・艾利克森的认知心理学研究影响了其他研究者）\n答案：NOT GIVEN（未提及）\n解析：全文仅描述 “艾利克森的研究内容与结论”，未提及 “影响其他研究者”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（2）题目 32：Different areas of expertise seem to have one specific thing in common.（不同领域的专长似乎有一个共同点）\n答案：YES（正确）\n解析：定位 Paragraph 6 中 “the emerging picture from such studies is that ten thousand hours of practice is required to achieve the level of mastery associated with being a world-class expert - in anything”，“任何领域成为世界级专家均需 1 万小时练习”，即 “有一个共同点”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（3）题目 33：In order to be useful, practice must be carried out regularly every day.（为保证效果，练习必须每天规律进行）\n答案：NOT GIVEN（未提及）\n解析：Paragraph 6 仅提到 “roughly 20 hours a week for ten years”，“每周 20 小时”，未提及 “每天规律练习”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（4）题目 34：Anyone who practises for long enough can reach the level of a world-class expert.（任何人只要练习足够久，都能达到世界级专家水平）\n答案：NO（错误）\n解析：定位 Paragraph 6 中 “this does not address why some people do not seem to get anywhere when they practise, and why some people get more out of their practice sessions than others”，“有人练习却无进展”，即 “并非练习久就能成为专家”，与题干描述矛盾，因此判定为 NO。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（5）题目 35：Occasionally, someone can become an expert at a global level with fewer than 10,000 hours’ practice.（偶尔有人可在少于 1 万小时练习内成为世界级专家）\n答案：NO（错误）\n解析：定位 Paragraph 6 中 “no-one has yet found a case in which true world-class expertise was accomplished in less time”，“未发现少于 1 万小时成为世界级专家的案例”，与题干描述矛盾，因此判定为 NO。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "（6）题目 36：Existing knowledge of learning and cognitive skills supports the importance of practice.（现有关于学习和认知技能的知识支持练习的重要性）\n答案：YES（正确）\n解析：定位 Paragraph 7 中 “The ten-thousand-hour theory is consistent with what we know about how the brain learns. Learning requires the assimilation and consolidation of information in neural tissue... increased practice leads to a greater number of neural traces”，“1 万小时理论与大脑学习机制一致，练习越多神经痕迹越强”，即 “现有知识支持练习重要性”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q36"
+          "questionId": "q10"
         }
       ],
       "questionRange": {
@@ -128,22 +128,22 @@
         {
           "questionNumber": 37,
           "text": "（1）题目 37：However, the writer points out that the young Mozart received a lot of \\___\\____ from his father.（但作者指出，年轻的莫扎特从父亲那里获得了大量_\\___\\___。）\n答案：E（tuition，指导）\n解析：定位 Paragraph 8 中 “Mozart had an expert teacher in his father, who was renowned as a teacher of musicians all over Europe”，“父亲是专家教师，提供指导”，因此选 E。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（2）题目 38：and that the symphony he wrote at the age of \\___\\___\\_.（且他在_\\___\\___岁时创作的交响曲。）\n答案：D（eight，八）\n解析：定位 Paragraph 8 中 “Mozart did not write it until he was eight”，“八岁创作首部交响曲”，因此选 D。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（3）题目 39：was not \\___\\____ and may be of only academic interest.（并不_\\___\\___，可能仅具学术价值。）\n答案：A（popular，受欢迎）\n解析：定位 Paragraph 8 中 “this early work received little acclaim and was not performed very often”，“早期作品反响平平、演出少”，即 “不受欢迎”，因此选 A。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（4）题目 40：The case therefore supports the view that expertise is not solely the result of \\___\\____ characteristics.（因此该案例支持 “专长并非仅由_\\___\\___特质导致” 的观点。）\n答案：G（inherited，遗传的）\n解析：定位 Paragraph 8 中 “this does not mean that there are no genetic factors involved in Mozart’s greatness, but that inborn traits may not be the only cause”，“先天 / 遗传特质并非唯一原因”，因此选 G。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

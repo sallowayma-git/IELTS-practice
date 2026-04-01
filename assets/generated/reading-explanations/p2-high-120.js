@@ -52,37 +52,37 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：Paragraph A\n答案：iv（The unexpectedly high standard of the housing，超出预期的住房高标准）\n解析：Paragraph A 强调新社区建筑 “与富裕郊区房屋无异”“建筑师担心有人反对政府资金打造高品质项目”，核心是 “住房标准高”，与标题 iv 一致，因此选 iv。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：Paragraph B\n答案：ix（A close community in the original Talbot Park development，早期塔尔博特公园社区的紧密邻里关系）\n解析：Paragraph B 回忆 1960 年代社区 “邻里尊重、孩子共同玩耍”，核心是 “早期社区关系紧密”，与标题 ix 一致，因此选 ix。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：Paragraph C\n答案：i（Some of the problems that developed at Talbot Park，塔尔博特公园出现的部分问题）\n解析：Paragraph C 描述社区衰败（移民融入困难、犯罪增多、建筑破败），核心是 “社区问题”，与标题 i 一致，因此选 i。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：Paragraph D\n答案：x（Details of the style of buildings used in the makeover，改造中使用的建筑风格细节）\n解析：Paragraph D 详细说明 “混搭” 设计（户型多样、风格保守、开放性规划），核心是 “建筑风格细节”，与标题 x 一致，因此选 x。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：Paragraph E\n答案：iii（The ethnic makeup of the new Talbot Park，新塔尔博特公园的族群构成）\n解析：Paragraph E 明确列出社区人口比例（50% 太平洋岛民、20% 毛利人等），核心是 “族群构成”，与标题 iii 一致，因此选 iii。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（6）题目 19：Paragraph F\n答案：v（Financial hardship in Talbot Park and a neighbouring community，塔尔博特公园及周边社区的经济困难）\n解析：Paragraph F 指出社区 “低收入、私人住房比例低”，核心是 “经济困难”，与标题 v 一致，因此选 v。",
-          "questionId": "q19"
+          "questionId": "q6"
         },
         {
           "questionNumber": 20,
           "text": "（7）题目 20：Paragraph G\n答案：vii（How to co-ordinate and assist the people who live at Talbot Park，如何协调和帮助塔尔博特公园居民）\n解析：Paragraph G 介绍 “强化租赁管理”（行为准则、日常巡视、组织社交活动），核心是 “居民协调与帮助”，与标题 vii 一致，因此选 vii。",
-          "questionId": "q20"
+          "questionId": "q7"
         }
       ],
       "questionRange": {
@@ -98,17 +98,17 @@
         {
           "questionNumber": 21,
           "text": "（1）题目 21：James Lundy\n答案：D（Mixed-race communities require adaptable and responsive designs.，多种族社区需要灵活且能满足需求的设计）\n解析：定位 Paragraph E 中 “James Lundy... ‘It was important that the buildings were sufficiently flexible to cater for the needs of people from a wide variety of cultural backgrounds’”，明确提到建筑需灵活满足不同文化背景居民需求，与观点 D 一致，因此选 D。",
-          "questionId": "q21"
+          "questionId": "q8"
         },
         {
           "questionNumber": 22,
           "text": "（2）题目 22：Graham Bodman\n答案：A（Good tenant management involves supervision and regulation.，良好的租户管理包括监督和规范）\n解析：定位 Paragraph G 中 “Graham Bodman... ‘The focus is on frequent inspections and setting clear guidelines and boundaries regarding the sort of behaviour we expect from tenants’”，明确提到管理重点是 “频繁检查和行为规范”，与观点 A 一致，因此选 A。",
-          "questionId": "q22"
+          "questionId": "q9"
         },
         {
           "questionNumber": 23,
           "text": "（3）题目 23：Stuart Bracey\n答案：C（Organising social events helps tenants to live close together.，组织社交活动有助于租户在密集社区生活）\n解析：定位 Paragraph G 中 “Stuart Bracey... ‘we acknowledge that if you are going to ask people to live in these quite tightly-packed communities, you have to actually help them to get to know each other by organising morning teas and street barbecues’”，明确提到组织早茶、烧烤等社交活动帮助居民相处，与观点 C 一致，因此选 C。",
-          "questionId": "q23"
+          "questionId": "q10"
         }
       ],
       "questionRange": {
@@ -124,17 +124,17 @@
         {
           "questionNumber": 24,
           "text": "（1）题目 24：One aspect of the Talbot Park project that some critics are concerned about is that the higher \\___\\___ of accommodation would lead to the old social problems returning.\n题目翻译：塔尔博特公园项目中，部分批评者担心的一点是，更高的住房_\\___\\__会导致旧有社会问题重现。\n答案：density（密度）\n解析：定位 Paragraph D 中 “One controversial aspect of the upgrade is that the new development has actually made the density of housing in Talbot Park greater”，“higher” 对应 “greater”，明确提到 “住房密度提高” 是争议点，因此答案为 “density”。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（2）题目 25：To prevent this, a team of various \\___\\___ worked on the project to ensure the buildings were not uniform.\n题目翻译：为避免这一问题，由不同_\\___\\__组成的团队参与项目，确保建筑风格不单调。\n答案：architects（建筑师）\n解析：定位 Paragraph D 中 “employing a variety of plans by different architects”，“various” 对应 “different”，明确提到 “不同建筑师” 设计多样户型，因此答案为 “architects”。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（3）题目 26：Further, they created pleasant, functional interiors that could still be built within their \\___\\___.\n题目翻译：此外，他们打造了舒适实用的室内空间，且仍能在_\\___\\__范围内建成。\n答案：budget（预算）\n解析：定位 Paragraph D 中 “to optimise durability and ensure the project did not go over budget”，“within their” 对应 “did not go over”，明确提到项目需控制在预算内，因此答案为 “budget”。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

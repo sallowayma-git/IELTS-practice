@@ -48,22 +48,22 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：Many parents indicate that their children struggle to learn a musical instrument.（许多家长表示孩子学乐器很吃力）\n答案：NOT GIVEN（未提及）\n解析：全文仅讨论 “学乐器的好处”，未提及 “家长对孩子学乐器难度的反馈”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：The findings of the recent research into pre-school children’s IQs are unreliable.（近期关于学龄前儿童智商的研究结果不可靠）\n答案：NO（错误）\n解析：定位 Paragraph 1 中 “Two highly convincing trials carried out recently have found no evidence to support this idea”，“highly convincing”（极具说服力）与题干 “unreliable”（不可靠）描述矛盾，因此判定为 NO。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：The main reasons people take up an instrument are that they enjoy playing music and being creative.（人们学乐器的主要原因是享受演奏和发挥创造力）\n答案：NOT GIVEN（未提及）\n解析：Paragraph 2 提到 “学乐器的好处包括自我表达、娱乐”，但未提及 “人们学乐器的主要原因”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：Evidence about the long-term advantages of learning an instrument is increasing.（关于学乐器长期益处的证据正在增多）\n答案：YES（正确）\n解析：定位 Paragraph 2 中 “A growing number of studies show that learning an instrument in childhood can do something perhaps more valuable for the brain: it can provide benefits as we age”，“a growing number of studies”（越来越多研究）对应 “evidence... is increasing”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q30"
+          "questionId": "q4"
         }
       ],
       "questionRange": {
@@ -79,27 +79,27 @@
         {
           "questionNumber": 31,
           "text": "（1）题目 31：The studies mentioned in the first paragraph（第一段提及的研究如何？）\n答案：D（cast doubt on a belief about the effects of taking music lessons. 对 “上音乐课有益” 的观点提出质疑）\n解析：定位 Paragraph 1 中 “Two highly convincing trials carried out recently have found no evidence to support this idea; the IQs of pre-school children who attended several weeks of music classes... did not differ significantly from the IQs of those who had not”，“无证据支持‘学乐器提升智商’” 即 “质疑该观点”，因此选 D。A（证实音乐训练与智力的关联）、B（提供关于学乐器价值的误导信息）、C（暗示学音乐有未被发现的好处）均与原文矛盾。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（2）题目 32：According to the second paragraph, there may be many benefits to studying music,（根据第二段，学音乐可能有很多好处，如何？）\n答案：A（even for those who begin learning in adulthood. 即使对成年后才开始学的人也有效）\n解析：定位 Paragraph 2 中 “you may well get those benefits even if you haven’t picked up your instrument in years, or decide to take up music for the first time in mid-life or beyond”，“中年后首次学也可能获益” 对应 “begin learning in adulthood”，因此选 A。B（需掌握正确技巧）、C（尤其定期练习者）、D（尤其会多种乐器者）均未提及。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（3）题目 33：The phrase ‘this might well be the case’ in the fourth paragraph suggests that（第四段中 “this might well be the case” 暗示什么？）\n答案：C（learning an instrument may have a lasting impact on brain function. 学乐器可能对大脑功能有持久影响）\n解析：Paragraph 3 提到音乐训练的 “ripple effects through the decades”（持续数十年的连锁影响），Paragraph 4 首句 “this might well be the case” 承接此观点，暗示 “持久影响”，因此选 C。A（音乐课与长期身体健康相关）、B（学音乐的能力取决于神经特征）、D（老年人比儿童更适合学音乐）均未提及。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（4）题目 34：Which aspect of playing an instrument was included in Hanna-Pladdy’s follow-up study but not in her first study?（汉纳 - 普拉迪的追踪研究包含而首项研究未包含的学乐器相关因素是？）\n答案：B（at which age the person began having lessons. 开始上课的年龄）\n解析：定位 Paragraph 4 中 “Her follow-up study a year later confirmed those findings and further suggested that starting musical training before the age of nine and keeping at it for ten years or more may yield the greatest benefits”，“首项研究仅分组别，追踪研究新增‘开始年龄’变量”，因此选 B。A（演奏年数）、C（距上次演奏的时间）、D（童年练习方式）均未提及。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（5）题目 35：What do Hanna-Pladdy’s studies suggest about people’s general education?（汉纳 - 普拉迪的研究关于人们的总体教育水平有何暗示？）\n答案：A（Studying music compensates for an otherwise limited level of education. 学音乐可弥补教育水平有限的不足）\n解析：定位 Paragraph 4 中 “it was the group who had the lowest level of general education which showed the greatest gap in scores between those who had studied an instrument in childhood and those who had not. Hanna-Pladdy suspects that musical training could have made up for the lack of cognitive stimulation these people had”，“教育程度最低组中，学乐器者与未学者分数差距最大，暗示音乐训练弥补认知刺激不足”，因此选 A。B（学乐器提升教育表现）、C（高教育者更易从音乐训练获益）、D（教育程度不影响音乐能力）均与原文矛盾。",
-          "questionId": "q35"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -115,27 +115,27 @@
         {
           "questionNumber": 36,
           "text": "（1）题目 36：Brenda Hanna-Pladdy believes the cognitive benefits of music lessons are a result of（布伦达・汉纳 - 普拉迪认为，音乐课的认知益处源于？）\n答案：D（acquiring the particular set of physical skills needed to play an instrument. 掌握演奏乐器所需的特定身体技能）\n解析：定位 Paragraph 2 中 “the time spent learning and practising specific types of motor control and coordination... contributes to the brain boost that shows up later in life”，“特定运动控制与协调能力” 对应 “particular set of physical skills”，因此选 D。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（2）题目 37：The research undertaken by Gottfried Schlaug focused on（戈特弗里德・施劳格的研究聚焦于？）\n答案：A（comparing the brains of people who had never played an instrument with those who played for a living. 比较从未学过乐器者与职业演奏者的大脑）\n解析：定位 Paragraph 3 中 “Gottfried Schlaug found that the brains of adult professional musicians had a larger volume of grey matter than the brains of non-musicians had”，“比较专业音乐家与非音乐家的大脑灰质”，因此选 A。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（3）题目 38：According to Alison Balbag, playing an instrument is a unique experience because it involves（根据艾莉森・巴尔巴格的观点，学乐器是独特体验，因它涉及？）\n答案：B（activating many different parts of the brain at the same time. 同时激活大脑的多个不同区域）\n解析：定位 Paragraph 3 中 “‘What’s unique about playing an instrument is that it requires a wide array of brain regions and cognitive functions to work together simultaneously, in both the right and left hemispheres of the brain,’ says Alison Balbag”，“大脑多区域同时协同工作” 对应 “activating many different parts of the brain”，因此选 B。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（4）题目 39：Nina Kraus believes there is a link between better hearing in later life and the experience of（尼娜・克劳斯认为，晚年听力更好与以下哪种经历有关？）\n答案：F（having played an instrument for a considerable length of time. 长时间演奏乐器）\n解析：定位 Paragraph 5 中 “those who had trained the longest-between four and fourteen years-responded the fastest... hearing tends to decline as we age... musical training appears to enhance auditory working memory”，“训练时间最长者晚年听觉反应最快”，因此选 F。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（5）题目 40：Jennifer Bugos’s study involved（詹妮弗・布戈斯的研究涉及？）\n答案：C（teaching a group of older people to play an instrument. 教一组老年人演奏乐器）\n解析：定位 Paragraph 6 中 “Jennifer Bugos studied the impact of elementary piano instruction on adults between the ages of 60 and 85. After six months, those who had received piano lessons showed more robust gains”，“给 60-85 岁成年人上钢琴课并观察效果”，因此选 C。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

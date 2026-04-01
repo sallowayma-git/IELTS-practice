@@ -56,22 +56,22 @@
         {
           "questionNumber": 28,
           "text": "（1）题目 28：What is the main purpose of paragraph A?（第一段的主要目的是？）\n答案：D（Introduction of the background of this passage. 介绍本文背景）\n解析：Paragraph A 通过詹姆斯・保罗・吉因儿子接触电子游戏、发现游戏潜在价值的故事，引出 “电子游戏益处” 这一核心议题，并非单纯介绍人物（A）、游戏（B）或游戏类型（C），核心是 “铺垫全文背景”，因此选 D。",
-          "questionId": "q28"
+          "questionId": "q1"
         },
         {
           "questionNumber": 29,
           "text": "（2）题目 29：What does the author want to express in the second paragraph?（作者在第二段想表达什么？）\n答案：C（Even though there is a certain proportion of violence in most video games, scientists and psychologists see their benefits to children’s intellectual abilities. 尽管多数游戏含有一定比例的暴力元素，但科学家和心理学家看到了其对儿童智力能力的益处）\n解析：Paragraph B 先描述 “家长和媒体认为游戏暴力、浪费时间”，随后转折 “89% 的游戏含暴力内容，但科学家发现游戏能培养孩子高阶思维、让孩子更聪明”，与选项 C 完全一致。A（游戏普遍被认为有害）、D（家长视游戏为腐蚀大脑的浪费时间事物）仅为段落前半部分内容，非核心观点；B（多数暴力游戏是青少年犯罪的直接原因）与原文 “被归咎于”“有一定比例暴力” 不符，因此选 C。",
-          "questionId": "q29"
+          "questionId": "q2"
         },
         {
           "questionNumber": 30,
           "text": "（3）题目 30：What is correctly mentioned in paragraph D?（第四段中正确提及的内容是？）\n答案：C（Some surgeons have better skills because they play more video games. 部分外科医生技能更精湛，因为他们玩更多电子游戏）\n解析：定位 Paragraph D 中 “there have even been studies with adults showing that experience with video games is related to better surgical skills. Jacob Benjamin... found a direct link between skill at video gaming and skill at keyhole or laparoscopic surgery”，明确提到 “游戏经验与手术技能相关，部分医生因玩游戏技能更优”，与选项 C 一致。A（部分学校用游戏教高阶思维）、B（游戏全方位提升大脑能力）表述过于绝对；D（熟练飞行员喜欢玩游戏）与原文 “从小玩游戏长大” 不符，因此选 C。",
-          "questionId": "q30"
+          "questionId": "q3"
         },
         {
           "questionNumber": 31,
           "text": "（4）题目 31：What is the finding of the experiment the three researchers conducted in the last paragraph?（最后一段中三位研究者的实验发现是？）\n答案：D（Video games help increase the speed of players’ reactions effectively. 电子游戏能有效提高玩家的反应速度）\n解析：定位 Paragraph I 中 “the action-game players were up to 25% faster at reaching a conclusion and answered just as many questions correctly as their strategy-game-playing peers”，“动作游戏组决策速度快 25% 且正确率不变”，即 “游戏有效提升反应速度”，与选项 D 一致。A（玩家需充分利用有限资源）是 Paragraph F 内容，B（数学好的玩家最终会赢）是 Paragraph G 内容，C（策略游戏玩家决策速度更快）与实验结果矛盾，因此选 D。",
-          "questionId": "q31"
+          "questionId": "q4"
         }
       ],
       "questionRange": {
@@ -87,22 +87,22 @@
         {
           "questionNumber": 32,
           "text": "（1）题目 32：Most video games are popular because of their violent content.（多数电子游戏因暴力内容而受欢迎）\n答案：NOT GIVEN（未提及）\n解析：Paragraph B 仅提到 “89% 的游戏含暴力内容，70% 的热门游戏含攻击内容”，但未说明 “游戏受欢迎的原因是暴力内容”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q32"
+          "questionId": "q5"
         },
         {
           "questionNumber": 33,
           "text": "（2）题目 33：It would be a good idea for schools to apply video games in their classrooms.（学校将电子游戏应用于课堂是个好主意）\n答案：NOT GIVEN（未提及）\n解析：全文仅强调 “游戏能培养高阶思维、锻炼大脑”，但未提及 “学校应将其引入课堂”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q33"
+          "questionId": "q6"
         },
         {
           "questionNumber": 34,
           "text": "（3）题目 34：Those people who are addicted to video games have lots of dopamine in their brains.（沉迷电子游戏的人脑中多巴胺含量高）\n答案：NOT GIVEN（未提及）\n解析：Paragraph C 提到 “游戏会引发多巴胺等神经递质的奖励激增”，但未提及 “沉迷者脑中多巴胺总量高”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q34"
+          "questionId": "q7"
         },
         {
           "questionNumber": 35,
           "text": "（4）题目 35：The action-game players minimised the percentage of mistakes in the experiment.（动作游戏玩家在实验中降低了错误率）\n答案：FALSE（错误）\n解析：定位 Paragraph I 中 “the action-game players were up to 25% faster at reaching a conclusion and answered just as many questions correctly as their strategy-game-playing peers”，“正确率与策略游戏组相当”，即 “错误率未降低”，与题干描述矛盾，因此判定为 FALSE。",
-          "questionId": "q35"
+          "questionId": "q8"
         }
       ],
       "questionRange": {
@@ -118,27 +118,27 @@
         {
           "questionNumber": 36,
           "text": "（1）题目 36：Video games, like other daily-life skills, alter the brain’s physical structure.（电子游戏与其他日常技能一样，会改变大脑的生理结构）\n答案：C（Shawn Green，肖恩・格林）\n解析：定位 Paragraph C 中 “C. Shawn Green... Video games alter the brain’s physical structure the same way as learning to read, playing the piano, or navigating with a map”，肖恩・格林明确提出该观点，因此选 C。",
-          "questionId": "q36"
+          "questionId": "q9"
         },
         {
           "questionNumber": 37,
           "text": "（2）题目 37：The brain is ready to make decisions without hesitation when players are immersed in stressful games.（玩家沉浸在有压力的游戏中时，大脑会做好毫不犹豫决策的准备）\n答案：D（Daphne Bavelier，达芙妮・巴维利尔）\n解析：定位 Paragraph F 中 “According to researchers at the University of Rochester led by Daphne Bavelier... playing action video games primes the brain to make quick decisions”，巴维利尔团队发现 “动作游戏（压力场景）让大脑快速决策”，因此选 D。",
-          "questionId": "q37"
+          "questionId": "q10"
         },
         {
           "questionNumber": 38,
           "text": "（3）题目 38：The purpose-motivated experience that video games offer plays an essential role in studying.（电子游戏提供的目标驱动体验对学习至关重要）\n答案：B（James Paul Gee，詹姆斯・保罗・吉）\n解析：定位 Paragraph G 中 “James Paul Gee says that playing a video game is similar to working through a science problem... Video games are goal-driven experiences, says Gee, which are fundamental to learning”，吉强调 “游戏的目标驱动体验对学习至关重要”，因此选 B。",
-          "questionId": "q38"
+          "questionId": "q11"
         },
         {
           "questionNumber": 39,
           "text": "（4）题目 39：Players are good at tackling immediate issues while keeping future intentions in mind.（玩家擅长处理即时问题，同时牢记未来目标）\n答案：E（Steven Johnson，史蒂文・约翰逊）\n解析：定位 Paragraph F 中 “Steven Johnson... says gamers must deal with immediate problems while keeping their long-term goals on the horizon”，约翰逊提出 “玩家需兼顾即时问题与长期目标”，因此选 E。",
-          "questionId": "q39"
+          "questionId": "q12"
         },
         {
           "questionNumber": 40,
           "text": "（5）题目 40：Video games help children broaden their horizons in many aspects and gain self-confidence.（电子游戏帮助儿童在多方面开阔视野并建立自信）\n答案：A（The writer’s opinion，作者观点）\n解析：定位 Paragraph H 中 “Video and computer games also help children gain self-confidence, and many games are based on history, city-building, and governance, and so on. Such games indirectly teach children about various aspects of life on Earth”，该段无引用具体学者，是作者直接总结的观点，因此选 A。",
-          "questionId": "q40"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

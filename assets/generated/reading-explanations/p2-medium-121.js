@@ -48,32 +48,32 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：Paragraph A\n答案：vii（A unique work of art，一件独特的艺术品）\n解析：Paragraph A 强调该蜘蛛丝织物 “由超 100 万只蜘蛛制成”“全球唯一大型天然蜘蛛丝纺织品”，核心是 “独特性”，与标题 vii 一致，因此选 vii。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：Paragraph B\n答案：v（The physical properties of spider silk，蜘蛛丝的物理特性）\n解析：Paragraph B 详细描述蜘蛛丝的 “强度、轻量化、延展性、低温韧性” 等物理属性，与标题 v 一致，因此选 v。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：Paragraph C\n答案：ix（Difficulties of raising spiders in captivity，人工饲养蜘蛛的困难）\n解析：Paragraph C 指出 “蜘蛛群居会相互残杀”，核心是 “人工饲养的困难”，与标题 ix 一致，因此选 ix。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：Paragraph D\n答案：i（Experimenting with an old idea，基于旧想法的实验）\n解析：Paragraph D 讲述皮尔斯复制 19 世纪传教士的 “抽丝机” 并进行测试，核心是 “基于旧想法的实验”，与标题 i 一致，因此选 i。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：Paragraph E\n答案：iv（Resources needed to meet the project’s demands，满足项目需求所需的资源）\n解析：Paragraph E 说明制作织物需 “超 100 万只蜘蛛、特定季节收集、12 名工人”，核心是 “项目所需资源”，与标题 iv 一致，因此选 iv。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（6）题目 19：Paragraph F\n答案：vi（A scientific analysis of spider silk，蜘蛛丝的科学分析）\n解析：Paragraph F 分析 “基因工程产丝的局限、蜘蛛纺丝的科学原理”，核心是 “科学分析”，与标题 vi 一致，因此选 vi。",
-          "questionId": "q19"
+          "questionId": "q6"
         }
       ],
       "questionRange": {
@@ -89,22 +89,22 @@
         {
           "questionNumber": 20,
           "text": "（1）题目 20：It takes a tremendous number of spiders to make a small amount of silk.（制作少量丝线需大量蜘蛛）\n答案：B（Nicholas Godley，尼古拉斯・戈德利）\n解析：定位 Paragraph E 中 “Fourteen thousand spiders yield about an ounce of silk, Godley said”，明确提到戈德利指出 “1.4 万只蜘蛛产 1 盎司丝线”，与题干一致，因此选 B。",
-          "questionId": "q20"
+          "questionId": "q7"
         },
         {
           "questionNumber": 21,
           "text": "（2）题目 21：Scientists want to use the qualities of spider silk for medical purposes.（科学家希望将蜘蛛丝的特性用于医学目的）\n答案：A（Simon Peers，西蒙・皮尔斯）\n解析：定位 Paragraph C 中 “According to Peers, there is intensive research worldwide aimed at replicating spider-silk tensile properties for use in medicine and industry”，明确提到皮尔斯指出 “研究旨在将蜘蛛丝特性用于医学”，与题干一致，因此选 A。",
-          "questionId": "q21"
+          "questionId": "q8"
         },
         {
           "questionNumber": 22,
           "text": "（3）题目 22：Scientists are making some progress in their efforts to manufacture spider silk.（科学家在人工制造蜘蛛丝方面取得一定进展）\n答案：C（Todd Blackledge，托德・布莱克利奇）\n解析：定位 Paragraph F 中 “Todd Blackledge... ‘Every year we get closer to mass production, but we’re not there yet’”，明确提到布莱克利奇认为 “每年都在接近量产”，即有进展，与题干一致，因此选 C。",
-          "questionId": "q22"
+          "questionId": "q9"
         },
         {
           "questionNumber": 23,
           "text": "（4）题目 23：Spider silk compares favourably to materials known for their strength.（蜘蛛丝与以强度著称的材料相比更具优势）\n答案：A（Simon Peers，西蒙・皮尔斯）\n解析：定位 Paragraph B 中 “Simon Peers... the tensile strength of spider silk is even greater than Kevlar’s aramid filaments and higher than that of high-grade steel”，明确提到皮尔斯指出 “蜘蛛丝强度超过凯夫拉和高档钢材”，与题干一致，因此选 A。",
-          "questionId": "q23"
+          "questionId": "q10"
         }
       ],
       "questionRange": {
@@ -120,17 +120,17 @@
         {
           "questionNumber": 24,
           "text": "（1）题目 24：Some researchers have tried to grow silk by introducing genetic material into \\___\\___ and some animals.\n题目翻译：部分研究者尝试将遗传物质植入_\\___\\__和部分动物体内，以培育产丝能力。\n答案：bacteria（细菌）\n解析：定位 Paragraph F 中 “Several groups have inserted spider genes into bacteria and even goats to make silk”，明确提到 “将蜘蛛基因植入细菌和山羊”，因此答案为 “bacteria”。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（2）题目 25：It is difficult to make spider silk in a lab setting because the silk comes from a liquid protein made in a \\___\\___ inside the spider’s body.\n题目翻译：实验室难以制造蜘蛛丝，因为蜘蛛丝源自蜘蛛体内_\\___\\__产生的液态蛋白质。\n答案：gland（腺体）\n解析：定位 Paragraph F 中 “spider silk begins as a liquid protein produced in a special gland in the abdomen”，明确提到液态蛋白质由 “腹部特殊腺体” 产生，因此答案为 “gland”。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（3）题目 26：When a spider spins silk, it applies \\___\\___ that turns this liquid into solid silk.\n题目翻译：蜘蛛纺丝时，会施加_\\___\\__将液态转化为固态丝线。\n答案：force（力）\n解析：定位 Paragraph F 中 “Using the spinneret, the spider applies force that rearranges the protein’s molecular structure, transforming it into solid fibre”，明确提到蜘蛛通过 “施加力” 实现液态到固态的转化，因此答案为 “force”。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

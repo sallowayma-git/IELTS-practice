@@ -52,22 +52,22 @@
         {
           "questionNumber": 27,
           "text": "(1) 题目 27：Childhood crazes can centre on items of any value. （童年狂热可以集中在任何价值的物品上。）\n答案：YES\n解析：定位第1段。原文提到：\"It may have been something as simple as a type of pen \\[cheap\\] or as expensive as an electronic games console \\[expensive\\]\"（它可能像一种笔那样简单，也可能像电子游戏机那样昂贵）。无论是便宜还是昂贵，都可以成为狂热的对象。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "(2) 题目 28：Children are more vulnerable to crazes now than they used to be. （现在的孩子比过去更容易受到狂热的影响。）\n答案：NOT GIVEN\n解析：第1段提到\"especially in the young\"（特别是在年轻人中），说明孩子容易受影响，但并未比较“现在”与“过去”的程度差异。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "(3) 题目 29：Consumers make too many quick decisions in shops. （消费者在商店里做出了太多快速的决定。）\n答案：NOT GIVEN\n解析：第1段提到\"we are persuaded that having certain items...\"（我们被说服拥有某些物品……），但未提及做决定的速度是否“too quick”（太快）。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "(4) 题目 30：Crutchfield's definition of conformity is the most reliable. （克拉奇菲尔德对从众的定义是最可靠的。）\n答案：NO\n解析：定位第2段。原文先引用了Crutchfield的定义，随后说\"However... A better definition is given by Aronson\"（然而……阿伦森给出了一个更好的定义）。作者认为阿伦森的定义更好，因此Crutchfield的不是最可靠的。",
-          "questionId": "q30"
+          "questionId": "q4"
         }
       ],
       "questionRange": {
@@ -83,27 +83,27 @@
         {
           "questionNumber": 31,
           "text": "(1) 题目 31：In the Jenness study, people had to guess how many 31 \\___\\___ were in a container. （在詹尼斯的研究中，人们必须猜测容器里有多少31 \\___\\___。）\n答案：beans\n解析：定位第3段。原文：\"estimate the number of beans in a bottle\"（估计瓶子里豆子的数量）。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "(2) 题目 32：Jenness found that, in most cases, people opted for an estimate given by a 32 \\___\\___. （詹尼斯发现，在大多数情况下，人们选择了由32 \\___\\___给出的估计。）\n答案：group\n解析：定位第3段末尾。原文：\"discovered that they had stayed with the group answer\"（发现他们坚持了小组的答案）。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "(3) 题目 33：Asch asked his subjects to 33 \\___\\___ line lengths. （阿施要求他的受试者33 \\___\\___线条长度。）\n答案：match\n解析：定位第4段末尾。原文：\"asked them to match this in terms of length\"（要求他们将其长度……相匹配）。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "(4) 题目 34：To test the extent to which people would conform, he placed his subjects with colleagues who gave 34 \\___\\___ responses. （为了测试人们从众的程度，他将受试者与给出34 \\___\\___回答的同事安排在一起。）\n答案：untrue / wrong\n解析：定位第5段开头。原文：\"The stooges gave untrue responses\"（托儿给出了不真实的回答）。或者第5段中部的\"wrong answer\"。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "(5) 题目 35：He found that his subjects agreed with his colleagues 32% of the time, although they admitted to feeling 35 \\___\\___ about giving their answer. （他发现受试者有32%的时间同意同事的观点，尽管他们承认对自己给出的答案感到35 \\___\\___。）\n答案：anxious\n解析：定位第5段中部。原文：\"they also stated that when they did give wrong answers it made them anxious\"（他们也表示，当他们给出错误答案时，这让他们感到焦虑）。",
-          "questionId": "q35"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -119,27 +119,27 @@
         {
           "questionNumber": 36,
           "text": "(1) 题目 36：Compliance... illustrated by the results of the research conducted by 36 \\___\\___ （顺从……由36 \\___\\___进行的研究结果所说明）\n答案：Asch\n解析：定位第6段。原文：\"If we look back to the Asch study, we can see that the subjects were simply complying\"（如果我们回顾阿施的研究，我们可以看到受试者只是顺从）。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "(2) 题目 37：37 \\___\\___ （第二种过程名称）\n答案：Internalization\n解析：定位第6段中部。原文：\"In a process known as internalization...\"（在一个被称为内化的过程中……）。这是Kelman提出的第二个过程。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "(3) 题目 38：majority view is considered most 38 \\___\\___ view （多数人的观点被认为是最38 \\___\\___的观点）\n答案：valid\n解析：定位第6段中部。原文：\"subjects do actually see the view of the group as the more valid one\"（受试者确实将群体的观点视为更有效的观点）。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "(4) 题目 39：39 \\___\\___ （第三种过程名称）\n答案：Identification\n解析：定位第6段后半部分。原文：\"Kelman calls this identification\"（凯尔曼称此为认同）。这是第三个过程。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "(5) 题目 40：typical of 40 \\___\\___ （是40 \\___\\___的典型特征）\n答案：teenagers\n解析：定位第6段末尾。原文：\"It frequently happens with teenagers...\"（这经常发生在青少年身上……）。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

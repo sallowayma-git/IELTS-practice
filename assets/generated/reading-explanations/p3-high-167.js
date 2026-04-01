@@ -52,37 +52,37 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：Paragraph A\n答案：iv（A potential threat to industry and communications，对工业和交通的潜在威胁）\n解析：Paragraph A 强调 “沙丘移动若阻挡油田、铁路会造成严重后果”，核心是 “威胁工业与交通”，与标题 iv 一致，因此选 iv。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：Paragraph B\n答案：viii（The commonest type of dune，最常见的沙丘类型）\n解析：Paragraph B 指出 “线形沙丘占沙覆盖区超一半”，核心是 “最常见类型”，与标题 viii 一致，因此选 viii。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：Paragraph C\n答案：vi（Needing a specific combination of conditions，需要特定条件组合）\n解析：Paragraph C 说明 “新月形沙丘仅形成于‘单向风、沙漠边缘、近海’环境”，核心是 “特定形成条件”，与标题 vi 一致，因此选 vi。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：Paragraph D\n答案：vii（A continuous cycle，持续循环）\n解析：Paragraph D 描述 “沙粒‘上坡 - 滑落 - 重现’的循环推动沙丘移动”，核心是 “循环过程”，与标题 vii 一致，因此选 vii。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：Paragraph E\n答案：v（Dunes coming together and re-forming，沙丘相撞后重新形成）\n解析：Paragraph E 提到 “两沙丘相撞后快速恢复原状”，核心是 “相撞与重组”，与标题 v 一致，因此选 v。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（6）题目 32：Paragraph F\n答案：ix（Old superstitions demystified，旧迷信被解开）\n解析：Paragraph F 用科学解释取代 “恶灵发声” 的传说，核心是 “破除迷信”，与标题 ix 一致，因此选 ix。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（7）题目 33：Paragraph G\n答案：ii（Recreating the process in a laboratory，在实验室重现过程）\n解析：Paragraph G 描述 “实验室复制沙丘发声”，核心是 “实验室重现”，与标题 ii 一致，因此选 ii。",
-          "questionId": "q33"
+          "questionId": "q7"
         }
       ],
       "questionRange": {
@@ -98,17 +98,17 @@
         {
           "questionNumber": 34,
           "text": "（1）题目 34：What are we told about linear dunes?（关于线形沙丘，文中提到什么？）\n答案：C（They develop in a recognisable shape. 形成可识别的形状）\n解析：定位 Paragraph B 中 “These form in a long curving wave”，“长弯曲波形” 对应 “可识别的形状”，因此选 C。A “单向风形成” 错误（线形沙丘由多方向风形成）；B “年移 100 米” 错误（线形沙丘静止）；D“占全球沙漠 20%” 错误（20% 是沙漠中沙覆盖区比例）。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（2）题目 35：Bagnold discovered that movement in barchans was caused by（巴格诺尔德发现新月形沙丘移动的原因是？）\n答案：B（the particular composition of the dunes. 沙丘的特定构成）\n解析：定位 Paragraph D 中 “his answer hinges on the fact that dunes aren’t solid, but granular. Bagnold figured out how barchan dunes are able to move grain by grain”，“由沙粒构成而非固体” 对应 “特定构成”，因此选 B。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "（3）题目 36：Why does Dr Douady compare a barchan dune to a living organism?（杜阿迪博士为何将新月形沙丘比作生命体？）\n答案：D（Its outline stays the same even after a period of movement. 移动后仍保持轮廓不变）\n解析：定位 Paragraph E 中 “the dune can regulate its own shape, and maintain it as it moves... Even when two dunes collide, they quickly take on their distinctive shapes again”，“保持并恢复形态” 对应 “轮廓不变”，因此选 D。",
-          "questionId": "q36"
+          "questionId": "q10"
         }
       ],
       "questionRange": {
@@ -124,22 +124,22 @@
         {
           "questionNumber": 37,
           "text": "（1）题目 37：Singing dunes, which belong to the type of dunes known as \\___\\___.（发声沙丘属于被称为_\\___\\__的沙丘类型。）\n答案：barchans（新月形沙丘）\n解析：定位 Paragraph F 中 “some barchans actually sing”，明确提到 “发声沙丘是新月形沙丘”，因此答案为 “barchans”。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（2）题目 38：Researchers have worked out that sand grains fall down the dune and start vibrating against other grains... Research proves that the individual grains have a similar .（研究者发现沙粒沿沙丘滑落并与其他颗粒振动…… 研究证明单个沙粒具有相似的。）\n答案：shape（形状）\n解析：定位 Paragraph G 中 “Their studies show the grains are a uniform shape”，“uniform shape” 对应 “similar shape”，因此答案为 “shape”。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（3）题目 39：but the differences in dimensions alter the \\___\\___ of the ‘song’.（但尺寸差异会改变 “歌声” 的_\\___\\__。）\n答案：tone（音调）\n解析：定位 Paragraph G 中 “the variations in size affect the tone”，明确提到 “尺寸影响音调”，因此答案为 “tone”。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（4）题目 40：Each grain is covered with a mixture of different \\___\\___, and this is vital to the sound production.（每个沙粒表面覆盖不同_\\___\\__的混合物，这对发声至关重要。）\n答案：minerals（矿物）\n解析：定位 Paragraph G 中 “the grains are coated with a special veneer... made from a precise combination of minerals”，明确提到 “矿物混合物”，因此答案为 “minerals”。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {
