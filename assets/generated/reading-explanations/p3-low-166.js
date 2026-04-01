@@ -52,27 +52,27 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：Pictures of Mars suggest it might make a good place for people to settle.（火星照片暗示其可能是人类宜居之地）\n答案：NO（错误）\n解析：定位 Paragraph 1 中 “contrary to photographic evidence, Mars may be more promising than it appears”，“与照片显示的相反” 表明 “照片未暗示火星宜居”，与题干描述矛盾，因此判定为 NO。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：Modern Mars and ancient Earth looked remarkably similar.（现代火星与远古地球外观极其相似）\n答案：NOT GIVEN（未提及）\n解析：定位 Paragraph 2 中 “you would notice some remarkable parallels between the atmosphere on Earth then and Mars today”，仅提到 “大气层相似”，未提及 “整体外观相似”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：One method of terraforming could involve adapting technology that is already under development.（一种地球化方法可能涉及改造已在研发的技术）\n答案：YES（正确）\n解析：定位 Paragraph 4 中 “At present, the American space agency NASA is working on a system that will use large mirrors... With a few changes, it might be possible to use similar mirrors to reflect the Sun’s radiation and heat the surface of Mars”，“NASA 研发的镜面系统稍作修改即可用于火星加热”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：Greenhouse-gas factories would provide enough oxygen for people to breathe without special equipment.（温室气体工厂将产生足够氧气，使人无需特殊设备即可呼吸）\n答案：NO（错误）\n解析：定位 Paragraph 5 中 “Eventually, there would be enough oxygen on the planet for humans to breathe using only special apparatus similar to that used by mountain climbers”，“需类似登山者的设备” 与题干 “无需特殊设备” 描述矛盾，因此判定为 NO。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：Terraforming Mars would be an extreme test of human skill and intelligence.（火星地球化改造将是对人类技能和智慧的极端考验）\n答案：YES（正确）\n解析：定位 Paragraph 7 中 “it will stretch human ingenuity to its limits, and will require levels of will and commitment that have rarely been seen before”，“将人类创造力推到极限” 对应 “极端考验技能和智慧”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q31"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -88,22 +88,22 @@
         {
           "questionNumber": 32,
           "text": "（1）题目 32：Which one of these factors suggests that Mars might be a good place for people to settle?（以下哪一因素暗示火星可能适合人类定居？）\n答案：D（It has some similarities with Earth. 与地球有相似之处）\n解析：定位 Paragraph 2 中 “it does have some things in common with our own planet. For example, it has a daily rotation rate... axial tilt... gravitational pull... holds many of the elements that are required to support life”，明确提到 “与地球的相似性” 是积极因素，因此选 D。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（2）题目 33：The first step in terraforming Mars would be to（火星地球化改造的第一步是？）\n答案：A（make the planet warmer. 使火星升温）\n解析：定位 Paragraph 3 中 “Terraforming... would initially create a greenhouse effect that would heat the planet, which in turn would create other conditions necessary to provide a suitable living environment for plants and animals”，“初期制造温室效应加热火星” 是第一步，因此选 A。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（3）题目 34：Special factories on Mars could be used to（火星上的特殊工厂可用于？）\n答案：C（produce oxygen in a manner similar to plants. 以类似植物的方式产氧）\n解析：定位 Paragraph 5 中 “The same factories would then produce oxygen by mimicking the natural process of plant photosynthesis”，“模仿植物光合作用产氧” 对应 “类似植物的方式产氧”，因此选 C。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（4）题目 35：What is the writer’s main purpose in the passage?（作者的主要写作目的是？）\n答案：C（To consider how and why Mars might be terraformed. 探讨火星为何及如何进行地球化改造）\n解析：全文先说明 “火星地球化的必要性（人类生存）”，再详细介绍三种改造方法，A “仅说明原因”、B “仅说明步骤”、D “证明改造简单” 均片面，因此选 C。",
-          "questionId": "q35"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -119,22 +119,22 @@
         {
           "questionNumber": 36,
           "text": "（1）题目 36：One method of terraforming Mars would be to \\___\\___ asteroids at the planet.（一种火星地球化方法是向火星_\\___\\__小行星。）\n答案：I（shoot，发射）\n解析：定位 Paragraph 6 中 “by firing large, ammonia-bearing asteroids at the planet”，“firing” 对应 “shoot”，因此选 I。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（2）题目 37：Rockets attached to an enormous asteroid would propel it towards Mars, taking ten years to \\___\\___ the enormous distances required.（附着在巨型小行星上的火箭将推动其前往火星，需十年_\\___\\__所需的遥远距离。）\n答案：A（cover，覆盖）\n解析：定位 Paragraph 6 中 “it would take each asteroid about ten years to reach its destination”，“reach” 对应 “cover the distance”（覆盖距离），因此选 A。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（3）题目 38：The asteroid would \\___\\___ the planet with incredible force.（小行星将以惊人力量_\\___\\__火星。）\n答案：C（hit，撞击）\n解析：定位 Paragraph 6 中 “The energy produced by one asteroid slamming into Mars’ surface”，“slamming into” 对应 “hit”，因此选 C。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（4）题目 39：and \\___\\___ enough energy to \\___\\___ the planet’s temperature.（并_\\___\\__足够能量以_\\___\\__火星温度。）\n答案：B（create，产生）；D（increase，升高）\n解析：定位 Paragraph 6 中 “The energy produced by one asteroid slamming into Mars’ surface... would raise the temperature of the planet by three degrees Celsius”，“produced” 对应 “create”，“raise” 对应 “increase”，因此依次选 B、D。",
-          "questionId": "q39"
+          "questionId": "q13"
         }
       ],
       "questionRange": {
