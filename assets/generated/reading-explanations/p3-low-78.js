@@ -56,22 +56,22 @@
         {
           "questionNumber": 27,
           "text": "(1) 题目 27：In the first paragraph, the writer's purpose is to （在第一段，作者的目的是）\n答案：D (illustrate the way adults enjoy eating food from their childhood.)\n解析：定位第1段。作者通过布里克斯顿市场的非洲人和纽约的英国人仍然寻找家乡食物（Marmite等）的例子，旨在说明人们“retain very strong preferences for the kinds of food they grew up eating”（保留着对从小吃到大食物的强烈偏好），即选项 D。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "(2) 题目 28：Economists from the universities of Tilburg and Chicago found that people who have migrated from one American state to another （蒂尔堡大学和芝加哥大学的经济学家发现，从美国一个州搬到另一个州的人）\n答案：C (bought only some of the brands which were popular in their new state.)\n解析：定位第3段。原文提到：“although they consumed local favourites, they bought fewer than longtime residents” （尽管他们也消费当地人喜爱的产品，但他们购买的数量少于长期居民）。这意味着他们只购买了部分当地流行品牌，对应选项 C。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "(3) 题目 29：Atkin's research shows that （阿特金的研究表明）\n答案：D (economists fail to understand all the effects of increased trade.)\n解析：定位第4段。原文提到：“Atkin's data show something many economists do not take into account” （阿特金的数据显示了许多经济学家没有考虑到的事情）。这说明经济学家未能理解贸易增加的所有影响，对应选项 D。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "(4) 题目 30：The writer thinks Atkin was wise to choose India for his study because （作者认为阿特金选择印度进行研究是明智的，因为）\n答案：A (trade barriers create food shortages between regions.)\n解析：定位第5段。原文解释印度是个好选择是因为“prevalence of internal barriers to trade means that its regions are best thought of as being only partially open to trade” （内部贸易壁垒的普遍存在……）。虽然原文未直接说“food shortages”，但强调了贸易壁垒导致地区间市场隔离（各产各的，价格不同），这为研究贸易开放的影响提供了理想的隔离环境（case study）。注：本题选项A的“food shortages”是对原文“only partially open”导致资源无法自由流通的推断，或者是对原文“different specialised crops are grown”导致某地缺乏非本地作物的概括。",
-          "questionId": "q30"
+          "questionId": "q4"
         }
       ],
       "questionRange": {
@@ -87,27 +87,27 @@
         {
           "questionNumber": 31,
           "text": "(1) 题目 31：The Tilburg and Chicago study shows that brand loyalty is greater in some states of the United States than in others. （蒂尔堡和芝加哥的研究表明，美国某些州的品牌忠诚度高于其他州。）\n答案：NOT GIVEN\n解析：定位第3段。研究确实追踪了跨州移民，但并未比较“不同州的品牌忠诚度高低”，只是说品牌忠诚度普遍存在。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "(2) 题目 32：The study shows that the differences in shopping habits between migrants and native residents increased in the first 20 years. （研究表明，移民与本地居民在购物习惯上的差异在头20年里增加了。）\n答案：NO\n解析：定位第3段。原文提到差异是“faded”（减弱/消失）的，尽管“took 20 years to halve”（需要20年才能减半），但总体趋势是减小而非增加。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "(3) 题目 33：First brands to enter a new market only hold their advantage if they are supported by advertising. （首先进入新市场的品牌只有在广告支持下才能保持优势。）\n答案：NO\n解析：定位第2段末尾和第3段末尾。第2段说“advertising alone cannot explain the strength of brand loyalty”（单靠广告无法解释品牌忠诚度）；第3段末尾说先发优势“could last longer than might be assumed”（可能持续得比假设的更久），并未将此归因于广告。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "(4) 题目 34：Atkin originally chose India as a case study because trade within the country was unrestricted. （阿特金最初选择印度作为案例研究是因为该国内部贸易不受限制。）\n答案：NO\n解析：定位第5段。原文明确说是因为“prevalence of internal barriers to trade”（内部贸易壁垒的普遍存在），即贸易是受限的，而非不受限制。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "(5) 题目 35：In India, if a region focuses on certain foods, the cost of those foods remains comparatively low. （在印度，如果一个地区专注于某些食物，这些食物的成本保持相对较低。）\n答案：YES\n解析：定位第5段末尾。原文提到：“foods a region specialises in producing are instead cheaper in that region” （一个地区专门生产的食物在该地区反而更便宜）。",
-          "questionId": "q35"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -123,27 +123,27 @@
         {
           "questionNumber": 36,
           "text": "(1) 题目 36：Data show that a wider 36 \\___\\___ of foods... （数据显示，更广泛的36 \\___\\___食物……）\n答案：B range\n解析：定位第6段。原文提到：\"when there is a greater choice of types of food\"（当有更多种类的食物选择时）。\"Greater choice\" 对应 \"wider range\"。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "(2) 题目 37：...does not necessarily result in a corresponding 37 \\___\\___ in the amount of calories in people's diets. （……并不一定导致人们饮食中卡路里数量的相应37 \\___\\___。）\n答案：F increase\n解析：定位第6段。原文提到人们的卡路里摄入量“declined”（下降），而不是理论上应该发生的“boost their calorie intake”（增加卡路里摄入）。因此，更广泛的选择并未导致“increase”。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "(3) 题目 38：This is because people's 38 \\___\\___ on continuing to eat the foods they grew up eating... （这是因为人们对继续吃他们从小吃到大的食物的38 \\___\\___……）\n答案：I insistence\n解析：定位第6段。原文提到：\"consumers keep buying the things they know and like\"（消费者坚持购买他们熟悉和喜欢的东西）。\"Keep buying\" 对应 \"insistence\"（坚持）。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "(4) 题目 39：This is especially true in countries where adequate 39 \\___\\___ is already a problem... （这在充足的39 \\___\\___已经成为问题的国家尤其如此……）\n答案：A nutrition\n解析：定位第7段。原文提到：\"high prevalence of undernutrition\"（营养不良的高发率）。\"Undernutrition\" 即 \"nutrition\" 是个问题。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "(5) 题目 40：...and could result in a whole section of society being unable to contribute fully to their country's 40 \\___\\___ in the future. （……并可能导致整个社会阶层在未来无法为国家的40 \\___\\___做出充分贡献。）\n答案：C progress / development\n解析：定位第7段和第8段。原文提到这会影响他们“ability to work and earn”（工作和赚钱的能力），并最终“hinder the development of their country”（阻碍国家的发展）。\"Development\" 对应选项 C \"progress\"。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

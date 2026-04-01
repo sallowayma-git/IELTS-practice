@@ -52,37 +52,37 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：Paragraph A\n答案：iv（Reviewing long-held beliefs，反思长期以来的观点）\n解析：Paragraph A 开篇回顾 “人类独有智慧” 的传统观点，随后用鸟类工具使用的研究推翻该观点，核心是 “反思旧观点”，与标题 iv 一致，因此选 iv。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：Paragraph B\n答案：viii（Several examples of birds that use tools，多种使用工具的鸟类案例）\n解析：Paragraph B 列举啄木雀、白翅琴鸟、黑鸢等多种鸟类使用工具的案例，核心是 “鸟类工具使用案例”，与标题 viii 一致，因此选 viii。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：Paragraph C\n答案：i（The theory linking capacity for tool use in birds and survival，鸟类工具使用能力与生存关联的理论）\n解析：Paragraph C 提出 “需求驱动进化” 理论，说明工具使用能力帮助资源稀缺环境中的鸟类存活，核心是 “工具使用与生存的关联理论”，与标题 i 一致，因此选 i。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：Paragraph D\n答案：ix（One species’ multiple tool-using techniques，单一物种的多种工具使用技巧）\n解析：Paragraph D 聚焦新喀里多尼亚鸦，详细描述其制作钩、耙、探针等多种工具的技巧，核心是 “单一物种的多工具使用”，与标题 ix 一致，因此选 ix。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：Paragraph E\n答案：vii（Physiological evidence of birds’ intelligence，鸟类智慧的生理证据）\n解析：Paragraph E 通过 “前脑大小与创新能力的关联”，从生理结构角度证明鸟类智慧，核心是 “生理证据”，与标题 vii 一致，因此选 vii。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（6）题目 19：Paragraph F\n答案：iii（The theory linking cognitive ability and living in a society，认知能力与群居生活关联的理论）\n解析：Paragraph F 提出 “群居竞争催生政治脑” 的理论，核心是 “认知能力与群居的关联”，与标题 iii 一致，因此选 iii。",
-          "questionId": "q19"
+          "questionId": "q6"
         },
         {
           "questionNumber": 20,
           "text": "（7）题目 20：Paragraph G\n答案：vi（How some birds trick each other，部分鸟类如何相互欺骗）\n解析：Paragraph G 详细描述白翅琴鸟 “假喂食、假梳理” 等欺骗行为，核心是 “鸟类欺骗行为”，与标题 vi 一致，因此选 vi。",
-          "questionId": "q20"
+          "questionId": "q7"
         }
       ],
       "questionRange": {
@@ -98,32 +98,32 @@
         {
           "questionNumber": 21,
           "text": "（1）题目 21：keeping tools that they like to use（保存常用工具）\n答案：C（New Caledonian crows，新喀里多尼亚鸦）\n解析：定位 Paragraph D 中 “The crows carry their favourite tool from one foraging site to the next. They also store their tools for later reuse in a secure place on their perch”，明确提到新喀里多尼亚鸦保存常用工具，因此选 C。",
-          "questionId": "q21"
+          "questionId": "q8"
         },
         {
           "questionNumber": 22,
           "text": "（2）题目 22：drawing out their prey by frightening it（通过惊吓引出猎物）\n答案：B（Black kites，黑鸢）\n解析：定位 Paragraph B 中 “A kite may also pick up a smouldering stick... drop the stick on a patch of unburned grass. The bird then feasts on the small animals that flee from the subsequent fire”，明确提到黑鸢用火种惊吓猎物，因此选 B。",
-          "questionId": "q22"
+          "questionId": "q9"
         },
         {
           "questionNumber": 23,
           "text": "（3）题目 23：the use of tools to remove the outer covering from food（用工具去除食物外壳）\n答案：A（White-winged choughs，白翅琴鸟）\n解析：定位 Paragraph B 中 “when white-winged choughs come across shellfish, they have been known to use rocks as hammers to crack open the recalcitrant shells”，明确提到白翅琴鸟用石头敲开贝类外壳，因此选 A。",
-          "questionId": "q23"
+          "questionId": "q10"
         },
         {
           "questionNumber": 24,
           "text": "（4）题目 24：using food to attract their prey（用食物吸引猎物）\n答案：B（Black kites，黑鸢）\n解析：定位 Paragraph B 中 “black kites have been reported dropping bait into lakes to bring fish to the surface of the water, thereby making them easier to catch”，明确提到黑鸢用诱饵吸引鱼，因此选 B。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（5）题目 25：the use of unfamiliar materials to make tools（用不熟悉的材料制作工具）\n答案：C（New Caledonian crows，新喀里多尼亚鸦）\n解析：定位 Paragraph D 中 “New Caledonian crows were observed moulding a piece of wire, something they had never seen before, into a hook and then using it to retrieve food”，明确提到新喀里多尼亚鸦用陌生的金属丝制作工具，因此选 C。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（6）题目 26：engaging in certain activities for the benefit of observers（为获得观察者认可而进行特定活动）\n答案：A（White-winged choughs，白翅琴鸟）\n解析：定位 Paragraph G 中 “it is more likely to preen the chicks if another bird can see it do so... a chough... will comically spring up and frantically start to preen the chicks as soon as some of its group members come into view”，明确提到白翅琴鸟在有观察者时才梳理雏鸟，因此选 A。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

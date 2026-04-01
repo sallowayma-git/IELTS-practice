@@ -56,27 +56,27 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：Mahy explores the traditional themes of New Zealand literature.（马希探讨新西兰文学的传统主题）\n答案：NO（错误）\n解析：定位 Paragraph 1 中 “Mahy, too, has ventured into imaginative territory unknown to other local writers”，“探索其他本地作家未触及的领域” 与题干 “传统主题” 描述矛盾，因此判定为 NO。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：Mahy’s children’s books have been more popular than her teenage books.（马希的儿童书比青少年书更受欢迎）\n答案：NOT GIVEN（未提及）\n解析：全文仅提到 “儿童书和青少年书均有特色”，未比较 “受欢迎程度”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：Mahy and Knox have sometimes criticised each other’s work.（马希和诺克斯有时批评彼此的作品）\n答案：NOT GIVEN（未提及）\n解析：Paragraph 1 仅提到 “诺克斯是马希的继承者”，未提及 “相互批评”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：Mahy is welcoming to interviewers.（马希对采访者友好）\n答案：YES（正确）\n解析：定位 Paragraph 1 中 “As with all journalists, she is generous to a fault with her time and attention”，“对记者慷慨” 对应 “welcoming to interviewers”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：Mahy is at ease speaking about her experiences.（马希谈论自己的经历时很自在）\n答案：NO（错误）\n解析：定位 Paragraph 1 中 “she isn’t truly comfortable making herself or her life the heart of any conversation”，“不愿将自己的生活作为谈话核心” 与题干 “自在谈论经历” 描述矛盾，因此判定为 NO。",
-          "questionId": "q31"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -92,22 +92,22 @@
         {
           "questionNumber": 32,
           "text": "（1）题目 32：Mahy’s determination to earn a living from writing has encouraged her to find the ideas for her work in \\___\\___ places.（马希靠写作谋生的决心促使她从_\\___\\__地方获取创作灵感）\n答案：B（everyday，日常的）\n解析：定位 Paragraph 2 中 “finding inspiration from her immediate environment: the writing on the side of a bus; a spelling mistake in a note to herself; the similarity between a cat and a fur hat”，“即时环境” 对应 “everyday places”，因此选 B。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（2）题目 33：The stories themselves are set in locations that are \\___\\___.（故事背景设定在_\\___\\__地方）\n答案：E（exotic and ordinary，奇异且普通的）\n解析：定位 Paragraph 2 中 “settings for her stories are delightfully varied, as these books celebrate the dramatic plot twists and unpredictability of adventures on the high seas or in Antarctica, and also in quite unassuming places like the library or even down the back of a chair at home”，“海上、南极（奇异）与图书馆、椅背后（普通）” 对应 “exotic and ordinary”，因此选 E。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（3）题目 34：In terms of characterisation, almost all of her books feature unruly people, and very often an adolescent who possesses \\___\\___ abilities.（人物塑造方面，几乎所有作品都有不守规矩的人，且常出现拥有_\\___\\__能力的青少年）\n答案：I（magical，魔法的）\n解析：定位 Paragraph 2 中 “a young adult burdened with special powers, such as the ability to cast spells in order to transform their world in supernatural and fantastical ways”，“施法、超自然能力” 对应 “magical abilities”，因此选 I。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（4）题目 35：Finally, the endings of the stories tend to be .（最后，故事结局往往）\n答案：H（unsurprising but satisfying，可预测但令人满意的）\n解析：定位 Paragraph 2 中 “while the conclusions of her tales are usually predictable, they leave the reader feeling absolutely complete”，“可预测但完整” 对应 “unsurprising but satisfying”，因此选 H。",
-          "questionId": "q35"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -123,27 +123,27 @@
         {
           "questionNumber": 36,
           "text": "（1）题目 36：What does the writer say about The Magician of Hoad?（作者关于《霍阿德的魔术师》有何观点？）\n答案：B（It was restructured in the writing process. 创作过程中进行了重构）\n解析：定位 Paragraph 3 中 “The story ballooned at one point to 800 pages and has been through at least two substantial rewrites. Now half its original size”，“大幅重写、篇幅减半” 对应 “restructured”，因此选 B。A（部分基于真实历史）、C（与传统故事完全不同）、D（未体现马希常见主题）均与原文矛盾。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（2）题目 37：According to the writer, Bubble Trouble（作者认为《泡泡麻烦》如何？）\n答案：C（is an old favourite for many families. 是许多家庭长期喜爱的作品）\n解析：定位 Paragraph 4 中 “Bubble Trouble is the Mahy that New Zealand children and their parents know so well... recited by Mahy at countless private and public functions”，“家庭熟悉、多次朗诵” 对应 “old favourite for many families”，因此选 C。A（1991 年首次插图出版）、B（语言朴素）、D（马希从未朗诵过）均与原文矛盾。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（3）题目 38：The writer’s purpose in the fifth paragraph is to（作者第五段的目的是？）\n答案：D（illustrate Mahy’s popularity with generations of children. 说明马希的作品受跨世代儿童欢迎）\n解析：Paragraph 5 列举 “作者本人、继女、子女、孙辈” 不同世代阅读马希作品的例子，核心是 “跨世代受欢迎”，因此选 D。A（展示马希风格的跨世代变化）、B（批评作品重复）、C（描述新媒体改变娱乐）均偏离目的。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（4）题目 39：According to the sixth paragraph, which of the following is true?（根据第六段，以下哪项正确？）\n答案：C（Readers are necessary in order to complete a book. 读者是完成一本书的必要条件）\n解析：定位 Paragraph 6 中 “a book is not properly finished, she has often said, until it has been read, because a reader brings something important to the book”，“书在被阅读前不算完成” 对应 “readers are necessary to complete a book”，因此选 C。A（读者有时未读完马希的书）、B（马希积极鼓励读者反馈）、D（马希未意识到自己对部分读者的重要性）均未提及。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（5）题目 40：What is the writer doing in the final paragraph?（作者最后一段的目的是？）\n答案：A（illustrating Mahy’s view of the world. 诠释马希的世界观）\n解析：定位 Paragraph 8 中 “His story was a wonderful comment on Mahy’s vision”，“戴维・希尔的故事诠释了马希的视角（vision）”，对应 “view of the world”，因此选 A。B（比较马希与另一位作家）、C（纠正对马希的误解）、D（解释马希创作方法的原因）均偏离目的。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

@@ -52,32 +52,32 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：a contrast between the ways young players gain experience of playing different positions（对比年轻球员体验不同位置的方式）\n答案：E\n解析：定位 Paragraph E 中 “One of the basic ideas of street soccer is that young players are assigned a particular role... Such an assignment runs counter to the idea of youth soccer that every child needs to learn every position”，对比街头足球 “分配特定角色” 与青少年足球 “学习所有位置”，与题干对应，因此答案为 E。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：examples outside sport of greater emphasis on individual safety（体育外重视个人安全的例子）\n答案：C\n解析：定位 Paragraph C 中 “Like the 1960s consumer movement which brought seat belts and airbags to cars, the (youth) soccer movement felt like it could create a set of … regulations that would protect both the child’s body and mind from damage”，以 “汽车安全带、安全气囊” 为例，与题干对应，因此答案为 C。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：a description of methods of selection for leadership on soccer teams（描述足球队 leadership 选拔方式）\n答案：F\n解析：定位 Paragraph F 中 “Positions of responsibility are earned through competition within the team. Younger players in street soccer must wait to attain those positions... youth soccer players come to believe that hard work and patience aren’t really necessary”，描述街头足球 “竞争 + 等待” 与青少年足球 “无差别分配” 的选拔差异，与题干对应，因此答案为 F。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：details of urban changes that discourage street soccer（阻碍街头足球的城市变化细节）\n答案：B\n解析：定位 Paragraph B 中 “Congested traffic now dominates... Parks and open fields are used as hangouts... requirement... for official permits... managed schedules”，列举交通、场地用途、许可制度等城市变化，与题干对应，因此答案为 B。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：a mention of the lesson that failure teaches street soccer players（提及失败给街头足球球员带来的教训）\n答案：G\n解析：定位 Paragraph G 中 “Losing a game is a common experience and players learn early on how to handle this. As a result, unlike most youth soccer players, they acquire resilience”，明确提到失败教会球员 “应对能力和韧性”，与题干对应，因此答案为 G。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（6）题目 19：an explanation of why youth soccer emphasises the need for coaches（解释青少年足球强调教练必要性的原因）\n答案：D\n解析：定位 Paragraph D 中 “They argue that children need to be taught by experts... This need to get ahead brings with it a fear of falling behind that only expert instruction can prevent”，解释 “担心落后，需专家指导”，与题干对应，因此答案为 D。",
-          "questionId": "q19"
+          "questionId": "q6"
         }
       ],
       "questionRange": {
@@ -113,17 +113,17 @@
         {
           "questionNumber": 24,
           "text": "（1）题目 24：For youth soccer players, a key \\___\\___ is that they should always come away from the game with a positive attitude.\n题目翻译：对青少年足球球员而言，核心_\\___\\__是他们离场时应始终保持积极态度。\n答案：principle（原则）\n解析：定位 Paragraph G 中 “‘Everyone’s a winner; no one’s a loser’ is a guiding principle of youth soccer. This ensures each individual goes away positive about themselves”，明确提到 “原则”，因此答案为 “principle”。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（2）题目 25：In this respect, regardless of the effort the players make, they get some kind of \\___\\___ at the end of a game.\n题目翻译：因此，无论球员付出多少努力，赛后都会获得某种_\\___\\__。\n答案：reward（奖励）\n解析：定位 Paragraph G 中 “giving less than your best receives the same reward as giving your best”，明确提到 “奖励”，因此答案为 “reward”。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（3）题目 26：In fact, no-one ever keeps a \\___\\___ of the results of games.\n题目翻译：事实上，无人记录比赛结果的_\\___\\__。\n答案：record（记录）\n解析：定位 Paragraph G 中 “in street soccer a formal record is not kept”，明确提到 “记录”，因此答案为 “record”。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

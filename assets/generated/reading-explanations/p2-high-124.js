@@ -52,37 +52,37 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：Paragraph A\n答案：v（Drivers or pressures motivate companies to address CSR，驱动或压力促使企业开展 CSR）\n解析：Paragraph A 强调企业需获得 “政府、社区等利益相关者的许可”，且 CSR 能带来 “形象提升、股价上涨” 等收益，核心是 “外部压力与内部收益驱动企业开展 CSR”，与标题 v 一致，因此选 v。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：Paragraph B\n答案：viii（Reasons that business and society benefit each other，企业与社会互惠互利的原因）\n解析：Paragraph B 详细论证 “成功企业依赖健康社会，健康社会也依赖成功企业”，核心是 “企业与社会互惠的原因”，与标题 viii 一致，因此选 viii。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：Paragraph C\n答案：vi（The past illustrates businesses are responsible for future outcomes，历史表明企业需对未来后果负责）\n解析：Paragraph C 以石棉案例说明 “企业未预见未来影响会导致破产”，核心是 “历史教训警示企业需对未来负责”，与标题 vi 一致，因此选 vi。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：Paragraph D\n答案：vii（Companies applying CSR should be selective，企业开展 CSR 应具有选择性）\n解析：Paragraph D 指出 “企业需选择与自身业务相关的议题，不可盲目参与”，核心是 “CSR 的选择性”，与标题 vii 一致，因此选 vii。",
-          "questionId": "q17"
+          "questionId": "q4"
         },
         {
           "questionNumber": 18,
           "text": "（5）题目 18：Paragraph E\n答案：iii（A CSR initiative without a financial gain，无财务收益的 CSR 举措）\n解析：Paragraph E 提到 GE 的 CSR 项目 “与主营业务无关，对招聘和留存影响小”，即无直接财务收益，核心是 “无财务收益的 CSR 案例”，与标题 iii 一致，因此选 iii。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（6）题目 19：Paragraph F\n答案：i（How CSR may help one business to expand，CSR 如何助力企业扩张）\n解析：Paragraph F 说明微软通过 CSR 解决 “IT 人才短缺”（制约扩张的瓶颈），核心是 “CSR 助力企业突破瓶颈、实现扩张”，与标题 i 一致，因此选 i。",
-          "questionId": "q19"
+          "questionId": "q6"
         },
         {
           "questionNumber": 20,
           "text": "（7）题目 20：Paragraph G\n答案：ii（CSR in many aspects of a company’s business，企业多业务环节中的 CSR）\n解析：Paragraph G 列举全食超市 “采购、能源、运输、清洁” 等价值链环节的 CSR 实践，核心是 “多业务环节的 CSR 整合”，与标题 ii 一致，因此选 ii。",
-          "questionId": "q20"
+          "questionId": "q7"
         }
       ],
       "questionRange": {
@@ -98,12 +98,12 @@
         {
           "questionNumber": 21,
           "text": "（1）题目 21：Corporations’ workers’ productivity generally needs health care, education, and \\___\\___.\n题目翻译：企业员工的生产效率通常需要医疗、教育和_\\___\\__的保障。\n答案：equal opportunity（平等机会）\n解析：定位 Paragraph B 中 “Education, health care, and equal opportunity are essential to a productive workforce”，明确提到 “平等机会” 是保障劳动力效率的要素，因此答案为 “equal opportunity”。",
-          "questionId": "q21"
+          "questionId": "q8"
         },
         {
           "questionNumber": 22,
           "text": "（2）题目 22：Improvement of the safety standard can reduce the \\___\\___ of accidents in the workplace.\n题目翻译：安全标准的提升可降低工作场所事故的_\\___\\__。\n答案：internal costs（内部成本）\n解析：定位 Paragraph B 中 “Safe products and working conditions not only attract customers but lower the internal costs of accidents”，明确提到安全标准提升可降低事故的 “内部成本”，因此答案为 “internal costs”。",
-          "questionId": "q22"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -119,22 +119,22 @@
         {
           "questionNumber": 23,
           "text": "（1）题目 23：Disposable waste（可回收废弃物处理）\n答案：C（Whole Foods Market，全食超市）\n解析：定位 Paragraph G 中 “Spoiled produce and biodegradable waste are trucked to regional centres for composting”，明确提到全食超市处理变质农产品等可回收废弃物，因此选 C。",
-          "questionId": "q23"
+          "questionId": "q10"
         },
         {
           "questionNumber": 24,
           "text": "（2）题目 24：The way the company purchases its goods（企业采购方式）\n答案：C（Whole Foods Market，全食超市）\n解析：定位 Paragraph G 中 “The company’s sourcing emphasises purchases from local farmers through each store’s procurement process. Buyers screen out foods containing any of nearly 100 common ingredients that the company considers unhealthy or environmentally damaging”，明确提到全食超市的采购标准与方式，因此选 C。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（3）题目 25：Helping the under-developed（帮扶欠发达领域）\n答案：A（General Electric，通用电气）\n解析：定位 Paragraph E 中 “General Electric’s programme to adopt underperforming public high schools... nearly all showed significant improvement, while the graduation rate in four of the five worst-performing schools doubled”，明确提到 GE 帮扶表现不佳的学校（欠发达教育领域），因此选 A。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（4）题目 26：Ensuring that people have the latest information（确保人员掌握最新信息）\n答案：B（Microsoft，微软）\n解析：定位 Paragraph F 中 “Microsoft’s $50 million five-year initiative was aimed at all three problems... create faculty-development institutes”，明确提到微软通过教师发展机构等，帮助社区学院教师掌握最新 IT 知识，因此选 B。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {
