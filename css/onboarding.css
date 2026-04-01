@@ -1,0 +1,292 @@
+:root {
+  --onboarding-overlay-bg: rgba(0, 0, 0, 0.65);
+  --onboarding-highlight-border: 3px solid #667eea;
+  --onboarding-tooltip-bg: #ffffff;
+  --onboarding-tooltip-border-radius: 16px;
+  --onboarding-tooltip-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  --onboarding-tooltip-max-width: 420px;
+  --onboarding-title-color: #1e293b;
+  --onboarding-content-color: #64748b;
+  --onboarding-btn-primary-bg: #667eea;
+  --onboarding-btn-primary-hover: #5a6fd6;
+  --onboarding-btn-secondary-bg: #f1f5f9;
+  --onboarding-btn-secondary-hover: #e2e8f0;
+  --onboarding-progress-bg: #e2e8f0;
+  --onboarding-progress-fill-bg: #667eea;
+  --onboarding-z-index: 99999;
+  --onboarding-z-index-hole: 100000;
+  --onboarding-z-index-highlight: 100001;
+  --onboarding-z-index-tooltip: 100007;
+}
+
+/* 遮罩层 - 完全透明，不拦截点击事件 */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--onboarding-z-index);
+  background: transparent;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.onboarding-overlay.is-active {
+  opacity: 1;
+}
+
+/* 洞元素 - 使用 box-shadow 创建遮罩效果 */
+.onboarding-hole {
+  position: fixed;
+  z-index: var(--onboarding-z-index-hole);
+  border: 2px solid #667eea;
+  border-radius: 8px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65);
+  pointer-events: none;
+  display: none;
+  transition: all 0.3s ease;
+}
+
+/* 高亮目标元素 - 提升层级使其可点击 */
+.onboarding-highlight {
+  position: relative !important;
+  z-index: var(--onboarding-z-index-highlight) !important;
+  box-shadow: 0 0 0 4px #667eea, 0 0 20px rgba(102, 126, 234, 0.4);
+  border-radius: 8px;
+  outline: none;
+  pointer-events: auto !important;
+}
+
+/* 提示框 */
+.onboarding-tooltip {
+  position: absolute;
+  z-index: calc(var(--onboarding-z-index) + 2);
+  background: var(--onboarding-tooltip-bg);
+  border-radius: var(--onboarding-tooltip-border-radius);
+  box-shadow: var(--onboarding-tooltip-shadow);
+  padding: 24px;
+  max-width: var(--onboarding-tooltip-max-width);
+  width: 90vw;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+}
+
+.onboarding-tooltip.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.onboarding-tooltip__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--onboarding-title-color);
+  margin: 0 0 12px;
+}
+
+.onboarding-tooltip__content {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--onboarding-content-color);
+  margin: 0 0 20px;
+}
+
+/* 进度指示器 */
+.onboarding-tooltip__progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.onboarding-tooltip__progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--onboarding-progress-bg);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.onboarding-tooltip__progress-fill {
+  height: 100%;
+  background: var(--onboarding-progress-fill-bg);
+  transition: width 0.3s ease;
+}
+
+.onboarding-tooltip__progress-text {
+  font-size: 0.8rem;
+  color: var(--onboarding-content-color);
+  white-space: nowrap;
+}
+
+/* 按钮组 */
+.onboarding-tooltip__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.onboarding-tooltip__btn {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.onboarding-tooltip__btn--primary {
+  background: var(--onboarding-btn-primary-bg);
+  color: #ffffff;
+}
+
+.onboarding-tooltip__btn--primary:hover {
+  background: var(--onboarding-btn-primary-hover);
+  transform: translateY(-1px);
+}
+
+.onboarding-tooltip__btn--secondary {
+  background: var(--onboarding-btn-secondary-bg);
+  color: var(--onboarding-content-color);
+}
+
+.onboarding-tooltip__btn--secondary:hover {
+  background: var(--onboarding-btn-secondary-hover);
+}
+
+.onboarding-tooltip__btn--skip {
+  background: transparent;
+  color: var(--onboarding-content-color);
+  text-decoration: underline;
+  font-size: 0.85rem;
+}
+
+/* 箭头指示器 */
+.onboarding-tooltip__arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--onboarding-tooltip-bg);
+  transform: rotate(45deg);
+}
+
+.onboarding-tooltip__arrow--top {
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.onboarding-tooltip__arrow--bottom {
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.onboarding-tooltip__arrow--left {
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.onboarding-tooltip__arrow--right {
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+/* 欢迎横幅（步骤 1 特殊样式） */
+.onboarding-welcome {
+  text-align: center;
+  padding: 40px 32px;
+}
+
+.onboarding-welcome__icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+}
+
+/* 响应式适配 */
+@media (max-width: 768px) {
+  .onboarding-tooltip {
+    width: 95vw;
+    padding: 20px;
+    max-width: none;
+  }
+
+  .onboarding-tooltip__title {
+    font-size: 1.1rem;
+  }
+
+  .onboarding-tooltip__content {
+    font-size: 0.9rem;
+  }
+
+  .onboarding-tooltip__actions {
+    flex-direction: column;
+  }
+
+  .onboarding-tooltip__btn {
+    width: 100%;
+  }
+}
+
+/* ===== 引导指针动画 ===== */
+@keyframes onboarding-bounce-pointer {
+
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0) scale(1);
+    opacity: 0.85;
+  }
+
+  40% {
+    transform: translateX(-50%) translateY(-7px) scale(1.15);
+    opacity: 1;
+  }
+
+  60% {
+    transform: translateX(-50%) translateY(-4px) scale(1.06);
+  }
+}
+
+@keyframes onboarding-ripple {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.65;
+  }
+
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+/* 在高亮元素下方叠加浮动手型 */
+.onboarding-highlight {
+  overflow: visible !important;
+}
+
+.onboarding-highlight::before {
+  content: '👆';
+  position: absolute;
+  bottom: -40px;
+  left: 50%;
+  font-size: 1.8rem;
+  z-index: 100010;
+  animation: onboarding-bounce-pointer 1.1s ease-in-out infinite;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
+}
+
+/* 扩散脉冲圈强调可点击性 */
+.onboarding-highlight::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+  border: 2px solid rgba(102, 126, 234, 0.65);
+  animation: onboarding-ripple 1.4s ease-out infinite;
+  pointer-events: none;
+  z-index: 100009;
+}
