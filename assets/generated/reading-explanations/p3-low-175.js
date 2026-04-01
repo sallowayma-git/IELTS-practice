@@ -52,37 +52,37 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：Paragraph A\n答案：iii（reconsidering the termite’s reputation，重新评估白蚁的名声）\n解析：Paragraph A 开篇指出 “多数人认为白蚁破坏性强”，随后转折 “但索尔博士认为其有利用价值”，核心是 “重新看待白蚁的名声”，与标题 iii 一致，因此选 iii。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：Paragraph B\n答案：vii（the astonishing physical dimensions of the termite mound，白蚁丘惊人的物理规模）\n解析：Paragraph B 聚焦 “白蚁丘高度（3-8 米）、地下深度、复杂隧道结构”，核心是 “物理规模”，与标题 vii 一致，因此选 vii。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：Paragraph C\n答案：iv（principal functions of the termite mound，白蚁丘的主要功能）\n解析：Paragraph C 详细说明隧道系统 “通风、控温、调湿” 等功能，核心是 “功能阐述”，与标题 iv 一致，因此选 iv。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：Paragraph D\n答案：ix（a mutually beneficial relationship，互利共生关系）\n解析：Paragraph D 描述 “白蚁喂养真菌，真菌为白蚁提供食物和建材”，核心是 “白蚁与真菌的互利关系”，与标题 ix 一致，因此选 ix。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：Paragraph E\n答案：ii（challenging our assumptions about the nature of life，挑战我们对生命本质的认知）\n解析：Paragraph E 提出 “白蚁丘是超级生物体”“可能需重新定义生命体”，核心是 “挑战生命本质认知”，与标题 ii 一致，因此选 ii。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（6）题目 32：Paragraph F\n答案：i（methods used to investigate termite mound formation，研究白蚁丘结构的方法）\n解析：Paragraph F 详细介绍 “填充石膏、切片、拍照、计算机建模” 的研究步骤，核心是 “研究方法”，与标题 i 一致，因此选 i。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（7）题目 33：Paragraph G\n答案：vi（some potential benefits of understanding termite architecture，理解白蚁建筑术的潜在好处）\n解析：Paragraph G 讨论研究对 “未来建筑、外星栖息地” 的启发，核心是 “潜在应用价值”，与标题 vi 一致，因此选 vi。",
-          "questionId": "q33"
+          "questionId": "q7"
         }
       ],
       "questionRange": {
@@ -98,22 +98,22 @@
         {
           "questionNumber": 34,
           "text": "（1）题目 34：network of \\___\\___ helps to give the termites a constant supply（\\___\\___网络帮助白蚁获得持续供应）\n答案：tunnels（隧道）\n解析：定位 Paragraph C 中 “This complex system of tunnels draws in air from the outside... ensuring them a continuous provision of fresh, breathable air”，“隧道系统” 是空气供应的关键，因此答案为 “tunnels”。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（2）题目 35：a constant \\___\\___ supply and to maintain a limited temperature range（持续的_\\___\\__供应，且维持有限的温度范围）\n答案：air（空气）\n解析：定位 Paragraph C 中 “ensuring them a continuous provision of fresh, breathable air... the nest stays within three degrees of a constant temperature”，“持续供应的是空气”，因此答案为 “air”。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "（3）题目 36：cellar to aid control of \\___\\___ levels in mound（地窖帮助控制丘体内的_\\___\\__水平）\n答案：moisture（湿度）\n解析：定位 Paragraph C 中 “The mound also automatically regulates moisture in the air, by means of both its underground ‘cellar’”，“地窖用于调节湿度”，因此答案为 “moisture”。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（4）题目 37：top of the mound permits （丘顶允许）\n答案：evaporation（蒸发）\n解析：定位 Paragraph C 中 “and evaporation from the top of the mound”，“丘顶通过蒸发调节湿度”，因此答案为 “evaporation”。",
-          "questionId": "q37"
+          "questionId": "q11"
         }
       ],
       "questionRange": {
@@ -129,17 +129,17 @@
         {
           "questionNumber": 38,
           "text": "（1）题目 38：The termite mound appears to process its refuse material internally.（白蚁丘似乎在内部处理废物）\n答案：YES（正确）\n解析：定位 Paragraph D 中 “although the termites must generate waste, none ever leaves the structure, indicating that there is also some kind of internal waste-recycling system”，“废物不排出，暗示内部处理”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（2）题目 39：Dr Soar’s reconstruction involves scanning a single photograph of a complete mound into a computer.（索尔博士的重建过程涉及将完整白蚁丘的单张照片扫描到计算机中）\n答案：NO（错误）\n解析：定位 Paragraph F 中 “carves the plaster of Paris into half-millimetre-thick slices, and photographs them sequentially. Once the pictures are digitally scanned, computer technology is able to recreate complex three-dimensional images”，“需扫描多张切片照片，而非单张完整照片”，与题干描述矛盾，因此判定为 NO。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（3）题目 40：New information about termite architecture could help people deal with future energy crises.（关于白蚁建筑术的新信息可能帮助人类应对未来能源危机）\n答案：YES（正确）\n解析：定位 Paragraph G 中 “the findings could be invaluable in informing future architectural design, and could inspire buildings that are self-sufficient, environmentally friendly, and cheap to run... as climate change and temperatures rise, there will not be enough fuel to drive air conditioners”，“启发节能建筑，应对燃料短缺”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

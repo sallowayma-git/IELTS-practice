@@ -56,27 +56,27 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：The Pacific islands were uninhabited when migrants arrived by sea from Southeast Asia.（当移民从东南亚乘船抵达时，太平洋岛屿仍无人居住）\n答案：YES（正确）\n解析：定位 Paragraph 1 中 “The many tiny islands of the Pacific Ocean had no human population until ancestors of today’s islanders sailed from Southeast Asia in ocean-going canoes approximately 2,000 years ago”，“had no human population until”（直到…… 才有人居住）与题干 “were uninhabited when migrants arrived”（移民抵达时无人居住）描述一致，因此判定为 YES。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：Andrew Sharp was the first person to write about the migrants to the islands.（安德鲁・夏普是首个撰写岛屿移民相关内容的人）\n答案：NO（错误）\n解析：定位 Paragraph 2 中 “Although the romantic vision of some early twentieth-century writers of fleets of heroic navigators simultaneously setting sail had come to be considered by later investigators to be exaggerated, no considered assessment of Pacific voyaging was forthcoming until 1956 when the American historian Andrew Sharp published his research”，明确提到 “20 世纪初已有作家描述过移民场景”，夏普只是 “首个进行严肃评估的人”，并非 “首个撰写相关内容的人”，与题干描述矛盾，因此判定为 NO。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：Andrew Sharp believed migratory voyages were based more on luck than on skill.（安德鲁・夏普认为迁徙航行更多依赖运气而非技术）\n答案：YES（正确）\n解析：定位 Paragraph 2 中 “Sharp challenged the ‘heroic vision’ by asserting that the expertise of the navigators was limited, and that the settlement of the islands was not systematic, being more dependent on good fortune by drifting canoes”，“more dependent on good fortune”（更多依赖运气）对应 “based more on luck than on skill”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：Despite being controversial, Andrew Sharp’s research had positive results.（尽管存在争议，安德鲁・夏普的研究仍产生了积极成果）\n答案：YES（正确）\n解析：定位 Paragraph 2 中 “Sharp’s theory was widely challenged, and deservedly so. If nothing else, however, it did spark renewed interest in the topic and precipitated valuable new research”，“spark renewed interest”“precipitated valuable new research”（激发兴趣、推动新研究）对应 “positive results”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：Edwin Doran disagreed with the findings of Lewis’s research.（埃德温・多兰不同意刘易斯的研究发现）\n答案：NOT GIVEN（未提及）\n解析：Paragraph 4 描述刘易斯的研究（传统航海者通过星辰确定航向），Paragraph 5 描述多兰的研究（用电子仪器记录独木舟性能），全文未提及 “多兰是否反对刘易斯的发现”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q31"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -92,27 +92,27 @@
         {
           "questionNumber": 32,
           "text": "（1）题目 32：David Lewis’s research was different because（戴维・刘易斯的研究与众不同，因为？）\n答案：A（he observed traditional navigators at work. 他观察传统航海者实际工作）\n解析：定位 Paragraph 4 中 “he took the yacht he had owned for many years and navigated through the islands in order to contact those men who still find their way at sea using traditional methods. He then accompanied these men, in their traditional canoes, on test voyages”，“contact”“accompanied” 表明刘易斯 “直接观察传统航海者工作”，这是其研究的独特之处。B（用自己的游艇进行测试航行）错误，他的游艇仅用于 “接触航海者”，测试航行用传统独木舟；C（测试航行中未携带现代仪器）错误，他秘密使用仪器验证；D（与岛民语言相通）未提及，因此选 A。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（2）题目 33：What did David Lewis’s research discover about traditional navigators?（戴维・刘易斯的研究发现传统航海者有何特点？）\n答案：C（They knew which direction they were sailing in. 他们知道自己的航行方向）\n解析：定位 Paragraph 4 中 “Lewis found that ancient navigators would have known which course to steer by memorizing which stars rose and set in certain positions along the horizon, and this gave them fixed directions by which to steer their boats”，“fixed directions”（固定方向）对应 “knew which direction they were sailing in”，因此选 C。A（用日月定位）错误，文中是 “星辰”；B（航行距离不超过 1000 海里）错误，1000 海里是他的测试航程，非航海者的极限；D（能长距离漂流）错误，这是夏普的观点，刘易斯已反驳，因此选 C。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（3）题目 34：What are we told about Edwin Doran’s research?（关于埃德温・多兰的研究，文中提到什么？）\n答案：B（Canoe characteristics were recorded using modern instruments. 用现代仪器记录独木舟特征）\n解析：定位 Paragraph 5 中 “he was interested in obtaining exact data on canoe sailing performance, and to that end employed the latest electronic instrumentation... using his instruments to record canoe speeds... and the angle canoes could sail relative to the wind. In the process, he provided the first really precise attributes of traditional sailing canoes”，“electronic instrumentation”“record”“precise attributes” 对应 “modern instruments”“record canoe characteristics”，因此选 B。A（独木舟返回后收集数据）错误，是航行中记录；C（在人口最密集地区研究）错误，是 “最偏远地区”；D（不让航海者看到仪器）未提及，因此选 B。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（4）题目 35：Which of the following did Steven Horvath discover during his research?（史蒂文・霍瓦特在研究中发现了以下哪项？）\n答案：D（Human energy may have been used to assist sailing canoes. 人力可能被用于辅助航行独木舟）\n解析：定位 Paragraph 6 中 “Horvath was able to calculate the energy expenditure required to paddle canoes of this sort at times when there was no wind to fill the sails, or when the wind was contrary. He concluded that paddles, or perhaps long oars, could indeed have propelled for long distances what were primarily sailing vessels”，“paddle”“propelled”（划桨、推动）对应 “human energy... assist sailing canoes”，因此选 D。A（独木舟设计不如人力重要）未提及；B（需开发新研究方法）错误，是 “改良标准方法”；C（长途航行中航海者会非常疲惫）未提及，因此选 D。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "（5）题目 36：What is the writer’s opinion of Wall Garrard’s research?（作者对沃尔・加勒德的研究持何种态度？）\n答案：B（He is impressed by the originality of the techniques used. 他对所用技术的独创性印象深刻）\n解析：定位 Paragraph 7 中 “Wall Garrard’s unusual method was to use the findings of linguists... Clever adaptation of computer simulation techniques pioneered in other disciplines allowed him to produce convincing models”，“unusual”“Clever adaptation”（独特、巧妙改良）体现作者对技术独创性的认可，因此选 B。A（对实验室研究感到失望）错误，作者未否定实验室研究；C（惊讶于对语言学家的帮助）错误，是 “利用语言学家成果” 而非 “帮助语言学家”；D（担忧研究的岛屿距离遥远）未提及，因此选 B。",
-          "questionId": "q36"
+          "questionId": "q10"
         }
       ],
       "questionRange": {
@@ -128,22 +128,22 @@
         {
           "questionNumber": 37,
           "text": "（1）题目 37：One limitation in the information produced by all of this research is that it（所有这些研究产生的信息存在一个局限，即？）\n答案：C（was not conclusive evidence in support of a single theory. 无法作为支持单一理论的决定性证据）\n解析：定位 Paragraph 8 中 “none of the researchers tried to use their findings to prove one theory or another; experiments such as these cannot categorically confirm or negate a hypothesis”，“cannot categorically confirm or negate”（无法绝对证实或否定）对应 “not conclusive evidence in support of a single theory”，因此选 C。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（2）题目 38：The best thing about this type of research（这类研究最棒的一点是？）\n答案：A（was the variety of experimental techniques used. 采用了多样化的实验技术）\n解析：定位 Paragraph 8 中 “The strength of this research lay in the range of methodologies employed”，“range of methodologies”（多样化的方法）对应 “variety of experimental techniques”，因此选 A。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（3）题目 39：The most important achievement of traditional navigators（传统航海者最重要的成就是？）\n答案：D（was being able to change their practices when necessary. 能在必要时调整做法）\n解析：定位 Paragraph 8 中 “it was this adaptability which was their greatest accomplishment. These navigators observed the conditions prevailing at sea at the time a voyage was made and altered their techniques accordingly”，“adaptability”“altered their techniques”（适应性、调整技术）对应 “change their practices when necessary”，因此选 D。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（4）题目 40：The migration of people from Asia to the Pacific（从亚洲到太平洋的人口迁徙？）\n答案：E（was the first time humans intentionally crossed an ocean. 是人类首次有目的地跨越海洋）\n解析：定位 Paragraph 8 中 “the Pacific peoples were able to view the ocean as an avenue, not a barrier, to communication before any other race on Earth”，“before any other race”（早于其他族群）暗含 “首次有目的地跨洋”，因此选 E。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {
