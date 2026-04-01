@@ -48,27 +48,27 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：detailed criticism of the methodology of a project（对某项目研究方法的详细批评）\n答案：D\n解析：定位 Paragraph D 中 “Eric Hanushek of Stanford, however, criticises some of STAR's key conclusions... He argues that STAR does not prove that gains persist... Nor does he accept that the benefits accumulate... Hanushek... also asserts that STAR failed to ensure good randomisation of teacher and student assignments”，详细批评 STAR 项目的 “长期效度、随机分配、优势累积” 等方法论问题，与题干对应，因此答案为 D。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：a comparison of the data from class-size reduction projects（对多个缩班项目数据的比较）\n答案：F\n解析：定位 Paragraph F 中 “Analysts have studied the results of first-grade students in these schools and similar first-grade students elsewhere and found the results accord with those from STAR”，将 SAGE 项目数据与 STAR 项目对比（“accord with”），与题干对应，因此答案为 F。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：the level of public interest in the issues of class-size reduction（公众对缩班议题的关注度）\n答案：A\n解析：定位 Paragraph A 中 “class-size reduction in the U.S. has lately gone from being a subject of primary academic interest to a policy juggernaut with over twenty states aiming at decreasing class sizes”，从 “学术议题” 到 “20 多个州推进的政策”，体现公众与政策层面的高关注度，与题干对应，因此答案为 A。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：details of action taken to protect the validity of a project（为保证项目有效性而采取的具体措施）\n答案：C\n解析：定位 Paragraph C 中 “Students... were randomly assigned to one of three kinds of classes... To ensure that teaching quality did not differ, teachers were randomly assigned... Few teachers received any special training... and there were no new curricular materials”，“随机分配学生与教师、控制培训和教材” 是保护实验效度的措施，与题干对应，因此答案为 C。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：reasons why class composition changed during a project（项目进行中班级构成变化的原因）\n答案：D\n解析：定位 Paragraph D 中 “Hanushek and others have also shown that during the study too many children moved from regular to small classes, probably because school personnel caved in to parent demands”，明确提到 “家长要求、校方妥协” 是班级构成变化的原因，与题干对应，因此答案为 D。",
-          "questionId": "q31"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -83,48 +83,48 @@
       "items": [
         {
           "questionNumber": 32,
-          "text": "（1）题目 32：The student composition of each class was left to chance.（每个班级的学生构成随机）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph C 中 “Students entering kindergarten were randomly assigned to one of three kinds of classes”，“randomly assigned” 对应 “left to chance”，因此选 A。",
-          "questionId": "q32"
+          "text": "（1）题目 32：The student composition of each class was left to chance.（每个班级的学生构成随机）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph C 中 "Students entering kindergarten were randomly assigned to one of three kinds of classes"，"randomly assigned" 对应 "left to chance"，因此选 A。",
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
-          "text": "（2）题目 33：A long-term improvement in performance was claimed.（宣称成绩有长期提升）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph D 中 “they calculated that students in smaller classes were outperforming their counterparts in regular-sized classes by the first grade and that this advantage persisted even after students returned to larger classes”，“advantage persisted even after returning to larger classes” 对应 “long-term improvement”，因此选 A。",
-          "questionId": "q33"
+          "text": "（2）题目 33：A long-term improvement in performance was claimed.（宣称成绩有长期提升）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph D 中 "they calculated that students in smaller classes were outperforming their counterparts in regular-sized classes by the first grade and that this advantage persisted even after students returned to larger classes"，"advantage persisted even after returning to larger classes" 对应 "long-term improvement"，因此选 A。",
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
-          "text": "（3）题目 34：Similar results were obtained for all social groups.（所有社会群体结果相似）\n答案：B（The California Project，加州项目）\n解析：定位 Paragraph E 中 “the effect did not vary for students of different backgrounds”，“different backgrounds” 对应 “all social groups”，“did not vary” 对应 “similar results”，因此选 B。",
-          "questionId": "q34"
+          "text": "（3）题目 34：Similar results were obtained for all social groups.（所有社会群体结果相似）\n答案：B（The California Project，加州项目）\n解析：定位 Paragraph E 中 "the effect did not vary for students of different backgrounds"，"different backgrounds" 对应 "all social groups"，"did not vary" 对应 "similar results"，因此选 B。",
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
-          "text": "（4）题目 35：The project was a preliminary to a more comprehensive study.（该项目是更全面研究的前期准备）\n答案：C（SAGE，SAGE 项目）\n解析：定位 Paragraph F 中 “Wisconsin’s Student Achievement Guarantee in Education (SAGE) was a five-year pilot study to do some of the groundwork for a major project”，“pilot study”“groundwork” 对应 “preliminary”，因此选 C。",
-          "questionId": "q35"
+          "text": "（4）题目 35：The project was a preliminary to a more comprehensive study.（该项目是更全面研究的前期准备）\n答案：C（SAGE，SAGE 项目）\n解析：定位 Paragraph F 中 "Wisconsin's Student Achievement Guarantee in Education (SAGE) was a five-year pilot study to do some of the groundwork for a major project"，"pilot study""groundwork" 对应 "preliminary"，因此选 C。",
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
-          "text": "（5）题目 36：Several different class types were involved in the project.（项目涉及多种班级类型）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph C 中 “one of three kinds of classes: a small class of 13 to 17 students, a regular-size class of 22 to 26 or a regular-size class with both a teacher and a full-time teacher’s aide”，明确提到 “三种班级类型”，因此选 A。",
-          "questionId": "q36"
+          "text": "（5）题目 36：Several different class types were involved in the project.（项目涉及多种班级类型）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph C 中 "one of three kinds of classes: a small class of 13 to 17 students, a regular-size class of 22 to 26 or a regular-size class with both a teacher and a full-time teacher's aide"，明确提到 "三种班级类型"，因此选 A。",
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
-          "text": "（6）题目 37：A special group of schools was selected to take part.（选取特定群体的学校参与）\n答案：C（SAGE，SAGE 项目）\n解析：定位 Paragraph F 中 “it was noteworthy for targeting schools at which 30% of the students were below poverty level”，“targeting schools” 对应 “a special group of schools was selected”，因此选 C。",
-          "questionId": "q37"
+          "text": "（6）题目 37：A special group of schools was selected to take part.（选取特定群体的学校参与）\n答案：C（SAGE，SAGE 项目）\n解析：定位 Paragraph F 中 "it was noteworthy for targeting schools at which 30% of the students were below poverty level"，"targeting schools" 对应 "a special group of schools was selected"，因此选 C。",
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
-          "text": "（7）题目 38：Classroom assistants were used as part of the project.（项目中使用了课堂助教）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph C 中 “a regular-size class with both a teacher and a full-time teacher’s aide”，“teacher’s aide” 对应 “classroom assistants”，因此选 A。",
-          "questionId": "q38"
+          "text": "（7）题目 38：Classroom assistants were used as part of the project.（项目中使用了课堂助教）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph C 中 "a regular-size class with both a teacher and a full-time teacher's aide"，"teacher's aide" 对应 "classroom assistants"，因此选 A。",
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
-          "text": "（8）题目 39：The project was responsible for aggravating existing problems.（项目导致既有问题加剧）\n答案：B（The California Project，加州项目）\n解析：定位 Paragraph E 中 “This is exacerbating the disparity in resources available to rich and poor schools in California... some of the extra teachers needed are being recruited from the poorer schools”，“exacerbating the disparity” 对应 “aggravating existing problems”，因此选 B。",
-          "questionId": "q39"
+          "text": "（8）题目 39：The project was responsible for aggravating existing problems.（项目导致既有问题加剧）\n答案：B（The California Project，加州项目）\n解析：定位 Paragraph E 中 "This is exacerbating the disparity in resources available to rich and poor schools in California... some of the extra teachers needed are being recruited from the poorer schools"，"exacerbating the disparity" 对应 "aggravating existing problems"，因此选 B。",
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
-          "text": "（9）题目 40：Certain groups of pupils within the sample were identified as having benefited.（样本中特定学生群体被识别为获益者）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph D 中 “they also found that the effect was stronger for black and Hispanic minority groups”，明确提到 “黑人和西班牙裔群体获益更显著”，因此选 A。",
-          "questionId": "q40"
+          "text": "（9）题目 40：Certain groups of pupils within the sample were identified as having benefited.（样本中特定学生群体被识别为获益者）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph D 中 "they also found that the effect was stronger for black and Hispanic minority groups"，明确提到 "黑人和西班牙裔群体获益更显著"，因此选 A。",
+          "questionId": "q14"
         }
       ],
       "questionRange": {
