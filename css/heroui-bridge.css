@@ -347,18 +347,62 @@ body.hero-body {
     gap: 12px;
 }
 
-#browse-view .exam-item-action-btn[data-action="start"] {
-    background-image: linear-gradient(135deg, rgba(255, 216, 155, 0.55), rgba(106, 204, 199, 0.45));
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
-    backdrop-filter: blur(14px);
-    transform: translateY(0);
+/* Specific Button Colors & Exquisite Overrides */
+#show-onboarding-btn {
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
-#browse-view .exam-item-action-btn[data-action="start"]:hover,
-#browse-view .exam-item-action-btn[data-action="start"]:focus-visible {
-    box-shadow: 0 16px 28px rgba(0, 0, 0, 0.18);
-    transform: translateY(-1px);
+#show-onboarding-btn:hover {
+    filter: brightness(1.08) saturate(1.05);
+    /* Light, textured color shift */
+    transform: scale(1.02);
+    /* Slight organic scale */
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.6) inset !important;
+    background-image: linear-gradient(135deg, var(--shui-gradient-start), var(--shui-gradient-end));
+}
+
+/* Apple Liquid Glassmorphism for Exam Item Action Buttons */
+#browse-view .exam-item-action-btn {
+    background: rgba(255, 255, 255, 0.35) !important;
+    background-image: none !important;
+    backdrop-filter: blur(20px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.5) !important;
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+    border-radius: var(--shui-radius-sm) !important;
+    /* 圆角矩形，与卡片、筛选按钮统一 */
+    color: #1d1d1f !important;
+    font-weight: 600 !important;
+    padding: 8px 16px !important;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+    transform: translateY(0) scale(1) !important;
+}
+
+#browse-view .exam-item-action-btn:hover,
+#browse-view .exam-item-action-btn:focus-visible {
+    background: rgba(255, 255, 255, 0.58) !important;
+    box-shadow:
+        0 8px 20px rgba(0, 0, 0, 0.07),
+        inset 0 1px 0 rgba(255, 255, 255, 1) !important;
+    transform: translateY(-1px) scale(1.01) !important;
+    border-color: rgba(255, 255, 255, 0.75) !important;
+}
+
+/* Give the "Start" action a warm brand-tinted liquid glass */
+#browse-view .exam-item-action-btn[data-action="start"] {
+    background: linear-gradient(135deg, rgba(255, 216, 155, 0.3), rgba(106, 204, 199, 0.25)) !important;
+    border-color: rgba(255, 216, 155, 0.4) !important;
+    color: #2d5a58 !important;
+}
+
+#browse-view .exam-item-action-btn[data-action="start"]:hover {
+    background: linear-gradient(135deg, rgba(255, 216, 155, 0.5), rgba(106, 204, 199, 0.4)) !important;
+    border-color: rgba(106, 204, 199, 0.5) !important;
+    box-shadow:
+        0 8px 20px rgba(106, 204, 199, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 1) !important;
 }
 
 .data-management-panel .data-mgmt-btn {
