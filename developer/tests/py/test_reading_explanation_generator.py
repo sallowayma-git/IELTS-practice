@@ -153,6 +153,33 @@ class ReadingExplanationGeneratorTest(unittest.TestCase):
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("答案与 answerKey 不一致", completed.stdout)
 
+    def test_render_rejects_section_text_out_of_sync(self) -> None:
+        self.run_script("prepare", "sample-exam", "--work-dir", str(self.work_dir), "--write-template")
+        response_path = self.work_dir / "responses" / "sample-exam.json"
+        response = json.loads(response_path.read_text(encoding="utf-8"))
+        response["passageNotes"] = [
+            {"label": "Paragraph 1", "text": "第一段讲第一条信息。"},
+            {"label": "Paragraph 2", "text": "第二段讲第二条信息。"},
+        ]
+        response["questionExplanations"][0]["items"][0]["text"] = (
+            "题目：Statement one.\n题目翻译：陈述一。\n答案：TRUE\n解析：原文信息与题干一致。"
+        )
+        response["questionExplanations"][0]["items"][1]["text"] = (
+            "题目：Statement two.\n题目翻译：陈述二。\n答案：FALSE\n解析：原文信息与题干相反。"
+        )
+        response["questionExplanations"][0]["text"] = "同上"
+        response_path.write_text(json.dumps(response, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        completed = self.run_script(
+            "render",
+            "sample-exam",
+            "--response",
+            str(response_path),
+            expect_ok=False,
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("section.text 未与 items 同步", completed.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
