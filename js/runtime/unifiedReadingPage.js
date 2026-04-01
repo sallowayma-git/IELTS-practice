@@ -48,6 +48,9 @@
         simulationContextReady: false,
         simulationDraftSyncTimer: null,
         simulationDraftFingerprint: '',
+        lastInitSignature: '',
+        lastReplaySignature: '',
+        sessionReadySent: false,
         parentWindow: global.opener || global.parent || null
     };
 
@@ -1690,6 +1693,32 @@
             reviewSessionId: state.reviewSessionId,
             reviewEntryIndex: state.reviewEntryIndex
         });
+        state.sessionReadySent = true;
+    }
+
+    function buildInitSignature(data = {}) {
+        return JSON.stringify({
+            examId: data && data.examId != null ? String(data.examId).trim() : '',
+            sessionId: data && data.sessionId != null ? String(data.sessionId).trim() : '',
+            suiteSessionId: data && data.suiteSessionId != null ? String(data.suiteSessionId).trim() : '',
+            reviewSessionId: data && data.reviewSessionId != null ? String(data.reviewSessionId).trim() : '',
+            reviewEntryIndex: Number.isInteger(data && data.reviewEntryIndex) ? data.reviewEntryIndex : 0,
+            reviewMode: Boolean(data && data.reviewMode),
+            readOnly: data && Object.prototype.hasOwnProperty.call(data, 'readOnly') ? Boolean(data.readOnly) : null,
+            suiteFlowMode: data && typeof data.suiteFlowMode === 'string' ? data.suiteFlowMode.trim().toLowerCase() : ''
+        });
+    }
+
+    function buildReplaySignature(data = {}) {
+        const entry = data && data.entry && typeof data.entry === 'object' ? data.entry : {};
+        const entryExamId = entry && entry.examId != null ? String(entry.examId).trim() : '';
+        const currentExamId = state.examId != null ? String(state.examId).trim() : '';
+        return JSON.stringify({
+            examId: entryExamId || currentExamId,
+            reviewSessionId: data && data.reviewSessionId != null ? String(data.reviewSessionId).trim() : '',
+            suiteSessionId: data && data.suiteSessionId != null ? String(data.suiteSessionId).trim() : '',
+            reviewEntryIndex: Number.isInteger(data && data.reviewEntryIndex) ? data.reviewEntryIndex : 0
+        });
     }
 
     function startInitLoop() {
@@ -2248,6 +2277,8 @@
         const type = String(payload.type || payload.action || '').toUpperCase();
         const data = payload.data || {};
         if (type === 'INIT_SESSION' || type === 'INIT_EXAM_SESSION') {
+            const initSignature = buildInitSignature(data);
+            const isDuplicateInit = initSignature && initSignature === state.lastInitSignature;
             const incomingExamId = data && data.examId != null ? String(data.examId).trim() : '';
             const currentExamId = state.examId != null ? String(state.examId).trim() : '';
             if (incomingExamId && currentExamId && incomingExamId !== currentExamId) {
@@ -2300,10 +2331,19 @@
             refreshSimulationDraftSyncLifecycle();
             syncSuiteModeState();
             stopInitLoop();
+            if (isDuplicateInit && state.sessionReadySent) {
+                return;
+            }
+            state.lastInitSignature = initSignature;
             sendSessionReady();
             return;
         }
         if (type === 'REPLAY_PRACTICE_RECORD') {
+            const replaySignature = buildReplaySignature(data || {});
+            if (replaySignature && replaySignature === state.lastReplaySignature) {
+                return;
+            }
+            state.lastReplaySignature = replaySignature;
             applyReplayRecord(data || {}).catch(() => {});
             return;
         }
