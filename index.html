@@ -8,6 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/heroui-bridge.css">
+    <link rel="stylesheet" href="css/onboarding.css">
 </head>
 
 <body class="hero-body boot-active" data-theme="heroui">
@@ -231,6 +232,13 @@
                             🎨 主题切换
                         </button>
                     </div> -->
+
+                    <!-- 引导流程按钮 -->
+                    <div style="margin-top: 15px;">
+                        <button class="btn hero-btn" id="show-onboarding-btn" onclick="OnboardingTour.start(true)">
+                            🎯 重新显示引导
+                        </button>
+                    </div>
 
                     <!-- 开发团队链接 -->
                     <div
@@ -534,6 +542,9 @@
     <script src="js/app/navigationMixin.js"></script>
     <script src="js/app/fallbackMixin.js"></script>
     <script src="js/app.js"></script>
+
+    <!-- 引导流程组件 -->
+    <script src="js/components/onboardingTour.js"></script>
 
     <!-- 成就系统模态框 -->
     <div id="achievements-modal" class="theme-modal">
