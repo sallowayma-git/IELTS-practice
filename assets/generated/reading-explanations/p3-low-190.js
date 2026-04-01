@@ -48,22 +48,22 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：What is the writer’s main point about great literary works in the first paragraph?（作者在第一段中关于伟大文学作品的主要观点是？）\n答案：C（Their quality is not always immediately recognised. 它们的价值并非总能立即被认可）\n解析：定位 Paragraph 1 中 “true greatness only becomes apparent over time, and yet that the judgements of the future are substantially dependent on what the present chooses to publish, publicise and preserve”，“真正的伟大需时间显现” 即 “价值并非立即被认可”，因此选 C。A（常遭不公批评）、B（如今读者更关注其他类型作品）、D（出版商认为其无商业吸引力）均未提及。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：The writer compares Greek poetry contests to sports events because of（作者将希腊诗歌竞赛与体育赛事类比，原因是？）\n答案：A（their impact on spectators. 对观众的影响）\n解析：定位 Paragraph 2 中 “just as sporting spectacles today offer people the thrill of watching the human body pushed toward its limits, so the quest for supremacy in words made the deepest concerns of the mind accessible to a wide audience in classical Greece”，“体育赛事给观众刺激，诗歌竞赛让大众接触思想深层关切” 即 “均对观众产生影响”，因此选 A。B（所需准备量）、C（顶尖参与者的名望）、D（对两者的共同批评）均未提及。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：What point is the writer making in the fourth paragraph?（作者在第四段中提出什么观点？）\n答案：D（More awards did not lead to a greater appreciation of literary merit. 更多奖项并未带来对文学价值的更大认可）\n解析：定位 Paragraph 4 中 “neither the gradual expansion of the universities nor the increasing number of awards seemed to be infusing the general reader with an overwhelming regard for great literary works”，“奖项增多但读者未更重视文学价值”，因此选 D。A（国际奖项鼓励写作）、B（人们对新奖项关注少）、C（读者开始看到多种写作的价值）均与原文矛盾。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：What are we told about the development of the Man Booker prize?（关于曼布克奖的发展，文中有何信息？）\n答案：C（The organisers knew how to generate interest in it. 组织者知道如何激发对它的兴趣）\n解析：定位 Paragraph 4 中 “The Booker would aim at catching the imagination of the press by establishing an explicitly sporting-style atmosphere: a shortlist of authors, a high-profile panel of judges, an exciting victor”，“通过短名单、高知名度评委等营造氛围吸引媒体与公众” 即 “知道如何激发兴趣”，因此选 C。A（媒体最初不重视）、B（与诺奖聚焦相同）、D（作家仅获荣誉无实际收益）均与原文矛盾。",
-          "questionId": "q30"
+          "questionId": "q4"
         }
       ],
       "questionRange": {
@@ -79,27 +79,27 @@
         {
           "questionNumber": 31,
           "text": "（1）题目 31：The founders of the Man Booker prize rejected high-profile commercialisation of its prize.（曼布克奖的创办者拒绝其奖项的高调商业化。）\n答案：NO（错误）\n解析：定位 Paragraph 4 中 “The Booker would aim at catching the imagination of the press by establishing an explicitly sporting-style atmosphere... winners could regularly expect to shift over 500,000 copies”，“主动营造高调氛围、追求销量” 与题干 “拒绝高调商业化” 描述矛盾，因此判定为 NO。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（2）题目 32：The judges of the 2007 Man Booker prize came to regret their choice of winning title.（2007 年曼布克奖的评委后来后悔所选的获奖作品。）\n答案：NOT GIVEN（未提及）\n解析：Paragraph 5 仅比较 “错失奖项作品与获奖作品的销量和质量”，未提及 “评委是否后悔”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（3）题目 33：Some authors deliberately write in an exaggerated style which they think will attract judges.（部分作家刻意使用他们认为能吸引评委的夸张风格。）\n答案：YES（正确）\n解析：定位 Paragraph 5 中 “those books that are manufactured to claim them-sensitive, trendy tracts of needlessly effortful prose whose elegant openings so impress some juries”，“为获奖而刻意创作的炫技作品” 对应 “deliberately write in an exaggerated style to attract judges”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（4）题目 34：There should be a reduction in the number of literary awards.（应减少文学奖项的数量。）\n答案：YES（正确）\n解析：定位 Paragraph 6 中 “we should thin out the other awards, and spend some money instead on competitions that will get writers’ first books into print”，“减少其他奖项” 与题干描述一致，因此判定为 YES。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（5）题目 35：Juries of literary awards should consist of writers rather than critics.（文学奖项的评审团应由作家而非评论家组成。）\n答案：NOT GIVEN（未提及）\n解析：定位 Paragraph 6 中 “We should restore proper expertise to juries”，“恢复评审团专业性” 未限定 “由作家组成”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q35"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -115,27 +115,27 @@
         {
           "questionNumber": 36,
           "text": "（1）题目 36：In ancient Greece, prizes（在古希腊，奖项_\\___\\__）\n答案：G（were presented to teams for oral performance of sacred works. 颁发给口头表演神圣作品的团队）\n解析：定位 Paragraph 2 中 “the competitive singing of dithyrambs-choruses of praise to the god Dionysus-... groups of up to 50 men or boys... declaiming verse in order to win the honour”，“合唱队演唱赞美神的诗歌并获奖” 对应 “teams for oral performance of sacred works”，因此选 G。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（2）题目 37：In the post-classical period, literary prizes（在后古典时期，文学奖项_\\___\\__）\n答案：A（were considered to be less significant than previously. 被认为不如以往重要）\n解析：定位 Paragraph 3 中 “After the classical era, the importance of prizes diminished”，“重要性下降” 对应 “less significant than previously”，因此选 A。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（3）题目 38：In medieval Europe, talented writers（在中世纪欧洲，有才华的作家_\\___\\__）\n答案：D（were supported by wealthy people. 得到富人的支持）\n解析：定位 Paragraph 3 中 “in medieval Europe, aristocratic patrons and learned societies singled out the most promising writers and commissioned and rewarded them”，“贵族资助者（富人）委托并奖励作家” 对应 “supported by wealthy people”，因此选 D。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（4）题目 39：The first results issued by the Nobel foundation（诺贝尔基金会发布的首批结果_\\___\\__）\n答案：C（were covered by the international press. 被国际媒体报道）\n解析：定位 Paragraph 3 中 “In 1901, the first Nobel prizes were announced... Their impact was instant, and the results were reported in over 100 newspapers worldwide”，“全球超 100 家报纸报道” 对应 “covered by the international press”，因此选 C。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（5）题目 40：After the establishment of the Nobel prizes, other awards（诺奖设立后，其他奖项_\\___\\__）\n答案：F（were presented for many different categories of literature. 为多种文学类别颁发）\n解析：定位 Paragraph 4 中 “Nobel imitators soon came thick and fast... the recently formed British Crime Writers’ Association started an annual prize for the best crime novel; in the same year, there was an annual award for Science Fiction”，“犯罪小说奖、科幻小说奖等多种类别” 对应 “many different categories of literature”，因此选 F。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

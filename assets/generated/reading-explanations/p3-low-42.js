@@ -56,27 +56,27 @@
         {
           "questionNumber": 27,
           "text": "(1) 题目 27：In the first paragraph, what is the writer's main point about migration to Patagonia?\n题目翻译：在第一段中，作者关于迁移到巴塔哥尼亚的主要观点是什么？\n答案：C (It impacts on research into the wider region.)\n解析：定位 Paragraph A。该段指出巴塔哥尼亚的最早占领为理解南北美洲大陆何时有人居住提供了明显意义，并给出一个基线来计算人类扩散速率。这表明巴塔哥尼亚的研究影响了对更广泛区域（wider region）的人类迁徙研究。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "(2) 题目 28：In the second paragraph, what is the writer's purpose?\n题目翻译：在第二段中，作者的目的是什么？\n答案：C (to summarise a scholarly debate)\n解析：定位 Paragraph B。该段列举了两种对立的观点：一些人认为最早在2万年前，另一些人则认为不早于8000年前，并指出这场辩论至今仍在继续。作者的意图是总结这场学术辩论。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "(3) 题目 29：The writer refers to the 'late' model in order to\n题目翻译：作者提到较晚模型是为了……\n答案：A (compare it with another theory of migration.)\n解析：定位 Paragraph C。先描述较晚模型设想为单一持续浪潮的迁徙过程，随后立即引入与之形成对比的较早模型（较为无序的过程），并指出后者更现实。因此目的是与另一迁徙理论进行比较。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "(4) 题目 30：What is the writer's main point about the 'early' model?\n题目翻译：关于较早模型的主要观点是什么？\n答案：D (It is more consistent with the physical conditions of the land.)\n解析：定位 Paragraph C。较早模型认为迁徙是较为无序的过程，因为迁徙者在穿越大陆时需要缓慢适应遇到的多样化自然栖息地。这更符合土地的实际物理状况，因此该模型更现实。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "(5) 题目 31：What does the writer suggest about the Monte Verde site?\n题目翻译：作者关于蒙特维尔德遗址暗示了什么？\n答案：B (It provides supporting evidence for relatively early settlement.)\n解析：定位 Paragraph D。蒙特维尔德遗址的年代被确定为约12500年前，这对较晚模型（认为不早于8000年前）提出了质疑，从而为相对较早的定居理论提供了支持证据。",
-          "questionId": "q31"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -92,22 +92,22 @@
         {
           "questionNumber": 32,
           "text": "(1) 题目 32：The conditions encountered by the first migrants to Patagonia were unique.\n题目翻译：最早迁移到巴塔哥尼亚的先民所遇到的条件是独一无二的。\n答案：NO\n解析：定位 Paragraph E。原文说当时巴塔哥尼亚的环境与早期后冰川时代的欧洲环境相似，并非独一无二，因此答案为 NO。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "(2) 题目 33：In the high country the first migrants hunted wild animals for food.\n题目翻译：在高地，最早的迁徙者猎捕野生动物为食。\n答案：NOT GIVEN\n解析：定位 Paragraph E。段落提到了高地中定居的脆弱性和证据稀少，但完全未提及先民是否在此狩猎野生动物。无相关信息，因此答案为 NOT GIVEN。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "(3) 题目 34：Archaeologists have failed to draw conclusions from the evidence found at rock shelters in Argentina and Chile.\n题目翻译：考古学家未能从阿根廷和智利的岩石庇护所发现的证据中得出结论。\n答案：NO\n解析：定位 Paragraph E。原文指出有可靠证据从这些遗址证实了约11000年前人类的存在，说明考古学家已经得出了结论，与题干矛盾，因此答案为 NO。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "(4) 题目 35：Archaeological evidence can be moved from place to place in a variety of ways.\n题目翻译：考古证据可以通过多种方式被从一个地方转移到另一个地方。\n答案：YES\n解析：定位 Paragraph E 末尾。原文说明骨头或其他证据可能由自然力量如洪水或捕食者带入洞穴，而非一定是人类带入。这确认了证据可以通过多种方式被移动，因此答案为 YES。",
-          "questionId": "q35"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -123,27 +123,27 @@
         {
           "questionNumber": 36,
           "text": "(1) 题目 36：Building remains and other evidence have been found in 36 ___ at the Chinchihuapi Creek site...\n题目翻译：在钦奇瓦皮溪遗址，建筑遗迹和其他证据被发现在36 ___……\n答案：D (good condition)\n解析：定位 Paragraph F。原文提到手工艺品埋在泥炭层中，泥炭具有极好地保存木材的特性（preserving wood remarkably well）。保存完好即对应 good condition。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "(2) 题目 37：However, the 37 ___ of the samples taken from Los Toldos means that this site is of doubtful value.\n题目翻译：然而，从洛斯托尔多斯采集样本的37 ___ 意味着该遗址价值存疑。\n答案：B (random collection)\n解析：定位 Paragraph F。原文指出测试中使用的散碳屑是从遗址的许多不同地方非系统地（unsystematically）采集的，与手工艺品的关联性不明确。非系统采集对应 random collection。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "(3) 题目 38：The remains found at the Arroyo Eeo site show 38 ___ and date from around 9,000 years ago.\n题目翻译：在阿罗约埃奥遗址发现的遗骸显示出38 ___，年代约为9000年前。\n答案：C (similar properties)\n解析：定位 Paragraph G。原文指出这些手工艺品在与洛斯托尔多斯相同的深度被发现，并且与洛斯托尔多斯的发现有相同的来源（same origins）。这表示它们具有相似的特征（similar properties）。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "(4) 题目 39：Unfortunately, no 39 ___ can be made between the samples taken from Las Buitreras and human presence.\n题目翻译：不幸的是，从拉斯布伊特雷拉斯采集的样本与人类存在之间无法建立39 ___。\n答案：H (reliable connection)\n解析：定位 Paragraph G。原文说无法确切地将这些遗骸与人类居住联系起来（no way of securely relating... to human occupation）。无法确切联系对应 no reliable connection。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "(5) 题目 40：The findings of the work carried out at Cueva Fell cannot provide useful information beyond the 40 ___.\n题目翻译：在奎瓦费尔进行的工作的发现无法提供超出其40 ___的有用信息。\n答案：J (immediate surroundings)\n解析：定位 Paragraph G 末尾。原文指出鉴于洪水引起的变化，该遗址的用途必须限于其直接周边地区（direct vicinity），其发现不能自由地外推到更远的地方。直接周边地区对应 immediate surroundings。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

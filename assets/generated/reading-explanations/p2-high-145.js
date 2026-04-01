@@ -52,22 +52,22 @@
         {
           "questionNumber": 14,
           "text": "（1）题目 14：a reason why newer forests provide howlers with better feeding opportunities than older forests（新生林比老林为吼猴提供更好取食机会的原因）\n答案：C\n解析：定位 Paragraph C 中 “In younger forests, trees put most of their limited energy into growing wood, leaves and fruit, so they produce much lower levels of toxin than do well-established, old-growth trees”，明确提到 “幼林毒素含量低”，与题干对应，因此答案为 C。",
-          "questionId": "q14"
+          "questionId": "q1"
         },
         {
           "questionNumber": 15,
           "text": "（2）题目 15：a reference to a change in farmers’ attitudes towards wildlife（提及农民对野生动物态度的转变）\n答案：G\n解析：定位 Paragraph G 中 “Conservation is usually viewed as a conflict... We’re moving away from that vision and beginning to consider ways in which commercial activities may become a tool for the conservation of primates”，明确提到 “从冲突到合作” 的态度转变，与题干对应，因此答案为 G。",
-          "questionId": "q15"
+          "questionId": "q2"
         },
         {
           "questionNumber": 16,
           "text": "（3）题目 16：a description of the means by which howlers select the best available diet for themselves（吼猴选择最佳饮食的方式描述）\n答案：C\n解析：定位 Paragraph C 中 “the monkeys keep their systems primed by sampling a variety of plants and then focusing on a small number of the most nutritious food items”，明确提到 “尝试多种植物后聚焦高营养种类”，与题干对应，因此答案为 C。",
-          "questionId": "q16"
+          "questionId": "q3"
         },
         {
           "questionNumber": 17,
           "text": "（4）题目 17：figures relating to the reduction of natural wildlife habitat over a period of time（自然栖息地一段时间内减少的相关数据）\n答案：B\n解析：定位 Paragraph B 中 “in the 18th century, tropical dry forests once covered most of Central America, but by the 1980s less than two percent remained undisturbed, and less than one percent was protected”，明确提到 “18 世纪→1980 年代” 的森林覆盖率数据，与题干对应，因此答案为 B。",
-          "questionId": "q17"
+          "questionId": "q4"
         }
       ],
       "questionRange": {
@@ -83,22 +83,22 @@
         {
           "questionNumber": 18,
           "text": "（1）题目 18：Howler monkeys have a more rapid rate of \\___\\___ than either capuchin or spider monkeys.\n题目翻译：吼猴的_\\___\\__速度比卷尾猴和蜘蛛猴更快。\n答案：reproduction（繁殖）\n解析：定位 Paragraph E 中 “Howler reproduction is faster than that of other native monkey species”，明确提到 “繁殖速度快”，因此答案为 “reproduction”。",
-          "questionId": "q18"
+          "questionId": "q5"
         },
         {
           "questionNumber": 19,
           "text": "（2）题目 19：Unlike the other local monkey species, howlers can survive without eating \\___\\___ and so can live inside a relatively small habitat area.\n题目翻译：与其他本地猴子不同，吼猴无需食用_\\___\\__即可生存，因此栖息地范围相对较小。\n答案：fruit（水果）\n解析：定位 Paragraph C 中 “they eat fruit when it is available but, unlike capuchin and spider monkeys, do not depend on large areas of fruiting trees”，明确提到 “不依赖水果”，因此答案为 “fruit”。",
-          "questionId": "q19"
+          "questionId": "q6"
         },
         {
           "questionNumber": 20,
           "text": "（3）题目 20：Their diet is more flexible, and they are able to tolerate leaves with high levels of \\___\\___.\n题目翻译：它们的食性更灵活，能耐受含高浓度_\\___\\__的树叶。\n答案：toxins（毒素）\n解析：定位 Paragraph C 中 “howlers’ ability to thrive on leaves loaded with toxins”，明确提到 “耐受毒素”，因此答案为 “toxins”。",
-          "questionId": "q20"
+          "questionId": "q7"
         },
         {
           "questionNumber": 21,
           "text": "（4）题目 21：Howlers can also survive periods of \\___\\___ better than the other monkey species can.\n题目翻译：吼猴在_\\___\\__期间的存活能力也优于其他猴子。\n答案：drought（干旱）\n解析：定位 Paragraph E 中 “this ability gives them a real advantage over capuchin and spider monkeys, which have suffered during the long, ongoing drought in the area”，明确提到 “干旱期间更易存活”，因此答案为 “drought”。",
-          "questionId": "q21"
+          "questionId": "q8"
         }
       ],
       "questionRange": {
@@ -114,27 +114,27 @@
         {
           "questionNumber": 22,
           "text": "（1）题目 22：It has seen the return of native tree species.（原生树木回归）\n答案：B（Santa Rosa National Park，圣罗莎国家公园）\n解析：定位 Paragraph D 中 “species of indigenous trees which had been absent for decades began to invade the abandoned pastures”，明确提到圣罗莎原生树木回归，因此选 B。",
-          "questionId": "q22"
+          "questionId": "q9"
         },
         {
           "questionNumber": 23,
           "text": "（2）题目 23：It supports only one species of native monkey.（仅生存一种本地猴子）\n答案：A（Hacienda La Pacifica，哈西恩达・拉太平洋牧场）\n解析：定位 Paragraph A 中 “has for decades been home to a community of mantled howler monkeys. Other native primates... vanished”，明确提到牧场仅存吼猴，因此选 A。",
-          "questionId": "q23"
+          "questionId": "q10"
         },
         {
           "questionNumber": 24,
           "text": "（3）题目 24：Its monkey population helps the agriculture of the area.（猴群对当地农业有益）\n答案：C（Cholula Cacao Farm，乔卢拉可可农场）\n解析：定位 Paragraph G 中 “the monkeys bring under-appreciated benefits to such plantations, dispersing the seeds... and fertilising the soil”，明确提到可可农场的猴子传播种子、肥沃土壤，因此选 C。",
-          "questionId": "q24"
+          "questionId": "q11"
         },
         {
           "questionNumber": 25,
           "text": "（4）题目 25：It is home to populations of all three local monkey species.（三种本地猴子均在此生存）\n答案：B（Santa Rosa National Park，圣罗莎国家公园）\n解析：定位 Paragraph D 中 “Capuchins were the first... followed by howlers. Eventually, even spider monkeys... returned”，明确提到三种猴子均回归圣罗莎，因此选 B。",
-          "questionId": "q25"
+          "questionId": "q12"
         },
         {
           "questionNumber": 26,
           "text": "（5）题目 26：Its landscape was altered by the construction of a transport link.（地貌因交通设施建设改变）\n答案：A（Hacienda La Pacifica，哈西恩达・拉太平洋牧场）\n解析：定位 Paragraph A 中 “vanished after the Pan-American Highway was built nearby in the 1950s and most of the surrounding land was cleared for cattle-raising”，明确提到牧场周边因公路建设改变地貌，因此选 A。",
-          "questionId": "q26"
+          "questionId": "q13"
         }
       ],
       "questionRange": {

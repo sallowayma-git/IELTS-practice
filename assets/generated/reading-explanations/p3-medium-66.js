@@ -68,42 +68,42 @@
         {
           "questionNumber": 27,
           "text": "(1) 题目 27：Cartographers before Mercator had tended to produce separate, individual maps. （墨卡托之前的制图师倾向于制作独立、个别的地图。）\n答案：TRUE\n解析：定位第2段。原文：\"Where his predecessors had adopted a piecemeal approach... Mercator sought to wrap the world in systematic overlapping maps\"（在他的前辈们采取零碎方法绘制地图的地方，墨卡托试图用系统的重叠地图包裹世界）。\"Piecemeal\"（零碎的/不成体系的）对应 \"separate, individual\"。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "(2) 题目 28：Mercator was critical of the work of his contemporaries. （墨卡托对他同时代人的作品持批评态度。）\n答案：NOT GIVEN\n解析：文中提到他有竞争对手，也引用了来源（第8段），但并未提及他是否“critical”（批评）他们的工作。信息缺失。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "(3) 题目 29：During his life, Mercator experienced great changes of fortune. （在他的一生中，墨卡托经历了命运的巨大变迁。）\n答案：TRUE\n解析：定位第3段。原文：\"His life was one of brilliant breakthroughs and abrupt reversals\"（他的一生充满了辉煌的突破和突然的逆转）。这描述了巨大的命运变迁。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "(4) 题目 30：Most of Mercator's published work remains intact today. （墨卡托大部分已出版的作品今天仍保存完好。）\n答案：TRUE\n解析：定位第3段末尾。原文：\"examples of virtually all of his printed maps and globes\"（他几乎所有印刷地图和地球仪的样本）。\"Virtually all\" 对应 \"Most... remains intact\"。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "(5) 题目 31：Mercator started work on his projection shortly after embarking on his cosmography. （墨卡托在开始他的宇宙志后不久就开始研究他的投影法。）\n答案：FALSE\n解析：定位第5段开头。原文：\"Before he commenced the great work \\[cosmography\\], Mercator produced in 1569 an enormous world map on a new projection\"（在他开始这部伟大著作之前，墨卡托在1569年制作了一张巨大的世界地图）。顺序与题干相反。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "(6) 题目 32：Mercator's Projection was immediately seen as a major breakthrough. （墨卡托投影法立即被视为重大突破。）\n答案：FALSE\n解析：定位第7段。原文：\"it would be several decades before the map's true navigational value would be recognised\"（要过几十年，该地图真正的航海价值才会被认识到）。并非“immediately”（立即）。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "(7) 题目 33：Mercator produced an accurate areal description of the world. （墨卡托制作了对世界面积的准确描述。）\n答案：FALSE\n解析：定位第7段。原文：\"Mercator knew that his projection was unsuitable as an areal description\"（墨卡托知道他的投影不适合作为世界的面积描述）。题目说他制作了准确的描述，与原文矛盾。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "(8) 题目 34：Mercator consulted the work of various people when producing his maps. （墨卡托在制作地图时参考了各种人的作品。）\n答案：TRUE\n解析：定位第8段。原文：\"His sources were wide-ranging and multitudinous, including an imperial physician... and his competitor\"（他的来源广泛且繁多，包括一位皇家医生……和他的竞争对手）。\"Consulted the work of various people\" 与此一致。",
-          "questionId": "q34"
+          "questionId": "q8"
         }
       ],
       "questionRange": {
@@ -119,32 +119,32 @@
         {
           "questionNumber": 35,
           "text": "(1) 题目 35：His attempt to represent the globe as a 35 \\___\\___ map （他试图将地球表现为一张35 \\___\\___地图）\n答案：two-dimensional\n解析：定位第5段。原文：\"converting the spherical globe into a two-dimensional map\"（将球形地球转换为二维地图）。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "(2) 题目 36：...the course of the ship could not be shown as a 36 \\___\\___ on a map （……船的航线无法在地图上显示为一条36 \\___\\___）\n答案：straight line\n解析：定位第5段末尾。原文：\"how could the course of a ship... be represented as a straight line\"（如何将船的航线……表示为一条直线？）。这里讨论的是当时未解决的问题（Could not be shown）。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "(3) 题目 37：...this produced 37 \\___\\___ at the northern and southern extremities （……这在南北两端产生了37 \\___\\___）\n答案：areal distortion\n解析：定位第6段。原文：\"Unfortunately, straightening the rhumbs caused areal distortion\"（不幸的是，拉直恒向线导致了面积扭曲）。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "(4) 题目 38：...with the full width of the map being taken up by the 38 \\___\\___ （……地图的全宽被38 \\___\\___占据）\n答案：polar regions\n解析：定位第6段。原文：\"the polar regions occupied the full width of the map\"（极地地区占据了地图的全部宽度）。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "(5) 题目 39：Mercator originally designed the map for 39 \\___\\___ purposes （墨卡托最初是为39 \\___\\___目的设计该地图的）\n答案：navigation\n解析：定位第7段。原文：\"the map's title explaining that it was intended 'for use in navigation'\"（地图的标题解释说它是为了“用于航海”）。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "(6) 题目 40：Various uses including the mapping of 40 \\___\\___ by state cartographers （各种用途，包括由国家制图师绘制40 \\___\\___的地图）\n答案：Britain\n解析：定位第10段。原文：\"In 1938, Mercator’s Projection was selected... to map Britain anew\"（1938年，英国地形测量局选择墨卡托投影法重新绘制英国地图）。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {
