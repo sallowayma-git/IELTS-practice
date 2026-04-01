@@ -52,22 +52,22 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：What point did the writer make in the second paragraph?（作者在第二段提出什么观点？）\n答案：C（Bilingual children can make a valuable contribution to the wealth of a country. 双语儿童能为国家财富作出重要贡献）\n解析：定位 Paragraph 2 中 “the cultural, linguistic, and economic resources of the nation are maximised. To waste the resources of the nation by discouraging children from developing their mother tongues is quite simply unintelligent from the point of view of national self-interest”，“发展母语能最大化国家资源” 即 “双语儿童通过母语能力为国家财富贡献力量”，因此选 C。A（现有母语研究误导）、B（文化丰富的教育项目对部分儿童更有益）、D（应加强学校母语使用法律）均未提及。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：Why does the writer refer to something that Goethe said?（作者为何引用歌德的话？）\n答案：A（to lend weight to his argument. 为观点增加说服力）\n解析：定位 Paragraph 3 中 “More than 150 research studies... strongly support what Goethe once said”，“150 多项研究 + 歌德名言” 共同支撑 “双语有益” 的观点，引用的目的是 “增强论证的说服力”，因此选 A。B（反驳研究）、C（引入新概念）、D（更新现有观点）均不符。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：The writer believes that when young children have a firm grasp of their mother tongue（作者认为，幼儿牢固掌握母语时会如何？）\n答案：B（They go on to do much better throughout their time at school. 他们在整个上学期间表现更好）\n解析：定位 Paragraph 4 中 “Children who come to school with a solid foundation in their mother tongue develop stronger literacy abilities in the school language... succeed educationally”，“母语基础扎实→学校语言读写能力强→学业成功” 即 “上学期间整体表现更好”，因此选 B。A（教年长家人学校所学）、C（读文化背景相关故事）、D（与家人关系比同伴更亲密）均未提及。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：Why are some people suspicious about mother-tongue-based teaching programmes?（为何有人质疑基于母语的教学项目？）\n答案：D（They fear that the programmes will use up valuable time in the school day. 他们担心项目占用宝贵的在校时间）\n解析：定位 Paragraph 5 中 “Some educators and parents are suspicious... because they worry that they take time away from the majority language”，“担心占用主流语言学习时间” 即 “占用在校时间”，因此选 D。A（担心读写速度慢）、B（担心混淆两种语言）、C（担心降低学习兴趣）均未提及。",
-          "questionId": "q30"
+          "questionId": "q4"
         }
       ],
       "questionRange": {
@@ -83,27 +83,27 @@
         {
           "questionNumber": 31,
           "text": "（1）题目 31：It was often recorded that bilingual children acquire the \\___\\___ to converse in the majority language remarkably quickly.（常有记录显示，双语儿童掌握主流语言交流_\\___\\__的速度极快。）\n答案：I（ability，能力）\n解析：定位 Paragraph 7 中 “bilingual children seem to ‘pick up’ conversational skills in the majority language at school quickly”，“交流技能” 对应 “ability to converse”，因此选 I。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（2）题目 32：The fact that the mother tongue can disappear at a similar \\___\\___ is less well understood.（母语以相似_\\___\\__消失的事实，却较少被关注。）\n答案：D（rate，速度）\n解析：定位 Paragraph 7 中 “how quickly children can lose their ability to use their mother tongue... The extent and rapidity of language loss”，“快速丧失母语能力” 对应 “disappear at a similar rate”，因此选 D。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（3）题目 33：This phenomenon depends, to a certain extent, on the proportion of people with the same linguistic background who have settled in a particular \\___\\___.（这种现象在一定程度上取决于，具有相同语言背景的人在特定_\\___\\__的定居比例。）\n答案：J（area，区域）\n解析：定位 Paragraph 7 中 “will vary according to the concentration of families from a particular linguistic group in the neighborhood”，“社区集中度” 对应 “proportion... in a particular area”，因此选 J。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（4）题目 34：If this is limited, children are likely to lose the active use of their mother tongue, and thus no longer employ it even with \\___\\___.（若比例有限，儿童可能丧失母语的主动使用能力，即便与_\\___\\__交流也不再使用。）\n答案：F（family，家人）\n解析：定位 Paragraph 7 中 “they will use the majority language in speaking with their peers and siblings and in responding to their parents”，“与父母、兄弟姐妹（家人）用主流语言交流” 对应 “even with family”，因此选 F。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（5）题目 35：It follows that teenage children in these circumstances experience a sense of \\___\\___ in relation to all aspects of their lives.（因此，这种情况下的青少年在生活各方面都会感到_\\___\\__。）\n答案：C（dislocation，疏离 / 错位）\n解析：定位 Paragraph 7 中 “the linguistic division between parents and children has become an emotional chasm. Pupils frequently become alienated from the cultures of both home and school”，“情感鸿沟、文化疏离” 对应 “sense of dislocation”，因此选 C。",
-          "questionId": "q35"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -119,27 +119,27 @@
         {
           "questionNumber": 36,
           "text": "（1）题目 36：Less than half of the children who attend kindergarten in Toronto have English as their mother tongue.（多伦多幼儿园中，不到一半儿童的母语是英语。）\n答案：YES（正确）\n解析：定位 Paragraph 1 中 “in the city of Toronto in Canada, 58% of kindergarten pupils come from homes where English is not the usual language of communication”，“58% 非英语家庭” 即 “不到一半儿童母语是英语”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（2）题目 37：Research proves that learning the host country language at school can have an adverse effect on a child’s mother tongue.（研究证明，在学校学习所在国语言会对儿童母语产生不利影响。）\n答案：NO（错误）\n解析：定位 Paragraph 5 中 “well-implemented bilingual programs can promote literacy and subject-matter knowledge in a minority language without any negative effects on children’s development in the majority language” 和 Paragraph 4 中 “Transfer across languages can be two-way: both languages nurture each other”，“双语项目不影响主流语言，且两种语言相互滋养” 与题干 “不利影响” 描述矛盾，因此判定为 NO。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（3）题目 38：The Foyer program is to be accepted by the French education system.（法国教育系统将采用 Foyer 项目。）\n答案：NOT GIVEN（未提及）\n解析：定位 Paragraph 5 中 “Within Europe, the Foyer program in Belgium... develops children’s speaking and literacy abilities in three languages (their mother tongue, Dutch and French)”，仅提到 “比利时的 Foyer 项目使用法语”，未提及 “法国教育系统将采用该项目”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（4）题目 39：Bilingual children are taught to tell the time earlier than monolingual children.（双语儿童比单语儿童更早学习看时间。）\n答案：NOT GIVEN（未提及）\n解析：定位 Paragraph 6 中 “Pupils who know how to tell the time in their mother tongue do not need to re-learn the concept”，仅讨论 “概念跨语言转移”，未比较 “学习时间早晚”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（5）题目 40：Bilingual children can apply reading comprehension strategies acquired in one language when reading in the other.（双语儿童阅读另一种语言时，可运用在一种语言中习得的阅读理解策略。）\n答案：YES（正确）\n解析：定位 Paragraph 6 中 “there is transfer across languages in other skills such as knowing how to distinguish the main idea from the supporting details of a written passage or story, and distinguishing fact from opinion”，“区分主旨与细节、事实与观点” 属于 “阅读理解策略”，且可跨语言转移，与题干描述一致，因此判定为 YES。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

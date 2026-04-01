@@ -60,32 +60,32 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：The Grimm brothers believed they would achieve international fame.（格林兄弟认为自己会获得国际声誉）\n答案：NO（错误）\n解析：定位 Paragraph B 中 “Such lasting fame would have shocked the humble Grimms”，“shocked”（震惊）表明兄弟俩未预料到会成名，与题干 “认为会获得国际声誉” 描述矛盾，因此判定为 NO。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：The Grimm brothers were forced to work in secret.（格林兄弟被迫秘密工作）\n答案：NOT GIVEN（未提及）\n解析：Paragraph B 仅提到 “德国被拿破仑统治、文化受压”，未提及 “被迫秘密工作”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：Some parents today still think Grimm fairy tales are not suitable for children.（如今部分家长仍认为格林童话不适合儿童）\n答案：YES（正确）\n解析：定位 Paragraph C 中 “Even today some protective parents shy from the Grimms’ tales because of their reputation for violence”，“shy from”（回避）对应 “think... not suitable”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：The first edition of Grimm’s fairy tales sold more widely in England than in Germany.（《格林童话》首版在英国销量比德国更广）\n答案：NOT GIVEN（未提及）\n解析：Paragraph B 提到 “首版在德国年售数百册”，Paragraph D 提到 “英国出版商后来推广儿童文学”，但未比较 “首版在英德的销量”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：Adults like reading Grimm’s fairy tales for reasons different from those of children.（成年人喜欢读格林童话的原因与儿童不同）\n答案：YES（正确）\n解析：定位 Paragraph E 中 “the stories read like dreams come true... Inevitably the boy and girl fall in love and live happily ever after. And parents keep reading because they approve of the finger-wagging lessons”，儿童因 “故事如美梦” 喜欢，家长因 “道德教训” 喜欢，原因不同，与题干描述一致，因此判定为 YES。",
-          "questionId": "q31"
+          "questionId": "q5"
         },
         {
           "questionNumber": 32,
           "text": "（6）题目 32：The Grimm brothers based the story “Cinderella” on the life of Dorothea Viehmann.（格林兄弟的《灰姑娘》基于多萝西娅・菲曼的生平）\n答案：NO（错误）\n解析：定位 Paragraph F 中 “Dorothea Viehmann... Among her treasure was ‘Aschenputtel’ -Cinderella”，菲曼是故事讲述者，并非《灰姑娘》的原型，与题干 “基于生平” 描述矛盾，因此判定为 NO。",
-          "questionId": "q32"
+          "questionId": "q6"
         }
       ],
       "questionRange": {
@@ -101,17 +101,17 @@
         {
           "questionNumber": 33,
           "text": "（1）题目 33：In paragraph D, what changes happened at that time in Europe?（D 段中，当时欧洲发生了什么变化？）\n答案：A（Literacy levels of the population increased. 人口识字率上升）\n解析：定位 Paragraph D 中 “to satisfy a newly literate audience seeking virtuous material for the nursery”，“newly literate audience”（新兴识字群体）对应 “literacy levels increased”，因此选 A。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（2）题目 34：What changes did the Grimm Brothers make in later editions?（格林兄弟在后续版本中做了哪些修改？）\n答案：C（The content of the tales became less violent. 故事内容暴力程度降低）\n解析：定位 Paragraph D 中 “they set about refining and softening their tales... cruel mothers became nasty stepmothers, unmarried lovers were made chaste, and the incestuous father was recast as the devil”，“softening”（弱化）对应 “less violent”，因此选 C。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（3）题目 35：What did Marie Hassenpflug contribute to the Grimm’s Fairy tales?（玛丽・哈森弗鲁格对《格林童话》有何贡献？）\n答案：D（She told the oral stories that were based on traditional Italian stories. 她讲述基于传统意大利故事的口头故事）\n解析：定位 Paragraph F 中 “Marie Hassenpflug... stories blended motifs from the oral tradition and from Perrault’s... book... Many of these had been adapted from earlier Italian tales”，明确提到她讲述的故事 “融合口头传统与改编自意大利的故事”，因此选 D。",
-          "questionId": "q35"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -127,27 +127,27 @@
         {
           "questionNumber": 36,
           "text": "（1）题目 36：Heinz Rolleke said the Grimm’s tales are “German” because some tales（海因茨・罗勒克认为格林童话 “具有德国特质”，因部分故事如何？）\n答案：D（tell of the simplicity of life in the German countryside. 讲述德国乡村生活的朴素）\n解析：定位 Paragraph G 中 “Heinz Rolleke... Love of the underdog, rustic simplicity, creative energy-these are Teutonic traits”，“rustic simplicity”（乡村朴素）对应 “simplicity of life in the German countryside”，因此选 D。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（2）题目 37：Heinz Rolleke said the abandoned children in tales（海因茨・罗勒克认为故事中被遗弃的儿童如何？）\n答案：A（reflect what life was like at that time. 反映当时的生活状况）\n解析：定位 Paragraph G 中 “Throughout Europe, children were often neglected and abandoned, like Hansel and Gretel... The cruelty in the stories... reflected the law-and-order system of the old times”，明确提到 “被遗弃儿童” 是当时生活的反映，因此选 A。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（3）题目 38：Bernhard Lauer said the writing style of the Grimm brothers is universal because they（伯恩哈德・劳尔认为格林兄弟的写作风格具有普适性，因他们如何？）\n答案：H（avoid details about characters’ social settings. 回避角色社会背景的细节）\n解析：定位 Paragraph H 中 “Bernhard Lauer points to the ‘universal style’ of the writing, you have no concrete descriptions of the land, or the clothes, or the forest, or the castles”，“无具体描述” 对应 “avoid details about social settings”，因此选 H。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（4）题目 39：Jack Zipes said the pursuit of happiness in the tales means they（杰克・齐普斯认为故事中对幸福的追求意味着它们如何？）\n答案：E（encourage people to believe that they can do anything. 鼓励人们相信自己能做成任何事）\n解析：定位 Paragraph H 中 “Jack Zipes... ‘They show a striving for happiness... We can identify with the heroes of the tales and become in our mind the masters and mistresses of our own destinies’”，“成为自身命运的主宰” 对应 “believe that they can do anything”，因此选 E。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（5）题目 40：Bruno Bettelheim said the therapeutic value of the tales means that the fairy tales（布鲁诺・贝特尔海姆认为故事的治疗价值意味着童话如何？）\n答案：B（help children deal with their problems. 帮助儿童处理自身问题）\n解析：定位 Paragraph I 中 “Bruno Bettelheim... calling fairy tales the ‘great comforters’. By confronting fears and phobias... children find they can master their anxieties”，“掌控焦虑” 对应 “deal with their problems”，因此选 B。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

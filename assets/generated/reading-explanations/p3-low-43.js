@@ -68,27 +68,27 @@
         {
           "questionNumber": 27,
           "text": "(1) 题目 27：Since it became an academic discipline, historical study has been too concerned with a search for 27 \\___\\___ by researchers who want to develop their careers. （自从成为一门学科学术后，历史研究过分关注于那些希望发展事业的研究者对原创性的追求。）\n答案：C) originality\n解析：定位第一段 “the need for the researcher to provide new insights ... to gain professional advancement”。“provide new insights”（提供新见解）与 originality（原创性/新意）意思一致。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "(2) 题目 28：Social history, however, is more closely related to the 28 \\___\\___ of the public. （然而，社会史与公众的兴趣和情感联系更紧密。）\n答案：F) interests and feelings\n解析：定位第二段 “It mobilises popular enthusiasm and engages popular passions.”。“popular enthusiasm / passions”（大众的热情/激情）对应 interests and feelings（兴趣和情感）。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "(3) 题目 29：It avoids history's traditional focus on 29 \\___\\___ （它避免了历史学传统上对重要人物的关注。）\n答案：D) important people\n解析：定位第二段 “directed against the ‘Great Man’ theories”。“Great Man theories”（伟人史观）即关注重要人物。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "(4) 题目 30：and its later concentration on 30 \\___\\___ （以及后来对组织事务的关注。）\n答案：H) organisational matters\n解析：定位第二段 “the tedious focus on bureaucratic issues”。“bureaucratic”（官僚的）对应 organisational matters（组织事务）。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "(5) 题目 31：and it is also different from traditional history in its teaching 31 \\___\\___, which is derived from different academic subjects. （它在教学方法论上也与传统历史不同，这种方法论源于不同的学科。）\n答案：A) methodology\n解析：定位第二段 “through the adoption of multi-disciplinary perspectives”。“multi-disciplinary perspectives”（多学科视角）指的是一种教学上或研究上的方法论。",
-          "questionId": "q31"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -104,22 +104,22 @@
         {
           "questionNumber": 32,
           "text": "(1) 题目 32：The rise of social history led to the cultural revolution of the 1960s. （社会史的兴起导致了20世纪60年代的文化大革命。）\n答案：NO\n解析：定位第三段 “Social history emerged ... from the cultural revolution of the 1960s”。原文是社会史“出自于”（from）文化大革命，而非“导致”（led to）。因果关系与题干相反。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "(2) 题目 33：Social historians tend to study a later period of history than traditional historians did. （社会史学家研究的时期倾向于晚于传统历史学家。）\n答案：YES\n解析：定位第三段 “traditional history ... 12th to 17th centuries, social history ... 19th century ... contemporary”。传统历史研究12-17世纪，而社会史研究19世纪及当代，时期明显更晚。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "(3) 题目 34：British cinema in the 1960s lacked any working-class characters. （20世纪60年代的英国电影缺少任何工人阶级角色。）\n答案：NO\n解析：定位第四段 “New Wave British cinema, with its working-class protagonists”。原文明确指出英国新浪潮电影有“工人阶级的主角”，与题干的“缺少任何”相反。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "(4) 题目 35：The loss of respect for authority in the 1960s was a leading cause of social problems. （20世纪60年代对权威的失敬是社会问题的一个主要原因。）\n答案：NOT GIVEN\n解析：第四段提到了“collapse of social deference”（社会尊卑秩序的崩溃），但并未将其与“social problems”（社会问题）联系起来，更未说明其因果关系。",
-          "questionId": "q35"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -135,27 +135,27 @@
         {
           "questionNumber": 36,
           "text": "(1) 题目 36：What point is made about the 'nostalgia industry'? （关于“怀旧产业”，作者提出了什么观点？）\n答案：D\n解析：定位第五段 “This emerged as a kind of negative counterpart to the otherwise dominant modernisation of the decade”。这句话的意思是，怀旧产业是那个时代占主导地位的现代化潮流的“消极对应物”，即反对当时的主流趋势。D选项（它反对当时的主导趋势）是其同义转述。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "(2) 题目 37：In the sixth paragraph, the writer makes the point that in the 1960s （在第六段，作者指出在20世纪60年代……）\n答案：B\n解析：定位第六段 “Industrial archaeology... elevated disused factories and mills to the status of national monuments.”。这表明当时人们对废弃的工厂和磨坊这类传统工业建筑产生了新的兴趣，将其提升为国家纪念碑。B选项（对传统工业建筑有了新的兴趣）是对这一点的准确概括。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "(3) 题目 38：By the 1970s, historians had come to believe that （到了20世纪70年代，历史学家们开始相信……）\n答案：B\n解析：定位第七段 “sense of disenchantment had crystallised into an idealised view of the past, fostering a nostalgic regard for disappearing communities”。对过去理想化的看法和对消失社区的怀旧，表明他们认为现代生活并不一定比过去更好。B选项（现代生活不一定是对过去的改进）准确地反映了这种幻灭感。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "(4) 题目 39：One problem related to the use of detail by social historians is that （社会史学家使用细节的一个问题是……）\n答案：C\n解析：定位第八段 “The facts accumulated may leave no conceptual space for the great absences, for the many areas where the documentary record is silent”。大量事实的堆砌可能会挤占对更宏大、更重要问题的思考空间，即那些文献记录缺失的“巨大空白”。C选项（更重要的问题可能被忽略）是对这个问题的最佳概括。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "(5) 题目 40：The writer recommends that to be effective, social history must （作者建议，为了行之有效，社会史必须……）\n答案：A\n解析：定位第十段 “far more weight needs to be given to the effects of insecurities and emergencies—the fears that shadow the growing up of children, the oppositions we encounter during our lives”。作者主张要更多地关注“不安全感、紧急情况、恐惧、对立”等负面经历和情绪。A选项（探索日常生活中作为一部分的负面情绪）是对此最准确的总结。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

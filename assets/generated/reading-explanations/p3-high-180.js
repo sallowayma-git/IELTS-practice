@@ -64,27 +64,27 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：The optimum amount of fluoride in fluoridated water is calculated partly according to（氟化水中氟化物的最佳含量部分根据什么计算？）\n答案：A（how hot the area is. 该地区的炎热程度）\n解析：定位 Paragraph 1 中 “the desired concentration of fluoride in public water is approximately one part per million, depending on the regional temperature and hence the amount of water people are likely to drink”，“regional temperature”（地区温度）对应 “how hot the area is”，因此选 A。B（水的温度）、C（社区牙科问题数量）、D（社区选择的水中氟含量）均未提及。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：One reason given by the writer for opposing fluoridation is that（作者提到的反对氟化水的原因之一是？）\n答案：C（obligatory fluoridation takes away personal freedom. 强制氟化水剥夺个人自由）\n解析：定位 Paragraph 2 中 “fluoridation is thought to be an infringement on individual rights because it is compulsory medication of all members of a community”，“强制用药、侵犯个人权利” 对应 “takes away personal freedom”，因此选 C。A（可能导致龋齿）、B（公众成本过高）、D（可能误加过量氟化物）均未提及。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：The writer mentions Kuhn in order to（作者提及库恩的目的是？）\n答案：D（show that science can be influenced by non-scientific considerations. 说明科学可能受非科学因素影响）\n解析：定位 Paragraph 5 中 “Kuhn (1970) argued that scientific knowledge does not always develop as an orderly process... the shift from one scientific way of thinking to another is not made solely on the basis of clear rules of formal scientific practice, but can include social factors”，“科学思维转变包含社会因素” 对应 “influenced by non-scientific considerations”，因此选 D。A（与科林斯的观点对比）、B（支持科学探索的理性本质）、C（证明库恩论证不充分）均偏离目的。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：What did Sutton’s research discover about earlier studies in North America?（萨顿的研究发现北美早期研究存在什么问题？）\n答案：A（There were failings in the way they were carried out. 研究实施方式存在缺陷）\n解析：定位 Paragraph 7 中 “Sutton in 1960, which analyzed the classic North American studies... found that each showed significant methodological shortcomings”，“methodological shortcomings”（方法缺陷）对应 “failings in the way they were carried out”，因此选 A。B（涉及的科学家取得独特成果）、C（氟化水支持者未理解长期影响）、D（氟化水防龋效果比之前认为的更显著）均与原文矛盾。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：In the last paragraph, what does the writer say about scientists?（最后一段中，作者关于科学家有何观点？）\n答案：B（They should not decide the fluoridation policy. 他们不应决定氟化水政策）\n解析：定位 Paragraph 10 中 “this is not an issue on which declarations by scientific experts ought to be considered the final word”，“科学专家的声明不应是最终结论” 对应 “should not decide the policy”，因此选 B。A（应透露真实动机）、C（仅关注科学真理）、D（无法就氟化水问题达成一致）均未提及。",
-          "questionId": "q31"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -100,22 +100,22 @@
         {
           "questionNumber": 32,
           "text": "（1）题目 32：Scientific knowledge should be kept separate from social values.（科学知识应与社会价值观分离）\n答案：NO（错误）\n解析：定位 Paragraph 6 中 “One interpretation of this analysis of science is that traditional distinctions between facts and theories, and between scientific knowledge and values, can no longer be justified. Because social processes are involved... social values may also be involved”，“传统区分不再合理，价值观可能参与其中” 与题干 “应分离” 描述矛盾，因此判定为 NO。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（2）题目 33：Many sociologists have disregarded the doubts that some scientists have concerning fluoridation.（许多社会学家忽视了部分科学家对氟化水的质疑）\n答案：YES（正确）\n解析：定位 Paragraph 7 中 “sociologists have also downplayed an important part of the debate by ignoring the number of eminent scientists who have questioned aspects of fluoridation... Sutton’s book is not cited in a single analysis of the fluoridation issue by any sociologist”，“忽视质疑、未引用萨顿著作” 与题干描述一致，因此判定为 YES。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（3）题目 34：Sutton’s findings have been given insufficient attention by scientists outside of North America.（北美以外的科学家对萨顿的发现关注不足）\n答案：NOT GIVEN（未提及）\n解析：全文仅提到 “社会学家未引用萨顿著作”，未提及 “北美以外科学家的关注情况”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（4）题目 35：There are valid arguments on both sides of the fluoridation debate.（氟化水争议双方均有合理论据）\n答案：YES（正确）\n解析：定位 Paragraph 9 中 “Both arguments consider the scientific evidence concerning fluoridation, but differ in their assessments of the social benefits and costs. This difference is not between rationality and irrationality but is a legitimate difference in values”，“双方均考虑科学证据，差异是合理价值观差异” 对应 “valid arguments on both sides”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q35"
+          "questionId": "q9"
         }
       ],
       "questionRange": {
@@ -131,27 +131,27 @@
         {
           "questionNumber": 36,
           "text": "（1）题目 36：The traditional view of science is that（传统科学观点认为？）\n答案：B（science is an unbiased discipline. 科学是无偏见的学科）\n解析：定位 Paragraph 4 中 “The traditional view is that science is a special kind of knowledge, which is established through scientific methods and objectively applied by members of a scientific community”，“客观应用” 对应 “unbiased discipline”，因此选 B。",
-          "questionId": "q36"
+          "questionId": "q10"
         },
         {
           "questionNumber": 37,
           "text": "（2）题目 37：A sociological view of science argues that（科学的社会学观点认为？）\n答案：G（scientific knowledge is affected by the beliefs of everyone concerned. 科学知识受所有相关者信念的影响）\n解析：定位 Paragraph 4 中 “a sociology of science that shows how scientific knowledge is socially negotiated, and inevitably linked to the values of the relevant parties, both scientists and nonscientists”，“与相关方价值观关联” 对应 “affected by the beliefs of everyone concerned”，因此选 G。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（3）题目 38：Collins is of the opinion that（科林斯认为？）\n答案：A（the results of scientific research are not always understood at first. 科学研究结果并非总能一开始就被理解）\n解析：定位 Paragraph 5 中 “Collins (1975) took this concept further when he asserted that the outcome of experiments was not something whose meaning could be immediately comprehended, but rather something for interpretation, discussion between scientists, and reinterpretation in the light of other experiments”，“结果意义并非即时可知” 对应 “not always understood at first”，因此选 A。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（4）题目 39：The writer suggests that a supporter of fluoridation may conclude that（作者暗示氟化水支持者可能认为？）\n答案：D（there is insufficient proof to support a cautious approach. 没有足够证据支持谨慎态度）\n解析：定位 Paragraph 8 中 “A supporter of fluoridation might argue, ‘The evidence for the benefits of fluoridation is quite substantial, while the evidence for harm is limited and dubious. I think the likely benefits outweigh the possible dangers’”，“益处证据充分，危害证据有限” 对应 “insufficient proof to support a cautious approach”，因此选 D。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（5）题目 40：The writer suggests that an opponent of fluoridation may conclude that（作者暗示氟化水反对者可能认为？）\n答案：C（people should be able to choose whether they want fluoride. 人们应能选择是否摄入氟化物）\n解析：定位 Paragraph 8 中 “An opponent might argue, ‘... I oppose fluoridation of water supplies and favor the voluntary use of fluoride tablets by those who want to take them’”，“支持自愿使用氟化物片剂” 对应 “choose whether they want fluoride”，因此选 C。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {

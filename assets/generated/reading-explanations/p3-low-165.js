@@ -68,27 +68,27 @@
         {
           "questionNumber": 27,
           "text": "（1）题目 27：According to the third paragraph, why is dismissing bad teachers a poor solution to problems in educational standards?（根据第三段，为何淘汰差教师不是提升教育水平的好办法？）\n答案：D（Replacement teachers have the same training as the dismissed ones. 替代教师与被淘汰者接受相同培训）\n解析：定位 Paragraph 3 中 “When poor teachers are fired, new ones are needed – and they will have come through the same educational system that failed to make fine teachers of their predecessors”，明确提到 “新教师来自与被淘汰者相同的教育体系，培训相同”，因此选 D。",
-          "questionId": "q27"
+          "questionId": "q1"
         },
         {
           "questionNumber": 28,
           "text": "（2）题目 28：What does the writer say about teacher-training institutions in the fourth paragraph?（作者在第四段中对教师培训机构有何评价？）\n答案：A（Graduating teachers are not ready for the classroom. 毕业教师未做好课堂准备）\n解析：定位 Paragraph 4 中 “A recent report found 31 countries in which more than a quarter of primary-school teachers had not reached minimal national standards... few newly qualified teachers are well enough prepared for the classroom”，明确提到 “新教师未做好课堂准备”，因此选 A。",
-          "questionId": "q28"
+          "questionId": "q2"
         },
         {
           "questionNumber": 29,
           "text": "（3）题目 29：In their first few years of working, teachers improve in the classroom because they（教师入职初期课堂教学能力提升的原因是？）\n答案：B（have to engage with the realities of the job. 必须应对工作现实）\n解析：定位 Paragraph 5 中 “they become better teachers in their first few years as they get to grips with real pupils in real classrooms”，“get to grips with real pupils” 对应 “engage with the realities of the job”，因此选 B。",
-          "questionId": "q29"
+          "questionId": "q3"
         },
         {
           "questionNumber": 30,
           "text": "（4）题目 30：Which of the following does the writer suggest is least effective for teachers to use?（作者认为教师使用以下哪种方法效果最差？）\n答案：C（responding to pupils who raise their hands to answer questions. 仅回应举手回答问题的学生）\n解析：定位 Paragraph 6 中 “asking questions in the classroom with ‘cold calling’ rather than relying on the same eager pupils putting up their hands”，作者推荐 “随机提问”，暗示 “仅回应举手学生” 效果差，因此选 C。",
-          "questionId": "q30"
+          "questionId": "q4"
         },
         {
           "questionNumber": 31,
           "text": "（5）题目 31：The author suggests that head teachers can assist newly qualified teachers by（作者认为校长可通过何种方式帮助新教师？）\n答案：D（working closely with them. 与他们密切合作）\n解析：定位 Paragraph 9 中 “The best head teachers hold novices’ hands by helping them prepare high-quality lessons and arranging for more-experienced teachers to cover for them”，“hold novices’ hands”（帮扶新人）对应 “working closely with them”，因此选 D。",
-          "questionId": "q31"
+          "questionId": "q5"
         }
       ],
       "questionRange": {
@@ -104,27 +104,27 @@
         {
           "questionNumber": 32,
           "text": "（1）题目 32：Of the many ‘miracle’ educational solutions that have been put forward, a few have been effective.（在众多 “神奇” 教育解决方案中，少数确实有效）\n答案：YES（正确）\n解析：定位 Paragraph 3 中 “Education has a history of lurching from one ‘miracle’ solution to the next. The best of them even achieve some good”，明确提到 “部分方案有成效”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q32"
+          "questionId": "q6"
         },
         {
           "questionNumber": 33,
           "text": "（2）题目 33：Understanding educational theories is an essential part of teacher training.（理解教育理论是教师培训的必要部分）\n答案：NO（错误）\n解析：定位 Paragraph 4 中 “which almost always involves superficial and seemingly useless discussions of theory. Some of these courses... have no effect on how well their graduates’ pupils end up being taught”，作者认为理论 “肤浅无用、无效果”，与题干 “必要部分” 描述矛盾，因此判定为 NO。",
-          "questionId": "q33"
+          "questionId": "q7"
         },
         {
           "questionNumber": 34,
           "text": "（3）题目 34：Courses producing unsuccessful teachers should be given grants to improve.（培养出不合格教师的课程应获得资助以改进）\n答案：NO（错误）\n解析：定位 Paragraph 8 中 “Courses that produce teachers who go on to do little to improve their pupils’ learning should not receive subsidies”，“不应获得补贴” 与题干 “应获得资助” 描述矛盾，因此判定为 NO。",
-          "questionId": "q34"
+          "questionId": "q8"
         },
         {
           "questionNumber": 35,
           "text": "（4）题目 35：Education is currently underfunded, which is leading to problems in schools.（当前教育经费不足，导致学校问题）\n答案：NOT GIVEN（未提及）\n解析：全文仅在 Paragraph 10 提到 “资金重要性低于预期”，未提及 “经费不足导致问题”，无相关信息，因此判定为 NOT GIVEN。",
-          "questionId": "q35"
+          "questionId": "q9"
         },
         {
           "questionNumber": 36,
           "text": "（5）题目 36：Good classroom teachers should be paid more to remain in the classroom.（应提高优秀课堂教师薪资以留住他们）\n答案：YES（正确）\n解析：定位 Paragraph 10 中 “ensuring the best teachers stay in the classroom will, in most places, mean paying more. People who thrive in front of pupils should not have to become managers to earn a pay rise”，明确提到 “加薪留住优秀教师”，与题干描述一致，因此判定为 YES。",
-          "questionId": "q36"
+          "questionId": "q10"
         }
       ],
       "questionRange": {
@@ -140,22 +140,22 @@
         {
           "questionNumber": 37,
           "text": "（1）题目 37：Just as any athlete can be coached for better performance,（正如任何运动员都可通过训练提升表现，\\___\\___）\n答案：D（a teacher who is not outstanding can be improved. 非优秀教师也可通过培养提升）\n解析：定位 Paragraph 2 中 “The aim is to make ordinary teachers great, just as sports coaches help athletes of all abilities to improve their personal best”，“普通教师变优秀” 对应 “非优秀教师可提升”，因此选 D。",
-          "questionId": "q37"
+          "questionId": "q11"
         },
         {
           "questionNumber": 38,
           "text": "（2）题目 38：If teachers are to be taught the complex skills they require,（若要教授教师所需的复杂技能，\\___\\___）\n答案：A（practice will always be more important than theory. 实践始终比理论重要）\n解析：定位 Paragraph 7 中 “Like other complex skills, teaching requires a route to mastery that is not based on abstruse theory but on intense, guided practice”，“基于实践而非理论” 对应 “实践更重要”，因此选 A。",
-          "questionId": "q38"
+          "questionId": "q12"
         },
         {
           "questionNumber": 39,
           "text": "（3）题目 39：In teaching, as in the medical profession,（与医学领域一样，教学领域_\\___\\__）\n答案：F（a better syllabus and more practical involvement will improve results. 更好的课程大纲和更多实践参与将提升效果）\n解析：定位 Paragraph 8 中 “A century ago, medical schools raised the calibre of doctors by introducing systematic curriculums and providing clinical experience. It is essential that teacher-training colleges start to collect and publish data”，“医学院通过系统课程和临床实践提升医生水平” 类比 “教师培训需更好大纲和实践”，因此选 F。",
-          "questionId": "q39"
+          "questionId": "q13"
         },
         {
           "questionNumber": 40,
           "text": "（4）题目 40：If the status of teachers were improved,（若教师地位提升，\\___\\___）\n答案：C（more capable graduates could be attracted into the profession. 更多优秀毕业生可能被吸引加入该行业）\n解析：定位 Paragraph 11 中 “Improving the quality of the average teacher would raise the profession’s prestige, setting up a virtuous cycle in which more talented graduates clamoured to join”，“提升声望吸引优秀毕业生” 对应 “地位提升吸引人才”，因此选 C。",
-          "questionId": "q40"
+          "questionId": "q14"
         }
       ],
       "questionRange": {
