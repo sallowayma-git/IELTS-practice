@@ -49,8 +49,16 @@ class ScoreStorage {
         }
     }
 
+    getPracticeCoreContracts() {
+        return window.PracticeCore && window.PracticeCore.contracts;
+    }
+
+    getPracticeCoreStore() {
+        return window.PracticeCore && window.PracticeCore.store;
+    }
+
     normalizePracticeType(rawType) {
-        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        const coreContracts = this.getPracticeCoreContracts();
         if (coreContracts && typeof coreContracts.normalizePracticeType === 'function') {
             return coreContracts.normalizePracticeType(rawType);
         }
@@ -62,7 +70,7 @@ class ScoreStorage {
     }
 
     inferPracticeType(recordData = {}) {
-        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        const coreContracts = this.getPracticeCoreContracts();
         if (coreContracts && typeof coreContracts.inferPracticeType === 'function') {
             return coreContracts.inferPracticeType(recordData);
         }
@@ -77,7 +85,7 @@ class ScoreStorage {
     }
 
     resolveRecordDate(recordData = {}, now = new Date().toISOString()) {
-        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        const coreContracts = this.getPracticeCoreContracts();
         if (coreContracts && typeof coreContracts.resolveRecordDate === 'function') {
             return coreContracts.resolveRecordDate(recordData, now);
         }
@@ -127,7 +135,7 @@ class ScoreStorage {
     }
 
     buildMetadata(recordData = {}, type) {
-        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        const coreContracts = this.getPracticeCoreContracts();
         if (coreContracts && typeof coreContracts.buildMetadata === 'function') {
             return coreContracts.buildMetadata(recordData, type);
         }
@@ -596,7 +604,7 @@ class ScoreStorage {
             // 验证记录数据
             this.validateRecord(standardizedRecord);
 
-            const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+            const practiceCoreStore = this.getPracticeCoreStore();
             if (practiceCoreStore && typeof practiceCoreStore.savePracticeRecord === 'function') {
                 const savedRecord = await practiceCoreStore.savePracticeRecord(standardizedRecord, {
                     currentVersion: this.currentVersion,
@@ -816,7 +824,7 @@ class ScoreStorage {
      * 标准化记录格式
      */
     standardizeRecord(recordData) {
-        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        const coreContracts = this.getPracticeCoreContracts();
         if (coreContracts && typeof coreContracts.standardizeRecord === 'function') {
             return coreContracts.standardizeRecord(recordData, {
                 currentVersion: this.currentVersion,
@@ -973,7 +981,7 @@ class ScoreStorage {
      * 标准化答案格式
      */
     standardizeAnswers(answers) {
-        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        const coreContracts = this.getPracticeCoreContracts();
         if (coreContracts && typeof coreContracts.buildAnswerArray === 'function') {
             return coreContracts.buildAnswerArray(answers);
         }
@@ -1087,7 +1095,7 @@ class ScoreStorage {
     }
 
     deriveCorrectMapFromDetails(details) {
-        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        const coreContracts = this.getPracticeCoreContracts();
         if (coreContracts && typeof coreContracts.deriveCorrectMapFromDetails === 'function') {
             return coreContracts.deriveCorrectMapFromDetails(details);
         }
@@ -1110,7 +1118,7 @@ class ScoreStorage {
     }
 
     buildAnswerDetailsFromMaps(answerMap = {}, correctMap = {}) {
-        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        const coreContracts = this.getPracticeCoreContracts();
         if (coreContracts && typeof coreContracts.buildAnswerDetails === 'function') {
             return coreContracts.buildAnswerDetails(answerMap, correctMap);
         }
