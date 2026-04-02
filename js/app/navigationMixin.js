@@ -72,8 +72,32 @@
                     }
                     break;
                 case 'practice':
-                    // 练习视图已由其他组件处理
-                    console.log('[App] 练习视图已激活');
+                    console.log('[App] 练习视图已激活，开始加载练习记录模块');
+                    Promise.resolve()
+                        .then(() => {
+                            if (typeof window.ensureBrowseGroup === 'function') {
+                                return window.ensureBrowseGroup();
+                            }
+                            return null;
+                        })
+                        .then(() => {
+                            if (typeof window.ensurePracticeSuiteReady === 'function') {
+                                return window.ensurePracticeSuiteReady();
+                            }
+                            return null;
+                        })
+                        .then(() => {
+                            if (typeof window.syncPracticeRecords === 'function') {
+                                return window.syncPracticeRecords();
+                            }
+                            if (typeof window.updatePracticeView === 'function') {
+                                window.updatePracticeView();
+                            }
+                            return null;
+                        })
+                        .catch((error) => {
+                            console.error('[App] 激活练习视图失败:', error);
+                        });
                     break;
             }
         },

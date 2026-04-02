@@ -1,0 +1,114 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-low-80", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-low-80",
+  "meta": {
+    "title": "The unsung sense 被低估的嗅觉",
+    "category": "P1",
+    "frequency": "low",
+    "pdfFilename": "170. P1 - The unsung sense 被低估的嗅觉.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/170. P1 - The unsung sense 被低估的嗅觉/",
+    "legacyFilename": "170. P1 - The unsung sense 被低估的嗅觉.html",
+    "questionIntroHtml": "<h3>Questions 1–6</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>The unsung sense</h3>\n            <h4>New research reassesses the nature and importance of smell</h4>\n            \n            <p>Traditionally, smell has not been at the forefront of sensory research, pushed aside in favour of the seemingly more vital senses of vision and hearing. There has been a strong belief that people, especially compared to other mammals, are not that influenced by smells.</p>\n            <p>One of the first to assert the relative unimportance of the human sense of smell was Pierre Paul Broca, an influential 19th-century anatomist. After comparing the proportion of the brain devoted to smell in different animals, he suggested that mammals can be classed into two broad groups: macrosmatic mammals, such as dogs, have a finely tuned sense of smell which they rely on to perceive the world, while marine mammals and primates, including humans, are microsmatic – the organ with which they smell is small and functionally redundant.</p>\n            <p>That idea seemed to fit with more recent studies in genetics, which found that the majority of mammals have about one thousand different types of smell receptor. Most of these aren't present in humans, who only possess four hundred or so different types.</p>\n            <p>Yet these findings may have been misleading. Brain scans show that more of the human brain is devoted to smell processing than Broca's anatomical studies suggested. And although we may have fewer types of receptor than other mammals, research has shown that the human nose and brain are unusually well connected, with each group of receptors linking to many more neural regions than is the case in other animals. That should give us a good ability to process incoming scents.</p>\n            <p>Once researchers began looking, they found the nose to be far more sensitive than its reputation suggested. One study, for example, found that we can pick out a particular substance even when heavily diluted. In fact, a person can smell just one drop of a chemical in a large swimming pool.</p>\n            <p>What's more, with the latest findings, it is becoming clear that the brain's smelling centres are intimately linked to its system for controlling emotion, fear and memory. That suggests a link between smell and the way we think. One Dutch academic, for example, found that when the smell of orange, seawater or peppermint was pumped through a nightclub, those inside partied harder – they danced more, laughed more, and even thought the music was better than when there was no added scent.</p>\n            <p>Other work has found that scent can influence our cognitive skills. A study found that when men were subjected to a novel smell – either good or bad – during a task used to test decision-making skills, they performed significantly worse than normal. The researchers concluded that the scent stimulated brain areas connected with emotion, making their decisions emotional rather than rational.</p>\n            <p>The surprising thing about such studies is that up to 95% of subjects altered their behaviour, despite only 5% of them being aware of the introduced smells that they were facing. The question, then, is why do we pay so little conscious attention to our noses unless we smell something really strong?</p>\n            <p>One vital factor is that our noses just aren't equipped to locate the source of an odour. This makes the sense of smell fundamentally different to vision or hearing, which are built to identify sights and sounds with precision. Apparently, we become aware of something when the brain focuses on a single location, after which it picks out the details, like a familiar face, from the scene. With smell, though, the brain does not focus in the same way, and so is not able to make us aware of the details relating to one particular area. It's for this reason that we can only ever pick out around four smells from a complex mixture.</p>\n            <p>Nevertheless, we all have the capacity to train our sense of smell, but it needs to be worked at. Master perfumers, for instance, learn to recognise, name and imagine an extraordinary range of smells through years of practice. This is accompanied by a significant reorganisation of the olfactory areas in the brain that helps them to process the scents more efficiently.</p>\n            <p>Smells are also especially good memory evokers, but it's actually a myth that odours trigger more complete memories than other stimuli. These memories are neither more accurate nor more detailed, but they are unique in that they are more emotional. This isn't surprising when you consider that both emotion and smell are processed by the same areas of the brain, and there is a strong link between emotion and memory.</p>\n            <p>That said, not all smell memories are equal. The link between a memory and a smell is stronger if the smell is an unpleasant rather than a pleasant one, which makes sense from an evolutionary perspective. In addition, the very first time we associate a smell with an object, it evokes a much greater response in our brains than for any encounter with the smell or object in later life, laying down stronger foundations for the memory. That doesn't happen with any other sense. Since most first encounters with a smell happen at a young age, this might explain why smells often carry us back to our childhood.</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Complete the notes below.</h4>\n                <p>Choose <strong>ONE WORD AND/OR A NUMBER</strong> from the passage for each answer.</p>\n                \n                <div class=\"notes-completion\">\n                    <h4>Research on smell</h4>\n                    <p><strong>Pierre Paul Broca</strong></p>\n                    <ul>\n                        <li>referred to mammals for whom smell is vital as macrosmatic</li>\n                        <li>categorised humans with other <strong>1</strong> <input type=\"text\" id=\"q1_input\" maxlength=\"20\" name=\"q1\"> and sea mammals as having a small smell organ</li>\n                    </ul>\n                    <p><strong>More recent studies</strong></p>\n                     <ul>\n                        <li>humans have about <strong>2</strong> <input type=\"text\" id=\"q2_input\" maxlength=\"20\" name=\"q2\"> kinds of smell receptor</li>\n                        <li>humans process incoming smells efficiently due to the way they reach the brain</li>\n                        <li>studies prove that humans can detect a single <strong>3</strong> <input type=\"text\" id=\"q3_input\" maxlength=\"20\" name=\"q3\"> of some substance in a huge quantity of liquid</li>\n                    </ul>\n                    <p><strong>The latest research</strong></p>\n                    <ul>\n                        <li>the effects of introducing certain aromas into a <strong>4</strong> <input type=\"text\" id=\"q4_input\" maxlength=\"20\" name=\"q4\"> were studied</li>\n                        <li>certain smells altered the way Dutch party-goers felt about the <strong>5</strong> <input type=\"text\" id=\"q5_input\" maxlength=\"20\" name=\"q5\"></li>\n                        <li>unfamiliar smells created a response related to emotion and changed the way some people made decisions</li>\n                        <li>as many as <strong>6</strong> <input type=\"text\" id=\"q6_input\" maxlength=\"20\" name=\"q6\"> of people in research studies reacted to introduced smells</li>\n                    </ul>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions 1–6</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q7",
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q7-8-9-10-11-12-13-anchor\">\n                <h4>Do the following statements agree with the information given in Reading Passage 1?</h4>\n                <p>In boxes 7–13 on your answer sheet, write:</p>\n                <ul style=\"list-style-position: inside; padding-left: 0; margin-bottom: 1rem;\">\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information on this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>7</strong> Human vision and hearing are designed to locate exactly where stimuli are coming from.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q7\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>8</strong> Even when complex multiple smells are present, most humans can identify only a few individual odours.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q8\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>9</strong> Professional help is needed when a person is developing their sense of smell.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q9\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>10</strong> Smells stimulate more precise memories than sights or sounds do.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q10\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q10\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q10\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>11</strong> A pleasant smell creates the strongest memories.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q11\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q11\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>12</strong> Sensitivity to new smells declines in adulthood.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q12\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>13</strong> Smell-related memories can frequently evoke childhood experiences.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q13\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "primates",
+    "q2": "400",
+    "q3": "drop",
+    "q4": "nightclub",
+    "q5": "music",
+    "q6": "95%",
+    "q7": "TRUE",
+    "q8": "TRUE",
+    "q9": "NOT GIVEN",
+    "q10": "FALSE",
+    "q11": "FALSE",
+    "q12": "NOT GIVEN",
+    "q13": "TRUE"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/170. P1 - The unsung sense 被低估的嗅觉/170. P1 - The unsung sense 被低估的嗅觉.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/170. P1 - The unsung sense 被低估的嗅觉/170. P1 - The unsung sense 被低估的嗅觉.pdf",
+    "ieltsHtml": "IELTS/P1/The unsung sense.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.648Z",
+    "notes": "signature:radio,text,textarea,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

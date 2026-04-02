@@ -5,6 +5,16 @@
     var scriptStatus = Object.create(null);
     var groupStatus = Object.create(null);
     var dependencies = Object.create(null);
+    var GROUP_ALIASES = {
+        'browse-view': 'browse-runtime'
+    };
+
+    function normalizeGroupName(name) {
+        if (!name) {
+            return '';
+        }
+        return GROUP_ALIASES[name] || name;
+    }
 
     function registerDefaultManifest() {
         manifest['exam-data'] = [
@@ -13,9 +23,9 @@
         ];
 
         manifest['state-core'] = [
+            'js/core/practiceCore.js',
+            'js/core/resourceCore.js',
             'js/app/state-service.js',
-            'js/services/GlobalStateService.js',
-            'js/runtime/legacy-state-adapter.js',
             'js/services/libraryManager.js'
         ];
 
@@ -27,9 +37,7 @@
             'js/components/practiceHistoryEnhancer.js',
             'js/core/scoreStorage.js',
             'js/utils/answerSanitizer.js',
-            'js/core/practiceRecorder.js',
-            'js/core/legacyStateBridge.js',
-            'js/utils/legacyStateAdapter.js'
+            'js/core/practiceRecorder.js'
         ];
 
         manifest['browse-runtime'] = [
@@ -37,6 +45,7 @@
             'js/views/legacyViewBundle.js',
             'js/app/examActions.js',
             // 单篇练习通信与会话能力属于 browse/practice 主流程
+            'js/app/readingLaunchMixin.js',
             'js/app/examSessionMixin.js',
             'js/app/browseController.js',
             'js/presentation/message-center.js',
@@ -46,6 +55,9 @@
             'js/components/DataIntegrityManager.js',
             'js/components/BrowseStateManager.js',
             'js/utils/dataConsistencyManager.js',
+            'js/utils/suitePreference.js',
+            'js/utils/suiteBackGuard.js',
+            'js/utils/answerMatchCore.js',
             'js/utils/answerComparisonUtils.js',
             'js/utils/BrowsePreferencesUtils.js',
             'js/utils/performance.js',
@@ -53,9 +65,6 @@
             'js/utils/codeStandards.js',
             'js/main.js'
         ];
-
-        // 向后兼容旧组名
-        manifest['browse-view'] = manifest['browse-runtime'].slice();
 
         manifest['session-suite'] = [
             'js/app/suitePracticeMixin.js'
@@ -83,7 +92,6 @@
         dependencies['exam-data'] = [];
         dependencies['practice-suite'] = ['state-core'];
         dependencies['browse-runtime'] = ['state-core'];
-        dependencies['browse-view'] = ['state-core'];
         dependencies['session-suite'] = ['browse-runtime', 'practice-suite'];
         dependencies['more-tools'] = ['state-core'];
         dependencies['theme-tools'] = [];
@@ -191,7 +199,7 @@
             return Promise.resolve();
         }
 
-        if (groupName === 'browse-runtime' || groupName === 'browse-view') {
+        if (groupName === 'browse-runtime') {
             var mainIndex = list.indexOf('js/main.js');
             var withoutMain = mainIndex >= 0
                 ? list.filter(function (file) { return file !== 'js/main.js'; })
@@ -221,14 +229,6 @@
         return sequentialLoad(list);
     }
 
-    function mirrorAliasStatus(groupName, statusValue) {
-        if (groupName === 'browse-runtime') {
-            groupStatus['browse-view'] = statusValue;
-        } else if (groupName === 'browse-view') {
-            groupStatus['browse-runtime'] = statusValue;
-        }
-    }
-
     function refreshAppPrototypeIfNeeded(groupName) {
         var files = manifest[groupName] || [];
         var containsMixin = files.some(function (file) {
@@ -247,51 +247,50 @@
     }
 
     function ensureGroup(groupName) {
-        if (!groupName || !manifest[groupName]) {
+        var resolvedName = normalizeGroupName(groupName);
+        if (!resolvedName || !manifest[resolvedName]) {
             return Promise.resolve();
         }
 
-        if (groupStatus[groupName] === 'loaded') {
+        if (groupStatus[resolvedName] === 'loaded') {
             return Promise.resolve();
         }
-        if (groupStatus[groupName] && groupStatus[groupName].then) {
-            return groupStatus[groupName];
+        if (groupStatus[resolvedName] && groupStatus[resolvedName].then) {
+            return groupStatus[resolvedName];
         }
 
-        var required = dependencies[groupName] || [];
-        groupStatus[groupName] = Promise.all(required.map(ensureGroup))
+        var required = dependencies[resolvedName] || [];
+        groupStatus[resolvedName] = Promise.all(required.map(ensureGroup))
             .then(function () {
-                return loadGroup(groupName, manifest[groupName]);
+                return loadGroup(resolvedName, manifest[resolvedName]);
             })
             .then(function onGroupLoaded() {
-                refreshAppPrototypeIfNeeded(groupName);
-                groupStatus[groupName] = 'loaded';
-                mirrorAliasStatus(groupName, 'loaded');
+                refreshAppPrototypeIfNeeded(resolvedName);
+                groupStatus[resolvedName] = 'loaded';
             }).catch(function onGroupFailed(error) {
-                console.error('[LazyLoader] 组加载失败:', groupName, error);
-                groupStatus[groupName] = null;
-                mirrorAliasStatus(groupName, null);
+                console.error('[LazyLoader] 组加载失败:', resolvedName, error);
+                groupStatus[resolvedName] = null;
                 throw error;
             });
-        mirrorAliasStatus(groupName, groupStatus[groupName]);
 
-        return groupStatus[groupName];
+        return groupStatus[resolvedName];
     }
 
     function registerGroup(name, files) {
         if (!name || !Array.isArray(files)) {
             return;
         }
-        manifest[name] = files.slice();
+        manifest[normalizeGroupName(name)] = files.slice();
     }
 
     function getStatus(name) {
         if (!name) {
             return { manifest: Object.keys(manifest) };
         }
+        var resolvedName = normalizeGroupName(name);
         return {
-            loaded: groupStatus[name] === 'loaded',
-            files: manifest[name] ? manifest[name].slice() : []
+            loaded: groupStatus[resolvedName] === 'loaded',
+            files: manifest[resolvedName] ? manifest[resolvedName].slice() : []
         };
     }
 

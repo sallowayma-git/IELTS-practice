@@ -101,6 +101,14 @@ async function main() {
         return { type, detail: init.detail || null };
     };
 
+    const sessionStorageStub = new Map();
+    const sessionStorageObj = {
+        getItem(key) { return sessionStorageStub.get(key) || null; },
+        setItem(key, value) { sessionStorageStub.set(key, String(value)); },
+        removeItem(key) { sessionStorageStub.delete(key); },
+        clear() { sessionStorageStub.clear(); }
+    };
+
     const sandbox = {
         window: windowStub,
         storage,
@@ -114,6 +122,7 @@ async function main() {
         CustomEvent: windowStub.CustomEvent
     };
     sandbox.globalThis = sandbox.window;
+    sandbox.window.sessionStorage = sessionStorageObj;
 
     const context = vm.createContext(sandbox);
 
@@ -185,7 +194,7 @@ async function main() {
     app.injectDataCollectionScript = function injectDataCollectionScript(examWindow, examId) {
         this.initializePracticeSession(examWindow, examId);
         if (typeof this.handleSessionReady === 'function') {
-            this.handleSessionReady(examId, { pageType: 'reading' });
+            this.handleSessionReady(examId, { pageType: 'unified-reading' });
         }
     };
     app.setupExamWindowManagement = function setupExamWindowManagement() {};
@@ -267,7 +276,7 @@ async function main() {
         return null;
     };
 
-    await app.startSuitePractice();
+    await app.startSuitePractice({ flowMode: 'simulation' });
 
     const session = app.currentSuiteSession;
     assert(session, '应创建套题会话');
@@ -281,6 +290,9 @@ async function main() {
     const firstWindow = session.windowRef;
     assert(firstWindow, '应持有首篇窗口引用');
     assert.strictEqual(firstWindow.lastExamId, firstExam.examId, '首篇窗口应加载 P1');
+    const firstCtx = firstWindow._messages.find(msg => msg && msg.type === 'SIMULATION_CONTEXT');
+    assert(firstCtx, '首篇加载后应立即收到 SIMULATION_CONTEXT');
+    assert.strictEqual(firstCtx.data.examId, firstExam.examId, '首篇上下文 examId 应匹配');
 
     const practicePayload = {
         duration: 900,
@@ -317,7 +329,64 @@ async function main() {
     const completionMessage = windowStub._messages.find(msg => typeof msg.text === 'string' && msg.text.includes('套题练习已完成'));
     assert(completionMessage, '应提示套题练习完成');
 
-    process.stdout.write(JSON.stringify({ status: 'pass', detail: '套题模式按顺序串联三篇题目并生成单条记录' }));
+    // 验证 SimulationSession 字段在初始化时存在
+    const appSim = {
+        components: {},
+        setState() {},
+        getState() { return null; },
+        updateExamStatus() {},
+        refreshOverviewData() {},
+        saveRealPracticeData: async () => {},
+        cleanupExamSession: async () => {},
+        _updatePracticeRecordsState: async () => {}
+    };
+    Object.assign(appSim, mixins.examSession, mixins.suitePractice);
+    appSim.ensureExamWindowSession = app.ensureExamWindowSession;
+    appSim.injectDataCollectionScript = app.injectDataCollectionScript;
+    appSim.setupExamWindowManagement = app.setupExamWindowManagement;
+
+    const simOpenCalls = [];
+    appSim.openExam = async function(examId, options = {}) {
+        simOpenCalls.push({ examId, options: { ...options } });
+        const name = options.windowName && options.windowName.trim() ? options.windowName.trim() : '_blank';
+        const win = createStubWindow(name);
+        win.lastExamId = examId;
+        return win;
+    };
+
+    sessionStorageStub.clear();
+    await appSim.startSuitePractice({ flowMode: 'simulation' });
+    const simSession = appSim.currentSuiteSession;
+    assert(simSession, '模拟会话应被创建');
+    assert(typeof simSession.draftsByExam === 'object', '应包含 draftsByExam');
+    assert(typeof simSession.elapsedByExam === 'object', '应包含 elapsedByExam');
+    assert(typeof simSession.globalTimerAnchorMs === 'number', '应包含 globalTimerAnchorMs');
+
+    const simP1 = simSession.sequence[0];
+    const simP2 = simSession.sequence[1];
+    const simP1Result = await appSim.handleSuitePracticeComplete(simP1.examId, practicePayload);
+    assert.strictEqual(simP1Result, true, 'P1 提交后应自动前进');
+    assert.strictEqual(simSession.currentIndex, 1, '应前进到第二篇');
+    assert(simSession.draftsByExam[simP1.examId], 'P1 draft 应被保存');
+
+    // 验证 sessionStorage 镜像
+    const stored = sessionStorageStub.get('ielts_sim_session');
+    assert(stored, 'sessionStorage 应包含会话镜像');
+    const snapshot = JSON.parse(stored);
+    assert.strictEqual(snapshot.id, simSession.id, '镜像 id 应匹配');
+    assert.strictEqual(snapshot.currentIndex, 1, '镜像 currentIndex 应为 1');
+
+    // 验证 _handleSimulationNavigate prev
+    const simNavResult = await appSim._handleSimulationNavigate(simP2.examId, { direction: 'prev' }, simSession.windowRef);
+    assert.strictEqual(simNavResult, true, '向前导航应成功');
+    assert.strictEqual(simSession.currentIndex, 0, '应回到第一篇');
+    assert.strictEqual(simSession.activeExamId, simP1.examId, '活动篇章应是 P1');
+
+    // 导航到界外应失败
+    const simNavOob = await appSim._handleSimulationNavigate(simP1.examId, { direction: 'prev' }, simSession.windowRef);
+    assert.strictEqual(simNavOob, false, 'P1 向前导航应失败');
+
+    process.stdout.write(JSON.stringify({ status: 'pass', detail: '模拟模式按顺序串联三篇题目并生成单条记录，导航与 sessionStorage 镜像正常' }));
 }
 
 main().catch(error => {

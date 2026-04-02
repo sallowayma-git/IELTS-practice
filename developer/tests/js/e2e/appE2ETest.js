@@ -967,11 +967,11 @@ class AppE2ETestSuite {
     }
 
     async testLegacyBridgeSynchronization() {
-        const name = 'Legacy 状态桥同步';
+        const name = 'AppStateService 状态同步';
         try {
-            const bridge = this.win.LegacyStateBridge?.getInstance?.();
-            if (!bridge) {
-                this.recordResult(name, false, 'LegacyStateBridge 未加载');
+            const stateService = this.win.appStateService;
+            if (!stateService) {
+                this.recordResult(name, false, 'appStateService 未加载');
                 return;
             }
 
@@ -981,11 +981,11 @@ class AppE2ETestSuite {
             const examSampleSize = originalExamIndex.length > 1 ? 1 : originalExamIndex.length;
             const examSample = examSampleSize > 0 ? originalExamIndex.slice(0, examSampleSize) : [];
 
-            bridge.setExamIndex(examSample);
+            stateService.setExamIndex(examSample);
             await this.waitFor(() => {
                 const state = this.win.app?.getState?.('exam.index');
                 return Array.isArray(state) && state.length === examSample.length;
-            }, { description: 'App exam state 接收 Legacy 更新' });
+            }, { description: 'App exam state 接收状态服务更新' });
             const examState = this.win.app.getState('exam.index') || [];
             const examSynced = Array.isArray(examState) && examState.length === examSample.length;
 
@@ -994,11 +994,11 @@ class AppE2ETestSuite {
             if (originalPractice.length > 0) {
                 practiceSampleSize = 1;
                 const practiceSample = originalPractice.slice(0, practiceSampleSize);
-                bridge.setPracticeRecords(practiceSample);
+                stateService.setPracticeRecords(practiceSample);
                 await this.waitFor(() => {
                     const state = this.win.app?.getState?.('practice.records');
                     return Array.isArray(state) && state.length === practiceSample.length;
-                }, { description: 'App practice state 接收 Legacy 更新' });
+                }, { description: 'App practice state 接收状态服务更新' });
                 const practiceState = this.win.app.getState('practice.records') || [];
                 practiceSynced = Array.isArray(practiceState) && practiceState.length === practiceSample.length;
             }
@@ -1015,13 +1015,13 @@ class AppE2ETestSuite {
             const filter = this.win.app.getState('ui.browseFilter') || {};
             const filterSynced = filter.type === 'reading' && (!filter.category || filter.category === 'all');
 
-            bridge.setExamIndex(originalExamIndex);
+            stateService.setExamIndex(originalExamIndex);
             await this.waitFor(() => {
                 const state = this.win.app?.getState?.('exam.index');
                 return Array.isArray(state) && state.length === originalExamIndex.length;
             }, { description: 'App exam state 恢复原始数据' });
 
-            bridge.setPracticeRecords(originalPractice);
+            stateService.setPracticeRecords(originalPractice);
             await this.waitFor(() => {
                 const state = this.win.app?.getState?.('practice.records');
                 return Array.isArray(state) && state.length === originalPractice.length;

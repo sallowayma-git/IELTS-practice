@@ -150,18 +150,15 @@
             // 生成新按钮
             config.filters.forEach(filter => {
                 const button = document.createElement('button');
-                button.className = 'btn btn-sm';
-                button.type = 'button';
+                button.className = 'btn btn-sm shui-filter-btn';
                 button.textContent = filter.label;
                 button.dataset.filterId = filter.id;
-                if (config.filterLogic === 'type-based') {
-                    button.dataset.filterType = filter.id;
-                }
 
                 // 设置激活状态
-                const isActive = filter.id === this.activeFilter;
-                button.classList.toggle('active', isActive);
-                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                if (filter.id === this.activeFilter) {
+                    button.classList.add('active');
+                }
+                button.setAttribute('aria-pressed', filter.id === this.activeFilter ? 'true' : 'false');
 
                 // 绑定点击事件
                 button.addEventListener('click', () => {
@@ -197,9 +194,13 @@
             const buttons = this.buttonContainer.querySelectorAll('.btn');
             buttons.forEach(button => {
                 const filterId = button.dataset.filterId;
-                const isActive = filterId === this.activeFilter;
-                button.classList.toggle('active', isActive);
-                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                if (filterId === this.activeFilter) {
+                    button.classList.add('active');
+                    button.setAttribute('aria-pressed', 'true');
+                } else {
+                    button.classList.remove('active');
+                    button.setAttribute('aria-pressed', 'false');
+                }
             });
         }
 

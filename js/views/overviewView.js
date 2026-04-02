@@ -13,7 +13,8 @@
             this.actions = {
                 onBrowseCategory: null,
                 onRandomPractice: null,
-                onStartSuite: null
+                onStartSuite: null,
+                onStartEndless: null
             };
             this.delegatesBound = false;
         }
@@ -63,6 +64,13 @@
                 }
             });
 
+            this.events.delegate('click', `${this.containerSelector} [data-action="start-endless-mode"]`, function (event) {
+                event.preventDefault();
+                if (typeof view.actions.onStartEndless === 'function') {
+                    view.actions.onStartEndless();
+                }
+            });
+
             this.delegatesBound = true;
         }
 
@@ -86,7 +94,7 @@
                 icon: '📖',
                 entries: stats?.reading || [],
                 style: { gridColumn: '1 / -1' },
-                rightButton: this.createSuiteModeButton()
+                rightButtons: [this.createEndlessModeButton(), this.createSuiteModeButton()]
             });
 
             fragment.appendChild(readingSection);
@@ -116,7 +124,7 @@
             this.dom.replaceContent(container, fragment);
         }
 
-        createSection({ title, icon, entries, style, rightButton, isSpecial = false }) {
+        createSection({ title, icon, entries, style, rightButton, rightButtons, isSpecial = false }) {
             const sectionFragment = document.createDocumentFragment();
             
             // 创建标题容器，支持右侧按钮
@@ -134,9 +142,14 @@
                 className: 'overview-section-title',
                 style: { margin: 0 }
             }, title));
-            
-            if (rightButton) {
-                titleContainer.appendChild(rightButton);
+            // 支持单个 rightButton（向后兼容）或多个 rightButtons
+            const buttons = rightButtons || (rightButton ? [rightButton] : []);
+            if (buttons.length > 0) {
+                const btnGroup = this.dom.create('div', {
+                    style: { display: 'flex', gap: '8px', alignItems: 'center', border: 'none' }
+                });
+                buttons.forEach(btn => btnGroup.appendChild(btn));
+                titleContainer.appendChild(btnGroup);
             }
             
             sectionFragment.appendChild(titleContainer);
@@ -237,7 +250,7 @@
                     fontWeight: '500',
                     borderRadius: '6px',
                     backgroundColor: '#646b20ff',
-                    border: '1px solid #646b20ff',
+                    border: 'none',
                     color: 'white',
                     cursor: 'pointer',
                     display: 'inline-flex',
@@ -247,6 +260,34 @@
             }, [
                 this.dom.create('span', { ariaHidden: 'true' }, '🚀'),
                 this.dom.create('span', {}, '套题模式')
+            ]);
+        }
+
+        createEndlessModeButton() {
+            return this.dom.create('button', {
+                className: 'btn',
+                type: 'button',
+                id: 'endless-mode-btn',
+                dataset: {
+                    action: 'start-endless-mode',
+                    overviewAction: 'endless'
+                },
+                style: {
+                    padding: '8px 16px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    borderRadius: '6px',
+                    backgroundColor: '#7c3aed',
+                    border: 'none',
+                    color: 'white',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                }
+            }, [
+                this.dom.create('span', { ariaHidden: 'true' }, '♾️'),
+                this.dom.create('span', {}, '无尽模式')
             ]);
         }
     }

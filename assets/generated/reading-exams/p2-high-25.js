@@ -1,0 +1,123 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p2-high-25", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-high-25",
+  "meta": {
+    "title": "Will Eating Less Make You Live Longer 节食与长寿",
+    "category": "P2",
+    "frequency": "high",
+    "pdfFilename": "120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】/",
+    "legacyFilename": "120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 2</h2>\n            <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>\n            \n            <h3>Will Eating Less Make You Live Longer?</h3>\n            <h4>The latest in a conflicting series of studies suggests calorie restriction could potentially slow ageing in humans</h4>\n            \n            <p><strong>A</strong> Calorie restriction, or ‘semi-starvation' as some refer to it, has been proven to extend lifespan in many living organisms from yeast to mice, but the picture for primates, including humans, is not so clear. Research published by a team at the University of Wisconsin in the United States shows that rhesus monkeys also live longer on a calorie-restricted diet. But those findings disagree with research by the National Institute on Aging (NIA) in Maryland, also in the United States. Rozalyn Anderson, of the Wisconsin team, says the research is not intended as a recommendation of calorie restriction. 'I find the idea monumentally unattractive!' she says. ‘We study it because it is so effective at delaying ageing and the onset of age-related disease. It's a way to tease out what it is that creates increased disease vulnerability as a function of age.'</p>\n            <p><strong>B</strong> Both groups started long-term trials on rhesus monkeys in the late 1980s to determine whether calorie restriction would extend the lifespan of primates. In mice, many experiments had come to the same finding: feed them a diet with 30% fewer calories and see a lifespan extension of 40%. The monkey trials were set up in a similar way: researchers took the calorie content of a standard monkey diet, cut it by 30% (while continuing to supply all essential nutrients) and monitored whether those monkeys lived longer, healthier lives than those on the standard diet.</p>\n            <p><strong>C</strong> In 2009, with the monkeys approaching old age, preliminary findings of the two trials started coming in. For the Wisconsin monkeys, calorie restriction seemed to be working. Compared to well-fed control animals, the lean monkeys were living longer and suffering less from the diseases of ageing: diabetes, heart disease and brain diseases. However, in 2012 the NIA results emerged with a dramatically different conclusion: their monkeys were not living any longer than the controls, although they were healthier.</p>\n            <p><strong>D</strong> The Wisconsin group's latest results confirm that their calorie-restricted monkeys are living longer than the controls. They also offer a possible explanation of why the two groups' findings don't agree, and that lies in the treatment of the control group. The Wisconsin study began with monkeys in early adulthood. Initially, all the monkeys were allowed to eat as much as they liked. A few months into the trial, the monkeys were placed into one of two groups: the controls (who continued to be fed as much as they wished) and the calorie-restricted monkeys (who were given an individualised diet of 30% less than they were previously eating).</p>\n            <p><strong>E</strong> The NIA study differed in two ways. First, the control group of monkeys were not allowed to eat as much as they wished. They were given a diet considered to represent a normal calorie count, while the calorie-restricted monkeys were fed 30% less than that. Second, whereas the Wisconsin monkeys were given highly processed food high in sucrose, making it easy to standardise, the NIA diet was based on whole grains, fish oils, and was very low in sugar. These different settings for the normal control diet may provide an explanation of why the two groups showed different results.</p>\n            <p><strong>F</strong> The Wisconsin group may in effect have studied the effects of ‘overeating'. Their control animals weighed up to 10% more than average for their age and gender. Compared to them, the calorie-restricted animals not only suffered fewer diseases, they lived longer. Julie Mattison, head of the NIA study, observes that an overweight person who goes to a fast food restaurant every day will obviously benefit if their calories are cut back by 30%.</p>\n            <p><strong>G</strong> The NIA study fed their control monkeys what they considered a 'standard' caloric intake and saw that longevity for monkeys that were fed 30% less was the same. But in Anderson's view, the NIA control monkeys were not fed enough; the NIA was calorie restricting both groups of animals. Their older female control monkeys, for example, weighed nearly 20% less than the national average. Indeed, Anderson points out that several of the NIA control monkeys have lived past the age of 40, far exceeding the 27-year average lifespan for captive rhesus monkeys. ‘That's the maximum lifespan ever detected for the species, so the idea that their intervention is doing nothing is really at odds with the data,' says Anderson.</p>\n            <p><strong>H</strong> However, neither group had the right notion of a standard diet according to Leonie Heilbronn, who researches calorie restriction and healthy ageing at the University of Adelaide in Australia. Heilbronn points out that the NIA controls were a very healthy set of monkeys and leaner than a control monkey should be. On the other hand, she notes, the Wisconsin controls were a little bigger than they had to be. On balance, Heilbronn agrees with the Wisconsin researcher's argument. ‘I think these studies suggest calorie restriction definitely will increase lifespan,' she says.</p>\n            <p><strong>I</strong> Both studies agree that cutting calories is beneficial to health — in both cases the calorie-restricted monkeys had fewer diseases related to ageing. As to the question of whether calorie restriction extends lifespan in primates, Anderson and Mattison are currently working together to compare the two studies' raw data. They plan to co-publish a joint analysis. The current data conflict will ultimately provide deeper insights into ageing, Anderson predicts. ‘The fact the two studies were set up differently, asking the same question in different ways — I think we will gain maximally from that.'</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "table_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 14–19</h4>\n                <p>Reading Passage 2 has nine paragraphs, <strong>A–I</strong>.</p>\n                <p>Which paragraph contains the following information?</p>\n                <p><em>Write the correct letter, <strong>A–I</strong>, in boxes 14–19 on your answer sheet.</em></p>\n                <div style=\"overflow-x: auto;\">\n                    <table class=\"matching-table\">\n                        <thead>\n                            <tr>\n                                <th></th>\n                                <th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th>G</th><th>H</th><th>I</th>\n                            </tr>\n                        </thead>\n                        <tbody>\n                            <tr>\n                                <td><strong>14</strong> a reference to studies based on the same level of calorie reduction with different animals</td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"A\"></td><td><input type=\"radio\" name=\"q1\" value=\"B\"></td><td><input type=\"radio\" name=\"q1\" value=\"C\"></td><td><input type=\"radio\" name=\"q1\" value=\"D\"></td><td><input type=\"radio\" name=\"q1\" value=\"E\"></td><td><input type=\"radio\" name=\"q1\" value=\"F\"></td><td><input type=\"radio\" name=\"q1\" value=\"G\"></td><td><input type=\"radio\" name=\"q1\" value=\"H\"></td><td><input type=\"radio\" name=\"q1\" value=\"I\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>15</strong> a comment that some control monkeys in one study reached an older age than normal for animals of their kind</td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"A\"></td><td><input type=\"radio\" name=\"q2\" value=\"B\"></td><td><input type=\"radio\" name=\"q2\" value=\"C\"></td><td><input type=\"radio\" name=\"q2\" value=\"D\"></td><td><input type=\"radio\" name=\"q2\" value=\"E\"></td><td><input type=\"radio\" name=\"q2\" value=\"F\"></td><td><input type=\"radio\" name=\"q2\" value=\"G\"></td><td><input type=\"radio\" name=\"q2\" value=\"H\"></td><td><input type=\"radio\" name=\"q2\" value=\"I\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>16</strong> distinctions between the types of food in each study that may have led to a contrast in findings</td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"A\"></td><td><input type=\"radio\" name=\"q3\" value=\"B\"></td><td><input type=\"radio\" name=\"q3\" value=\"C\"></td><td><input type=\"radio\" name=\"q3\" value=\"D\"></td><td><input type=\"radio\" name=\"q3\" value=\"E\"></td><td><input type=\"radio\" name=\"q3\" value=\"F\"></td><td><input type=\"radio\" name=\"q3\" value=\"G\"></td><td><input type=\"radio\" name=\"q3\" value=\"H\"></td><td><input type=\"radio\" name=\"q3\" value=\"I\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>17</strong> examples of health problems which monkeys on calorie-restricted diets were less likely to get</td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"A\"></td><td><input type=\"radio\" name=\"q4\" value=\"B\"></td><td><input type=\"radio\" name=\"q4\" value=\"C\"></td><td><input type=\"radio\" name=\"q4\" value=\"D\"></td><td><input type=\"radio\" name=\"q4\" value=\"E\"></td><td><input type=\"radio\" name=\"q4\" value=\"F\"></td><td><input type=\"radio\" name=\"q4\" value=\"G\"></td><td><input type=\"radio\" name=\"q4\" value=\"H\"></td><td><input type=\"radio\" name=\"q4\" value=\"I\"></td>\n                            </tr>\n                             <tr>\n                                <td><strong>18</strong> a researcher's negative opinion of a calorie-restricted diet</td>\n                                <td><input type=\"radio\" name=\"q5\" value=\"A\"></td><td><input type=\"radio\" name=\"q5\" value=\"B\"></td><td><input type=\"radio\" name=\"q5\" value=\"C\"></td><td><input type=\"radio\" name=\"q5\" value=\"D\"></td><td><input type=\"radio\" name=\"q5\" value=\"E\"></td><td><input type=\"radio\" name=\"q5\" value=\"F\"></td><td><input type=\"radio\" name=\"q5\" value=\"G\"></td><td><input type=\"radio\" name=\"q5\" value=\"H\"></td><td><input type=\"radio\" name=\"q5\" value=\"I\"></td>\n                            </tr>\n                             <tr>\n                                <td><strong>19</strong> a reference to the stage in the monkeys' lives at which research commenced in one study</td>\n                                <td><input type=\"radio\" name=\"q6\" value=\"A\"></td><td><input type=\"radio\" name=\"q6\" value=\"B\"></td><td><input type=\"radio\" name=\"q6\" value=\"C\"></td><td><input type=\"radio\" name=\"q6\" value=\"D\"></td><td><input type=\"radio\" name=\"q6\" value=\"E\"></td><td><input type=\"radio\" name=\"q6\" value=\"F\"></td><td><input type=\"radio\" name=\"q6\" value=\"G\"></td><td><input type=\"radio\" name=\"q6\" value=\"H\"></td><td><input type=\"radio\" name=\"q6\" value=\"I\"></td>\n                            </tr>\n                        </tbody>\n                    </table>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "matching",
+      "questionIds": [
+        "q7",
+        "q8",
+        "q9",
+        "q10"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q7-8-9-10-anchor\">\n                <h4>Questions 20–23</h4>\n                <p>Look at the following statements (Questions 20–23) and the list of researchers below.</p>\n                <p>Match each statement with the correct researcher, <strong>A, B</strong> or <strong>C</strong>.</p>\n                <p><em>NB You may use any letter more than once.</em></p>\n                \n                <div class=\"match-question-item\">\n                    <p><strong>20</strong> It is good that the two studies took dissimilar approaches.</p>\n                    <div class=\"match-dropzone\" data-question=\"q7\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>21</strong> Neither study used diets that are typical for monkeys.</p>\n                    <div class=\"match-dropzone\" data-question=\"q8\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                     <p><strong>22</strong> Calorie restriction is a method of finding out about health issues connected with ageing.</p>\n                    <div class=\"match-dropzone\" data-question=\"q9\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                    <p><strong>23</strong> Calorie reduction will have a positive effect on people who have unhealthy diets.</p>\n                    <div class=\"match-dropzone\" data-question=\"q10\"></div>\n                </div>\n\n                <div class=\"options-pool\" id=\"researcher-options-pool\">\n                    <strong>List of Researchers</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"A\">A Rozalyn Anderson</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"B\">B Julie Mattison</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"C\">C Leonie Heilbronn</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": true
+    },
+    {
+      "groupId": "group-3",
+      "kind": "summary_completion",
+      "questionIds": [
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                 <h4>Questions 24–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h4>Agreement between the two studies on calorie restriction in rhesus monkeys</h4>\n                    <p>\n                    The two studies were in agreement that it is beneficial to cut calories, in terms of health. Monkeys whose calories were restricted suffered fewer diseases that are associated with the <strong>24</strong> <input name=\"q11\" type=\"text\" id=\"q24_input\"> process. Anderson and Mattison have undertaken research to determine if a calorie-restricted diet increases primates' <strong>25</strong> <input name=\"q12\" type=\"text\" id=\"q25_input\">. Although there is a <strong>26</strong> <input name=\"q13\" type=\"text\" id=\"q26_input\"> between the two sets of data, Anderson believes they will help researchers reach a better understanding.\n                    </p>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "B",
+    "q2": "G",
+    "q3": "E",
+    "q4": "C",
+    "q5": "A",
+    "q6": "D",
+    "q7": "A",
+    "q8": "C",
+    "q9": "A",
+    "q10": "B",
+    "q11": "ageing",
+    "q12": "lifespan",
+    "q13": "conflict"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】/120. P2 - Will Eating Less Make You Live Longer 节食与长寿【高】.pdf",
+    "ieltsHtml": "IELTS/P2/Will Eating Less Make You Live Longer.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-11T14:43:22.032Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "14",
+    "q2": "15",
+    "q3": "16",
+    "q4": "17",
+    "q5": "18",
+    "q6": "19",
+    "q7": "20",
+    "q8": "21",
+    "q9": "22",
+    "q10": "23",
+    "q11": "24",
+    "q12": "25",
+    "q13": "26"
+  }
+}
+);
+})(typeof window !== "undefined" ? window : globalThis);

@@ -1,4 +1,74 @@
 (function(global) {
+    function getFallbackDomAdapter() {
+        return window.DOMAdapter && typeof window.DOMAdapter.create === 'function'
+            ? window.DOMAdapter
+            : null;
+    }
+
+    function createFallbackNode(adapter, tag, attrs, children) {
+        if (adapter) {
+            return adapter.create(tag, attrs, children);
+        }
+
+        const element = document.createElement(tag);
+        if (attrs && typeof attrs === 'object') {
+            Object.keys(attrs).forEach((key) => {
+                const value = attrs[key];
+                if (value == null) {
+                    return;
+                }
+                if (key === 'className') {
+                    element.className = value;
+                    return;
+                }
+                if (key === 'dataset' && typeof value === 'object') {
+                    Object.keys(value).forEach((dataKey) => {
+                        element.dataset[dataKey] = String(value[dataKey]);
+                    });
+                    return;
+                }
+                element.setAttribute(key, value);
+            });
+        }
+
+        const nodes = Array.isArray(children) ? children : [children];
+        nodes.forEach((child) => {
+            if (child == null) {
+                return;
+            }
+            if (child instanceof Node) {
+                element.appendChild(child);
+            } else if (typeof child === 'string') {
+                element.appendChild(document.createTextNode(child));
+            }
+        });
+        return element;
+    }
+
+    function replaceContainerContent(container, content) {
+        container.textContent = '';
+        const nodes = Array.isArray(content) ? content : [content];
+        nodes.forEach((node) => {
+            if (!node) {
+                return;
+            }
+            container.appendChild(node);
+        });
+    }
+
+    function bindActions(container, attrName, handlers) {
+        Object.keys(handlers).forEach((name) => {
+            const node = container.querySelector(`[data-${attrName}="${name}"]`);
+            if (!node) {
+                return;
+            }
+            node.addEventListener('click', (event) => {
+                event.preventDefault();
+                handlers[name]();
+            });
+        });
+    }
+
     const mixin = {
         /**
          * 显示/隐藏加载状态
@@ -27,63 +97,8 @@
                 return;
             }
 
-            const adapter = window.DOMAdapter;
-
-            const createNode = (tag, attrs, children) => {
-                if (adapter && typeof adapter.create === 'function') {
-                    return adapter.create(tag, attrs, children);
-                }
-                const element = document.createElement(tag);
-                if (attrs && typeof attrs === 'object') {
-                    Object.keys(attrs).forEach((key) => {
-                        const value = attrs[key];
-                        if (value == null) {
-                            return;
-                        }
-                        if (key === 'className') {
-                            element.className = value;
-                            return;
-                        }
-                        if (key === 'dataset' && typeof value === 'object') {
-                            Object.keys(value).forEach((dataKey) => {
-                                element.dataset[dataKey] = String(value[dataKey]);
-                            });
-                            return;
-                        }
-                        if (key === 'type') {
-                            element.setAttribute('type', value);
-                            return;
-                        }
-                        element.setAttribute(key, value);
-                    });
-                }
-
-                const nodes = Array.isArray(children) ? children : [children];
-                nodes.forEach((child) => {
-                    if (child == null) {
-                        return;
-                    }
-                    if (child instanceof Node) {
-                        element.appendChild(child);
-                    } else if (typeof child === 'string') {
-                        element.appendChild(document.createTextNode(child));
-                    }
-                });
-                return element;
-            };
-
-            const replaceContent = (container, content) => {
-                while (container.firstChild) {
-                    container.removeChild(container.firstChild);
-                }
-                const nodes = Array.isArray(content) ? content : [content];
-                nodes.forEach((node) => {
-                    if (!node) {
-                        return;
-                    }
-                    container.appendChild(node);
-                });
-            };
+            const adapter = getFallbackDomAdapter();
+            const createNode = (tag, attrs, children) => createFallbackNode(adapter, tag, attrs, children);
 
             const solutionList = createNode('ul', { className: 'solution-list' }, [
                 createNode('li', null, '🔄 刷新页面重新加载系统'),
@@ -142,23 +157,13 @@
                 ])
             ]);
 
-            replaceContent(appContainer, fallbackRoot);
-
-            const bindAction = (selector, handler) => {
-                const node = appContainer.querySelector(selector);
-                if (!node) {
-                    return;
-                }
-                node.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    handler();
-                });
-            };
-
-            bindAction('[data-fallback-action="reload"]', () => window.location.reload());
-            bindAction('[data-fallback-action="show-info"]', () => alert('系统信息功能已移除'));
-            bindAction('[data-fallback-action="attempt-recovery"]', () => this.attemptRecovery());
-            bindAction('[data-fallback-action="safe-mode"]', () => this.enterSafeMode());
+            replaceContainerContent(appContainer, fallbackRoot);
+            bindActions(appContainer, 'fallback-action', {
+                reload: () => window.location.reload(),
+                'show-info': () => alert('系统信息功能已移除'),
+                'attempt-recovery': () => this.attemptRecovery(),
+                'safe-mode': () => this.enterSafeMode()
+            });
         },
 
         /**
@@ -166,17 +171,11 @@
          */
         attemptRecovery() {
             this.showUserMessage('正在尝试恢复系统...', 'info');
-
-            // 重置组件状态
             this.components = {};
             this.isInitialized = false;
-
-            // 清理可能的错误状态
             if (this.globalErrors) {
                 this.globalErrors = [];
             }
-
-            // 重新初始化
             setTimeout(() => {
                 this.initialize();
             }, 1000);
@@ -193,62 +192,8 @@
                 return;
             }
 
-            const adapter = window.DOMAdapter;
-            const createNode = (tag, attrs, children) => {
-                if (adapter && typeof adapter.create === 'function') {
-                    return adapter.create(tag, attrs, children);
-                }
-                const element = document.createElement(tag);
-                if (attrs && typeof attrs === 'object') {
-                    Object.keys(attrs).forEach((key) => {
-                        const value = attrs[key];
-                        if (value == null) {
-                            return;
-                        }
-                        if (key === 'className') {
-                            element.className = value;
-                            return;
-                        }
-                        if (key === 'dataset' && typeof value === 'object') {
-                            Object.keys(value).forEach((dataKey) => {
-                                element.dataset[dataKey] = String(value[dataKey]);
-                            });
-                            return;
-                        }
-                        if (key === 'type') {
-                            element.setAttribute('type', value);
-                            return;
-                        }
-                        element.setAttribute(key, value);
-                    });
-                }
-
-                const nodes = Array.isArray(children) ? children : [children];
-                nodes.forEach((child) => {
-                    if (child == null) {
-                        return;
-                    }
-                    if (child instanceof Node) {
-                        element.appendChild(child);
-                    } else if (typeof child === 'string') {
-                        element.appendChild(document.createTextNode(child));
-                    }
-                });
-                return element;
-            };
-
-            const replaceContent = (container, content) => {
-                while (container.firstChild) {
-                    container.removeChild(container.firstChild);
-                }
-                const nodes = Array.isArray(content) ? content : [content];
-                nodes.forEach((node) => {
-                    if (!node) {
-                        return;
-                    }
-                    container.appendChild(node);
-                });
-            };
+            const adapter = getFallbackDomAdapter();
+            const createNode = (tag, attrs, children) => createFallbackNode(adapter, tag, attrs, children);
 
             const featuresList = createNode('ul', null, [
                 createNode('li', null, '基本题库浏览'),
@@ -279,21 +224,11 @@
                 ])
             ]);
 
-            replaceContent(appContainer, safeModeRoot);
-
-            const bindAction = (selector, handler) => {
-                const node = appContainer.querySelector(selector);
-                if (!node) {
-                    return;
-                }
-                node.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    handler();
-                });
-            };
-
-            bindAction('[data-safe-mode-action="initialize"]', () => this.initialize());
-            bindAction('[data-safe-mode-action="reload"]', () => window.location.reload());
+            replaceContainerContent(appContainer, safeModeRoot);
+            bindActions(appContainer, 'safe-mode-action', {
+                initialize: () => this.initialize(),
+                reload: () => window.location.reload()
+            });
         },
     };
 

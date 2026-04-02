@@ -32,9 +32,9 @@
         async commit() {
             for (const op of this.operations) {
                 if (op.type === 'set') {
-                    await this.storage.set(op.key, op.value);
+                    await this.storage.set(op.key, op.value, { skipPracticeCoreRedirect: true });
                 } else if (op.type === 'remove') {
-                    await this.storage.remove(op.key);
+                    await this.storage.remove(op.key, { skipPracticeCoreRedirect: true });
                 }
             }
             this.operations = [];
@@ -62,14 +62,14 @@
 
         async write(key, value) {
             return this._enqueue(async () => {
-                await this.storage.set(key, value, { skipScoreStorageRedirect: true });
+                await this.storage.set(key, value, { skipPracticeCoreRedirect: true });
                 return true;
             });
         }
 
         async remove(key) {
             return this._enqueue(async () => {
-                await this.storage.remove(key, { skipScoreStorageRedirect: true });
+                await this.storage.remove(key, { skipPracticeCoreRedirect: true });
                 return true;
             });
         }
