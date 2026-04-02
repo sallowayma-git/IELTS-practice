@@ -443,9 +443,14 @@
 
         /* Highlight visual */
         .hl {
-            background-color: #fef08a;
-            /* Yellow highlight */
-            color: #000;
+            background-color: #72361c;
+            color: #fff;
+        }
+
+        /* Note highlight */
+        .hl[data-hl-type="note"] {
+            background-color: #0369d9;
+            color: #fff;
         }
 
         /* Dark Mode variables */
@@ -468,7 +473,12 @@
         }
 
         body.dark-mode .hl {
-            background-color: #854d0e;
+            background-color: #72361c;
+            color: #fff;
+        }
+
+        body.dark-mode .hl[data-hl-type="note"] {
+            background-color: #0369d9;
             color: #fff;
         }
 
