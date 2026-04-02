@@ -1,5 +1,71 @@
 (function () {
   var storage = window.storage;
+
+  function _syncLegacyNavigationActive(viewName) {
+    var normalized = (typeof viewName === 'string' && viewName) ? viewName : 'overview';
+    var controller = null;
+
+    if (typeof window.ensureLegacyNavigationController === 'function') {
+      try {
+        controller = window.ensureLegacyNavigationController({
+          containerSelector: '.main-nav',
+          syncOnNavigate: false
+        });
+      } catch (err) {
+        console.warn('[Fallback] 初始化导航控制器失败:', err);
+      }
+    }
+
+    if (controller && typeof controller.syncActive === 'function') {
+      controller.syncActive(normalized);
+      return;
+    }
+
+    var navContainer = document.querySelector('.main-nav');
+    if (!navContainer) {
+      return;
+    }
+    Array.prototype.forEach.call(navContainer.querySelectorAll('.nav-btn'), function (btn) {
+      btn.classList.remove('active');
+    });
+    var navButton = navContainer.querySelector('[data-view="' + normalized + '"]');
+    if (navButton) {
+      navButton.classList.add('active');
+    }
+  }
+
+  function _bindNavigationFallback() {
+    if (typeof window.ensureLegacyNavigationController === 'function') {
+      window.ensureLegacyNavigationController({
+        containerSelector: '.main-nav',
+        syncOnNavigate: true,
+        onNavigate: function onNavigate(viewName) {
+          if (typeof window.showView === 'function') {
+            window.showView(viewName);
+          }
+        }
+      });
+      return;
+    }
+
+    var navRoot = document.querySelector('.main-nav');
+    if (navRoot && !navRoot._legacyNavHandler) {
+      var handler = function (event) {
+        var button = event.target && event.target.closest ? event.target.closest('.nav-btn[data-view]') : null;
+        if (!button || !navRoot.contains(button)) {
+          return;
+        }
+        event.preventDefault();
+        var viewName = button.getAttribute('data-view');
+        if (viewName && typeof window.showView === 'function') {
+          window.showView(viewName);
+        }
+      };
+      navRoot._legacyNavHandler = handler;
+      navRoot.addEventListener('click', handler);
+    }
+  }
+
   // Fallback for navigation
   if (typeof window.showView !== 'function') {
     window.showView = function (viewName, resetCategory) {
@@ -16,33 +82,7 @@
         v.classList.remove('active');
       });
       target.classList.add('active');
-
-      var controller = null;
-      if (typeof window.ensureLegacyNavigationController === 'function') {
-        try {
-          controller = window.ensureLegacyNavigationController({
-            containerSelector: '.main-nav',
-            syncOnNavigate: false
-          });
-        } catch (err) {
-          console.warn('[Fallback] 初始化导航控制器失败:', err);
-        }
-      }
-
-      if (controller && typeof controller.syncActive === 'function') {
-        controller.syncActive(normalized);
-      } else {
-        var navContainer = document.querySelector('.main-nav');
-        if (navContainer) {
-          Array.prototype.forEach.call(navContainer.querySelectorAll('.nav-btn'), function (btn) {
-            btn.classList.remove('active');
-          });
-          var navButton = navContainer.querySelector('[data-view="' + normalized + '"]');
-          if (navButton) {
-            navButton.classList.add('active');
-          }
-        }
-      }
+      _syncLegacyNavigationActive(normalized);
 
       if (normalized === 'browse' && (resetCategory === undefined || resetCategory === true)) {
         window.currentCategory = 'all';
@@ -59,34 +99,7 @@
   }
 
   try {
-    if (typeof window.ensureLegacyNavigationController === 'function') {
-      window.ensureLegacyNavigationController({
-        containerSelector: '.main-nav',
-        syncOnNavigate: true,
-        onNavigate: function onNavigate(viewName) {
-          if (typeof window.showView === 'function') {
-            window.showView(viewName);
-          }
-        }
-      });
-    } else {
-      var navRoot = document.querySelector('.main-nav');
-      if (navRoot && !navRoot._legacyNavHandler) {
-        var handler = function (event) {
-          var button = event.target && event.target.closest ? event.target.closest('.nav-btn[data-view]') : null;
-          if (!button || !navRoot.contains(button)) {
-            return;
-          }
-          event.preventDefault();
-          var viewName = button.getAttribute('data-view');
-          if (viewName && typeof window.showView === 'function') {
-            window.showView(viewName);
-          }
-        };
-        navRoot._legacyNavHandler = handler;
-        navRoot.addEventListener('click', handler);
-      }
-    }
+    _bindNavigationFallback();
   } catch (error) {
     console.warn('[Fallback] 注册导航事件失败:', error);
   }
@@ -308,25 +321,26 @@
   })();
 
   function showImportModeModal(onSelect) {
-    const overlay = document.createElement('div');
-    overlay.className = 'import-mode-overlay-lite';
-    const modal = document.createElement('div');
-    modal.className = 'import-mode-modal-lite';
-
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'close-btn-lite';
-    closeBtn.innerHTML = '&times;';
-    closeBtn.ariaLabel = '关闭';
-    closeBtn.addEventListener('click', () => document.body.removeChild(overlay));
-
-    const title = document.createElement('h4');
-    title.textContent = '选择导入模式';
-    const desc = document.createElement('p');
-    desc.textContent = '请选择适合当前场景的数据导入策略';
-
-    const options = document.createElement('div');
-    options.className = 'import-mode-options-lite';
+    const create = _fallbackCreateElement;
+    const overlay = create('div', { className: 'import-mode-overlay-lite' });
+    const modal = create('div', { className: 'import-mode-modal-lite' });
+    if (!overlay || !modal) {
+      return;
+    }
+    const closeModal = () => {
+      if (overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+      }
+    };
+    const pickMode = (mode) => {
+      closeModal();
+      if (typeof onSelect === 'function') {
+        onSelect(mode);
+      }
+    };
+    const closeBtn = create('button', { type: 'button', className: 'close-btn-lite', ariaLabel: '关闭' }, '×');
+    closeBtn.addEventListener('click', closeModal);
+    const options = create('div', { className: 'import-mode-options-lite' });
 
     const defs = [
       { mode: 'merge', icon: '📥', title: '增量导入', text: '合并新数据，保留现有记录。适合日常更新。' },
@@ -334,28 +348,12 @@
     ];
 
     defs.forEach((def) => {
-      const card = document.createElement('div');
-      card.className = 'import-mode-option-lite';
-      card.role = 'button';
-      card.tabIndex = 0;
-
-      const icon = document.createElement('div');
-      icon.className = 'mode-icon-lite';
-      icon.textContent = def.icon;
-
-      const head = document.createElement('strong');
-      head.textContent = def.title;
-
-      const text = document.createElement('p');
-      text.textContent = def.text;
-
-      card.append(icon, head, text);
-
-      const selectAction = () => {
-        document.body.removeChild(overlay);
-        onSelect(def.mode);
-      };
-
+      const card = create('div', { className: 'import-mode-option-lite', role: 'button', tabIndex: '0' }, [
+        create('div', { className: 'mode-icon-lite' }, def.icon),
+        create('strong', null, def.title),
+        create('p', null, def.text)
+      ]);
+      const selectAction = () => pickMode(def.mode);
       card.addEventListener('click', selectAction);
       card.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -363,17 +361,20 @@
           selectAction();
         }
       });
-
       options.appendChild(card);
     });
 
-    modal.append(closeBtn, title, desc, options);
+    modal.append(
+      closeBtn,
+      create('h4', null, '选择导入模式'),
+      create('p', null, '请选择适合当前场景的数据导入策略'),
+      options
+    );
     overlay.appendChild(modal);
 
-    // Close on backdrop click
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) {
-        document.body.removeChild(overlay);
+        closeModal();
       }
     });
 
@@ -383,7 +384,7 @@
       style.textContent = `
         @keyframes importFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes importScaleIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        
+
         .import-mode-overlay-lite {
           position: fixed; inset: 0; z-index: 10000;
           background: rgba(0, 0, 0, 0.25);
@@ -394,15 +395,12 @@
         }
         .import-mode-modal-lite {
           position: relative; width: 440px; max-width: 90vw;
-          /* White transparent gradient for substantial glass feel */
           background: linear-gradient(165deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%);
           backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
           border-radius: 24px;
-          /* Highlight border */
           border: 1px solid rgba(255, 255, 255, 0.8);
-          /* Rich shadow + Top highlight for 3D glass effect */
-          box-shadow: 
-            0 25px 50px -12px rgba(0, 0, 0, 0.15), 
+          box-shadow:
+            0 25px 50px -12px rgba(0, 0, 0, 0.15),
             inset 0 1px 0 rgba(255, 255, 255, 1),
             inset 0 0 0 1px rgba(255, 255, 255, 0.2);
           padding: 40px 32px;
@@ -424,7 +422,6 @@
         .import-mode-option-lite {
           display: flex; flex-direction: column; align-items: center; text-align: center;
           padding: 24px 16px;
-          /* Glassy cards */
           background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.6));
           border: 1px solid rgba(255, 255, 255, 0.6);
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.8);
@@ -588,6 +585,7 @@
 
       var container = document.getElementById('settings-view');
       var create = _fallbackCreateElement;
+      var isEmpty = !Array.isArray(backups) || backups.length === 0;
 
       // 防止重复渲染多个列表/遮罩
       var existingInline = (container && container.querySelector('.backup-list-container')) || document.querySelector('.backup-list-container');
@@ -600,7 +598,7 @@
       }
 
       var buildEntries = function () {
-        if (!Array.isArray(backups) || backups.length === 0) {
+        if (isEmpty) {
           return [
             create('div', { className: 'backup-list-empty' }, [
               create('div', { className: 'backup-list-empty-icon', ariaHidden: 'true' }, '📂'),
@@ -631,9 +629,6 @@
         });
       };
 
-      var existing = document.querySelector('.backup-modal-overlay');
-      if (existing) existing.remove();
-
       var card = create('div', { className: 'backup-list-card' }, [
         create('div', { className: 'backup-list-header' }, [
           create('h3', { className: 'backup-list-title' }, [
@@ -657,7 +652,7 @@
         } else {
           container.appendChild(holder);
         }
-        if (!Array.isArray(backups) || backups.length === 0) {
+        if (isEmpty) {
           window.showMessage && window.showMessage('暂无备份记录', 'info');
         }
         return;
@@ -689,7 +684,7 @@
       ]);
 
       document.body.appendChild(overlay);
-      if (!Array.isArray(backups) || backups.length === 0) {
+      if (isEmpty) {
         window.showMessage && window.showMessage('暂无备份记录', 'info');
       }
     };
@@ -884,9 +879,6 @@
       }
 
       var create = _fallbackCreateElement;
-      var ensureArray = function (value) {
-        return Array.isArray(value) ? value : [value];
-      };
 
       var createLoaderCard = function (type, title, description, hint) {
         var prefix = type === 'reading' ? 'reading' : 'listening';
@@ -987,7 +979,7 @@
         }, '关闭')
       ]);
 
-      ensureArray([header, body, footer]).forEach(function (section) {
+      [header, body, footer].forEach(function (section) {
         if (section) {
           modal.appendChild(section);
         }
@@ -1037,12 +1029,7 @@
 
         var type = input.dataset.libraryType;
         var mode = input.dataset.libraryMode;
-        if (!type || !mode) {
-          cleanup();
-          return;
-        }
-
-        if (typeof Promise === 'undefined') {
+        if (!type || !mode || typeof Promise === 'undefined') {
           cleanup();
           return;
         }
