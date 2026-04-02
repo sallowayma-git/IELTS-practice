@@ -1,5 +1,6 @@
 (function(global) {
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
+    const DEFAULT_SUITE_WINDOW_NAME = 'ielts-suite-mode-tab';
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
 
     function getSuitePreferenceUtils() {
@@ -61,8 +62,6 @@
         },
 
         async startSuitePractice(options = {}) {
-            const suiteWindowName = 'ielts-suite-mode-tab';
-
             try {
                 if (!this._suiteModeReady) {
                     this.initializeSuiteMode();
@@ -72,18 +71,18 @@
                 const frequencyScope = suitePreference.frequencyScope;
 
                 if (this.currentSuiteSession && this.currentSuiteSession.status === 'active') {
-                    window.showMessage && window.showMessage('套题练习正在进行中，请先完成当前套题。', 'warning');
+                    this._notifySuiteMessage('套题练习正在进行中，请先完成当前套题。', 'warning');
                     return;
                 }
 
                 if (typeof this.openExam !== 'function') {
-                    window.showMessage && window.showMessage('当前版本暂不支持套题练习自动打开题目。', 'error');
+                    this._notifySuiteMessage('当前版本暂不支持套题练习自动打开题目。', 'error');
                     return;
                 }
 
                 const examIndex = await this._fetchSuiteExamIndex();
                 if (!examIndex.length) {
-                    window.showMessage && window.showMessage('题库为空，无法开启套题练习。', 'warning');
+                    this._notifySuiteMessage('题库为空，无法开启套题练习。', 'warning');
                     return;
                 }
 
@@ -119,7 +118,7 @@
                         const scopeLabel = frequencyScope === 'high'
                             ? '仅高频'
                             : (frequencyScope === 'high_medium' ? '高频+次高频' : '全部频率');
-                        window.showMessage && window.showMessage(`当前抽题范围（${scopeLabel}）缺少 ${category} 阅读题目，无法开启套题练习。`, 'warning');
+                        this._notifySuiteMessage(`当前抽题范围（${scopeLabel}）缺少 ${category} 阅读题目，无法开启套题练习。`, 'warning');
                         return;
                     }
                     const picked = pool[Math.floor(Math.random() * pool.length)];
@@ -146,7 +145,7 @@
                     frequencyScope,
                     autoAdvanceAfterSubmit: lockedAutoAdvance,
                     windowRef: null,
-                    windowName: suiteWindowName
+                    windowName: DEFAULT_SUITE_WINDOW_NAME
                 };
 
                 this.currentSuiteSession = session;
@@ -156,18 +155,11 @@
                 const launchLabel = flowMode === 'stationary'
                     ? '驻足模式'
                     : (flowMode === 'simulation' ? '模拟模式' : '经典模式');
-                window.showMessage && window.showMessage(`${launchLabel}已启动，正在打开第一篇。`, 'info');
+                this._notifySuiteMessage(`${launchLabel}已启动，正在打开第一篇。`, 'info');
 
                 let examWindow = null;
                 try {
-                    examWindow = await this.openExam(firstEntry.examId, {
-                        target: 'tab',
-                        windowName: suiteWindowName,
-                        suiteSessionId: suiteSessionId,
-                        suiteFlowMode: flowMode,
-                        sequenceIndex: 0,
-                        sequenceTotal: sequence.length
-                    });
+                    examWindow = await this.openExam(firstEntry.examId, this._buildSuiteOpenExamOptions(session, 0));
                 } catch (openError) {
                     console.error('[SuitePractice] 打开首篇失败:', openError);
                     examWindow = null;
@@ -184,7 +176,7 @@
                 this._focusSuiteWindow(session.windowRef);
             } catch (error) {
                 console.error('[SuitePractice] 启动失败:', error);
-                window.showMessage && window.showMessage('套题练习启动失败，请稍后重试。', 'error');
+                this._notifySuiteMessage('套题练习启动失败，请稍后重试。', 'error');
                 if (this.currentSuiteSession) {
                     await this._abortSuiteSession(this.currentSuiteSession, { reason: 'startup_failed' });
                 }
@@ -270,9 +262,7 @@
                     updatedAt: Date.now()
                 };
                 this._mirrorSessionToStorage(session);
-                const replayWindow = sourceWindow && !sourceWindow.closed
-                    ? sourceWindow
-                    : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
+                const replayWindow = this._resolveSuiteWindow(session, sourceWindow);
                 if (replayWindow) {
                     await this._sendSuiteReviewState(session, examId, replayWindow);
                 }
@@ -339,6 +329,44 @@
                 return activeSession.autoAdvanceAfterSubmit;
             }
             return this._readSuiteAutoAdvancePreference();
+        },
+
+        _notifySuiteMessage(message, type = 'info') {
+            if (window.showMessage) {
+                window.showMessage(message, type);
+            }
+        },
+
+        _getSuiteWindowName(session = null) {
+            if (session && typeof session.windowName === 'string' && session.windowName.trim()) {
+                return session.windowName;
+            }
+            return DEFAULT_SUITE_WINDOW_NAME;
+        },
+
+        _resolveSuiteWindow(session, preferredWindow = null) {
+            const candidate = preferredWindow && !preferredWindow.closed ? preferredWindow : null;
+            if (candidate) {
+                return candidate;
+            }
+            const sessionWindow = session && session.windowRef;
+            return sessionWindow && !sessionWindow.closed ? sessionWindow : null;
+        },
+
+        _buildSuiteOpenExamOptions(session, sequenceIndex, reuseWindow = null) {
+            const options = {
+                target: 'tab',
+                windowName: this._getSuiteWindowName(session),
+                suiteSessionId: session && session.id ? session.id : null,
+                suiteFlowMode: session && session.flowMode ? session.flowMode : 'simulation',
+                sequenceIndex: Number.isFinite(sequenceIndex) ? sequenceIndex : 0,
+                sequenceTotal: session && Array.isArray(session.sequence) ? session.sequence.length : 0
+            };
+            const reusable = reuseWindow && !reuseWindow.closed ? reuseWindow : null;
+            if (reusable) {
+                options.reuseWindow = reusable;
+            }
+            return options;
         },
 
         _hasMeaningfulSuiteAnswer(value) {
@@ -455,9 +483,7 @@
                 return false;
             }
             const replayEntry = this._buildSuiteReplayEntry(session, examId);
-            const resolvedWindow = targetWindow && !targetWindow.closed
-                ? targetWindow
-                : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
+            const resolvedWindow = this._resolveSuiteWindow(session, targetWindow);
             if (!resolvedWindow || resolvedWindow.closed) {
                 return false;
             }
@@ -508,9 +534,7 @@
                 return false;
             }
 
-            const resolvedWindow = targetWindow && !targetWindow.closed
-                ? targetWindow
-                : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
+            const resolvedWindow = this._resolveSuiteWindow(session, targetWindow);
             if (!resolvedWindow || resolvedWindow.closed) {
                 return false;
             }
@@ -587,18 +611,13 @@
                 return false;
             }
 
-            let targetWindow = sourceWindow && !sourceWindow.closed ? sourceWindow : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
+            let targetWindow = this._resolveSuiteWindow(session, sourceWindow);
 
             if (targetEntry.examId !== examId || !targetWindow) {
-                targetWindow = await this.openExam(targetEntry.examId, {
-                    target: 'tab',
-                    windowName: session.windowName || 'ielts-suite-mode-tab',
-                    suiteSessionId: session.id,
-                    suiteFlowMode: session.flowMode || 'simulation',
-                    sequenceIndex: targetIndex,
-                    sequenceTotal: session.sequence.length,
-                    reuseWindow: targetWindow || undefined
-                });
+                targetWindow = await this.openExam(
+                    targetEntry.examId,
+                    this._buildSuiteOpenExamOptions(session, targetIndex, targetWindow)
+                );
             }
 
             if (!targetWindow || targetWindow.closed) {
@@ -614,7 +633,7 @@
 
         async _advanceSuiteToNext(session, completedTitle, skipExamIdForAbort) {
             if (typeof this.openExam !== 'function') {
-                window.showMessage && window.showMessage('无法继续套题练习，系统将恢复为普通模式。', 'warning');
+                this._notifySuiteMessage('无法继续套题练习，系统将恢复为普通模式。', 'warning');
                 await this._abortSuiteSession(session, { reason: 'missing_open_exam', skipExamId: skipExamIdForAbort || null });
                 return false;
             }
@@ -626,26 +645,16 @@
             }
 
             session.activeExamId = nextEntry.examId;
-            const windowName = session.windowName || 'ielts-suite-mode-tab';
-            const reuseWindow = session.windowRef && !session.windowRef.closed ? session.windowRef : null;
+            const windowName = this._getSuiteWindowName(session);
+            const reuseWindow = this._resolveSuiteWindow(session);
             let openError = null;
 
             const attemptOpen = async (candidateWindow = null) => {
-                const options = {
-                    target: 'tab',
-                    windowName,
-                    suiteSessionId: session.id,
-                    suiteFlowMode: session.flowMode || 'simulation',
-                    sequenceIndex: session.currentIndex,
-                    sequenceTotal: session.sequence.length
-                };
-
-                if (candidateWindow && !candidateWindow.closed) {
-                    options.reuseWindow = candidateWindow;
-                }
-
                 try {
-                    const opened = await this.openExam(nextEntry.examId, options);
+                    const opened = await this.openExam(
+                        nextEntry.examId,
+                        this._buildSuiteOpenExamOptions(session, session.currentIndex, candidateWindow)
+                    );
                     if (opened && !opened.closed) {
                         return opened;
                     }
@@ -675,7 +684,7 @@
                 if (openError) {
                     console.warn('[SuitePractice] 套题无法打开下一篇:', openError);
                 }
-                window.showMessage && window.showMessage('无法继续套题练习，系统将恢复为普通模式。', 'warning');
+                this._notifySuiteMessage('无法继续套题练习，系统将恢复为普通模式。', 'warning');
                 await this._abortSuiteSession(session, { reason: 'open_next_failed', skipExamId: skipExamIdForAbort || null });
                 return false;
             }
@@ -685,7 +694,7 @@
             this._focusSuiteWindow(session.windowRef);
             this._mirrorSessionToStorage(session);
             this._sendSimulationContext(session, nextEntry.examId, session.windowRef);
-            window.showMessage && window.showMessage(`已完成 ${completedTitle || '上一篇'}，继续下一篇 ${nextEntry.exam.title}。`, 'success');
+            this._notifySuiteMessage(`已完成 ${completedTitle || '上一篇'}，继续下一篇 ${nextEntry.exam.title}。`, 'success');
             return true;
         },
 
@@ -820,15 +829,10 @@
                 session.currentIndex = targetIdx;
                 session.activeExamId = targetEntry.examId;
 
-                const targetWindow = await this.openExam(targetEntry.examId, {
-                    target: 'tab',
-                    windowName: session.windowName || 'ielts-suite-mode-tab',
-                    suiteSessionId: session.id,
-                    suiteFlowMode: session.flowMode || 'simulation',
-                    sequenceIndex: targetIdx,
-                    sequenceTotal: session.sequence.length,
-                    reuseWindow: sourceWindow && !sourceWindow.closed ? sourceWindow : undefined
-                });
+                const targetWindow = await this.openExam(
+                    targetEntry.examId,
+                    this._buildSuiteOpenExamOptions(session, targetIdx, sourceWindow)
+                );
 
                 if (!targetWindow || targetWindow.closed) return false;
 
@@ -884,13 +888,8 @@
             if (!pageType.includes('unified-reading')) {
                 return false;
             }
-            let targetWindow = session.windowRef && !session.windowRef.closed ? session.windowRef : null;
-            if (windowInfo) {
-                const info = windowInfo;
-                if (info && info.window && !info.window.closed) {
-                    targetWindow = info.window;
-                }
-            }
+            const preferredWindow = windowInfo && windowInfo.window ? windowInfo.window : null;
+            let targetWindow = this._resolveSuiteWindow(session, preferredWindow);
             if (!targetWindow || targetWindow.closed) {
                 return false;
             }
@@ -1162,8 +1161,8 @@
                 this.multiSuiteSessionsMap.delete(session.baseExamId);
                 session.status = 'completed';
 
-                window.showMessage && window.showMessage(
-                    `多套题练习已完成！共完成 ${session.suiteResults.length} 套题，记录已保存。`, 
+                this._notifySuiteMessage(
+                    `多套题练习已完成！共完成 ${session.suiteResults.length} 套题，记录已保存。`,
                     'success'
                 );
 
@@ -1172,7 +1171,7 @@
             } catch (error) {
                 console.error('[MultiSuite] 聚合记录失败:', error);
                 session.status = 'error';
-                window.showMessage && window.showMessage('保存多套题记录失败，请稍后重试。', 'error');
+                this._notifySuiteMessage('保存多套题记录失败，请稍后重试。', 'error');
             }
         },
 
@@ -1207,37 +1206,37 @@
             };
         },
 
-        /**
-         * 聚合多套题的答案
-         * @param {Array} suiteResults - 套题结果数组
-         * @returns {object} 聚合的答案对象
-         */
-        aggregateAnswers(suiteResults) {
+        _aggregateSuiteFieldMap(suiteResults, fieldName) {
             const aggregated = {};
-
             if (!Array.isArray(suiteResults)) {
                 return aggregated;
             }
 
             suiteResults.forEach(result => {
                 const suiteId = result.suiteId || 'unknown';
-                const answers = result.answers || {};
-
-                Object.entries(answers).forEach(([questionId, answer]) => {
+                const source = result && result[fieldName] ? result[fieldName] : {};
+                Object.entries(source).forEach(([questionId, value]) => {
                     const normalizedQuestionId = questionId == null ? '' : String(questionId);
                     if (!normalizedQuestionId) {
                         return;
                     }
-
-                    // 使用 "套题ID::问题ID" 格式，兼容子页面已带前缀的情况
                     const key = normalizedQuestionId.startsWith(`${suiteId}::`)
                         ? normalizedQuestionId
                         : `${suiteId}::${normalizedQuestionId}`;
-                    aggregated[key] = answer;
+                    aggregated[key] = value;
                 });
             });
 
             return aggregated;
+        },
+
+        /**
+         * 聚合多套题的答案
+         * @param {Array} suiteResults - 套题结果数组
+         * @returns {object} 聚合的答案对象
+         */
+        aggregateAnswers(suiteResults) {
+            return this._aggregateSuiteFieldMap(suiteResults, 'answers');
         },
 
         /**
@@ -1246,31 +1245,7 @@
          * @returns {object} 聚合的答案比较对象
          */
         aggregateAnswerComparisons(suiteResults) {
-            const aggregated = {};
-
-            if (!Array.isArray(suiteResults)) {
-                return aggregated;
-            }
-
-            suiteResults.forEach(result => {
-                const suiteId = result.suiteId || 'unknown';
-                const comparison = result.answerComparison || {};
-
-                Object.entries(comparison).forEach(([questionId, comparisonData]) => {
-                    const normalizedQuestionId = questionId == null ? '' : String(questionId);
-                    if (!normalizedQuestionId) {
-                        return;
-                    }
-
-                    // 使用 "套题ID::问题ID" 格式，兼容子页面已带前缀的情况
-                    const key = normalizedQuestionId.startsWith(`${suiteId}::`)
-                        ? normalizedQuestionId
-                        : `${suiteId}::${normalizedQuestionId}`;
-                    aggregated[key] = comparisonData;
-                });
-            });
-
-            return aggregated;
+            return this._aggregateSuiteFieldMap(suiteResults, 'answerComparison');
         },
 
         /**
@@ -1440,11 +1415,11 @@
                 await this._saveSuitePracticeRecord(record);
                 await this._updatePracticeRecordsState();
                 this.refreshOverviewData && this.refreshOverviewData();
-                window.showMessage && window.showMessage('套题练习已完成，记录已保存。', 'success');
+                this._notifySuiteMessage('套题练习已完成，记录已保存。', 'success');
                 session.status = 'completed';
             } catch (error) {
                 console.error('[SuitePractice] 保存套题记录失败:', error);
-                window.showMessage && window.showMessage('保存套题记录失败，系统将尝试恢复为普通模式。', 'error');
+                this._notifySuiteMessage('保存套题记录失败，系统将尝试恢复为普通模式。', 'error');
                 await this._savePartialSuiteAsIndividual(session);
                 session.status = 'error';
             } finally {
@@ -1886,10 +1861,11 @@
             }
 
             this._clearSuiteHandshakes();
+            const suiteWindow = this._resolveSuiteWindow(session);
 
-            if (session.windowRef && !session.windowRef.closed && typeof session.windowRef.postMessage === 'function') {
+            if (suiteWindow && typeof suiteWindow.postMessage === 'function') {
                 try {
-                    session.windowRef.postMessage({
+                    suiteWindow.postMessage({
                         type: 'SUITE_FORCE_CLOSE',
                         data: {
                             suiteSessionId: session.id || null
@@ -1900,8 +1876,8 @@
                 }
             }
 
-            this._releaseSuiteWindowGuard(session.windowRef);
-            this._safelyCloseWindow(session.windowRef);
+            this._releaseSuiteWindowGuard(suiteWindow);
+            this._safelyCloseWindow(suiteWindow);
 
             if (session.sequence && session.sequence.length) {
                 const cleanupTasks = session.sequence.map(item => this.cleanupExamSession ? this.cleanupExamSession(item.examId) : Promise.resolve());
@@ -1955,7 +1931,7 @@
         _openNamedSuiteWindow(windowName, session = null) {
             const normalizedName = typeof windowName === 'string' && windowName.trim()
                 ? windowName.trim()
-                : 'ielts-suite-mode-tab';
+                : this._getSuiteWindowName(session);
 
             let reopened = null;
             try {

@@ -169,6 +169,16 @@ def main() -> int:
     mapping = json.loads(MAPPING.read_text(encoding="utf-8"))
     mapping_ids = [item["id"] for item in mapping.get("issues", [])]
 
+    if not CHECKLIST.exists():
+        result = {
+            "skipped": True,
+            "reason": "checklist.md 已移除，跳过 checklist 相关 PDF/MONA 对账审计"
+        }
+        REPORT.parent.mkdir(parents=True, exist_ok=True)
+        REPORT.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(result, ensure_ascii=False))
+        return 0
+
     checklist_text = CHECKLIST.read_text(encoding="utf-8")
     checklist_rows = parse_checklist_rows(checklist_text)
     checklist_ids = [row["id"] for row in checklist_rows]
