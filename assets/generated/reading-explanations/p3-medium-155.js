@@ -83,47 +83,47 @@
       "items": [
         {
           "questionNumber": 32,
-          "text": "（1）题目 32：The student composition of each class was left to chance.（每个班级的学生构成随机）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph C 中 "Students entering kindergarten were randomly assigned to one of three kinds of classes"，"randomly assigned" 对应 "left to chance"，因此选 A。",
+          "text": "（1）题目 32：The student composition of each class was left to chance.（每个班级的学生构成随机）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph C 中 “Students entering kindergarten were randomly assigned to one of three kinds of classes”，“randomly assigned” 对应 “left to chance”，因此选 A。",
           "questionId": "q6"
         },
         {
           "questionNumber": 33,
-          "text": "（2）题目 33：A long-term improvement in performance was claimed.（宣称成绩有长期提升）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph D 中 "they calculated that students in smaller classes were outperforming their counterparts in regular-sized classes by the first grade and that this advantage persisted even after students returned to larger classes"，"advantage persisted even after returning to larger classes" 对应 "long-term improvement"，因此选 A。",
+          "text": "（2）题目 33：A long-term improvement in performance was claimed.（宣称成绩有长期提升）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph D 中 “they calculated that students in smaller classes were outperforming their counterparts in regular-sized classes by the first grade and that this advantage persisted even after students returned to larger classes”，“advantage persisted even after returning to larger classes” 对应 “long-term improvement”，因此选 A。",
           "questionId": "q7"
         },
         {
           "questionNumber": 34,
-          "text": "（3）题目 34：Similar results were obtained for all social groups.（所有社会群体结果相似）\n答案：B（The California Project，加州项目）\n解析：定位 Paragraph E 中 "the effect did not vary for students of different backgrounds"，"different backgrounds" 对应 "all social groups"，"did not vary" 对应 "similar results"，因此选 B。",
+          "text": "（3）题目 34：Similar results were obtained for all social groups.（所有社会群体结果相似）\n答案：B（The California Project，加州项目）\n解析：定位 Paragraph E 中 “the effect did not vary for students of different backgrounds”，“different backgrounds” 对应 “all social groups”，“did not vary” 对应 “similar results”，因此选 B。",
           "questionId": "q8"
         },
         {
           "questionNumber": 35,
-          "text": "（4）题目 35：The project was a preliminary to a more comprehensive study.（该项目是更全面研究的前期准备）\n答案：C（SAGE，SAGE 项目）\n解析：定位 Paragraph F 中 "Wisconsin's Student Achievement Guarantee in Education (SAGE) was a five-year pilot study to do some of the groundwork for a major project"，"pilot study""groundwork" 对应 "preliminary"，因此选 C。",
+          "text": "（4）题目 35：The project was a preliminary to a more comprehensive study.（该项目是更全面研究的前期准备）\n答案：C（SAGE，SAGE 项目）\n解析：定位 Paragraph F 中 “Wisconsin's Student Achievement Guarantee in Education (SAGE) was a five-year pilot study to do some of the groundwork for a major project”，“pilot study”“groundwork” 对应 “preliminary”，因此选 C。",
           "questionId": "q9"
         },
         {
           "questionNumber": 36,
-          "text": "（5）题目 36：Several different class types were involved in the project.（项目涉及多种班级类型）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph C 中 "one of three kinds of classes: a small class of 13 to 17 students, a regular-size class of 22 to 26 or a regular-size class with both a teacher and a full-time teacher's aide"，明确提到 "三种班级类型"，因此选 A。",
+          "text": "（5）题目 36：Several different class types were involved in the project.（项目涉及多种班级类型）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph C 中 “one of three kinds of classes: a small class of 13 to 17 students, a regular-size class of 22 to 26 or a regular-size class with both a teacher and a full-time teacher's aide”，明确提到 “三种班级类型”，因此选 A。",
           "questionId": "q10"
         },
         {
           "questionNumber": 37,
-          "text": "（6）题目 37：A special group of schools was selected to take part.（选取特定群体的学校参与）\n答案：C（SAGE，SAGE 项目）\n解析：定位 Paragraph F 中 "it was noteworthy for targeting schools at which 30% of the students were below poverty level"，"targeting schools" 对应 "a special group of schools was selected"，因此选 C。",
+          "text": "（6）题目 37：A special group of schools was selected to take part.（选取特定群体的学校参与）\n答案：C（SAGE，SAGE 项目）\n解析：定位 Paragraph F 中 “it was noteworthy for targeting schools at which 30% of the students were below poverty level”，“targeting schools” 对应 “a special group of schools was selected”，因此选 C。",
           "questionId": "q11"
         },
         {
           "questionNumber": 38,
-          "text": "（7）题目 38：Classroom assistants were used as part of the project.（项目中使用了课堂助教）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph C 中 "a regular-size class with both a teacher and a full-time teacher's aide"，"teacher's aide" 对应 "classroom assistants"，因此选 A。",
+          "text": "（7）题目 38：Classroom assistants were used as part of the project.（项目中使用了课堂助教）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph C 中 “a regular-size class with both a teacher and a full-time teacher's aide”，“teacher's aide” 对应 “classroom assistants”，因此选 A。",
           "questionId": "q12"
         },
         {
           "questionNumber": 39,
-          "text": "（8）题目 39：The project was responsible for aggravating existing problems.（项目导致既有问题加剧）\n答案：B（The California Project，加州项目）\n解析：定位 Paragraph E 中 "This is exacerbating the disparity in resources available to rich and poor schools in California... some of the extra teachers needed are being recruited from the poorer schools"，"exacerbating the disparity" 对应 "aggravating existing problems"，因此选 B。",
+          "text": "（8）题目 39：The project was responsible for aggravating existing problems.（项目导致既有问题加剧）\n答案：B（The California Project，加州项目）\n解析：定位 Paragraph E 中 “This is exacerbating the disparity in resources available to rich and poor schools in California... some of the extra teachers needed are being recruited from the poorer schools”，“exacerbating the disparity” 对应 “aggravating existing problems”，因此选 B。",
           "questionId": "q13"
         },
         {
           "questionNumber": 40,
-          "text": "（9）题目 40：Certain groups of pupils within the sample were identified as having benefited.（样本中特定学生群体被识别为获益者）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph D 中 "they also found that the effect was stronger for black and Hispanic minority groups"，明确提到 "黑人和西班牙裔群体获益更显著"，因此选 A。",
+          "text": "（9）题目 40：Certain groups of pupils within the sample were identified as having benefited.（样本中特定学生群体被识别为获益者）\n答案：A（Project STAR，STAR 项目）\n解析：定位 Paragraph D 中 “they also found that the effect was stronger for black and Hispanic minority groups”，明确提到 “黑人和西班牙裔群体获益更显著”，因此选 A。",
           "questionId": "q14"
         }
       ],

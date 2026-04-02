@@ -35,8 +35,40 @@ class PracticeRecorder {
         });
     }
 
+    getPracticeCoreContracts() {
+        return window.PracticeCore && window.PracticeCore.contracts;
+    }
+
+    getPracticeCoreStore() {
+        return window.PracticeCore && window.PracticeCore.store;
+    }
+
+    getDefaultUserStats() {
+        return {
+            totalPractices: 0,
+            totalTimeSpent: 0,
+            averageScore: 0,
+            categoryStats: {},
+            questionTypeStats: {},
+            streakDays: 0,
+            practiceDays: [],
+            lastPracticeDate: null,
+            achievements: []
+        };
+    }
+
+    async writeMetaValue(key, value) {
+        const practiceCoreStore = this.getPracticeCoreStore();
+        if (practiceCoreStore && typeof practiceCoreStore.writeMeta === 'function') {
+            await practiceCoreStore.writeMeta(key, value);
+            return true;
+        }
+        await this.metaRepo.set(key, value);
+        return false;
+    }
+
     normalizePracticeType(rawType) {
-        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        const coreContracts = this.getPracticeCoreContracts();
         if (coreContracts && typeof coreContracts.normalizePracticeType === 'function') {
             return coreContracts.normalizePracticeType(rawType);
         }
@@ -547,7 +579,7 @@ class PracticeRecorder {
     }
 
     normalizeAnswerValue(value) {
-        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        const coreContracts = this.getPracticeCoreContracts();
         if (coreContracts && typeof coreContracts.normalizeAnswerValue === 'function') {
             return coreContracts.normalizeAnswerValue(value);
         }
@@ -602,7 +634,7 @@ class PracticeRecorder {
     }
 
     normalizeAnswerMap(rawAnswers = {}) {
-        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        const coreContracts = this.getPracticeCoreContracts();
         if (coreContracts && typeof coreContracts.normalizeAnswerMap === 'function') {
             return coreContracts.normalizeAnswerMap(rawAnswers);
         }
@@ -728,7 +760,7 @@ class PracticeRecorder {
     }
 
     normalizeAnswerComparison(comparison) {
-        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        const coreContracts = this.getPracticeCoreContracts();
         if (coreContracts && typeof coreContracts.normalizeAnswerComparison === 'function') {
             return coreContracts.normalizeAnswerComparison(comparison);
         }
@@ -765,7 +797,7 @@ class PracticeRecorder {
     }
 
     convertAnswerMapToArray(answerMap = {}, correctMap = {}) {
-        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        const coreContracts = this.getPracticeCoreContracts();
         if (coreContracts && typeof coreContracts.buildAnswerArray === 'function') {
             return coreContracts.buildAnswerArray(answerMap, correctMap);
         }
@@ -813,7 +845,7 @@ class PracticeRecorder {
     }
 
     buildAnswerDetails(answerMap = {}, correctMap = {}) {
-        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        const coreContracts = this.getPracticeCoreContracts();
         if (coreContracts && typeof coreContracts.buildAnswerDetails === 'function') {
             return coreContracts.buildAnswerDetails(answerMap, correctMap);
         }
@@ -839,7 +871,7 @@ class PracticeRecorder {
     }
 
     deriveCorrectMapFromDetails(details) {
-        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        const coreContracts = this.getPracticeCoreContracts();
         if (coreContracts && typeof coreContracts.deriveCorrectMapFromDetails === 'function') {
             return coreContracts.deriveCorrectMapFromDetails(details);
         }
@@ -1399,7 +1431,7 @@ class PracticeRecorder {
      */
     async saveActiveSessions() {
         const sessionsArray = Array.from(this.activeSessions.values());
-        const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+        const practiceCoreStore = this.getPracticeCoreStore();
         if (practiceCoreStore && typeof practiceCoreStore.writeMeta === 'function') {
             await practiceCoreStore.writeMeta('active_sessions', sessionsArray);
             return;
@@ -1466,7 +1498,7 @@ class PracticeRecorder {
             console.log('[PracticeRecorder] 使用降级保存方法');
 
             const standardizedRecord = this.standardizeRecordForFallback(record);
-            const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+            const practiceCoreStore = this.getPracticeCoreStore();
             if (practiceCoreStore && typeof practiceCoreStore.savePracticeRecord === 'function') {
                 const savedRecord = await practiceCoreStore.savePracticeRecord(standardizedRecord, {
                     currentVersion: this.scoreStorage && this.scoreStorage.currentVersion,
@@ -1738,17 +1770,7 @@ class PracticeRecorder {
      */
     async updateUserStatsManually(practiceRecord) {
         try {
-            const stats = await this.metaRepo.get('user_stats', {
-                totalPractices: 0,
-                totalTimeSpent: 0,
-                averageScore: 0,
-                categoryStats: {},
-                questionTypeStats: {},
-                streakDays: 0,
-                practiceDays: [],
-                lastPracticeDate: null,
-                achievements: []
-            });
+            const stats = await this.metaRepo.get('user_stats', this.getDefaultUserStats());
 
             // 更新基础统计
             const duration = Number(practiceRecord.duration) || 0;
@@ -1768,12 +1790,7 @@ class PracticeRecorder {
             // 更新时间戳
             stats.updatedAt = new Date().toISOString();
 
-            const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
-            if (practiceCoreStore && typeof practiceCoreStore.writeMeta === 'function') {
-                await practiceCoreStore.writeMeta('user_stats', stats);
-            } else {
-                await this.metaRepo.set('user_stats', stats);
-            }
+            await this.writeMetaValue('user_stats', stats);
             console.log('[PracticeRecorder] 用户统计手动更新完成');
 
         } catch (error) {
@@ -1797,12 +1814,7 @@ class PracticeRecorder {
             // 限制临时记录数量
             const finalTempRecords = tempRecords.length > 50 ? tempRecords.slice(-50) : tempRecords;
 
-            const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
-            if (practiceCoreStore && typeof practiceCoreStore.writeMeta === 'function') {
-                await practiceCoreStore.writeMeta('temp_practice_records', finalTempRecords);
-            } else {
-                await this.metaRepo.set('temp_practice_records', finalTempRecords);
-            }
+            await this.writeMetaValue('temp_practice_records', finalTempRecords);
             console.log('[PracticeRecorder] 记录已保存到临时存储:', record.id);
 
         } catch (error) {
@@ -1828,17 +1840,7 @@ class PracticeRecorder {
      * 更新用户统计
      */
     async updateUserStats(practiceRecord) {
-        const stats = await this.metaRepo.get('user_stats', {
-            totalPractices: 0,
-            totalTimeSpent: 0,
-            averageScore: 0,
-            categoryStats: {},
-            questionTypeStats: {},
-            streakDays: 0,
-            practiceDays: [],
-            lastPracticeDate: null,
-            achievements: []
-        });
+        const stats = await this.metaRepo.get('user_stats', this.getDefaultUserStats());
 
         // 更新基础统计
         const duration = Number(practiceRecord.duration) || 0;
@@ -1898,12 +1900,7 @@ class PracticeRecorder {
         // 更新连续学习天数
         this.updateStreakDays(stats, normalizedRecord);
 
-        const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
-        if (practiceCoreStore && typeof practiceCoreStore.writeMeta === 'function') {
-            await practiceCoreStore.writeMeta('user_stats', stats);
-        } else {
-            await this.metaRepo.set('user_stats', stats);
-        }
+        await this.writeMetaValue('user_stats', stats);
         console.log('User stats updated');
     }
 
@@ -1954,17 +1951,7 @@ class PracticeRecorder {
             console.error('Failed to get user stats from ScoreStorage:', error);
 
             // 降级处理
-            return await this.metaRepo.get('user_stats', {
-                totalPractices: 0,
-                totalTimeSpent: 0,
-                averageScore: 0,
-                categoryStats: {},
-                questionTypeStats: {},
-                streakDays: 0,
-                practiceDays: [],
-                lastPracticeDate: null,
-                achievements: []
-            });
+            return await this.metaRepo.get('user_stats', this.getDefaultUserStats());
         }
     }
 
@@ -2481,8 +2468,8 @@ class PracticeRecorder {
             }
 
             // 清理已恢复的临时记录
+            const practiceCoreStore = this.getPracticeCoreStore();
             if (failedRecords.length === 0) {
-                const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
                 if (practiceCoreStore && typeof practiceCoreStore.removeMeta === 'function') {
                     await practiceCoreStore.removeMeta('temp_practice_records');
                 } else {
@@ -2490,7 +2477,6 @@ class PracticeRecorder {
                 }
                 console.log(`[PracticeRecorder] 所有${recoveredCount} 条临时记录恢复成功`);
             } else {
-                const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
                 if (practiceCoreStore && typeof practiceCoreStore.writeMeta === 'function') {
                     await practiceCoreStore.writeMeta('temp_practice_records', failedRecords);
                 } else {

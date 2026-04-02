@@ -26,7 +26,9 @@
         const timerEl = document.getElementById('timer');
         const submitBtn = document.getElementById('submit-btn');
         const resetBtn = document.getElementById('reset-btn');
+        const exitBtn = document.getElementById('exit-btn');
         const suiteFlowModeSection = document.getElementById('suite-flow-mode-section');
+        const defaultExitText = exitBtn ? (exitBtn.textContent || '') : '';
 
         function startTimer() {
             if (!timerEl) return;
@@ -97,6 +99,50 @@
                     source: 'practice_page'
                 }
             }, '*');
+        }
+
+        function isSimulationMode() { return window.__UNIFIED_READING_SIMULATION_MODE__ === true; }
+        function closePracticeWindow() { window.close(); }
+        function parseSessionJson(key, fallbackValue = null) {
+            let raw = null;
+            try { raw = window.sessionStorage.getItem(key); } catch (_) { return fallbackValue; }
+            if (!raw) return fallbackValue;
+            try { return JSON.parse(raw); } catch (_) { return fallbackValue; }
+        }
+        function writeSessionJson(key, value) { try { window.sessionStorage.setItem(key, JSON.stringify(value)); return true; } catch (_) { return false; } }
+        function setExitButtonVisible(visible) {
+            if (!exitBtn) return;
+            exitBtn.style.display = visible ? 'block' : 'none';
+        }
+        function setExitButtonAction(handler, text) {
+            if (!exitBtn) return;
+            if (typeof text === 'string') {
+                exitBtn.textContent = text;
+            }
+            exitBtn.onclick = typeof handler === 'function' ? handler : null;
+        }
+        function restoreDefaultExitAction() {
+            setExitButtonAction(null, defaultExitText);
+        }
+        function notifyEndlessUserExit() {
+            const opener = window.opener;
+            if (!opener || opener.closed) return;
+            try {
+                opener.postMessage({ type: 'ENDLESS_USER_EXIT' }, '*');
+                if (typeof opener.stopEndlessPractice === 'function') {
+                    opener.stopEndlessPractice();
+                } else if (opener.AppActions && typeof opener.AppActions.stopEndlessPractice === 'function') {
+                    opener.AppActions.stopEndlessPractice();
+                }
+            } catch (_) {
+                // ignore opener communication errors
+            }
+        }
+        function bindLiveModeClick(button, action) {
+            if (!button) return;
+            button.addEventListener('click', () => {
+                if (!isSimulationMode()) action();
+            });
         }
 
         function applySuiteModeVisibility(isSuiteMode) {
@@ -587,6 +633,20 @@
         const navContainer = document.querySelector('.practice-nav');
         const markedQuestions = new Set();
         let markedStorageKey = null;
+        function applyMarkedQuestionValues(values, clearExisting = true) {
+            if (clearExisting) {
+                markedQuestions.clear();
+            }
+            if (!Array.isArray(values)) {
+                return;
+            }
+            values.forEach((value) => {
+                const normalized = normalizeQuestionId(value);
+                if (normalized) {
+                    markedQuestions.add(normalized);
+                }
+            });
+        }
 
         function resolveMarkedStorageKey() {
             if (markedStorageKey) {
@@ -608,32 +668,12 @@
         }
 
         function persistMarkedQuestions() {
-            try {
-                window.sessionStorage.setItem(resolveMarkedStorageKey(), JSON.stringify(Array.from(markedQuestions)));
-            } catch (_) {
-                // ignore storage failures under file://
-            }
+            writeSessionJson(resolveMarkedStorageKey(), Array.from(markedQuestions));
         }
 
         function restoreMarkedQuestions() {
-            try {
-                const raw = window.sessionStorage.getItem(resolveMarkedStorageKey());
-                if (!raw) {
-                    return;
-                }
-                const saved = JSON.parse(raw);
-                if (!Array.isArray(saved)) {
-                    return;
-                }
-                saved.forEach((value) => {
-                    const normalized = normalizeQuestionId(value);
-                    if (normalized) {
-                        markedQuestions.add(normalized);
-                    }
-                });
-            } catch (_) {
-                // ignore parse/storage errors
-            }
+            const saved = parseSessionJson(resolveMarkedStorageKey(), null);
+            applyMarkedQuestionValues(saved, false);
         }
 
         function applyMarkedClasses() {
@@ -673,15 +713,7 @@
         };
 
         window.setPracticeMarkedQuestions = function setPracticeMarkedQuestions(values) {
-            markedQuestions.clear();
-            if (Array.isArray(values)) {
-                values.forEach((value) => {
-                    const normalized = normalizeQuestionId(value);
-                    if (normalized) {
-                        markedQuestions.add(normalized);
-                    }
-                });
-            }
+            applyMarkedQuestionValues(values, true);
             persistMarkedQuestions();
             applyMarkedClasses();
         };
@@ -776,10 +808,7 @@
             if (resetBtn) {
                 resetBtn.disabled = true;
             }
-            const exitBtn = document.getElementById('exit-btn');
-            if (exitBtn) {
-                exitBtn.style.display = 'block';
-            }
+            setExitButtonVisible(true);
             disableAnswerInputs();
         }
 
@@ -1023,26 +1052,25 @@
             if (submissionLocked) {
                 return;
             }
-            const exitBtn = document.getElementById('exit-btn');
-            if (exitBtn) {
-                exitBtn.style.display = 'none';
-            }
-            // 清空输入
-            document.querySelectorAll('input').forEach((input) => {
-                if (input.type === 'radio' || input.type === 'checkbox') {
-                    input.checked = false;
-                } else if (input.type !== 'button' && input.type !== 'submit' && input.type !== 'reset') {
-                    input.value = '';
+            setExitButtonVisible(false);
+            restoreDefaultExitAction();
+            document.querySelectorAll('input, textarea, select').forEach((field) => {
+                if (field.tagName === 'INPUT') {
+                    const type = (field.type || '').toLowerCase();
+                    if (type === 'radio' || type === 'checkbox') {
+                        field.checked = false;
+                    } else if (!['button', 'submit', 'reset'].includes(type)) {
+                        field.value = '';
+                    }
+                    return;
                 }
-            });
-            document.querySelectorAll('textarea').forEach((textarea) => {
-                textarea.value = '';
-            });
-            document.querySelectorAll('select').forEach((select) => {
-                select.selectedIndex = 0;
+                if (field.tagName === 'TEXTAREA') {
+                    field.value = '';
+                    return;
+                }
+                field.selectedIndex = 0;
             });
 
-            // 移除高亮
             document.querySelectorAll('.hl').forEach((highlight) => {
                 const parent = highlight.parentNode;
                 if (!parent) return;
@@ -1053,12 +1081,10 @@
                 parent.normalize();
             });
 
-            // 清空拖拽题结果
             document.querySelectorAll(DROP_ZONE_SELECTOR).forEach((zone) => {
                 clearDropzone(zone);
             });
 
-            // 将所有拖拽选项放回原池
             document.querySelectorAll(ACTIVE_DRAG_ITEM_SELECTOR).forEach((item) => {
                 const container = item.parentElement;
                 if (isDropTargetContainer(container)) {
@@ -1082,7 +1108,6 @@
                 resultsContainer.style.display = '';
             }
 
-            // 重新开始计时器
             timerRunning = true;
             seconds = 0;
             if (timerEl) {
@@ -1090,59 +1115,37 @@
             }
         }
 
-        if (resetBtn) {
-            resetBtn.addEventListener('click', () => {
-                const simulationMode = window.__UNIFIED_READING_SIMULATION_MODE__ === true;
-                if (simulationMode) {
-                    return;
-                }
-                resetPracticePage();
-            });
-        }
+        bindLiveModeClick(resetBtn, resetPracticePage);
+        bindLiveModeClick(submitBtn, lockPracticeAfterSubmit);
 
-        if (submitBtn) {
-            submitBtn.addEventListener('click', () => {
-                const simulationMode = window.__UNIFIED_READING_SIMULATION_MODE__ === true;
-                if (simulationMode) {
-                    return;
-                }
-                lockPracticeAfterSubmit();
-            });
-        }
-
-        const exitBtn = document.getElementById('exit-btn');
+        restoreDefaultExitAction();
         if (exitBtn) {
             exitBtn.addEventListener('click', () => {
-                window.close();
+                if (typeof exitBtn.onclick !== 'function') {
+                    closePracticeWindow();
+                }
             });
         }
 
-        document.addEventListener('change', (event) => {
-            if (!(event.target instanceof HTMLElement)) {
-                return;
+        function shouldHandleAnswerTarget(eventType, target) {
+            if (eventType === 'change') return true;
+            if (eventType === 'input') {
+                return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
             }
-            handleAnswerInteraction(event.target);
-        }, true);
-
-        document.addEventListener('input', (event) => {
+            return target.matches('input[type="radio"], input[type="checkbox"]');
+        }
+        function handleAnswerInteractionEvent(event) {
             const target = event.target;
             if (!(target instanceof HTMLElement)) {
                 return;
             }
-            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+            if (shouldHandleAnswerTarget(event.type, target)) {
                 handleAnswerInteraction(target);
             }
-        }, true);
-
-        document.addEventListener('click', (event) => {
-            const target = event.target;
-            if (!(target instanceof HTMLElement)) {
-                return;
-            }
-            if (target.matches('input[type="radio"], input[type="checkbox"]')) {
-                handleAnswerInteraction(target);
-            }
-        }, true);
+        }
+        ['change', 'input', 'click'].forEach((eventType) => {
+            document.addEventListener(eventType, handleAnswerInteractionEvent, true);
+        });
 
         document.addEventListener('practiceResultsReady', (event) => {
             const detail = event && event.detail ? event.detail : {};
@@ -1179,25 +1182,11 @@
                     endlessCountdownActive = true;
                     var secs = (msg.data && typeof msg.data.seconds === 'number') ? msg.data.seconds : 5;
                     applyEndlessTimer(secs);
-                    var exitBtn = document.getElementById('exit-btn');
-                    if (exitBtn) {
-                        exitBtn.style.display = 'block';
-                        exitBtn.textContent = '\u9000\u51fa\u65e0\u5c3d\u6a21\u5f0f';
-                        exitBtn.onclick = function () {
-                            var opener = window.opener;
-                            if (opener && !opener.closed) {
-                                try {
-                                    opener.postMessage({ type: 'ENDLESS_USER_EXIT' }, '*');
-                                    if (typeof opener.stopEndlessPractice === 'function') {
-                                        opener.stopEndlessPractice();
-                                    } else if (opener.AppActions && typeof opener.AppActions.stopEndlessPractice === 'function') {
-                                        opener.AppActions.stopEndlessPractice();
-                                    }
-                                } catch (_) {}
-                            }
-                            window.close();
-                        };
-                    }
+                    setExitButtonVisible(true);
+                    setExitButtonAction(function () {
+                        notifyEndlessUserExit();
+                        closePracticeWindow();
+                    }, '\u9000\u51fa\u65e0\u5c3d\u6a21\u5f0f');
                 } else if (msg.type === 'ENDLESS_COUNTDOWN_TICK') {
                     if (!endlessCountdownActive) return;
                     var remaining = (msg.data && typeof msg.data.seconds === 'number') ? msg.data.seconds : 0;
@@ -1553,6 +1542,42 @@
         return undefined;
     }
 
+    function resolveResultRow(results, key) {
+        const normalized = normalizeQuestionId(key) || key;
+        if (!normalized) {
+            return null;
+        }
+
+        const comparison = results.answerComparison || {};
+        const answers = results.answers || {};
+        const correctAnswers = results.correctAnswers || {};
+        const entry = comparison[normalized] || comparison[key] || {};
+        const userAnswerRaw = Object.prototype.hasOwnProperty.call(entry, 'userAnswer')
+            ? entry.userAnswer
+            : pickValueFromStore(answers, normalized, key);
+        const correctAnswerRaw = Object.prototype.hasOwnProperty.call(entry, 'correctAnswer')
+            ? entry.correctAnswer
+            : pickValueFromStore(correctAnswers, normalized, key);
+        const userAnswer = formatAnswerValue(userAnswerRaw);
+        const correctAnswer = formatAnswerValue(correctAnswerRaw);
+        const hasAnswer = userAnswer !== NO_ANSWER_PLACEHOLDER;
+
+        let isCorrect = null;
+        if (Object.prototype.hasOwnProperty.call(entry, 'isCorrect')) {
+            isCorrect = entry.isCorrect;
+        } else if (hasAnswer && correctAnswerRaw !== undefined && correctAnswerRaw !== null) {
+            isCorrect = compareAnswerValues(userAnswerRaw, correctAnswerRaw);
+        }
+
+        return {
+            questionId: normalized,
+            userAnswer,
+            correctAnswer,
+            hasAnswer,
+            isCorrect
+        };
+    }
+
     function resolveQuestionOrder(results) {
         const answers = results.answers || {};
         const correctAnswers = results.correctAnswers || {};
@@ -1595,6 +1620,12 @@
         return fallbackKeys;
     }
 
+    function collectResultRows(results) {
+        return resolveQuestionOrder(results)
+            .map((key) => resolveResultRow(results, key))
+            .filter(Boolean);
+    }
+
     function formatQuestionLabel(questionId) {
         if (!questionId) {
             return '';
@@ -1620,7 +1651,7 @@
         }, 3000);
     }
 
-    function renderResultsSummary(results) {
+    function renderResultsSummary(results, rows = null) {
         const container = document.getElementById('results');
         if (!container) return;
         container.style.display = 'block';
@@ -1630,13 +1661,10 @@
             clearTimeout(pendingResultsTimeout);
             pendingResultsTimeout = null;
         }
-        const comparison = results.answerComparison || {};
-        const answers = results.answers || {};
-        const correctAnswers = results.correctAnswers || {};
-        const orderedKeys = resolveQuestionOrder(results);
+        const resolvedRows = Array.isArray(rows) ? rows : collectResultRows(results);
 
         container.innerHTML = '';
-        if (!orderedKeys.length) {
+        if (!resolvedRows.length) {
             return;
         }
 
@@ -1659,41 +1687,22 @@
         table.appendChild(thead);
 
         const tbody = document.createElement('tbody');
-        orderedKeys.forEach((key) => {
-            const normalized = normalizeQuestionId(key) || key;
-            const entry = comparison[normalized] || comparison[key] || {};
-            const userAnswerRaw = entry.hasOwnProperty('userAnswer')
-                ? entry.userAnswer
-                : pickValueFromStore(answers, normalized, key);
-            const correctAnswerRaw = entry.hasOwnProperty('correctAnswer')
-                ? entry.correctAnswer
-                : pickValueFromStore(correctAnswers, normalized, key);
-            const userAnswer = formatAnswerValue(userAnswerRaw);
-            const correctAnswer = formatAnswerValue(correctAnswerRaw);
-            const hasUserAnswer = userAnswer !== NO_ANSWER_PLACEHOLDER;
-
-            let isCorrect = null;
-            if (entry.hasOwnProperty('isCorrect')) {
-                isCorrect = entry.isCorrect;
-            } else if (hasUserAnswer && correctAnswerRaw !== undefined && correctAnswerRaw !== null) {
-                isCorrect = compareAnswerValues(userAnswerRaw, correctAnswerRaw);
-            }
-
+        resolvedRows.forEach((rowData) => {
             const row = document.createElement('tr');
-            if (isCorrect === true) {
+            if (rowData.isCorrect === true) {
                 row.className = 'correct';
-            } else if (isCorrect === false) {
+            } else if (rowData.isCorrect === false) {
                 row.className = 'incorrect';
             }
 
-            const resultText = isCorrect === null
+            const resultText = rowData.isCorrect === null
                 ? '–'
-                : (isCorrect ? '✅' : '❌');
+                : (rowData.isCorrect ? '✅' : '❌');
 
             const columns = [
-                formatQuestionLabel(normalized),
-                userAnswer,
-                correctAnswer,
+                formatQuestionLabel(rowData.questionId),
+                rowData.userAnswer,
+                rowData.correctAnswer,
                 resultText
             ];
             columns.forEach((text) => {
@@ -1710,43 +1719,18 @@
     }
 
     function handleResultsReady(results) {
-        renderResultsSummary(results);
-        const comparison = results.answerComparison || {};
-        const answers = results.answers || {};
-        const correctAnswers = results.correctAnswers || {};
-        const orderedKeys = resolveQuestionOrder(results);
-
-        orderedKeys.forEach((key) => {
-            const normalized = normalizeQuestionId(key);
-            if (!normalized) return;
-            const entry = comparison[normalized] || comparison[key] || {};
-            const userAnswer = entry.hasOwnProperty('userAnswer')
-                ? entry.userAnswer
-                : pickValueFromStore(answers, normalized, key);
-            const hasAnswer =
-                userAnswer !== undefined &&
-                userAnswer !== null &&
-                String(userAnswer).trim() !== '' &&
-                !/^no answer$/i.test(String(userAnswer).trim());
-            const correctAnswer = entry.hasOwnProperty('correctAnswer')
-                ? entry.correctAnswer
-                : pickValueFromStore(correctAnswers, normalized, key);
-            let isCorrect = null;
-            if (entry.hasOwnProperty('isCorrect')) {
-                isCorrect = entry.isCorrect;
-            } else if (hasAnswer && correctAnswer !== undefined && correctAnswer !== null) {
-                isCorrect = compareAnswerValues(userAnswer, correctAnswer);
-            }
-
-            if (isCorrect === null) {
-                setNavStatus(normalized, hasAnswer ? 'answered' : null);
-                highlightAnswerFields(normalized, null);
-            } else if (isCorrect) {
-                setNavStatus(normalized, 'correct');
-                highlightAnswerFields(normalized, true);
+        const rows = collectResultRows(results);
+        renderResultsSummary(results, rows);
+        rows.forEach((rowData) => {
+            if (rowData.isCorrect === null) {
+                setNavStatus(rowData.questionId, rowData.hasAnswer ? 'answered' : null);
+                highlightAnswerFields(rowData.questionId, null);
+            } else if (rowData.isCorrect) {
+                setNavStatus(rowData.questionId, 'correct');
+                highlightAnswerFields(rowData.questionId, true);
             } else {
-                setNavStatus(normalized, 'incorrect');
-                highlightAnswerFields(normalized, false);
+                setNavStatus(rowData.questionId, 'incorrect');
+                highlightAnswerFields(rowData.questionId, false);
             }
         });
     }
