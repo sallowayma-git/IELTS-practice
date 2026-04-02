@@ -103,6 +103,21 @@ def format_iso_timestamp(ts: float | None):
 
 
 def main() -> int:
+    if not CHECKLIST_PATH.exists():
+        result = {
+            "skipped": True,
+            "reason": "checklist.md 已移除，跳过 checklist 一致性校验",
+            "summaryStatusCount": {},
+            "issueStatusCount": {},
+            "summaryMismatches": [],
+            "claims": {},
+            "claimMismatches": [],
+            "freshnessMismatches": [],
+            "reportFreshness": {},
+        }
+        print(json.dumps(result, ensure_ascii=False))
+        return 0
+
     checklist_text = CHECKLIST_PATH.read_text(encoding="utf-8")
     checklist_mtime = CHECKLIST_PATH.stat().st_mtime
     issue_status_count = parse_issue_rows(checklist_text)
