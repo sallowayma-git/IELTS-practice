@@ -1,5 +1,71 @@
 (function () {
   var storage = window.storage;
+
+  function _syncLegacyNavigationActive(viewName) {
+    var normalized = (typeof viewName === 'string' && viewName) ? viewName : 'overview';
+    var controller = null;
+
+    if (typeof window.ensureLegacyNavigationController === 'function') {
+      try {
+        controller = window.ensureLegacyNavigationController({
+          containerSelector: '.main-nav',
+          syncOnNavigate: false
+        });
+      } catch (err) {
+        console.warn('[Fallback] 初始化导航控制器失败:', err);
+      }
+    }
+
+    if (controller && typeof controller.syncActive === 'function') {
+      controller.syncActive(normalized);
+      return;
+    }
+
+    var navContainer = document.querySelector('.main-nav');
+    if (!navContainer) {
+      return;
+    }
+    Array.prototype.forEach.call(navContainer.querySelectorAll('.nav-btn'), function (btn) {
+      btn.classList.remove('active');
+    });
+    var navButton = navContainer.querySelector('[data-view="' + normalized + '"]');
+    if (navButton) {
+      navButton.classList.add('active');
+    }
+  }
+
+  function _bindNavigationFallback() {
+    if (typeof window.ensureLegacyNavigationController === 'function') {
+      window.ensureLegacyNavigationController({
+        containerSelector: '.main-nav',
+        syncOnNavigate: true,
+        onNavigate: function onNavigate(viewName) {
+          if (typeof window.showView === 'function') {
+            window.showView(viewName);
+          }
+        }
+      });
+      return;
+    }
+
+    var navRoot = document.querySelector('.main-nav');
+    if (navRoot && !navRoot._legacyNavHandler) {
+      var handler = function (event) {
+        var button = event.target && event.target.closest ? event.target.closest('.nav-btn[data-view]') : null;
+        if (!button || !navRoot.contains(button)) {
+          return;
+        }
+        event.preventDefault();
+        var viewName = button.getAttribute('data-view');
+        if (viewName && typeof window.showView === 'function') {
+          window.showView(viewName);
+        }
+      };
+      navRoot._legacyNavHandler = handler;
+      navRoot.addEventListener('click', handler);
+    }
+  }
+
   // Fallback for navigation
   if (typeof window.showView !== 'function') {
     window.showView = function (viewName, resetCategory) {
@@ -16,33 +82,7 @@
         v.classList.remove('active');
       });
       target.classList.add('active');
-
-      var controller = null;
-      if (typeof window.ensureLegacyNavigationController === 'function') {
-        try {
-          controller = window.ensureLegacyNavigationController({
-            containerSelector: '.main-nav',
-            syncOnNavigate: false
-          });
-        } catch (err) {
-          console.warn('[Fallback] 初始化导航控制器失败:', err);
-        }
-      }
-
-      if (controller && typeof controller.syncActive === 'function') {
-        controller.syncActive(normalized);
-      } else {
-        var navContainer = document.querySelector('.main-nav');
-        if (navContainer) {
-          Array.prototype.forEach.call(navContainer.querySelectorAll('.nav-btn'), function (btn) {
-            btn.classList.remove('active');
-          });
-          var navButton = navContainer.querySelector('[data-view="' + normalized + '"]');
-          if (navButton) {
-            navButton.classList.add('active');
-          }
-        }
-      }
+      _syncLegacyNavigationActive(normalized);
 
       if (normalized === 'browse' && (resetCategory === undefined || resetCategory === true)) {
         window.currentCategory = 'all';
@@ -59,34 +99,7 @@
   }
 
   try {
-    if (typeof window.ensureLegacyNavigationController === 'function') {
-      window.ensureLegacyNavigationController({
-        containerSelector: '.main-nav',
-        syncOnNavigate: true,
-        onNavigate: function onNavigate(viewName) {
-          if (typeof window.showView === 'function') {
-            window.showView(viewName);
-          }
-        }
-      });
-    } else {
-      var navRoot = document.querySelector('.main-nav');
-      if (navRoot && !navRoot._legacyNavHandler) {
-        var handler = function (event) {
-          var button = event.target && event.target.closest ? event.target.closest('.nav-btn[data-view]') : null;
-          if (!button || !navRoot.contains(button)) {
-            return;
-          }
-          event.preventDefault();
-          var viewName = button.getAttribute('data-view');
-          if (viewName && typeof window.showView === 'function') {
-            window.showView(viewName);
-          }
-        };
-        navRoot._legacyNavHandler = handler;
-        navRoot.addEventListener('click', handler);
-      }
-    }
+    _bindNavigationFallback();
   } catch (error) {
     console.warn('[Fallback] 注册导航事件失败:', error);
   }
@@ -308,25 +321,26 @@
   })();
 
   function showImportModeModal(onSelect) {
-    const overlay = document.createElement('div');
-    overlay.className = 'import-mode-overlay-lite';
-    const modal = document.createElement('div');
-    modal.className = 'import-mode-modal-lite';
-
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'close-btn-lite';
-    closeBtn.innerHTML = '&times;';
-    closeBtn.ariaLabel = '关闭';
-    closeBtn.addEventListener('click', () => document.body.removeChild(overlay));
-
-    const title = document.createElement('h4');
-    title.textContent = '选择导入模式';
-    const desc = document.createElement('p');
-    desc.textContent = '请选择适合当前场景的数据导入策略';
-
-    const options = document.createElement('div');
-    options.className = 'import-mode-options-lite';
+    const create = _fallbackCreateElement;
+    const overlay = create('div', { className: 'import-mode-overlay-lite' });
+    const modal = create('div', { className: 'import-mode-modal-lite' });
+    if (!overlay || !modal) {
+      return;
+    }
+    const closeModal = () => {
+      if (overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+      }
+    };
+    const pickMode = (mode) => {
+      closeModal();
+      if (typeof onSelect === 'function') {
+        onSelect(mode);
+      }
+    };
+    const closeBtn = create('button', { type: 'button', className: 'close-btn-lite', ariaLabel: '关闭' }, '×');
+    closeBtn.addEventListener('click', closeModal);
+    const options = create('div', { className: 'import-mode-options-lite' });
 
     const defs = [
       { mode: 'merge', icon: '📥', title: '增量导入', text: '合并新数据，保留现有记录。适合日常更新。' },
@@ -334,28 +348,12 @@
     ];
 
     defs.forEach((def) => {
-      const card = document.createElement('div');
-      card.className = 'import-mode-option-lite';
-      card.role = 'button';
-      card.tabIndex = 0;
-
-      const icon = document.createElement('div');
-      icon.className = 'mode-icon-lite';
-      icon.textContent = def.icon;
-
-      const head = document.createElement('strong');
-      head.textContent = def.title;
-
-      const text = document.createElement('p');
-      text.textContent = def.text;
-
-      card.append(icon, head, text);
-
-      const selectAction = () => {
-        document.body.removeChild(overlay);
-        onSelect(def.mode);
-      };
-
+      const card = create('div', { className: 'import-mode-option-lite', role: 'button', tabIndex: '0' }, [
+        create('div', { className: 'mode-icon-lite' }, def.icon),
+        create('strong', null, def.title),
+        create('p', null, def.text)
+      ]);
+      const selectAction = () => pickMode(def.mode);
       card.addEventListener('click', selectAction);
       card.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -363,17 +361,20 @@
           selectAction();
         }
       });
-
       options.appendChild(card);
     });
 
-    modal.append(closeBtn, title, desc, options);
+    modal.append(
+      closeBtn,
+      create('h4', null, '选择导入模式'),
+      create('p', null, '请选择适合当前场景的数据导入策略'),
+      options
+    );
     overlay.appendChild(modal);
 
-    // Close on backdrop click
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) {
-        document.body.removeChild(overlay);
+        closeModal();
       }
     });
 
@@ -383,7 +384,7 @@
       style.textContent = `
         @keyframes importFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes importScaleIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        
+
         .import-mode-overlay-lite {
           position: fixed; inset: 0; z-index: 10000;
           background: rgba(0, 0, 0, 0.25);
@@ -394,15 +395,12 @@
         }
         .import-mode-modal-lite {
           position: relative; width: 440px; max-width: 90vw;
-          /* White transparent gradient for substantial glass feel */
           background: linear-gradient(165deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%);
           backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
           border-radius: 24px;
-          /* Highlight border */
           border: 1px solid rgba(255, 255, 255, 0.8);
-          /* Rich shadow + Top highlight for 3D glass effect */
-          box-shadow: 
-            0 25px 50px -12px rgba(0, 0, 0, 0.15), 
+          box-shadow:
+            0 25px 50px -12px rgba(0, 0, 0, 0.15),
             inset 0 1px 0 rgba(255, 255, 255, 1),
             inset 0 0 0 1px rgba(255, 255, 255, 0.2);
           padding: 40px 32px;
@@ -424,7 +422,6 @@
         .import-mode-option-lite {
           display: flex; flex-direction: column; align-items: center; text-align: center;
           padding: 24px 16px;
-          /* Glassy cards */
           background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.6));
           border: 1px solid rgba(255, 255, 255, 0.6);
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.8);
@@ -529,34 +526,6 @@
     };
   }
 
-  function _fallbackAssignSequence(list) {
-    if (typeof window.assignExamSequenceNumbers === 'function') {
-      try { window.assignExamSequenceNumbers(list); return; } catch (_) { }
-    }
-    list.forEach(function (item, idx) {
-      if (item && typeof item === 'object' && item.sequenceNumber == null) {
-        item.sequenceNumber = idx + 1;
-      }
-    });
-  }
-
-  function _fallbackGetExamIndexState() {
-    if (typeof window.getExamIndexState === 'function') {
-      try { return window.getExamIndexState(); } catch (_) { }
-    }
-    return Array.isArray(window.examIndex) ? window.examIndex : [];
-  }
-
-  function _fallbackSetExamIndexState(list) {
-    var cloned = Array.isArray(list) ? list.slice() : [];
-    _fallbackAssignSequence(cloned);
-    if (typeof window.setExamIndexState === 'function') {
-      try { return window.setExamIndexState(cloned); } catch (_) { }
-    }
-    try { window.examIndex = cloned; } catch (_) { }
-    return cloned;
-  }
-
   function _fallbackIsQuotaExceeded(error) {
     return !!(error && (
       error.name === 'QuotaExceededError' ||
@@ -616,6 +585,7 @@
 
       var container = document.getElementById('settings-view');
       var create = _fallbackCreateElement;
+      var isEmpty = !Array.isArray(backups) || backups.length === 0;
 
       // 防止重复渲染多个列表/遮罩
       var existingInline = (container && container.querySelector('.backup-list-container')) || document.querySelector('.backup-list-container');
@@ -628,7 +598,7 @@
       }
 
       var buildEntries = function () {
-        if (!Array.isArray(backups) || backups.length === 0) {
+        if (isEmpty) {
           return [
             create('div', { className: 'backup-list-empty' }, [
               create('div', { className: 'backup-list-empty-icon', ariaHidden: 'true' }, '📂'),
@@ -659,9 +629,6 @@
         });
       };
 
-      var existing = document.querySelector('.backup-modal-overlay');
-      if (existing) existing.remove();
-
       var card = create('div', { className: 'backup-list-card' }, [
         create('div', { className: 'backup-list-header' }, [
           create('h3', { className: 'backup-list-title' }, [
@@ -685,7 +652,7 @@
         } else {
           container.appendChild(holder);
         }
-        if (!Array.isArray(backups) || backups.length === 0) {
+        if (isEmpty) {
           window.showMessage && window.showMessage('暂无备份记录', 'info');
         }
         return;
@@ -717,7 +684,7 @@
       ]);
 
       document.body.appendChild(overlay);
-      if (!Array.isArray(backups) || backups.length === 0) {
+      if (isEmpty) {
         window.showMessage && window.showMessage('暂无备份记录', 'info');
       }
     };
@@ -912,9 +879,6 @@
       }
 
       var create = _fallbackCreateElement;
-      var ensureArray = function (value) {
-        return Array.isArray(value) ? value : [value];
-      };
 
       var createLoaderCard = function (type, title, description, hint) {
         var prefix = type === 'reading' ? 'reading' : 'listening';
@@ -994,7 +958,7 @@
 
       var body = create('div', { className: 'modal-body library-loader-body' }, [
         create('div', { className: 'library-loader-grid' }, [
-          createLoaderCard('reading', '📖 阅读题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF的根文件夹。', '💡 建议路径：.../3. 所有文章(9.4)[134篇]/...'),
+          createLoaderCard('reading', '📖 阅读题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF的根文件夹。', '💡 推荐结构：任意根目录/分类目录/题目目录/HTML 或 PDF'),
           createLoaderCard('listening', '🎧 听力题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF/音频的根文件夹。', '💡 建议路径：ListeningPractice/P3 或 ListeningPractice/P4')
         ]),
         create('div', { className: 'library-loader-instructions' }, [
@@ -1015,7 +979,7 @@
         }, '关闭')
       ]);
 
-      ensureArray([header, body, footer]).forEach(function (section) {
+      [header, body, footer].forEach(function (section) {
         if (section) {
           modal.appendChild(section);
         }
@@ -1065,12 +1029,7 @@
 
         var type = input.dataset.libraryType;
         var mode = input.dataset.libraryMode;
-        if (!type || !mode) {
-          cleanup();
-          return;
-        }
-
-        if (typeof Promise === 'undefined') {
+        if (!type || !mode || typeof Promise === 'undefined') {
           cleanup();
           return;
         }
@@ -1169,52 +1128,16 @@
       }
     }
 
-    function _fallbackDerivePathMap(exams, fallbackMap) {
-      if (typeof window.derivePathMapFromIndex === 'function') {
-        try { return window.derivePathMapFromIndex(exams, fallbackMap); } catch (_) { }
-      }
-      if (window.LibraryManager && typeof window.LibraryManager.derivePathMapFromIndex === 'function') {
-        try { return window.LibraryManager.derivePathMapFromIndex(exams, fallbackMap); } catch (_) { }
-      }
-      return null;
-    }
-
-    async function _fallbackLoadPathMap(key) {
-      if (typeof window.loadPathMapForConfiguration === 'function') {
-        try { return await window.loadPathMapForConfiguration(key); } catch (_) { }
-      }
-      var manager = null;
-      if (window.LibraryManager && typeof window.LibraryManager.getInstance === 'function') {
-        manager = window.LibraryManager.getInstance();
-      }
-      if (manager && typeof manager.loadPathMapForConfiguration === 'function') {
-        try { return await manager.loadPathMapForConfiguration(key); } catch (_) { }
-      }
-      return null;
-    }
-
-    async function _fallbackSavePathMap(key, exams, options) {
-      if (typeof window.savePathMapForConfiguration === 'function') {
-        try { return await window.savePathMapForConfiguration(key, exams, options || {}); } catch (_) { }
-      }
-      var manager = null;
-      if (window.LibraryManager && typeof window.LibraryManager.getInstance === 'function') {
-        manager = window.LibraryManager.getInstance();
-      }
-      if (manager && typeof manager.savePathMapForConfiguration === 'function') {
-        try { return await manager.savePathMapForConfiguration(key, exams, options || {}); } catch (err) {
-          console.warn('[Fallback] 保存路径映射失败:', err);
-        }
-      }
-      return null;
-    }
-
     async function _fallbackApplyLibraryConfig(key, dataset, options) {
       if (typeof window.applyLibraryConfiguration === 'function') {
         try { return await window.applyLibraryConfiguration(key, dataset, options || {}); } catch (_) { }
       }
       // fallback:直接刷新内存状态与UI
-      _fallbackSetExamIndexState(dataset);
+      if (typeof window.setExamIndexState === 'function') {
+        try { window.setExamIndexState(dataset); } catch (_) { }
+      } else {
+        try { window.examIndex = Array.isArray(dataset) ? dataset.slice() : []; } catch (_) { }
+      }
       if (options && options.setActive) {
         await _fallbackSetActiveLibraryKey(key);
       }
@@ -1228,17 +1151,65 @@
     }
 
     function _fallbackDetectFolderPlacement(files, type) {
-      var paths = files.map(function (f) { return f.webkitRelativePath || f.name; });
-      if (type === 'reading') {
-        return paths.some(function (p) { return /睡着过项目组\(9\.4\)\[134篇\]\/3\. 所有文章\(9\.4\)\[134篇\]\//.test(p); });
+      var paths = files
+        .map(function (f) { return (f && (f.webkitRelativePath || f.name) || '').replace(/\\/g, '/'); })
+        .filter(Boolean);
+      if (!paths.length) {
+        return false;
       }
-      return paths.some(function (p) { return /^ListeningPractice\/(P3|P4)\//.test(p); });
+
+      var hasQuestionFile = files.some(function (file) {
+        var name = file && file.name ? String(file.name).toLowerCase() : '';
+        return /\.html?$/.test(name) || /\.pdf$/.test(name);
+      });
+      if (!hasQuestionFile) {
+        return false;
+      }
+
+      if (type === 'reading') {
+        // Reading 目录命名不应被硬编码限制，只要包含可识别题目文件即视为有效。
+        return true;
+      }
+
+      // Listening 推荐包含 P3/P4，但不再强依赖固定父目录名（例如 ListeningPractice）。
+      return paths.some(function (p) { return /(^|\/)(P3|P4)(\/|$)/i.test(p); }) || hasQuestionFile;
     }
 
     async function _fallbackBuildIndexFromFiles(files, type, label) {
       var byDir = new Map();
+
+      function normalizeUploadDir(rawDir) {
+        return String(rawDir || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+      }
+
+      function normalizeListeningDir(rawDir) {
+        var normalized = normalizeUploadDir(rawDir);
+        if (!normalized) return '';
+
+        var segments = normalized.split('/').filter(Boolean);
+        if (!segments.length) return normalized;
+
+        // Prefer stable semantic anchors from the scanned folder tree.
+        var anchorPatterns = [
+          /^listeningpractice$/i,
+          /^p[1-4]$/i,
+          /^vip$/i
+        ];
+        var anchorIndex = -1;
+        for (var i = 0; i < segments.length; i++) {
+          if (anchorPatterns.some(function (re) { return re.test(segments[i]); })) {
+            anchorIndex = i;
+            break;
+          }
+        }
+        if (anchorIndex >= 0) {
+          return segments.slice(anchorIndex).join('/');
+        }
+        return normalized;
+      }
+
       files.forEach(function (f) {
-        var rel = f.webkitRelativePath || f.name;
+        var rel = (f.webkitRelativePath || f.name || '').replace(/\\/g, '/');
         var parts = rel.split('/');
         if (parts.length < 2) return;
         var dir = parts.slice(0, parts.length - 1).join('/');
@@ -1257,10 +1228,11 @@
         var category = 'P1';
         var m = dir.match(/\b(P1|P2|P3|P4)\b/);
         if (m) category = m[1];
-        var basePath = dir + '/';
-        if (type === 'listening') {
-          basePath = basePath.replace(/^.*?(ListeningPractice\/)/, '$1');
-        }
+        var normalizedDir = type === 'listening'
+          ? normalizeListeningDir(dir)
+          : normalizeUploadDir(dir);
+        if (!normalizedDir) return;
+        var basePath = normalizedDir + '/';
         var id = 'custom_' + type + '_' + Date.now() + '_' + (idx++);
         entries.push({
           id: id,
@@ -1317,7 +1289,7 @@
         }
         if (!_fallbackDetectFolderPlacement(files, type)) {
           var proceed = typeof confirm === 'function'
-            ? confirm('检测到文件夹不在推荐的结构中。\n阅读: .../3. 所有文章(9.4)[134篇]/...\n听力: ListeningPractice/P3 或 P4\n是否继续?')
+            ? confirm('检测到文件夹结构与推荐示例不一致。\n阅读: 任意根目录/分类目录/题目目录\n听力: 任意根目录下包含 P3 或 P4 子目录\n是否继续?')
             : true;
           if (!proceed) return;
         }
@@ -1331,7 +1303,9 @@
       }
 
       var activeKey = await _fallbackGetActiveLibraryKey();
-      var currentIndex = _fallbackGetExamIndexState();
+      var currentIndex = (typeof window.getExamIndexState === 'function')
+        ? window.getExamIndexState()
+        : (Array.isArray(window.examIndex) ? window.examIndex : []);
       if (storage && storage.get) {
         try {
           var maybeCurrent = storage.get(activeKey, currentIndex);
@@ -1354,15 +1328,23 @@
         var dedupAdd = additions.filter(function (e) { return !existingKeys.has((e.path || '') + '|' + (e.filename || '') + '|' + e.title); });
         newIndex = currentIndex.concat(dedupAdd);
       }
-      _fallbackAssignSequence(newIndex);
+      if (typeof window.assignExamSequenceNumbers === 'function') {
+        try { window.assignExamSequenceNumbers(newIndex); } catch (_) { }
+      }
 
       if (mode === 'full') {
         var targetKey = 'exam_index_' + Date.now();
         var configName = (type === 'reading' ? '阅读' : '听力') + '全量-' + new Date().toLocaleString();
         await _fallbackSaveIndexForKey(targetKey, newIndex);
-        var fullPathFallback = await _fallbackLoadPathMap(targetKey);
-        var fullDerivedMap = _fallbackDerivePathMap(newIndex, fullPathFallback);
-        await _fallbackSavePathMap(targetKey, newIndex, { overrideMap: fullDerivedMap, setActive: true });
+        var fullPathFallback = (typeof window.loadPathMapForConfiguration === 'function')
+          ? await window.loadPathMapForConfiguration(targetKey)
+          : null;
+        var fullDerivedMap = (typeof window.derivePathMapFromIndex === 'function')
+          ? window.derivePathMapFromIndex(newIndex, fullPathFallback)
+          : fullPathFallback;
+        if (typeof window.savePathMapForConfiguration === 'function') {
+          await window.savePathMapForConfiguration(targetKey, newIndex, { overrideMap: fullDerivedMap, setActive: true });
+        }
         await _fallbackSaveLibraryConfiguration(configName, targetKey, newIndex.length);
         await _fallbackSetActiveLibraryKey(targetKey);
         try {
@@ -1383,9 +1365,15 @@
         targetKeyInc = 'exam_index_' + Date.now();
         configNameInc = (type === 'reading' ? '阅读' : '听力') + '增量-' + new Date().toLocaleString();
         await _fallbackSaveIndexForKey(targetKeyInc, newIndex);
-        var incFallback = await _fallbackLoadPathMap(targetKeyInc);
-        var derivedMap = _fallbackDerivePathMap(newIndex, incFallback);
-        await _fallbackSavePathMap(targetKeyInc, newIndex, { overrideMap: derivedMap, setActive: true });
+        var incFallback = (typeof window.loadPathMapForConfiguration === 'function')
+          ? await window.loadPathMapForConfiguration(targetKeyInc)
+          : null;
+        var derivedMap = (typeof window.derivePathMapFromIndex === 'function')
+          ? window.derivePathMapFromIndex(newIndex, incFallback)
+          : incFallback;
+        if (typeof window.savePathMapForConfiguration === 'function') {
+          await window.savePathMapForConfiguration(targetKeyInc, newIndex, { overrideMap: derivedMap, setActive: true });
+        }
         await _fallbackSaveLibraryConfiguration(configNameInc, targetKeyInc, newIndex.length);
         await _fallbackSetActiveLibraryKey(targetKeyInc);
         window.showMessage && window.showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
@@ -1394,11 +1382,21 @@
       }
 
       await _fallbackSaveIndexForKey(targetKeyInc, newIndex);
-      var targetPathFallback = await _fallbackLoadPathMap(targetKeyInc);
-      var incrementalMap = _fallbackDerivePathMap(newIndex, targetPathFallback);
-      await _fallbackSavePathMap(targetKeyInc, newIndex, { overrideMap: incrementalMap, setActive: true });
+      var targetPathFallback = (typeof window.loadPathMapForConfiguration === 'function')
+        ? await window.loadPathMapForConfiguration(targetKeyInc)
+        : null;
+      var incrementalMap = (typeof window.derivePathMapFromIndex === 'function')
+        ? window.derivePathMapFromIndex(newIndex, targetPathFallback)
+        : targetPathFallback;
+      if (typeof window.savePathMapForConfiguration === 'function') {
+        await window.savePathMapForConfiguration(targetKeyInc, newIndex, { overrideMap: incrementalMap, setActive: true });
+      }
       await _fallbackSaveLibraryConfiguration((type === 'reading' ? '阅读' : '听力') + '增量-' + new Date().toLocaleString(), targetKeyInc, newIndex.length);
-      _fallbackSetExamIndexState(newIndex);
+      if (typeof window.setExamIndexState === 'function') {
+        window.setExamIndexState(newIndex);
+      } else {
+        try { window.examIndex = Array.isArray(newIndex) ? newIndex.slice() : []; } catch (_) { }
+      }
       try { if (typeof window.updateOverview === 'function') window.updateOverview(); } catch (_) { }
       if (document.getElementById('browse-view') && document.getElementById('browse-view').classList.contains('active') && typeof window.loadExamList === 'function') {
         try { window.loadExamList(); } catch (_) { }

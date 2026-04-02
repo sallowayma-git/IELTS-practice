@@ -183,6 +183,14 @@ async function run() {
     const recordId = await suiteRecord.getAttribute('data-record-id');
     if (!recordId) throw new Error('Suite practice record not found in history list');
 
+    const recordCountBefore = await page.evaluate(async () => {
+      if (window.storage && typeof window.storage.get === 'function') {
+        const records = await window.storage.get('practice_records', []);
+        return Array.isArray(records) ? records.length : 0;
+      }
+      return document.querySelectorAll('#history-list .history-record-item').length;
+    });
+
     const titleText = await page.evaluate((id) => {
       const base = `#history-list .history-record-item[data-record-id='${id}']`;
       const titleEl = document.querySelector(`${base} .record-title`) ||
@@ -217,6 +225,89 @@ async function run() {
     await page.locator('#practice-record-modal .modal-container').screenshot({
       path: path.join(REPORT_DIR, 'suite-practice-record-detail.png'),
     });
+
+    const [replayPage] = await Promise.all([
+      context.waitForEvent('page', { timeout: 20_000 }),
+      page.click('#practice-record-modal .record-summary .record-summary-replay-trigger'),
+    ]);
+    attachConsole(replayPage);
+    await replayPage.waitForLoadState('load');
+
+    await replayPage.waitForFunction(() => {
+      const results = document.getElementById('results');
+      if (!results || results.style.display === 'none') return false;
+      return results.querySelectorAll('tbody tr').length > 0 || results.textContent.includes('得分');
+    }, { timeout: 30_000 });
+    await replayPage.waitForFunction(() => {
+      return !!(document.getElementById('review-nav-bar') || document.getElementById('practice-review-nav'));
+    }, { timeout: 30_000 });
+    await replayPage.waitForFunction(() => {
+      const bar = document.getElementById('review-nav-bar') || document.getElementById('practice-review-nav');
+      const header = document.querySelector('body > header') || document.querySelector('header');
+      return !!(bar && header && header.contains(bar));
+    }, { timeout: 30_000 });
+    await replayPage.waitForFunction(() => {
+      const bar = document.getElementById('review-nav-bar') || document.getElementById('practice-review-nav');
+      const header = document.querySelector('body > header') || document.querySelector('header');
+      if (!bar || !header) return false;
+      const br = bar.getBoundingClientRect();
+      const hr = header.getBoundingClientRect();
+      const centerDelta = Math.abs((br.left + br.width / 2) - (hr.left + hr.width / 2));
+      return centerDelta <= Math.max(24, hr.width * 0.08);
+    }, { timeout: 30_000 });
+
+    const readonlyState = await replayPage.evaluate(() => {
+      const submit = document.querySelector('#submit-btn, [data-submit-suite], .suite-submit-btn, button[type="submit"]');
+      return {
+        submitDisabled: !submit || submit.disabled === true,
+      };
+    });
+    if (!readonlyState.submitDisabled) {
+      throw new Error('Replay page is not read-only: submit button is enabled');
+    }
+
+    const navState = await replayPage.evaluate(() => {
+      const bar = document.getElementById('review-nav-bar') || document.getElementById('practice-review-nav');
+      if (!bar) return null;
+      const next = bar.querySelector('button[data-review-dir="next"], button[data-review-nav="next"]');
+      return {
+        reviewIndex: Number.parseInt(bar.dataset.reviewIndex || '0', 10),
+        nextDisabled: !next || next.disabled,
+        selector: next
+          ? (next.getAttribute('data-review-dir')
+            ? '#review-nav-bar button[data-review-dir="next"]'
+            : '#practice-review-nav button[data-review-nav="next"]')
+          : '',
+      };
+    });
+
+    if (navState && !navState.nextDisabled && navState.selector) {
+      await replayPage.click(navState.selector);
+      await replayPage.waitForLoadState('load', { timeout: 30_000 });
+      await replayPage.waitForFunction((prevIndex) => {
+        const bar = document.getElementById('review-nav-bar') || document.getElementById('practice-review-nav');
+        if (!bar) return false;
+        const current = Number.parseInt(bar.dataset.reviewIndex || '0', 10);
+        return Number.isFinite(current) && current !== Number(prevIndex);
+      }, navState.reviewIndex, { timeout: 30_000 });
+    }
+
+    await replayPage.screenshot({
+      path: path.join(REPORT_DIR, 'suite-practice-replay-final.png'),
+    });
+    await replayPage.close().catch(() => {});
+    await page.waitForTimeout(800);
+
+    const recordCountAfter = await page.evaluate(async () => {
+      if (window.storage && typeof window.storage.get === 'function') {
+        const records = await window.storage.get('practice_records', []);
+        return Array.isArray(records) ? records.length : 0;
+      }
+      return document.querySelectorAll('#history-list .history-record-item').length;
+    });
+    if (recordCountAfter !== recordCountBefore) {
+      throw new Error(`Replay should not create new records: before=${recordCountBefore}, after=${recordCountAfter}`);
+    }
 
     passed = true;
   } finally {

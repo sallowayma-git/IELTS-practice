@@ -7,6 +7,7 @@
 /tools/
 /dist/
 /apps/
+/ReadingPractice/
 
 
 # ListeningPractice 资源体积大，默认忽略；仅放行 100 P1 / 100 P4 的 HTML 便于维护与回归
@@ -18,6 +19,7 @@
 !/ListeningPractice/100 P1/**/*.html
 !/ListeningPractice/100 P4/**/*.html
 /睡着过项目组(9.4)[134篇]/
+/IELTS/
 /.claude/
 /templates/hp/
 /ielts-writing-assistant/

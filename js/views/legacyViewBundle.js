@@ -684,8 +684,8 @@
         var list = Array.isArray(records) ? records : [];
 
         if (list.length === 0) {
-            historyRenderer.renderEmptyState(container);
             historyRenderer.destroyScroller(options.scroller);
+            historyRenderer.renderEmptyState(container);
             return null;
         }
 

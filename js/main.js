@@ -2,48 +2,8 @@
 // This file is the result of refactoring the inline script from improved-working-system.html
 
 // ============================================================================
-// Phase 1: 全局状态迁移到 AppStateService
+// Phase 2/3: 路径与状态由 ResourceCore / AppStateService 统一提供
 // ============================================================================
-
-const legacyStateAdapter = window.LegacyStateAdapter ? window.LegacyStateAdapter.getInstance() : null;
-
-// 全局状态现已迁移到 AppStateService，以下为向后兼容的 getter
-// fallbackExamSessions - 迁移到 AppStateService
-Object.defineProperty(window, 'fallbackExamSessions', {
-    get: function () {
-        if (window.appStateService) {
-            return window.appStateService.getFallbackExamSessions();
-        }
-        // 降级：如果 state-service 未加载，返回临时 Map
-        if (!window.__legacyFallbackExamSessions) {
-            window.__legacyFallbackExamSessions = new Map();
-        }
-        return window.__legacyFallbackExamSessions;
-    },
-    set: function (value) {
-        if (window.appStateService && value instanceof Map) {
-            window.appStateService.setFallbackExamSessions(value);
-        } else {
-            window.__legacyFallbackExamSessions = value;
-        }
-    },
-    configurable: true
-});
-
-// processedSessions - 迁移到 AppStateService
-Object.defineProperty(window, 'processedSessions', {
-    get: function () {
-        if (window.appStateService) {
-            return window.appStateService.getProcessedSessions();
-        }
-        // 降级：如果 state-service 未加载，返回临时 Set
-        if (!window.__legacyProcessedSessions) {
-            window.__legacyProcessedSessions = new Set();
-        }
-        return window.__legacyProcessedSessions;
-    },
-    configurable: true
-});
 
 // 其他全局变量保留在 main.js（暂未迁移）
 let practiceListScroller = null;
@@ -82,40 +42,54 @@ let practiceDashboardViewInstance = null;
 let legacyNavigationController = null;
 
 // ============================================================================
-// Phase 1: Boot/Ensure 函数 Shim 层（实际实现在 main-entry.js）
+// Phase 1: Boot/Ensure 入口桥接（真实实现集中在 main-entry.js）
 // ============================================================================
 
-// reportBootStage - 已在 main-entry.js 实现
-// 保留此处为兼容性注释，实际由 main-entry.js 提供
-if (typeof window.reportBootStage !== 'function') {
-    window.reportBootStage = function reportBootStage(message, progress) {
-        console.warn('[main.js shim] reportBootStage 应由 main-entry.js 提供');
+function resolveAppEntryMethod(name) {
+    if (window.AppEntry && typeof window.AppEntry[name] === 'function') {
+        return window.AppEntry[name].bind(window.AppEntry);
+    }
+    return null;
+}
+
+function ensureWindowEntryMethod(name, fallback) {
+    if (typeof window[name] === 'function') {
+        return window[name];
+    }
+    const fromEntry = resolveAppEntryMethod(name);
+    if (typeof fromEntry === 'function') {
+        window[name] = fromEntry;
+        return window[name];
+    }
+    window[name] = typeof fallback === 'function' ? fallback : function () {
+        return Promise.resolve();
+    };
+    return window[name];
+}
+
+function createMethodDelegate(resolver, methodName, fallbackValue) {
+    return function () {
+        const target = typeof resolver === 'function' ? resolver() : null;
+        if (target && typeof target[methodName] === 'function') {
+            return target[methodName].apply(target, arguments);
+        }
+        return typeof fallbackValue === 'function'
+            ? fallbackValue.apply(this, arguments)
+            : fallbackValue;
     };
 }
 
-// ensureExamDataScripts - 已在 main-entry.js 实现
-if (typeof window.ensureExamDataScripts !== 'function') {
-    window.ensureExamDataScripts = function ensureExamDataScripts() {
-        console.warn('[main.js shim] ensureExamDataScripts 应由 main-entry.js 提供');
-        return Promise.resolve();
-    };
+function ensureWindowDelegate(name, resolver, methodName, fallbackValue) {
+    if (typeof window[name] !== 'function') {
+        window[name] = createMethodDelegate(resolver, methodName, fallbackValue);
+    }
+    return window[name];
 }
 
-// ensurePracticeSuiteReady - 已在 main-entry.js 实现
-if (typeof window.ensurePracticeSuiteReady !== 'function') {
-    window.ensurePracticeSuiteReady = function ensurePracticeSuiteReady() {
-        console.warn('[main.js shim] ensurePracticeSuiteReady 应由 main-entry.js 提供');
-        return Promise.resolve();
-    };
-}
-
-// ensureBrowseGroup - 已在 main-entry.js 实现
-if (typeof window.ensureBrowseGroup !== 'function') {
-    window.ensureBrowseGroup = function ensureBrowseGroup() {
-        console.warn('[main.js shim] ensureBrowseGroup 应由 main-entry.js 提供');
-        return Promise.resolve();
-    };
-}
+ensureWindowEntryMethod('reportBootStage', function reportBootStageFallback() { });
+ensureWindowEntryMethod('ensureExamDataScripts');
+ensureWindowEntryMethod('ensurePracticeSuiteReady');
+ensureWindowEntryMethod('ensureBrowseGroup');
 
 // getLibraryManager - 保留在 main.js（依赖 browse-view 组加载后的全局对象）
 function getLibraryManager() {
@@ -143,61 +117,18 @@ async function ensureLibraryManagerReady() {
 // Phase 2: 浏览/筛选函数 Shim 层（实际实现在 browseController.js）
 // ============================================================================
 
-// setBrowseFilterState
-if (typeof window.setBrowseFilterState !== 'function') {
-    window.setBrowseFilterState = function (category, type) {
-        if (window.browseController && typeof window.browseController.setBrowseFilterState === 'function') {
-            window.browseController.setBrowseFilterState(category, type);
-        }
-    };
-}
+const getBrowseController = function () {
+    return window.browseController || null;
+};
 
-// getCurrentCategory
-if (typeof window.getCurrentCategory !== 'function') {
-    window.getCurrentCategory = function () {
-        if (window.browseController && typeof window.browseController.getCurrentCategory === 'function') {
-            return window.browseController.getCurrentCategory();
-        }
-        return 'all';
-    };
-}
-
-// getCurrentExamType
-if (typeof window.getCurrentExamType !== 'function') {
-    window.getCurrentExamType = function () {
-        if (window.browseController && typeof window.browseController.getCurrentExamType === 'function') {
-            return window.browseController.getCurrentExamType();
-        }
-        return 'all';
-    };
-}
-
-// updateBrowseTitle
-if (typeof window.updateBrowseTitle !== 'function') {
-    window.updateBrowseTitle = function () {
-        if (window.browseController && typeof window.browseController.updateBrowseTitle === 'function') {
-            window.browseController.updateBrowseTitle();
-        }
-    };
-}
-
-// clearPendingBrowseAutoScroll
-if (typeof window.clearPendingBrowseAutoScroll !== 'function') {
-    window.clearPendingBrowseAutoScroll = function () {
-        if (window.browseController && typeof window.browseController.clearPendingBrowseAutoScroll === 'function') {
-            window.browseController.clearPendingBrowseAutoScroll();
-        }
-    };
-}
-
-// switchLibraryConfig
-if (typeof window.switchLibraryConfig !== 'function') {
-    window.switchLibraryConfig = function (key) {
-        if (window.LibraryManager && typeof window.LibraryManager.switchLibraryConfig === 'function') {
-            return window.LibraryManager.switchLibraryConfig(key);
-        }
-    };
-}
+ensureWindowDelegate('setBrowseFilterState', getBrowseController, 'setBrowseFilterState');
+ensureWindowDelegate('getCurrentCategory', getBrowseController, 'getCurrentCategory', 'all');
+ensureWindowDelegate('getCurrentExamType', getBrowseController, 'getCurrentExamType', 'all');
+ensureWindowDelegate('updateBrowseTitle', getBrowseController, 'updateBrowseTitle');
+ensureWindowDelegate('clearPendingBrowseAutoScroll', getBrowseController, 'clearPendingBrowseAutoScroll');
+ensureWindowDelegate('switchLibraryConfig', function () {
+    return window.LibraryManager || null;
+}, 'switchLibraryConfig');
 
 // loadLibrary - 始终转发到 LibraryManager 实现，支持字符串 key
 window.loadLibrary = function (keyOrForceReload) {
@@ -363,44 +294,50 @@ async function cleanupOldCache() {
 // --- Data Loading and Management ---
 
 // Phase 3: 练习记录同步 - 保留在 main.js（核心数据流，暂不迁移）
-async function syncPracticeRecords() {
+async function syncPracticeRecords(options = {}) {
+    const { forceRender = false } = options || {};
     console.log('[System] 正在从存储中同步练习记录...');
     let records = [];
     try {
-        // Prefer normalized records from ScoreStorage via PracticeRecorder
-        const pr = window.app && window.app.components && window.app.components.practiceRecorder;
-        if (pr && typeof pr.getPracticeRecords === 'function') {
-            const maybePromise = pr.getPracticeRecords();
-            const res = (typeof maybePromise?.then === 'function') ? await maybePromise : maybePromise;
-            records = Array.isArray(res) ? res : [];
+        const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+        if (practiceCoreStore && typeof practiceCoreStore.listPracticeRecords === 'function') {
+            records = await practiceCoreStore.listPracticeRecords();
         } else {
-            // Fallback: read raw storage and defensively normalize minimal fields
-            const raw = await storage.get('practice_records', []) || [];
-            const base = Array.isArray(raw) ? raw : [];
-            records = base.map(r => {
-                const rd = (r && r.realData) || {};
-                const sInfo = r && (r.scoreInfo || rd.scoreInfo) || {};
-                const correct = (typeof r.correctAnswers === 'number') ? r.correctAnswers : (typeof sInfo.correct === 'number' ? sInfo.correct : (typeof r.score === 'number' ? r.score : 0));
-                const total = (typeof r.totalQuestions === 'number') ? r.totalQuestions : (typeof sInfo.total === 'number' ? sInfo.total : (rd.answers ? Object.keys(rd.answers).length : 0));
-                const acc = (typeof r.accuracy === 'number') ? r.accuracy : (total > 0 ? (correct / total) : 0);
-                const pct = (typeof r.percentage === 'number') ? r.percentage : Math.round(acc * 100);
-                let dur = (typeof r.duration === 'number') ? r.duration : undefined;
-                if (!(Number.isFinite(dur) && dur > 0)) {
-                    if (typeof rd.duration === 'number' && rd.duration > 0) {
-                        dur = rd.duration;
-                    } else {
-                        // try compute from timestamps if available
-                        const s = r.startTime ? new Date(r.startTime).getTime() : NaN;
-                        const e = r.endTime ? new Date(r.endTime).getTime() : NaN;
-                        if (Number.isFinite(s) && Number.isFinite(e) && e > s) {
-                            dur = Math.round((e - s) / 1000);
+        // Prefer normalized records from ScoreStorage via PracticeRecorder
+            const pr = window.app && window.app.components && window.app.components.practiceRecorder;
+            if (pr && typeof pr.getPracticeRecords === 'function') {
+                const maybePromise = pr.getPracticeRecords();
+                const res = (typeof maybePromise?.then === 'function') ? await maybePromise : maybePromise;
+                records = Array.isArray(res) ? res : [];
+            } else {
+                // Fallback: read raw storage and defensively normalize minimal fields
+                const raw = await storage.get('practice_records', []) || [];
+                const base = Array.isArray(raw) ? raw : [];
+                records = base.map(r => {
+                    const rd = (r && r.realData) || {};
+                    const sInfo = r && (r.scoreInfo || rd.scoreInfo) || {};
+                    const correct = (typeof r.correctAnswers === 'number') ? r.correctAnswers : (typeof sInfo.correct === 'number' ? sInfo.correct : (typeof r.score === 'number' ? r.score : 0));
+                    const total = (typeof r.totalQuestions === 'number') ? r.totalQuestions : (typeof sInfo.total === 'number' ? sInfo.total : (rd.answers ? Object.keys(rd.answers).length : 0));
+                    const acc = (typeof r.accuracy === 'number') ? r.accuracy : (total > 0 ? (correct / total) : 0);
+                    const pct = (typeof r.percentage === 'number') ? r.percentage : Math.round(acc * 100);
+                    let dur = (typeof r.duration === 'number') ? r.duration : undefined;
+                    if (!(Number.isFinite(dur) && dur > 0)) {
+                        if (typeof rd.duration === 'number' && rd.duration > 0) {
+                            dur = rd.duration;
                         } else {
-                            dur = 0;
+                            // try compute from timestamps if available
+                            const s = r.startTime ? new Date(r.startTime).getTime() : NaN;
+                            const e = r.endTime ? new Date(r.endTime).getTime() : NaN;
+                            if (Number.isFinite(s) && Number.isFinite(e) && e > s) {
+                                dur = Math.round((e - s) / 1000);
+                            } else {
+                                dur = 0;
+                            }
                         }
                     }
-                }
-                return { ...r, accuracy: acc, percentage: pct, duration: dur, correctAnswers: (r.correctAnswers ?? correct), totalQuestions: (r.totalQuestions ?? total) };
-            });
+                    return { ...r, accuracy: acc, percentage: pct, duration: dur, correctAnswers: (r.correctAnswers ?? correct), totalQuestions: (r.totalQuestions ?? total) };
+                });
+            }
         }
     } catch (e) {
         console.warn('[System] 同步记录时发生错误，使用存储原始数据:', e);
@@ -469,15 +406,25 @@ async function syncPracticeRecords() {
         if (renderer && renderer.helpers && typeof renderer.helpers.computeRecordsSignature === 'function') {
             const prevSig = renderer.helpers.computeRecordsSignature(prev);
             const nextSig = renderer.helpers.computeRecordsSignature(records);
-            if (prevSig === nextSig) {
+            if (!forceRender && prevSig === nextSig) {
                 console.log('[System] 练习记录未变化，跳过UI刷新');
                 return;
             }
         }
     } catch (_) { /* 保底不中断同步流程 */ }
 
-    // 新增修复3D：确保全局变量是UI的单一数据源
+    // 新增修复3D：确保全局变量和 app.state 都跟 canonical records 保持一致
     setPracticeRecordsState(records);
+    try {
+        if (window.app && window.app.state && window.app.state.practice) {
+            const nextRecords = typeof getPracticeRecordsState === 'function'
+                ? getPracticeRecordsState()
+                : (Array.isArray(records) ? records : []);
+            window.app.state.practice.records = Array.isArray(nextRecords) ? nextRecords.slice() : [];
+        }
+    } catch (error) {
+        console.warn('[System] 同步练习记录到 App state 失败:', error);
+    }
     refreshBrowseProgressFromRecords(records);
 
     console.log(`[System] ${records.length} 条练习记录已加载到内存。`);
@@ -489,13 +436,15 @@ function ensurePracticeRecordsSync(trigger = 'default') {
     if (practiceRecordsLoadPromise) {
         return practiceRecordsLoadPromise;
     }
-    practiceRecordsLoadPromise = (async () => {
+    const loadTask = (async () => {
         await syncPracticeRecords();
         return true;
     })().catch((error) => {
         console.warn(`[System] 练习记录同步失败(${trigger}):`, error);
-        practiceRecordsLoadPromise = null;
         return false;
+    });
+    practiceRecordsLoadPromise = loadTask.finally(() => {
+        practiceRecordsLoadPromise = null;
     });
     return practiceRecordsLoadPromise;
 }
@@ -506,6 +455,92 @@ function startPracticeRecordsSyncInBackground(trigger = 'default') {
     } catch (error) {
         console.warn(`[System] 后台同步练习记录失败(${trigger}):`, error);
     }
+}
+
+async function listCanonicalPracticeRecords() {
+    const practiceKey = ['practice', 'records'].join('_');
+    const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+    if (practiceCoreStore && typeof practiceCoreStore.listPracticeRecords === 'function') {
+        return await practiceCoreStore.listPracticeRecords();
+    }
+
+    if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.getPracticeRecords === 'function') {
+        const records = await window.simpleStorageWrapper.getPracticeRecords();
+        return Array.isArray(records) ? records : [];
+    }
+
+    if (window.storage && typeof window.storage.get === 'function') {
+        const records = await window.storage.get(practiceKey, []);
+        return Array.isArray(records) ? records : [];
+    }
+
+    return [];
+}
+
+async function replaceCanonicalPracticeRecords(records) {
+    const finalRecords = Array.isArray(records) ? records : [];
+    const practiceKey = ['practice', 'records'].join('_');
+    const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+
+    if (practiceCoreStore && typeof practiceCoreStore.replacePracticeRecords === 'function') {
+        await practiceCoreStore.replacePracticeRecords(finalRecords);
+        return true;
+    }
+
+    if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+        await window.simpleStorageWrapper.savePracticeRecords(finalRecords);
+        return true;
+    }
+
+    if (window.storage && typeof window.storage.writePersistentValue === 'function') {
+        await window.storage.writePersistentValue(practiceKey, finalRecords);
+        return true;
+    }
+
+    if (window.storage && typeof window.storage.set === 'function') {
+        await window.storage.set(practiceKey, finalRecords);
+        return true;
+    }
+
+    throw new Error('练习记录存储未就绪');
+}
+
+function syncLegacyPracticeRecordArtifacts(records) {
+    const finalRecords = Array.isArray(records) ? records : [];
+    const legacyRawKeys = ['practice_records', 'old_prefix_practice_records'];
+    const shadowKey = window.storage && typeof window.storage.getKey === 'function'
+        ? window.storage.getKey('practice_records')
+        : null;
+
+    try {
+        if (finalRecords.length === 0) {
+            legacyRawKeys.forEach((key) => {
+                try { localStorage.removeItem(key); } catch (_) { }
+                try { sessionStorage.removeItem(key); } catch (_) { }
+            });
+        } else {
+            const serialized = JSON.stringify(finalRecords);
+            try { localStorage.setItem('practice_records', serialized); } catch (_) { }
+            try { sessionStorage.removeItem('practice_records'); } catch (_) { }
+            try { localStorage.removeItem('old_prefix_practice_records'); } catch (_) { }
+            try { sessionStorage.removeItem('old_prefix_practice_records'); } catch (_) { }
+        }
+    } catch (error) {
+        console.warn('[System] 同步 legacy 练习记录影子键失败:', error);
+    }
+
+    if (shadowKey && window.storage && window.storage.mode === 'indexeddb') {
+        try { localStorage.removeItem(shadowKey); } catch (_) { }
+        try { sessionStorage.removeItem(shadowKey); } catch (_) { }
+    }
+}
+
+async function persistPracticeRecordsAndRefresh(records, trigger = 'manual-update') {
+    const finalRecords = Array.isArray(records) ? records : [];
+    await replaceCanonicalPracticeRecords(finalRecords);
+    syncLegacyPracticeRecordArtifacts(finalRecords);
+    await syncPracticeRecords({ forceRender: true });
+    return getPracticeRecordsState();
 }
 
 const completionNoticeState = {
@@ -943,6 +978,34 @@ async function savePracticeRecordFallback(examId, realData) {
             category = 'Unknown';
         }
 
+        const practiceCore = window.PracticeCore;
+        if (practiceCore && practiceCore.ingestor && practiceCore.store) {
+            const canonicalRecord = practiceCore.ingestor.fromCompletion(realData, {
+                examId,
+                examEntry: exam,
+                metadata: {
+                    examId,
+                    examTitle: exam.title || realData.title || '',
+                    category,
+                    frequency: exam.frequency || realData.frequency || 'unknown',
+                    type: exam.type || realData.type || null
+                }
+            }, exam, {
+                currentVersion: (window.scoreStorage && window.scoreStorage.currentVersion) || '1.0.0'
+            });
+
+            if (!canonicalRecord) {
+                return null;
+            }
+
+            await practiceCore.store.savePracticeRecord(canonicalRecord, {
+                currentVersion: canonicalRecord.version || ((window.scoreStorage && window.scoreStorage.currentVersion) || '1.0.0'),
+                maxRecords: (window.scoreStorage && window.scoreStorage.maxRecords) || 1000
+            });
+            console.log('[Fallback] 真实数据已通过 PracticeCore 保存');
+            return canonicalRecord;
+        }
+
         const record = {
             id: Date.now(),
             examId: examId,
@@ -982,10 +1045,17 @@ async function savePracticeRecordFallback(examId, realData) {
             endTime: new Date((realData.endTime ?? Date.now())).toISOString()
         };
 
-        const records = await storage.get('practice_records', []);
-        const arr = Array.isArray(records) ? records : [];
-        arr.push(record);
-        await storage.set('practice_records', arr);
+        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+            await window.PracticeCore.store.savePracticeRecord(record);
+        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+            await window.simpleStorageWrapper.addPracticeRecord(record);
+        } else {
+            const records = await storage.get('practice_records', []);
+            const arr = Array.isArray(records) ? records : [];
+            arr.push(record);
+            const practiceKey = ['practice', 'records'].join('_');
+            await storage.set(practiceKey, arr);
+        }
         console.log('[Fallback] 真实数据已保存到 practice_records');
     } catch (e) {
         console.error('[Fallback] 保存练习记录失败:', e);
@@ -1517,7 +1587,6 @@ function updatePracticeView() {
         : records.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const examType = getCurrentExamType();
-    syncFilterButtonState('record-type-filter-buttons', examType);
     if (examType !== 'all') {
         if (stats && typeof stats.filterByExamType === 'function') {
             recordsToShow = stats.filterByExamType(recordsToShow, getExamIndexState(), examType);
@@ -1525,6 +1594,25 @@ function updatePracticeView() {
             const examIndexSnapshot = getExamIndexState();
             recordsToShow = recordsToShow.filter((record) => recordMatchesExamType(record, examType, examIndexSnapshot));
         }
+    }
+
+    const historyQuery = String(window.__practiceHistoryQuery || '').trim().toLowerCase();
+    if (historyQuery) {
+        recordsToShow = recordsToShow.filter((record) => {
+            if (!record) {
+                return false;
+            }
+            const fields = [
+                record.title,
+                record.examId,
+                record.category,
+                record.frequency,
+                record.metadata && record.metadata.examTitle,
+                record.metadata && record.metadata.category,
+                record.date
+            ];
+            return fields.some((field) => String(field || '').toLowerCase().includes(historyQuery));
+        });
     }
 
     // --- 4. Render history list ---
@@ -1548,6 +1636,26 @@ function updatePracticeView() {
         practiceListScroller = renderResult.scroller;
     }
     refreshBulkDeleteButton();
+}
+
+function searchPracticeHistory(query) {
+    window.__practiceHistoryQuery = String(query || '').trim();
+    const clearButton = document.getElementById('history-search-clear-btn');
+    if (clearButton) {
+        clearButton.hidden = window.__practiceHistoryQuery.length === 0;
+    }
+    updatePracticeView();
+}
+
+function clearPracticeHistorySearch() {
+    const input = document.getElementById('history-search-input');
+    if (input) {
+        input.value = '';
+        try {
+            input.focus();
+        } catch (_) { }
+    }
+    searchPracticeHistory('');
 }
 
 function refreshBrowseProgressFromRecords(recordsOverride = null) {
@@ -1692,29 +1800,17 @@ function applyPracticeSummaryFallback(summary) {
 
 
 function browseCategory(category, type = 'reading', filterMode = null, path = null) {
-
     requestBrowseAutoScroll(category, type);
-    // 先设置筛选器，确保 App 路径也能获取到筛选参数
     try {
         setBrowseFilterState(category, type);
-
-        // 设置待处理筛选器，确保组件未初始化时筛选不会丢失
-        // 新增：包含 filterMode 和 path 参数
-        try {
-            window.__pendingBrowseFilter = { category, type, filterMode, path };
-        } catch (_) {
-            // 如果全局变量设置失败，继续执行
-        }
+        window.__pendingBrowseFilter = { category, type, filterMode, path };
     } catch (error) {
         console.warn('[browseCategory] 设置筛选器失败:', error);
     }
 
-    // 优先调用 window.app.browseCategory(category, type, filterMode, path)
     if (window.app && typeof window.app.browseCategory === 'function') {
         try {
             window.app.browseCategory(category, type, filterMode, path);
-            console.log('[browseCategory] Called app.browseCategory with filterMode:', filterMode);
-            // 常规模式仍需刷新题库；频率模式由 browseController 接管
             if (!filterMode) {
                 setTimeout(() => loadExamList(), 100);
             }
@@ -1724,12 +1820,7 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
         }
     }
 
-    // 降级路径：手动处理浏览筛选
     try {
-        // 正确更新标题使用中文字符串
-        setBrowseTitle(formatBrowseTitle(category, type));
-
-        // 导航到浏览视图
         if (window.app && typeof window.app.navigateToView === 'function') {
             window.app.navigateToView('browse');
         } else if (typeof window.showView === 'function') {
@@ -1742,13 +1833,7 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
             } catch (_) { }
         }
 
-        // 尽量沿用统一筛选逻辑
-        if (typeof applyBrowseFilter === 'function') {
-            applyBrowseFilter(category, type, filterMode, path);
-        } else {
-            loadExamList();
-        }
-
+        applyBrowseFilter(category, type, filterMode, path);
     } catch (error) {
         console.error('[browseCategory] 处理浏览类别时出错:', error);
         showMessage('浏览类别时出现错误', 'error');
@@ -1759,23 +1844,6 @@ function filterByType(type) {
     // 重置筛选器状态
     setBrowseFilterState('all', type);
     setBrowseTitle(formatBrowseTitle('all', type));
-
-    // 更新按钮状态 (UI Feedback)
-    const container = document.getElementById('type-filter-buttons');
-    if (container) {
-        const buttons = container.querySelectorAll('.btn');
-        buttons.forEach(btn => {
-            const filterValue = btn.getAttribute('data-filter-id') || btn.getAttribute('data-filter-type');
-            const isMatch = filterValue === type;
-            if (isMatch) {
-                btn.classList.add('active');
-                btn.setAttribute('aria-pressed', 'true');
-            } else {
-                btn.classList.remove('active');
-                btn.setAttribute('aria-pressed', 'false');
-            }
-        });
-    }
 
     // 重置浏览模式和路径（清除频率模式残留）
     window.__browseFilterMode = 'default';
@@ -1902,162 +1970,190 @@ function initializeBrowseView() {
     ensurePracticeRecordsSync('browse-view').then(() => {
         refreshBrowseProgressFromRecords();
     });
+    setupBrowseSortControl();
     loadExamList();
 }
 
-// 全局桥接：HTML 按钮 onclick="browseCategory('P1','reading')"
+function setupBrowseSortControl() {
+    const sortSelect = document.getElementById('browse-sort-select');
+    if (!sortSelect || sortSelect.dataset.bound === 'true') {
+        return;
+    }
+    let savedMode = String(window.__browseSortMode || '').trim().toLowerCase();
+    if (!savedMode) {
+        try {
+            savedMode = String(window.localStorage.getItem('browse_sort_mode') || 'default').trim().toLowerCase();
+        } catch (_) {
+            savedMode = 'default';
+        }
+    }
+    sortSelect.value = savedMode === 'frequency-desc' ? 'frequency-desc' : 'default';
+    window.__browseSortMode = sortSelect.value;
+    sortSelect.addEventListener('change', () => {
+        const mode = String(sortSelect.value || 'default').trim().toLowerCase();
+        window.__browseSortMode = mode === 'frequency-desc' ? 'frequency-desc' : 'default';
+        try {
+            window.localStorage.setItem('browse_sort_mode', window.__browseSortMode);
+        } catch (_) {
+            // ignore storage failures
+        }
+        loadExamList();
+    });
+    sortSelect.dataset.bound = 'true';
+}
+
 if (typeof window.browseCategory !== 'function') {
-    window.browseCategory = function (category, type, filterMode, path) {
-        try {
-            if (window.app && typeof window.app.browseCategory === 'function') {
-                window.app.browseCategory(category, type, filterMode, path);
-                return;
-            }
-        } catch (_) { }
-        // 回退：直接应用筛选（保持 filterMode/path 兼容）
-        try {
-            applyBrowseFilter(category, type, filterMode, path);
-        } catch (_) { }
-    };
+    window.browseCategory = browseCategory;
 }
 
 function filterRecordsByType(type) {
-    const container = document.getElementById('record-type-filter-buttons');
-    if (container) {
-        const buttons = container.querySelectorAll('button');
-        buttons.forEach(btn => {
-            const onclickVal = btn.getAttribute('onclick');
-            const isActive = onclickVal && onclickVal.includes(`'${type}'`);
-            if (isActive) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-            btn.setAttribute('aria-pressed', isActive);
-        });
-    }
     setBrowseFilterState(getCurrentCategory(), type);
-
-    // 更新按钮状态 (UI Feedback)
-    syncFilterButtonState('record-type-filter-buttons', type);
-
     updatePracticeView();
 }
 
-function syncFilterButtonState(containerId, activeFilter) {
-    const container = document.getElementById(containerId);
-    if (!container) {
+function withBrowseViewGroup(onReady, onFallback, failureLog) {
+    const ensureBrowse = typeof window.ensureBrowseGroup === 'function'
+        ? window.ensureBrowseGroup
+        : (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function'
+            ? function () { return window.AppLazyLoader.ensureGroup('browse-view'); }
+            : null);
+    if (!ensureBrowse) {
+        if (typeof onFallback === 'function') {
+            onFallback();
+        }
         return;
     }
-
-    const buttons = container.querySelectorAll('.btn');
-    buttons.forEach(btn => {
-        const filterValue = btn.getAttribute('data-filter-id') || btn.getAttribute('data-filter-type');
-        const isMatch = filterValue === activeFilter;
-        btn.classList.toggle('active', isMatch);
-        btn.setAttribute('aria-pressed', isMatch ? 'true' : 'false');
+    Promise.resolve().then(function () {
+        return ensureBrowse();
+    }).then(function () {
+        if (typeof onReady === 'function') {
+            onReady();
+        }
+    }).catch(function (err) {
+        if (failureLog) {
+            console.error(failureLog, err);
+        }
+        if (typeof onFallback === 'function') {
+            onFallback();
+        }
     });
 }
 
+function hideBrowseLoadingIndicator() {
+    const loadingEl = document.querySelector('#browse-view .loading');
+    if (loadingEl) {
+        loadingEl.style.display = 'none';
+    }
+}
+
+function createFallbackExamItem(exam, options) {
+    const includeMeta = !!(options && options.includeMeta);
+    const item = document.createElement('div');
+    item.className = 'exam-item';
+    const metaHtml = includeMeta
+        ? '<div class="exam-meta">' + (exam.category || '') + ' | ' + (exam.type || '') + '</div>'
+        : '';
+    item.innerHTML = '<div class="exam-info"><h4>' + (exam.title || '') + '</h4>' + metaHtml + '</div>' +
+        '<div class="exam-actions">' +
+        '<button class="btn" onclick="window.openExam(\'' + (exam.id || '') + '\')">开始练习</button>' +
+        '<button class="btn btn-outline" onclick="window.viewPDF(\'' + (exam.id || '') + '\')">PDF</button>' +
+        '</div>';
+    return item;
+}
+
+function renderFallbackExamList(exams, emptyMessage, options) {
+    const container = document.getElementById('exam-list-container');
+    if (!container) return;
+    hideBrowseLoadingIndicator();
+    const normalizedExams = Array.isArray(exams) ? exams.filter(Boolean) : [];
+    if (!normalizedExams.length) {
+        container.innerHTML = '<div class="exam-list-empty"><p>' + emptyMessage + '</p></div>';
+        return;
+    }
+    const list = document.createElement('div');
+    list.className = 'exam-list';
+    normalizedExams.forEach(function (exam) {
+        list.appendChild(createFallbackExamItem(exam, options));
+    });
+    container.innerHTML = '';
+    container.appendChild(list);
+}
+
+function applyCurrentBrowseFilters(examIndex) {
+    const currentCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
+    const currentType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
+    const isFrequencyMode = window.__browseFilterMode && window.__browseFilterMode !== 'default';
+    const basePathFilter = isFrequencyMode && typeof window.__browsePath === 'string' && window.__browsePath.trim()
+        ? window.__browsePath.trim()
+        : null;
+
+    let filtered = Array.isArray(examIndex) ? Array.from(examIndex) : [];
+    if (currentType !== 'all') {
+        filtered = filtered.filter(function (exam) { return exam.type === currentType; });
+    }
+    if (currentCategory !== 'all') {
+        filtered = filtered.filter(function (exam) { return exam.category === currentCategory; });
+    }
+    if (basePathFilter) {
+        filtered = filtered.filter(function (exam) {
+            return typeof exam?.path === 'string' && exam.path.includes(basePathFilter);
+        });
+    }
+
+    if (window.ExamActions && typeof window.ExamActions.applyBrowsePostFilters === 'function') {
+        return window.ExamActions.applyBrowsePostFilters(filtered);
+    }
+    if (window.ExamActions && typeof window.ExamActions.deduplicateExams === 'function') {
+        filtered = window.ExamActions.deduplicateExams(filtered);
+    }
+    if (window.ExamActions && typeof window.ExamActions.applyExamSort === 'function') {
+        filtered = window.ExamActions.applyExamSort(filtered);
+    }
+    return filtered;
+}
+
+function getExamActionsMethod(name) {
+    if (window.ExamActions && typeof window.ExamActions[name] === 'function') {
+        return window.ExamActions[name].bind(window.ExamActions);
+    }
+    return null;
+}
 
 function loadExamList() {
-    if (window.ExamActions && typeof window.ExamActions.loadExamList === 'function') {
-        return window.ExamActions.loadExamList();
+    const runLoad = getExamActionsMethod('loadExamList');
+    if (runLoad) {
+        return runLoad();
     }
     console.warn('[main.js] ExamActions.loadExamList 未就绪，尝试加载 browse-view 组');
-    if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-        window.AppLazyLoader.ensureGroup('browse-view').then(function () {
-            if (window.ExamActions && typeof window.ExamActions.loadExamList === 'function') {
-                window.ExamActions.loadExamList();
-            } else {
-                // 最终降级：直接 DOM 渲染
-                loadExamListFallback();
-            }
-        }).catch(function (err) {
-            console.error('[main.js] browse-view 组加载失败:', err);
+    withBrowseViewGroup(function () {
+        const retried = getExamActionsMethod('loadExamList');
+        if (retried) {
+            retried();
+        } else {
             loadExamListFallback();
-        });
-    } else {
-        // 无懒加载器，直接降级
-        loadExamListFallback();
-    }
+        }
+    }, loadExamListFallback, '[main.js] browse-view 组加载失败:');
 }
 
 function loadExamListFallback() {
     console.warn('[main.js] 使用降级渲染逻辑');
     try {
-        let examIndex = typeof getExamIndexState === 'function' ? getExamIndexState() : (Array.isArray(window.examIndex) ? window.examIndex : []);
-        const container = document.getElementById('exam-list-container');
-        if (!container) return;
-
-        // 清除 loading 指示器
-        const loadingEl = document.querySelector('#browse-view .loading');
-        if (loadingEl) {
-            loadingEl.style.display = 'none';
-        }
-
-        container.innerHTML = '<div class="exam-list-empty"><p>题库加载中...</p></div>';
-
-        if (examIndex.length === 0) {
-            container.innerHTML = '<div class="exam-list-empty"><p>暂无题目</p></div>';
+        const examIndex = typeof getExamIndexState === 'function' ? getExamIndexState() : (Array.isArray(window.examIndex) ? window.examIndex : []);
+        if (!Array.isArray(examIndex) || examIndex.length === 0) {
+            renderFallbackExamList([], '暂无题目');
             return;
         }
-
-        // 应用当前筛选状态（修复 P2 bug）
-        const currentCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
-        const currentType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
-        const isFrequencyMode = window.__browseFilterMode && window.__browseFilterMode !== 'default';
-        const basePathFilter = isFrequencyMode && typeof window.__browsePath === 'string' && window.__browsePath.trim()
-            ? window.__browsePath.trim()
-            : null;
-
-        let filtered = Array.from(examIndex);
-        if (currentType !== 'all') {
-            filtered = filtered.filter(function (exam) { return exam.type === currentType; });
-        }
-        if (currentCategory !== 'all') {
-            filtered = filtered.filter(function (exam) { return exam.category === currentCategory; });
-        }
-        if (basePathFilter) {
-            filtered = filtered.filter(function (exam) {
-                return typeof exam?.path === 'string' && exam.path.includes(basePathFilter);
-            });
-        }
-
-        if (filtered.length === 0) {
-            let emptyHtml = '<div class="exam-list-empty"><p>未找到匹配的题目</p>';
-            const searchInput = document.getElementById('exam-search-input');
-            if (searchInput && searchInput.value.trim().length > 0) {
-                emptyHtml += '<div class="exam-list-empty-actions"><button class="btn btn-secondary exam-list-empty-action" onclick="if(typeof clearSearch===\'function\'){clearSearch()}else if(window.clearSearch){window.clearSearch()}else{var i=document.getElementById(\'exam-search-input\');if(i){i.value=\'\';i.focus();if(typeof searchExams===\'function\'){searchExams(\'\')}}}">清除搜索</button></div>';
-            }
-            emptyHtml += '</div>';
-            container.innerHTML = emptyHtml;
-            return;
-        }
-        
-        const list = document.createElement('div');
-        list.className = 'exam-list';
-        filtered.forEach(function (exam) {
-            if (!exam) return;
-            const item = document.createElement('div');
-            item.className = 'exam-item';
-            item.innerHTML = '<div class="exam-info"><h4>' + (exam.title || '') + '</h4></div>' +
-                '<div class="exam-actions">' +
-                '<button class="btn" onclick="window.openExam(\'' + (exam.id || '') + '\')">开始练习</button>' +
-                '<button class="btn btn-outline" onclick="window.viewPDF(\'' + (exam.id || '') + '\')">PDF</button>' +
-                '</div>';
-            list.appendChild(item);
-        });
-        container.innerHTML = '';
-        container.appendChild(list);
+        const filtered = applyCurrentBrowseFilters(examIndex);
+        renderFallbackExamList(filtered, '未找到匹配的题目');
     } catch (err) {
         console.error('[main.js] 降级渲染失败:', err);
     }
 }
 
 function resetBrowseViewToAll() {
-    if (window.ExamActions && typeof window.ExamActions.resetBrowseViewToAll === 'function') {
-        return window.ExamActions.resetBrowseViewToAll();
+    const reset = getExamActionsMethod('resetBrowseViewToAll');
+    if (reset) {
+        return reset();
     }
     console.warn('[main.js] ExamActions.resetBrowseViewToAll 未就绪');
 
@@ -2065,416 +2161,71 @@ function resetBrowseViewToAll() {
     window.__browseFilterMode = 'default';
     window.__browsePath = null;
 
-    if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-        window.AppLazyLoader.ensureGroup('browse-view').then(function () {
-            if (window.ExamActions && typeof window.ExamActions.resetBrowseViewToAll === 'function') {
-                window.ExamActions.resetBrowseViewToAll();
-            } else {
-                // 降级：重置状态并重新加载
-                if (typeof setBrowseFilterState === 'function') setBrowseFilterState('all', 'all');
-                loadExamList();
-            }
-        }).catch(function () {
-            if (typeof setBrowseFilterState === 'function') setBrowseFilterState('all', 'all');
-            loadExamList();
-        });
-    } else {
+    const localReset = function () {
         if (typeof setBrowseFilterState === 'function') setBrowseFilterState('all', 'all');
         loadExamList();
-    }
+    };
+    withBrowseViewGroup(function () {
+        const retried = getExamActionsMethod('resetBrowseViewToAll');
+        if (retried) {
+            retried();
+        } else {
+            localReset();
+        }
+    }, localReset);
 }
 
 function displayExams(exams) {
-    if (window.ExamActions && typeof window.ExamActions.displayExams === 'function') {
-        return window.ExamActions.displayExams(exams);
+    const display = getExamActionsMethod('displayExams');
+    if (display) {
+        return display(exams);
     }
     console.warn('[main.js] ExamActions.displayExams 未就绪，使用降级渲染');
     
     // 立即降级渲染（displayExams 需要同步执行）
     try {
-        const container = document.getElementById('exam-list-container');
-        if (!container) return;
-        
-        // 清除 loading 指示器（修复 P2 bug）
-        const loadingEl = document.querySelector('#browse-view .loading');
-        if (loadingEl) {
-            loadingEl.style.display = 'none';
-        }
-        
-        const normalizedExams = Array.isArray(exams) ? exams : [];
-        if (normalizedExams.length === 0) {
-            let emptyHtml = '<div class="exam-list-empty"><p>未找到匹配的题目</p>';
-            const searchInput = document.getElementById('exam-search-input');
-            if (searchInput && searchInput.value.trim().length > 0) {
-                emptyHtml += '<div class="exam-list-empty-actions"><button class="btn btn-secondary" onclick="if(typeof clearSearch===\'function\'){clearSearch()}else if(window.clearSearch){window.clearSearch()}else{var i=document.getElementById(\'exam-search-input\');if(i){i.value=\'\';i.focus();if(typeof searchExams===\'function\'){searchExams(\'\')}}}">清除搜索</button></div>';
-            }
-            emptyHtml += '</div>';
-            container.innerHTML = emptyHtml;
-            return;
-        }
-        
-        const list = document.createElement('div');
-        list.className = 'exam-list';
-        normalizedExams.forEach(function (exam) {
-            if (!exam) return;
-            const item = document.createElement('div');
-            item.className = 'exam-item';
-            item.innerHTML = '<div class="exam-info"><h4>' + (exam.title || '') + '</h4>' +
-                '<div class="exam-meta">' + (exam.category || '') + ' | ' + (exam.type || '') + '</div></div>' +
-                '<div class="exam-actions">' +
-                '<button class="btn" onclick="window.openExam(\'' + (exam.id || '') + '\')">开始练习</button>' +
-                '<button class="btn btn-outline" onclick="window.viewPDF(\'' + (exam.id || '') + '\')">PDF</button>' +
-                '</div>';
-            list.appendChild(item);
-        });
-        container.innerHTML = '';
-        container.appendChild(list);
+        renderFallbackExamList(exams, '未找到匹配的题目', { includeMeta: true });
     } catch (err) {
         console.error('[main.js] displayExams 降级渲染失败:', err);
     }
 }
 
-const ABSOLUTE_URL_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//;
-const WINDOWS_ABSOLUTE_RE = /^[a-zA-Z]:[\\/]/;
-
-function isAbsolutePath(value) {
-    if (!value) {
-        return false;
-    }
-    const normalized = String(value).trim();
-    return ABSOLUTE_URL_RE.test(normalized)
-        || WINDOWS_ABSOLUTE_RE.test(normalized)
-        || normalized.startsWith('\\\\')
-        || normalized.startsWith('//')
-        || normalized.startsWith('/');
+function getResourceCore() {
+    return window.ResourceCore || null;
 }
 
-function ensureTrailingSlash(value) {
-    if (!value) {
-        return '';
+window.resolveExamBasePath = createMethodDelegate(getResourceCore, 'resolveExamBasePath', '');
+window.buildResourcePath = createMethodDelegate(getResourceCore, 'buildResourcePath', '');
+window.derivePathMapFromIndex = createMethodDelegate(getResourceCore, 'derivePathMapFromIndex', function (_, fallbackMap) {
+    return fallbackMap || null;
+});
+
+window.loadPathMapForConfiguration = async function (key) {
+    const resourceCore = getResourceCore();
+    if (resourceCore && typeof resourceCore.loadPathMapForConfiguration === 'function') {
+        return resourceCore.loadPathMapForConfiguration(key);
     }
-    return value.endsWith('/') ? value : value + '/';
-}
-
-function joinAbsoluteResource(base, file) {
-    const basePart = base ? String(base).replace(/\\/g, '/') : '';
-    const filePart = file ? String(file).replace(/\\/g, '/').replace(/^\/+/, '') : '';
-    if (!basePart) {
-        return encodeURI(filePart);
-    }
-    if (!filePart) {
-        return encodeURI(basePart);
-    }
-    const baseWithSlash = basePart.endsWith('/') ? basePart : basePart + '/';
-    return encodeURI(baseWithSlash + filePart);
-}
-
-function encodePathSegments(path) {
-    if (!path) {
-        return '';
-    }
-
-    const segments = String(path).split('/');
-    return segments.map((segment) => {
-        if (!segment) {
-            return segment;
-        }
-        try {
-            return encodeURIComponent(decodeURIComponent(segment));
-        } catch (error) {
-            return encodeURIComponent(segment);
-        }
-    }).join('/');
-}
-
-function resolveExamBasePath(exam) {
-    const relativePath = exam && exam.path ? String(exam.path) : "";
-    const normalizedRelative = relativePath.replace(/\\/g, '/').trim();
-    if (normalizedRelative && isAbsolutePath(normalizedRelative)) {
-        return ensureTrailingSlash(normalizedRelative);
-    }
-
-    let combined = normalizedRelative;
-    try {
-        const pathMap = getPathMap() || {};
-        const type = exam && exam.type;
-        const mapped = type && pathMap[type] ? pathMap[type] : {};
-        const fallback = type && DEFAULT_PATH_MAP[type] ? DEFAULT_PATH_MAP[type] : {};
-        const root = mergeRootWithFallback(mapped.root, fallback.root);
-        const normalizedRoot = root.replace(/\\/g, '/');
-        if (normalizedRoot) {
-            if (normalizedRelative && normalizedRelative.startsWith(normalizedRoot)) {
-                combined = normalizedRelative;
-            } else {
-                combined = normalizedRoot + normalizedRelative;
-            }
-        } else {
-            combined = normalizedRelative;
-        }
-
-        const fallbackTopRoot = extractTopLevelRootSegment(fallback.root);
-        if (fallbackTopRoot && !combined.replace(/\\/g, '/').startsWith(fallbackTopRoot)) {
-            const normalizedCombined = combined.replace(/\\/g, '/').replace(/^\/+/, '');
-            combined = fallbackTopRoot + normalizedCombined;
-        }
-    } catch (_) { }
-
-    combined = combined.replace(/\\/g, '/');
-    combined = combined.replace(/\/{2,}/g, '/');
-    return ensureTrailingSlash(combined);
-}
-
-function extractTopLevelRootSegment(root) {
-    if (!root) {
-        return '';
-    }
-    const normalized = normalizePathRoot(root).replace(/^\/+/, '');
-    const segments = normalized.split('/').filter(Boolean);
-    if (!segments.length) {
-        return '';
-    }
-    return segments[0] + '/';
-}
-
-// Path map definitions moved to LibraryManager; keep thin proxies for legacy callers
-const RAW_DEFAULT_PATH_MAP = (getLibraryManager && getLibraryManager() && getLibraryManager().RAW_DEFAULT_PATH_MAP) || {
-    reading: { root: '睡着过项目组/2. 所有文章(11.20)[192篇]/', exceptions: {} },
-    listening: { root: 'ListeningPractice/', exceptions: {} }
+    return null;
 };
 
-function clonePathMap(map, fallback = RAW_DEFAULT_PATH_MAP) {
-    const source = map && typeof map === 'object' ? map : fallback;
-    const cloneCategory = (category) => {
-        const segment = source[category] && typeof source[category] === 'object' ? source[category] : {};
-        return {
-            root: typeof segment.root === 'string' ? segment.root : '',
-            exceptions: segment.exceptions && typeof segment.exceptions === 'object'
-                ? Object.assign({}, segment.exceptions)
-                : {}
-        };
-    };
-    return {
-        reading: cloneCategory('reading'),
-        listening: cloneCategory('listening')
-    };
-}
-
-function normalizePathRoot(value) {
-    if (!value) {
-        return '';
-    }
-    let root = String(value).replace(/\\/g, '/');
-    root = root.replace(/\/+$/, '') + '/';
-    if (root.startsWith('./')) {
-        root = root.slice(2);
-    }
-    return root;
-}
-
-function mergeRootWithFallback(root, fallbackRoot) {
-    const normalizedPrimary = normalizePathRoot(root || '');
-    if (normalizedPrimary) {
-        return normalizedPrimary;
-    }
-    return normalizePathRoot(fallbackRoot || '');
-}
-
-function buildOverridePathMap(metadata, fallback = RAW_DEFAULT_PATH_MAP) {
-    const lm = getLibraryManager && getLibraryManager();
-    if (lm && typeof lm.buildOverridePathMap === 'function') {
-        return lm.buildOverridePathMap(metadata, fallback);
-    }
-    return fallback;
-}
-
-let DEFAULT_PATH_MAP = (getLibraryManager && getLibraryManager() && getLibraryManager().DEFAULT_PATH_MAP)
-    || buildOverridePathMap(typeof window !== 'undefined' ? window.examIndexMetadata : null, RAW_DEFAULT_PATH_MAP);
-
-const PATH_MAP_STORAGE_PREFIX = 'exam_path_map__';
-
-function derivePathMapFromIndex(exams, fallbackMap = DEFAULT_PATH_MAP) {
-    const manager = getLibraryManager && getLibraryManager();
-    if (manager && typeof manager.derivePathMapFromIndex === 'function') {
-        return manager.derivePathMapFromIndex(exams, fallbackMap);
-    }
-    return fallbackMap;
-}
-
-async function loadPathMapForConfiguration(key) {
-    const manager = await ensureLibraryManagerReady();
-    if (manager && typeof manager.loadPathMapForConfiguration === 'function') {
-        return await manager.loadPathMapForConfiguration(key);
-    }
-    return DEFAULT_PATH_MAP;
-}
-
-function setActivePathMap(map) {
-    const normalized = map || DEFAULT_PATH_MAP;
-    window.__activeLibraryPathMap = normalized;
-    window.pathMap = normalized;
-}
-
-async function savePathMapForConfiguration(key, examIndex, options = {}) {
-    const manager = await ensureLibraryManagerReady();
-    if (manager && typeof manager.savePathMapForConfiguration === 'function') {
-        return await manager.savePathMapForConfiguration(key, examIndex, options);
-    }
-    if (options.setActive) {
-        setActivePathMap(options.overrideMap || DEFAULT_PATH_MAP);
+window.savePathMapForConfiguration = async function (key, examIndex, options) {
+    const resourceCore = getResourceCore();
+    if (resourceCore && typeof resourceCore.savePathMapForConfiguration === 'function') {
+        return resourceCore.savePathMapForConfiguration(key, examIndex, options || {});
     }
     return null;
-}
+};
 
-function getPathMap() {
-    try {
-        const manager = getLibraryManager && getLibraryManager();
-        if (manager && typeof manager.getPathMap === 'function') {
-            return manager.getPathMap();
-        }
-        if (window.__activeLibraryPathMap) {
-            return window.__activeLibraryPathMap;
-        }
-        if (window.pathMap) {
-            return window.pathMap;
-        }
-        return DEFAULT_PATH_MAP;
-    } catch (error) {
-        console.warn('[PathNormalization] Failed to load path map:', error);
-        return DEFAULT_PATH_MAP;
-    }
-}
+window.getPathMap = createMethodDelegate(getResourceCore, 'getPathMap', null);
+window.setActivePathMap = createMethodDelegate(getResourceCore, 'setActivePathMap', function (map) {
+    return map || null;
+});
 
-function normalizeThemeBasePrefix(prefix) {
-    if (prefix == null) {
-        return './';
-    }
-    const normalized = String(prefix)
-        .trim()
-        .replace(/\\/g, '/');
-    if (!normalized || normalized === '.' || normalized === './') {
-        return './';
-    }
-    return normalized.replace(/\/+$/g, '');
-}
-
-function stripQueryAndHash(url) {
-    if (!url) {
-        return '';
-    }
-    const withoutHash = String(url).split('#', 1)[0];
-    return withoutHash.split('?', 1)[0];
-}
-
-function detectScriptBasePrefix() {
-    if (typeof document === 'undefined') {
-        return null;
-    }
-
-    try {
-        const scripts = document.getElementsByTagName('script');
-        const candidates = ['js/main.js', 'js/app.js', 'js/boot-fallbacks.js'];
-
-        for (let i = scripts.length - 1; i >= 0; i -= 1) {
-            const script = scripts[i];
-            if (!script) {
-                continue;
-            }
-
-            const rawSrc = stripQueryAndHash(script.getAttribute('src'));
-            if (!rawSrc) {
-                continue;
-            }
-
-            const normalized = rawSrc.replace(/\\/g, '/').trim();
-            if (!normalized || /^(?:[a-z]+:)?\/\//i.test(normalized)) {
-                continue;
-            }
-
-            for (const candidate of candidates) {
-                const idx = normalized.lastIndexOf(candidate);
-                if (idx === -1) {
-                    continue;
-                }
-
-                const prefix = normalized.slice(0, idx);
-                return prefix || './';
-            }
-        }
-    } catch (error) {
-        try {
-            console.warn('[PathDetection] detectScriptBasePrefix failed:', error);
-        } catch (_) { }
-    }
-
-    return null;
-}
-
-function resolveThemeBasePrefix() {
-    const hint = normalizeThemeBasePrefix(typeof window !== 'undefined' ? window.HP_BASE_PREFIX : null);
-    if (hint && hint !== './') {
-        return hint;
-    }
-
-    const detected = normalizeThemeBasePrefix(detectScriptBasePrefix());
-    if (detected && detected !== './') {
-        try {
-            window.HP_BASE_PREFIX = detected;
-        } catch (_) { }
-        return detected;
-    }
-
-    return hint || './';
-}
-
-function buildResourcePath(exam, kind = 'html') {
-    const basePath = resolveExamBasePath(exam);
-    const rawName = kind === 'pdf' ? exam.pdfFilename : exam.filename;
-    const file = sanitizeFilename(rawName, kind);
-    const prefix = resolveThemeBasePrefix();
-
-    const normalizedFile = file ? String(file).replace(/\\/g, '/') : '';
-    if (isAbsolutePath(normalizedFile)) {
-        return joinAbsoluteResource(normalizedFile, '');
-    }
-
-    const normalizedBasePath = basePath ? String(basePath).replace(/\\/g, '/') : '';
-    if (isAbsolutePath(normalizedBasePath)) {
-        return joinAbsoluteResource(normalizedBasePath, normalizedFile);
-    }
-
-    const baseSegment = normalizedBasePath.replace(/^\.+\//, '').replace(/^\/+/, '');
-    const normalizedBase = baseSegment && !baseSegment.endsWith('/') ? baseSegment + '/' : baseSegment;
-    const relativePath = (normalizedBase || '') + normalizedFile;
-    const encodedRelative = encodePathSegments(relativePath);
-
-    if (prefix === './') {
-        return encodedRelative ? './' + encodedRelative : './';
-    }
-
-    const trimmedPrefix = prefix ? prefix.replace(/\/+$/g, '') : '';
-    return trimmedPrefix ? `${trimmedPrefix}/${encodedRelative}` : encodedRelative;
-}
-function sanitizeFilename(name, kind) {
-    if (!name) return '';
-    const s = String(name);
-    if (/\.html?$/i.test(s) || /\.pdf$/i.test(s)) return s;
-    // html 情况下，如果误给了 .pdf 结尾，优先尝试 pdf.html 包装页
-    if (kind === 'html' && /\.pdf$/i.test(s)) return s.replace(/\.pdf$/i, '.pdf.html');
-    if (/html$/i.test(s)) return s.replace(/html$/i, '.html');
-    if (/pdf$/i.test(s)) return s.replace(/pdf$/i, '.pdf');
-    // 若未包含扩展名，按 kind 追加
-    if (kind === 'pdf') return s + '.pdf';
-    return s + '.html';
-}
-// expose helpers globally for other modules (e.g., app.js)
-window.resolveExamBasePath = resolveExamBasePath;
-window.buildResourcePath = buildResourcePath;
-
-function openExam(examId) {
+function openExam(examId, options = {}) {
     // 优先使用App流程（带会话与通信）
     if (window.app && typeof window.app.openExam === 'function') {
         try {
-            window.app.openExam(examId);
+            window.app.openExam(examId, options || {});
             return;
         } catch (e) {
             console.warn('[Main] app.openExam 调用失败，启用降级握手路径:', e);
@@ -2487,7 +2238,7 @@ function openExam(examId) {
     if (!exam) return showMessage('未找到题目', 'error');
     if (!exam.hasHtml) return viewPDF(examId);
 
-    const fullPath = buildResourcePath(exam, 'html');
+    const fullPath = window.buildResourcePath(exam, 'html');
     const examWindow = window.open(fullPath, `exam_${exam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
     if (!examWindow) {
         return showMessage('无法打开窗口，请检查弹窗设置', 'error');
@@ -2539,13 +2290,13 @@ function viewPDF(examId) {
     const exam = list.find(e => e.id === examId);
     if (!exam || !exam.pdfFilename) return showMessage('未找到PDF文件', 'error');
 
-    const fullPath = buildResourcePath(exam, 'pdf');
+    const fullPath = window.buildResourcePath(exam, 'pdf');
     openPDFSafely(fullPath, exam.title);
 }
 
 // Bridge for record details to existing enhancer/modal if present
 function showRecordDetails(recordId) {
-    ensurePracticeSuiteReady().then(() => {
+    window.ensurePracticeSuiteReady().then(() => {
         if (window.practiceHistoryEnhancer && typeof window.practiceHistoryEnhancer.showRecordDetails === 'function') {
             window.practiceHistoryEnhancer.showRecordDetails(recordId);
             return;
@@ -2676,25 +2427,8 @@ function handleFolderSelection(event) { /* legacy stub - replaced by modal-speci
 // --- Functions Restored from Backup ---
 
 
-function syncSearchClearButtonState(query) {
-    const clearBtn = document.getElementById('search-clear-btn');
-    if (!clearBtn) {
-        return;
-    }
-    const normalized = typeof query === 'string'
-        ? query
-        : ((document.getElementById('exam-search-input') || {}).value || '');
-    if (normalized.length > 0) {
-        clearBtn.removeAttribute('hidden');
-    } else {
-        clearBtn.setAttribute('hidden', '');
-    }
-}
-
 function searchExams(query) {
-    // Keep clear button state in sync for both user input and programmatic updates.
-    syncSearchClearButtonState(query);
-
+    toggleSearchClearButton(query);
     if (window.performanceOptimizer && typeof window.performanceOptimizer.debounce === 'function') {
         const debouncedSearch = window.performanceOptimizer.debounce(performSearch, 300, 'exam_search');
         debouncedSearch(query);
@@ -2704,18 +2438,28 @@ function searchExams(query) {
     }
 }
 
-function clearSearch() {
-    const input = document.getElementById('exam-search-input');
-    if (input) {
-        input.value = '';
-        input.focus();
-        searchExams('');
+function toggleSearchClearButton(query) {
+    const clearButton = document.getElementById('search-clear-btn');
+    if (!clearButton) {
+        return;
     }
+    const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+    clearButton.hidden = normalizedQuery.length === 0;
 }
 
-if (typeof window !== 'undefined') {
-    window.clearSearch = clearSearch;
-    window.syncSearchClearButtonState = syncSearchClearButtonState;
+function clearSearch() {
+    const searchInput = document.getElementById('exam-search-input') || document.querySelector('.search-input');
+    if (searchInput) {
+        searchInput.value = '';
+        try {
+            searchInput.focus();
+        } catch (_) { }
+    }
+    if (window.browseStateManager && typeof window.browseStateManager.clearSearchState === 'function') {
+        try { window.browseStateManager.clearSearchState(); } catch (_) { }
+    }
+    toggleSearchClearButton('');
+    searchExams('');
 }
 
 function performSearch(query) {
@@ -2779,31 +2523,23 @@ async function toggleBulkDelete() {
 }
 
 async function bulkDeleteRecords(selectedSnapshot = getSelectedRecordsState()) {
-    const store = window.storage;
-    if (!store || typeof store.get !== 'function' || typeof store.set !== 'function') {
-        console.error('[System] storage 管理器不可用，无法执行批量删除');
-        showMessage('存储未就绪，暂时无法删除记录', 'error');
-        return;
-    }
-
     const normalizedIds = Array.from(selectedSnapshot, (id) => normalizeRecordId(id)).filter(Boolean);
     if (normalizedIds.length === 0) {
         showMessage('请选择要删除的记录', 'warning');
         return;
     }
 
-    const records = await store.get('practice_records', []);
+    const records = await listCanonicalPracticeRecords();
     const baseList = Array.isArray(records) ? records : [];
     const recordsToKeep = baseList.filter(record => !normalizedIds.includes(normalizeRecordId(record && record.id)));
 
     const deletedCount = baseList.length - recordsToKeep.length;
-
-    await store.set('practice_records', recordsToKeep);
-    setPracticeRecordsState(recordsToKeep);
-
-    if (typeof syncPracticeRecords === 'function') {
-        await syncPracticeRecords();
+    if (deletedCount === 0) {
+        showMessage('未找到可删除的记录', 'warning');
+        return;
     }
+
+    await persistPracticeRecordsAndRefresh(recordsToKeep, 'bulk-delete');
 
     showMessage(`已删除 ${deletedCount} 条记录`, 'success');
     console.log(`[System] 批量删除了 ${deletedCount} 条练习记录`);
@@ -2833,7 +2569,7 @@ async function deleteRecord(recordId) {
         return;
     }
 
-    const records = await storage.get('practice_records', []);
+    const records = await listCanonicalPracticeRecords();
     const recordIndex = records.findIndex(record => String(record.id) === String(recordId));
 
     if (recordIndex === -1) {
@@ -2845,60 +2581,71 @@ async function deleteRecord(recordId) {
     const confirmMessage = `确定要删除这条练习记录吗？\n\n题目: ${record.title}\n时间: ${new Date(record.date).toLocaleString()}\n\n此操作不可恢复。`;
 
     if (confirm(confirmMessage)) {
-        const historyItem = document.querySelector(`[data-record-id="${recordId}"]`);
-        if (historyItem) {
-            historyItem.classList.add('deleting');
-            setTimeout(async () => {
-                historyItem.classList.add('deleted');
-                setTimeout(async () => {
-                    records.splice(recordIndex, 1);
-                    await storage.set('practice_records', records);
-                    syncPracticeRecords(); // Re-sync and update UI
-                    showMessage('记录已删除', 'success');
-                }, 300);
-            }, 200);
-        } else {
-            // Fallback if element not found
-            records.splice(recordIndex, 1);
-            await storage.set('practice_records', records);
-            syncPracticeRecords();
-            showMessage('记录已删除', 'success');
-        }
+        const nextRecords = records.filter((record) => String(record.id) !== String(recordId));
+        await persistPracticeRecordsAndRefresh(nextRecords, 'single-delete');
+        showMessage('记录已删除', 'success');
     }
 }
 
 async function clearPracticeData() {
     if (confirm('确定要清除所有练习记录吗？此操作不可恢复。')) {
-        setPracticeRecordsState([]);
-        await storage.set('practice_records', []); // Use storage helper
+        await persistPracticeRecordsAndRefresh([], 'clear-all');
         processedSessions.clear();
-        updatePracticeView();
+        clearSelectedRecordsState();
+        setBulkDeleteModeState(false);
+        refreshBulkDeleteButton();
         showMessage('练习记录已清除', 'success');
     }
 }
 
 async function clearCache() {
-    if (confirm('确定要清除所有缓存数据并清空练习记录吗？')) {
-        try {
-            // 清空命名空间下的练习记录
-            if (window.storage && typeof storage.set === 'function') {
-                await storage.set('practice_records', []);
-            } else {
-                try { localStorage.removeItem('exam_system_practice_records'); } catch (_) { }
-            }
-        } catch (e) { console.warn('[clearCache] failed to clear practice_records:', e); }
-
-        try { localStorage.clear(); } catch (_) { }
-        try { sessionStorage.clear(); } catch (_) { }
-
-        setPracticeRecordsState([]);
-        if (window.performanceOptimizer) {
-            // optional cleanup hook
-            // window.performanceOptimizer.cleanup();
-        }
-        showMessage('缓存与练习记录已清除', 'success');
-        setTimeout(() => { location.reload(); }, 1000);
+    const confirmMessage = '确定要清除所有缓存数据并清空练习记录吗？';
+    if (!confirm(confirmMessage)) {
+        return;
     }
+
+    const localLegacyKeys = [
+        'exam_system_practice_records',
+        'upgrade_v1_1_0_cleanup_done',
+        'browse_state',
+        'hasSeenGplLicense',
+        'theme',
+        'bloom-theme-mode',
+        'blue-theme-mode',
+        'hp.theme'
+    ];
+    const sessionLegacyKeys = ['hp.portal.pendingView'];
+
+    try {
+        if (window.storage && typeof storage.clear === 'function') {
+            await storage.clear();
+        } else if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
+            await window.PracticeCore.store.replacePracticeRecords([]);
+        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+            await window.simpleStorageWrapper.savePracticeRecords([]);
+        } else if (window.storage && typeof storage.set === 'function') {
+            const practiceKey = ['practice', 'records'].join('_');
+            await storage.set(practiceKey, []);
+        }
+    } catch (error) {
+        console.warn('[clearCache] failed to clear managed storage:', error);
+    }
+
+    localLegacyKeys.forEach((key) => {
+        try { localStorage.removeItem(key); } catch (_) { }
+    });
+    sessionLegacyKeys.forEach((key) => {
+        try { sessionStorage.removeItem(key); } catch (_) { }
+    });
+
+    setPracticeRecordsState([]);
+    processedSessions.clear();
+    if (window.performanceOptimizer && typeof window.performanceOptimizer.cleanup === 'function') {
+        window.performanceOptimizer.cleanup();
+    }
+
+    showMessage('缓存与练习记录已清除', 'success');
+    setTimeout(() => { location.reload(); }, 1000);
 }
 
 let libraryConfigViewInstance = null;

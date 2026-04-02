@@ -11,6 +11,84 @@
         'P3_listening': { id: 'listening-p3-02', title: 'Climate change and allergies' }
     };
 
+    const FREQUENCY_SORT_RANK = {
+        'ultra-high': 5,
+        '超高频': 5,
+        'very-high': 4,
+        '次高频': 4,
+        'high': 3,
+        '高频': 3,
+        'medium': 2,
+        'mid': 2,
+        '中频': 2,
+        'low': 1,
+        '低频': 1
+    };
+
+    function normalizeExamSignature(value) {
+        return String(value || '')
+            .toLowerCase()
+            .replace(/[^\w\u4e00-\u9fa5]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function deduplicateExams(exams) {
+        if (!Array.isArray(exams) || exams.length <= 1) {
+            return Array.isArray(exams) ? exams : [];
+        }
+        const seen = new Set();
+        const deduped = [];
+        exams.forEach((exam) => {
+            if (!exam) return;
+            const signature = [
+                normalizeExamSignature(exam.type),
+                normalizeExamSignature(exam.category),
+                normalizeExamSignature(exam.title)
+            ].join('::');
+            if (seen.has(signature)) {
+                return;
+            }
+            seen.add(signature);
+            deduped.push(exam);
+        });
+        return deduped;
+    }
+
+    function resolveFrequencyRank(exam) {
+        const raw = String(exam && exam.frequency || '').trim().toLowerCase();
+        if (Object.prototype.hasOwnProperty.call(FREQUENCY_SORT_RANK, raw)) {
+            return FREQUENCY_SORT_RANK[raw];
+        }
+        return 0;
+    }
+
+    function applyExamSort(exams) {
+        const list = Array.isArray(exams) ? exams.slice() : [];
+        const mode = String(global.__browseSortMode || 'default').trim().toLowerCase();
+        if (mode !== 'frequency-desc') {
+            return list;
+        }
+        return list.sort((a, b) => {
+            const rankDiff = resolveFrequencyRank(b) - resolveFrequencyRank(a);
+            if (rankDiff !== 0) {
+                return rankDiff;
+            }
+            const categoryA = String(a && a.category || '');
+            const categoryB = String(b && b.category || '');
+            const categoryDiff = categoryA.localeCompare(categoryB, 'zh-Hans-CN');
+            if (categoryDiff !== 0) {
+                return categoryDiff;
+            }
+            return String(a && a.title || '').localeCompare(String(b && b.title || ''), 'zh-Hans-CN');
+        });
+    }
+
+    function applyBrowsePostFilters(exams) {
+        const deduplicated = deduplicateExams(exams);
+        return applyExamSort(deduplicated);
+    }
+
    // 核心功能：加载与渲染
    
     /**
@@ -119,6 +197,8 @@
                 }
             }
         }
+
+        examsToShow = applyBrowsePostFilters(examsToShow);
 
         // 6. 更新状态并渲染
         if (global.appStateService) {
@@ -522,7 +602,10 @@
         displayExams,
         setupExamActionHandlers,
         exportAllData,
-        exportPracticeData
+        exportPracticeData,
+        deduplicateExams,
+        applyExamSort,
+        applyBrowsePostFilters
     };
 
     global.loadExamList = loadExamList;

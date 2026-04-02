@@ -29,20 +29,6 @@
   // 路径解析备用策略顺序
   const PATH_FALLBACK_ORDER = ['map', 'fallback', 'raw', 'relative-up', 'relative-design'];
 
-  // 练习完成消息类型集合
-  const PRACTICE_COMPLETE_TYPES = new Set([
-    'PRACTICE_COMPLETE',
-    'PRACTICE_COMPLETED',
-    'SESSION_COMPLETE',
-    'SESSION_COMPLETED',
-    'EXAM_FINISHED',
-    'QUIZ_COMPLETE',
-    'QUIZ_COMPLETED',
-    'TEST_COMPLETE',
-    'LESSON_COMPLETE',
-    'WORKOUT_COMPLETE'
-  ]);
-
   /**
    * 深拷贝数组
    */
@@ -59,87 +45,6 @@
     } catch (_) {
       return null;
     }
-  }
-
-  /**
-   * 规范化路径基础部分
-   */
-  function normalizeBasePath(value) {
-    if (!value) return '';
-    return String(value).replace(/\\/g, '/').replace(/\/+$/g, '');
-  }
-
-  /**
-   * 规范化路径段
-   */
-  function normalizePathSegment(value) {
-    if (!value) return '';
-    return String(value).replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/g, '');
-  }
-
-  /**
-   * 判断是否为绝对路径
-   */
-  function isAbsolutePath(value) {
-    if (!value) return false;
-    return /^(?:[a-z]+:)?\/\//i.test(value) || /^[A-Za-z]:\\/.test(value);
-  }
-
-  /**
-   * 拼接资源路径
-   */
-  function joinResourcePath(base, folder, file) {
-    if (isAbsolutePath(file)) return file;
-    if (isAbsolutePath(folder)) {
-      const folderPart = normalizePathSegment(folder);
-      const filePart = normalizePathSegment(file);
-      return filePart ? folderPart + '/' + filePart : folderPart;
-    }
-    const segments = [];
-    const basePart = normalizeBasePath(base);
-    if (basePart) segments.push(basePart);
-    const folderPart = normalizePathSegment(folder);
-    if (folderPart) segments.push(folderPart);
-    const filePart = normalizePathSegment(file);
-    if (filePart) segments.push(filePart);
-    return segments.join('/');
-  }
-
-  /**
-   * 编码资源路径
-   */
-  function encodeResourcePath(path) {
-    if (!path) return '';
-    if (isAbsolutePath(path)) return path;
-    return encodeURI(path).replace(/#/g, '%23');
-  }
-
-  /**
-   * 推断从当前页面到仓库根目录的相对前缀（兼容 file:// 与设计页目录结构）
-   */
-  function inferRepoRootPrefix() {
-    try {
-      const rawPath = (window.location && window.location.pathname) ? String(window.location.pathname) : '';
-      const path = rawPath.replace(/\\/g, '/');
-
-      const prefixFromAnchor = (anchor, baseUps) => {
-        const idx = path.indexOf(anchor);
-        if (idx === -1) return '';
-        const after = path.slice(idx + anchor.length);
-        const parts = after.split('/').filter(Boolean);
-        const depth = Math.max(0, parts.length - 1);
-        const ups = new Array(baseUps + depth).fill('..');
-        return ups.length ? ups.join('/') : '.';
-      };
-
-      const design = prefixFromAnchor('/.superdesign/design_iterations/', 2);
-      if (design) return design;
-
-      const superdesign = prefixFromAnchor('/.superdesign/', 1);
-      if (superdesign) return superdesign;
-    } catch (_) {}
-
-    return './';
   }
 
   /**
@@ -262,6 +167,9 @@
    * @returns {string} - 大写规范化后的消息类型
    */
   function normalizeMessageType(value) {
+    if (window.PracticeCore && window.PracticeCore.protocol && typeof window.PracticeCore.protocol.normalizeMessageType === 'function') {
+      return window.PracticeCore.protocol.normalizeMessageType(value);
+    }
     return String(value || '').toUpperCase();
   }
 
@@ -590,6 +498,13 @@
           timestamp: record.timestamp || Date.now()
         };
 
+        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+          await window.PracticeCore.store.savePracticeRecord(normalizedRecord, { maxRecords: 1000 });
+          await this._loadPracticeRecords();
+          console.log('[ThemeAdapterBase] 练习记录已通过 PracticeCore 保存', normalizedRecord.id || normalizedRecord.sessionId);
+          return;
+        }
+
         // 添加到本地缓存
         this._practiceRecords.unshift(normalizedRecord);
         
@@ -607,91 +522,6 @@
         console.error('[ThemeAdapterBase] 保存练习记录失败:', error);
         throw error;
       }
-    },
-
-    /**
-     * 构建资源路径
-     * @param {Object} exam - 题目对象
-     * @param {string} kind - 资源类型 ('html' | 'pdf')
-     * @returns {string} 资源路径
-     */
-    buildResourcePath(exam, kind) {
-      if (!exam) return '';
-
-      // 优先使用 window.hpPath 或 window.buildResourcePath
-      if (window.hpPath && typeof window.hpPath.buildResourcePath === 'function') {
-        try {
-          const result = window.hpPath.buildResourcePath(exam, kind);
-          if (result) return result;
-        } catch (error) {
-          console.warn('[ThemeAdapterBase] hpPath.buildResourcePath 失败:', error);
-        }
-      }
-
-      if (typeof window.buildResourcePath === 'function') {
-        try {
-          const result = window.buildResourcePath(exam, kind);
-          if (result) return result;
-        } catch (error) {
-          console.warn('[ThemeAdapterBase] window.buildResourcePath 失败:', error);
-        }
-      }
-
-      // 备用路径生成逻辑
-      return this._buildFallbackPath(exam, kind);
-    },
-
-    /**
-     * 获取资源路径尝试列表（按顺序：map → fallback → raw → relative-up → relative-design）
-     * @param {Object} exam - 题目对象
-     * @param {string} kind - 资源类型
-     * @returns {Array} 路径尝试列表，每项包含 { label, path }
-     */
-    getResourceAttempts(exam, kind) {
-      if (!exam) return [];
-
-      const attempts = [];
-      const seen = new Set();
-
-      const addAttempt = (label, path) => {
-        if (path && !seen.has(path)) {
-          seen.add(path);
-          attempts.push({ label, path });
-        }
-      };
-
-      const base = normalizeBasePath(window.HP_BASE_PREFIX) || inferRepoRootPrefix();
-      const folder = exam.path || '';
-      const primaryFile = kind === 'pdf'
-        ? (exam.pdfFilename || exam.filename || '')
-        : (exam.filename || '');
-
-      // 1. map - 使用外部路径解析器（不调用 this.buildResourcePath 避免循环）
-      let mapPath = '';
-      if (window.hpPath && typeof window.hpPath.buildResourcePath === 'function') {
-        try {
-          mapPath = window.hpPath.buildResourcePath(exam, kind) || '';
-        } catch (_) {}
-      } else if (typeof window.buildResourcePath === 'function') {
-        try {
-          mapPath = window.buildResourcePath(exam, kind) || '';
-        } catch (_) {}
-      }
-      addAttempt('map', mapPath);
-
-      // 2. fallback - 使用 HP_BASE_PREFIX
-      addAttempt('fallback', encodeResourcePath(joinResourcePath(base, folder, primaryFile)));
-
-      // 3. raw - 直接使用 path + filename
-      addAttempt('raw', encodeResourcePath(joinResourcePath('', folder, primaryFile)));
-
-      // 4. relative-up - 上一级目录
-      addAttempt('relative-up', encodeResourcePath(joinResourcePath('..', folder, primaryFile)));
-
-      // 5. relative-design - 上两级目录（适用于 .superdesign/design_iterations/ 下的主题）
-      addAttempt('relative-design', encodeResourcePath(joinResourcePath('../..', folder, primaryFile)));
-
-      return attempts;
     },
 
     /**
@@ -757,7 +587,9 @@
       }
 
       // 构建资源路径
-      const fullPath = this.buildResourcePath(exam, 'html');
+      const fullPath = window.ResourceCore && typeof window.ResourceCore.buildResourcePath === 'function'
+        ? window.ResourceCore.buildResourcePath(exam, 'html')
+        : (typeof window.buildResourcePath === 'function' ? window.buildResourcePath(exam, 'html') : '');
       if (!fullPath) {
         this.showMessage('无法解析题目路径', 'error');
         return null;
@@ -798,7 +630,9 @@
         return null;
       }
 
-      const fullPath = this.buildResourcePath(exam, 'pdf');
+      const fullPath = window.ResourceCore && typeof window.ResourceCore.buildResourcePath === 'function'
+        ? window.ResourceCore.buildResourcePath(exam, 'pdf')
+        : (typeof window.buildResourcePath === 'function' ? window.buildResourcePath(exam, 'pdf') : '');
       if (!fullPath) {
         this.showMessage('无法解析 PDF 路径', 'error');
         return null;
@@ -989,7 +823,10 @@
      * @returns {boolean}
      */
     isPracticeCompleteType(type) {
-      return PRACTICE_COMPLETE_TYPES.has(normalizeMessageType(type));
+      if (window.PracticeCore && window.PracticeCore.protocol && typeof window.PracticeCore.protocol.isPracticeCompleteType === 'function') {
+        return window.PracticeCore.protocol.isPracticeCompleteType(type);
+      }
+      return normalizeMessageType(type) === 'PRACTICE_COMPLETE';
     },
 
     // ========== 内部方法 ==========
@@ -1061,7 +898,7 @@
       }
 
       // 处理练习完成消息
-      if (PRACTICE_COMPLETE_TYPES.has(normalizedType)) {
+      if (this.isPracticeCompleteType(normalizedType)) {
         console.log('[ThemeAdapterBase] 收到练习完成消息:', normalizedType, payload);
         this._handlePracticeComplete(payload);
         this._notifyMessageCallbacks('PRACTICE_COMPLETE', payload);
@@ -1381,19 +1218,6 @@
     },
 
     /**
-     * 构建备用路径
-     */
-    _buildFallbackPath(exam, kind) {
-      const base = normalizeBasePath(window.HP_BASE_PREFIX) || inferRepoRootPrefix();
-      const folder = exam.path || '';
-      const file = kind === 'pdf'
-        ? (exam.pdfFilename || exam.filename || '')
-        : (exam.filename || '');
-
-      return encodeResourcePath(joinResourcePath(base, folder, file));
-    },
-
-    /**
      * 通知数据更新
      */
     _notifyDataUpdated(data) {
@@ -1419,11 +1243,11 @@
     deduplicateRecords,
     getRecordTimestamp,
     normalizeMessageType,
+    isPracticeCompleteType: (type) => ThemeAdapterBase.isPracticeCompleteType(type),
     normalizePracticePayload,
     STORAGE_KEYS,
     VALID_TYPES,
-    PATH_FALLBACK_ORDER,
-    PRACTICE_COMPLETE_TYPES
+    PATH_FALLBACK_ORDER
   };
 
   // 暴露到全局
