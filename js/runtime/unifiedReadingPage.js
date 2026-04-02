@@ -2001,6 +2001,28 @@
         });
     }
 
+    function resolveHighlightKind(node) {
+        if (!(node instanceof HTMLElement)) {
+            return 'highlight';
+        }
+        if (node.dataset && node.dataset.hlType === 'note') {
+            return 'note';
+        }
+        return 'highlight';
+    }
+
+    function applyHighlightKind(node, kind = 'highlight') {
+        if (!(node instanceof HTMLElement)) {
+            return;
+        }
+        node.classList.add('hl');
+        if (kind === 'note') {
+            node.dataset.hlType = 'note';
+        } else {
+            delete node.dataset.hlType;
+        }
+    }
+
     function resolveHighlightRoot(scope) {
         if (scope === 'left') return dom.left;
         return dom.groups;
@@ -2031,6 +2053,7 @@
                 records.push({
                     scope,
                     text,
+                    kind: resolveHighlightKind(node),
                     occurrence: seen,
                     startOffset: hit,
                     endOffset: hit + text.length,
@@ -2084,6 +2107,7 @@
         if (!root) return;
         const fullText = String(root.textContent || '');
         if (!fullText) return;
+        const highlightKind = record.kind === 'note' ? 'note' : 'highlight';
         const normalizedRecordText = String(record.text || '').replace(/\s+/g, ' ').trim();
         const startOffset = Number(record.startOffset);
         const endOffset = Number(record.endOffset);
@@ -2104,7 +2128,7 @@
                 const offsetRange = resolveRangeFromOffsets(root, startOffset, endOffset);
                 if (offsetRange && !offsetRange.collapsed) {
                     const offsetSpan = document.createElement('span');
-                    offsetSpan.className = 'hl';
+                    applyHighlightKind(offsetSpan, highlightKind);
                     try {
                         offsetRange.surroundContents(offsetSpan);
                         return;
@@ -2138,7 +2162,7 @@
             return;
         }
         const span = document.createElement('span');
-        span.className = 'hl';
+        applyHighlightKind(span, highlightKind);
         try {
             range.surroundContents(span);
         } catch (_) {
