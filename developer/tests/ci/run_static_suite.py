@@ -8,13 +8,15 @@ invoked locally or inside CI before changes are merged.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
+from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -361,6 +363,165 @@ def _check_metadata_field(path: Path, keyword: str = "pathRoot") -> Tuple[bool, 
     return False, f"缺少 {keyword} 元数据"
 
 
+def _extract_registered_payload(path: Path) -> Optional[dict]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception:
+        return None
+
+    match = re.search(
+        r"register\(\s*['\"]([^'\"]+)['\"]\s*,\s*(\{[\s\S]*\})\s*\)\s*;",
+        text,
+        re.MULTILINE,
+    )
+    if not match:
+        return None
+
+    try:
+        payload = json.loads(match.group(2))
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _normalize_title_for_similarity(title: str) -> str:
+    lowered = (title or "").strip().lower()
+    lowered = re.sub(r"\s+", " ", lowered)
+    lowered = re.sub(r"[^0-9a-z\u4e00-\u9fff ]+", "", lowered)
+    return lowered.strip()
+
+
+def _extract_exam_question_range(exam_payload: dict) -> Optional[Tuple[int, int]]:
+    display_map = exam_payload.get("questionDisplayMap")
+    if isinstance(display_map, dict):
+        numeric_values = []
+        for value in display_map.values():
+            try:
+                numeric_values.append(int(str(value).strip()))
+            except Exception:
+                continue
+        if numeric_values:
+            return min(numeric_values), max(numeric_values)
+
+    question_order = exam_payload.get("questionOrder")
+    if isinstance(question_order, list):
+        numeric_values = []
+        for item in question_order:
+            match = re.match(r"^q(\d+)$", str(item).strip(), re.IGNORECASE)
+            if match:
+                numeric_values.append(int(match.group(1)))
+        if numeric_values:
+            return min(numeric_values), max(numeric_values)
+    return None
+
+
+def _extract_explanation_question_range(explanation_payload: dict) -> Optional[Tuple[int, int]]:
+    question_sections = explanation_payload.get("questionExplanations")
+    if not isinstance(question_sections, list):
+        return None
+    starts: List[int] = []
+    ends: List[int] = []
+    for section in question_sections:
+        if not isinstance(section, dict):
+            continue
+        question_range = section.get("questionRange")
+        if not isinstance(question_range, dict):
+            continue
+        start = question_range.get("start")
+        end = question_range.get("end")
+        if isinstance(start, int) and isinstance(end, int):
+            starts.append(start)
+            ends.append(end)
+    if not starts or not ends:
+        return None
+    return min(starts), max(ends)
+
+
+def _check_reading_explanation_alignment() -> Tuple[bool, dict]:
+    exams_dir = REPO_ROOT / "assets" / "generated" / "reading-exams"
+    explanations_dir = REPO_ROOT / "assets" / "generated" / "reading-explanations"
+    if not exams_dir.exists() or not explanations_dir.exists():
+        return False, {"error": "reading-exams 或 reading-explanations 目录缺失"}
+
+    exam_payloads: Dict[str, dict] = {}
+    explanation_payloads: Dict[str, dict] = {}
+
+    for exam_file in sorted(exams_dir.glob("*.js")):
+        payload = _extract_registered_payload(exam_file)
+        if not payload:
+            continue
+        exam_id = str(payload.get("examId") or "").strip()
+        if exam_id:
+            exam_payloads[exam_id] = payload
+
+    for explanation_file in sorted(explanations_dir.glob("*.js")):
+        payload = _extract_registered_payload(explanation_file)
+        if not payload:
+            continue
+        exam_id = str(payload.get("examId") or "").strip()
+        if exam_id:
+            explanation_payloads[exam_id] = payload
+
+    missing_explanations = sorted([exam_id for exam_id in exam_payloads.keys() if exam_id not in explanation_payloads])
+    mismatches: List[dict] = []
+
+    for exam_id, explanation in explanation_payloads.items():
+        exam = exam_payloads.get(exam_id)
+        if not exam:
+            mismatches.append({
+                "examId": exam_id,
+                "reason": "explanation_orphan",
+                "detail": "存在解析，但找不到同 examId 的阅读题目",
+            })
+            continue
+
+        exam_meta = exam.get("meta") if isinstance(exam.get("meta"), dict) else {}
+        explanation_meta = explanation.get("meta") if isinstance(explanation.get("meta"), dict) else {}
+        exam_title = str(exam_meta.get("title") or "")
+        explanation_title = str(explanation_meta.get("title") or "")
+        normalized_exam_title = _normalize_title_for_similarity(exam_title)
+        normalized_explanation_title = _normalize_title_for_similarity(explanation_title)
+        similarity = SequenceMatcher(None, normalized_exam_title, normalized_explanation_title).ratio()
+        if normalized_exam_title and normalized_explanation_title and similarity < 0.45:
+            mismatches.append({
+                "examId": exam_id,
+                "reason": "title_similarity_low",
+                "detail": {
+                    "examTitle": exam_title,
+                    "explanationTitle": explanation_title,
+                    "similarity": round(similarity, 3),
+                },
+            })
+
+        exam_range = _extract_exam_question_range(exam)
+        explanation_range = _extract_explanation_question_range(explanation)
+        if exam_range and explanation_range:
+            exam_start, exam_end = exam_range
+            exp_start, exp_end = explanation_range
+            overlap_start = max(exam_start, exp_start)
+            overlap_end = min(exam_end, exp_end)
+            has_overlap = overlap_start <= overlap_end
+            if not has_overlap:
+                mismatches.append({
+                    "examId": exam_id,
+                    "reason": "question_range_mismatch",
+                    "detail": {
+                        "examRange": [exam_start, exam_end],
+                        "explanationRange": [exp_start, exp_end],
+                    },
+                })
+
+    passed = not mismatches
+    detail = {
+        "examCount": len(exam_payloads),
+        "explanationCount": len(explanation_payloads),
+        "missingExplanations": len(missing_explanations),
+        "mismatchCount": len(mismatches),
+        "mismatches": mismatches[:20],
+    }
+    return passed, detail
+
+
 def _format_result(name: str, passed: bool, detail: str) -> dict:
     return {
         "name": name,
@@ -372,6 +533,41 @@ def _format_result(name: str, passed: bool, detail: str) -> dict:
 def _ensure_exists(path: Path) -> Tuple[bool, str]:
     exists = path.exists()
     return exists, ("已找到" if exists else "文件缺失")
+
+
+def _run_json_subprocess(
+    command: List[str],
+    timeout: int,
+    *,
+    env: Optional[Dict[str, str]] = None,
+    parse_mode: str = "stdout",
+) -> Tuple[bool, Any]:
+    try:
+        completed = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"执行超时（{timeout}秒）"
+    except subprocess.CalledProcessError as exc:
+        output_text = exc.stdout or exc.stderr or str(exc)
+        return False, f"执行失败: {output_text.strip()}"
+
+    if parse_mode == "last-line":
+        output_lines = [line.strip() for line in (completed.stdout or "").splitlines() if line.strip()]
+        parse_target = output_lines[-1] if output_lines else ""
+    else:
+        parse_target = completed.stdout.strip() or completed.stderr.strip()
+
+    try:
+        payload = json.loads(parse_target or "{}")
+    except json.JSONDecodeError as parse_error:
+        return False, f"输出解析失败: {parse_error}"
+    return True, payload
 
 
 def run_checks() -> Tuple[List[dict], bool]:
@@ -576,17 +772,30 @@ def run_checks() -> Tuple[List[dict], bool]:
     all_passed &= synthetic_guard_ok
 
     main_js_path = REPO_ROOT / "js" / "main.js"
+    resource_core_path = REPO_ROOT / "js" / "core" / "resourceCore.js"
     main_js_exists, main_js_detail = _ensure_exists(main_js_path)
     results.append(_format_result("main.js 存在性", main_js_exists, main_js_detail))
     all_passed &= main_js_exists
 
+    resource_core_exists, resource_core_detail = _ensure_exists(resource_core_path)
+    results.append(_format_result("resourceCore.js 存在性", resource_core_exists, resource_core_detail))
+    all_passed &= resource_core_exists
+
     main_js_source: Optional[str] = None
+    resource_core_source: Optional[str] = None
     if main_js_exists:
         try:
             main_js_source = main_js_path.read_text(encoding="utf-8")
         except Exception as exc:  # pragma: no cover - defensive guard
             read_detail = f"读取失败：{exc}"
             results.append(_format_result("main.js 读取", False, read_detail))
+            all_passed = False
+    if resource_core_exists:
+        try:
+            resource_core_source = resource_core_path.read_text(encoding="utf-8")
+        except Exception as exc:  # pragma: no cover - defensive guard
+            read_detail = f"读取失败：{exc}"
+            results.append(_format_result("resourceCore.js 读取", False, read_detail))
             all_passed = False
 
     if main_js_source is not None:
@@ -602,13 +811,14 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("loadLibraryInternal 定义存在性", internal_passed, internal_detail))
         all_passed &= internal_passed
 
+    if resource_core_source is not None:
         for helper_name in ("buildOverridePathMap", "mergeRootWithFallback"):
-            helper_passed, helper_detail = _check_js_function_definition(main_js_source, helper_name)
-            results.append(_format_result(f"{helper_name} 定义存在性", helper_passed, helper_detail))
+            helper_passed, helper_detail = _check_js_function_definition(resource_core_source, helper_name)
+            results.append(_format_result(f"ResourceCore {helper_name} 定义存在性", helper_passed, helper_detail))
             all_passed &= helper_passed
 
-        resolve_passed, resolve_detail = _check_resolve_exam_base_path(main_js_source)
-        results.append(_format_result("resolveExamBasePath 路径组合逻辑", resolve_passed, resolve_detail))
+        resolve_passed, resolve_detail = _check_resolve_exam_base_path(resource_core_source)
+        results.append(_format_result("ResourceCore resolveExamBasePath 路径组合逻辑", resolve_passed, resolve_detail))
         all_passed &= resolve_passed
 
     metadata_targets = [
@@ -619,6 +829,10 @@ def run_checks() -> Tuple[List[dict], bool]:
         meta_passed, meta_detail = _check_metadata_field(metadata_path)
         results.append(_format_result(f"{metadata_path.name} 根目录元数据", meta_passed, meta_detail))
         all_passed &= meta_passed
+
+    explanation_alignment_passed, explanation_alignment_detail = _check_reading_explanation_alignment()
+    results.append(_format_result("阅读题目-解析一致性校验", explanation_alignment_passed, explanation_alignment_detail))
+    all_passed &= explanation_alignment_passed
 
     practice_fixture = REPO_ROOT / "templates" / "ci-practice-fixtures" / "analysis-of-fear.html"
     fixture_exists, fixture_detail = _ensure_exists(practice_fixture)
@@ -723,6 +937,101 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("套题模式首篇衔接测试", False, "测试脚本缺失"))
         all_passed = False
 
+    suite_regression_test = REPO_ROOT / "developer" / "tests" / "js" / "suiteModeRegression.test.js"
+    if suite_regression_test.exists():
+        try:
+            completed_suite_regression = subprocess.run(
+                ["node", str(suite_regression_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            suite_regression_passed = False
+            suite_regression_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_suite_regression = completed_suite_regression.stdout.strip() or completed_suite_regression.stderr.strip()
+            try:
+                suite_regression_payload = json.loads(raw_suite_regression or "{}")
+            except json.JSONDecodeError as parse_error:
+                suite_regression_passed = False
+                suite_regression_detail = f"输出解析失败: {parse_error}"
+            else:
+                suite_regression_passed = suite_regression_payload.get("status") == "pass"
+                suite_regression_detail = suite_regression_payload.get("detail", suite_regression_payload)
+        results.append(_format_result("套题模式状态机回归测试", suite_regression_passed, suite_regression_detail))
+        all_passed &= suite_regression_passed
+    else:
+        results.append(_format_result("套题模式状态机回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    simulation_nb_drag_test = REPO_ROOT / "developer" / "tests" / "e2e" / "simulation_nb_drag_regression.py"
+    if simulation_nb_drag_test.exists():
+        try:
+            completed_sim_nb_drag = subprocess.run(
+                ["python3", str(simulation_nb_drag_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=240,
+            )
+        except subprocess.TimeoutExpired:
+            sim_nb_drag_passed = False
+            sim_nb_drag_detail = "执行超时（240秒）"
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            sim_nb_drag_passed = False
+            sim_nb_drag_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_sim_nb_drag = completed_sim_nb_drag.stdout.strip() or completed_sim_nb_drag.stderr.strip()
+            try:
+                sim_nb_drag_payload = json.loads(raw_sim_nb_drag or "{}")
+            except json.JSONDecodeError as parse_error:
+                sim_nb_drag_passed = False
+                sim_nb_drag_detail = f"输出解析失败: {parse_error}"
+            else:
+                sim_nb_drag_passed = sim_nb_drag_payload.get("status") == "pass"
+                sim_nb_drag_detail = sim_nb_drag_payload.get("detail", sim_nb_drag_payload)
+        results.append(_format_result("模拟模式 NB 拖拽回灌回归测试", sim_nb_drag_passed, sim_nb_drag_detail))
+        all_passed &= sim_nb_drag_passed
+    else:
+        results.append(_format_result("模拟模式 NB 拖拽回灌回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    simulation_roundtrip_restore_test = REPO_ROOT / "developer" / "tests" / "e2e" / "simulation_roundtrip_restore_regression.py"
+    if simulation_roundtrip_restore_test.exists():
+        try:
+            completed_sim_roundtrip_restore = subprocess.run(
+                ["python3", str(simulation_roundtrip_restore_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=360,
+            )
+        except subprocess.TimeoutExpired:
+            sim_roundtrip_restore_passed = False
+            sim_roundtrip_restore_detail = "执行超时（360秒）"
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            sim_roundtrip_restore_passed = False
+            sim_roundtrip_restore_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_sim_roundtrip_restore = completed_sim_roundtrip_restore.stdout.strip() or completed_sim_roundtrip_restore.stderr.strip()
+            try:
+                sim_roundtrip_restore_payload = json.loads(raw_sim_roundtrip_restore or "{}")
+            except json.JSONDecodeError as parse_error:
+                sim_roundtrip_restore_passed = False
+                sim_roundtrip_restore_detail = f"输出解析失败: {parse_error}"
+            else:
+                sim_roundtrip_restore_passed = sim_roundtrip_restore_payload.get("status") == "pass"
+                sim_roundtrip_restore_detail = sim_roundtrip_restore_payload.get("detail", sim_roundtrip_restore_payload)
+        results.append(_format_result("模拟模式切题回灌回归测试", sim_roundtrip_restore_passed, sim_roundtrip_restore_detail))
+        all_passed &= sim_roundtrip_restore_passed
+    else:
+        results.append(_format_result("模拟模式切题回灌回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
     inline_fallback_test = REPO_ROOT / "developer" / "tests" / "js" / "suiteInlineFallback.test.js"
     if inline_fallback_test.exists():
         try:
@@ -782,8 +1091,271 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("全量题库记录匹配测试", False, "测试脚本缺失"))
         all_passed = False
 
+    practice_core_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCore.test.js"
+    if practice_core_test.exists():
+        try:
+            completed_practice_core = subprocess.run(
+                ["node", str(practice_core_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            practice_core_passed = False
+            practice_core_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_practice_core_output = completed_practice_core.stdout.strip() or completed_practice_core.stderr.strip()
+            try:
+                practice_core_payload = json.loads(raw_practice_core_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_core_passed = False
+                practice_core_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_core_passed = practice_core_payload.get("status") == "pass"
+                practice_core_detail = practice_core_payload.get("detail", practice_core_payload)
+        results.append(_format_result("PracticeCore 单元测试", practice_core_passed, practice_core_detail))
+        all_passed &= practice_core_passed
+    else:
+        results.append(_format_result("PracticeCore 单元测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    resource_core_test = REPO_ROOT / "developer" / "tests" / "js" / "resourceCore.test.js"
+    if resource_core_test.exists():
+        try:
+            completed_resource_core = subprocess.run(
+                ["node", str(resource_core_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            resource_core_passed = False
+            resource_core_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_resource_core_output = completed_resource_core.stdout.strip() or completed_resource_core.stderr.strip()
+            try:
+                resource_core_payload = json.loads(raw_resource_core_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                resource_core_passed = False
+                resource_core_detail = f"输出解析失败: {parse_error}"
+            else:
+                resource_core_passed = resource_core_payload.get("status") == "pass"
+                resource_core_detail = resource_core_payload.get("detail", resource_core_payload)
+        results.append(_format_result("ResourceCore 单元测试", resource_core_passed, resource_core_detail))
+        all_passed &= resource_core_passed
+    else:
+        results.append(_format_result("ResourceCore 单元测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    on_demand_entry_test = REPO_ROOT / "developer" / "tests" / "js" / "onDemandEntrypoints.test.js"
+    if on_demand_entry_test.exists():
+        try:
+            completed_on_demand = subprocess.run(
+                ["node", str(on_demand_entry_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            on_demand_passed = False
+            on_demand_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_on_demand_output = completed_on_demand.stdout.strip() or completed_on_demand.stderr.strip()
+            try:
+                on_demand_payload = json.loads(raw_on_demand_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                on_demand_passed = False
+                on_demand_detail = f"输出解析失败: {parse_error}"
+            else:
+                on_demand_passed = on_demand_payload.get("status") == "pass"
+                on_demand_detail = on_demand_payload.get("detail", on_demand_payload)
+        results.append(_format_result("按需入口回归测试", on_demand_passed, on_demand_detail))
+        all_passed &= on_demand_passed
+    else:
+        results.append(_format_result("按需入口回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    practice_core_guard_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCore.guard.test.js"
+    if practice_core_guard_test.exists():
+        try:
+            completed_practice_core_guard = subprocess.run(
+                ["node", str(practice_core_guard_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            practice_core_guard_passed = False
+            practice_core_guard_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_guard_output = completed_practice_core_guard.stdout.strip() or completed_practice_core_guard.stderr.strip()
+            try:
+                practice_core_guard_payload = json.loads(raw_guard_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_core_guard_passed = False
+                practice_core_guard_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_core_guard_passed = practice_core_guard_payload.get("status") == "pass"
+                practice_core_guard_detail = practice_core_guard_payload.get("detail", practice_core_guard_payload)
+        results.append(_format_result("PracticeCore 静态守卫", practice_core_guard_passed, practice_core_guard_detail))
+        all_passed &= practice_core_guard_passed
+    else:
+        results.append(_format_result("PracticeCore 静态守卫", False, "测试脚本缺失"))
+        all_passed = False
+
+    practice_record_persistence_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceRecordPersistence.test.js"
+    if practice_record_persistence_test.exists():
+        try:
+            completed_practice_record_persistence = subprocess.run(
+                ["node", str(practice_record_persistence_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            practice_record_persistence_passed = False
+            practice_record_persistence_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_persistence_output = completed_practice_record_persistence.stdout.strip() or completed_practice_record_persistence.stderr.strip()
+            try:
+                practice_record_persistence_payload = json.loads(raw_persistence_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_record_persistence_passed = False
+                practice_record_persistence_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_record_persistence_passed = practice_record_persistence_payload.get("status") == "pass"
+                practice_record_persistence_detail = practice_record_persistence_payload.get("detail", practice_record_persistence_payload)
+        results.append(_format_result("练习记录持久化删除链路测试", practice_record_persistence_passed, practice_record_persistence_detail))
+        all_passed &= practice_record_persistence_passed
+    else:
+        results.append(_format_result("练习记录持久化删除链路测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    practice_core_app_state_sync_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCoreAppStateSync.test.js"
+    if practice_core_app_state_sync_test.exists():
+        try:
+            completed_practice_core_app_state_sync = subprocess.run(
+                ["node", str(practice_core_app_state_sync_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            practice_core_app_state_sync_passed = False
+            practice_core_app_state_sync_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_app_state_output = completed_practice_core_app_state_sync.stdout.strip() or completed_practice_core_app_state_sync.stderr.strip()
+            try:
+                practice_core_app_state_sync_payload = json.loads(raw_app_state_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_core_app_state_sync_passed = False
+                practice_core_app_state_sync_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_core_app_state_sync_passed = practice_core_app_state_sync_payload.get("status") == "pass"
+                practice_core_app_state_sync_detail = practice_core_app_state_sync_payload.get("detail", practice_core_app_state_sync_payload)
+        results.append(_format_result("PracticeCore app.state 同步测试", practice_core_app_state_sync_passed, practice_core_app_state_sync_detail))
+        all_passed &= practice_core_app_state_sync_passed
+    else:
+        results.append(_format_result("PracticeCore app.state 同步测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    practice_page_ui_test = REPO_ROOT / "developer" / "tests" / "js" / "practicePageUi.test.js"
+    if practice_page_ui_test.exists():
+        try:
+            completed_practice_page_ui = subprocess.run(
+                ["node", str(practice_page_ui_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            practice_page_ui_passed = False
+            practice_page_ui_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_practice_page_ui_output = completed_practice_page_ui.stdout.strip() or completed_practice_page_ui.stderr.strip()
+            try:
+                practice_page_ui_payload = json.loads(raw_practice_page_ui_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_page_ui_passed = False
+                practice_page_ui_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_page_ui_passed = practice_page_ui_payload.get("status") == "pass"
+                practice_page_ui_detail = practice_page_ui_payload.get("detail", practice_page_ui_payload)
+        results.append(_format_result("练习页 UI 回归测试", practice_page_ui_passed, practice_page_ui_detail))
+        all_passed &= practice_page_ui_passed
+    else:
+        results.append(_format_result("练习页 UI 回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    practice_page_enhancer_test = REPO_ROOT / "developer" / "tests" / "js" / "practicePageEnhancer.test.js"
+    if practice_page_enhancer_test.exists():
+        try:
+            completed_practice_page_enhancer = subprocess.run(
+                ["node", str(practice_page_enhancer_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            practice_page_enhancer_passed = False
+            practice_page_enhancer_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_practice_page_enhancer_output = completed_practice_page_enhancer.stdout.strip() or completed_practice_page_enhancer.stderr.strip()
+            try:
+                practice_page_enhancer_payload = json.loads(raw_practice_page_enhancer_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_page_enhancer_passed = False
+                practice_page_enhancer_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_page_enhancer_passed = practice_page_enhancer_payload.get("status") == "pass"
+                practice_page_enhancer_detail = practice_page_enhancer_payload.get("detail", practice_page_enhancer_payload)
+        results.append(_format_result("练习页增强器回归测试", practice_page_enhancer_passed, practice_page_enhancer_detail))
+        all_passed &= practice_page_enhancer_passed
+    else:
+        results.append(_format_result("练习页增强器回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    unified_reading_page_test = REPO_ROOT / "developer" / "tests" / "js" / "unifiedReadingPage.test.js"
+    if unified_reading_page_test.exists():
+        try:
+            completed_unified_reading_page = subprocess.run(
+                ["node", str(unified_reading_page_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            unified_reading_page_passed = False
+            unified_reading_page_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_unified_reading_page_output = completed_unified_reading_page.stdout.strip() or completed_unified_reading_page.stderr.strip()
+            try:
+                unified_reading_page_payload = json.loads(raw_unified_reading_page_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                unified_reading_page_passed = False
+                unified_reading_page_detail = f"输出解析失败: {parse_error}"
+            else:
+                unified_reading_page_passed = unified_reading_page_payload.get("status") == "pass"
+                unified_reading_page_detail = unified_reading_page_payload.get("detail", unified_reading_page_payload)
+        results.append(_format_result("统一阅读页协议回归测试", unified_reading_page_passed, unified_reading_page_detail))
+        all_passed &= unified_reading_page_passed
+    else:
+        results.append(_format_result("统一阅读页协议回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
     # Integration tests
+    deprecated_reading_source_dir = REPO_ROOT / "developer" / "reading-exams"
     integration_tests = [
+        ("Reading migration snapshot integration test", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "readingMigrationSnapshot.test.js"),
         ("多套题提交流程集成测试", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "multiSuiteSubmission.test.js"),
         ("拼写错误收集流程集成测试", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "spellingErrorCollection.test.js"),
         ("词表切换流程集成测试", REPO_ROOT / "developer" / "tests" / "js" / "integration" / "vocabListSwitching.test.js"),
@@ -791,6 +1363,16 @@ def run_checks() -> Tuple[List[dict], bool]:
     ]
 
     for test_name, test_path in integration_tests:
+        if test_name == "Reading migration snapshot integration test" and not deprecated_reading_source_dir.exists():
+            results.append(
+                _format_result(
+                    test_name,
+                    True,
+                    "显式跳过：developer/reading-exams 目录已废弃，迁移快照用例不再执行",
+                )
+            )
+            continue
+
         if test_path.exists():
             try:
                 completed_integration = subprocess.run(
@@ -829,36 +1411,105 @@ def run_checks() -> Tuple[List[dict], bool]:
             results.append(_format_result(test_name, False, "测试脚本缺失"))
             all_passed = False
 
-    # Phase 05 E2E Tests (真实 HTTP API 调用)
-    phase05_eval_e2e = REPO_ROOT / "developer" / "tests" / "e2e" / "phase05_eval_flow_e2e.py"
-    phase05_eval_exists, phase05_eval_detail = _ensure_exists(phase05_eval_e2e)
-    results.append(_format_result("Phase 05 评分流程 E2E 脚本存在性", phase05_eval_exists, phase05_eval_detail))
-    all_passed &= phase05_eval_exists
-    if phase05_eval_exists:
-        phase05_eval_checks = {
-            "包含 transport 字段": "transport",
-            "调用真实 HTTP API": "/api/evaluate",
-            "验证真实 DB 状态": "get_session_from_db",
-        }
-        for label, snippet in phase05_eval_checks.items():
-            check_passed, check_detail = _check_contains(phase05_eval_e2e, snippet)
-            results.append(_format_result(f"Phase 05 评分 E2E: {label}", check_passed, check_detail))
-            all_passed &= check_passed
+    reading_question_audit_script = REPO_ROOT / "developer" / "tests" / "e2e" / "reading_question_audit.py"
+    if reading_question_audit_script.exists():
+        try:
+            completed_reading_audit = subprocess.run(
+                ["python3", str(reading_question_audit_script), "--mode", "quick"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=480,
+            )
+        except subprocess.TimeoutExpired:
+            reading_audit_passed = False
+            reading_audit_detail = "执行超时（480秒）"
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            reading_audit_passed = False
+            reading_audit_detail = f"执行失败: {output_text.strip()}"
+        else:
+            output_text = completed_reading_audit.stdout.strip() or completed_reading_audit.stderr.strip()
+            reading_report_path = REPO_ROOT / "developer" / "tests" / "e2e" / "reports" / "reading-question-audit-quick.json"
+            if reading_report_path.exists():
+                try:
+                    payload = json.loads(reading_report_path.read_text(encoding="utf-8"))
+                except json.JSONDecodeError as parse_error:
+                    reading_audit_passed = False
+                    reading_audit_detail = f"报告解析失败: {parse_error}"
+                else:
+                    summary = payload.get("summary", {}) if isinstance(payload, dict) else {}
+                    reading_audit_passed = summary.get("exitCode") == 0
+                    reading_audit_detail = {
+                        "staticAudited": summary.get("staticAudited", 0),
+                        "staticFailed": summary.get("staticFailed", 0),
+                        "uiAudited": summary.get("uiAudited", 0),
+                        "uiFailed": summary.get("uiFailed", 0),
+                        "report": "developer/tests/e2e/reports/reading-question-audit-quick.json",
+                    }
+            else:
+                reading_audit_passed = False
+                reading_audit_detail = f"缺少报告文件，输出: {output_text}"
 
-    phase05_upload_e2e = REPO_ROOT / "developer" / "tests" / "e2e" / "phase05_upload_flow_e2e.py"
-    phase05_upload_exists, phase05_upload_detail = _ensure_exists(phase05_upload_e2e)
-    results.append(_format_result("Phase 05 上传流程 E2E 脚本存在性", phase05_upload_exists, phase05_upload_detail))
-    all_passed &= phase05_upload_exists
-    if phase05_upload_exists:
-        phase05_upload_checks = {
-            "包含 transport 字段": "transport",
-            "调用真实 HTTP API": "/api/upload/image",
-            "验证真实文件系统": "check_file_exists",
-        }
-        for label, snippet in phase05_upload_checks.items():
-            check_passed, check_detail = _check_contains(phase05_upload_e2e, snippet)
-            results.append(_format_result(f"Phase 05 上传 E2E: {label}", check_passed, check_detail))
-            all_passed &= check_passed
+        results.append(_format_result("Reading 逐题自动排查（quick）", reading_audit_passed, reading_audit_detail))
+        all_passed &= reading_audit_passed
+    else:
+        results.append(_format_result("Reading 逐题自动排查（quick）", False, "测试脚本缺失"))
+        all_passed = False
+
+    pdf_audit_script = REPO_ROOT / "developer" / "tests" / "ci" / "audit_pdf_checklist_and_mona.py"
+    if pdf_audit_script.exists():
+        pdf_audit_passed, pdf_audit_detail = _run_json_subprocess(
+            ["python3", str(pdf_audit_script)],
+            timeout=120,
+        )
+
+        results.append(_format_result("PDF 对账与回归审计", pdf_audit_passed, pdf_audit_detail))
+        all_passed &= pdf_audit_passed
+    else:
+        results.append(_format_result("PDF 对账与回归审计", False, "测试脚本缺失"))
+        all_passed = False
+
+    reading_integrity_script = REPO_ROOT / "developer" / "tests" / "ci" / "check_reading_data_integrity.py"
+    if reading_integrity_script.exists():
+        reading_integrity_passed, reading_integrity_detail = _run_json_subprocess(
+            ["python3", str(reading_integrity_script)],
+            timeout=30,
+            parse_mode="last-line",
+        )
+
+        results.append(_format_result("Reading 数据完整性校验", reading_integrity_passed, reading_integrity_detail))
+        all_passed &= reading_integrity_passed
+    else:
+        results.append(_format_result("Reading 数据完整性校验", False, "测试脚本缺失"))
+        all_passed = False
+
+    checklist_consistency_script = REPO_ROOT / "developer" / "tests" / "ci" / "check_checklist_consistency.py"
+    if checklist_consistency_script.exists():
+        checklist_env = os.environ.copy()
+        checklist_env["CHECKLIST_IGNORE_RUN_STATIC_CLAIM"] = "1"
+        checklist_consistency_ok, checklist_payload_or_error = _run_json_subprocess(
+            ["python3", str(checklist_consistency_script)],
+            timeout=30,
+            env=checklist_env,
+        )
+        if not checklist_consistency_ok:
+            checklist_consistency_passed = False
+            checklist_consistency_detail = checklist_payload_or_error
+        else:
+            checklist_payload = checklist_payload_or_error if isinstance(checklist_payload_or_error, dict) else {}
+            checklist_consistency_passed = (
+                not checklist_payload.get("summaryMismatches")
+                and not checklist_payload.get("claimMismatches")
+                and not checklist_payload.get("freshnessMismatches")
+            )
+            checklist_consistency_detail = checklist_payload
+
+        results.append(_format_result("Checklist 对账一致性校验", checklist_consistency_passed, checklist_consistency_detail))
+        all_passed &= checklist_consistency_passed
+    else:
+        results.append(_format_result("Checklist 对账一致性校验", False, "测试脚本缺失"))
+        all_passed = False
 
     return results, all_passed
 

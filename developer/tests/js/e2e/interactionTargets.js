@@ -9,7 +9,8 @@
       "create-backup-btn",
       "backup-list-btn",
       "export-data-btn",
-      "import-data-btn"
+      "import-data-btn",
+      "show-onboarding-btn"
     ]
   });
 

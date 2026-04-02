@@ -1,0 +1,125 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p3-high-180", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p3-high-180",
+  "meta": {
+    "title": "The fluoridation controversy 氟化水争议",
+    "category": "P3",
+    "frequency": "high",
+    "pdfFilename": "88. P3 - The fluoridation controversy 氟化水争议【高】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/88. P3 - The fluoridation controversy 氟化水争议【高】/",
+    "legacyFilename": "88. P3 - The fluoridation controversy 氟化水争议【高】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 3</h2>\n            <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>\n            \n            <h3>The fluoridation controversy</h3>\n            <h4>The long-standing debate about whether to fluoridate our drinking water continues</h4>\n            \n            <p>Fluoridation is the addition of fluorine to public water supplies with the aim of reducing tooth decay. The fluorine, when mixed with water, becomes fluoride and the desired concentration of fluoride in public water is approximately one part per million, depending on the regional temperature and hence the amount of water people are likely to drink. Many studies, such as those by McClure in 1970 through to Burt in 1983, have shown that when children drink fluoridated water, their average rate of tooth decay seems greatly reduced. A typical figure claimed is 50 percent reduction. This apparently enormous benefit for children's teeth is the major argument in favor of fluoridation.</p>\n            <p>Three main grounds for opposition to fluoridation have been expressed. First, opponents claim the benefits are exaggerated or not established. Second, there are claims of health risks to parts of the population, for example, allergic reactions. It is also accepted that high levels of fluoride can cause discoloration of otherwise healthy teeth. Proponents do not consider this to be a problem in such small concentrations, whereas opponents disagree—especially because some people drink more water and obtain much more than the standard 1 milligram of fluoride per day. Third, fluoridation is thought to be an infringement on individual rights because it is compulsory medication of all members of a community.</p>\n            <p>An understanding of the fluoridation issue has important implications. If, according to the experts, fluoridation is unquestionably a beneficial and non-hazardous measure, then the wisdom of allowing the public to vote on, and reject it must be questioned.</p>\n            <p>Almost all studies that have been done have assumed that the scientific aspects of the controversy are unproblematic, and they have excluded science from sociological examination. The traditional view is that science is a special kind of knowledge, which is established through scientific methods and objectively applied by members of a scientific community. However, in recent years there has been a major challenge to this picture by a sociology of science that shows how scientific knowledge is socially negotiated, and inevitably linked to the values of the relevant parties, both scientists and nonscientists. These challengers do not see scientific knowledge as exempt from social inquiry.</p>\n            <p>Kuhn (1970) argued that scientific knowledge does not always develop as an orderly process, but is characterized by periodic revolutions, in which the methods of study and the assessment criteria change in a fragmented way. According to Kuhn, the shift from one scientific way of thinking to another is not made solely on the basis of clear rules of formal scientific practice, but can include social factors, though Kuhn has never developed a full analysis of what these might be. Collins (1975) took this concept further when he asserted that the outcome of experiments was not something whose meaning could be immediately comprehended, but rather something for interpretation, discussion between scientists, and reinterpretation in the light of other experiments.</p>\n            <p>One interpretation of this analysis of science is that traditional distinctions between facts and theories, and between scientific knowledge and values, can no longer be justified. Because social processes are involved at all stages of the creation, evaluation, and establishing of scientific knowledge, social values may also be involved.</p>\n            <p>In the same way as many scientists who study fluoridation have overlooked social values, sociologists have also downplayed an important part of the debate by ignoring the number of eminent scientists who have questioned aspects of fluoridation. An example is the study by Sutton in 1960, which analyzed the classic North American studies of the effect of fluoridation on tooth decay, and found that each showed significant methodological shortcomings. Sutton's detailed study throws doubt as to the extent of reductions in tooth decay from fluoridation. Yet Sutton's book is not cited in a single analysis of the fluoridation issue by any sociologist.</p>\n            <p>In a situation of some scientific uncertainty, differences in values are highlighted. A supporter of fluoridation might argue, 'The evidence for the benefits of fluoridation is quite substantial, while the evidence for harm is limited and dubious. I think the likely benefits outweigh the possible dangers; hence I support fluoridation because it is the cheapest and easiest way to make sure every child reaps the benefits.' An opponent might argue, 'Though the evidence for the benefits of fluoridation is substantial, there is some doubt about it. Since fluoridation is not necessary for good teeth, we should forgo the benefits if there is some slight chance of harm. Some scientists claim that a small percentage of the population could be harmed by fluoride. Therefore, I oppose fluoridation of water supplies and favor the voluntary use of fluoride tablets by those who want to take them.'</p>\n            <p>Both arguments consider the scientific evidence concerning fluoridation, but differ in their assessments of the social benefits and costs. This difference is not between rationality and irrationality but is a legitimate difference in values, for example, the positive value placed on good teeth, the negative value placed on possible health risks, and the social benefits or costs of compulsory or voluntary intake of fluorides.</p>\n            <p>From the sociological point of view, opposition to fluoridation is not necessarily irrational. Rather, claims to rationality and to scientific authority are better seen as part of a strategy to promote fluoridation than as incontrovertible statements of fact. Second, social values are likely to be bound up in any decision about fluoridation, so this is not an issue on which declarations by scientific experts ought to be considered the final word.</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "single_choice",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Questions 27–31</h4>\n                <p>Choose the correct letter, <strong>A, B, C</strong> or <strong>D</strong>.</p>\n                <p>Write the correct letter in boxes 27–31 on your answer sheet.</p>\n                <div class=\"question-item\">\n                    <p><strong>27</strong> The optimum amount of fluoride in fluoridated water is calculated partly according to</p>\n                    <ul class=\"mcq-options\">\n                        <li><label><input name=\"q1\" type=\"radio\" value=\"A\"> A how hot the area is.</label></li>\n                        <li><label><input name=\"q1\" type=\"radio\" value=\"B\"> B how warm the water is.</label></li>\n                        <li><label><input name=\"q1\" type=\"radio\" value=\"C\"> C how many dental problems there are in the community.</label></li>\n                        <li><label><input name=\"q1\" type=\"radio\" value=\"D\"> D how much fluorine the community chooses to have in its water.</label></li>\n                    </ul>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>28</strong> One reason given by the writer for opposing fluoridation is that</p>\n                    <ul class=\"mcq-options\">\n                        <li><label><input name=\"q2\" type=\"radio\" value=\"A\"> A it may contribute to tooth decay.</label></li>\n                        <li><label><input name=\"q2\" type=\"radio\" value=\"B\"> B it will be unacceptably expensive for the public.</label></li>\n                        <li><label><input name=\"q2\" type=\"radio\" value=\"C\"> C obligatory fluoridation takes away personal freedom.</label></li>\n                        <li><label><input name=\"q2\" type=\"radio\" value=\"D\"> D excessive fluoride could be added to the water by mistake.</label></li>\n                    </ul>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>29</strong> The writer mentions Kuhn in order to</p>\n                     <ul class=\"mcq-options\">\n                        <li><label><input name=\"q3\" type=\"radio\" value=\"A\"> A provide a contrast with the view of Collins.</label></li>\n                        <li><label><input name=\"q3\" type=\"radio\" value=\"B\"> B support the rational nature of scientific inquiry.</label></li>\n                        <li><label><input name=\"q3\" type=\"radio\" value=\"C\"> C demonstrate that Kuhn did not argue his case adequately.</label></li>\n                        <li><label><input name=\"q3\" type=\"radio\" value=\"D\"> D show that science can be influenced by non-scientific considerations.</label></li>\n                    </ul>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>30</strong> What did Sutton's research discover about earlier studies in North America?</p>\n                     <ul class=\"mcq-options\">\n                        <li><label><input name=\"q4\" type=\"radio\" value=\"A\"> A There were failings in the way they were carried out.</label></li>\n                        <li><label><input name=\"q4\" type=\"radio\" value=\"B\"> B The scientists involved had achieved unique results.</label></li>\n                        <li><label><input name=\"q4\" type=\"radio\" value=\"C\"> C Proponents of fluoridation had not understood its long-term effects.</label></li>\n                        <li><label><input name=\"q4\" type=\"radio\" value=\"D\"> D Fluoridation had a greater effect on tooth decay than previously believed.</label></li>\n                    </ul>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>31</strong> In the last paragraph, what does the writer say about scientists?</p>\n                     <ul class=\"mcq-options\">\n                        <li><label><input name=\"q5\" type=\"radio\" value=\"A\"> A They should reveal their true motivations.</label></li>\n                        <li><label><input name=\"q5\" type=\"radio\" value=\"B\"> B They should not decide the fluoridation policy.</label></li>\n                        <li><label><input name=\"q5\" type=\"radio\" value=\"C\"> C They are solely concerned with scientific truths.</label></li>\n                        <li><label><input name=\"q5\" type=\"radio\" value=\"D\"> D They cannot reach agreement on the fluoridation issue.</label></li>\n                    </ul>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "yes_no_not_given",
+      "questionIds": [
+        "q6",
+        "q7",
+        "q8",
+        "q9"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q6-7-8-9-anchor\">\n                <h4>Questions 32–35</h4>\n                <p>Do the following statements agree with the views of the writer in Reading Passage 3?</p>\n                <p>In boxes 32–35 on your answer sheet, write:</p>\n                <ul>\n                    <li><strong>YES</strong> if the statement agrees with the views of the writer</li>\n                    <li><strong>NO</strong> if the statement contradicts the views of the writer</li>\n                    <li><strong>NOT GIVEN</strong> if it is impossible to say what the writer thinks about this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>32</strong> Scientific knowledge should be kept separate from social values.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q6\" type=\"radio\" value=\"YES\"> YES</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"NO\"> NO</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>33</strong> Many sociologists have disregarded the doubts that some scientists have concerning fluoridation.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q7\" type=\"radio\" value=\"YES\"> YES</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"NO\"> NO</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>34</strong> Sutton's findings have been given insufficient attention by scientists outside of North America.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q8\" type=\"radio\" value=\"YES\"> YES</label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"NO\"> NO</label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>35</strong> There are valid arguments on both sides of the fluoridation debate.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q9\" type=\"radio\" value=\"YES\"> YES</label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"NO\"> NO</label>\n                        <label><input name=\"q9\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q10",
+        "q11",
+        "q12",
+        "q13",
+        "q14"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q10-11-12-13-14-anchor\">\n                 <h4>Questions 36–40</h4>\n                <p>Complete each sentence with the correct ending, <strong>A–G</strong>, below.</p>\n                <p>Write the correct letter, <strong>A–G</strong>, in boxes 36–40 on your answer sheet.</p>\n                <ul class=\"sentence-ending-options\">\n                    <li>the results of scientific research are not always understood at first.</li>\n                    <li>science is an unbiased discipline.</li>\n                    <li>people should be able to choose whether they want fluoride.</li>\n                    <li>there is insufficient proof to support a cautious approach.</li>\n                    <li>the serious damage fluoride causes far outweighs any positive effects.</li>\n                    <li>children are not the only ones who benefit from fluoridation.</li>\n                    <li>scientific knowledge is affected by the beliefs of everyone concerned.</li>\n                </ul>\n\n                <div class=\"question-item\"><strong>36</strong> The traditional view of science is that<input type=\"text\" id=\"q36_input\" maxlength=\"1\" name=\"q10\"></div>\n                <div class=\"question-item\"><strong>37</strong> A sociological view of science argues that<input type=\"text\" id=\"q37_input\" maxlength=\"1\" name=\"q11\"></div>\n                <div class=\"question-item\"><strong>38</strong> Collins is of the opinion that<input type=\"text\" id=\"q38_input\" maxlength=\"1\" name=\"q12\"></div>\n                <div class=\"question-item\"><strong>39</strong> The writer suggests that a supporter of fluoridation may conclude that<input type=\"text\" id=\"q39_input\" maxlength=\"1\" name=\"q13\"></div>\n                <div class=\"question-item\"><strong>40</strong> The writer suggests that an opponent of fluoridation may conclude that<input type=\"text\" id=\"q40_input\" maxlength=\"1\" name=\"q14\"></div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "A",
+    "q2": "C",
+    "q3": "D",
+    "q4": "A",
+    "q5": "B",
+    "q6": "NO",
+    "q7": "YES",
+    "q8": "NOT GIVEN",
+    "q9": "YES",
+    "q10": "B",
+    "q11": "G",
+    "q12": "A",
+    "q13": "D",
+    "q14": "C"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/88. P3 - The fluoridation controversy 氟化水争议【高】/88. P3 - The fluoridation controversy 氟化水争议【高】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/88. P3 - The fluoridation controversy 氟化水争议【高】/88. P3 - The fluoridation controversy 氟化水争议【高】.pdf",
+    "ieltsHtml": null
+  },
+  "audit": {
+    "matchStatus": "shui_only",
+    "matchConfidence": 0,
+    "verifiedAt": "2026-03-08T16:24:30.809Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13",
+    "q14"
+  ],
+  "questionDisplayMap": {
+    "q1": "27",
+    "q2": "28",
+    "q3": "29",
+    "q4": "30",
+    "q5": "31",
+    "q6": "32",
+    "q7": "33",
+    "q8": "34",
+    "q9": "35",
+    "q10": "36",
+    "q11": "37",
+    "q12": "38",
+    "q13": "39",
+    "q14": "40"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

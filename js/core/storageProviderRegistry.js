@@ -8,6 +8,8 @@
         }
         const normalized = {
             storageManager: input.storageManager || window.storage || null,
+            persistentStore: input.persistentStore || window.persistentStore || null,
+            preferenceStore: input.preferenceStore || window.preferenceStore || null,
             repositories: input.repositories || null,
             simpleStorageWrapper: input.simpleStorageWrapper || null
         };
@@ -39,6 +41,12 @@
         }
         if (!window.storage && normalized.storageManager) {
             window.storage = normalized.storageManager;
+        }
+        if (!window.persistentStore && normalized.persistentStore) {
+            window.persistentStore = normalized.persistentStore;
+        }
+        if (!window.preferenceStore && normalized.preferenceStore) {
+            window.preferenceStore = normalized.preferenceStore;
         }
         if (normalized.simpleStorageWrapper && !window.simpleStorageWrapper) {
             window.simpleStorageWrapper = normalized.simpleStorageWrapper;
