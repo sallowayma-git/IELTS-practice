@@ -28,7 +28,7 @@
     <div class="container hero-shell">
         <div class="hero-header">
             <h1>📚 考试总览系统
-                <button type="button" class="hero-badge hero-badge--cta" onclick="showDeveloperTeam(); return false;"
+                <button type="button" class="hero-badge hero-badge--cta" data-action="show-developer-team"
                     aria-label="睡着过开发团队">
                     SHUI
                 </button>
@@ -65,17 +65,17 @@
                     </label>
                 </div>
                 <div id="type-filter-buttons" class="hero-panel__actions shui-filter-group">
-                    <button class="btn btn-sm shui-filter-btn active" type="button" aria-pressed="true" data-filter-type="all" onclick="filterByType('all')">全部</button>
-                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="reading" onclick="filterByType('reading')">阅读</button>
-                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="listening" onclick="filterByType('listening')">听力</button>
+                    <button class="btn btn-sm shui-filter-btn active" type="button" aria-pressed="true" data-filter-type="all" data-action="filter-exam-type">全部</button>
+                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="reading" data-action="filter-exam-type">阅读</button>
+                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="listening" data-action="filter-exam-type">听力</button>
                 </div>
             </div>
 
             <div class="search-box">
                 <div class="search-row">
                     <div class="search-input-wrap">
-                        <input type="text" class="search-input" id="exam-search-input" placeholder="搜索题目..." aria-label="搜索题目" onkeyup="searchExams(this.value)">
-                        <button type="button" class="search-clear-btn" id="search-clear-btn" aria-label="清除搜索" hidden onclick="clearSearch()">
+                        <input type="text" class="search-input" id="exam-search-input" placeholder="搜索题目..." aria-label="搜索题目" data-input-action="search-exams" data-input-event="keyup">
+                        <button type="button" class="search-clear-btn" id="search-clear-btn" aria-label="清除搜索" hidden data-action="clear-exam-search">
                             <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -134,24 +134,23 @@
                 <div class="hero-panel__header">
                     <h3 class="hero-panel__title">📈 练习历史 <span class="hero-tag">SHUI Timeline</span></h3>
                     <div id="record-type-filter-buttons" class="hero-panel__actions shui-filter-group">
-                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="true" data-filter-type="all" onclick="filterRecordsByType('all')">全部</button>
-                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="reading" onclick="filterRecordsByType('reading')">阅读</button>
-                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="listening" onclick="filterRecordsByType('listening')">听力</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="true" data-filter-type="all" data-action="filter-record-type">全部</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="reading" data-action="filter-record-type">阅读</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="listening" data-action="filter-record-type">听力</button>
                     </div>
                     <div class="hero-panel__actions">
-                        <button class="btn btn-secondary hero-btn hero-btn--ghost"
-                            onclick="window.AppActions && window.AppActions.exportPracticeMarkdown()">📄
+                        <button class="btn btn-secondary hero-btn hero-btn--ghost" data-action="export-practice-markdown">📄
                             导出Markdown</button>
-                        <button class="btn btn-info hero-btn" onclick="toggleBulkDelete()" id="bulk-delete-btn">📝
+                        <button class="btn btn-info hero-btn" id="bulk-delete-btn" data-action="toggle-bulk-delete">📝
                             批量删除</button>
-                        <button class="btn btn-warning hero-btn hero-btn--warn" onclick="clearPracticeData()">🗑️
+                        <button class="btn btn-warning hero-btn hero-btn--warn" data-action="clear-practice-data">🗑️
                             清除记录</button>
                     </div>
                 </div>
                 <div class="practice-history-search-row">
                     <div class="search-input-wrap">
-                        <input type="text" class="search-input" id="history-search-input" placeholder="搜索练习记录（标题/分类/日期）..." aria-label="搜索练习记录" oninput="searchPracticeHistory(this.value)">
-                        <button type="button" class="search-clear-btn history-search-clear-btn" id="history-search-clear-btn" aria-label="清除练习记录搜索" hidden onclick="clearPracticeHistorySearch()">
+                        <input type="text" class="search-input" id="history-search-input" placeholder="搜索练习记录（标题/分类/日期）..." aria-label="搜索练习记录" data-input-action="search-practice-history" data-input-event="input">
+                        <button type="button" class="search-clear-btn history-search-clear-btn" id="history-search-clear-btn" aria-label="清除练习记录搜索" hidden data-action="clear-history-search">
                             <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -178,11 +177,11 @@
                     <h3>🔧 系统管理</h3>
                     <p class="hero-panel__muted">系统工具和设置选项</p>
                     <div class="hero-settings-actions">
-                        <button class="btn btn-warning hero-btn hero-btn--warn" id="clear-cache-btn">🗑️ 清除缓存</button>
-                        <button class="btn btn-warning hero-btn hero-btn--warn" id="load-library-btn">📂 加载题库</button>
-                        <button class="btn btn-warning hero-btn hero-btn--warn" id="library-config-btn">⚙️
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="clear-cache-btn" data-action="clear-cache">🗑️ 清除缓存</button>
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="load-library-btn" data-action="load-library">📂 加载题库</button>
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="library-config-btn" data-action="library-config">⚙️
                             题库配置切换</button>
-                        <button class="btn btn-warning hero-btn hero-btn--warn" id="force-refresh-btn">🔄
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="force-refresh-btn" data-action="force-refresh">🔄
                             强制刷新题库</button>
                     </div>
                 </div>
@@ -191,10 +190,10 @@
                     <h3>💾 数据管理</h3>
                     <p class="hero-panel__muted">数据备份、导入导出和完整性检查</p>
                     <div class="hero-settings-actions">
-                        <button class="btn hero-btn data-mgmt-btn" id="create-backup-btn">💾 创建备份</button>
-                        <button class="btn hero-btn data-mgmt-btn" id="backup-list-btn">📋 备份列表</button>
-                        <button class="btn hero-btn data-mgmt-btn" id="export-data-btn">📤 导出数据</button>
-                        <button class="btn hero-btn data-mgmt-btn" id="import-data-btn">📥 导入数据</button>
+                        <button class="btn hero-btn data-mgmt-btn" id="create-backup-btn" data-action="create-backup">💾 创建备份</button>
+                        <button class="btn hero-btn data-mgmt-btn" id="backup-list-btn" data-action="backup-list">📋 备份列表</button>
+                        <button class="btn hero-btn data-mgmt-btn" id="export-data-btn" data-action="export-data">📤 导出数据</button>
+                        <button class="btn hero-btn data-mgmt-btn" id="import-data-btn" data-action="import-data">📥 导入数据</button>
                     </div>
                 </div>
 
@@ -210,14 +209,14 @@
 
                     <!-- 主题切换按钮 -->
                     <div style="margin-top: 25px;">
-                        <button class="btn btn-secondary hero-btn hero-btn--ghost" onclick="showThemeSwitcherModal()">
+                        <button class="btn btn-secondary hero-btn hero-btn--ghost" data-action="show-theme-switcher">
                             🎨 主题切换
                         </button>
                     </div>
 
                     <!-- 引导流程按钮 -->
                     <div style="margin-top: 15px;">
-                        <button class="btn hero-btn" id="show-onboarding-btn" onclick="OnboardingTour.start(true)">
+                        <button class="btn hero-btn" id="show-onboarding-btn" data-action="show-onboarding">
                             🎯 重新显示引导
                         </button>
                     </div>
@@ -225,7 +224,7 @@
                     <!-- 开发团队链接 -->
                     <div
                         style="margin-top: 30px; text-align: center; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.2);">
-                        <a href="#" onclick="showDeveloperTeam()"
+                        <a href="#" data-action="show-developer-team"
                             style="color: rgba(255, 255, 255, 0.7); text-decoration: none; font-size: 0.9em; transition: color 0.3s ease;">
                             睡着过开发团队
                         </a>
@@ -265,7 +264,7 @@
                     </div>
                     <div class="tool-card-arrow">进入</div>
                 </button>
-                <button class="tool-card" type="button" onclick="showAchievements()">
+                <button class="tool-card" type="button" data-action="show-achievements">
                     <div class="tool-card-icon">🏆</div>
                     <div class="tool-card-content">
                         <h3>成就</h3>
@@ -404,7 +403,7 @@
                 </div>
             </div>
 
-            <button class="modal-close-btn" onclick="hideDeveloperTeam()">
+            <button class="modal-close-btn" data-action="hide-developer-team">
                 关闭
             </button>
         </div>
@@ -415,7 +414,7 @@
         <div class="theme-modal-content">
             <div class="theme-modal-header">
                 <h3>🎨 主题切换</h3>
-                <button class="theme-modal-close" onclick="hideThemeSwitcherModal()" aria-label="关闭">×</button>
+                <button class="theme-modal-close" data-action="hide-theme-switcher" aria-label="关闭">×</button>
             </div>
             <div class="theme-modal-body">
                 <div class="theme-options-viewport" role="presentation">
@@ -425,15 +424,15 @@
                                 <div class="theme-name">📚 Academic</div>
                                 <div class="theme-desc">专业 高效 可靠</div>
                             </div>
-                            <button class="btn btn-sm" aria-label="切换到 Academic 主题"
-                                onclick="navigateToThemePortal('.superdesign/design_iterations/ielts_academic_functional_2.html', { label: 'Academic' })">切换</button>
+                            <button class="btn btn-sm" aria-label="切换到 Academic 主题" data-action="navigate-theme-portal"
+                                data-theme-url=".superdesign/design_iterations/ielts_academic_functional_2.html" data-theme-label="Academic">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
                                 <div class="theme-name">🍂 Bloom</div>
                                 <div class="theme-desc">秋日 暖阳</div>
                             </div>
-                            <button id="bloom-theme-btn" class="btn btn-sm" aria-label="切换到 Bloom 主题" onclick="toggleBloomDarkMode()">切换</button>
+                            <button id="bloom-theme-btn" class="btn btn-sm" aria-label="切换到 Bloom 主题" data-action="toggle-bloom-theme">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
@@ -441,8 +440,8 @@
                                 <div class="theme-desc" style="color: #0788D9;">冷静 清爽 专注</div>
                             </div>
                             <button id="blue-theme-btn" class="btn btn-sm" aria-label="切换到 Blue 主题"
-                                style="background: #0554F2; border-color: #1154D9;"
-                                onclick="applyTheme('blue')">切换</button>
+                                style="background: #0554F2; border-color: #1154D9;" data-action="apply-theme"
+                                data-theme="blue">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
@@ -450,7 +449,7 @@
                                 <div class="theme-desc" style="color: #ec4899;">美乐蒂</div>
                             </div>
                             <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;" aria-label="切换到 Melody 主题"
-                                onclick="navigateToThemePortal('.superdesign/design_iterations/my_melody_ielts_1.html', { label: 'MyMelody', theme: 'mymelody' })">切换</button>
+                                data-action="navigate-theme-portal" data-theme-url=".superdesign/design_iterations/my_melody_ielts_1.html" data-theme-label="MyMelody" data-theme-name="mymelody">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
@@ -458,8 +457,8 @@
                                 <div class="theme-desc" style="color: #6a2bbf;">哈利波特</div>
                             </div>
                             <button class="btn btn-sm" style="background: #6a2bbf; border-color: #6a2bbf;"
-                                aria-label="哈利波特主题（冒险）"
-                                onclick="navigateToThemePortal('.superdesign/design_iterations/HarryPoter.html', { label: 'HarryPotter', theme: 'harry' })">切换</button>
+                                aria-label="哈利波特主题（冒险）" data-action="navigate-theme-portal"
+                                data-theme-url=".superdesign/design_iterations/HarryPoter.html" data-theme-label="HarryPotter" data-theme-name="harry">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
@@ -468,7 +467,7 @@
                             </div>
                             <button class="btn btn-sm" aria-label="切换到 小呆呆 主题"
                                 style="background: linear-gradient(120deg, #ffe08a, #ffc83d); border-color: #fbbf24; color: #3b2400;"
-                                onclick="navigateToThemePortal('.superdesign/design_iterations/xiaodaidai_dashboard_1.html', { label: 'XiaoDaiDai', theme: 'xiaodaidai' })">切换</button>
+                                data-action="navigate-theme-portal" data-theme-url=".superdesign/design_iterations/xiaodaidai_dashboard_1.html" data-theme-label="XiaoDaiDai" data-theme-name="xiaodaidai">切换</button>
                         </div>
                     </div>
                 </div>
@@ -531,7 +530,7 @@
         <div class="theme-modal-content" style="max-width: 600px;">
             <div class="theme-modal-header">
                 <h3>🏆 我的成就</h3>
-                <button class="theme-modal-close" onclick="hideAchievements()" aria-label="关闭">×</button>
+                <button class="theme-modal-close" data-action="hide-achievements" aria-label="关闭">×</button>
             </div>
             <div class="theme-modal-body">
                 <div class="achievements-grid" id="achievements-list">
