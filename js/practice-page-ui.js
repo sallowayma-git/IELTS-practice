@@ -192,6 +192,23 @@
             });
         }
 
+        function createHighlightSpan(type = 'default') {
+            const span = document.createElement('span');
+            span.className = 'hl';
+            if (type === 'note') {
+                span.dataset.hlType = 'note';
+            }
+            return span;
+        }
+
+        function markHighlightAsNote(node) {
+            if (!(node instanceof HTMLElement)) {
+                return;
+            }
+            node.classList.add('hl');
+            node.dataset.hlType = 'note';
+        }
+
         function updateSelbar() {
             if (!selbar) return;
             const sel = window.getSelection();
@@ -213,8 +230,11 @@
             const isInAllowedPane =
                 (leftPane && leftPane.contains(container)) ||
                 (rightPane && rightPane.contains(container));
-            const isHighlighted =
-                container.classList?.contains('hl') || !!container.closest('.hl');
+            const highlightNode =
+                container instanceof HTMLElement
+                    ? (container.matches('.hl') ? container : container.closest('.hl'))
+                    : null;
+            const isHighlighted = !!highlightNode;
 
             if (!isInAllowedPane && !isHighlighted) {
                 selbar.style.display = 'none';
@@ -222,7 +242,7 @@
             }
 
             lastRange = range.cloneRange();
-            currentHlNode = isHighlighted ? container.closest('.hl') : null;
+            currentHlNode = isHighlighted ? highlightNode : null;
             positionSelbarForRect(range.getBoundingClientRect());
         }
 
@@ -230,8 +250,7 @@
             if (!selbar || currentHlNode || !lastRange || lastRange.collapsed) return;
             const sel = window.getSelection();
             try {
-                const span = document.createElement('span');
-                span.className = 'hl';
+                const span = createHighlightSpan();
                 lastRange.surroundContents(span);
             } catch (error) {
                 console.error('[PracticePageUI] Highlighting failed:', error);
@@ -408,10 +427,15 @@
                         target.closest('.audio-controls')
                     );
 
-                    if (target instanceof HTMLElement && target.classList.contains('hl')) {
-                        currentHlNode = target;
+                    const clickedHighlight =
+                        target instanceof HTMLElement
+                            ? target.closest('.hl')
+                            : null;
+
+                    if (clickedHighlight) {
+                        currentHlNode = clickedHighlight;
                         lastRange = null;
-                        positionSelbarForRect(target.getBoundingClientRect());
+                        positionSelbarForRect(clickedHighlight.getBoundingClientRect());
                         window.getSelection()?.removeAllRanges();
                         setTimeout(() => {
                             keepToolbar = false;
@@ -441,6 +465,17 @@
                             : ''
                 ).trim();
                 if (text) {
+                    // Mark the selected text with blue note highlight
+                    if (!currentHlNode && lastRange && !lastRange.collapsed) {
+                        try {
+                            const span = createHighlightSpan('note');
+                            lastRange.surroundContents(span);
+                        } catch (e) {
+                            console.error('[PracticePageUI] Note highlight failed:', e);
+                        }
+                    } else if (currentHlNode) {
+                        markHighlightAsNote(currentHlNode);
+                    }
                     const noteArea = notesPanel.querySelector('textarea');
                     if (noteArea) {
                         noteArea.value += (noteArea.value ? '\n\n' : '') + '> ' + text;
@@ -451,6 +486,7 @@
                         noteArea.scrollTop = noteArea.scrollHeight;
                     }
                 }
+                window.getSelection()?.removeAllRanges();
                 if (selbar) selbar.style.display = 'none';
             });
         }
