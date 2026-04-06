@@ -62,6 +62,18 @@
         return maxTs;
     }
 
+    function resolveRecordDurationSeconds(record) {
+        if (!record || typeof record !== 'object') {
+            return 0;
+        }
+        var startMs = Number(new Date(record.startTime).getTime());
+        var endMs = Number(new Date(record.endTime).getTime());
+        if (Number.isFinite(startMs) && Number.isFinite(endMs) && endMs >= startMs) {
+            return Math.floor((endMs - startMs) / 1000);
+        }
+        return 0;
+    }
+
     function normalizePathValue(path) {
         if (!path) {
             return '';
@@ -172,7 +184,7 @@
         for (var i = 0; i < normalized.length; i += 1) {
             var record = normalized[i];
             var percentage = typeof record.percentage === 'number' ? record.percentage : 0;
-            var duration = typeof record.duration === 'number' ? record.duration : 0;
+            var duration = resolveRecordDurationSeconds(record);
             totalScore += percentage;
             totalMinutes += duration;
 
@@ -439,7 +451,7 @@
             });
         }
         var helpers = historyRenderer.helpers;
-        var durationInSeconds = Number(record && record.duration) || 0;
+        var durationInSeconds = resolveRecordDurationSeconds(record);
         var percentage = typeof record.percentage === 'number'
             ? record.percentage
             : Math.round((record.accuracy || 0) * 100);
@@ -660,7 +672,7 @@
             var id = record && record.id != null ? record.id : ('idx' + index);
             var ts = historyRenderer.helpers.getRecordTimestampSafe(record);
             var pct = Number(record && record.percentage) || 0;
-            var dur = Number(record && record.duration) || 0;
+            var dur = resolveRecordDurationSeconds(record);
             return id + ':' + ts + ':' + pct + ':' + dur;
         });
         return list.length + '|' + tokens.join(';');

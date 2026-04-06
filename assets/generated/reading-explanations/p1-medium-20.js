@@ -57,12 +57,12 @@
         },
         {
           "questionNumber": 3,
-          "text": "题目：Bakelite — Common use: ______, household items and car parts\n题目翻译：酚醛树脂——常见用途：______、家居用品和汽车部件\n答案：switches\n解析：第三段列举其用途时首先提到开关（switches），与表格空格对应。",
+          "text": "题目：Bakelite — Common use: ______\n题目翻译：酚醛树脂——常见用途：______\n答案：electrical switches\n解析：第三段写明 Bakelite 用于“the manufacture of electrical switches as well as a variety of domestic items”，故应填 electrical switches。",
           "questionId": "q3"
         },
         {
           "questionNumber": 4,
-          "text": "题目：Polythene — Original region: ______\n题目翻译：聚乙烯——最初发现地区：______\n答案：British\n解析：第四段写“British chemists discovered ... polythene”，对应地区信息为英国（British）。",
+          "text": "题目：Polythene — Country of origin: ______\n题目翻译：聚乙烯——来源国家：______\n答案：Britain\n解析：第四段写“chemists in Britain discovered ... polythene”，对应国家是 Britain。",
           "questionId": "q4"
         },
         {
@@ -72,12 +72,12 @@
         },
         {
           "questionNumber": 6,
-          "text": "题目：Polystyrene — Property: ______\n题目翻译：聚苯乙烯——性质：______\n答案：clear and glass-like\n解析：第四段将聚苯乙烯定义为“a clear, glass-like material”，与空格精确对应。",
+          "text": "题目：Polystyrene — resembles ______\n题目翻译：聚苯乙烯——类似于______\n答案：glass\n解析：原文为“Polystyrene, a hard, clear material like glass...”，题干是 resembles，故应填 glass。",
           "questionId": "q6"
         },
         {
           "questionNumber": 7,
-          "text": "题目：Polyurethanes — Property: ______ foams\n题目翻译：聚氨酯——性质：______ 泡沫\n答案：rigid\n解析：第四段后半部分指出聚氨酯可制成“rigid foams”用于保温，答案是 rigid。",
+          "text": "题目：Polyurethane — usually manufactured as a ______\n题目翻译：聚氨酯——通常被制成一种______\n答案：foam\n解析：原文写“Polyurethane ... was commonly produced as a foam”，因此填 foam。",
           "questionId": "q7"
         }
       ],
@@ -85,7 +85,7 @@
         "start": 1,
         "end": 7
       },
-      "text": "题目1答案photographic film：赛璐珞关键应用是摄影胶片。\n题目2答案Bakelite：1907年贝克兰发明并命名。\n题目3答案switches：酚醛树脂典型用途之一。\n题目4答案British：聚乙烯由英国化学家发现。\n题目5答案fireproof：硬质PVC的核心特性。\n题目6答案clear and glass-like：聚苯乙烯外观特征。\n题目7答案rigid：聚氨酯可形成rigid foams。"
+      "text": "题目1答案photographic film：赛璐珞关键应用是摄影胶片。\n题目2答案Bakelite：1907年贝克兰发明并命名。\n题目3答案electrical switches：酚醛树脂常见用途之一。\n题目4答案Britain：聚乙烯由英国化学家发现。\n题目5答案fireproof：硬质PVC的核心特性。\n题目6答案glass：题干是 resembles，对应 like glass。\n题目7答案foam：聚氨酯常被制成泡沫材料。"
     },
     {
       "sectionTitle": "2. 判断正误（Questions 8–13）",
@@ -93,12 +93,12 @@
       "items": [
         {
           "questionNumber": 8,
-          "text": "题目：The chemical structure of plastic is very different from that of rubber.\n题目翻译：塑料的化学结构与橡胶截然不同。\n答案：FALSE\n解析：第一段把橡胶和塑料都放在聚合物框架下，强调“same bonding principle—polymerization”支撑塑料制造，不是“截然不同”。",
+          "text": "题目：The chemical structure of rubber is very different from that of plastics.\n题目翻译：橡胶的化学结构与塑料截然不同。\n答案：FALSE\n解析：第一段明确指出橡胶与塑料都遵循同一聚合原理（polymerization），并非截然不同。",
           "questionId": "q8"
         },
         {
           "questionNumber": 9,
-          "text": "题目：John Wesley was a famous chemist.\n题目翻译：约翰·韦斯利是一位著名化学家。\n答案：NOT GIVEN\n解析：文中仅说明 John Wesley Hyatt 赢得竞赛并开发赛璐珞，没有评价其“著名化学家”身份。",
+          "text": "题目：John Wesley Hyatt was an industrial chemist.\n题目翻译：John Wesley Hyatt 是一位工业化学家。\n答案：NOT GIVEN\n解析：文中只说明 Hyatt 发明赛璐珞并获奖，没有给出其职业身份是否为“industrial chemist”。",
           "questionId": "q9"
         },
         {
@@ -108,7 +108,7 @@
         },
         {
           "questionNumber": 11,
-          "text": "题目：The mix of different varieties of plastic can make recycling more difficult.\n题目翻译：不同塑料类型混用会使回收更困难。\n答案：TRUE\n解析：第六段明确说同一制品常混有不同塑料、处理方法不同，这正是回收难点。",
+          "text": "题目：If an object is made of several plastics, these prove hard to break down and reuse.\n题目翻译：若一个物品由多种塑料组成，则这些塑料很难分解并再利用。\n答案：TRUE\n解析：第六段指出不同塑料常混在同一物品中且需要不同处理，这正是回收利用困难的原因。",
           "questionId": "q11"
         },
         {
@@ -118,7 +118,7 @@
         },
         {
           "questionNumber": 13,
-          "text": "题目：Some plastic containers have to be preserved in special conditions.\n题目翻译：某些塑料容器需要在特殊条件下保存。\n答案：TRUE\n解析：文末提到含光降解组分的瓶子必须避光储存，否则会在使用前提前分解。",
+          "text": "题目：Containers which are designed to decompose need particular storage conditions.\n题目翻译：被设计成可分解的容器需要特定储存条件。\n答案：TRUE\n解析：文末提到含光降解组分的瓶子需要避光保存，否则会在使用前提前分解。",
           "questionId": "q13"
         }
       ],
@@ -126,7 +126,7 @@
         "start": 8,
         "end": 13
       },
-      "text": "题目8答案FALSE：橡胶与塑料同属聚合原理体系。\n题目9答案NOT GIVEN：文中未给出“著名化学家”评价。\n题目10答案FALSE：热塑性与热固性对热响应相反。\n题目11答案TRUE：混合材质确实提高回收难度。\n题目12答案FALSE：加淀粉是为加速降解。\n题目13答案TRUE：部分容器需要避光等特殊存放条件。"
+      "text": "题目8答案FALSE：橡胶与塑料同属聚合原理体系。\n题目9答案NOT GIVEN：文中未给出 Hyatt 的职业身份判断。\n题目10答案FALSE：热塑性与热固性对热响应相反。\n题目11答案TRUE：多种塑料混用会增加回收与再利用难度。\n题目12答案FALSE：加淀粉是为了促进降解。\n题目13答案TRUE：可分解容器需要特定储存条件（如避光）。"
     }
   ]
 });
