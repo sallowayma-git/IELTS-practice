@@ -445,6 +445,10 @@
         .hl {
             background-color: #72361c;
             color: #fff;
+            /* Keep highlighted English words intact even if parent containers use aggressive wrapping rules. */
+            word-break: normal;
+            overflow-wrap: normal;
+            white-space: normal;
         }
 
         /* Note highlight */
