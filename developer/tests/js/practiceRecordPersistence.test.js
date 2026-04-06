@@ -233,11 +233,117 @@ async function testDeleteRecordForcesUiRefreshWhenPracticeCoreAlreadySyncedState
     );
 }
 
+function testScoreStorageDurationPrefersTimelineWhenConflict() {
+    const quietConsole = {
+        log() {},
+        warn() {},
+        error() {},
+        info() {},
+        debug() {}
+    };
+    const sandbox = {
+        console: quietConsole,
+        window: {
+            console: quietConsole
+        },
+        Date,
+        Math,
+        JSON,
+        Map,
+        Set,
+        Promise
+    };
+    sandbox.globalThis = sandbox.window;
+
+    loadScript('js/core/scoreStorage.js', vm.createContext(sandbox));
+    const ScoreStorage = sandbox.window.ScoreStorage;
+    assert.strictEqual(typeof ScoreStorage, 'function', 'ScoreStorage 应成功加载');
+
+    const storageLike = Object.create(ScoreStorage.prototype);
+    storageLike.convertComparisonToMap = () => ({});
+    storageLike.deriveCorrectMapFromDetails = () => ({});
+    storageLike.convertComparisonToDetails = () => null;
+    storageLike.buildAnswerDetailsFromMaps = () => null;
+
+    const normalized = storageLike.normalizeRecordFields({
+        id: 'duration-conflict',
+        examId: 'reading-duration',
+        duration: 7200,
+        startTime: '2026-03-09T09:20:00.000Z',
+        endTime: '2026-03-09T10:39:00.000Z',
+        metadata: {},
+        realData: {}
+    });
+
+    assert.strictEqual(
+        normalized.duration,
+        4740,
+        'duration 与 start/end 冲突时，应优先使用 start/end 计算的可信时长'
+    );
+}
+
+function testScoreStorageDurationRejectsRawFallbackWithoutTimeline() {
+    const quietConsole = {
+        log() {},
+        warn() {},
+        error() {},
+        info() {},
+        debug() {}
+    };
+    const sandbox = {
+        console: quietConsole,
+        window: {
+            console: quietConsole
+        },
+        Date,
+        Math,
+        JSON,
+        Map,
+        Set,
+        Promise
+    };
+    sandbox.globalThis = sandbox.window;
+
+    loadScript('js/core/scoreStorage.js', vm.createContext(sandbox));
+    const ScoreStorage = sandbox.window.ScoreStorage;
+    const storageLike = Object.create(ScoreStorage.prototype);
+    storageLike.convertComparisonToMap = () => ({});
+    storageLike.deriveCorrectMapFromDetails = () => ({});
+    storageLike.convertComparisonToDetails = () => null;
+    storageLike.buildAnswerDetailsFromMaps = () => null;
+
+    const normalized = storageLike.normalizeRecordFields({
+        id: 'duration-no-timeline',
+        examId: 'reading-duration',
+        duration: 7200,
+        metadata: {},
+        realData: {}
+    });
+
+    assert.strictEqual(
+        normalized.duration,
+        0,
+        '缺少完整 start/end 时间线时，不应再相信裸 duration'
+    );
+    assert.strictEqual(
+        normalized.startTime,
+        null,
+        '缺少可信开始时间时，不应伪造 startTime'
+    );
+    assert.strictEqual(
+        normalized.endTime,
+        null,
+        '缺少可信结束时间时，不应伪造 endTime'
+    );
+}
+
 async function main() {
     try {
         await testDeleteRecordPersistsAndCleansLegacyKeys();
         await testClearPracticeDataPersistsAndClearsLegacyKeys();
         await testDeleteRecordForcesUiRefreshWhenPracticeCoreAlreadySyncedState();
+        testScoreStorageDurationPrefersTimelineWhenConflict();
+        testScoreStorageDurationRejectsRawFallbackWithoutTimeline();
         console.log(JSON.stringify({
             status: 'pass',
             detail: 'deleteRecord / clearPracticeData 已覆盖 canonical store、legacy shadow key 与删除后的强制 UI 刷新链路'
