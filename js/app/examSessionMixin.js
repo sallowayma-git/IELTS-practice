@@ -1871,6 +1871,51 @@
             return date.toLocaleString('zh-CN');
         },
 
+        _parseTimeMs(value) {
+            if (value == null) {
+                return null;
+            }
+            if (typeof value === 'number' && Number.isFinite(value)) {
+                return value;
+            }
+            const parsed = new Date(value).getTime();
+            return Number.isFinite(parsed) ? parsed : null;
+        },
+
+        _resolveTrustedDurationSeconds(data = {}) {
+            const startMs = this._parseTimeMs(data.startTime);
+            const endMs = this._parseTimeMs(data.endTime);
+            if (
+                startMs != null
+                && endMs != null
+                && endMs >= startMs
+            ) {
+                return Math.floor((endMs - startMs) / 1000);
+            }
+            return 0;
+        },
+
+        _resolveTrustedTimeRange(data = {}) {
+            const startMs = this._parseTimeMs(data.startTime);
+            const endMs = this._parseTimeMs(data.endTime);
+            if (
+                startMs != null
+                && endMs != null
+                && endMs >= startMs
+            ) {
+                return {
+                    startTime: new Date(startMs).toISOString(),
+                    endTime: new Date(endMs).toISOString(),
+                    duration: Math.floor((endMs - startMs) / 1000)
+                };
+            }
+            return {
+                startTime: null,
+                endTime: null,
+                duration: 0
+            };
+        },
+
         /**
          * 检查是否为移动设备
          */
@@ -1884,6 +1929,7 @@
         createSimplePracticeRecord(exam, realData) {
             const now = new Date();
             const recordId = `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const resolvedTime = this._resolveTrustedTimeRange(realData || {});
 
             // 提取分数信息
             const scoreInfo = realData.scoreInfo || {};
@@ -1903,9 +1949,8 @@
                 isRealData: true,
 
                 // 基本信息
-                startTime: realData.startTime ? new Date(realData.startTime).toISOString() :
-                    new Date(Date.now() - realData.duration * 1000).toISOString(),
-                endTime: realData.endTime ? new Date(realData.endTime).toISOString() : now.toISOString(),
+                startTime: resolvedTime.startTime,
+                endTime: resolvedTime.endTime,
                 date: now.toISOString(),
 
                 // 成绩数据
@@ -1913,7 +1958,7 @@
                 totalQuestions: totalQuestions,
                 accuracy: accuracy,
                 percentage: Math.round(accuracy * 100),
-                duration: realData.duration, // 秒
+                duration: resolvedTime.duration, // 秒
 
                 // 详细数据
                 realData: {
@@ -1921,6 +1966,7 @@
                     answers: realData.answers || {},
                     interactions: realData.interactions || [],
                     scoreInfo: scoreInfo,
+                    duration: resolvedTime.duration,
                     pageType: realData.pageType,
                     url: realData.url,
                     source: scoreInfo.source || 'fallback_recorder'
@@ -3111,6 +3157,7 @@
                 }
 
                 const exam = await findExamDefinition(examId);
+                const resolvedTime = this._resolveTrustedTimeRange(realData || {});
 
                 if (!exam) {
                     console.error('[DataCollection] 无法找到题目信息:', examId);
@@ -3131,7 +3178,7 @@
                         totalQuestions: realData.scoreInfo?.total || 0,
                         accuracy: realData.scoreInfo?.accuracy || 0,
                         percentage: realData.scoreInfo?.percentage || 0,
-                        duration: realData.duration,
+                        duration: resolvedTime.duration,
                         answers: normalizedAnswers,
                         correctAnswers: normalizedCorrectMap,
                         answerHistory: realData.answerHistory,
@@ -3161,9 +3208,10 @@
                     practiceRecord.totalQuestions = total;
                     practiceRecord.accuracy = acc;
                     practiceRecord.percentage = pct;
+                    practiceRecord.duration = resolvedTime.duration;
                     practiceRecord.answers = normalizedAnswers;
-                    practiceRecord.startTime = new Date((realData.startTime ?? (Date.now() - (realData.duration || 0) * 1000))).toISOString();
-                    practiceRecord.endTime = new Date((realData.endTime ?? Date.now())).toISOString();
+                    practiceRecord.startTime = resolvedTime.startTime;
+                    practiceRecord.endTime = resolvedTime.endTime;
 
                     // 填充详情，便于在练习记录详情中显示正确答案
                     const comp = realData && realData.answerComparison ? realData.answerComparison : {};
@@ -3227,9 +3275,10 @@
             if (!exam) return;
 
             const scoreInfo = realData.scoreInfo;
+            const resolvedDuration = this._resolveTrustedDurationSeconds(realData || {});
             if (scoreInfo) {
                 const accuracy = scoreInfo.percentage || Math.round((scoreInfo.accuracy || 0) * 100);
-                const duration = Math.round(realData.duration / 60); // 转换为分钟
+                const duration = Math.round(resolvedDuration / 60); // 转换为分钟
 
                 let message = `练习完成！\n${exam.title}\n`;
 
@@ -3248,7 +3297,7 @@
                 window.showMessage(message, 'success');
             } else {
                 // 没有分数信息的情况
-                const duration = Math.round(realData.duration / 60);
+                const duration = Math.round(resolvedDuration / 60);
                 window.showMessage(`练习完成！\n${exam.title}\n用时: ${duration} 分钟`, 'success');
             }
         },

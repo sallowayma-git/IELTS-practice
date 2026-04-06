@@ -379,6 +379,34 @@ function testSuiteComparisonScoreAndPayloadContracts() {
     harness.enhancer.sendSuiteCompleteMessage('set1', comparison, null, []);
     assert.strictEqual(messages[1].payload.scoreInfo.percentage, 50, 'suite payload 缺省 scoreInfo 时应走 comparison 计算且保持百分比');
 }
+
+function testCorrectAnswerExtractorKeepsSingleLetterChoices() {
+    const harness = createHarness();
+    const extractor = new harness.windowStub.CorrectAnswerExtractor();
+    const normalized = extractor.normalizeAnswers({
+        1: 'F',
+        2: 'T',
+        3: 'Y',
+        4: 'N',
+        5: 'NO',
+        6: 'yes',
+        7: 'A'
+    });
+
+    assert.deepStrictEqual(
+        JSON.parse(JSON.stringify(normalized)),
+        {
+            q1: 'F',
+            q2: 'T',
+            q3: 'Y',
+            q4: 'N',
+            q5: 'FALSE',
+            q6: 'TRUE',
+            q7: 'A'
+        },
+        'CorrectAnswerExtractor 不应把单字母 F/T/Y/N 误映射成布尔值'
+    );
+}
 function main() {
     try {
         testCollectAnswersNowDelegatesToEnhancer();
@@ -388,6 +416,7 @@ function main() {
         testApplyReplayRecordSchedulesReplayFallbackOnce();
         testResultsMonitoringAndScoreContracts();
         testSuiteComparisonScoreAndPayloadContracts();
+        testCorrectAnswerExtractorKeepsSingleLetterChoices();
         console.log(JSON.stringify({
             status: 'pass',
             detail: 'practice-page-enhancer 已覆盖回放 marked questions、sendMessage 只读守卫、回放 fallback 单次调度、results monitoring、extractScore 与 suite submit payload 合同'
