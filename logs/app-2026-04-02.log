@@ -1,0 +1,15 @@
+[2026-04-02 16:29:11] [INFO] Database connected: /var/folders/q4/mvpk54dd52sglj4d1gct4g0r0000gn/T/ielts-topic-seed-FMsQ5V/test.db
+[2026-04-02 16:29:11] [INFO] Starting database migration...
+[2026-04-02 16:29:11] [INFO] Applied schema version: 1.0.0
+[2026-04-02 16:29:11] [INFO] Applied migration: 20260209_phase06_schema
+[2026-04-02 16:29:11] [INFO] Database migration completed successfully
+[2026-04-02 16:29:11] [INFO] Batch import completed: 232 success, 0 failed
+[2026-04-02 16:29:11] [INFO] Initialized default topics: 232 success, 0 failed
+[2026-04-02 16:29:11] [INFO] Database connection closed
+[2026-04-02 16:29:25] [INFO] Database connected: /var/folders/q4/mvpk54dd52sglj4d1gct4g0r0000gn/T/ielts-topic-seed-skip-kOYlUt/test.db
+[2026-04-02 16:29:25] [INFO] Starting database migration...
+[2026-04-02 16:29:25] [INFO] Applied schema version: 1.0.0
+[2026-04-02 16:29:25] [INFO] Applied migration: 20260209_phase06_schema
+[2026-04-02 16:29:25] [INFO] Database migration completed successfully
+[2026-04-02 16:29:25] [INFO] Topics already exist, skipping default topics initialization
+[2026-04-02 16:29:25] [INFO] Database connection closed
