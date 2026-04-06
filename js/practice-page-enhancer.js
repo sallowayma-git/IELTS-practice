@@ -832,9 +832,9 @@
                     if (typeof value === 'string') {
                         normalizedValue = value.trim();
 
-                        if (/^(true|t|yes|y|正确|是)$/i.test(normalizedValue)) {
+                        if (/^(true|yes|正确|是)$/i.test(normalizedValue)) {
                             normalizedValue = 'TRUE';
-                        } else if (/^(false|f|no|n|错误|否)$/i.test(normalizedValue)) {
+                        } else if (/^(false|no|错误|否)$/i.test(normalizedValue)) {
                             normalizedValue = 'FALSE';
                         }
 
