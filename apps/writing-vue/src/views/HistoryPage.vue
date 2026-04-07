@@ -1,21 +1,25 @@
 <template>
   <div class="history-page">
-    <div class="page-header">
-      <h1>📋 历史记录</h1>
+    <div class="page-header page-header--workspace">
+      <div class="page-header__copy">
+        <span class="panel-label">History Workspace</span>
+        <h1>历史记录</h1>
+        <p>筛选、对比和复盘每一篇作文，不再在碎卡片里找旧结果。</p>
+      </div>
       <div class="header-actions">
         <button 
           class="btn btn-secondary" 
           @click="exportCSV"
           :disabled="loading || total === 0"
         >
-          📤 导出CSV ({{ total }}条)
+          导出 CSV ({{ total }} 条)
         </button>
         <button 
           class="btn btn-danger" 
           @click="confirmDeleteAll"
           :disabled="loading || total === 0"
         >
-          🗑️ 清空所有
+          清空所有
         </button>
       </div>
     </div>
@@ -85,7 +89,7 @@
         <input 
           type="text"
           v-model="filters.search"
-          placeholder="🔍 搜索题目标题或作文内容"
+          placeholder="搜索题目标题或作文内容"
           class="search-input"
           title="按关键词搜索题目标题和作文正文"
         />
@@ -95,7 +99,7 @@
     <!-- 统计分析区域 -->
     <div v-if="total > 0" class="statistics-section card">
       <div class="section-header">
-        <h2>📊 历史统计与对比</h2>
+        <h2>历史统计与对比</h2>
         <div class="range-selector">
           <label>对比范围：</label>
           <select v-model="statisticsRange">
@@ -1544,6 +1548,166 @@ onBeforeUnmount(() => {
   .detail-left,
   .detail-right {
     min-height: auto;
+  }
+}
+
+.history-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: rise-in 0.45s var(--ease-smooth);
+}
+
+.page-header--workspace {
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.page-header__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.page-header__copy h1 {
+  font-family: var(--font-family-display);
+  font-size: clamp(38px, 5vw, 62px);
+  line-height: 0.94;
+  letter-spacing: -0.05em;
+}
+
+.page-header__copy p {
+  max-width: 760px;
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.history-page .filter-panel,
+.history-page .statistics-section,
+.history-page .batch-actions,
+.history-page .error-state,
+.history-page .empty-state {
+  padding: 20px 22px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-0);
+  border: 1px solid var(--line-1);
+  box-shadow: none;
+}
+
+.history-page .filter-row,
+.history-page .search-row,
+.history-page .section-header,
+.history-page .header-actions,
+.history-page .range-selector,
+.history-page .date-range,
+.history-page .score-range {
+  gap: 12px;
+}
+
+.history-page .section-header h2 {
+  font-family: var(--font-family-display);
+  font-size: 30px;
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+}
+
+.history-page .batch-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.history-page .essay-list {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line-1);
+}
+
+.history-page .essay-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 18px 0;
+  margin: 0;
+  border: none;
+  border-bottom: 1px solid var(--line-1);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.history-page .essay-content {
+  min-width: 0;
+}
+
+.history-page .essay-header,
+.history-page .essay-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.history-page .essay-title {
+  margin: 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.history-page .essay-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-page .task-badge,
+.history-page .topic-source,
+.history-page .score-name {
+  border-radius: 999px;
+}
+
+.history-page .pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.history-page .detail-modal {
+  width: min(1180px, calc(100vw - 32px));
+  padding: 22px 24px;
+  border-radius: var(--radius-xl);
+}
+
+.history-page .detail-content,
+.history-page .detail-grid,
+.history-page .detail-left,
+.history-page .detail-right {
+  gap: 18px;
+}
+
+.history-page .topic-preview-card,
+.history-page .feedback-panel,
+.history-page .essay-text,
+.history-page .detail-analysis-card,
+.history-page .total-score,
+.history-page .score-item,
+.history-page .info-item {
+  border-radius: var(--radius-md);
+  background: rgba(255, 251, 246, 0.62);
+  border: 1px solid var(--line-1);
+  box-shadow: none;
+}
+
+@media (max-width: 960px) {
+  .history-page .batch-actions,
+  .history-page .pagination,
+  .history-page .essay-item {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 }
 </style>

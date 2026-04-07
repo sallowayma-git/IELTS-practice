@@ -1,21 +1,17 @@
 <template>
   <div class="topic-manage-page">
-    <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-content">
-        <h2 class="page-title">
-          <span class="icon">📚</span> 
-          题目管理
-          <span class="count-badge" v-if="total > 0">{{ total }}</span>
-        </h2>
-        <p class="page-subtitle">管理所有的写作题目，支持 Task 1 图表与 Task 2 话题</p>
+        <span class="panel-label">Topic Workspace</span>
+        <h2 class="page-title">题库管理 <span class="count-badge" v-if="total > 0">{{ total }}</span></h2>
+        <p class="page-subtitle">维护 Task 1 图表题与 Task 2 大作文题目，供写作页直接调用。</p>
       </div>
       <div class="header-actions">
         <button class="btn btn-secondary glass-btn" @click="showImportDialog = true">
-          <span class="icon">📥</span> 批量导入
+          批量导入
         </button>
         <button class="btn btn-primary" @click="openEditor()">
-          <span class="icon">➕</span> 添加题目
+          添加题目
         </button>
       </div>
     </div>
@@ -24,7 +20,6 @@
     <div class="filter-toolbar card">
       <div class="filter-group">
         <div class="filter-item">
-          <span class="filter-icon">🎯</span>
           <select v-model="filters.type" class="glass-select">
             <option value="">全部类型</option>
             <option value="task1">Task 1 (小作文)</option>
@@ -33,7 +28,6 @@
         </div>
 
         <div class="filter-item">
-          <span class="filter-icon">🏷️</span>
           <select v-model="filters.category" class="glass-select">
             <option value="">全部分类</option>
             <optgroup v-if="!filters.type || filters.type === 'task1'" label="Task 1">
@@ -60,7 +54,6 @@
         </div>
 
         <div class="filter-item">
-          <span class="filter-icon">⭐</span>
           <select v-model.number="filters.difficulty" class="glass-select">
             <option :value="0">全部难度</option>
             <option :value="1">⭐ 入门</option>
@@ -1222,5 +1215,242 @@ onBeforeUnmount(() => {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.topic-manage-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: rise-in 0.45s var(--ease-smooth);
+}
+
+.topic-manage-page .page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.topic-manage-page .header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.topic-manage-page .page-title {
+  font-family: var(--font-family-display);
+  font-size: clamp(38px, 5vw, 62px);
+  line-height: 0.94;
+  letter-spacing: -0.05em;
+  color: var(--text-primary);
+}
+
+.topic-manage-page .page-subtitle {
+  max-width: 760px;
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.topic-manage-page .count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 10px;
+  min-width: 38px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(90, 73, 60, 0.08);
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.topic-manage-page .filter-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 18px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-0);
+  border: 1px solid var(--line-1);
+  box-shadow: none;
+}
+
+.topic-manage-page .filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.topic-manage-page .filter-item {
+  min-width: 180px;
+}
+
+.topic-manage-page .glass-select {
+  width: 100%;
+}
+
+.topic-manage-page .topic-grid {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line-1);
+}
+
+.topic-manage-page .topic-card {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr) minmax(140px, auto);
+  grid-template-areas:
+    "header body footer"
+    "image body footer";
+  gap: 14px 18px;
+  align-items: start;
+  padding: 18px 0;
+  margin: 0;
+  border: none;
+  border-bottom: 1px solid var(--line-1);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.topic-manage-page .card-header {
+  grid-area: header;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.topic-manage-page .badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.topic-manage-page .badge,
+.topic-manage-page .category-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(90, 73, 60, 0.06);
+  color: var(--text-secondary);
+}
+
+.topic-manage-page .badge.task1 {
+  background: rgba(91, 114, 136, 0.12);
+  color: var(--info-color);
+}
+
+.topic-manage-page .badge.task2 {
+  background: rgba(139, 77, 49, 0.12);
+  color: var(--accent-1);
+}
+
+.topic-manage-page .difficulty {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.topic-manage-page .topic-image {
+  grid-area: image;
+  width: 120px;
+  height: 90px;
+}
+
+.topic-manage-page .topic-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+.topic-manage-page .topic-body {
+  grid-area: body;
+  align-self: center;
+}
+
+.topic-manage-page .topic-title {
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--text-primary);
+}
+
+.topic-manage-page .card-footer {
+  grid-area: footer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 100%;
+}
+
+.topic-manage-page .usage-info {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.topic-manage-page .actions {
+  display: flex;
+  gap: 6px;
+}
+
+.topic-manage-page .action-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--line-1);
+  background: rgba(255, 251, 246, 0.72);
+  cursor: pointer;
+}
+
+.topic-manage-page .loading-state,
+.topic-manage-page .empty-state {
+  padding: 40px 20px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-0);
+  border: 1px solid var(--line-1);
+  color: var(--text-secondary);
+}
+
+.topic-manage-page .pagination-glass {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.topic-manage-page .page-btn {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--line-1);
+  border-radius: 999px;
+  background: rgba(255, 251, 246, 0.74);
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .topic-manage-page .page-header,
+  .topic-manage-page .filter-toolbar,
+  .topic-manage-page .pagination-glass,
+  .topic-manage-page .topic-card {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .topic-manage-page .topic-card {
+    grid-template-areas:
+      "header"
+      "image"
+      "body"
+      "footer";
+  }
+
+  .topic-manage-page .card-footer {
+    align-items: flex-start;
+  }
 }
 </style>

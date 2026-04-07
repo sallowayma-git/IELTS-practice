@@ -1,114 +1,134 @@
 <template>
   <div class="evaluating-page">
-    <div class="evaluating-container card">
-      <div class="evaluating-header">
-        <div class="logo-animated">🤖</div>
-        <h2>AI 正在评分...</h2>
-        <p class="status-message">{{ statusMessage }}</p>
+    <header class="evaluating-hero">
+      <div class="evaluating-hero__copy">
+        <p class="panel-label">Evaluation session</p>
+        <h1>评分链路正在推进</h1>
+        <p>{{ statusMessage }}</p>
       </div>
 
-      <!-- 进度条 -->
-      <div class="progress-section">
-        <div class="progress-bar">
-          <div 
-            class="progress-bar-fill"
-            :style="{ width: `${progress}%` }"
-          ></div>
+      <div class="evaluating-hero__badge surface-muted">
+        <span class="badge-label">当前完成度</span>
+        <strong>{{ progress }}%</strong>
+      </div>
+    </header>
+
+    <div class="evaluating-layout">
+      <section class="focus-panel surface">
+        <div class="focus-head">
+          <div>
+            <p class="panel-label">Pipeline</p>
+            <h2>{{ currentStageLabel }}</h2>
+          </div>
+          <div class="focus-meta">
+            <span class="stage-summary">{{ stageMessage }}</span>
+          </div>
         </div>
-        <div class="progress-text">{{ progress }}%</div>
-      </div>
 
-      <div class="stage-section">
-        <div class="stage-title">当前阶段：{{ currentStageLabel }}</div>
+        <div class="progress-rail">
+          <div class="progress-bar">
+            <div class="progress-bar-fill" :style="{ width: `${progress}%` }"></div>
+          </div>
+          <span class="progress-text">{{ progress }}%</span>
+        </div>
+
         <div class="stage-track">
           <span :class="['stage-chip', getStageClass('preparing')]">准备</span>
           <span :class="['stage-chip', getStageClass('scoring')]">评分</span>
           <span :class="['stage-chip', getStageClass('reviewing')]">详解</span>
           <span :class="['stage-chip', getStageClass('completed')]">完成</span>
         </div>
+
         <p v-if="scoreData && !isComplete" class="stage-hint">
-          分数已生成，正在输出段落与句级详解...
+          分数已出来，系统正在继续生成段落详解和句级问题定位。
         </p>
-      </div>
 
-      <div class="live-log-section card-subsection">
-        <div class="live-log-header">
-          <h3>实时进度</h3>
-          <span class="live-log-hint">仅显示最近 3 条</span>
-        </div>
-        <div class="live-log-list">
-          <div v-for="item in recentLogs" :key="item.id" class="live-log-item">
-            <span class="live-log-time">{{ item.time }}</span>
-            <span class="live-log-message">{{ item.message }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 流式预览 -->
-      <div v-if="scoreData" class="preview-section">
-        <h3>评分预览</h3>
-        <div class="score-preview">
-          <div class="score-item">
-            <span class="score-label">总分</span>
-            <span class="score-value">{{ scoreData.total_score ?? '-' }}</span>
+        <div v-if="scoreData" class="score-preview">
+          <div class="score-summary">
+            <span class="score-summary__label">总分</span>
+            <strong class="score-summary__value">{{ scoreData.total_score ?? '-' }}</strong>
           </div>
           <div class="score-grid">
-            <div class="score-item small">
-              <span class="score-label">任务完成</span>
-              <span class="score-value">{{ scoreData.task_achievement ?? '-' }}</span>
+            <div class="score-card">
+              <span>任务完成</span>
+              <strong>{{ scoreData.task_achievement ?? '-' }}</strong>
             </div>
-            <div class="score-item small">
-              <span class="score-label">连贯衔接</span>
-              <span class="score-value">{{ scoreData.coherence_cohesion ?? '-' }}</span>
+            <div class="score-card">
+              <span>连贯衔接</span>
+              <strong>{{ scoreData.coherence_cohesion ?? '-' }}</strong>
             </div>
-            <div class="score-item small">
-              <span class="score-label">词汇资源</span>
-              <span class="score-value">{{ scoreData.lexical_resource ?? '-' }}</span>
+            <div class="score-card">
+              <span>词汇资源</span>
+              <strong>{{ scoreData.lexical_resource ?? '-' }}</strong>
             </div>
-            <div class="score-item small">
-              <span class="score-label">语法范围</span>
-              <span class="score-value">{{ scoreData.grammatical_range ?? '-' }}</span>
+            <div class="score-card">
+              <span>语法范围</span>
+              <strong>{{ scoreData.grammatical_range ?? '-' }}</strong>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <!-- 句子预览 -->
-      <div v-if="sentences.length > 0" class="sentences-preview">
-        <h4>已分析 {{ sentences.length }} 个句子</h4>
-      </div>
+      <aside class="status-rail">
+        <section class="rail-card surface">
+          <div class="rail-head">
+            <h3>实时日志</h3>
+            <span>最近 3 条</span>
+          </div>
 
-      <div v-if="analysisSummary.length > 0" class="sentences-preview">
-        <h4>评分分析已生成</h4>
-        <p class="provider-path">{{ analysisSummary.join(' · ') }}</p>
-      </div>
+          <div v-if="recentLogs.length > 0" class="log-list">
+            <div v-for="item in recentLogs" :key="item.id" class="log-item">
+              <span class="log-time">{{ item.time }}</span>
+              <span class="log-message">{{ item.message }}</span>
+            </div>
+          </div>
+          <p v-else class="rail-empty">链路已启动，等待后台返回第一条进度消息。</p>
+        </section>
 
-      <div v-if="providerPath.length > 0" class="sentences-preview">
-        <h4>供应商路径</h4>
-        <p class="provider-path">
-          {{ providerPath.map(item => `${item.provider}/${item.model}(${item.status})`).join(' -> ') }}
-        </p>
-      </div>
+        <section class="rail-card surface">
+          <div class="rail-head">
+            <h3>链路状态</h3>
+            <span>结构化输出</span>
+          </div>
+          <div class="rail-stack">
+            <p v-if="sentences.length > 0" class="status-pill">
+              已分析 {{ sentences.length }} 个句子
+            </p>
+            <p v-if="analysisSummary.length > 0" class="status-pill">
+              {{ analysisSummary.join(' · ') }}
+            </p>
+            <p v-if="providerPath.length > 0" class="provider-path">
+              {{ providerPath.map(item => `${item.provider}/${item.model}(${item.status})`).join(' -> ') }}
+            </p>
+          </div>
+        </section>
 
-      <!-- 操作按钮 -->
-      <div class="actions">
-        <button class="btn btn-danger" @click="handleCancel">
-          取消评分
-        </button>
-      </div>
+        <section v-if="error" class="rail-card rail-card-error surface">
+          <div class="rail-head">
+            <h3>链路异常</h3>
+            <span>{{ error.code || 'error' }}</span>
+          </div>
+          <p class="error-copy">{{ error.message }}</p>
+          <div class="error-actions">
+            <button class="btn btn-primary" @click="handleRetry">
+              重试
+            </button>
+            <button class="btn btn-secondary" @click="handleBack">
+              返回编辑
+            </button>
+          </div>
+        </section>
 
-      <!-- 错误显示 -->
-      <div v-if="error" class="error-message">
-        <p>⚠️ {{ error.message }}</p>
-        <div class="error-actions">
-          <button class="btn btn-primary" @click="handleRetry">
-            重试
+        <section class="rail-card surface-muted">
+          <div class="rail-head">
+            <h3>会话控制</h3>
+            <span>Session</span>
+          </div>
+          <button class="btn btn-danger" @click="handleCancel">
+            取消评分
           </button>
-          <button class="btn btn-secondary" @click="handleBack">
-            返回编辑
-          </button>
-        </div>
-      </div>
+        </section>
+      </aside>
     </div>
   </div>
 </template>
@@ -154,7 +174,6 @@ let cachePersistRetryAt = 0
 const seenEventSequences = new Set()
 let lastLogSignature = ''
 
-// 存储完整结果用于传递到结果页
 const fullResult = ref({
   contract_version: EVALUATION_CONTRACT_VERSION,
   sessionId: props.sessionId,
@@ -183,13 +202,11 @@ const fullResult = ref({
 })
 
 onMounted(() => {
-  // 订阅评测事件
   eventListenerId = evaluate.onEvent(handleEvent)
   void hydrateSessionState()
 })
 
 onUnmounted(() => {
-  // 移除事件监听
   evaluate.removeEventListener(eventListenerId)
   eventListenerId = null
 })
@@ -214,7 +231,6 @@ const currentStageLabel = computed(() => stageLabel(currentStage.value, stageMes
 
 function handleEvent(event) {
   if (!event || typeof event !== 'object') return
-  // 只处理当前会话的事件
   if (event.sessionId !== props.sessionId) return
   if (typeof event.sequence === 'number') {
     if (seenEventSequences.has(event.sequence)) {
@@ -319,14 +335,12 @@ function handleEvent(event) {
         fullResult.value.feedback = event.data.overall_feedback
         fullResult.value.overall_feedback = event.data.overall_feedback
       }
-      // 保留兜底缓存，优先使用 DB 记录
       persistCachedResult()
       void navigateToResult()
       break
 
     case 'error':
       appendLog('error', event.data?.message || getErrorMessage(event.data?.code), event)
-      // 【错误展示优先级】优先使用 message，回退到 code 映射
       error.value = {
         code: event.data.code,
         message: event.data.message || getErrorMessage(event.data.code)
@@ -362,7 +376,6 @@ async function handleCancel() {
 
 function handleRetry() {
   error.value = null
-  // 返回 Compose 页重新提交
   router.push({ name: 'Compose' })
 }
 
@@ -613,244 +626,271 @@ function persistCachedResult() {
 
 <style scoped>
 .evaluating-page {
-  max-width: 700px;
-  margin: 0 auto;
-  padding-top: 40px;
+  display: grid;
+  gap: 22px;
+  animation: rise-in 0.45s var(--ease-smooth);
 }
 
-.evaluating-container {
-  text-align: center;
-  padding: 40px;
+.evaluating-hero {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
 }
 
-.evaluating-header {
-  margin-bottom: 32px;
+.evaluating-hero__copy {
+  display: grid;
+  gap: 10px;
 }
 
-.logo-animated {
-  font-size: 64px;
-  animation: pulse 2s ease-in-out infinite;
+.evaluating-hero__copy h1 {
+  font-size: clamp(2.2rem, 4vw, 3.8rem);
+  max-width: 10ch;
 }
 
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.1); }
-}
-
-.evaluating-header h2 {
-  font-size: 28px;
-  color: var(--text-primary);
-  margin: 16px 0 8px;
-}
-
-.status-message {
+.evaluating-hero__copy p:last-child {
   color: var(--text-secondary);
-  font-size: 16px;
+  max-width: 60ch;
 }
 
-.progress-section {
-  margin-bottom: 32px;
+.evaluating-hero__badge {
+  min-width: 190px;
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+}
+
+.badge-label {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.evaluating-hero__badge strong {
+  font-size: 2.4rem;
+  line-height: 1;
+}
+
+.evaluating-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.75fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.focus-panel,
+.rail-card {
+  padding: 22px;
+}
+
+.focus-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.focus-head,
+.rail-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.focus-head h2,
+.rail-head h3 {
+  font-size: 1.6rem;
+}
+
+.focus-meta,
+.rail-head span,
+.stage-summary {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.progress-rail {
+  display: grid;
+  gap: 8px;
 }
 
 .progress-bar {
   height: 12px;
-  background: var(--bg-light);
-  border-radius: 6px;
   overflow: hidden;
-  margin-bottom: 8px;
+  border-radius: 999px;
+  background: rgba(143, 95, 63, 0.08);
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
-  transition: width 0.5s ease;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7b5234 0%, #c59a73 100%);
+  transition: width var(--duration-normal) var(--ease-standard);
 }
 
 .progress-text {
-  font-size: 14px;
   color: var(--text-muted);
-}
-
-.stage-section {
-  margin-bottom: 24px;
-  text-align: left;
-}
-
-.stage-title {
-  margin-bottom: 10px;
-  font-size: 14px;
-  color: var(--text-secondary);
+  font-size: 0.9rem;
 }
 
 .stage-track {
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 8px;
 }
 
 .stage-chip {
-  font-size: 12px;
-  line-height: 1;
-  padding: 6px 10px;
+  padding: 8px 12px;
   border-radius: 999px;
-  background: var(--bg-light);
+  background: rgba(143, 95, 63, 0.08);
   color: var(--text-muted);
+  font-size: 0.86rem;
 }
 
 .stage-chip.active {
-  background: rgba(102, 126, 234, 0.14);
-  color: var(--primary-color);
+  color: #fff8f0;
+  background: var(--primary-color);
 }
 
 .stage-chip.done {
-  background: rgba(103, 194, 58, 0.14);
   color: var(--success-color);
+  background: rgba(83, 120, 93, 0.14);
 }
 
 .stage-hint {
-  margin-top: 10px;
-  margin-bottom: 0;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.live-log-section {
-  text-align: left;
-  margin-bottom: 24px;
-  padding: 14px 16px;
-  background: var(--bg-light);
-  border-radius: var(--border-radius);
-}
-
-.live-log-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.live-log-header h3 {
-  margin: 0;
-  font-size: 16px;
-  color: var(--text-primary);
-}
-
-.live-log-hint {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.live-log-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.live-log-item {
-  display: grid;
-  grid-template-columns: 72px 1fr;
-  gap: 10px;
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.live-log-time {
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.live-log-message {
-  color: var(--text-primary);
-  word-break: break-word;
-}
-
-.preview-section {
-  text-align: left;
-  margin-bottom: 24px;
-}
-
-.preview-section h3 {
-  font-size: 18px;
-  margin-bottom: 16px;
-  color: var(--text-primary);
-}
-
-.score-preview {
-  background: var(--bg-light);
-  border-radius: var(--border-radius);
-  padding: 20px;
-}
-
-.score-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-}
-
-.score-item .score-label {
   color: var(--text-secondary);
 }
 
-.score-item .score-value {
-  font-size: 24px;
-  font-weight: 700;
+.score-preview {
+  display: grid;
+  gap: 16px;
+  padding-top: 6px;
+}
+
+.score-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 248, 239, 0.8);
+}
+
+.score-summary__label {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.score-summary__value {
+  font-size: 3rem;
+  line-height: 1;
   color: var(--primary-color);
 }
 
 .score-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-color);
 }
 
-.score-item.small .score-value {
-  font-size: 18px;
+.score-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: rgba(255, 252, 247, 0.82);
 }
 
-.sentences-preview {
-  background: var(--bg-light);
-  padding: 12px 16px;
-  border-radius: var(--border-radius);
-  margin-bottom: 24px;
+.score-card span {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
 }
 
-.sentences-preview h4 {
-  margin: 0;
-  font-size: 14px;
+.score-card strong {
+  font-size: 1.4rem;
+}
+
+.status-rail {
+  display: grid;
+  gap: 16px;
+}
+
+.log-list,
+.rail-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.log-item {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.log-item:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.log-time {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.log-message,
+.rail-empty,
+.provider-path {
   color: var(--text-secondary);
 }
 
 .provider-path {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
-  word-break: break-all;
+  word-break: break-word;
 }
 
-.actions {
-  margin-top: 24px;
+.status-pill {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(143, 95, 63, 0.08);
+  color: var(--text-primary);
 }
 
-.error-message {
-  background: rgba(245, 108, 108, 0.1);
-  padding: 20px;
-  border-radius: var(--border-radius);
-  margin-top: 24px;
-  text-align: left;
+.rail-card-error {
+  border-color: rgba(162, 72, 54, 0.18);
+  background: rgba(255, 246, 243, 0.9);
 }
 
-.error-message p {
+.error-copy {
   color: var(--danger-color);
-  margin-bottom: 16px;
 }
 
 .error-actions {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 1080px) {
+  .evaluating-hero,
+  .evaluating-layout {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 720px) {
+  .focus-panel,
+  .rail-card {
+    padding: 18px;
+  }
+
+  .score-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
