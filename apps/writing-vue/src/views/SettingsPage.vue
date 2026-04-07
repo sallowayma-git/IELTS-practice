@@ -21,6 +21,12 @@
       <div v-if="activeTab === 'api'" class="tab-content">
         <div class="section">
           <h3>API 配置列表</h3>
+          <p class="hint">
+            护栏规则：系统至少保留一个启用配置，默认配置必须是启用状态。
+          </p>
+          <div v-if="sectionMessages.api.message" :class="['inline-message', `inline-message-${sectionMessages.api.type}`]">
+            {{ sectionMessages.api.message }}
+          </div>
           <div v-if="apiLoading" class="hint">加载中...</div>
           <table v-else class="config-table">
             <thead>
@@ -28,7 +34,6 @@
                 <th>名称</th>
                 <th>供应商</th>
                 <th>模型</th>
-                <th>优先级</th>
                 <th>状态</th>
                 <th>操作</th>
               </tr>
@@ -38,18 +43,36 @@
                 <td>{{ item.config_name }} <span v-if="item.is_default">（默认）</span></td>
                 <td>{{ item.provider }}</td>
                 <td>{{ item.default_model }}</td>
-                <td>{{ item.priority || 100 }}</td>
                 <td>{{ item.is_enabled ? '启用' : '禁用' }}</td>
                 <td class="table-actions">
                   <button class="btn-text" @click="editConfig(item)">编辑</button>
                   <button class="btn-text" @click="testConfig(item.id)" :disabled="testingConfigId === item.id">
                     {{ testingConfigId === item.id ? '测试中' : '测试' }}
                   </button>
-                  <button class="btn-text" @click="setDefaultConfig(item.id)">设默认</button>
-                  <button class="btn-text" @click="toggleConfig(item.id)">
+                  <button
+                    class="btn-text"
+                    :disabled="item.is_default || !item.is_enabled"
+                    :title="item.is_default ? '当前已是默认配置' : (!item.is_enabled ? '禁用配置不能设为默认' : '')"
+                    @click="setDefaultConfig(item.id)"
+                  >
+                    设默认
+                  </button>
+                  <button
+                    class="btn-text"
+                    :disabled="isToggleBlocked(item)"
+                    :title="getToggleBlockedReason(item)"
+                    @click="toggleConfig(item.id)"
+                  >
                     {{ item.is_enabled ? '禁用' : '启用' }}
                   </button>
-                  <button class="btn-text danger" @click="removeConfig(item.id)">删除</button>
+                  <button
+                    class="btn-text danger"
+                    :disabled="isDeleteBlocked(item)"
+                    :title="getDeleteBlockedReason(item)"
+                    @click="requestRemoveConfig(item.id)"
+                  >
+                    删除
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -61,14 +84,12 @@
           <div class="form-grid">
             <input v-model="apiForm.config_name" placeholder="配置名称" />
             <select v-model="apiForm.provider">
-              <option value="openai">openai</option>
-              <option value="openrouter">openrouter</option>
-              <option value="deepseek">deepseek</option>
+              <option value="openai">OpenAI</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="deepseek">DeepSeek</option>
             </select>
             <input v-model="apiForm.base_url" placeholder="Base URL" />
             <input v-model="apiForm.default_model" placeholder="默认模型" />
-            <input v-model.number="apiForm.priority" type="number" min="1" placeholder="优先级" />
-            <input v-model.number="apiForm.max_retries" type="number" min="0" max="5" placeholder="重试次数" />
             <input v-model="apiForm.api_key" placeholder="API Key（编辑时留空=不变）" />
           </div>
           <div class="form-actions">
@@ -82,6 +103,9 @@
       <div v-if="activeTab === 'prompts'" class="tab-content">
         <div class="section">
           <h3>提示词版本</h3>
+          <div v-if="sectionMessages.prompts.message" :class="['inline-message', `inline-message-${sectionMessages.prompts.type}`]">
+            {{ sectionMessages.prompts.message }}
+          </div>
           <div v-if="promptLoading" class="hint">加载中...</div>
           <table v-else class="config-table">
             <thead>
@@ -101,7 +125,7 @@
                 <td>{{ item.is_active ? '是' : '否' }}</td>
                 <td class="table-actions">
                   <button class="btn-text" @click="activatePrompt(item.id)">激活</button>
-                  <button class="btn-text danger" @click="deletePrompt(item.id)">删除</button>
+                  <button class="btn-text danger" @click="requestDeletePrompt(item.id)">删除</button>
                 </td>
               </tr>
             </tbody>
@@ -128,6 +152,9 @@
         <div class="section">
           <h3>温度模式选择</h3>
           <p class="hint">温度值影响 AI 评分的严格程度和反馈详细度</p>
+          <div v-if="sectionMessages.model.message" :class="['inline-message', `inline-message-${sectionMessages.model.type}`]">
+            {{ sectionMessages.model.message }}
+          </div>
           
           <div class="temperature-modes">
             <div 
@@ -140,42 +167,52 @@
                 <span class="mode-icon">{{ mode.icon }}</span>
                 <span class="mode-name">{{ mode.name }}</span>
               </div>
-              <div class="mode-temp">Temperature: {{ mode.temp }}</div>
+              <div class="mode-temp">{{ getModeTemperatureLabel(mode) }}</div>
               <div class="mode-desc">{{ mode.desc }}</div>
             </div>
           </div>
 
-          <button class="btn btn-primary" @click="saveModelSettings" :disabled="saving">
-            {{ saving ? '保存中...' : '保存设置' }}
+          <div v-if="modelSettings.temperature_mode === 'custom'" class="custom-temperature-panel">
+            <h4>自定义任务温度</h4>
+            <div class="custom-temperature-grid">
+              <label class="custom-temperature-field">
+                <span>Task 1</span>
+                <input
+                  v-model.number="modelSettings.temperature_task1"
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                />
+              </label>
+              <label class="custom-temperature-field">
+                <span>Task 2</span>
+                <input
+                  v-model.number="modelSettings.temperature_task2"
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                />
+              </label>
+            </div>
+            <p class="hint">自定义模式允许分别设置 Task 1 / Task 2，范围 0.0-2.0。</p>
+          </div>
+
+          <button class="btn btn-primary" @click="saveModelSettings" :disabled="modelSaving">
+            {{ modelSaving ? '保存中...' : '保存设置' }}
           </button>
         </div>
 
-        <div class="section">
-          <h3>任务参数说明</h3>
-          <div class="param-info">
-            <div class="param-card">
-              <h4>📊 Task 1 参数</h4>
-              <p><strong>当前温度:</strong> {{ task1Temperature }}</p>
-              <p class="hint">Task 1 注重数据准确性和客观描述，建议使用较低温度</p>
-            </div>
-            <div class="param-card">
-              <h4>📝 Task 2 参数</h4>
-              <p><strong>当前温度:</strong> {{ task2Temperature }}</p>
-              <p class="hint">Task 2 需要平衡客观评分和创意反馈，建议使用中等温度</p>
-            </div>
-          </div>
-          <div class="param-card">
-            <h4>📏 Max Tokens (通用)</h4>
-            <p><strong>固定值:</strong> 4096</p>
-            <p class="hint">Max Tokens 已固定为 4096，确保完整返回评分结果</p>
-          </div>
-        </div>
       </div>
 
       <!-- 数据管理 -->
       <div v-if="activeTab === 'data'" class="tab-content">
         <div class="section">
           <h3>历史记录管理</h3>
+          <div v-if="sectionMessages.data.message" :class="['inline-message', `inline-message-${sectionMessages.data.type}`]">
+            {{ sectionMessages.data.message }}
+          </div>
           
           <div class="setting-item">
             <label>自动保留最近记录数量</label>
@@ -189,9 +226,9 @@
               />
               <span class="input-suffix">条</span>
             </div>
-            <p class="hint">超过此数量时，将自动删除最早的记录（当前暂未实现自动清理逻辑）</p>
-            <button class="btn btn-primary" @click="saveDataSettings" :disabled="saving">
-              {{ saving ? '保存中...' : '保存' }}
+            <p class="hint">超过此数量时，系统会自动清理最早记录，避免历史数据无限增长</p>
+            <button class="btn btn-primary" @click="saveDataSettings" :disabled="dataSaving">
+              {{ dataSaving ? '保存中...' : '保存' }}
             </button>
           </div>
         </div>
@@ -220,7 +257,7 @@
           <div class="about-info">
             <div class="info-row">
               <span class="label">开发阶段</span>
-              <span class="value">Phase 04 - 数据与功能完善</span>
+              <span class="value">Phase 05 - 收口与交付准备</span>
             </div>
             <div class="info-row">
               <span class="label">Electron版本</span>
@@ -241,42 +278,46 @@
             <ul>
               <li>✅ AI 作文评分（Task 1 & Task 2）</li>
               <li>✅ 详细评分报告与反馈</li>
+              <li>✅ 写作页题库选题（自由写作 / 题库模式）</li>
               <li>✅ 题目管理（CRUD + 批量导入）</li>
+              <li>✅ 默认官方题库 seed（Task 2 全量 + Task 1 最小样本）</li>
               <li>✅ 历史记录管理（筛选 + 导出CSV）</li>
+              <li>✅ 历史统计对比（雷达图 + 范围切换）</li>
+              <li>✅ 草稿自动保存与恢复</li>
               <li>✅ 模型参数配置</li>
-              <li>🚧 草稿自动保存（待集成）</li>
-              <li>🚧 分数对比分析（待实现）</li>
+              <li>🟡 发布前收尾（写作专属自动化报告 / 打包验收）</li>
             </ul>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 清空历史确认弹窗 -->
-    <div v-if="showClearConfirm" class="dialog-overlay" @click.self="showClearConfirm = false">
+    <!-- 通用确认弹窗 -->
+    <div v-if="confirmDialog.visible" class="dialog-overlay" @click.self="closeConfirmDialog">
       <div class="dialog card">
-        <h3>⚠️ 清空所有历史记录</h3>
-        <p>此操作将删除所有历史记录，且不可恢复。</p>
-        <p>请输入 <strong>&quot;确认删除&quot;</strong> 以继续。</p>
+        <h3>{{ confirmDialog.title }}</h3>
+        <p>{{ confirmDialog.message }}</p>
+        <p v-if="confirmDialog.keyword">请输入 <strong>&quot;{{ confirmDialog.keyword }}&quot;</strong> 以继续。</p>
         
-        <input 
+        <input
+          v-if="confirmDialog.keyword"
           type="text"
-          v-model="clearConfirmInput"
-          placeholder="请输入 &quot;确认删除&quot;"
+          v-model="confirmDialog.input"
+          :placeholder="'请输入 ' + confirmDialog.keyword"
           class="input"
           style="width: 100%; margin: 12px 0;"
         />
 
         <div class="dialog-actions">
-          <button class="btn btn-secondary" @click="showClearConfirm = false">
+          <button class="btn btn-secondary" @click="closeConfirmDialog">
             取消
           </button>
           <button 
-            class="btn btn-danger" 
-            @click="executeClearHistory"
-            :disabled="clearConfirmInput !== '确认删除'"
+            :class="['btn', confirmDialog.danger ? 'btn-danger' : 'btn-primary']"
+            @click="executeConfirmAction"
+            :disabled="!confirmDialogReady"
           >
-            确认清空
+            {{ confirmDialog.confirmLabel }}
           </button>
         </div>
       </div>
@@ -285,8 +326,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { settings, essays, configs, prompts } from '@/api/client.js'
+import { createRequestGate } from '@/utils/request-gate.js'
 
 const tabs = [
   { key: 'api', label: 'API配置' },
@@ -296,10 +338,29 @@ const tabs = [
   { key: 'about', label: '关于' }
 ]
 
+const PROVIDER_DEFAULTS = Object.freeze({
+  openai: {
+    base_url: 'https://api.openai.com/v1'
+  },
+  openrouter: {
+    base_url: 'https://openrouter.ai/api/v1'
+  },
+  deepseek: {
+    base_url: 'https://api.deepseek.com/v1'
+  }
+})
+
 const activeTab = ref('model')
-const saving = ref(false)
+const modelSaving = ref(false)
+const dataSaving = ref(false)
 const apiLoading = ref(false)
 const promptLoading = ref(false)
+const sectionMessages = reactive({
+  api: { type: 'info', message: '' },
+  prompts: { type: 'info', message: '' },
+  model: { type: 'info', message: '' },
+  data: { type: 'info', message: '' }
+})
 
 // 温度模式配置
 const temperatureModes = [
@@ -307,28 +368,41 @@ const temperatureModes = [
     value: 'precise',
     name: '精确模式',
     icon: '🎯',
-    temp: 0.3,
+    task1: 0.3,
+    task2: 0.3,
     desc: '适合客观评分，输出稳定一致'
   },
   {
     value: 'balanced',
     name: '平衡模式',
     icon: '⚖️',
-    temp: 0.5,
+    task1: 0.5,
+    task2: 0.5,
     desc: '推荐使用，兼顾准确性与详细度'
   },
   {
     value: 'creative',
     name: '创意模式',
     icon: '💡',
-    temp: 0.8,
+    task1: 0.8,
+    task2: 0.8,
     desc: '详细反馈，适合学习分析'
+  },
+  {
+    value: 'custom',
+    name: '自定义模式',
+    icon: '🛠️',
+    task1: null,
+    task2: null,
+    desc: '兼容旧设置并允许分别配置两个任务'
   }
 ]
 
 // 设置数据
 const modelSettings = ref({
-  temperature_mode: 'balanced'
+  temperature_mode: 'balanced',
+  temperature_task1: 0.3,
+  temperature_task2: 0.5
 })
 
 const dataSettings = ref({
@@ -337,23 +411,34 @@ const dataSettings = ref({
 
 const apiConfigs = ref([])
 const testingConfigId = ref(null)
+const isApiFormUrlLinked = ref(true)
+const isApplyingProviderDefault = ref(false)
 const apiForm = ref({
   id: null,
   config_name: '',
   provider: 'openai',
   base_url: 'https://api.openai.com/v1',
   api_key: '',
-  default_model: 'gpt-4o-mini',
-  priority: 100,
-  max_retries: 2
+  default_model: 'gpt-4o-mini'
 })
 
 const promptEntries = ref([])
 const importPromptJson = ref('')
-
-// 清空历史确认
-const showClearConfirm = ref(false)
-const clearConfirmInput = ref('')
+const confirmDialog = reactive({
+  visible: false,
+  kind: '',
+  section: 'data',
+  title: '',
+  message: '',
+  keyword: '',
+  input: '',
+  confirmLabel: '确认',
+  danger: true,
+  payload: null
+})
+const apiRequestGate = createRequestGate()
+const promptRequestGate = createRequestGate()
+const settingsRequestGate = createRequestGate()
 
 // 关于页面数据
 const electronVersion = ref('N/A')
@@ -380,16 +465,121 @@ async function getUserDataPath() {
   }
 }
 
-async function loadApiConfigs() {
-  apiLoading.value = true
-  try {
-    apiConfigs.value = await configs.list()
-  } catch (error) {
-    console.error('加载 API 配置失败:', error)
-    alert('加载 API 配置失败: ' + error.message)
-  } finally {
-    apiLoading.value = false
+function setSectionMessage(section, type, message) {
+  if (!sectionMessages[section]) return
+  sectionMessages[section].type = type
+  sectionMessages[section].message = String(message || '').trim()
+}
+
+function clearSectionMessage(section) {
+  setSectionMessage(section, 'info', '')
+}
+
+function normalizeTemperatureValue(value, fallback = 0.5) {
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function findTemperatureMode(modeValue) {
+  return temperatureModes.find((mode) => mode.value === modeValue) || null
+}
+
+function resolveModeTemperature(taskKey) {
+  const mode = findTemperatureMode(modelSettings.value.temperature_mode)
+  if (!mode) return 0.5
+  if (mode.value === 'custom') {
+    return normalizeTemperatureValue(modelSettings.value[`temperature_${taskKey}`])
   }
+  return mode[taskKey] ?? 0.5
+}
+
+function getModeTemperatureLabel(mode) {
+  if (mode.value === 'custom') {
+    return `Task 1 ${resolveModeTemperature('task1')} / Task 2 ${resolveModeTemperature('task2')}`
+  }
+  return `Task 1 ${mode.task1} / Task 2 ${mode.task2}`
+}
+
+const confirmDialogReady = computed(() => (
+  !confirmDialog.keyword || confirmDialog.input === confirmDialog.keyword
+))
+
+function closeConfirmDialog() {
+  confirmDialog.visible = false
+  confirmDialog.kind = ''
+  confirmDialog.section = 'data'
+  confirmDialog.title = ''
+  confirmDialog.message = ''
+  confirmDialog.keyword = ''
+  confirmDialog.input = ''
+  confirmDialog.confirmLabel = '确认'
+  confirmDialog.danger = true
+  confirmDialog.payload = null
+}
+
+function openConfirmDialog(options) {
+  confirmDialog.visible = true
+  confirmDialog.kind = options.kind
+  confirmDialog.section = options.section || 'data'
+  confirmDialog.title = options.title
+  confirmDialog.message = options.message
+  confirmDialog.keyword = options.keyword || ''
+  confirmDialog.input = ''
+  confirmDialog.confirmLabel = options.confirmLabel || '确认'
+  confirmDialog.danger = options.danger !== false
+  confirmDialog.payload = options.payload ?? null
+}
+
+async function loadApiConfigs() {
+  const requestId = apiRequestGate.begin()
+  apiLoading.value = true
+  clearSectionMessage('api')
+  try {
+    const nextConfigs = await configs.list()
+    if (!apiRequestGate.isCurrent(requestId)) return
+    apiConfigs.value = nextConfigs
+  } catch (error) {
+    if (!apiRequestGate.isCurrent(requestId)) return
+    console.error('加载 API 配置失败:', error)
+    setSectionMessage('api', 'error', '加载 API 配置失败: ' + error.message)
+  } finally {
+    if (apiRequestGate.isCurrent(requestId)) {
+      apiLoading.value = false
+    }
+  }
+}
+
+const enabledConfigCount = computed(() => (
+  apiConfigs.value.filter((item) => item.is_enabled).length
+))
+
+const totalConfigCount = computed(() => apiConfigs.value.length)
+
+function isToggleBlocked(item) {
+  return Boolean(item.is_enabled && enabledConfigCount.value <= 1)
+}
+
+function getToggleBlockedReason(item) {
+  if (isToggleBlocked(item)) {
+    return '至少保留一个启用配置，不能禁用唯一启用项'
+  }
+  return ''
+}
+
+function isDeleteBlocked(item) {
+  if (totalConfigCount.value <= 1) return true
+  if (item.is_enabled && enabledConfigCount.value <= 1) return true
+  return false
+}
+
+function getDeleteBlockedReason(item) {
+  if (totalConfigCount.value <= 1) {
+    return '至少保留一个可用配置，不能删除最后一个配置'
+  }
+  if (item.is_enabled && enabledConfigCount.value <= 1) {
+    return '至少保留一个启用配置，不能删除唯一启用项'
+  }
+  return ''
 }
 
 function resetApiForm() {
@@ -399,10 +589,9 @@ function resetApiForm() {
     provider: 'openai',
     base_url: 'https://api.openai.com/v1',
     api_key: '',
-    default_model: 'gpt-4o-mini',
-    priority: 100,
-    max_retries: 2
+    default_model: 'gpt-4o-mini'
   }
+  isApiFormUrlLinked.value = true
 }
 
 function editConfig(item) {
@@ -412,16 +601,15 @@ function editConfig(item) {
     provider: item.provider,
     base_url: item.base_url,
     api_key: '',
-    default_model: item.default_model,
-    priority: item.priority || 100,
-    max_retries: item.max_retries ?? 2
+    default_model: item.default_model
   }
+  isApiFormUrlLinked.value = isProviderDefaultUrl(item.provider, item.base_url)
 }
 
 async function saveApiConfig() {
   try {
     if (!apiForm.value.config_name || !apiForm.value.base_url || !apiForm.value.default_model) {
-      alert('请填写完整配置字段')
+      setSectionMessage('api', 'error', '请填写完整配置字段')
       return
     }
 
@@ -429,9 +617,7 @@ async function saveApiConfig() {
       config_name: apiForm.value.config_name,
       provider: apiForm.value.provider,
       base_url: apiForm.value.base_url,
-      default_model: apiForm.value.default_model,
-      priority: apiForm.value.priority,
-      max_retries: apiForm.value.max_retries
+      default_model: apiForm.value.default_model
     }
     if (apiForm.value.api_key) {
       payload.api_key = apiForm.value.api_key
@@ -441,7 +627,7 @@ async function saveApiConfig() {
       await configs.update(apiForm.value.id, payload)
     } else {
       if (!payload.api_key) {
-        alert('新建配置必须填写 API Key')
+        setSectionMessage('api', 'error', '新建配置必须填写 API Key')
         return
       }
       await configs.create(payload)
@@ -449,64 +635,113 @@ async function saveApiConfig() {
 
     resetApiForm()
     await loadApiConfigs()
+    setSectionMessage('api', 'success', 'API 配置已保存')
   } catch (error) {
     console.error('保存 API 配置失败:', error)
-    alert('保存 API 配置失败: ' + error.message)
+    setSectionMessage('api', 'error', '保存 API 配置失败: ' + error.message)
   }
 }
 
-async function removeConfig(id) {
-  if (!confirm('确定删除该配置？')) return
-  try {
-    await configs.delete(id)
-    await loadApiConfigs()
-  } catch (error) {
-    console.error('删除 API 配置失败:', error)
-    alert('删除 API 配置失败: ' + error.message)
+function normalizeProviderUrl(url) {
+  return String(url || '').trim().replace(/\/+$/, '')
+}
+
+function getProviderDefaultBaseUrl(provider) {
+  return PROVIDER_DEFAULTS[provider]?.base_url || ''
+}
+
+function isProviderDefaultUrl(provider, url) {
+  const expected = getProviderDefaultBaseUrl(provider)
+  if (!expected) return false
+  return normalizeProviderUrl(url) === normalizeProviderUrl(expected)
+}
+
+function applyProviderBaseUrl(provider) {
+  const defaultUrl = getProviderDefaultBaseUrl(provider)
+  if (!defaultUrl) return
+  isApplyingProviderDefault.value = true
+  apiForm.value.base_url = defaultUrl
+  isApplyingProviderDefault.value = false
+}
+
+function requestRemoveConfig(id) {
+  const target = apiConfigs.value.find((item) => item.id === id)
+  if (!target) return
+
+  if (isDeleteBlocked(target)) {
+    setSectionMessage('api', 'error', getDeleteBlockedReason(target))
+    return
   }
+
+  openConfirmDialog({
+    kind: 'delete-api-config',
+    section: 'api',
+    title: '删除 API 配置',
+    message: `确定删除配置“${target.config_name}”吗？`,
+    confirmLabel: '确认删除',
+    payload: { id }
+  })
 }
 
 async function setDefaultConfig(id) {
   try {
     await configs.setDefault(id)
     await loadApiConfigs()
+    setSectionMessage('api', 'success', '默认配置已更新')
   } catch (error) {
     console.error('设为默认失败:', error)
-    alert('设为默认失败: ' + error.message)
+    setSectionMessage('api', 'error', '设为默认失败: ' + error.message)
   }
 }
 
 async function toggleConfig(id) {
+  const target = apiConfigs.value.find((item) => item.id === id)
+  if (!target) return
+
+  if (isToggleBlocked(target)) {
+    setSectionMessage('api', 'error', getToggleBlockedReason(target))
+    return
+  }
+
   try {
     await configs.toggleEnabled(id)
     await loadApiConfigs()
+    setSectionMessage('api', 'success', target.is_enabled ? '配置已禁用' : '配置已启用')
   } catch (error) {
     console.error('切换启用状态失败:', error)
-    alert('切换状态失败: ' + error.message)
+    setSectionMessage('api', 'error', '切换状态失败: ' + error.message)
   }
 }
 
 async function testConfig(id) {
   testingConfigId.value = id
+  clearSectionMessage('api')
   try {
     const result = await configs.test(id)
-    alert(`连接成功，延迟 ${result.latency}ms`)
+    setSectionMessage('api', 'success', `连接成功，延迟 ${result.latency}ms`)
   } catch (error) {
-    alert('连接失败: ' + error.message)
+    setSectionMessage('api', 'error', '连接失败: ' + error.message)
   } finally {
     testingConfigId.value = null
   }
 }
 
 async function loadPromptList() {
+  const requestId = promptRequestGate.begin()
   promptLoading.value = true
+  clearSectionMessage('prompts')
   try {
-    promptEntries.value = await prompts.listAll()
+    const nextPromptEntries = await prompts.listAll()
+    if (!promptRequestGate.isCurrent(requestId)) return
+    promptEntries.value = nextPromptEntries
   } catch (error) {
+    if (!promptRequestGate.isCurrent(requestId)) return
     console.error('加载提示词失败:', error)
-    alert('加载提示词失败: ' + error.message)
+    setSectionMessage('prompts', 'error', '加载提示词失败: ' + error.message)
   } finally {
-    promptLoading.value = false
+    if (promptRequestGate.isCurrent(requestId)) {
+      promptLoading.value = false
+    }
   }
 }
 
@@ -514,19 +749,24 @@ async function activatePrompt(id) {
   try {
     await prompts.activate(id)
     await loadPromptList()
+    setSectionMessage('prompts', 'success', '提示词版本已激活')
   } catch (error) {
-    alert('激活失败: ' + error.message)
+    setSectionMessage('prompts', 'error', '激活失败: ' + error.message)
   }
 }
 
-async function deletePrompt(id) {
-  if (!confirm('确定删除该提示词版本？')) return
-  try {
-    await prompts.delete(id)
-    await loadPromptList()
-  } catch (error) {
-    alert('删除失败: ' + error.message)
-  }
+function requestDeletePrompt(id) {
+  const target = promptEntries.value.find((item) => item.id === id)
+  if (!target) return
+
+  openConfirmDialog({
+    kind: 'delete-prompt',
+    section: 'prompts',
+    title: '删除提示词版本',
+    message: `确定删除 ${target.task_type} / ${target.version} 吗？`,
+    confirmLabel: '确认删除',
+    payload: { id }
+  })
 }
 
 async function exportPromptConfig() {
@@ -540,7 +780,7 @@ async function exportPromptConfig() {
     a.click()
     URL.revokeObjectURL(url)
   } catch (error) {
-    alert('导出失败: ' + error.message)
+    setSectionMessage('prompts', 'error', '导出失败: ' + error.message)
   }
 }
 
@@ -550,51 +790,76 @@ async function importPromptConfig() {
     await prompts.import(parsed)
     importPromptJson.value = ''
     await loadPromptList()
-    alert('提示词导入成功')
+    setSectionMessage('prompts', 'success', '提示词导入成功')
   } catch (error) {
-    alert('导入失败: ' + error.message)
+    setSectionMessage('prompts', 'error', '导入失败: ' + error.message)
   }
 }
 
 const task1Temperature = computed(() => {
-  const mode = temperatureModes.find(m => m.value === modelSettings.value.temperature_mode)
-  return mode ? mode.temp : 0.5
+  return resolveModeTemperature('task1')
 })
 
 const task2Temperature = computed(() => {
-  const mode = temperatureModes.find(m => m.value === modelSettings.value.temperature_mode)
-  return mode ? mode.temp : 0.5
+  return resolveModeTemperature('task2')
 })
 
 // 加载设置
 async function loadSettings() {
+  const requestId = settingsRequestGate.begin()
   try {
     const allSettings = await settings.getAll()
+    if (!settingsRequestGate.isCurrent(requestId)) return
     
     if (allSettings.temperature_mode) {
       modelSettings.value.temperature_mode = allSettings.temperature_mode
+    }
+    if (allSettings.temperature_task1 !== undefined && allSettings.temperature_task1 !== null) {
+      modelSettings.value.temperature_task1 = normalizeTemperatureValue(allSettings.temperature_task1, 0.3)
+    }
+    if (allSettings.temperature_task2 !== undefined && allSettings.temperature_task2 !== null) {
+      modelSettings.value.temperature_task2 = normalizeTemperatureValue(allSettings.temperature_task2, 0.5)
     }
     if (allSettings.history_limit) {
       dataSettings.value.history_limit = allSettings.history_limit
     }
   } catch (error) {
+    if (!settingsRequestGate.isCurrent(requestId)) return
     console.error('加载设置失败:', error)
+    setSectionMessage('model', 'error', '加载设置失败: ' + error.message)
+    setSectionMessage('data', 'error', '加载设置失败: ' + error.message)
   }
 }
 
 // 保存模型设置
 async function saveModelSettings() {
-  saving.value = true
+  modelSaving.value = true
+  clearSectionMessage('model')
   try {
-    await settings.update({
+    const updates = {
       temperature_mode: modelSettings.value.temperature_mode
-    })
-    alert('模型设置已保存')
+    }
+
+    if (modelSettings.value.temperature_mode === 'custom') {
+      const task1 = normalizeTemperatureValue(modelSettings.value.temperature_task1, NaN)
+      const task2 = normalizeTemperatureValue(modelSettings.value.temperature_task2, NaN)
+      if (!Number.isFinite(task1) || task1 < 0 || task1 > 2 || !Number.isFinite(task2) || task2 < 0 || task2 > 2) {
+        setSectionMessage('model', 'error', '自定义温度必须在 0.0-2.0 之间')
+        return
+      }
+      updates.temperature_task1 = task1
+      updates.temperature_task2 = task2
+      modelSettings.value.temperature_task1 = task1
+      modelSettings.value.temperature_task2 = task2
+    }
+
+    await settings.update(updates)
+    setSectionMessage('model', 'success', modelSettings.value.temperature_mode === 'custom' ? '自定义温度已保存' : '模型设置已保存')
   } catch (error) {
     console.error('保存失败:', error)
-    alert('保存失败: ' + error.message)
+    setSectionMessage('model', 'error', '保存失败: ' + error.message)
   } finally {
-    saving.value = false
+    modelSaving.value = false
   }
 }
 
@@ -602,40 +867,76 @@ async function saveModelSettings() {
 async function saveDataSettings() {
   // 验证范围
   if (dataSettings.value.history_limit < 50 || dataSettings.value.history_limit > 500) {
-    alert('记录保留数量必须在 50-500 之间')
+    setSectionMessage('data', 'error', '记录保留数量必须在 50-500 之间')
     return
   }
 
-  saving.value = true
+  dataSaving.value = true
+  clearSectionMessage('data')
   try {
     await settings.update({
       history_limit: dataSettings.value.history_limit
     })
-    alert('数据设置已保存')
+    setSectionMessage('data', 'success', '数据设置已保存')
   } catch (error) {
     console.error('保存失败:', error)
-    alert('保存失败: ' + error.message)
+    setSectionMessage('data', 'error', '保存失败: ' + error.message)
   } finally {
-    saving.value = false
+    dataSaving.value = false
   }
 }
 
+watch(() => apiForm.value.provider, (nextProvider, prevProvider) => {
+  if (!nextProvider || nextProvider === prevProvider) return
+  if (!isApiFormUrlLinked.value) return
+  applyProviderBaseUrl(nextProvider)
+})
+
+watch(() => apiForm.value.base_url, (nextBaseUrl) => {
+  if (isApplyingProviderDefault.value) return
+  isApiFormUrlLinked.value = isProviderDefaultUrl(apiForm.value.provider, nextBaseUrl)
+})
+
 // 清空历史记录
 function confirmClearHistory() {
-  clearConfirmInput.value = ''
-  showClearConfirm.value = true
+  openConfirmDialog({
+    kind: 'clear-history',
+    section: 'data',
+    title: '⚠️ 清空所有历史记录',
+    message: '此操作将删除所有历史记录，且不可恢复。',
+    keyword: '确认删除',
+    confirmLabel: '确认清空',
+    payload: null
+  })
 }
 
-async function executeClearHistory() {
-  if (clearConfirmInput.value !== '确认删除') return
+async function executeConfirmAction() {
+  if (!confirmDialogReady.value) return
 
+  const { kind, payload, section } = confirmDialog
   try {
-    await essays.deleteAll()
-    showClearConfirm.value = false
-    alert('已清空所有历史记录')
+    if (kind === 'delete-api-config') {
+      await configs.delete(payload.id)
+      await loadApiConfigs()
+      setSectionMessage('api', 'success', '配置删除成功')
+    } else if (kind === 'delete-prompt') {
+      await prompts.delete(payload.id)
+      await loadPromptList()
+      setSectionMessage('prompts', 'success', '提示词版本已删除')
+    } else if (kind === 'clear-history') {
+      await essays.deleteAll()
+      setSectionMessage('data', 'success', '已清空所有历史记录')
+    }
+    closeConfirmDialog()
   } catch (error) {
-    console.error('清空失败:', error)
-    alert('清空失败: ' + error.message)
+    console.error('确认操作失败:', error)
+    closeConfirmDialog()
+    const errorLabel = kind === 'delete-api-config'
+      ? '删除 API 配置失败'
+      : kind === 'delete-prompt'
+        ? '删除提示词失败'
+        : '清空失败'
+    setSectionMessage(section, 'error', `${errorLabel}: ${error.message}`)
   }
 }
 
@@ -645,6 +946,12 @@ onMounted(() => {
   getUserDataPath()
   loadApiConfigs()
   loadPromptList()
+})
+
+onBeforeUnmount(() => {
+  apiRequestGate.invalidate()
+  promptRequestGate.invalidate()
+  settingsRequestGate.invalidate()
 })
 </script>
 
@@ -723,6 +1030,30 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.inline-message {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.inline-message-error {
+  background: #ffebee;
+  color: #b71c1c;
+  border: 1px solid #ffcdd2;
+}
+
+.inline-message-success {
+  background: #e8f5e9;
+  color: #1b5e20;
+  border: 1px solid #c8e6c9;
+}
+
+.btn-text:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .btn-text.danger {
   color: #c62828;
 }
@@ -774,7 +1105,7 @@ onMounted(() => {
 /* 温度模式选择 */
 .temperature-modes {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
   margin: 20px 0;
 }
@@ -826,6 +1157,41 @@ onMounted(() => {
 .mode-desc {
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.custom-temperature-panel {
+  margin: 0 0 20px;
+  padding: 16px;
+  background: var(--bg-light);
+  border-radius: var(--border-radius);
+}
+
+.custom-temperature-panel h4 {
+  font-size: 15px;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.custom-temperature-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.custom-temperature-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.custom-temperature-field input {
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
 }
 
 /* 参数说明 */
