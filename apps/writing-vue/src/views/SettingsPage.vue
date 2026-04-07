@@ -2,9 +2,7 @@
   <div class="settings-page">
     <div class="page-header">
       <div class="page-header__copy">
-        <span class="panel-label">System Workspace</span>
         <h1>系统设置</h1>
-        <p>集中管理 API、提示词、模型参数和数据策略，不再把设置页做成一张大白卡。</p>
       </div>
     </div>
 
@@ -1108,7 +1106,7 @@ onBeforeUnmount(() => {
 
 .mode-card:hover {
   border-color: var(--primary-color);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+  background: var(--bg-muted);
 }
 
 .mode-card.active {
@@ -1398,7 +1396,6 @@ onBeforeUnmount(() => {
   border: 1px solid var(--line-1);
   border-radius: var(--radius-lg);
   background: var(--surface-0);
-  box-shadow: var(--shadow-sm);
 }
 
 .settings-page .section + .section {
