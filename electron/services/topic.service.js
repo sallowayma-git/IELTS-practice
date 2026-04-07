@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const TopicsDAO = require('../db/dao/topics.dao');
 const logger = require('../utils/logger');
 
@@ -8,6 +10,35 @@ const logger = require('../utils/logger');
 class TopicService {
     constructor(db) {
         this.dao = new TopicsDAO(db);
+    }
+
+    /**
+     * 初始化默认题库（仅在首次安装且 topics 为空时）
+     */
+    async initializeDefaults() {
+        try {
+            if (this.dao.countAll() > 0) {
+                logger.info('Topics already exist, skipping default topics initialization');
+                return;
+            }
+
+            const defaultTopicsPath = path.join(__dirname, '../resources/default-topics.json');
+            if (!fs.existsSync(defaultTopicsPath)) {
+                logger.warn('Default topics file not found, skipping initialization');
+                return;
+            }
+
+            const defaultTopics = JSON.parse(fs.readFileSync(defaultTopicsPath, 'utf-8'));
+            if (!Array.isArray(defaultTopics) || defaultTopics.length === 0) {
+                logger.warn('Default topics file is empty, skipping initialization');
+                return;
+            }
+
+            const result = this.dao.batchImport(defaultTopics);
+            logger.info(`Initialized default topics: ${result.success} success, ${result.failed} failed`);
+        } catch (error) {
+            logger.error('Failed to initialize default topics', error);
+        }
     }
 
     /**
@@ -57,9 +88,15 @@ class TopicService {
      */
     async update(id, updates) {
         try {
-            // 如果更新了类型和分类，需要验证
-            if (updates.type && updates.category) {
-                this._validateCategory(updates.type, updates.category);
+            const currentTopic = this.dao.getById(id);
+            if (!currentTopic) {
+                throw new Error(`Topic not found: ${id}`);
+            }
+
+            const nextType = updates.type || currentTopic.type;
+            const nextCategory = updates.category || currentTopic.category;
+            if (updates.type || updates.category) {
+                this._validateCategory(nextType, nextCategory);
             }
 
             return this.dao.update(id, updates);
@@ -90,19 +127,52 @@ class TopicService {
                 throw new Error('Invalid topics array');
             }
 
-            // 预验证所有题目
+            const validTopics = [];
+            const validationErrors = [];
+
             for (let i = 0; i < topics.length; i++) {
                 const topic = topics[i];
                 try {
                     this._validateTopic(topic);
                     this._validateCategory(topic.type, topic.category);
+                    validTopics.push({
+                        ...topic,
+                        __originalIndex: i
+                    });
                 } catch (error) {
-                    // 记录验证错误但继续处理
                     logger.warn(`Topic validation failed at index ${i}:`, error.message);
+                    validationErrors.push({
+                        index: i,
+                        topic,
+                        error: error.message
+                    });
                 }
             }
 
-            return this.dao.batchImport(topics);
+            const daoResult = this.dao.batchImport(validTopics.map((topic) => {
+                const { __originalIndex, ...rest } = topic;
+                return rest;
+            }));
+
+            const persistedErrors = Array.isArray(daoResult.errors)
+                ? daoResult.errors.map((item) => {
+                    const sourceTopic = validTopics[item.index];
+                    return {
+                        ...item,
+                        index: sourceTopic?.__originalIndex ?? item.index,
+                        topic: sourceTopic ? (() => {
+                            const { __originalIndex, ...rest } = sourceTopic;
+                            return rest;
+                        })() : item.topic
+                    };
+                })
+                : [];
+
+            return {
+                success: Number(daoResult.success || 0),
+                failed: validationErrors.length + Number(daoResult.failed || 0),
+                errors: [...validationErrors, ...persistedErrors]
+            };
         } catch (error) {
             logger.error('TopicService.batchImport failed', error);
             throw error;

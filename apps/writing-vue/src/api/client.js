@@ -156,6 +156,12 @@ export const evaluate = {
         return handleResponse(response)
     },
 
+    async getSessionState(sessionId) {
+        if (!isAPIAvailable()) throw new Error('API 不可用')
+        const response = await window.writingAPI.evaluate.getSessionState(sessionId)
+        return handleResponse(response)
+    },
+
     /**
      * 订阅评测事件
      * @param {Function} callback - (event) => void
@@ -163,17 +169,17 @@ export const evaluate = {
     onEvent(callback) {
         if (!isAPIAvailable()) {
             console.warn('API 不可用，无法订阅事件')
-            return
+            return null
         }
-        window.writingAPI.evaluate.onEvent(callback)
+        return window.writingAPI.evaluate.onEvent(callback)
     },
 
     /**
      * 移除事件监听
      */
-    removeEventListener() {
+    removeEventListener(listenerId) {
         if (!isAPIAvailable()) return
-        window.writingAPI.evaluate.removeEventListener()
+        window.writingAPI.evaluate.removeEventListener(listenerId)
     }
 }
 

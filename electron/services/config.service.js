@@ -60,6 +60,12 @@ class ConfigService {
                 max_retries
             });
 
+            // 首个配置自动设为默认，避免进入无默认状态
+            const defaultConfig = this.dao.getDefault();
+            if (!defaultConfig) {
+                this.dao.setDefault(id);
+            }
+
             logger.info(`Config created: ${config_name}`, null, { id, provider });
 
             return { id, success: true };
@@ -101,7 +107,29 @@ class ConfigService {
      */
     async delete(id) {
         try {
-            this.dao.delete(id);
+            const target = this.dao.getById(id);
+            if (!target) {
+                throw this._buildGuardError('config_not_found', `配置不存在: id ${id}`);
+            }
+
+            if (this.dao.countAll() <= 1) {
+                throw this._buildGuardError('config_guard_violation', '至少保留一个可用配置，不能删除最后一个配置');
+            }
+
+            const enabledCount = this.dao.countEnabled();
+            if (target.is_enabled && enabledCount <= 1) {
+                throw this._buildGuardError('config_guard_violation', '至少保留一个启用配置，不能删除唯一启用项');
+            }
+
+            if (target.is_default) {
+                const fallback = this.dao.findEnabledCandidate(id);
+                if (!fallback) {
+                    throw this._buildGuardError('config_guard_violation', '删除默认配置后找不到可用替代项');
+                }
+                this.dao.deleteAndReassignDefault(id, fallback.id);
+            } else {
+                this.dao.delete(id);
+            }
 
             logger.info(`Config deleted: id ${id}`);
 
@@ -117,6 +145,14 @@ class ConfigService {
      */
     async setDefault(id) {
         try {
+            const target = this.dao.getById(id);
+            if (!target) {
+                throw this._buildGuardError('config_not_found', `配置不存在: id ${id}`);
+            }
+            if (!target.is_enabled) {
+                throw this._buildGuardError('config_disabled', '禁用配置不能设为默认，请先启用');
+            }
+
             this.dao.setDefault(id);
 
             logger.info(`Set default config: id ${id}`);
@@ -133,7 +169,37 @@ class ConfigService {
      */
     async toggleEnabled(id) {
         try {
-            this.dao.toggleEnabled(id);
+            const target = this.dao.getById(id);
+            if (!target) {
+                throw this._buildGuardError('config_not_found', `配置不存在: id ${id}`);
+            }
+
+            // 启用 -> 禁用
+            if (target.is_enabled) {
+                const enabledCount = this.dao.countEnabled();
+                if (enabledCount <= 1) {
+                    throw this._buildGuardError('config_guard_violation', '至少保留一个启用配置，不能禁用唯一启用项');
+                }
+
+                if (target.is_default) {
+                    const fallback = this.dao.findEnabledCandidate(id);
+                    if (!fallback) {
+                        throw this._buildGuardError('config_guard_violation', '禁用默认配置后找不到可用替代项');
+                    }
+                    this.dao.disableAndReassignDefault(id, fallback.id);
+                } else {
+                    this.dao.toggleEnabled(id);
+                }
+            } else {
+                // 禁用 -> 启用
+                this.dao.toggleEnabled(id);
+
+                // 修复历史脏数据：默认缺失或默认被禁用时，自动补一个启用默认
+                const defaultConfig = this.dao.getDefault();
+                if (!defaultConfig || !defaultConfig.is_enabled) {
+                    this.dao.setDefault(id);
+                }
+            }
 
             logger.info(`Toggled enabled for config: id ${id}`);
 
@@ -355,6 +421,9 @@ class ConfigService {
      * 标准化错误
      */
     _normalizeError(error) {
+        if (error && error.code && error.message) {
+            return { code: error.code, message: error.message };
+        }
         return {
             code: this._getErrorCode(error),
             message: error.message
@@ -365,6 +434,9 @@ class ConfigService {
      * 获取错误码
      */
     _getErrorCode(error) {
+        if (error && error.code) {
+            return error.code;
+        }
         if (error.message.includes('API Key') || error.message.includes('Unauthorized')) {
             return 'invalid_api_key';
         }
@@ -375,6 +447,12 @@ class ConfigService {
             return 'rate_limited';
         }
         return 'unknown_error';
+    }
+
+    _buildGuardError(code, message) {
+        const error = new Error(message);
+        error.code = code;
+        return error;
     }
 }
 

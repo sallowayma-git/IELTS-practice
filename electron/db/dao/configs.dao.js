@@ -63,6 +63,122 @@ class ConfigsDAO {
     }
 
     /**
+     * 获取配置总数
+     */
+    countAll() {
+        try {
+            const row = this.db.prepare('SELECT COUNT(*) AS count FROM api_configs').get();
+            return row?.count || 0;
+        } catch (error) {
+            logger.error('Failed to count API configs', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 获取启用配置数量
+     */
+    countEnabled() {
+        try {
+            const row = this.db.prepare('SELECT COUNT(*) AS count FROM api_configs WHERE is_enabled = 1').get();
+            return row?.count || 0;
+        } catch (error) {
+            logger.error('Failed to count enabled API configs', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 获取候选默认配置（优先启用，按优先级）
+     */
+    findEnabledCandidate(excludeId = null) {
+        try {
+            const sql = `
+                SELECT * FROM api_configs
+                WHERE is_enabled = 1
+                  ${excludeId !== null ? 'AND id != ?' : ''}
+                ORDER BY priority ASC, id ASC
+                LIMIT 1
+            `;
+            return excludeId !== null
+                ? this.db.prepare(sql).get(excludeId) || null
+                : this.db.prepare(sql).get() || null;
+        } catch (error) {
+            logger.error('Failed to find enabled config candidate', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 删除配置并切换默认配置（事务）
+     */
+    deleteAndReassignDefault(id, fallbackDefaultId) {
+        try {
+            const tx = this.db.transaction(() => {
+                const deleteResult = this.db.prepare('DELETE FROM api_configs WHERE id = ?').run(id);
+                if (deleteResult.changes === 0) {
+                    throw new Error(`Config with id ${id} not found`);
+                }
+
+                this.db.prepare('UPDATE api_configs SET is_default = 0, updated_at = CURRENT_TIMESTAMP').run();
+                const setDefaultResult = this.db.prepare(`
+                    UPDATE api_configs
+                    SET is_default = 1, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND is_enabled = 1
+                `).run(fallbackDefaultId);
+
+                if (setDefaultResult.changes === 0) {
+                    throw new Error(`Fallback default config id ${fallbackDefaultId} is invalid`);
+                }
+            });
+
+            tx();
+            return true;
+        } catch (error) {
+            logger.error(`Failed to delete config ${id} with fallback ${fallbackDefaultId}`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * 禁用默认配置并转移默认标记（事务）
+     */
+    disableAndReassignDefault(id, fallbackDefaultId) {
+        try {
+            const tx = this.db.transaction(() => {
+                const disableResult = this.db.prepare(`
+                    UPDATE api_configs
+                    SET is_enabled = 0,
+                        is_default = 0,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                `).run(id);
+
+                if (disableResult.changes === 0) {
+                    throw new Error(`Config with id ${id} not found`);
+                }
+
+                this.db.prepare('UPDATE api_configs SET is_default = 0, updated_at = CURRENT_TIMESTAMP').run();
+                const setDefaultResult = this.db.prepare(`
+                    UPDATE api_configs
+                    SET is_default = 1, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND is_enabled = 1
+                `).run(fallbackDefaultId);
+
+                if (setDefaultResult.changes === 0) {
+                    throw new Error(`Fallback default config id ${fallbackDefaultId} is invalid`);
+                }
+            });
+
+            tx();
+            return true;
+        } catch (error) {
+            logger.error(`Failed to disable config ${id} with fallback ${fallbackDefaultId}`, error);
+            throw error;
+        }
+    }
+
+    /**
      * 创建新配置
      */
     create({ config_name, provider, base_url, api_key_encrypted, default_model, priority = 100, max_retries = 2 }) {

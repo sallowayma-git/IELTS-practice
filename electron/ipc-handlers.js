@@ -97,6 +97,7 @@ class IPCHandlers {
 
             // 3. 初始化默认提示词
             await this.promptService.initializeDefaults();
+            await this.topicService.initializeDefaults();
 
             logger.info('IPC handlers initialization completed');
         } catch (error) {
@@ -202,6 +203,10 @@ class IPCHandlers {
     _registerEvaluateHandlers() {
         ipcMain.handle('evaluate:start', async (event, payload) => {
             return this._handleAsyncWithAuth(event, () => this.evaluateService.start(payload));
+        });
+
+        ipcMain.handle('evaluate:getSessionState', async (event, sessionId) => {
+            return this._handleAsyncWithAuth(event, () => this.evaluateService.getSessionState(sessionId));
         });
 
         ipcMain.handle('evaluate:cancel', async (event, sessionId) => {
@@ -311,7 +316,15 @@ class IPCHandlers {
         });
 
         ipcMain.handle('upload:deleteImage', async (event, filename) => {
-            return this._handleAsyncWithAuth(event, () => this.uploadService.deleteImage(filename));
+            return this._handleAsyncWithAuth(event, async () => {
+                const deleted = await this.uploadService.deleteImage(filename);
+                if (!deleted) {
+                    const error = new Error('图片不存在或已删除');
+                    error.code = 'image_not_found';
+                    throw error;
+                }
+                return deleted;
+            });
         });
 
         ipcMain.handle('upload:getImagePath', async (event, filename) => {
