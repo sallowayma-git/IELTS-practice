@@ -10,6 +10,7 @@ const logger = require('../utils/logger');
 class TopicService {
     constructor(db) {
         this.dao = new TopicsDAO(db);
+        this.ensureDefaultsPromise = null;
     }
 
     /**
@@ -19,26 +20,50 @@ class TopicService {
         try {
             if (this.dao.countAll() > 0) {
                 logger.info('Topics already exist, skipping default topics initialization');
-                return;
+                return { success: this.dao.countAll(), failed: 0, skipped: true };
             }
 
             const defaultTopicsPath = path.join(__dirname, '../resources/default-topics.json');
             if (!fs.existsSync(defaultTopicsPath)) {
                 logger.warn('Default topics file not found, skipping initialization');
-                return;
+                return { success: 0, failed: 0, skipped: true };
             }
 
             const defaultTopics = JSON.parse(fs.readFileSync(defaultTopicsPath, 'utf-8'));
             if (!Array.isArray(defaultTopics) || defaultTopics.length === 0) {
                 logger.warn('Default topics file is empty, skipping initialization');
-                return;
+                return { success: 0, failed: 0, skipped: true };
             }
 
             const result = this.dao.batchImport(defaultTopics);
             logger.info(`Initialized default topics: ${result.success} success, ${result.failed} failed`);
+            if (this.dao.countAll() === 0) {
+                throw new Error('Default topics import completed but topics table is still empty');
+            }
+            return result;
         } catch (error) {
             logger.error('Failed to initialize default topics', error);
+            throw error;
         }
+    }
+
+    async ensureDefaultsAvailable() {
+        if (this.dao.countAll() > 0) {
+            return;
+        }
+
+        if (!this.ensureDefaultsPromise) {
+            this.ensureDefaultsPromise = this.initializeDefaults()
+                .catch((error) => {
+                    logger.error('TopicService.ensureDefaultsAvailable failed', error);
+                    throw error;
+                })
+                .finally(() => {
+                    this.ensureDefaultsPromise = null;
+                });
+        }
+
+        await this.ensureDefaultsPromise;
     }
 
     /**
@@ -46,6 +71,7 @@ class TopicService {
      */
     async list(filters, pagination) {
         try {
+            await this.ensureDefaultsAvailable();
             return this.dao.list(filters, pagination);
         } catch (error) {
             logger.error('TopicService.list failed', error);
@@ -58,6 +84,7 @@ class TopicService {
      */
     async getById(id) {
         try {
+            await this.ensureDefaultsAvailable();
             return this.dao.getById(id);
         } catch (error) {
             logger.error(`TopicService.getById failed (id: ${id})`, error);
@@ -196,6 +223,7 @@ class TopicService {
      */
     async getStatistics() {
         try {
+            await this.ensureDefaultsAvailable();
             return this.dao.getStatistics();
         } catch (error) {
             logger.error('TopicService.getStatistics failed', error);

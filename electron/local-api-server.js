@@ -48,15 +48,18 @@ class LocalApiServer {
         this._registerSettingsRoutes();
         this._registerUploadRoutes();
 
-        await new Promise((resolve, reject) => {
-            this.server = this.app.listen(this.preferredPort, this.host, () => {
-                const address = this.server.address();
-                this.port = address.port;
-                logger.info('Local API server started', null, this.getInfo());
-                resolve();
+        try {
+            await this._listen(this.preferredPort);
+        } catch (error) {
+            if (error.code !== 'EADDRINUSE') {
+                throw error;
+            }
+
+            logger.warn('Preferred local API port occupied, fallback to random port', null, {
+                requestedPort: this.preferredPort
             });
-            this.server.on('error', reject);
-        });
+            await this._listen(0);
+        }
 
         return this.getInfo();
     }
@@ -75,6 +78,34 @@ class LocalApiServer {
             port: this.port,
             baseUrl: this.port ? `http://${this.host}:${this.port}` : null
         };
+    }
+
+    async _listen(port) {
+        await new Promise((resolve, reject) => {
+            const server = this.app.listen(port, this.host);
+
+            const cleanup = () => {
+                server.removeListener('error', onError);
+                server.removeListener('listening', onListening);
+            };
+
+            const onError = (error) => {
+                cleanup();
+                reject(error);
+            };
+
+            const onListening = () => {
+                cleanup();
+                this.server = server;
+                const address = server.address();
+                this.port = address.port;
+                logger.info('Local API server started', null, this.getInfo());
+                resolve();
+            };
+
+            server.once('error', onError);
+            server.once('listening', onListening);
+        });
     }
 
     _registerEvaluateRoutes() {

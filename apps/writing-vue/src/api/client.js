@@ -2,6 +2,7 @@
  * IPC 适配层
  * 统一封装 window.writingAPI.* 调用
  */
+import { toIpcSerializable } from '@/utils/ipc-serialize.js'
 
 // 错误码映射表
 const ERROR_MESSAGES = {
@@ -44,11 +45,15 @@ function handleResponse(response) {
     return response.data
 }
 
+function callBridge(method, ...args) {
+    return method(...args.map((arg) => toIpcSerializable(arg)))
+}
+
 // API 配置相关
 export const configs = {
     async list() {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.configs.list()
+        const response = await callBridge(window.writingAPI.configs.list)
         return handleResponse(response)
     },
 
@@ -59,37 +64,37 @@ export const configs = {
 
     async create(data) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.configs.create(data)
+        const response = await callBridge(window.writingAPI.configs.create, data)
         return handleResponse(response)
     },
 
     async update(id, updates) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.configs.update(id, updates)
+        const response = await callBridge(window.writingAPI.configs.update, id, updates)
         return handleResponse(response)
     },
 
     async delete(id) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.configs.delete(id)
+        const response = await callBridge(window.writingAPI.configs.delete, id)
         return handleResponse(response)
     },
 
     async setDefault(id) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.configs.setDefault(id)
+        const response = await callBridge(window.writingAPI.configs.setDefault, id)
         return handleResponse(response)
     },
 
     async toggleEnabled(id) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.configs.toggleEnabled(id)
+        const response = await callBridge(window.writingAPI.configs.toggleEnabled, id)
         return handleResponse(response)
     },
 
     async test(id) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.configs.test(id)
+        const response = await callBridge(window.writingAPI.configs.test, id)
         return handleResponse(response)
     }
 }
@@ -98,37 +103,37 @@ export const configs = {
 export const prompts = {
     async getActive(taskType) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.prompts.getActive(taskType)
+        const response = await callBridge(window.writingAPI.prompts.getActive, taskType)
         return handleResponse(response)
     },
 
     async import(jsonData) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.prompts.import(jsonData)
+        const response = await callBridge(window.writingAPI.prompts.import, jsonData)
         return handleResponse(response)
     },
 
     async exportActive() {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.prompts.exportActive()
+        const response = await callBridge(window.writingAPI.prompts.exportActive)
         return handleResponse(response)
     },
 
     async listAll(taskType = null) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.prompts.listAll(taskType)
+        const response = await callBridge(window.writingAPI.prompts.listAll, taskType)
         return handleResponse(response)
     },
 
     async activate(id) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.prompts.activate(id)
+        const response = await callBridge(window.writingAPI.prompts.activate, id)
         return handleResponse(response)
     },
 
     async delete(id) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.prompts.delete(id)
+        const response = await callBridge(window.writingAPI.prompts.delete, id)
         return handleResponse(response)
     }
 }
@@ -142,7 +147,7 @@ export const evaluate = {
      */
     async start(payload) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.evaluate.start(payload)
+        const response = await callBridge(window.writingAPI.evaluate.start, payload)
         return handleResponse(response)
     },
 
@@ -152,13 +157,13 @@ export const evaluate = {
      */
     async cancel(sessionId) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.evaluate.cancel(sessionId)
+        const response = await callBridge(window.writingAPI.evaluate.cancel, sessionId)
         return handleResponse(response)
     },
 
     async getSessionState(sessionId) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.evaluate.getSessionState(sessionId)
+        const response = await callBridge(window.writingAPI.evaluate.getSessionState, sessionId)
         return handleResponse(response)
     },
 
@@ -187,43 +192,43 @@ export const evaluate = {
 export const topics = {
     async list(filters = {}, pagination = { page: 1, limit: 20 }) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.topics.list(filters, pagination)
+        const response = await callBridge(window.writingAPI.topics.list, filters, pagination)
         return handleResponse(response)
     },
 
     async getById(id) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.topics.getById(id)
+        const response = await callBridge(window.writingAPI.topics.getById, id)
         return handleResponse(response)
     },
 
     async create(topicData) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.topics.create(topicData)
+        const response = await callBridge(window.writingAPI.topics.create, topicData)
         return handleResponse(response)
     },
 
     async update(id, updates) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.topics.update(id, updates)
+        const response = await callBridge(window.writingAPI.topics.update, id, updates)
         return handleResponse(response)
     },
 
     async delete(id) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.topics.delete(id)
+        const response = await callBridge(window.writingAPI.topics.delete, id)
         return handleResponse(response)
     },
 
     async batchImport(topicsArray) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.topics.batchImport(topicsArray)
+        const response = await callBridge(window.writingAPI.topics.batchImport, topicsArray)
         return handleResponse(response)
     },
 
     async getStatistics() {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.topics.getStatistics()
+        const response = await callBridge(window.writingAPI.topics.getStatistics)
         return handleResponse(response)
     }
 }
@@ -232,49 +237,49 @@ export const topics = {
 export const essays = {
     async list(filters = {}, pagination = { page: 1, limit: 20 }) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.essays.list(filters, pagination)
+        const response = await callBridge(window.writingAPI.essays.list, filters, pagination)
         return handleResponse(response)
     },
 
     async getById(id) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.essays.getById(id)
+        const response = await callBridge(window.writingAPI.essays.getById, id)
         return handleResponse(response)
     },
 
     async create(essayData) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.essays.create(essayData)
+        const response = await callBridge(window.writingAPI.essays.create, essayData)
         return handleResponse(response)
     },
 
     async delete(id) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.essays.delete(id)
+        const response = await callBridge(window.writingAPI.essays.delete, id)
         return handleResponse(response)
     },
 
     async batchDelete(ids) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.essays.batchDelete(ids)
+        const response = await callBridge(window.writingAPI.essays.batchDelete, ids)
         return handleResponse(response)
     },
 
     async deleteAll() {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.essays.deleteAll()
+        const response = await callBridge(window.writingAPI.essays.deleteAll)
         return handleResponse(response)
     },
 
     async getStatistics(range = 'all', taskType = null) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.essays.getStatistics(range, taskType)
+        const response = await callBridge(window.writingAPI.essays.getStatistics, range, taskType)
         return handleResponse(response)
     },
 
     async exportCSV(filters = {}) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.essays.exportCSV(filters)
+        const response = await callBridge(window.writingAPI.essays.exportCSV, filters)
         return handleResponse(response)
     }
 }
@@ -283,25 +288,25 @@ export const essays = {
 export const settings = {
     async getAll() {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.settings.getAll()
+        const response = await callBridge(window.writingAPI.settings.getAll)
         return handleResponse(response)
     },
 
     async get(key) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.settings.get(key)
+        const response = await callBridge(window.writingAPI.settings.get, key)
         return handleResponse(response)
     },
 
     async update(updates) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.settings.update(updates)
+        const response = await callBridge(window.writingAPI.settings.update, updates)
         return handleResponse(response)
     },
 
     async reset() {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.settings.reset()
+        const response = await callBridge(window.writingAPI.settings.reset)
         return handleResponse(response)
     }
 }
@@ -310,19 +315,19 @@ export const settings = {
 export const upload = {
     async uploadImage(fileData) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.upload.uploadImage(fileData)
+        const response = await callBridge(window.writingAPI.upload.uploadImage, fileData)
         return handleResponse(response)
     },
 
     async deleteImage(filename) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.upload.deleteImage(filename)
+        const response = await callBridge(window.writingAPI.upload.deleteImage, filename)
         return handleResponse(response)
     },
 
     async getImagePath(filename) {
         if (!isAPIAvailable()) throw new Error('API 不可用')
-        const response = await window.writingAPI.upload.getImagePath(filename)
+        const response = await callBridge(window.writingAPI.upload.getImagePath, filename)
         return handleResponse(response)
     }
 }

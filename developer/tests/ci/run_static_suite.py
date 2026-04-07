@@ -1152,6 +1152,35 @@ def run_checks() -> Tuple[List[dict], bool]:
     results.append(_format_result("写作题库页去竞态与非阻塞错误守卫", topic_manage_page_guard_passed, topic_manage_page_guard_detail))
     all_passed &= topic_manage_page_guard_passed
 
+    writing_ipc_serialize_test = REPO_ROOT / "developer" / "tests" / "ci" / "writing_ipc_serialize_contract.cjs"
+    if writing_ipc_serialize_test.exists():
+        try:
+            completed_writing_ipc_serialize = subprocess.run(
+                ["node", str(writing_ipc_serialize_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            writing_ipc_serialize_passed = False
+            writing_ipc_serialize_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_writing_ipc_serialize = completed_writing_ipc_serialize.stdout.strip() or completed_writing_ipc_serialize.stderr.strip()
+            try:
+                writing_ipc_serialize_payload = json.loads(raw_writing_ipc_serialize or "{}")
+            except json.JSONDecodeError as parse_error:
+                writing_ipc_serialize_passed = False
+                writing_ipc_serialize_detail = f"输出解析失败: {parse_error}"
+            else:
+                writing_ipc_serialize_passed = writing_ipc_serialize_payload.get("status") == "pass"
+                writing_ipc_serialize_detail = writing_ipc_serialize_payload.get("detail", writing_ipc_serialize_payload)
+        results.append(_format_result("写作 IPC 参数可克隆化守卫", writing_ipc_serialize_passed, writing_ipc_serialize_detail))
+        all_passed &= writing_ipc_serialize_passed
+    else:
+        results.append(_format_result("写作 IPC 参数可克隆化守卫", False, "测试脚本缺失"))
+        all_passed = False
+
     writing_request_gate_test = REPO_ROOT / "developer" / "tests" / "ci" / "writing_request_gate_contract.cjs"
     if writing_request_gate_test.exists():
         try:
