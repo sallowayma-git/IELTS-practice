@@ -124,17 +124,17 @@ const gridLevels = [1, 2, 3, 4, 5]
 const dimensions = computed(() => {
   if (props.taskType === 'task1') {
     return [
-      { name: 'TR\nTask Achievement', key: 'tr_ta' },
-      { name: 'CC\nCoherence & Cohesion', key: 'cc' },
-      { name: 'LR\nLexical Resource', key: 'lr' },
-      { name: 'GRA\nGrammatical Range', key: 'gra' }
+      { name: 'TR\n任务完成度', key: 'tr_ta' },
+      { name: 'CC\n连贯与衔接', key: 'cc' },
+      { name: 'LR\n词汇丰富度', key: 'lr' },
+      { name: 'GRA\n语法多样性', key: 'gra' }
     ]
   } else {
     return [
-      { name: 'TA\nTask Response', key: 'tr_ta' },
-      { name: 'CC\nCoherence & Cohesion', key: 'cc' },
-      { name: 'LR\nLexical Resource', key: 'lr' },
-      { name: 'GRA\nGrammatical Range', key: 'gra' }
+      { name: 'TA\n任务回应情况', key: 'tr_ta' },
+      { name: 'CC\n连贯与衔接', key: 'cc' },
+      { name: 'LR\n词汇丰富度', key: 'lr' },
+      { name: 'GRA\n语法多样性', key: 'gra' }
     ]
   }
 })

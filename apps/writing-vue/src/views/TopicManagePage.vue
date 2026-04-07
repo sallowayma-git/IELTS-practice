@@ -774,20 +774,20 @@ onBeforeUnmount(() => {
 }
 
 .glass-btn {
-  background: rgba(255, 255, 255, 0.15);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: var(--surface-0);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
 }
 
 .glass-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--bg-muted);
   transform: translateY(-2px);
 }
 
 /* 筛选工具栏 (HeroUI Capsular Style) */
 .filter-toolbar {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   padding: 12px 24px;
   margin-bottom: 32px;
@@ -798,11 +798,13 @@ onBeforeUnmount(() => {
   min-width: 800px;
   margin-left: auto;
   margin-right: auto;
+  gap: 24px;
 }
 
 .filter-group {
   display: flex;
-  gap: 12px;
+  gap: 16px;
+  justify-content: center;
 }
 
 .filter-item {

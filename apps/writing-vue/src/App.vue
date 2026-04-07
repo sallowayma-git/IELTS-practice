@@ -1,5 +1,6 @@
 <template>
   <div class="app-shell">
+    <ShuiBackground />
     <NavBar />
     <main class="app-main">
       <router-view v-slot="{ Component }">
@@ -13,6 +14,7 @@
 
 <script setup>
 import NavBar from './components/NavBar.vue'
+import ShuiBackground from './components/ShuiBackground.vue'
 </script>
 
 <style scoped>
@@ -20,7 +22,9 @@ import NavBar from './components/NavBar.vue'
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg-app);
+  background: rgba(245, 244, 237, 0.45); /* WebGL is visually beneath this glass layer */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: var(--text-primary);
   position: relative;
 }
