@@ -184,8 +184,16 @@
             </div>
           </div>
         </div>
-      </div>
 
+        <!-- 历史趋势折线图 -->
+        <div class="trend-chart-container test-dashboard-card" style="margin-top: 32px; background: var(--surface-0); padding: 24px; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
+          <h3 style="margin-top: 0; margin-bottom: 24px; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+            历次练习得分曲线
+          </h3>
+          <LineChart :historyData="trendData" />
+        </div>
+      </div>
       <div v-else-if="loadingStatistics" class="loading">加载统计数据中...</div>
       <div v-else class="statistics-empty">
         <p>暂无统计数据</p>
@@ -449,6 +457,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { essays as essaysApi } from '@/api/client.js'
 import RadarChart from '@/components/RadarChart.vue'
+import LineChart from '@/components/LineChart.vue'
 import { createRequestGate } from '@/utils/request-gate.js'
 import {
   BAND_RATIONALE_LABELS,
@@ -480,6 +489,17 @@ const pageNotice = ref({ type: '', message: '' })
 const loadingStatistics = ref(false)
 const statistics = ref(null)
 const statisticsRange = ref('all')
+
+const trendData = computed(() => {
+  if (!essaysList.value) return [];
+  return [...essaysList.value].slice(0, 15).reverse().map(record => {
+    const d = new Date(record.created_at);
+    return {
+      date: `${d.getMonth() + 1}/${d.getDate()}`,
+      score: record.overall_score || 0
+    };
+  });
+})
 
 // 筛选条件（严格按照后端契约）
 const filters = ref({
