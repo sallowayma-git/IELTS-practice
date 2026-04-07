@@ -73,36 +73,6 @@
             </div>
           </div>
 
-          <div v-if="topicMode === 'bank'" class="config-section config-section--grow">
-            <span class="config-label">选择考题</span>
-            <div class="field-row">
-              <select id="topic-category" v-model="selectedCategory" class="select select-sm">
-                <option value="">全部分类</option>
-                <option
-                  v-for="option in categoryOptions"
-                  :key="option.value"
-                  :value="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-              <select
-                id="topic-select"
-                :value="selectedTopicId === null ? '' : String(selectedTopicId)"
-                class="select select-sm select-grow"
-                :disabled="topicLoading || topicsList.length === 0"
-                @change="handleTopicChange"
-              >
-                <option value="">请选择题目</option>
-                <option
-                  v-for="topic in topicsList"
-                  :key="topic.id"
-                  :value="String(topic.id)"
-                >
-                  {{ getTopicOptionLabel(topic) }}
-                </option>
-              </select>
-            </div>
           </div>
         </div>
 
@@ -117,16 +87,51 @@
             ></textarea>
           </div>
           <div v-else class="topic-panel">
-            <div v-if="topicLoading" class="topic-status">题库加载中...</div>
-            <div v-else-if="topicError" class="topic-status topic-status--error">{{ topicError }}</div>
-            <div v-else-if="topicsList.length === 0" class="topic-status">当前分类下没有题目。</div>
-            <div v-else-if="selectedTopicId === null" class="topic-status">先选中题目，再开始作答。</div>
-
-            <div v-if="selectedTopicText" class="prompt-content">
-              <div class="prompt-meta">
-                <strong>{{ currentTopicLabel }}</strong>
+            <div class="prompt-content">
+              <div class="prompt-meta" style="display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px;">
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                  <strong v-if="selectedTopicText">{{ currentTopicLabel }}</strong>
+                  <strong v-else style="opacity: 0.6;">等待选择题目...</strong>
+                </div>
+                <div class="field-row inline-topic-selectors" style="display: flex; gap: 8px;">
+                  <select id="topic-category" v-model="selectedCategory" class="select select-sm inline-select">
+                    <option value="">全部分类</option>
+                    <option
+                      v-for="option in categoryOptions"
+                      :key="option.value"
+                      :value="option.value"
+                    >
+                      {{ option.label }}
+                    </option>
+                  </select>
+                  <select
+                    id="topic-select"
+                    :value="selectedTopicId === null ? '' : String(selectedTopicId)"
+                    class="select select-sm inline-select"
+                    :disabled="topicLoading || topicsList.length === 0"
+                    @change="handleTopicChange"
+                  >
+                    <option value="">选择具体考题</option>
+                    <option
+                      v-for="topic in topicsList"
+                      :key="topic.id"
+                      :value="String(topic.id)"
+                    >
+                      {{ getTopicOptionLabel(topic) }}
+                    </option>
+                  </select>
+                </div>
               </div>
-              <p class="prompt-text">{{ selectedTopicText }}</p>
+
+              <div v-if="topicLoading" class="topic-status">数据同步中...</div>
+              <div v-else-if="topicError" class="topic-status topic-status--error">{{ topicError }}</div>
+              <div v-else-if="selectedTopicText">
+                <p class="prompt-text">{{ selectedTopicText }}</p>
+              </div>
+              <div v-else class="topic-status" style="border: none; background: transparent; padding: 0;">
+                <span v-if="topicsList.length === 0" style="opacity: 0.5;">当前分类下无记录</span>
+                <span v-else style="opacity: 0.5;"></span>
+              </div>
             </div>
           </div>
         </div>
@@ -137,15 +142,15 @@
         <div class="editor-head">
           <div class="editor-head__copy">
             <h2>正文</h2>
+            <div class="word-meta">
+              目标 <strong>{{ targetWordCount }}</strong> 词
+            </div>
           </div>
 
           <div class="editor-head__stats">
             <div :class="['word-badge', { 'is-warning': isWordCountLow }]">
-              <span>当前字数</span>
-              <strong>{{ wordCount }}</strong>
-            </div>
-            <div class="word-meta">
-              目标 {{ targetWordCount }} 词
+              <span class="word-badge-label">字数</span>
+              <strong class="word-badge-value">{{ wordCount }}</strong>
             </div>
           </div>
         </div>
@@ -804,13 +809,15 @@ async function submitEssay() {
 .editor-head {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 18px;
 }
 
 .editor-head__copy {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 16px;
 }
 
 .editor-head__copy h2 {
@@ -818,6 +825,7 @@ async function submitEssay() {
   font-size: 34px;
   line-height: 0.96;
   letter-spacing: -0.04em;
+  margin: 0;
 }
 
 .editor-head__stats {
@@ -825,17 +833,16 @@ async function submitEssay() {
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
-  min-width: 150px;
 }
 
 .word-badge {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 132px;
-  padding: 14px 16px;
-  border-radius: var(--radius-md);
-  background: rgba(255, 251, 246, 0.84);
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-radius: var(--radius-full);
+  background: var(--surface-0);
   border: 1px solid var(--line-1);
 }
 
