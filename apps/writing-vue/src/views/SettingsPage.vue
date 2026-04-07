@@ -1,7 +1,11 @@
 <template>
   <div class="settings-page">
     <div class="page-header">
-      <h1>⚙️ 系统设置</h1>
+      <div class="page-header__copy">
+        <span class="panel-label">System Workspace</span>
+        <h1>系统设置</h1>
+        <p>集中管理 API、提示词、模型参数和数据策略，不再把设置页做成一张大白卡。</p>
+      </div>
     </div>
 
     <!-- 标签页 -->
@@ -1337,5 +1341,159 @@ onBeforeUnmount(() => {
   padding: 8px 0;
   font-size: 14px;
   color: var(--text-secondary);
+}
+
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: rise-in 0.45s var(--ease-smooth);
+}
+
+.settings-page .page-header__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-page .page-header__copy h1 {
+  font-family: var(--font-family-display);
+  font-size: clamp(38px, 5vw, 62px);
+  line-height: 0.94;
+  letter-spacing: -0.05em;
+}
+
+.settings-page .page-header__copy p {
+  max-width: 760px;
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.settings-page .tabs-container {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.settings-page .tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: start;
+  position: sticky;
+  top: 108px;
+  padding: 18px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--radius-lg);
+  background: var(--surface-0);
+}
+
+.settings-page .tab-content {
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--radius-lg);
+  background: var(--surface-0);
+  box-shadow: var(--shadow-sm);
+}
+
+.settings-page .section + .section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line-1);
+}
+
+.settings-page .section h3 {
+  font-family: var(--font-family-display);
+  font-size: 28px;
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+}
+
+.settings-page .form-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.settings-page .temperature-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-page .mode-card {
+  padding: 14px 16px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--radius-md);
+  background: rgba(255, 251, 246, 0.62);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease,
+    transform var(--duration-fast) ease;
+}
+
+.settings-page .mode-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+}
+
+.settings-page .mode-card.active {
+  background: rgba(139, 77, 49, 0.08);
+  border-color: rgba(139, 77, 49, 0.22);
+}
+
+.settings-page .config-table,
+.settings-page .json-editor,
+.settings-page .about-info,
+.settings-page .about-features,
+.settings-page .custom-temperature-panel,
+.settings-page .danger-zone {
+  border-radius: var(--radius-md);
+}
+
+.settings-page .danger-zone {
+  border-color: rgba(138, 64, 49, 0.2);
+  background: rgba(138, 64, 49, 0.05);
+}
+
+.settings-page .about-section {
+  max-width: none;
+  text-align: left;
+}
+
+.settings-page .about-section h2 {
+  font-family: var(--font-family-display);
+  font-size: 36px;
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+}
+
+@media (max-width: 960px) {
+  .settings-page .tabs-container {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-page .tabs {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 720px) {
+  .settings-page .temperature-modes {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-page .form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>

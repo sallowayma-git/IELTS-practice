@@ -1,38 +1,34 @@
 <template>
-  <nav class="navbar-container">
-    <div class="navbar-content">
-      <div class="navbar-left">
-        <div class="logo-wrapper">
-          <span class="logo-icon">✍️</span>
+  <nav class="nav-shell">
+    <div class="nav-inner">
+      <router-link to="/" class="brand-block">
+        <span class="brand-mark">IW</span>
+        <div class="brand-copy">
+          <span class="brand-eyebrow">IELTS writing workspace</span>
+          <strong class="brand-title">写作评分工作台</strong>
         </div>
-        <h1 class="brand-title">IELTS Writing <span class="badge">Pro</span></h1>
-      </div>
-      
-      <div class="navbar-right">
+      </router-link>
+
+      <div class="nav-cluster">
         <div class="nav-links">
-          <router-link to="/" class="nav-item">
-            <span class="nav-icon">📝</span> 写作
-          </router-link>
-          <router-link to="/topics" class="nav-item">
-            <span class="nav-icon">📚</span> 题库
-          </router-link>
-          <router-link to="/history" class="nav-item">
-            <span class="nav-icon">📊</span> 历史
-          </router-link>
-          <router-link to="/settings" class="nav-item">
-            <span class="nav-icon">⚙️</span> 设置
+          <router-link
+            v-for="item in navItems"
+            :key="item.to"
+            :to="item.to"
+            class="nav-item"
+          >
+            <span class="nav-label">{{ item.label }}</span>
+            <span class="nav-caption">{{ item.caption }}</span>
           </router-link>
         </div>
-        
-        <div class="divider"></div>
-        
+
         <button
-          :class="['btn-return', { 'is-disabled': isReturnDisabled }]"
+          :class="['return-link', { 'is-disabled': isReturnDisabled }]"
           :disabled="isReturnDisabled"
           :title="returnTitle"
           @click="goBackToLegacy"
         >
-          <span class="icon">🔙</span> <span class="text">{{ returnLabel }}</span>
+          <span>{{ returnLabel }}</span>
         </button>
       </div>
     </div>
@@ -46,6 +42,13 @@ import { useRoute, useRouter } from 'vue-router'
 const router = useRouter()
 const route = useRoute()
 
+const navItems = [
+  { to: '/', label: '写作', caption: 'Compose' },
+  { to: '/topics', label: '题库', caption: 'Topics' },
+  { to: '/history', label: '历史', caption: 'History' },
+  { to: '/settings', label: '设置', caption: 'Settings' }
+]
+
 const canOpenLegacy = computed(() => (
   typeof window !== 'undefined' &&
   !!window.electronAPI &&
@@ -54,7 +57,7 @@ const canOpenLegacy = computed(() => (
 
 const isComposePage = computed(() => route.name === 'Compose')
 const isReturnDisabled = computed(() => !canOpenLegacy.value && isComposePage.value)
-const returnLabel = computed(() => (canOpenLegacy.value ? '返回' : '回首页'))
+const returnLabel = computed(() => (canOpenLegacy.value ? '返回练习主页' : '回写作首页'))
 const returnTitle = computed(() => (
   canOpenLegacy.value
     ? '返回练习主页'
@@ -74,151 +77,157 @@ function goBackToLegacy() {
 </script>
 
 <style scoped>
-.navbar-container {
+.nav-shell {
   position: sticky;
   top: 0;
-  z-index: 100;
-  /* 移除背景色，让毛玻璃效果更纯粹 */
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  z-index: 120;
+  padding: 18px 0 0;
 }
 
-.navbar-content {
-  max-width: 1400px;
+.nav-inner {
+  width: min(1480px, calc(100vw - 48px));
   margin: 0 auto;
-  padding: 12px 24px;
+  padding: 14px 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 72px;
+  gap: 20px;
+  border: 1px solid rgba(88, 64, 46, 0.12);
+  border-radius: 28px;
+  background: rgba(255, 250, 242, 0.84);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 30px rgba(68, 46, 29, 0.06);
 }
 
-.navbar-left {
+.brand-block {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
+  color: inherit;
+  text-decoration: none;
 }
 
-.logo-wrapper {
-  background: rgba(255, 255, 255, 0.2);
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+.brand-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  background: linear-gradient(180deg, #9b6c49 0%, #7d5133 100%);
+  color: #fff7ee;
+  font-family: var(--font-family-display);
+  font-size: 1rem;
+  letter-spacing: 0.08em;
 }
 
-.logo-icon {
-  font-size: 24px;
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.brand-eyebrow {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .brand-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #ffffff;
-  letter-spacing: -0.02em;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  font-size: 1.18rem;
+  font-family: var(--font-family-display);
 }
 
-.badge {
-  font-size: 11px;
-  background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
-  color: #8B4500;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.navbar-right {
+.nav-cluster {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 18px;
 }
 
 .nav-links {
   display: flex;
-  background: rgba(0, 0, 0, 0.2);
-  padding: 4px;
-  border-radius: 12px;
-  gap: 4px;
+  gap: 8px;
 }
 
 .nav-item {
-  color: rgba(255, 255, 255, 0.8);
-  text-decoration: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 88px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: all var(--duration-fast) var(--ease-smooth);
 }
 
 .nav-item:hover {
-  color: white;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(143, 95, 63, 0.08);
+  color: var(--text-primary);
 }
 
 .nav-item.router-link-active {
-  background: white;
-  color: var(--primary-color);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  background: rgba(143, 95, 63, 0.12);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px rgba(143, 95, 63, 0.16);
+}
+
+.nav-label {
+  font-size: 0.95rem;
   font-weight: 600;
 }
 
-.divider {
-  width: 1px;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.2);
+.nav-caption {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.btn-return {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: white;
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 500;
+.return-link {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(88, 64, 46, 0.12);
+  background: rgba(255, 251, 245, 0.92);
+  color: var(--text-primary);
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  transition: all var(--duration-fast) var(--ease-smooth);
 }
 
-.btn-return:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: translateY(-1px);
+.return-link:hover {
+  background: #fffdf9;
+  border-color: var(--border-strong);
 }
 
-.btn-return:disabled,
-.btn-return.is-disabled {
+.return-link:disabled,
+.return-link.is-disabled {
   opacity: 0.55;
   cursor: not-allowed;
-  transform: none;
 }
 
-.btn-return:disabled:hover,
-.btn-return.is-disabled:hover {
-  background: rgba(255, 255, 255, 0.15);
-  transform: none;
-}
+@media (max-width: 960px) {
+  .nav-inner {
+    width: min(100vw - 24px, 1480px);
+    flex-direction: column;
+    align-items: stretch;
+    border-radius: 24px;
+  }
 
-.btn-return .icon {
-  font-size: 12px;
+  .nav-cluster {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .nav-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .return-link {
+    min-height: 46px;
+  }
 }
 </style>
