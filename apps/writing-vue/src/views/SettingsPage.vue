@@ -329,6 +329,11 @@
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { settings, essays, configs, prompts } from '@/api/client.js'
 import { createRequestGate } from '@/utils/request-gate.js'
+import {
+  getProviderDefaultBaseUrl,
+  isProviderDefaultUrl,
+  resolveProviderBaseUrlOnChange
+} from '@/utils/provider-form.js'
 
 const tabs = [
   { key: 'api', label: 'API配置' },
@@ -337,18 +342,6 @@ const tabs = [
   { key: 'data', label: '数据管理' },
   { key: 'about', label: '关于' }
 ]
-
-const PROVIDER_DEFAULTS = Object.freeze({
-  openai: {
-    base_url: 'https://api.openai.com/v1'
-  },
-  openrouter: {
-    base_url: 'https://openrouter.ai/api/v1'
-  },
-  deepseek: {
-    base_url: 'https://api.deepseek.com/v1'
-  }
-})
 
 const activeTab = ref('model')
 const modelSaving = ref(false)
@@ -642,22 +635,12 @@ async function saveApiConfig() {
   }
 }
 
-function normalizeProviderUrl(url) {
-  return String(url || '').trim().replace(/\/+$/, '')
-}
-
-function getProviderDefaultBaseUrl(provider) {
-  return PROVIDER_DEFAULTS[provider]?.base_url || ''
-}
-
-function isProviderDefaultUrl(provider, url) {
-  const expected = getProviderDefaultBaseUrl(provider)
-  if (!expected) return false
-  return normalizeProviderUrl(url) === normalizeProviderUrl(expected)
-}
-
 function applyProviderBaseUrl(provider) {
-  const defaultUrl = getProviderDefaultBaseUrl(provider)
+  const defaultUrl = resolveProviderBaseUrlOnChange({
+    provider,
+    currentBaseUrl: apiForm.value.base_url,
+    isLinked: true
+  })
   if (!defaultUrl) return
   isApplyingProviderDefault.value = true
   apiForm.value.base_url = defaultUrl

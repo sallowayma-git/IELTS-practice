@@ -1,6 +1,5 @@
 <template>
   <div class="compose-page">
-    <!-- Draft Recovery Notification -->
     <div v-if="showDraftNotification" class="draft-notification card">
       <div class="notification-content">
         <div class="notification-icon">💾</div>
@@ -23,13 +22,13 @@
       <div class="compose-header">
         <h2>作文输入</h2>
         <div class="task-type-selector">
-          <button 
+          <button
             :class="['task-btn', { active: taskType === 'task1' }]"
             @click="taskType = 'task1'"
           >
             Task 1
           </button>
-          <button 
+          <button
             :class="['task-btn', { active: taskType === 'task2' }]"
             @click="taskType = 'task2'"
           >
@@ -47,19 +46,110 @@
         </p>
       </div>
 
+      <div class="mode-section">
+        <span class="section-label">写作模式</span>
+        <div class="mode-toggle">
+          <button
+            :class="['mode-btn', { active: topicMode === 'free' }]"
+            @click="topicMode = 'free'"
+          >
+            自由写作
+          </button>
+          <button
+            :class="['mode-btn', { active: topicMode === 'bank' }]"
+            @click="topicMode = 'bank'"
+          >
+            从题库选择
+          </button>
+        </div>
+      </div>
+
+      <div v-if="topicMode === 'free'" class="topic-bank card-subsection">
+        <div class="field">
+          <label for="custom-topic-text">{{ customTopicLabel }}</label>
+          <textarea
+            id="custom-topic-text"
+            v-model="customTopicText"
+            class="textarea topic-input"
+            :placeholder="customTopicPlaceholder"
+            rows="4"
+          ></textarea>
+        </div>
+        <p class="topic-status">
+          评分会结合题目要求判断 {{ taskType === 'task1' ? 'Task Achievement' : 'Task Response' }}，不填题目就是瞎判。
+        </p>
+      </div>
+
+      <div v-if="topicMode === 'bank'" class="topic-bank card-subsection">
+        <div class="topic-toolbar">
+          <div class="field">
+            <label for="topic-category">分类</label>
+            <select id="topic-category" v-model="selectedCategory" class="select">
+              <option value="">全部分类</option>
+              <option
+                v-for="option in categoryOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+
+          <div class="field field-grow">
+            <label for="topic-select">题目</label>
+            <select
+              id="topic-select"
+              :value="selectedTopicId === null ? '' : String(selectedTopicId)"
+              class="select"
+              :disabled="topicLoading || topicsList.length === 0"
+              @change="handleTopicChange"
+            >
+              <option value="">请选择题目</option>
+              <option
+                v-for="topic in topicsList"
+                :key="topic.id"
+                :value="String(topic.id)"
+              >
+                {{ getTopicOptionLabel(topic) }}
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <p v-if="topicLoading" class="topic-status">正在加载题库...</p>
+        <p v-else-if="topicError" class="topic-status topic-status-error">{{ topicError }}</p>
+        <p v-else-if="topicsList.length === 0" class="topic-status">
+          当前条件下没有题目，换个分类试试。
+        </p>
+        <p v-else-if="selectedTopicId === null" class="topic-status">
+          请选择题目后再提交评分。
+        </p>
+
+        <div v-if="selectedTopicText" class="topic-preview">
+          <div class="topic-preview-header">
+            <span class="section-label">当前题目</span>
+            <span class="topic-meta">
+              {{ currentTopicLabel }}
+            </span>
+          </div>
+          <p>{{ selectedTopicText }}</p>
+        </div>
+      </div>
+
       <div class="editor-section">
-        <textarea 
+        <textarea
           v-model="content"
           class="textarea essay-input"
           :placeholder="placeholder"
           rows="15"
         ></textarea>
-        
+
         <div class="editor-footer">
           <div :class="['word-count', { warning: isWordCountLow }]">
             字数：{{ wordCount }} / {{ targetWordCount }}
           </div>
-          <button 
+          <button
             class="btn btn-primary submit-btn"
             :disabled="!canSubmit"
             @click="handleSubmit"
@@ -72,9 +162,11 @@
       <div v-if="error" class="error-message">
         ⚠️ {{ error }}
       </div>
+      <div v-else-if="restoreNotice" class="restore-notice">
+        {{ restoreNotice }}
+      </div>
     </div>
 
-    <!-- 字数不足确认弹窗 -->
     <div v-if="showConfirmDialog" class="dialog-overlay">
       <div class="dialog card">
         <h3>字数不足提醒</h3>
@@ -97,100 +189,330 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { evaluate, getErrorMessage } from '@/api/client.js'
+import { evaluate, getErrorMessage, topics as topicsApi } from '@/api/client.js'
 import { useDraft } from '@/composables/useDraft.js'
 
 const router = useRouter()
 
+const TASK2_CATEGORIES = [
+  { value: 'education', label: '教育' },
+  { value: 'technology', label: '科技' },
+  { value: 'society', label: '社会' },
+  { value: 'environment', label: '环境' },
+  { value: 'health', label: '健康' },
+  { value: 'culture', label: '文化' },
+  { value: 'government', label: '政府' },
+  { value: 'economy', label: '经济' }
+]
+
+const TASK1_CATEGORIES = [
+  { value: 'bar_chart', label: '柱状图' },
+  { value: 'pie_chart', label: '饼图' },
+  { value: 'line_chart', label: '折线图' },
+  { value: 'flow_chart', label: '流程图' },
+  { value: 'map', label: '地图' },
+  { value: 'table', label: '表格' },
+  { value: 'process', label: '过程' },
+  { value: 'mixed', label: '混合图' }
+]
+
 const taskType = ref('task2')
+const topicMode = ref('free')
+const selectedCategory = ref('')
+const selectedTopicId = ref(null)
+const topicsList = ref([])
+const topicLoading = ref(false)
+const topicError = ref('')
+const customTopicText = ref('')
 const content = ref('')
 const isSubmitting = ref(false)
 const error = ref('')
+const restoreNotice = ref('')
 const showConfirmDialog = ref(false)
-
-// Draft management
-const {
-  hasDraft,
-  loadDraft,
-  saveDraft,
-  clearDraft,
-  stopAutoSave
-} = useDraft('compose-essay', content)
-
 const showDraftNotification = ref(false)
+const isRestoringDraft = ref(false)
+let topicsRequestSequence = 0
 
-// Load draft on mount
+function invalidateTopicRequests() {
+  topicsRequestSequence += 1
+  topicLoading.value = false
+  topicsList.value = []
+}
+
+const {
+  scheduleSave,
+  loadDraft,
+  clearDraft,
+  hasDraft,
+  stopAutoSave
+} = useDraft('compose-essay', () => ({
+  task_type: taskType.value,
+  topic_mode: topicMode.value,
+  topic_id: topicMode.value === 'bank' ? selectedTopicId.value : null,
+  topic_text: topicMode.value === 'free' ? customTopicText.value : selectedTopicText.value,
+  category: selectedCategory.value,
+  content: content.value,
+  word_count: wordCount.value
+}))
+
+const categoryOptions = computed(() => (
+  taskType.value === 'task1' ? TASK1_CATEGORIES : TASK2_CATEGORIES
+))
+
+function normalizeCategory(type = taskType.value, category = selectedCategory.value) {
+  const options = type === 'task1' ? TASK1_CATEGORIES : TASK2_CATEGORIES
+  return options.some((item) => item.value === category) ? category : ''
+}
+
+const selectedTopic = computed(() => (
+  topicsList.value.find((topic) => topic.id === selectedTopicId.value) || null
+))
+
+const selectedTopicText = computed(() => (
+  selectedTopic.value ? extractTextFromTiptap(selectedTopic.value.title_json) : ''
+))
+
+const currentTopicLabel = computed(() => {
+  if (!selectedTopic.value) return ''
+  const option = categoryOptions.value.find((item) => item.value === selectedTopic.value.category)
+  return option ? option.label : selectedTopic.value.category
+})
+
+const customTopicLabel = computed(() => (
+  taskType.value === 'task1' ? '图表题目或图示说明' : '写作题目'
+))
+
+const wordCount = computed(() => {
+  const text = content.value.trim()
+  if (!text) return 0
+  return text.split(/\s+/).filter((word) => word.length > 0).length
+})
+
+const minWordCount = computed(() => taskType.value === 'task1' ? 150 : 250)
+const targetWordCount = computed(() => taskType.value === 'task1' ? 180 : 280)
+const isWordCountLow = computed(() => wordCount.value < minWordCount.value)
+
+const placeholder = computed(() => {
+  if (topicMode.value === 'bank' && selectedTopicText.value) {
+    return `当前题目：\n${selectedTopicText.value}\n\n请在这里写作...`
+  }
+
+  return taskType.value === 'task1'
+    ? '请输入您的 Task 1 作文...\n\n描述图表中的主要特征和趋势...'
+    : '请输入您的 Task 2 作文...\n\n介绍您的观点和论据...'
+})
+
+const customTopicPlaceholder = computed(() => (
+  taskType.value === 'task1'
+    ? '请输入 Task 1 图表题目或图示说明，例如：The chart below shows...'
+    : '请输入 Task 2 写作题目，例如：Some people think... To what extent do you agree or disagree?'
+))
+
+function getSubmitBlockReason() {
+  if (content.value.trim().length === 0) {
+    return '请先输入作文内容'
+  }
+
+  if (topicMode.value === 'free') {
+    return customTopicText.value.trim().length > 0
+      ? ''
+      : '自由写作模式下必须先输入题目'
+  }
+
+  if (topicLoading.value) {
+    return '题库还在加载中，请稍候再提交'
+  }
+
+  if (topicError.value) {
+    return topicError.value || '题库加载失败，请稍后重试'
+  }
+
+  if (selectedTopicId.value === null) {
+    return '题库模式下必须先选择题目'
+  }
+
+  if (!selectedTopic.value) {
+    return '当前题目无效，请重新选择题目'
+  }
+
+  return ''
+}
+
+const canSubmit = computed(() => (
+  !isSubmitting.value &&
+  !getSubmitBlockReason()
+))
+
 onMounted(() => {
   if (hasDraft()) {
     showDraftNotification.value = true
   }
 })
 
-// Auto-save when content or taskType changes
-watch([content, taskType], () => {
-  saveDraft({
-    taskType: taskType.value,
-    content: content.value
-  })
+watch([taskType, topicMode, selectedCategory], async ([nextTaskType, nextMode], [prevTaskType, prevMode, prevCategory]) => {
+  if (isRestoringDraft.value) return
+  restoreNotice.value = ''
+
+  if (
+    nextTaskType !== prevTaskType ||
+    nextMode !== prevMode ||
+    selectedCategory.value !== prevCategory
+  ) {
+    selectedTopicId.value = null
+  }
+
+  const normalizedCategory = normalizeCategory(nextTaskType, selectedCategory.value)
+  if (normalizedCategory !== selectedCategory.value) {
+    selectedCategory.value = normalizedCategory
+  }
+
+  if (nextMode === 'bank') {
+    await loadTopics(nextTaskType)
+  } else {
+    invalidateTopicRequests()
+    topicError.value = ''
+  }
+
+  scheduleSave()
 })
 
-onBeforeUnmount(() => {
-  stopAutoSave()
+watch([content, selectedTopicId], () => {
+  if (isRestoringDraft.value) return
+  restoreNotice.value = ''
+  scheduleSave()
 })
 
-// Handle draft recovery
-function handleRecoverDraft() {
-  const draft = loadDraft()
-  if (draft) {
-    if (draft.taskType) {
-      taskType.value = draft.taskType
+watch(customTopicText, () => {
+  if (isRestoringDraft.value) return
+  restoreNotice.value = ''
+  scheduleSave()
+})
+
+async function loadTopics(type = taskType.value) {
+  const requestId = ++topicsRequestSequence
+  const category = selectedCategory.value
+
+  topicLoading.value = true
+  topicError.value = ''
+  topicsList.value = []
+
+  try {
+    const filters = { type }
+    if (category) {
+      filters.category = category
     }
-    if (draft.content) {
-      content.value = draft.content
+
+    const result = await topicsApi.list(filters, { page: 1, limit: 500 })
+    if (requestId !== topicsRequestSequence) {
+      return
+    }
+
+    topicsList.value = Array.isArray(result.data) ? result.data : []
+
+    const selectedStillExists = topicsList.value.some((topic) => topic.id === selectedTopicId.value)
+    if (!selectedStillExists) {
+      selectedTopicId.value = null
+    }
+  } catch (loadError) {
+    if (requestId !== topicsRequestSequence) {
+      return
+    }
+    console.error('加载题库失败:', loadError)
+    topicError.value = loadError?.message
+      ? `题库加载失败：${loadError.message}`
+      : '题库加载失败，请稍后重试'
+    topicsList.value = []
+    selectedTopicId.value = null
+  } finally {
+    if (requestId === topicsRequestSequence) {
+      topicLoading.value = false
     }
   }
+}
+
+async function handleRecoverDraft() {
+  const draft = loadDraft()
+  if (!draft) {
+    showDraftNotification.value = false
+    return
+  }
+
+  isRestoringDraft.value = true
+  taskType.value = draft.task_type || 'task2'
+  topicMode.value = draft.topic_mode || 'free'
+  selectedCategory.value = normalizeCategory(draft.task_type || 'task2', draft.category || '')
+  customTopicText.value = draft.topic_text || ''
+  content.value = draft.content || ''
+  selectedTopicId.value = draft.topic_id || null
+
+  if (draft.topic_mode === 'bank') {
+    await loadTopics(draft.task_type || 'task2')
+    if (draft.topic_id !== null && selectedTopicId.value === null) {
+      topicMode.value = 'free'
+      selectedCategory.value = ''
+      customTopicText.value = draft.topic_text || ''
+      restoreNotice.value = draft.topic_text
+        ? '草稿关联的题库题目已失效，已切换为自由写作并保留题目文本。'
+        : '草稿关联的题库题目已失效，请重新输入题目或重新选题。'
+    }
+  }
+
+  await nextTick()
+  isRestoringDraft.value = false
   showDraftNotification.value = false
+  scheduleSave()
 }
 
 function handleDiscardDraft() {
   clearDraft()
   showDraftNotification.value = false
+  restoreNotice.value = ''
 }
 
-// 计算属性
-const wordCount = computed(() => {
-  const text = content.value.trim()
-  if (!text) return 0
-  return text.split(/\s+/).filter(w => w.length > 0).length
-})
+function handleTopicChange(event) {
+  const value = event.target.value
+  selectedTopicId.value = value ? Number(value) : null
+  restoreNotice.value = ''
+}
 
-const minWordCount = computed(() => taskType.value === 'task1' ? 150 : 250)
-const targetWordCount = computed(() => taskType.value === 'task1' ? 180 : 280)
+function getTopicOptionLabel(topic) {
+  const text = extractTextFromTiptap(topic.title_json)
+  return text.length > 90 ? `${text.slice(0, 90)}...` : text
+}
 
-const isWordCountLow = computed(() => wordCount.value < minWordCount.value)
+function extractTextFromTiptap(json) {
+  if (typeof json === 'string') {
+    try {
+      return extractTextFromTiptap(JSON.parse(json))
+    } catch {
+      return json
+    }
+  }
 
-const placeholder = computed(() => 
-  taskType.value === 'task1' 
-    ? '请输入您的 Task 1 作文...\n\n描述图表中的主要特征和趋势...'
-    : '请输入您的 Task 2 作文...\n\n介绍您的观点和论据...'
-)
+  if (!json || typeof json !== 'object') return ''
+  if (json.type === 'text') return json.text || ''
+  if (Array.isArray(json.content)) {
+    return json.content.map((item) => extractTextFromTiptap(item)).join('')
+  }
+  return ''
+}
 
-const canSubmit = computed(() => {
-  return content.value.trim().length > 0 && !isSubmitting.value
-})
-
-// 提交处理
 async function handleSubmit() {
   if (!canSubmit.value) return
-  
-  // 字数不足时显示确认弹窗
+
+  const submitBlockReason = getSubmitBlockReason()
+  if (submitBlockReason) {
+    error.value = submitBlockReason
+    return
+  }
+
   if (isWordCountLow.value) {
     showConfirmDialog.value = true
     return
   }
-  
+
   await submitEssay()
 }
 
@@ -200,22 +522,30 @@ async function confirmSubmit() {
 }
 
 async function submitEssay() {
+  if (isSubmitting.value) return
+
+  const bankTopicId = topicMode.value === 'bank' ? (selectedTopic.value?.id ?? null) : null
+  if (topicMode.value === 'bank' && bankTopicId === null) {
+    error.value = '当前题目无效，请重新选择题目'
+    return
+  }
+
   isSubmitting.value = true
   error.value = ''
-  
+  restoreNotice.value = ''
+
   try {
     const result = await evaluate.start({
       task_type: taskType.value,
-      topic_id: null, // 自由写作模式
+      topic_id: bankTopicId,
+      topic_text: topicMode.value === 'free' ? customTopicText.value.trim() : null,
       content: content.value.trim(),
       word_count: wordCount.value
     })
-    
-    // Clear draft on successful submission
+
     clearDraft()
     stopAutoSave()
-    
-    // 跳转到评测进度页
+
     router.push({
       name: 'Evaluating',
       params: { sessionId: result.sessionId }
@@ -235,7 +565,6 @@ async function submitEssay() {
   margin: 0 auto;
 }
 
-/* Draft Notification */
 .draft-notification {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
@@ -261,184 +590,261 @@ async function submitEssay() {
 .notification-content {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .notification-icon {
-  font-size: 32px;
+  font-size: 28px;
 }
 
 .notification-text strong {
   display: block;
-  font-size: 16px;
   margin-bottom: 4px;
 }
 
 .notification-text p {
   margin: 0;
-  font-size: 14px;
   opacity: 0.9;
 }
 
 .notification-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
 }
-
-.notification-actions .btn {
-  padding: 8px 16px;
-  font-size: 14px;
-  border: 1px solid white;
-}
-
-.notification-actions .btn-secondary {
-  background: transparent;
-  color: white;
-}
-
-.notification-actions .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.notification-actions .btn-primary {
-  background: white;
-  color: #667eea;
-}
-
-.notification-actions .btn-primary:hover {
-  background: rgba(255, 255, 255, 0.9);
-}
-
 
 .compose-container {
-  background: white;
+  padding: 28px;
 }
 
 .compose-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
   margin-bottom: 16px;
 }
 
 .compose-header h2 {
-  font-size: 24px;
-  color: var(--text-primary);
+  margin: 0;
 }
 
-.task-type-selector {
-  display: flex;
+.task-type-selector,
+.mode-toggle {
+  display: inline-flex;
   gap: 8px;
 }
 
-.task-btn {
-  padding: 8px 20px;
-  font-size: 14px;
-  font-weight: 600;
-  border: 2px solid var(--primary-color);
-  background: transparent;
-  color: var(--primary-color);
-  border-radius: 20px;
+.task-btn,
+.mode-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 8px 14px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.task-btn.active {
+.task-btn.active,
+.mode-btn.active {
   background: var(--primary-color);
   color: white;
-}
-
-.task-btn:hover:not(.active) {
-  background: rgba(102, 126, 234, 0.1);
+  border-color: var(--primary-color);
 }
 
 .task-info {
-  background: var(--bg-light);
-  padding: 12px 16px;
-  border-radius: var(--border-radius);
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+  color: var(--text-secondary);
 }
 
 .task-info p {
   margin: 0;
+}
+
+.mode-section {
+  margin-bottom: 18px;
+}
+
+.section-label {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.card-subsection {
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.topic-toolbar {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 160px;
+}
+
+.field-grow {
+  flex: 1;
+}
+
+.field label {
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-secondary);
 }
 
+.select,
+.textarea {
+  width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: white;
+  color: var(--text-primary);
+  box-sizing: border-box;
+}
+
+.topic-status {
+  margin: 12px 0 0;
+  color: var(--text-secondary);
+}
+
+.topic-input {
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.topic-status-error {
+  color: #c2410c;
+}
+
+.topic-preview {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+.topic-preview-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.topic-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.topic-preview p {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
 .editor-section {
-  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .essay-input {
-  min-height: 350px;
-  font-size: 16px;
+  min-height: 340px;
+  resize: vertical;
+  line-height: 1.7;
 }
 
 .editor-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 12px;
+  gap: 16px;
 }
 
 .word-count {
-  font-size: 14px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .word-count.warning {
-  color: var(--warning-color);
-  font-weight: 600;
+  color: #dc2626;
 }
 
 .submit-btn {
-  min-width: 140px;
+  min-width: 120px;
 }
 
 .error-message {
-  background: rgba(245, 108, 108, 0.1);
-  color: var(--danger-color);
-  padding: 12px 16px;
-  border-radius: var(--border-radius);
+  margin-top: 16px;
+  color: #dc2626;
 }
 
-/* 弹窗样式 */
+.restore-notice {
+  margin-top: 16px;
+  color: #9a3412;
+}
+
 .dialog-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  padding: 20px;
+  z-index: 20;
 }
 
 .dialog {
-  max-width: 400px;
-  width: 90%;
+  max-width: 420px;
+  width: 100%;
   padding: 24px;
 }
 
 .dialog h3 {
-  margin-bottom: 12px;
-  color: var(--text-primary);
-}
-
-.dialog p {
-  color: var(--text-secondary);
-  margin-bottom: 8px;
+  margin-top: 0;
 }
 
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
   margin-top: 20px;
 }
 
-.dialog-actions .btn {
-  padding: 10px 20px;
+@media (max-width: 720px) {
+  .compose-header,
+  .topic-toolbar,
+  .editor-footer,
+  .notification-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .task-type-selector,
+  .mode-toggle {
+    width: 100%;
+  }
+
+  .task-btn,
+  .mode-btn {
+    flex: 1;
+  }
+
+  .topic-preview-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 </style>

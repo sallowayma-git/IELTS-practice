@@ -47,8 +47,8 @@ class EssaysDAO {
             }
             if (filters.search && String(filters.search).trim().length > 0) {
                 const keyword = `%${String(filters.search).trim()}%`;
-                conditions.push('(t.title_json LIKE ? OR e.content LIKE ?)');
-                params.push(keyword, keyword);
+                conditions.push('(t.title_json LIKE ? OR e.content LIKE ? OR e.evaluation_json LIKE ?)');
+                params.push(keyword, keyword, keyword);
             }
 
             const whereClause = conditions.length > 0
@@ -321,8 +321,8 @@ class EssaysDAO {
             }
             if (filters.search && String(filters.search).trim().length > 0) {
                 const keyword = `%${String(filters.search).trim()}%`;
-                conditions.push('(t.title_json LIKE ? OR e.content LIKE ?)');
-                params.push(keyword, keyword);
+                conditions.push('(t.title_json LIKE ? OR e.content LIKE ? OR e.evaluation_json LIKE ?)');
+                params.push(keyword, keyword, keyword);
             }
 
             const whereClause = conditions.length > 0
@@ -340,7 +340,8 @@ class EssaysDAO {
                     e.coherence_cohesion,
                     e.lexical_resource,
                     e.grammatical_range,
-                    e.model_name
+                    e.model_name,
+                    e.evaluation_json
                 FROM essays e
                 LEFT JOIN topics t ON e.topic_id = t.id
                 ${whereClause}

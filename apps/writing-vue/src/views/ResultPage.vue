@@ -4,25 +4,29 @@
       <!-- 左侧：作文标注 -->
       <div class="left-panel card">
         <div class="panel-header">
-          <h3>作文标注</h3>
+          <h3>{{ viewMode === 'full' ? '作文原文' : `重点纠错（${sentences.length}句）` }}</h3>
           <div class="view-switcher">
+            <button 
+              :class="['view-btn', { active: viewMode === 'full' }]"
+              @click="viewMode = 'full'"
+            >
+              全文
+            </button>
             <button 
               :class="['view-btn', { active: viewMode === 'annotated' }]"
               @click="viewMode = 'annotated'"
             >
-              标注视图
-            </button>
-            <button 
-              :class="['view-btn', { active: viewMode === 'original' }]"
-              @click="viewMode = 'original'"
-            >
-              原文视图
+              重点纠错
             </button>
           </div>
         </div>
 
-        <!-- 标注视图 -->
-        <div v-if="viewMode === 'annotated'" class="annotated-view">
+        <div v-if="viewMode === 'full'" class="essay-view">
+          <div v-if="essayText" class="essay-text">{{ essayText }}</div>
+          <p v-else class="empty-hint">暂无作文原文。</p>
+        </div>
+
+        <div v-else-if="sentences.length > 0" class="annotated-view">
           <div class="bulk-controls">
             <button class="btn-text" @click="expandAll">全部展开</button>
             <button class="btn-text" @click="collapseAll">全部折叠</button>
@@ -76,16 +80,22 @@
           </div>
         </div>
 
-        <!-- 原文视图 -->
         <div v-else class="original-view">
-          <p v-for="(sentence, index) in sentences" :key="index" class="original-sentence">
-            {{ sentence.original }}
-          </p>
+          <p class="empty-hint">{{ sentenceEmptyHint }}</p>
         </div>
       </div>
 
       <!-- 右侧：评分详情 -->
       <div class="right-panel">
+        <div v-if="topicText" class="topic-card card">
+          <div class="topic-meta-row">
+            <span class="topic-source">{{ topicSourceLabel }}</span>
+            <span class="word-meta">字数 {{ essayWordCount || '-' }}</span>
+          </div>
+          <h4>题目要求</h4>
+          <p class="topic-text">{{ topicText }}</p>
+        </div>
+
         <!-- 总分 -->
         <div class="score-card card">
           <div class="total-score">
@@ -129,10 +139,68 @@
           </div>
         </div>
 
+        <div v-if="reviewDegraded" class="feedback-card card degraded-feedback-card">
+          <h4>详解降级提示</h4>
+          <p class="feedback-text">
+            本次评测仅完成评分阶段，段落与句级详解未完整生成。建议稍后重试以获取完整详解。
+          </p>
+        </div>
+
         <!-- 整体建议 -->
         <div v-if="feedback" class="feedback-card card">
           <h4>整体改进建议</h4>
           <p class="feedback-text">{{ feedback }}</p>
+        </div>
+
+        <div v-if="reviewBlocks.length > 0" class="analysis-card card">
+          <h4>段落详解</h4>
+          <div class="rationale-list">
+            <div
+              v-for="(item, index) in reviewBlocks"
+              :key="`review-${index}`"
+              class="rationale-item"
+            >
+              <span class="analysis-label">段落 {{ item.paragraph_index || (index + 1) }}</span>
+              <p>{{ item.comment || item.analysis || item.feedback || '' }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="taskAnalysisEntries.length > 0" class="analysis-card card">
+          <h4>任务诊断</h4>
+          <div class="analysis-grid">
+            <div
+              v-for="item in taskAnalysisEntries"
+              :key="item.label"
+              class="analysis-item"
+            >
+              <span class="analysis-label">{{ item.label }}</span>
+              <p>{{ item.value }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="bandRationaleEntries.length > 0" class="analysis-card card">
+          <h4>评分理由</h4>
+          <div class="rationale-list">
+            <div
+              v-for="item in bandRationaleEntries"
+              :key="item.label"
+              class="rationale-item"
+            >
+              <span class="analysis-label">{{ item.label }}</span>
+              <p>{{ item.value }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="improvementPlan.length > 0" class="analysis-card card">
+          <h4>提分计划</h4>
+          <ul class="plan-list">
+            <li v-for="(item, index) in improvementPlan" :key="`${index}-${item}`">
+              {{ item }}
+            </li>
+          </ul>
         </div>
 
         <!-- 操作按钮 -->
@@ -150,6 +218,12 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { essays as essaysApi } from '@/api/client.js'
+import {
+  BAND_RATIONALE_LABELS,
+  TASK_ANALYSIS_LABELS,
+  buildEvaluationView,
+  formatLabeledEntries
+} from '@/utils/evaluation-result.js'
 
 const props = defineProps({
   sessionId: {
@@ -161,12 +235,21 @@ const props = defineProps({
 const router = useRouter()
 const route = useRoute()
 
-const viewMode = ref('annotated')
+const viewMode = ref('full')
 const expandedSentences = ref(new Set([0, 1, 2])) // 默认展开前3个
 
 const scoreData = ref(null)
 const sentences = ref([])
 const feedback = ref('')
+const essayText = ref('')
+const essayWordCount = ref(0)
+const topicText = ref('')
+const topicSource = ref('')
+const taskAnalysis = ref({})
+const bandRationale = ref({})
+const improvementPlan = ref([])
+const reviewBlocks = ref([])
+const reviewDegraded = ref(false)
 
 // 错误类型标签
 const ERROR_TYPE_LABELS = {
@@ -176,6 +259,26 @@ const ERROR_TYPE_LABELS = {
   sentence_structure: '句式问题',
   coherence: '逻辑连贯'
 }
+
+const taskAnalysisEntries = computed(() => (
+  formatLabeledEntries(taskAnalysis.value, TASK_ANALYSIS_LABELS)
+))
+
+const bandRationaleEntries = computed(() => (
+  formatLabeledEntries(bandRationale.value, BAND_RATIONALE_LABELS)
+))
+
+const topicSourceLabel = computed(() => {
+  if (topicSource.value === 'topic_bank') return '题库题目'
+  if (topicSource.value === 'custom_input') return '自定义题目'
+  return '评测题目'
+})
+
+const sentenceEmptyHint = computed(() => (
+  reviewDegraded.value
+    ? '本次详解阶段已降级，本页仅展示评分与提分建议；句级纠错没有成功生成。'
+    : '本次评测未返回句级纠错，说明模型没有识别出足够高价值的逐句修改点。'
+))
 
 onMounted(() => {
   loadResult()
@@ -187,19 +290,24 @@ async function loadResult() {
   if (essayId) {
     try {
       const detail = await essaysApi.getById(essayId)
-      const parsedEvaluation = typeof detail.evaluation_json === 'string'
-        ? JSON.parse(detail.evaluation_json)
-        : (detail.evaluation_json || {})
+      const evaluationView = buildEvaluationView(detail.evaluation_json, {
+        score: {
+          total_score: detail.total_score,
+          task_achievement: detail.task_achievement,
+          coherence_cohesion: detail.coherence_cohesion,
+          lexical_resource: detail.lexical_resource,
+          grammatical_range: detail.grammatical_range
+        },
+        task_analysis: detail.task_analysis,
+        band_rationale: detail.band_rationale,
+        improvement_plan: detail.improvement_plan,
+        topic_text: detail.topic_text || detail.display_topic_title || '',
+        topic_source: detail.topic_source || ''
+      })
 
-      scoreData.value = {
-        total_score: detail.total_score,
-        task_achievement: detail.task_achievement,
-        coherence_cohesion: detail.coherence_cohesion,
-        lexical_resource: detail.lexical_resource,
-        grammatical_range: detail.grammatical_range
-      }
-      sentences.value = parsedEvaluation.sentences || []
-      feedback.value = parsedEvaluation.overall_feedback || ''
+      essayText.value = detail.content || ''
+      essayWordCount.value = detail.word_count || 0
+      applyEvaluationView(evaluationView)
       return
     } catch (error) {
       console.warn('从数据库加载结果失败，降级读取 sessionStorage', error)
@@ -208,28 +316,37 @@ async function loadResult() {
 
   const stored = sessionStorage.getItem(`evaluation_${props.sessionId}`)
   if (stored) {
-    const data = JSON.parse(stored)
-    scoreData.value = data.score
-    sentences.value = data.sentences || []
-    feedback.value = data.feedback || ''
+    try {
+      applyEvaluationView(buildEvaluationView(JSON.parse(stored)))
+      return
+    } catch (error) {
+      console.warn('sessionStorage 结果解析失败，返回写作页', error)
+    }
+  }
+
+  router.replace({ name: 'Compose' })
+}
+
+function applyEvaluationView(view) {
+  scoreData.value = view.score
+  sentences.value = Array.isArray(view.sentences) ? view.sentences : []
+  feedback.value = view.overallFeedback
+  taskAnalysis.value = view.taskAnalysis
+  bandRationale.value = view.bandRationale
+  improvementPlan.value = view.improvementPlan
+  reviewBlocks.value = view.reviewBlocks
+  reviewDegraded.value = view.reviewDegraded === true
+
+  if (!topicText.value && view.topicText) {
+    topicText.value = view.topicText
+  }
+  if (!topicSource.value && view.topicSource) {
+    topicSource.value = view.topicSource
   }
 }
 
 function getErrorTypeLabel(type) {
   return ERROR_TYPE_LABELS[type] || type
-}
-
-/**
- * 提取错误的起止位置
- * 兼容两种格式：
- * - 新格式: { range: { start, end, unit: 'utf16' } }
- * - 旧格式: { start_pos, end_pos }
- */
-function getErrorRange(err) {
-  if (err.range && typeof err.range.start === 'number') {
-    return { start: err.range.start, end: err.range.end }
-  }
-  return { start: err.start_pos, end: err.end_pos }
 }
 
 function highlightErrors(sentence) {
@@ -241,19 +358,14 @@ function highlightErrors(sentence) {
   let result = ''
   let lastIndex = 0
 
-  // 按位置排序错误（兼容两种格式）
   const sortedErrors = [...sentence.errors].sort((a, b) => {
-    const rangeA = getErrorRange(a)
-    const rangeB = getErrorRange(b)
-    return rangeA.start - rangeB.start
+    return a.range.start - b.range.start
   })
 
   for (const err of sortedErrors) {
-    const range = getErrorRange(err)
-    
     // 边界检查：防止越界
-    const startPos = Math.max(0, Math.min(range.start, text.length))
-    const endPos = Math.max(startPos, Math.min(range.end, text.length))
+    const startPos = Math.max(0, Math.min(err.range.start, text.length))
+    const endPos = Math.max(startPos, Math.min(err.range.end, text.length))
     
     // 添加错误前的普通文本
     if (startPos > lastIndex) {
@@ -508,8 +620,24 @@ function writeNew() {
   line-height: 2;
 }
 
-.original-sentence {
-  margin-bottom: 8px;
+.essay-view {
+  min-height: 320px;
+}
+
+.essay-text {
+  background: var(--bg-light);
+  padding: 16px;
+  border-radius: var(--border-radius);
+  line-height: 1.9;
+  white-space: pre-wrap;
+}
+
+.empty-hint {
+  margin: 0;
+  padding: 16px;
+  background: var(--bg-light);
+  border-radius: var(--border-radius);
+  color: var(--text-secondary);
 }
 
 /* 右侧面板 */
@@ -517,6 +645,37 @@ function writeNew() {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.topic-card {
+  background: linear-gradient(180deg, rgba(102, 126, 234, 0.08), rgba(102, 126, 234, 0.02));
+}
+
+.topic-meta-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.topic-source,
+.word-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.topic-card h4,
+.analysis-card h4 {
+  font-size: 16px;
+  margin-bottom: 12px;
+  color: var(--text-primary);
+}
+
+.topic-text {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.8;
+  white-space: pre-wrap;
 }
 
 .score-card {
@@ -588,10 +747,55 @@ function writeNew() {
   background: var(--bg-light);
 }
 
+.degraded-feedback-card {
+  border: 1px solid rgba(194, 65, 12, 0.25);
+  background: rgba(255, 237, 213, 0.55);
+}
+
 .feedback-text {
   color: var(--text-secondary);
   line-height: 1.8;
   white-space: pre-wrap;
+}
+
+.analysis-grid,
+.rationale-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.analysis-item,
+.rationale-item {
+  padding: 12px 14px;
+  background: var(--bg-light);
+  border-radius: var(--border-radius);
+}
+
+.analysis-label {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.analysis-item p,
+.rationale-item p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.plan-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+}
+
+.plan-list li {
+  line-height: 1.8;
+  margin-bottom: 8px;
 }
 
 .action-buttons {

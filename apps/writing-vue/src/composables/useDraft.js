@@ -1,223 +1,312 @@
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { computed, onBeforeUnmount } from 'vue'
 
 /**
  * Draft Auto-Save Composable
  * 草稿自动保存功能
- * 
- * 使用 localStorage 存储草稿
- * 兼容两种调用方式:
- * 1) useDraft('compose-essay', contentRef)
- * 2) useDraft('task1') / useDraft('task2')
+ *
+ * 当前写作模块只在 ComposePage 使用，因此这里收敛成一个简单契约：
+ * - 调用方提供当前草稿快照 getter
+ * - composable 负责 debounce 保存、读取、清理与 beforeunload 兜底
  */
-export function useDraft(draftId, contentRef = null) {
+export function useDraft(draftId, getSnapshot = null) {
     const keySuffix = draftId || 'compose'
-
-    // 草稿存储 key
     const draftKey = computed(() => `ielts_writing_draft_${keySuffix}`)
+    const VALID_TASK_TYPES = new Set(['task1', 'task2'])
+    const VALID_TOPIC_MODES = new Set(['free', 'bank'])
 
-    // 草稿数据
-    const content = ref('')
-    const topicId = ref(null)
-    const wordCount = ref(0)
-    const lastSaved = ref(null)
-
-    // 是否有待保存的更改
-    const hasUnsavedChanges = ref(false)
-
-    // 自动保存定时器
     let saveTimeout = null
+    let lastSnapshot = null
+    let lastPersistedSignature = ''
+    let persistenceEnabled = true
+    let storageAvailableCache = null
+    let storageRetryAt = 0
 
-    /**
-     * 保存草稿到 localStorage
-     */
-    const saveDraft = (payload = null) => {
+    function resolveStorage() {
+        if (typeof window === 'undefined') return null
         try {
-            const nextContent = payload && typeof payload.content === 'string'
-                ? payload.content
-                : (contentRef?.value ?? content.value);
-            const nextTaskType = payload && payload.taskType
-                ? payload.taskType
-                : (payload?.task_type || keySuffix);
-
-            if (contentRef) {
-                contentRef.value = nextContent;
-            } else {
-                content.value = nextContent;
-            }
-
-            const draftData = {
-                task_type: nextTaskType,
-                topic_id: topicId.value,
-                content: nextContent,
-                word_count: wordCount.value,
-                last_saved: new Date().toISOString()
-            }
-
-            localStorage.setItem(draftKey.value, JSON.stringify(draftData))
-            lastSaved.value = new Date()
-            hasUnsavedChanges.value = false
-
-            console.log(`[Draft] Saved at ${lastSaved.value.toLocaleTimeString()}`)
-        } catch (error) {
-            console.error('[Draft] Failed to save:', error)
-            // 如果是 QuotaExceededError，可能需要清理旧数据或转用其他存储
-            if (error.name === 'QuotaExceededError') {
-                console.warn('[Draft] localStorage quota exceeded, consider cleanup')
-            }
-        }
-    }
-
-    /**
-     * 从 localStorage 加载草稿
-     */
-    const loadDraft = () => {
-        try {
-            const stored = localStorage.getItem(draftKey.value)
-            if (!stored) return null
-
-            const draftData = JSON.parse(stored)
-
-            // 设置数据
-            content.value = draftData.content || ''
-            topicId.value = draftData.topic_id || null
-            wordCount.value = draftData.word_count || 0
-            lastSaved.value = draftData.last_saved ? new Date(draftData.last_saved) : null
-
-            console.log('[Draft] Loaded from localStorage')
-            return draftData
-        } catch (error) {
-            console.error('[Draft] Failed to load:', error)
+            return window.localStorage || null
+        } catch {
             return null
         }
     }
 
-    /**
-     * 清除草稿
-     */
-    const clearDraft = () => {
-        try {
-            localStorage.removeItem(draftKey.value)
-            content.value = ''
-            topicId.value = null
-            wordCount.value = 0
-            lastSaved.value = null
-            hasUnsavedChanges.value = false
+    function isStorageAvailable() {
+        const now = Date.now()
+        if (storageAvailableCache !== null) {
+            if (storageAvailableCache === false && now >= storageRetryAt) {
+                storageAvailableCache = null
+            } else {
+                return storageAvailableCache
+            }
+        }
 
-            console.log('[Draft] Cleared')
+        if (storageRetryAt > now) {
+            return storageAvailableCache
+        }
+
+        const storage = resolveStorage()
+        if (!storage) {
+            storageAvailableCache = false
+            storageRetryAt = now + 1000
+            return false
+        }
+
+        try {
+            const probeKey = '__ielts_writing_draft_probe__'
+            storage.setItem(probeKey, '1')
+            storage.removeItem(probeKey)
+            storageAvailableCache = true
+            storageRetryAt = 0
+            return true
+        } catch {
+            storageAvailableCache = false
+            storageRetryAt = now + 1000
+            return false
+        }
+    }
+
+    function normalizeDraft(raw = {}) {
+        const topicId = raw.topic_id === null || raw.topic_id === undefined || raw.topic_id === ''
+            ? null
+            : Number(raw.topic_id)
+        const taskType = typeof raw.task_type === 'string' ? raw.task_type : raw.taskType
+        const topicMode = typeof raw.topic_mode === 'string' ? raw.topic_mode : raw.topicMode
+
+        return {
+            task_type: VALID_TASK_TYPES.has(taskType) ? taskType : 'task2',
+            topic_mode: VALID_TOPIC_MODES.has(topicMode) ? topicMode : 'free',
+            topic_id: Number.isFinite(topicId) ? topicId : null,
+            topic_text: typeof raw.topic_text === 'string' ? raw.topic_text : '',
+            category: typeof raw.category === 'string' ? raw.category : '',
+            content: typeof raw.content === 'string' ? raw.content : '',
+            word_count: Number.isFinite(Number(raw.word_count)) ? Number(raw.word_count) : 0,
+            last_saved: raw.last_saved || null
+        }
+    }
+
+    function createSignature(payload) {
+        return JSON.stringify({
+            task_type: payload.task_type,
+            topic_mode: payload.topic_mode,
+            topic_id: payload.topic_id,
+            topic_text: payload.topic_text,
+            category: payload.category,
+            content: payload.content,
+            word_count: payload.word_count
+        })
+    }
+
+    function hasMeaningfulContent(payload) {
+        if (!payload) return false
+
+        return (
+            payload.content.trim().length > 0 ||
+            payload.topic_text.trim().length > 0 ||
+            payload.topic_id !== null ||
+            payload.category.trim().length > 0
+        )
+    }
+
+    function buildSnapshot(override = null) {
+        if (override) {
+            return normalizeDraft(override)
+        }
+
+        if (typeof getSnapshot === 'function') {
+            return normalizeDraft(getSnapshot())
+        }
+
+        return normalizeDraft(lastSnapshot || {})
+    }
+
+    function saveDraft(override = null) {
+        try {
+            if (!isStorageAvailable()) {
+                return null
+            }
+
+            persistenceEnabled = true
+            const snapshot = buildSnapshot(override)
+
+            if (!hasMeaningfulContent(snapshot)) {
+                clearDraft()
+                return null
+            }
+
+            const payload = {
+                ...snapshot,
+                last_saved: new Date().toISOString()
+            }
+
+            const storage = resolveStorage()
+            if (!storage) {
+                return null
+            }
+
+            storage.setItem(draftKey.value, JSON.stringify(payload))
+            lastSnapshot = payload
+            lastPersistedSignature = createSignature(payload)
+            return payload
+        } catch (error) {
+            console.error('[Draft] Failed to save:', error)
+            if (error.name === 'QuotaExceededError') {
+                console.warn('[Draft] localStorage quota exceeded')
+            }
+            return null
+        }
+    }
+
+    function scheduleSave(override = null, delay = 500) {
+        if (!isStorageAvailable()) {
+            return
+        }
+
+        persistenceEnabled = true
+        lastSnapshot = buildSnapshot(override)
+
+        if (!hasMeaningfulContent(lastSnapshot)) {
+            clearDraft()
+            return
+        }
+
+        if (saveTimeout) {
+            clearTimeout(saveTimeout)
+        }
+
+        saveTimeout = setTimeout(() => {
+            saveDraft(lastSnapshot)
+            saveTimeout = null
+        }, delay)
+    }
+
+    function loadDraft() {
+        try {
+            if (!isStorageAvailable()) {
+                return null
+            }
+
+            const storage = resolveStorage()
+            if (!storage) {
+                return null
+            }
+
+            const stored = storage.getItem(draftKey.value)
+            if (!stored) return null
+
+            const payload = normalizeDraft(JSON.parse(stored))
+            if (!hasMeaningfulContent(payload)) {
+                clearDraft()
+                return null
+            }
+            lastSnapshot = payload
+            lastPersistedSignature = createSignature(payload)
+            persistenceEnabled = true
+            return payload
+        } catch (error) {
+            console.error('[Draft] Failed to load:', error)
+            clearDraft()
+            return null
+        }
+    }
+
+    function clearDraft() {
+        try {
+            if (saveTimeout) {
+                clearTimeout(saveTimeout)
+                saveTimeout = null
+            }
+            lastSnapshot = null
+            lastPersistedSignature = ''
+            persistenceEnabled = false
+            const storage = resolveStorage()
+            if (storage) {
+                storage.removeItem(draftKey.value)
+            }
         } catch (error) {
             console.error('[Draft] Failed to clear:', error)
         }
     }
 
-    /**
-     * 检查是否有草稿
-     */
-    const hasDraft = () => {
+    function hasDraft() {
         try {
-            return localStorage.getItem(draftKey.value) !== null
-        } catch (error) {
+            if (!isStorageAvailable()) {
+                return false
+            }
+
+            const storage = resolveStorage()
+            if (!storage) {
+                return false
+            }
+
+            const raw = storage.getItem(draftKey.value)
+            if (!raw) {
+                return false
+            }
+
+            const payload = normalizeDraft(JSON.parse(raw))
+            if (!hasMeaningfulContent(payload)) {
+                storage.removeItem(draftKey.value)
+                return false
+            }
+            return true
+        } catch {
+            const storage = resolveStorage()
+            if (storage) {
+                storage.removeItem(draftKey.value)
+            }
             return false
         }
     }
 
-    /**
-     * 设置内容并触发自动保存（防抖）
-     */
-    const setContent = (newContent, newWordCount = 0, taskType = null) => {
-        if (contentRef) {
-            contentRef.value = newContent
-        } else {
-            content.value = newContent
-        }
-        wordCount.value = newWordCount
-        hasUnsavedChanges.value = true
-
-        // 清除之前的定时器
-        if (saveTimeout) {
-            clearTimeout(saveTimeout)
+    function hasPendingChanges() {
+        if (!persistenceEnabled) {
+            return false
         }
 
-        // 10秒后自动保存（防抖）
-        saveTimeout = setTimeout(() => saveDraft(taskType ? { taskType } : null), 10000)
-    }
-
-    /**
-     * 设置题目ID
-     */
-    const setTopicId = (id) => {
-        topicId.value = id
-        hasUnsavedChanges.value = true
-    }
-
-    /**
-     * 手动立即保存（Ctrl+S 触发）
-     */
-    const saveNow = () => {
-        if (saveTimeout) {
-            clearTimeout(saveTimeout)
-            saveTimeout = null
+        if (!lastSnapshot) {
+            lastSnapshot = buildSnapshot()
         }
-        saveDraft()
+
+        if (!hasMeaningfulContent(lastSnapshot)) {
+            return false
+        }
+
+        return createSignature(lastSnapshot) !== lastPersistedSignature
     }
 
-    /**
-     * 停止自动保存定时器（用于提交后清理）
-     */
-    const stopAutoSave = () => {
+    function stopAutoSave() {
         if (saveTimeout) {
             clearTimeout(saveTimeout)
             saveTimeout = null
         }
     }
 
-    // 组件卸载前保存
-    onBeforeUnmount(() => {
-        if (hasUnsavedChanges.value) {
-            saveDraft()
-        }
-        if (saveTimeout) {
-            clearTimeout(saveTimeout)
-        }
-    })
-
-    // 页面刷新/关闭前保存
-    const beforeUnloadHandler = (e) => {
-        if (hasUnsavedChanges.value) {
-            saveDraft()
-            // 某些浏览器会显示确认对话框
-            e.preventDefault()
-            e.returnValue = ''
+    const beforeUnloadHandler = () => {
+        if (hasPendingChanges()) {
+            saveDraft(lastSnapshot)
         }
     }
 
-    // 注册页面卸载监听
     if (typeof window !== 'undefined') {
         window.addEventListener('beforeunload', beforeUnloadHandler)
     }
 
-    // 清理事件监听
     onBeforeUnmount(() => {
+        if (hasPendingChanges()) {
+            saveDraft(lastSnapshot)
+        }
+        stopAutoSave()
         if (typeof window !== 'undefined') {
             window.removeEventListener('beforeunload', beforeUnloadHandler)
         }
     })
 
     return {
-        // 数据
-        content,
-        topicId,
-        wordCount,
-        lastSaved,
-        hasUnsavedChanges,
-
-        // 方法
         saveDraft,
+        scheduleSave,
         loadDraft,
         clearDraft,
         hasDraft,
-        setContent,
-        setTopicId,
-        saveNow,
         stopAutoSave
     }
 }

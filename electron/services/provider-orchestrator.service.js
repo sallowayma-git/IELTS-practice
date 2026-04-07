@@ -12,7 +12,18 @@ class ProviderOrchestratorService {
         this.failureCooldownMs = 60 * 1000;
     }
 
-    async streamCompletion({ preferredConfigId = null, messages, temperature, max_tokens, signal, onChunk }) {
+    async streamCompletion({
+        preferredConfigId = null,
+        messages,
+        temperature,
+        max_tokens,
+        signal,
+        onChunk,
+        response_format = null,
+        onProviderEvent = null,
+        allow_json_object_fallback = true,
+        allow_raw_fallback = true
+    }) {
         const candidates = await this._resolveCandidates(preferredConfigId);
         if (candidates.length === 0) {
             throw new Error('未找到可用的 API 配置，请先在设置中启用配置');
@@ -27,6 +38,12 @@ class ProviderOrchestratorService {
                 : 2;
 
             if (this._isInCooldown(config)) {
+                this._notifyProviderEvent(onProviderEvent, {
+                    type: 'candidate_skip',
+                    provider: config.provider,
+                    model: config.default_model,
+                    reason: 'cooldown'
+                });
                 providerPath.push({
                     provider: config.provider,
                     model: config.default_model,
@@ -37,6 +54,13 @@ class ProviderOrchestratorService {
             }
 
             for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+                this._notifyProviderEvent(onProviderEvent, {
+                    type: attempt === 1 ? 'candidate_start' : 'candidate_retry',
+                    provider: config.provider,
+                    model: config.default_model,
+                    attempt,
+                    maxRetries
+                });
                 const provider = new LLMProvider({
                     provider: config.provider,
                     base_url: config.base_url,
@@ -50,10 +74,19 @@ class ProviderOrchestratorService {
                         temperature,
                         max_tokens,
                         signal,
-                        onChunk
+                        onChunk,
+                        response_format,
+                        allow_json_object_fallback,
+                        allow_raw_fallback
                     });
 
                     this.configService.markSuccess(config.id);
+                    this._notifyProviderEvent(onProviderEvent, {
+                        type: 'candidate_success',
+                        provider: config.provider,
+                        model: config.default_model,
+                        attempt
+                    });
                     providerPath.push({
                         provider: config.provider,
                         model: config.default_model,
@@ -68,6 +101,14 @@ class ProviderOrchestratorService {
                 } catch (error) {
                     lastError = error;
                     const errorCode = this._getErrorCode(error);
+                    this._notifyProviderEvent(onProviderEvent, {
+                        type: 'candidate_failed',
+                        provider: config.provider,
+                        model: config.default_model,
+                        attempt,
+                        error_code: errorCode,
+                        message: error.message
+                    });
                     providerPath.push({
                         provider: config.provider,
                         model: config.default_model,
@@ -98,11 +139,54 @@ class ProviderOrchestratorService {
     }
 
     async _resolveCandidates(preferredConfigId) {
-        if (preferredConfigId) {
-            const preferred = await this.configService.getConfigByIdDecrypted(preferredConfigId);
-            return [preferred];
+        const enabledConfigs = await this.configService.getDecryptedEnabledConfigs();
+        if (!preferredConfigId) {
+            return enabledConfigs;
         }
-        return this.configService.getDecryptedEnabledConfigs();
+
+        let preferred = null;
+        try {
+            preferred = await this.configService.getConfigByIdDecrypted(preferredConfigId);
+        } catch (error) {
+            logger.warn('Failed to load preferred provider config, fallback to enabled configs', null, {
+                preferredConfigId,
+                message: error?.message
+            });
+        }
+
+        if (!this._isEnabled(preferred)) {
+            return enabledConfigs;
+        }
+
+        return this._mergePreferredAndEnabled(preferred, enabledConfigs);
+    }
+
+    _mergePreferredAndEnabled(preferred, enabledConfigs) {
+        const candidates = [];
+        const seen = new Set();
+        for (const config of [preferred, ...(enabledConfigs || [])]) {
+            if (!config) continue;
+            const key = this._candidateKey(config);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            candidates.push(config);
+        }
+        return candidates;
+    }
+
+    _candidateKey(config) {
+        if (config.id !== undefined && config.id !== null) {
+            return `id:${String(config.id)}`;
+        }
+        return `provider:${String(config.provider || '')}|model:${String(config.default_model || '')}|url:${String(config.base_url || '')}`;
+    }
+
+    _isEnabled(config) {
+        if (!config) return false;
+        if (!Object.prototype.hasOwnProperty.call(config, 'enabled')) {
+            return true;
+        }
+        return config.enabled === true || Number(config.enabled) === 1;
     }
 
     _isInCooldown(config) {
@@ -145,6 +229,17 @@ class ProviderOrchestratorService {
                 }, { once: true });
             }
         });
+    }
+
+    _notifyProviderEvent(handler, payload) {
+        if (typeof handler !== 'function') {
+            return;
+        }
+        try {
+            handler(payload);
+        } catch (error) {
+            logger.warn('Provider event handler failed', null, { message: error?.message });
+        }
     }
 }
 

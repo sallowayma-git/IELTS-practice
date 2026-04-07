@@ -66,6 +66,7 @@
 
         var clockTrigger = moreView.querySelector('[data-action="open-clock"]');
         var vocabTrigger = moreView.querySelector('[data-action="open-vocab"]');
+        var writingTrigger = moreView.querySelector('#writing-entry-btn');
         var closeTrigger = overlay.querySelector('[data-action="close-clock"]');
         var overlayInner = overlay.querySelector('[data-clock-role="overlay-inner"]');
         var viewStack = overlay.querySelector('[data-clock-role="view-stack"]');
@@ -138,7 +139,31 @@
             vocabTrigger.addEventListener('click', handleVocabEntry);
         }
 
+        if (writingTrigger) {
+            writingTrigger.addEventListener('click', handleWritingEntry);
+        }
+
         moreViewInteractionsConfigured = true;
+    }
+
+    function handleWritingEntry(event) {
+        if (event && typeof event.preventDefault === 'function') {
+            event.preventDefault();
+        }
+
+        if (global.electronAPI && typeof global.electronAPI.openWriting === 'function') {
+            global.electronAPI.openWriting();
+            return;
+        }
+
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('当前环境不支持打开写作模块，请在 Electron 应用中使用。', 'warning');
+            return;
+        }
+
+        if (typeof global.console !== 'undefined' && typeof global.console.warn === 'function') {
+            global.console.warn('[MoreView] Writing entry is unavailable outside Electron.');
+        }
     }
 
     function handleVocabEntry(event) {

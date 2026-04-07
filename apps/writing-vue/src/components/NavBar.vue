@@ -26,8 +26,13 @@
         
         <div class="divider"></div>
         
-        <button class="btn-return" @click="goBackToLegacy" title="返回练习主页">
-          <span class="icon">🔙</span> <span class="text">返回</span>
+        <button
+          :class="['btn-return', { 'is-disabled': isReturnDisabled }]"
+          :disabled="isReturnDisabled"
+          :title="returnTitle"
+          @click="goBackToLegacy"
+        >
+          <span class="icon">🔙</span> <span class="text">{{ returnLabel }}</span>
         </button>
       </div>
     </div>
@@ -35,12 +40,35 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+
+const router = useRouter()
+const route = useRoute()
+
+const canOpenLegacy = computed(() => (
+  typeof window !== 'undefined' &&
+  !!window.electronAPI &&
+  typeof window.electronAPI.openLegacy === 'function'
+))
+
+const isComposePage = computed(() => route.name === 'Compose')
+const isReturnDisabled = computed(() => !canOpenLegacy.value && isComposePage.value)
+const returnLabel = computed(() => (canOpenLegacy.value ? '返回' : '回首页'))
+const returnTitle = computed(() => (
+  canOpenLegacy.value
+    ? '返回练习主页'
+    : '当前环境不支持返回 Legacy，点击回写作首页'
+))
+
 function goBackToLegacy() {
-  if (window.electronAPI && window.electronAPI.openLegacy) {
+  if (canOpenLegacy.value) {
     window.electronAPI.openLegacy()
-  } else {
-    // 优雅降级提示
-    console.warn('Navigation to legacy is only available in Electron')
+    return
+  }
+
+  if (!isComposePage.value) {
+    router.push({ name: 'Compose' })
   }
 }
 </script>
@@ -175,6 +203,19 @@ function goBackToLegacy() {
 .btn-return:hover {
   background: rgba(255, 255, 255, 0.3);
   transform: translateY(-1px);
+}
+
+.btn-return:disabled,
+.btn-return.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-return:disabled:hover,
+.btn-return.is-disabled:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: none;
 }
 
 .btn-return .icon {

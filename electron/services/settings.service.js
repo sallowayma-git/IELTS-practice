@@ -1,6 +1,18 @@
 const SettingsDAO = require('../db/dao/settings.dao');
 const logger = require('../utils/logger');
 
+const DEFAULT_TEMPERATURE = 0.5;
+const TEMPERATURE_PRESETS = Object.freeze({
+    precise: Object.freeze({ task1: 0.3, task2: 0.3 }),
+    balanced: Object.freeze({ task1: 0.5, task2: 0.5 }),
+    creative: Object.freeze({ task1: 0.8, task2: 0.8 })
+});
+
+function normalizeTemperatureValue(value, fallback = DEFAULT_TEMPERATURE) {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 /**
  * Settings Service
  * 应用设置管理业务逻辑层
@@ -74,25 +86,22 @@ class SettingsService {
     async getTemperature(taskType) {
         try {
             const mode = this.dao.get('temperature_mode');
+            const preset = TEMPERATURE_PRESETS[mode];
 
-            // 如果是自定义模式，从对应的 task 设置获取
-            if (mode === 'custom' || mode === 'balanced') {
-                const key = `temperature_${taskType}`;
-                const value = this.dao.get(key);
-                return parseFloat(value) || 0.5;
+            if (preset && Object.prototype.hasOwnProperty.call(preset, taskType)) {
+                return preset[taskType];
             }
 
-            // 预设模式
-            const presets = {
-                precise: 0.3,
-                balanced: 0.5,
-                creative: 0.8
-            };
+            if (mode === 'custom') {
+                const key = `temperature_${taskType}`;
+                const value = this.dao.get(key);
+                return normalizeTemperatureValue(value);
+            }
 
-            return presets[mode] || 0.5;
+            return DEFAULT_TEMPERATURE;
         } catch (error) {
             logger.error('SettingsService.getTemperature failed', error);
-            return 0.5; // 默认值
+            return DEFAULT_TEMPERATURE;
         }
     }
 

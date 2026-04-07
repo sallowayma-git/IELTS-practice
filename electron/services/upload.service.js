@@ -1,8 +1,22 @@
 const fs = require('fs');
 const path = require('path');
-const { app, nativeImage } = require('electron');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
+
+let nativeImage = null;
+try {
+    const electron = require('electron');
+    if (
+        electron &&
+        typeof electron === 'object' &&
+        electron.nativeImage &&
+        typeof electron.nativeImage.createFromBuffer === 'function'
+    ) {
+        nativeImage = electron.nativeImage;
+    }
+} catch (error) {
+    nativeImage = null;
+}
 
 /**
  * Upload Service
@@ -215,26 +229,50 @@ class UploadService {
      * @private
      */
     _generateThumbnail(buffer, originalFilename, originalExt) {
-        const ext = ['.jpg', '.jpeg', '.png', '.webp'].includes(originalExt.toLowerCase())
-            ? originalExt.toLowerCase()
-            : '.png';
         const baseName = path.parse(originalFilename).name;
+        const ext = this._normalizeImageExt(originalExt);
 
-        const image = nativeImage.createFromBuffer(Buffer.from(buffer));
-        const thumb = image.resize({ width: 150, height: 150, quality: 'good' });
-
-        let thumbnailName = `${baseName}_thumb.png`;
-        let outputBuffer;
-        if (ext === '.jpg' || ext === '.jpeg') {
-            thumbnailName = `${baseName}_thumb.jpg`;
-            outputBuffer = thumb.toJPEG(85);
-        } else {
-            // PNG/WebP 统一写 PNG，避免跨平台编码差异
-            outputBuffer = thumb.toPNG();
+        if (!nativeImage) {
+            return this._writeFallbackThumbnail(buffer, baseName, ext);
         }
 
+        try {
+            const image = nativeImage.createFromBuffer(Buffer.from(buffer));
+            if (!image || image.isEmpty()) {
+                throw new Error('Unable to decode image buffer');
+            }
+
+            const thumb = image.resize({ width: 150, height: 150, quality: 'good' });
+            let thumbnailName = `${baseName}_thumb.png`;
+            let outputBuffer;
+
+            if (ext === '.jpg' || ext === '.jpeg') {
+                thumbnailName = `${baseName}_thumb.jpg`;
+                outputBuffer = thumb.toJPEG(85);
+            } else {
+                // PNG/WebP 统一写 PNG，避免跨平台编码差异
+                outputBuffer = thumb.toPNG();
+            }
+
+            const thumbnailPath = path.join(this.thumbnailsDir, thumbnailName);
+            fs.writeFileSync(thumbnailPath, outputBuffer);
+            return thumbnailName;
+        } catch (error) {
+            logger.warn('nativeImage thumbnail generation failed, fallback to raw copy', error.message || error);
+            return this._writeFallbackThumbnail(buffer, baseName, ext);
+        }
+    }
+
+    _normalizeImageExt(ext) {
+        const normalized = String(ext || '').toLowerCase();
+        if (normalized === '.jpeg') return '.jpg';
+        return ['.jpg', '.png', '.webp', '.gif'].includes(normalized) ? normalized : '.png';
+    }
+
+    _writeFallbackThumbnail(buffer, baseName, ext) {
+        const thumbnailName = `${baseName}_thumb${ext}`;
         const thumbnailPath = path.join(this.thumbnailsDir, thumbnailName);
-        fs.writeFileSync(thumbnailPath, outputBuffer);
+        fs.writeFileSync(thumbnailPath, Buffer.from(buffer));
         return thumbnailName;
     }
 
@@ -243,9 +281,13 @@ class UploadService {
      * @private
      */
     _resolveSafePath(filename) {
-        const normalized = String(filename).replace(/^\/+/, '');
+        const normalized = String(filename || '').replace(/^\/+/, '');
+        if (!normalized) {
+            throw new Error('Invalid file path');
+        }
         const resolved = path.resolve(this.imagesDir, normalized);
-        if (!resolved.startsWith(this.imagesDir)) {
+        const relative = path.relative(this.imagesDir, resolved);
+        if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
             throw new Error('Invalid file path');
         }
         return resolved;

@@ -773,6 +773,7 @@ def run_checks() -> Tuple[List[dict], bool]:
 
     main_js_path = REPO_ROOT / "js" / "main.js"
     resource_core_path = REPO_ROOT / "js" / "core" / "resourceCore.js"
+    more_view_path = REPO_ROOT / "js" / "presentation" / "moreView.js"
     main_js_exists, main_js_detail = _ensure_exists(main_js_path)
     results.append(_format_result("main.js 存在性", main_js_exists, main_js_detail))
     all_passed &= main_js_exists
@@ -781,8 +782,13 @@ def run_checks() -> Tuple[List[dict], bool]:
     results.append(_format_result("resourceCore.js 存在性", resource_core_exists, resource_core_detail))
     all_passed &= resource_core_exists
 
+    more_view_exists, more_view_detail = _ensure_exists(more_view_path)
+    results.append(_format_result("moreView.js 存在性", more_view_exists, more_view_detail))
+    all_passed &= more_view_exists
+
     main_js_source: Optional[str] = None
     resource_core_source: Optional[str] = None
+    more_view_source: Optional[str] = None
     if main_js_exists:
         try:
             main_js_source = main_js_path.read_text(encoding="utf-8")
@@ -796,6 +802,13 @@ def run_checks() -> Tuple[List[dict], bool]:
         except Exception as exc:  # pragma: no cover - defensive guard
             read_detail = f"读取失败：{exc}"
             results.append(_format_result("resourceCore.js 读取", False, read_detail))
+            all_passed = False
+    if more_view_exists:
+        try:
+            more_view_source = more_view_path.read_text(encoding="utf-8")
+        except Exception as exc:  # pragma: no cover - defensive guard
+            read_detail = f"读取失败：{exc}"
+            results.append(_format_result("moreView.js 读取", False, read_detail))
             all_passed = False
 
     if main_js_source is not None:
@@ -820,6 +833,22 @@ def run_checks() -> Tuple[List[dict], bool]:
         resolve_passed, resolve_detail = _check_resolve_exam_base_path(resource_core_source)
         results.append(_format_result("ResourceCore resolveExamBasePath 路径组合逻辑", resolve_passed, resolve_detail))
         all_passed &= resolve_passed
+
+    if more_view_source is not None:
+        required_more_view_snippets = [
+            "#writing-entry-btn",
+            "handleWritingEntry",
+            "electronAPI.openWriting"
+        ]
+        missing_more_view_snippets = [snippet for snippet in required_more_view_snippets if snippet not in more_view_source]
+        more_view_guard_passed = not missing_more_view_snippets
+        more_view_guard_detail = (
+            "更多工具页已绑定写作入口"
+            if more_view_guard_passed
+            else {"missing": missing_more_view_snippets}
+        )
+        results.append(_format_result("更多工具写作入口守卫", more_view_guard_passed, more_view_guard_detail))
+        all_passed &= more_view_guard_passed
 
     metadata_targets = [
         REPO_ROOT / "assets" / "scripts" / "complete-exam-data.js",
@@ -1031,6 +1060,276 @@ def run_checks() -> Tuple[List[dict], bool]:
     else:
         results.append(_format_result("模拟模式切题回灌回归测试", False, "测试脚本缺失"))
         all_passed = False
+
+    writing_compose_draft_test = REPO_ROOT / "developer" / "tests" / "e2e" / "writing_compose_draft_restore_e2e.py"
+    if writing_compose_draft_test.exists():
+        try:
+            completed_writing_compose_draft = subprocess.run(
+                ["python3", str(writing_compose_draft_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=240,
+            )
+        except subprocess.TimeoutExpired:
+            writing_compose_draft_passed = False
+            writing_compose_draft_detail = "执行超时（240秒）"
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            writing_compose_draft_passed = False
+            writing_compose_draft_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_writing_compose_draft = completed_writing_compose_draft.stdout.strip() or completed_writing_compose_draft.stderr.strip()
+            try:
+                writing_compose_draft_payload = json.loads(raw_writing_compose_draft or "{}")
+            except json.JSONDecodeError as parse_error:
+                writing_compose_draft_passed = False
+                writing_compose_draft_detail = f"输出解析失败: {parse_error}"
+            else:
+                writing_compose_draft_passed = writing_compose_draft_payload.get("status") == "pass"
+                writing_compose_draft_detail = writing_compose_draft_payload.get("detail", writing_compose_draft_payload)
+        results.append(_format_result("写作自由写作/题库模式草稿恢复回归测试", writing_compose_draft_passed, writing_compose_draft_detail))
+        all_passed &= writing_compose_draft_passed
+    else:
+        results.append(_format_result("写作自由写作/题库模式草稿恢复回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    history_page_path = REPO_ROOT / "apps" / "writing-vue" / "src" / "views" / "HistoryPage.vue"
+    try:
+        history_page_source = history_page_path.read_text(encoding="utf-8")
+    except Exception as exc:
+        history_page_guard_passed = False
+        history_page_guard_detail = f"读取失败：{exc}"
+    else:
+        required_snippets = [
+            "createRequestGate",
+            "pageNotice",
+            "detailError",
+            "detailRequestGate.invalidate()",
+        ]
+        missing_snippets = [snippet for snippet in required_snippets if snippet not in history_page_source]
+        forbidden_snippets = [
+            "alert('加载详情失败:",
+            "alert('删除失败:",
+            "alert('导出失败:",
+        ]
+        forbidden_hits = [snippet for snippet in forbidden_snippets if snippet in history_page_source]
+        history_page_guard_passed = not missing_snippets and not forbidden_hits
+        history_page_guard_detail = (
+            "历史页已启用请求门闩与页内错误反馈"
+            if history_page_guard_passed
+            else {"missing": missing_snippets, "forbiddenHits": forbidden_hits}
+        )
+    results.append(_format_result("写作历史页去竞态与非阻塞错误守卫", history_page_guard_passed, history_page_guard_detail))
+    all_passed &= history_page_guard_passed
+
+    topic_manage_page_path = REPO_ROOT / "apps" / "writing-vue" / "src" / "views" / "TopicManagePage.vue"
+    try:
+        topic_manage_page_source = topic_manage_page_path.read_text(encoding="utf-8")
+    except Exception as exc:
+        topic_manage_page_guard_passed = False
+        topic_manage_page_guard_detail = f"读取失败：{exc}"
+    else:
+        required_snippets = [
+            "createRequestGate",
+            "topicsRequestGate",
+            "pageMessage",
+            "deleteDialog",
+            "closeDeleteDialog",
+        ]
+        missing_snippets = [snippet for snippet in required_snippets if snippet not in topic_manage_page_source]
+        forbidden_snippets = [
+            "alert(",
+            "confirm(",
+        ]
+        forbidden_hits = [snippet for snippet in forbidden_snippets if snippet in topic_manage_page_source]
+        topic_manage_page_guard_passed = not missing_snippets and not forbidden_hits
+        topic_manage_page_guard_detail = (
+            "题库页已启用请求门闩与页内反馈"
+            if topic_manage_page_guard_passed
+            else {"missing": missing_snippets, "forbiddenHits": forbidden_hits}
+        )
+    results.append(_format_result("写作题库页去竞态与非阻塞错误守卫", topic_manage_page_guard_passed, topic_manage_page_guard_detail))
+    all_passed &= topic_manage_page_guard_passed
+
+    writing_request_gate_test = REPO_ROOT / "developer" / "tests" / "ci" / "writing_request_gate_contract.cjs"
+    if writing_request_gate_test.exists():
+        try:
+            completed_writing_request_gate = subprocess.run(
+                ["node", str(writing_request_gate_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            writing_request_gate_passed = False
+            writing_request_gate_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_writing_request_gate = completed_writing_request_gate.stdout.strip() or completed_writing_request_gate.stderr.strip()
+            try:
+                writing_request_gate_payload = json.loads(raw_writing_request_gate or "{}")
+            except json.JSONDecodeError as parse_error:
+                writing_request_gate_passed = False
+                writing_request_gate_detail = f"输出解析失败: {parse_error}"
+            else:
+                writing_request_gate_passed = writing_request_gate_payload.get("status") == "pass"
+                writing_request_gate_detail = writing_request_gate_payload
+        results.append(_format_result("写作请求门闩契约测试", writing_request_gate_passed, writing_request_gate_detail))
+        all_passed &= writing_request_gate_passed
+    else:
+        results.append(_format_result("写作请求门闩契约测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    writing_provider_form_contract = REPO_ROOT / "developer" / "tests" / "ci" / "writing_provider_form_contract.cjs"
+    if writing_provider_form_contract.exists():
+        try:
+            completed_provider_form_contract = subprocess.run(
+                ["node", str(writing_provider_form_contract)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            writing_provider_form_passed = False
+            writing_provider_form_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_provider_form_output = completed_provider_form_contract.stdout.strip() or completed_provider_form_contract.stderr.strip()
+            try:
+                writing_provider_form_payload = json.loads(raw_provider_form_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                writing_provider_form_passed = False
+                writing_provider_form_detail = f"输出解析失败: {parse_error}"
+            else:
+                writing_provider_form_passed = writing_provider_form_payload.get("status") == "pass"
+                writing_provider_form_detail = writing_provider_form_payload
+        results.append(_format_result("写作设置页供应商 Base URL 联动契约测试", writing_provider_form_passed, writing_provider_form_detail))
+        all_passed &= writing_provider_form_passed
+    else:
+        results.append(_format_result("写作设置页供应商 Base URL 联动契约测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    writing_topics_dao_contract = REPO_ROOT / "developer" / "tests" / "ci" / "writing_topics_dao_contract.cjs"
+    if writing_topics_dao_contract.exists():
+        try:
+            completed_topics_dao_contract = subprocess.run(
+                ["node", str(writing_topics_dao_contract)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            writing_topics_dao_passed = False
+            writing_topics_dao_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_topics_dao_output = completed_topics_dao_contract.stdout.strip() or completed_topics_dao_contract.stderr.strip()
+            try:
+                writing_topics_dao_payload = json.loads(raw_topics_dao_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                writing_topics_dao_passed = False
+                writing_topics_dao_detail = f"输出解析失败: {parse_error}"
+            else:
+                writing_topics_dao_passed = writing_topics_dao_payload.get("status") == "pass"
+                writing_topics_dao_detail = writing_topics_dao_payload
+        results.append(_format_result("写作题库 DAO 兼容契约测试", writing_topics_dao_passed, writing_topics_dao_detail))
+        all_passed &= writing_topics_dao_passed
+    else:
+        results.append(_format_result("写作题库 DAO 兼容契约测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    writing_contract_probe = REPO_ROOT / "developer" / "tests" / "ci" / "writing_contract_probe.cjs"
+    if writing_contract_probe.exists():
+        try:
+            completed_writing_contract_probe = subprocess.run(
+                ["node", str(writing_contract_probe)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            writing_contract_probe_passed = False
+            writing_contract_probe_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_writing_contract_probe = completed_writing_contract_probe.stdout.strip() or completed_writing_contract_probe.stderr.strip()
+            try:
+                writing_contract_probe_payload = json.loads(raw_writing_contract_probe or "{}")
+            except json.JSONDecodeError as parse_error:
+                writing_contract_probe_passed = False
+                writing_contract_probe_detail = f"输出解析失败: {parse_error}"
+            else:
+                writing_contract_probe_passed = writing_contract_probe_payload.get("status") == "pass"
+                writing_contract_probe_detail = writing_contract_probe_payload
+        results.append(_format_result("写作评测链路契约测试", writing_contract_probe_passed, writing_contract_probe_detail))
+        all_passed &= writing_contract_probe_passed
+    else:
+        results.append(_format_result("写作评测链路契约测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    writing_temperature_contract = REPO_ROOT / "developer" / "tests" / "ci" / "writing_temperature_contract.cjs"
+    if writing_temperature_contract.exists():
+        try:
+            completed_temperature_contract = subprocess.run(
+                ["node", str(writing_temperature_contract)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            writing_temperature_passed = False
+            writing_temperature_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_temperature_output = completed_temperature_contract.stdout.strip() or completed_temperature_contract.stderr.strip()
+            try:
+                writing_temperature_payload = json.loads(raw_temperature_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                writing_temperature_passed = False
+                writing_temperature_detail = f"输出解析失败: {parse_error}"
+            else:
+                writing_temperature_passed = writing_temperature_payload.get("status") == "pass"
+                writing_temperature_detail = writing_temperature_payload.get("detail", writing_temperature_payload)
+        results.append(_format_result("写作温度模式契约测试", writing_temperature_passed, writing_temperature_detail))
+        all_passed &= writing_temperature_passed
+    else:
+        results.append(_format_result("写作温度模式契约测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    settings_page_path = REPO_ROOT / "apps" / "writing-vue" / "src" / "views" / "SettingsPage.vue"
+    try:
+        settings_page_source = settings_page_path.read_text(encoding="utf-8")
+    except Exception as exc:
+        settings_page_guard_passed = False
+        settings_page_guard_detail = f"读取失败：{exc}"
+    else:
+        required_snippets = [
+            "sectionMessages",
+            "setSectionMessage",
+            "createRequestGate",
+            "confirmDialog",
+            "modelSaving",
+            "dataSaving",
+            "inline-message-${sectionMessages.prompts.type}",
+            "inline-message-${sectionMessages.model.type}",
+            "inline-message-${sectionMessages.data.type}",
+            "inline-message-${sectionMessages.api.type}",
+        ]
+        missing_snippets = [snippet for snippet in required_snippets if snippet not in settings_page_source]
+        forbidden_snippets = [
+            "alert(",
+            "confirm(",
+        ]
+        forbidden_hits = [snippet for snippet in forbidden_snippets if snippet in settings_page_source]
+        settings_page_guard_passed = not missing_snippets and not forbidden_hits
+        settings_page_guard_detail = (
+            "设置页已切换为非阻塞反馈并接入请求门闩"
+            if settings_page_guard_passed
+            else {"missing": missing_snippets, "forbiddenHits": forbidden_hits}
+        )
+    results.append(_format_result("写作设置页非阻塞反馈守卫", settings_page_guard_passed, settings_page_guard_detail))
+    all_passed &= settings_page_guard_passed
 
     inline_fallback_test = REPO_ROOT / "developer" / "tests" / "js" / "suiteInlineFallback.test.js"
     if inline_fallback_test.exists():

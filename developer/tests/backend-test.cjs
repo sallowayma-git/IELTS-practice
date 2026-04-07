@@ -153,6 +153,7 @@ async function testTopicsService(db) {
 
     const TopicService = require('../../electron/services/topic.service');
     const service = new TopicService(db);
+    let validTopicId = null;
 
     // 2.1 验证非法 category（边界测试）
     try {
@@ -178,6 +179,47 @@ async function testTopicsService(db) {
         log('Topics Service: Invalid difficulty validation', false, 'Should reject invalid difficulty');
     } catch (error) {
         log('Topics Service: Invalid difficulty validation', error.message.includes('Difficulty'), error.message);
+    }
+
+    // 2.3 更新时仅修改 category 也必须校验
+    try {
+        validTopicId = await service.create({
+            type: 'task2',
+            category: 'technology',
+            difficulty: 3,
+            title_json: '{"type":"doc","content":[]}'
+        });
+
+        await service.update(validTopicId, { category: 'bar_chart' });
+        log('Topics Service: Update category-only validation', false, 'Should reject invalid category-only update');
+    } catch (error) {
+        log('Topics Service: Update category-only validation', error.message.includes('category'), error.message);
+    }
+
+    // 2.4 batchImport 只导入合法题目
+    try {
+        const result = await service.batchImport([
+            {
+                type: 'task2',
+                category: 'society',
+                difficulty: 4,
+                title_json: '{"type":"doc","content":[]}'
+            },
+            {
+                type: 'task1',
+                category: 'society',
+                difficulty: 3,
+                title_json: '{"type":"doc","content":[]}'
+            }
+        ]);
+
+        log(
+            'Topics Service: Batch import filters invalid topics',
+            result.success === 1 && result.failed === 1 && Array.isArray(result.errors) && result.errors.length === 1,
+            `success=${result.success}, failed=${result.failed}`
+        );
+    } catch (error) {
+        log('Topics Service: Batch import filters invalid topics', false, error.message);
     }
 }
 

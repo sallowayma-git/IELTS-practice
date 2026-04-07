@@ -59,23 +59,60 @@ class LLMProvider {
     /**
      * 流式调用 LLM
      */
-    async streamCompletion({ messages, temperature, max_tokens, onChunk, signal }) {
+    async streamCompletion({
+        messages,
+        temperature,
+        max_tokens,
+        onChunk,
+        signal,
+        response_format = null,
+        allow_json_object_fallback = true,
+        allow_raw_fallback = true
+    }) {
         try {
-            const response = await fetch(`${this.baseUrl}/chat/completions`, {
-                method: 'POST',
-                headers: this._getHeaders(),
-                body: JSON.stringify({
-                    model: this.model,
-                    messages,
-                    temperature,
-                    max_tokens,
-                    stream: true
-                }),
-                signal
-            });
+            const requestBody = {
+                model: this.model,
+                messages,
+                temperature,
+                max_tokens,
+                stream: true
+            };
+            if (response_format) {
+                requestBody.response_format = response_format;
+            }
+
+            let response = await this._sendCompletionRequest(requestBody, signal);
+            let errorData = null;
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
+                errorData = await response.json().catch(() => ({}));
+
+                if (response_format && this._shouldRetryWithoutStructuredOutput(response.status, errorData)) {
+                    const fallbackFormat = this._buildJsonObjectFallback(response_format);
+                    if (fallbackFormat && allow_json_object_fallback) {
+                        logger.warn('Structured schema unsupported, retrying with json_object', null, {
+                            provider: this.provider,
+                            model: this.model,
+                            status: response.status,
+                            message: errorData?.error?.message || errorData?.message || null
+                        });
+                        requestBody.response_format = fallbackFormat;
+                        response = await this._sendCompletionRequest(requestBody, signal);
+                    } else if (allow_raw_fallback) {
+                        logger.warn('Structured output unsupported, retrying without response_format', null, {
+                            provider: this.provider,
+                            model: this.model,
+                            status: response.status,
+                            message: errorData?.error?.message || errorData?.message || null
+                        });
+                        delete requestBody.response_format;
+                        response = await this._sendCompletionRequest(requestBody, signal);
+                    }
+                }
+            }
+
+            if (!response.ok) {
+                errorData = await response.json().catch(() => ({}));
                 throw this._parseError(response.status, errorData);
             }
 
@@ -90,6 +127,15 @@ class LLMProvider {
             logger.error('LLM stream error', error);
             throw error;
         }
+    }
+
+    async _sendCompletionRequest(requestBody, signal) {
+        return fetch(`${this.baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: this._getHeaders(),
+            body: JSON.stringify(requestBody),
+            signal
+        });
     }
 
     /**
@@ -115,8 +161,12 @@ class LLMProvider {
                 for (const line of lines) {
                     const trimmed = line.trim();
 
-                    if (!trimmed || trimmed === 'data: [DONE]') {
+                    if (!trimmed) {
                         continue;
+                    }
+
+                    if (trimmed === 'data: [DONE]') {
+                        return;
                     }
 
                     if (trimmed.startsWith('data: ')) {
@@ -157,6 +207,32 @@ class LLMProvider {
         }
 
         return headers;
+    }
+
+    _shouldRetryWithoutStructuredOutput(status, errorData) {
+        if (status !== 400) {
+            return false;
+        }
+
+        const message = String(errorData?.error?.message || errorData?.message || '').toLowerCase();
+        if (!message) {
+            return false;
+        }
+
+        return [
+            'response_format',
+            'json_schema',
+            'structured output',
+            'unsupported parameter',
+            'unsupported_response_format'
+        ].some((token) => message.includes(token));
+    }
+
+    _buildJsonObjectFallback(responseFormat) {
+        if (!responseFormat || responseFormat.type !== 'json_schema') {
+            return null;
+        }
+        return { type: 'json_object' };
     }
 
     /**
