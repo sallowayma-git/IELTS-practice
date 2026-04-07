@@ -1,4 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const evaluateEventListeners = new Map();
+let evaluateEventListenerSeq = 0;
 
 /**
  * 预加载脚本：向渲染进程暴露最小 API
@@ -79,12 +81,27 @@ contextBridge.exposeInMainWorld('writingAPI', {
      */
     evaluate: {
         start: (payload) => ipcRenderer.invoke('evaluate:start', payload),
+        getSessionState: (sessionId) => ipcRenderer.invoke('evaluate:getSessionState', sessionId),
         cancel: (sessionId) => ipcRenderer.invoke('evaluate:cancel', sessionId),
         onEvent: (callback) => {
-            ipcRenderer.on('evaluate:event', (event, data) => callback(data));
+            if (typeof callback !== 'function') {
+                return null;
+            }
+
+            const listenerId = `evaluate:${Date.now()}:${++evaluateEventListenerSeq}`;
+            const listener = (event, data) => callback(data);
+            evaluateEventListeners.set(listenerId, listener);
+            ipcRenderer.on('evaluate:event', listener);
+            return listenerId;
         },
-        removeEventListener: () => {
-            ipcRenderer.removeAllListeners('evaluate:event');
+        removeEventListener: (listenerId) => {
+            const listener = evaluateEventListeners.get(listenerId);
+            if (!listener) {
+                return;
+            }
+
+            ipcRenderer.removeListener('evaluate:event', listener);
+            evaluateEventListeners.delete(listenerId);
         }
     },
 

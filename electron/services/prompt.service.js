@@ -22,15 +22,6 @@ class PromptService {
      */
     async initializeDefaults() {
         try {
-            // 检查是否已有激活的提示词
-            const task1Active = this.dao.getActive('task1');
-            const task2Active = this.dao.getActive('task2');
-
-            if (task1Active && task2Active) {
-                logger.info('Default prompts already initialized');
-                return;
-            }
-
             // 加载默认提示词
             const defaultPromptsPath = path.join(__dirname, '../resources/prompts-default.json');
 
@@ -43,25 +34,30 @@ class PromptService {
 
             // 导入并激活
             for (const [taskType, prompt] of Object.entries(defaultPrompts)) {
+                const activePrompt = this.dao.getActive(taskType);
                 const existing = this.dao.getByVersion(prompt.version, taskType);
+                let targetId = existing?.id || null;
 
                 if (!existing) {
-                    const id = this.dao.create({
+                    targetId = this.dao.create({
                         version: prompt.version,
                         task_type: taskType,
                         system_prompt: prompt.system_prompt,
                         scoring_criteria: prompt.scoring_criteria,
                         output_format_example: prompt.output_format_example
                     });
+                    logger.info(`Imported bundled prompt for ${taskType}: ${prompt.version}`);
+                }
 
-                    // 激活
-                    this.dao.activate(id);
+                if (!activePrompt && targetId) {
+                    this.dao.activate(targetId);
+                    logger.info(`Activated bundled prompt for ${taskType}: ${prompt.version}`);
+                    continue;
+                }
 
-                    logger.info(`Initialized default prompt for ${taskType}: ${prompt.version}`);
-                } else if (!this.dao.getActive(taskType)) {
-                    // 如果存在但未激活,则激活
-                    this.dao.activate(existing.id);
-                    logger.info(`Activated existing prompt for ${taskType}: ${prompt.version}`);
+                if (this._shouldAutoActivateBundledPrompt(activePrompt, prompt) && targetId) {
+                    this.dao.activate(targetId);
+                    logger.info(`Upgraded legacy bundled prompt for ${taskType}: ${prompt.version}`);
                 }
             }
 
@@ -120,6 +116,22 @@ class PromptService {
                 ? `${injectedParts.join('\n')}\n\n${prompt.system_prompt}`
                 : prompt.system_prompt
         };
+    }
+
+    _shouldAutoActivateBundledPrompt(activePrompt, bundledPrompt) {
+        if (!activePrompt) {
+            return true;
+        }
+
+        if (activePrompt.version === bundledPrompt.version) {
+            return false;
+        }
+
+        const isLegacyBundledVersion = activePrompt.version === '1.0.0';
+        const hasLegacyMarker = typeof activePrompt.system_prompt === 'string'
+            && activePrompt.system_prompt.includes('你是一位资深的雅思写作考官');
+
+        return isLegacyBundledVersion && hasLegacyMarker;
     }
 
     /**

@@ -17,7 +17,13 @@ class EssayService {
      */
     async list(filters, pagination) {
         try {
-            return this.dao.list(filters, pagination);
+            const result = this.dao.list(filters, pagination);
+            return {
+                ...result,
+                data: Array.isArray(result.data)
+                    ? result.data.map((item) => this._decorateEssayRecord(item))
+                    : []
+            };
         } catch (error) {
             logger.error('EssayService.list failed', error);
             throw error;
@@ -29,7 +35,8 @@ class EssayService {
      */
     async getById(id) {
         try {
-            return this.dao.getById(id);
+            const essay = this.dao.getById(id);
+            return essay ? this._decorateEssayRecord(essay) : null;
         } catch (error) {
             logger.error(`EssayService.getById failed (id: ${id})`, error);
             throw error;
@@ -47,10 +54,11 @@ class EssayService {
             // 创建记录
             const id = this.dao.create(essayData);
 
-            // TODO: 增加题目使用次数 (需要 TopicService 实例)
-            // if (essayData.topic_id) {
-            //     await this.topicService.incrementUsageCount(essayData.topic_id);
-            // }
+            // 题目模式下增加使用次数（失败不影响主流程）
+            const topicId = essayData.topic_id;
+            if (topicId !== null && topicId !== undefined) {
+                this._incrementTopicUsageCount(topicId);
+            }
 
             // 检查是否需要清理旧记录
             await this._autoCleanup();
@@ -59,6 +67,27 @@ class EssayService {
         } catch (error) {
             logger.error('EssayService.create failed', error);
             throw error;
+        }
+    }
+
+    /**
+     * 增加题目使用次数（非关键路径，失败仅记录日志）
+     * @private
+     */
+    _incrementTopicUsageCount(topicId) {
+        try {
+            const result = this.dao.db.prepare(`
+                UPDATE topics
+                SET usage_count = usage_count + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            `).run(topicId);
+
+            if (result.changes === 0) {
+                logger.warn(`Topic usage increment skipped: topic not found (id: ${topicId})`);
+            }
+        } catch (error) {
+            logger.warn(`Topic usage increment failed (id: ${topicId})`, error);
         }
     }
 
@@ -181,7 +210,7 @@ class EssayService {
      */
     async exportCSV(filters = {}) {
         try {
-            const data = this.dao.exportData(filters);
+            const data = this.dao.exportData(filters).map((row) => this._decorateEssayRecord(row));
 
             // 生成 CSV 内容
             const headers = [
@@ -199,16 +228,7 @@ class EssayService {
 
             const rows = data.map(row => {
                 // 解析题目标题 JSON（仅取前50字符）
-                let titleText = '自由写作';
-                if (row.topic_title) {
-                    try {
-                        const titleObj = JSON.parse(row.topic_title);
-                        // 简单提取文本内容
-                        titleText = this._extractTextFromTiptap(titleObj).substring(0, 50);
-                    } catch {
-                        titleText = row.topic_title.substring(0, 50);
-                    }
-                }
+                const titleText = (row.display_topic_title || '自由写作').substring(0, 50);
 
                 return [
                     row.submitted_at,
@@ -298,7 +318,15 @@ class EssayService {
      */
     _extractTextFromTiptap(json) {
         if (typeof json === 'string') {
-            return json;
+            try {
+                return this._extractTextFromTiptap(JSON.parse(json));
+            } catch {
+                return json;
+            }
+        }
+
+        if (!json || typeof json !== 'object') {
+            return '';
         }
 
         if (json.type === 'text') {
@@ -310,6 +338,76 @@ class EssayService {
         }
 
         return '';
+    }
+
+    _decorateEssayRecord(record) {
+        if (!record || typeof record !== 'object') {
+            return record;
+        }
+
+        const evaluation = this._parseEvaluationJson(record.evaluation_json);
+        const inputContext = evaluation?.input_context && typeof evaluation.input_context === 'object'
+            ? evaluation.input_context
+            : {};
+        const analysis = evaluation?.analysis && typeof evaluation.analysis === 'object'
+            ? evaluation.analysis
+            : {};
+
+        const topicTitleText = this._extractTextFromTiptap(record.topic_title).trim();
+        const customTopicText = typeof inputContext.topic_text === 'string'
+            ? inputContext.topic_text.trim()
+            : '';
+        const resolvedTopicText = topicTitleText || customTopicText;
+        const topicSource = inputContext.topic_source
+            || (record.topic_id ? 'topic_bank' : (customTopicText ? 'custom_input' : null));
+
+        return {
+            ...record,
+            display_topic_title: resolvedTopicText || '自由写作',
+            topic_text: resolvedTopicText || null,
+            custom_topic_text: customTopicText || null,
+            topic_source: topicSource,
+            task_analysis: this._normalizeMap(analysis.task_analysis || evaluation?.task_analysis),
+            band_rationale: this._normalizeMap(analysis.band_rationale || evaluation?.band_rationale),
+            improvement_plan: this._normalizeList(analysis.improvement_plan || evaluation?.improvement_plan)
+        };
+    }
+
+    _parseEvaluationJson(value) {
+        if (!value) {
+            return null;
+        }
+
+        if (typeof value === 'object') {
+            return value;
+        }
+
+        if (typeof value !== 'string') {
+            return null;
+        }
+
+        try {
+            return JSON.parse(value);
+        } catch {
+            return null;
+        }
+    }
+
+    _normalizeMap(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) {
+            return {};
+        }
+        return value;
+    }
+
+    _normalizeList(value) {
+        if (!Array.isArray(value)) {
+            return [];
+        }
+
+        return value
+            .map((item) => (typeof item === 'string' ? item.trim() : ''))
+            .filter(Boolean);
     }
 }
 

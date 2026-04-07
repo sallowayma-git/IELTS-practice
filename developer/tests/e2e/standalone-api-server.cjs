@@ -63,9 +63,7 @@ class StandaloneApiServer {
         // EvaluateService 需要特殊处理（依赖 LLM 调用）
         this.services.evaluateService = new EvaluateService(
             this.db,
-            this.services.configService,
-            this.services.promptService,
-            this.services.essayService
+            null
         );
 
         logger.info('Services initialized');
@@ -87,6 +85,7 @@ class StandaloneApiServer {
         this._registerUploadRoutes();
         this._registerEssayRoutes();
         this._registerConfigRoutes();
+        this._registerTopicRoutes();
 
         return new Promise((resolve, reject) => {
             this.server = this.app.listen(this.port, this.host, () => {
@@ -185,7 +184,12 @@ class StandaloneApiServer {
 
         this.app.delete('/api/upload/image/:filename', async (req, res) => {
             try {
-                await uploadService.deleteImage(req.params.filename);
+                const deleted = await uploadService.deleteImage(req.params.filename);
+                if (!deleted) {
+                    const error = new Error('图片不存在或已删除');
+                    error.code = 'image_not_found';
+                    throw error;
+                }
                 res.json({ success: true, message: '图片已删除' });
             } catch (error) {
                 this._sendError(res, error);
@@ -226,6 +230,71 @@ class StandaloneApiServer {
             try {
                 const data = await configService.list();
                 res.json({ success: true, data });
+            } catch (error) {
+                this._sendError(res, error);
+            }
+        });
+
+        this.app.post('/api/configs', async (req, res) => {
+            try {
+                const data = await configService.create(req.body || {});
+                res.json({ success: true, data, message: 'API配置创建成功' });
+            } catch (error) {
+                this._sendError(res, error);
+            }
+        });
+
+        this.app.put('/api/configs/:id', async (req, res) => {
+            try {
+                const id = Number(req.params.id);
+                const body = req.body || {};
+                const updates = { ...body };
+                const shouldSetDefault = Number(body.is_default) === 1;
+                delete updates.is_default;
+
+                if (Object.keys(updates).length > 0) {
+                    await configService.update(id, updates);
+                }
+                if (shouldSetDefault) {
+                    await configService.setDefault(id);
+                }
+
+                res.json({ success: true, message: '配置更新成功' });
+            } catch (error) {
+                this._sendError(res, error);
+            }
+        });
+
+        this.app.delete('/api/configs/:id', async (req, res) => {
+            try {
+                await configService.delete(Number(req.params.id));
+                res.json({ success: true, message: '配置已删除' });
+            } catch (error) {
+                this._sendError(res, error);
+            }
+        });
+    }
+
+    _registerTopicRoutes() {
+        const { topicService } = this.services;
+
+        this.app.get('/api/topics', async (req, res) => {
+            try {
+                const { page = 1, limit = 20, ...filters } = req.query;
+                const data = await topicService.list(filters, {
+                    page: Number(page),
+                    limit: Number(limit)
+                });
+                res.json({ success: true, ...data });
+            } catch (error) {
+                this._sendError(res, error);
+            }
+        });
+
+        this.app.post('/api/topics', async (req, res) => {
+            try {
+                const topicId = await topicService.create(req.body || {});
+                res.json({ success: true, topic_id: topicId, message: '题目创建成功' });
             } catch (error) {
                 this._sendError(res, error);
             }
@@ -291,8 +360,23 @@ async function main() {
     });
 }
 
+function isDirectElectronLaunch() {
+    if (!process.versions?.electron) {
+        return false;
+    }
+
+    return process.argv.some((arg) => {
+        if (!arg) return false;
+        try {
+            return path.resolve(arg) === __filename;
+        } catch (_error) {
+            return false;
+        }
+    });
+}
+
 // 如果直接运行此脚本
-if (require.main === module) {
+if (require.main === module || isDirectElectronLaunch()) {
     main();
 }
 

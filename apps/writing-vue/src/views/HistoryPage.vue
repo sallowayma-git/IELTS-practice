@@ -20,6 +20,11 @@
       </div>
     </div>
 
+    <div v-if="pageNotice.message" :class="['page-notice', `notice-${pageNotice.type}`, 'card']">
+      <span>{{ pageNotice.message }}</span>
+      <button class="btn-icon" type="button" @click="clearPageNotice" aria-label="关闭提示">✕</button>
+    </div>
+
     <!-- 筛选面板 -->
     <div class="filter-panel card">
       <div class="filter-row">
@@ -93,7 +98,7 @@
         <h2>📊 历史统计与对比</h2>
         <div class="range-selector">
           <label>对比范围：</label>
-          <select v-model="statisticsRange" @change="loadStatistics">
+          <select v-model="statisticsRange">
             <option value="all">全部历史</option>
             <option value="recent10">最近10次</option>
             <option value="thisMonth">本月</option>
@@ -232,7 +237,7 @@
           </div>
 
           <div class="essay-title">
-            {{ getTopicTitle(essay.topic_title) }}
+            {{ essay.display_topic_title || getTopicTitle(essay.topic_title) }}
           </div>
 
           <div class="essay-stats">
@@ -284,14 +289,32 @@
         </div>
         
         <div v-if="loadingDetail" class="loading">加载中...</div>
+
+        <div v-else-if="detailError" class="error-state detail-error-state card">
+          <p>⚠️ {{ detailError }}</p>
+          <div class="detail-error-actions">
+            <button class="btn btn-primary" @click="retryDetail">重试</button>
+            <button class="btn btn-secondary" @click="closeDetail">关闭</button>
+          </div>
+        </div>
         
         <div v-else-if="detailData" class="detail-content">
           <!-- 复用 ResultPage 风格的展示 -->
           <div class="detail-grid">
             <!-- 左侧：作文内容 -->
             <div class="detail-left">
+              <div class="section-header">🧭 题目要求</div>
+              <div class="topic-preview-card">
+                {{ detailData.display_topic_title || getTopicTitle(detailData.topic_title) }}
+              </div>
+
               <div class="section-header">📝 作文内容</div>
               <div class="essay-text">{{ detailData.content }}</div>
+
+              <template v-if="detailFeedback">
+                <div class="section-header" style="margin-top: 20px;">💡 整体建议</div>
+                <div class="feedback-panel">{{ detailFeedback }}</div>
+              </template>
               
               <div class="section-header" style="margin-top: 20px;">ℹ️ 基本信息</div>
               <div class="info-grid">
@@ -310,6 +333,10 @@
                 <div class="info-item">
                   <span class="info-label">模型</span>
                   <span>{{ detailData.model_name }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">题目来源</span>
+                  <span>{{ getTopicSourceLabel(detailData.topic_source) }}</span>
                 </div>
               </div>
             </div>
@@ -338,6 +365,43 @@
                   <span class="score-name">Grammatical Range</span>
                   <span class="score-value">{{ detailData.grammatical_range }}</span>
                 </div>
+              </div>
+
+              <div v-if="detailTaskAnalysisEntries.length > 0" class="detail-analysis-card">
+                <div class="section-header">任务诊断</div>
+                <div class="detail-analysis-grid">
+                  <div
+                    v-for="item in detailTaskAnalysisEntries"
+                    :key="item.label"
+                    class="detail-analysis-item"
+                  >
+                    <span class="info-label">{{ item.label }}</span>
+                    <p>{{ item.value }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="detailBandRationaleEntries.length > 0" class="detail-analysis-card">
+                <div class="section-header">评分理由</div>
+                <div class="detail-analysis-grid">
+                  <div
+                    v-for="item in detailBandRationaleEntries"
+                    :key="item.label"
+                    class="detail-analysis-item"
+                  >
+                    <span class="info-label">{{ item.label }}</span>
+                    <p>{{ item.value }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="detailImprovementPlan.length > 0" class="detail-analysis-card">
+                <div class="section-header">提分计划</div>
+                <ul class="plan-list">
+                  <li v-for="(item, index) in detailImprovementPlan" :key="`${index}-${item}`">
+                    {{ item }}
+                  </li>
+                </ul>
               </div>
             </div>
           </div>
@@ -380,9 +444,17 @@
 </template>
 
 <script setup>
-import {ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { essays as essaysApi } from '@/api/client.js'
 import RadarChart from '@/components/RadarChart.vue'
+import { createRequestGate } from '@/utils/request-gate.js'
+import {
+  BAND_RATIONALE_LABELS,
+  TASK_ANALYSIS_LABELS,
+  formatLabeledEntries,
+  normalizeList,
+  resolveEvaluationConsumption
+} from '@/utils/evaluation-result.js'
 
 // Debounce 工具函数
 function debounce(fn, delay) {
@@ -400,6 +472,7 @@ const essaysList = ref([])
 const total = ref(0)
 const pagination = ref({ page: 1, limit: 20 })
 const today = new Date().toISOString().split('T')[0]
+const pageNotice = ref({ type: '', message: '' })
 
 // Statistics state
 const loadingStatistics = ref(false)
@@ -423,12 +496,17 @@ const selectedIds = ref([])
 const detailModalEssay = ref(null)
 const detailData = ref(null)
 const loadingDetail = ref(false)
+const detailError = ref('')
 
 // 删除确认
 const showDeleteConfirm = ref(false)
 const deleteMode = ref('') // 'single' | 'batch' | 'all'
 const deleteTarget = ref(null)
 const deleteConfirmInput = ref('')
+
+const listRequestGate = createRequestGate()
+const statisticsRequestGate = createRequestGate()
+const detailRequestGate = createRequestGate()
 
 // 计算属性
 const essays = computed(() => essaysList.value)
@@ -458,60 +536,127 @@ const deleteConfirmMessage = computed(() => {
   return '确定删除该记录？此操作不可恢复。'
 })
 
+const detailEvaluation = computed(() => resolveEvaluationConsumption(
+  detailData.value?.evaluation_json,
+  {
+    overall_feedback: detailData.value?.overall_feedback,
+    feedback: detailData.value?.feedback,
+    task_analysis: detailData.value?.task_analysis,
+    band_rationale: detailData.value?.band_rationale,
+    improvement_plan: detailData.value?.improvement_plan
+  }
+))
+const detailFeedback = computed(() => detailEvaluation.value.feedback)
+const detailTaskAnalysisEntries = computed(() => (
+  formatLabeledEntries(
+    detailEvaluation.value.task_analysis,
+    TASK_ANALYSIS_LABELS
+  )
+))
+const detailBandRationaleEntries = computed(() => (
+  formatLabeledEntries(
+    detailEvaluation.value.band_rationale,
+    BAND_RATIONALE_LABELS
+  )
+))
+const detailImprovementPlan = computed(() => normalizeList(detailEvaluation.value.improvement_plan))
+
+function setPageNotice(type, message) {
+  pageNotice.value = message
+    ? { type, message: String(message).trim() }
+    : { type: '', message: '' }
+}
+
+function clearPageNotice() {
+  setPageNotice('', '')
+}
+
+function buildApiFilters(source = filters.value) {
+  const apiFilters = {}
+
+  if (source.task_type) apiFilters.task_type = source.task_type
+  if (source.start_date) apiFilters.start_date = source.start_date
+  if (source.end_date) apiFilters.end_date = source.end_date
+  if (source.min_score !== null && source.min_score !== '') {
+    apiFilters.min_score = source.min_score
+  }
+  if (source.max_score !== null && source.max_score !== '') {
+    apiFilters.max_score = source.max_score
+  }
+  if (source.search && source.search.trim()) {
+    apiFilters.search = source.search.trim()
+  }
+
+  return apiFilters
+}
+
+function validateFilters(source = filters.value) {
+  if (source.start_date && source.end_date && source.start_date > source.end_date) {
+    return '开始日期不能晚于结束日期'
+  }
+
+  if (source.min_score !== null && source.max_score !== null && source.min_score > source.max_score) {
+    return '最低分不能高于最高分'
+  }
+
+  return ''
+}
+
+function keepVisibleSelections() {
+  if (selectedIds.value.length === 0) return
+
+  const visibleIds = new Set(essaysList.value.map((essay) => essay.id))
+  selectedIds.value = selectedIds.value.filter((id) => visibleIds.has(id))
+}
+
 // 加载列表
 async function loadEssays() {
+  const requestId = listRequestGate.begin()
+  const filtersSnapshot = { ...filters.value }
+  const paginationSnapshot = { ...pagination.value }
+  const validationError = validateFilters(filtersSnapshot)
+
   loading.value = true
   error.value = ''
-  
-  // 日期范围校验
-  if (filters.value.start_date && filters.value.end_date) {
-    if (filters.value.start_date > filters.value.end_date) {
-      error.value = '开始日期不能晚于结束日期'
+  clearPageNotice()
+
+  if (validationError) {
+    if (listRequestGate.isCurrent(requestId)) {
+      error.value = validationError
+      essaysList.value = []
+      total.value = 0
+      clearSelection()
+      statistics.value = null
       loading.value = false
-      return
+      loadingStatistics.value = false
+      statisticsRequestGate.invalidate()
     }
+    return
   }
-  
-  // 分数范围校验
-  if (filters.value.min_score !== null && filters.value.max_score !== null) {
-    if (filters.value.min_score > filters.value.max_score) {
-      error.value = '最低分不能高于最高分'
-      loading.value = false
-      return
-    }
-  }
-  
+
   try {
-    // 构建后端契约的筛选参数
-    const apiFilters = {}
-    
-    if (filters.value.task_type) {
-      apiFilters.task_type = filters.value.task_type
-    }
-    if (filters.value.start_date) {
-      apiFilters.start_date = filters.value.start_date
-    }
-    if (filters.value.end_date) {
-      apiFilters.end_date = filters.value.end_date
-    }
-    if (filters.value.min_score !== null && filters.value.min_score !== '') {
-      apiFilters.min_score = filters.value.min_score
-    }
-    if (filters.value.max_score !== null && filters.value.max_score !== '') {
-      apiFilters.max_score = filters.value.max_score
-    }
-    if (filters.value.search && filters.value.search.trim()) {
-      apiFilters.search = filters.value.search.trim()
-    }
-    
-    const result = await essaysApi.list(apiFilters, pagination.value)
-    essaysList.value = result.data
-    total.value = result.total
+    const result = await essaysApi.list(buildApiFilters(filtersSnapshot), paginationSnapshot)
+    if (!listRequestGate.isCurrent(requestId)) return
+
+    essaysList.value = Array.isArray(result.data) ? result.data : []
+    total.value = Number(result.total) || 0
+    keepVisibleSelections()
+    await loadStatistics({
+      totalCount: total.value,
+      rangeValue: statisticsRange.value,
+      parentListRequestId: requestId
+    })
   } catch (err) {
+    if (!listRequestGate.isCurrent(requestId)) return
     console.error('加载历史记录失败:', err)
     error.value = err.message || '加载失败，请重试'
+    statistics.value = null
+    loadingStatistics.value = false
+    statisticsRequestGate.invalidate()
   } finally {
-    loading.value = false
+    if (listRequestGate.isCurrent(requestId)) {
+      loading.value = false
+    }
   }
 }
 
@@ -529,6 +674,7 @@ function resetFilters() {
     search: ''
   }
   pagination.value.page = 1
+  clearSelection()
 }
 
 // 批量选择
@@ -547,27 +693,45 @@ function clearSelection() {
 
 // 查看详情
 async function viewDetail(id) {
+  const requestId = detailRequestGate.begin()
   detailModalEssay.value = id
+  detailData.value = null
+  detailError.value = ''
   loadingDetail.value = true
-  
+
   try {
-    detailData.value = await essaysApi.getById(id)
+    const result = await essaysApi.getById(id)
+    if (!detailRequestGate.isCurrent(requestId)) return
+
+    detailData.value = result
   } catch (err) {
+    if (!detailRequestGate.isCurrent(requestId)) return
     console.error('加载详情失败:', err)
-    alert('加载详情失败: ' + err.message)
-    closeDetail()
+    detailError.value = err.message || '加载详情失败，请重试'
   } finally {
-    loadingDetail.value = false
+    if (detailRequestGate.isCurrent(requestId)) {
+      loadingDetail.value = false
+    }
+  }
+}
+
+function retryDetail() {
+  if (detailModalEssay.value) {
+    viewDetail(detailModalEssay.value)
   }
 }
 
 function closeDetail() {
+  detailRequestGate.invalidate()
   detailModalEssay.value = null
   detailData.value = null
+  detailError.value = ''
+  loadingDetail.value = false
 }
 
 // 删除操作
 function confirmDelete(id) {
+  clearPageNotice()
   deleteMode.value = 'single'
   deleteTarget.value = id
   showDeleteConfirm.value = true
@@ -575,11 +739,13 @@ function confirmDelete(id) {
 
 function confirmBatchDelete() {
   if (selectedIds.value.length === 0) return
+  clearPageNotice()
   deleteMode.value = 'batch'
   showDeleteConfirm.value = true
 }
 
 function confirmDeleteAll() {
+  clearPageNotice()
   deleteMode.value = 'all'
   deleteConfirmInput.value = ''
   showDeleteConfirm.value = true
@@ -595,35 +761,31 @@ async function executeDelete() {
     } else if (deleteMode.value === 'all') {
       await essaysApi.deleteAll()
     }
-    
+
+    const wasDeleteAll = deleteMode.value === 'all'
     showDeleteConfirm.value = false
+    deleteTarget.value = null
+    deleteMode.value = ''
+    deleteConfirmInput.value = ''
+    if (wasDeleteAll) {
+      clearSelection()
+    }
+    clearPageNotice()
     await loadEssays()
   } catch (err) {
     console.error('删除失败:', err)
-    alert('删除失败: ' + err.message)
+    setPageNotice('error', `删除失败：${err.message || '请重试'}`)
   }
 }
 
 // 导出CSV
 async function exportCSV() {
+  clearPageNotice()
+
   try {
-    // 构建筛选参数（导出"当前筛选结果全量"，非"当前页"）
-    const apiFilters = {}
-    if (filters.value.task_type) apiFilters.task_type = filters.value.task_type
-    if (filters.value.start_date) apiFilters.start_date = filters.value.start_date
-    if (filters.value.end_date) apiFilters.end_date = filters.value.end_date
-    if (filters.value.min_score !== null && filters.value.min_score !== '') {
-      apiFilters.min_score = filters.value.min_score
-    }
-    if (filters.value.max_score !== null && filters.value.max_score !== '') {
-      apiFilters.max_score = filters.value.max_score
-    }
-    if (filters.value.search && filters.value.search.trim()) {
-      apiFilters.search = filters.value.search.trim()
-    }
-    
-    const csvContent = await essaysApi.exportCSV(apiFilters)
-    
+    // 导出"当前筛选结果全量"，非"当前页"
+    const csvContent = await essaysApi.exportCSV(buildApiFilters())
+
     // 生成带筛选范围的文件名
     const dateStr = new Date().toISOString().split('T')[0]
     const filterSuffix = []
@@ -631,7 +793,7 @@ async function exportCSV() {
     if (filters.value.start_date || filters.value.end_date) filterSuffix.push('date-filtered')
     if (filters.value.min_score !== null || filters.value.max_score !== null) filterSuffix.push('score-filtered')
     const filename = `ielts-history-${dateStr}${filterSuffix.length > 0 ? '-' + filterSuffix.join('-') : ''}.csv`
-    
+
     // 下载CSV文件
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -642,7 +804,73 @@ async function exportCSV() {
     URL.revokeObjectURL(url)
   } catch (err) {
     console.error('导出CSV失败:', err)
-    alert('导出失败: ' + err.message)
+    setPageNotice('error', `导出失败：${err.message || '请重试'}`)
+  }
+}
+
+function buildStatisticsQuery(rangeValue = statisticsRange.value) {
+  if (rangeValue === 'thisMonth') {
+    return { range: 'monthly', taskType: null }
+  }
+  if (rangeValue === 'task1' || rangeValue === 'task2') {
+    return { range: rangeValue, taskType: null }
+  }
+  return { range: rangeValue || 'all', taskType: null }
+}
+
+// Statistics functions
+async function loadStatistics({ totalCount = total.value, rangeValue = statisticsRange.value, parentListRequestId = null } = {}) {
+  const requestId = statisticsRequestGate.begin()
+
+  if (totalCount === 0) {
+    if (statisticsRequestGate.isCurrent(requestId) && (parentListRequestId === null || listRequestGate.isCurrent(parentListRequestId))) {
+      statistics.value = { count: 0 }
+      loadingStatistics.value = false
+    }
+    return
+  }
+
+  loadingStatistics.value = true
+
+  try {
+    const { range, taskType } = buildStatisticsQuery(rangeValue)
+    const result = await essaysApi.getStatistics(range, taskType)
+
+    if (!statisticsRequestGate.isCurrent(requestId)) return
+    if (parentListRequestId !== null && !listRequestGate.isCurrent(parentListRequestId)) return
+
+    if (result && result.count > 0) {
+      // STRICT PROTOCOL: Use only tr_ta field (no fallback)
+      statistics.value = {
+        count: result.count,
+        latest: {
+          tr_ta: parseFloat(result.latest.tr_ta || 0),  // PROTOCOL: Always tr_ta
+          cc: parseFloat(result.latest.cc || 0),
+          lr: parseFloat(result.latest.lr || 0),
+          gra: parseFloat(result.latest.gra || 0)
+        },
+        average: {
+          tr_ta: parseFloat(result.average.avg_tr_ta || 0),  // PROTOCOL: Always avg_tr_ta
+          cc: parseFloat(result.average.avg_cc || 0),
+          lr: parseFloat(result.average.avg_lr || 0),
+          gra: parseFloat(result.average.avg_gra || 0)
+        },
+        latest_task_type: result.latest.task_type || 'task2',
+        latest_date: result.latest.submitted_at
+      }
+    } else {
+      statistics.value = { count: 0 }
+    }
+  } catch (err) {
+    if (!statisticsRequestGate.isCurrent(requestId)) return
+    if (parentListRequestId !== null && !listRequestGate.isCurrent(parentListRequestId)) return
+
+    console.error('加载统计数据失败:', err)
+    statistics.value = null
+  } finally {
+    if (statisticsRequestGate.isCurrent(requestId) && (parentListRequestId === null || listRequestGate.isCurrent(parentListRequestId))) {
+      loadingStatistics.value = false
+    }
   }
 }
 
@@ -672,61 +900,16 @@ function extractTextFromTiptap(json) {
   return ''
 }
 
+function getTopicSourceLabel(source) {
+  if (source === 'topic_bank') return '题库题目'
+  if (source === 'custom_input') return '自定义题目'
+  return '未标记'
+}
+
 function getScoreClass(score) {
   if (score >= 7) return 'high'
   if (score >= 6) return 'medium'
   return 'low'
-}
-
-// Statistics functions
-async function loadStatistics() {
-  if (total.value === 0) return
-  
-  loadingStatistics.value = true
-  
-  try {
-    // Determine range and taskType based on selector
-    let range = statisticsRange.value
-    let taskType = null
-    
-    // Map frontend range to backend protocol
-    if (range === 'task1' || range === 'task2') {
-      range = statisticsRange.value  // 'task1' or 'task2' for backend
-    } else if (range === 'thisMonth') {
-      range = 'monthly'  // Backend expects 'monthly'
-    }
-    // 'all' and 'recent10' pass through
-    
-    const result = await essaysApi.getStatistics(range, taskType)
-    
-    if (result && result.count > 0) {
-      // STRICT PROTOCOL: Use only tr_ta field (no fallback)
-      statistics.value = {
-        count: result.count,
-        latest: {
-          tr_ta: parseFloat(result.latest.tr_ta || 0),  // PROTOCOL: Always tr_ta
-          cc: parseFloat(result.latest.cc || 0),
-          lr: parseFloat(result.latest.lr || 0),
-          gra: parseFloat(result.latest.gra || 0)
-        },
-        average: {
-          tr_ta: parseFloat(result.average.avg_tr_ta || 0),  // PROTOCOL: Always avg_tr_ta
-          cc: parseFloat(result.average.avg_cc || 0),
-          lr: parseFloat(result.average.avg_lr || 0),
-          gra: parseFloat(result.average.avg_gra || 0)
-        },
-        latest_task_type: result.latest.task_type || 'task2',
-        latest_date: result.latest.submitted_at
-      }
-    } else {
-      statistics.value = { count: 0 }
-    }
-  } catch (err) {
-    console.error('加载统计数据失败:', err)
-    statistics.value = null
-  } finally {
-    loadingStatistics.value = false
-  }
 }
 
 function formatDifference(diff) {
@@ -762,11 +945,19 @@ watch(() => pagination.value.page, () => {
   loadEssays()
 })
 
+watch(statisticsRange, (rangeValue) => {
+  loadStatistics({ totalCount: total.value, rangeValue })
+})
+
 // 初始化
 onMounted(() => {
   loadEssays()
-  // Load statistics after essays are loaded
-  setTimeout(() => loadStatistics(), 500)
+})
+
+onBeforeUnmount(() => {
+  listRequestGate.invalidate()
+  statisticsRequestGate.invalidate()
+  detailRequestGate.invalidate()
 })
 </script>
 
@@ -792,6 +983,22 @@ onMounted(() => {
 .header-actions {
   display: flex;
   gap: 12px;
+}
+
+.page-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+}
+
+.page-notice.notice-error {
+  background: #fff4f4;
+  border-color: #f1b7b7;
+  color: #a73434;
 }
 
 /* 筛选面板 */
@@ -1153,6 +1360,18 @@ onMounted(() => {
   overflow-y: auto;
 }
 
+.detail-error-state {
+  margin: 12px 0 0;
+  padding: 40px 20px;
+}
+
+.detail-error-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -1192,6 +1411,32 @@ onMounted(() => {
   line-height: 1.8;
   white-space: pre-wrap;
   word-wrap: break-word;
+}
+
+.topic-preview-card,
+.feedback-panel,
+.detail-analysis-card {
+  background: var(--bg-light);
+  padding: 16px;
+  border-radius: var(--border-radius);
+  line-height: 1.8;
+  color: var(--text-secondary);
+}
+
+.detail-analysis-card {
+  margin-top: 20px;
+}
+
+.detail-analysis-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-analysis-item p {
+  margin: 4px 0 0;
+  color: var(--text-primary);
+  line-height: 1.7;
 }
 
 .info-grid {
@@ -1255,5 +1500,50 @@ onMounted(() => {
   font-size: 20px;
   font-weight: 600;
   color: var(--primary-color);
+}
+
+.plan-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.plan-list li {
+  margin-bottom: 8px;
+  line-height: 1.7;
+}
+
+@media (max-width: 960px) {
+  .page-header,
+  .filter-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .header-actions,
+  .essay-header,
+  .essay-stats {
+    flex-wrap: wrap;
+  }
+
+  .essay-item {
+    align-items: flex-start;
+  }
+
+  .detail-modal {
+    width: calc(100% - 24px);
+  }
+
+  .detail-left,
+  .detail-right {
+    min-height: auto;
+  }
 }
 </style>

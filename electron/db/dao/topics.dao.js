@@ -7,6 +7,19 @@ const logger = require('../../utils/logger');
 class TopicsDAO {
     constructor(db) {
         this.db = db;
+        this.topicColumns = null;
+    }
+
+    /**
+     * 获取题目总数
+     */
+    countAll() {
+        try {
+            return this.db.prepare('SELECT COUNT(*) as count FROM topics').get().count;
+        } catch (error) {
+            logger.error('Failed to count topics', error);
+            throw error;
+        }
     }
 
     /**
@@ -48,10 +61,11 @@ class TopicsDAO {
 
             // 分页查询
             const offset = (pagination.page - 1) * pagination.limit;
+            const orderBy = this._hasTopicColumn('created_at') ? 'created_at DESC' : 'id DESC';
             const listSql = `
                 SELECT * FROM topics 
                 ${whereClause}
-                ORDER BY created_at DESC
+                ORDER BY ${orderBy}
                 LIMIT ? OFFSET ?
             `;
             const topics = this.db.prepare(listSql).all(...params, pagination.limit, offset);
@@ -124,8 +138,9 @@ class TopicsDAO {
                 throw new Error('No valid fields to update');
             }
 
-            // 添加 updated_at
-            setClauses.push('updated_at = CURRENT_TIMESTAMP');
+            if (this._hasTopicColumn('updated_at')) {
+                setClauses.push('updated_at = CURRENT_TIMESTAMP');
+            }
             values.push(id);
 
             const sql = `
@@ -172,10 +187,20 @@ class TopicsDAO {
      */
     incrementUsageCount(id) {
         try {
+            const setClauses = [];
+            if (this._hasTopicColumn('usage_count')) {
+                setClauses.push('usage_count = COALESCE(usage_count, 0) + 1');
+            }
+            if (this._hasTopicColumn('updated_at')) {
+                setClauses.push('updated_at = CURRENT_TIMESTAMP');
+            }
+            if (setClauses.length === 0) {
+                return;
+            }
+
             this.db.prepare(`
                 UPDATE topics 
-                SET usage_count = usage_count + 1,
-                    updated_at = CURRENT_TIMESTAMP
+                SET ${setClauses.join(', ')}
                 WHERE id = ?
             `).run(id);
 
@@ -276,6 +301,20 @@ class TopicsDAO {
             logger.error('Failed to get topic statistics', error);
             throw error;
         }
+    }
+
+    _hasTopicColumn(columnName) {
+        return this._getTopicColumns().has(columnName);
+    }
+
+    _getTopicColumns() {
+        if (this.topicColumns instanceof Set) {
+            return this.topicColumns;
+        }
+
+        const rows = this.db.prepare('PRAGMA table_info(topics)').all();
+        this.topicColumns = new Set(rows.map((row) => String(row.name || '')));
+        return this.topicColumns;
     }
 }
 

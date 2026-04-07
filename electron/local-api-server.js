@@ -407,7 +407,12 @@ class LocalApiServer {
 
         this.app.delete('/api/upload/image/:filename', async (req, res) => {
             try {
-                await uploadService.deleteImage(req.params.filename);
+                const deleted = await uploadService.deleteImage(req.params.filename);
+                if (!deleted) {
+                    const error = new Error('图片不存在或已删除');
+                    error.code = 'image_not_found';
+                    throw error;
+                }
                 res.json({ success: true, message: '图片已删除' });
             } catch (error) {
                 this._sendError(res, error);

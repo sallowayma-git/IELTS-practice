@@ -77,6 +77,10 @@
       </button>
     </div>
 
+    <div v-if="pageMessage.message" :class="['inline-message', `inline-message-${pageMessage.type}`]">
+      {{ pageMessage.message }}
+    </div>
+
     <!-- 题目列表 (Grid Layout) -->
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
@@ -273,7 +277,7 @@
     </div>
 
     <!-- 批量导入弹窗 (保持逻辑，简化样式引用) -->
-    <div v-if="showImportDialog" class="dialog-overlay" @click.self="showImportDialog = false">
+    <div v-if="showImportDialog" class="dialog-overlay" @click.self="closeImportDialog">
       <div class="dialog card">
         <h3>📥 批量导入题目</h3>
         <p class="dialog-hint">请上传符合格式要求的 JSON 文件</p>
@@ -297,10 +301,21 @@
         </div>
 
         <div class="dialog-actions">
-          <button class="btn btn-secondary" @click="showImportDialog = false">取消</button>
+          <button class="btn btn-secondary" @click="closeImportDialog">取消</button>
           <button class="btn btn-primary" @click="confirmImport" :disabled="!importPreview">
             确认导入
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="deleteDialog.visible" class="dialog-overlay" @click.self="closeDeleteDialog">
+      <div class="dialog card">
+        <h3>删除题目</h3>
+        <p>确定删除该题目？关联的历史记录不会被删除。</p>
+        <div class="dialog-actions">
+          <button class="btn btn-secondary" @click="closeDeleteDialog">取消</button>
+          <button class="btn btn-danger" @click="confirmDeleteTopic">确认删除</button>
         </div>
       </div>
     </div>
@@ -310,6 +325,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import { topics as topicsApi, upload } from '@/api/client.js'
+import { createRequestGate } from '@/utils/request-gate.js'
 
 // Debounce 工具函数
 function debounce(fn, delay) {
@@ -324,6 +340,7 @@ function debounce(fn, delay) {
 const loading = ref(false)
 const topicsList = ref([])
 const total = ref(0)
+const pageMessage = ref({ type: 'info', message: '' })
 const pagination = ref({ page: 1, limit: 12 })
 const filters = ref({
   type: '',
@@ -350,10 +367,20 @@ const showImportDialog = ref(false)
 const importPreview = ref(null)
 const importError = ref('')
 const importFileInput = ref(null)
+const topicsRequestGate = createRequestGate()
+const deleteDialog = ref({
+  visible: false,
+  topicId: null
+})
 
 // 计算属性
 const topics = computed(() => topicsList.value)
 const totalPages = computed(() => Math.ceil(total.value / pagination.value.limit))
+const hasActiveFilters = computed(() => (
+  Boolean(filters.value.type)
+  || Boolean(filters.value.category)
+  || Number(filters.value.difficulty || 0) > 0
+))
 
 const isEditorValid = computed(() => {
   return editorForm.value.type && 
@@ -364,7 +391,9 @@ const isEditorValid = computed(() => {
 
 // 加载题目列表
 async function loadTopics() {
+  const requestId = topicsRequestGate.begin()
   loading.value = true
+  pageMessage.value = { type: 'info', message: '' }
   try {
     const activeFilters = {}
     if (filters.value.type) activeFilters.type = filters.value.type
@@ -372,30 +401,45 @@ async function loadTopics() {
     if (filters.value.difficulty > 0) activeFilters.difficulty = filters.value.difficulty
 
     const result = await topicsApi.list(activeFilters, pagination.value)
+    if (!topicsRequestGate.isCurrent(requestId)) return
+    if (!Array.isArray(result?.data)) {
+      throw new Error('题库返回格式无效')
+    }
+    const rawTopics = result.data
     
     // 批量加载图片 URL（同步化）
     const topicsWithUrls = await Promise.all(
-      result.data.map(async (topic) => {
+      rawTopics.map(async (topic) => {
+        const nextTopic = { ...topic }
         if (topic.image_path) {
           try {
-            topic.image_url = await upload.getImagePath(topic.image_path)
+            nextTopic.image_url = await upload.getImagePath(topic.image_path)
           } catch {
-            topic.image_url = null
+            nextTopic.image_url = null
           }
         } else {
-          topic.image_url = null
+          nextTopic.image_url = null
         }
-        return topic
+        return nextTopic
       })
     )
+    if (!topicsRequestGate.isCurrent(requestId)) return
     
     topicsList.value = topicsWithUrls
-    total.value = result.total
+    total.value = Number.isFinite(Number(result?.total)) ? Number(result.total) : topicsWithUrls.length
   } catch (error) {
+    if (!topicsRequestGate.isCurrent(requestId)) return
     console.error('加载题目失败:', error)
-    alert('加载题目失败: ' + error.message)
+    topicsList.value = []
+    total.value = 0
+    pageMessage.value = {
+      type: 'error',
+      message: `加载题目失败：${error.message}`
+    }
   } finally {
-    loading.value = false
+    if (topicsRequestGate.isCurrent(requestId)) {
+      loading.value = false
+    }
   }
 }
 
@@ -437,11 +481,13 @@ function openEditor(topic = null) {
 function closeEditor() {
   showEditor.value = false
   editingTopic.value = null
+  editorError.value = ''
 }
 
 // 保存题目
 async function saveTopic() {
   if (!isEditorValid.value) return
+  const isEditing = Boolean(editingTopic.value)
 
   try {
     // 上传图片（如果有）
@@ -479,6 +525,7 @@ async function saveTopic() {
 
     closeEditor()
     await loadTopics()
+    pageMessage.value = { type: 'success', message: isEditing ? '题目已更新' : '题目已创建' }
   } catch (error) {
     console.error('保存题目失败:', error)
     editorError.value = error.message
@@ -488,20 +535,38 @@ async function saveTopic() {
 // 删除题目
 async function deleteTopic(topic) {
   if (topic.is_official) {
-    alert('官方题目不允许删除')
+    pageMessage.value = { type: 'error', message: '官方题目不允许删除' }
     return
   }
+  deleteDialog.value = {
+    visible: true,
+    topicId: topic.id
+  }
+}
 
-  if (!confirm(`确定删除该题目？关联的历史记录不会被删除。`)) {
+function closeDeleteDialog() {
+  deleteDialog.value = {
+    visible: false,
+    topicId: null
+  }
+}
+
+async function confirmDeleteTopic() {
+  const topicId = deleteDialog.value.topicId
+  if (!topicId) {
+    closeDeleteDialog()
     return
   }
 
   try {
-    await topicsApi.delete(topic.id)
+    await topicsApi.delete(topicId)
     await loadTopics()
+    pageMessage.value = { type: 'success', message: '题目已删除' }
   } catch (error) {
     console.error('删除题目失败:', error)
-    alert('删除失败: ' + error.message)
+    pageMessage.value = { type: 'error', message: `删除失败：${error.message}` }
+  } finally {
+    closeDeleteDialog()
   }
 }
 
@@ -516,7 +581,7 @@ async function handleFileSelect(event) {
 
   // 验证文件大小
   if (file.size > 5 * 1024 * 1024) {
-    alert('图片大小不能超过 5MB')
+    editorError.value = '图片大小不能超过 5MB'
     return
   }
 
@@ -578,12 +643,23 @@ async function confirmImport() {
 
   try {
     const result = await topicsApi.batchImport(importPreview.value)
-    alert(`成功导入 ${result.success} 道题目${result.failed > 0 ? `，失败 ${result.failed} 道` : ''}`)
-    showImportDialog.value = false
-    importPreview.value = null
+    pageMessage.value = {
+      type: 'success',
+      message: `成功导入 ${result.success} 道题目${result.failed > 0 ? `，失败 ${result.failed} 道` : ''}`
+    }
+    closeImportDialog()
     await loadTopics()
   } catch (error) {
     importError.value = '导入失败: ' + error.message
+  }
+}
+
+function closeImportDialog() {
+  showImportDialog.value = false
+  importPreview.value = null
+  importError.value = ''
+  if (importFileInput.value) {
+    importFileInput.value.value = ''
   }
 }
 
@@ -652,6 +728,7 @@ onMounted(() => {
 
 // 清理
 onBeforeUnmount(() => {
+  topicsRequestGate.invalidate()
   // 清理可能残留的 blob URL
   if (editorForm.value.imagePreview && editorForm.value.imagePreview.startsWith('blob:')) {
     URL.revokeObjectURL(editorForm.value.imagePreview)
@@ -1063,6 +1140,26 @@ onBeforeUnmount(() => {
   height: 24px;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
+}
+
+.inline-message {
+  margin: 0 auto 16px;
+  max-width: 800px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.inline-message-success {
+  background: #ecfdf5;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.inline-message-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
 }
 
 .error-banner {
