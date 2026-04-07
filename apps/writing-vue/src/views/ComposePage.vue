@@ -1,14 +1,12 @@
 <template>
   <div class="compose-page">
-    <div v-if="showDraftNotification" class="draft-notification card">
-      <div class="notification-content">
-        <div class="notification-icon">💾</div>
-        <div class="notification-text">
-          <strong>检测到未保存的草稿</strong>
-          <p>要恢复上次编辑的内容吗?</p>
-        </div>
+    <section v-if="showDraftNotification" class="draft-banner draft-notification surface">
+      <div class="draft-banner__copy">
+        <span class="panel-label">Draft Recovery</span>
+        <strong>检测到未保存的草稿</strong>
+        <p>可以直接恢复继续写，也可以丢弃后从空白工作台开始。</p>
       </div>
-      <div class="notification-actions">
+      <div class="draft-banner__actions">
         <button class="btn btn-secondary" @click="handleDiscardDraft">
           放弃
         </button>
@@ -16,128 +14,62 @@
           恢复草稿
         </button>
       </div>
-    </div>
+    </section>
 
-    <div class="compose-container card">
-      <div class="compose-header">
-        <h2>作文输入</h2>
-        <div class="task-type-selector">
-          <button
-            :class="['task-btn', { active: taskType === 'task1' }]"
-            @click="taskType = 'task1'"
-          >
-            Task 1
-          </button>
-          <button
-            :class="['task-btn', { active: taskType === 'task2' }]"
-            @click="taskType = 'task2'"
-          >
-            Task 2
-          </button>
-        </div>
-      </div>
-
-      <div class="task-info">
-        <p v-if="taskType === 'task1'">
-          📊 Task 1：图表描述题，建议 150-180 词
-        </p>
-        <p v-else>
-          📝 Task 2：议论文，建议 250-280 词
+    <header class="compose-hero">
+      <div class="compose-hero__copy">
+        <span class="panel-label">Writing Workspace</span>
+        <h1>先把题目钉住，再把正文写满。</h1>
+        <h2 class="legacy-heading">作文输入</h2>
+        <p>
+          这个页面只做写作链路里真正有价值的事情：选任务、定题目、写正文、看字数、提交评分。
         </p>
       </div>
 
-      <div class="mode-section">
-        <span class="section-label">写作模式</span>
-        <div class="mode-toggle">
-          <button
-            :class="['mode-btn', { active: topicMode === 'free' }]"
-            @click="topicMode = 'free'"
-          >
-            自由写作
-          </button>
-          <button
-            :class="['mode-btn', { active: topicMode === 'bank' }]"
-            @click="topicMode = 'bank'"
-          >
-            从题库选择
-          </button>
+      <div class="compose-hero__metrics surface-muted">
+        <div class="hero-metric">
+          <span class="hero-metric__label">当前任务</span>
+          <strong>Task {{ taskType === 'task1' ? '1' : '2' }}</strong>
+        </div>
+        <div class="hero-metric">
+          <span class="hero-metric__label">建议字数</span>
+          <strong>{{ minWordCount }} - {{ targetWordCount }}</strong>
+        </div>
+        <div class="hero-metric">
+          <span class="hero-metric__label">题目来源</span>
+          <strong>{{ topicMode === 'free' ? '自由写作' : '题库选题' }}</strong>
         </div>
       </div>
+    </header>
 
-      <div v-if="topicMode === 'free'" class="topic-bank card-subsection">
-        <div class="field">
-          <label for="custom-topic-text">{{ customTopicLabel }}</label>
-          <textarea
-            id="custom-topic-text"
-            v-model="customTopicText"
-            class="textarea topic-input"
-            :placeholder="customTopicPlaceholder"
-            rows="4"
-          ></textarea>
-        </div>
-        <p class="topic-status">
-          评分会结合题目要求判断 {{ taskType === 'task1' ? 'Task Achievement' : 'Task Response' }}，不填题目就是瞎判。
-        </p>
-      </div>
-
-      <div v-if="topicMode === 'bank'" class="topic-bank card-subsection">
-        <div class="topic-toolbar">
-          <div class="field">
-            <label for="topic-category">分类</label>
-            <select id="topic-category" v-model="selectedCategory" class="select">
-              <option value="">全部分类</option>
-              <option
-                v-for="option in categoryOptions"
-                :key="option.value"
-                :value="option.value"
-              >
-                {{ option.label }}
-              </option>
-            </select>
+    <div class="compose-layout">
+      <section class="compose-editor surface">
+        <div class="editor-head">
+          <div class="editor-head__copy">
+            <span class="panel-label">Essay Draft</span>
+            <h2>正文工作面</h2>
+            <p>只管把文章写清楚。题目和任务规则在右侧，提交动作在底部。</p>
           </div>
 
-          <div class="field field-grow">
-            <label for="topic-select">题目</label>
-            <select
-              id="topic-select"
-              :value="selectedTopicId === null ? '' : String(selectedTopicId)"
-              class="select"
-              :disabled="topicLoading || topicsList.length === 0"
-              @change="handleTopicChange"
-            >
-              <option value="">请选择题目</option>
-              <option
-                v-for="topic in topicsList"
-                :key="topic.id"
-                :value="String(topic.id)"
-              >
-                {{ getTopicOptionLabel(topic) }}
-              </option>
-            </select>
+          <div class="editor-head__stats">
+            <div :class="['word-badge', { 'is-warning': isWordCountLow }]">
+              <span>当前字数</span>
+              <strong>{{ wordCount }}</strong>
+            </div>
+            <div class="word-meta">
+              目标 {{ targetWordCount }} 词
+            </div>
+          </div>
+        </div>
+        <div v-if="error || restoreNotice" class="editor-notices">
+          <div v-if="error" class="inline-message inline-message-error error-message">
+            <span>{{ error }}</span>
+          </div>
+          <div v-if="restoreNotice" :class="['inline-message', 'restore-notice']">
+            <span>{{ restoreNotice }}</span>
           </div>
         </div>
 
-        <p v-if="topicLoading" class="topic-status">正在加载题库...</p>
-        <p v-else-if="topicError" class="topic-status topic-status-error">{{ topicError }}</p>
-        <p v-else-if="topicsList.length === 0" class="topic-status">
-          当前条件下没有题目，换个分类试试。
-        </p>
-        <p v-else-if="selectedTopicId === null" class="topic-status">
-          请选择题目后再提交评分。
-        </p>
-
-        <div v-if="selectedTopicText" class="topic-preview">
-          <div class="topic-preview-header">
-            <span class="section-label">当前题目</span>
-            <span class="topic-meta">
-              {{ currentTopicLabel }}
-            </span>
-          </div>
-          <p>{{ selectedTopicText }}</p>
-        </div>
-      </div>
-
-      <div class="editor-section">
         <textarea
           v-model="content"
           class="textarea essay-input"
@@ -146,25 +78,163 @@
         ></textarea>
 
         <div class="editor-footer">
-          <div :class="['word-count', { warning: isWordCountLow }]">
-            字数：{{ wordCount }} / {{ targetWordCount }}
+          <div class="word-status">
+            <span class="word-status__label">提交阈值</span>
+            <strong :class="{ 'is-warning': isWordCountLow }">
+              {{ isWordCountLow ? `至少 ${minWordCount} 词` : '字数已达最低要求' }}
+            </strong>
           </div>
-          <button
-            class="btn btn-primary submit-btn"
-            :disabled="!canSubmit"
-            @click="handleSubmit"
-          >
-            {{ isSubmitting ? '提交中...' : '提交评分' }}
-          </button>
-        </div>
-      </div>
 
-      <div v-if="error" class="error-message">
-        ⚠️ {{ error }}
-      </div>
-      <div v-else-if="restoreNotice" class="restore-notice">
-        {{ restoreNotice }}
-      </div>
+          <div class="editor-actions">
+            <p class="submit-hint">
+              {{ canSubmit ? '准备好后即可提交评分。' : getSubmitBlockReason() }}
+            </p>
+            <button
+              class="btn btn-primary submit-btn"
+              :disabled="!canSubmit"
+              @click="handleSubmit"
+            >
+              {{ isSubmitting ? '提交中...' : '提交评分' }}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="compose-sidebar">
+        <section class="compose-panel surface">
+          <span class="panel-label">Task Setup</span>
+          <div class="panel-header">
+            <h2>任务设定</h2>
+            <p>{{ taskType === 'task1' ? '图表描述题' : '议论文 / 观点题' }}</p>
+          </div>
+
+          <div class="toggle-group">
+            <button
+              :class="['toggle-item', 'task-btn', { active: taskType === 'task1' }]"
+              @click="taskType = 'task1'"
+            >
+              <span class="toggle-item__label">Task 1</span>
+              <span class="toggle-item__meta">150-180 词</span>
+            </button>
+            <button
+              :class="['toggle-item', 'task-btn', { active: taskType === 'task2' }]"
+              @click="taskType = 'task2'"
+            >
+              <span class="toggle-item__label">Task 2</span>
+              <span class="toggle-item__meta">250-280 词</span>
+            </button>
+          </div>
+
+          <p class="panel-note">
+            {{ taskType === 'task1'
+              ? '评分重点是图表信息覆盖、关键信息提炼与比较表达。'
+              : '评分重点是立场完整、论证推进和段落衔接。'
+            }}
+          </p>
+        </section>
+
+        <section class="compose-panel surface">
+          <span class="panel-label">Prompt Source</span>
+          <div class="panel-header">
+            <h2>题目来源</h2>
+            <p>评分必须绑定题目，否则 Task Response 会漂。</p>
+          </div>
+
+          <div class="toggle-group toggle-group--compact">
+            <button
+              :class="['toggle-item', 'mode-btn', { active: topicMode === 'free' }]"
+              @click="topicMode = 'free'"
+            >
+              <span class="toggle-item__label">自由写作</span>
+              <span class="toggle-item__meta">手动输入题目</span>
+            </button>
+            <button
+              :class="['toggle-item', 'mode-btn', { active: topicMode === 'bank' }]"
+              @click="topicMode = 'bank'"
+            >
+              <span class="toggle-item__label">从题库选择</span>
+              <span class="toggle-item__meta">调用已有题目</span>
+            </button>
+          </div>
+
+          <div v-if="topicMode === 'free'" class="topic-panel">
+            <label for="custom-topic-text">{{ customTopicLabel }}</label>
+            <textarea
+              id="custom-topic-text"
+              v-model="customTopicText"
+              class="textarea topic-input"
+              :placeholder="customTopicPlaceholder"
+              rows="6"
+            ></textarea>
+          </div>
+
+          <div v-else class="topic-panel">
+            <div class="field-grid">
+              <div class="field">
+                <label for="topic-category">分类</label>
+                <select id="topic-category" v-model="selectedCategory" class="select">
+                  <option value="">全部分类</option>
+                  <option
+                    v-for="option in categoryOptions"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="field field-grow">
+                <label for="topic-select">题目</label>
+                <select
+                  id="topic-select"
+                  :value="selectedTopicId === null ? '' : String(selectedTopicId)"
+                  class="select"
+                  :disabled="topicLoading || topicsList.length === 0"
+                  @change="handleTopicChange"
+                >
+                  <option value="">请选择题目</option>
+                  <option
+                    v-for="topic in topicsList"
+                    :key="topic.id"
+                    :value="String(topic.id)"
+                  >
+                    {{ getTopicOptionLabel(topic) }}
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <div v-if="topicLoading" class="topic-status">题库加载中...</div>
+            <div v-else-if="topicError" class="topic-status topic-status--error">{{ topicError }}</div>
+            <div v-else-if="topicsList.length === 0" class="topic-status">当前分类下没有题目。</div>
+            <div v-else-if="selectedTopicId === null" class="topic-status">先选中题目，再提交评分。</div>
+
+            <div v-if="selectedTopicText" class="topic-preview">
+              <div class="topic-preview__meta">
+                <span>当前题目</span>
+                <strong>{{ currentTopicLabel }}</strong>
+              </div>
+              <p>{{ selectedTopicText }}</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="compose-panel surface-muted">
+          <span class="panel-label">Checklist</span>
+          <div class="panel-header">
+            <h2>提交前检查</h2>
+            <p>不要让模型替你猜题目，也不要用不成形的草稿浪费一次完整评测。</p>
+          </div>
+
+          <ul class="checklist">
+            <li v-if="taskType === 'task1'">有没有覆盖图表中的主要趋势、比较和异常点。</li>
+            <li v-else>有没有明确立场，并且每段都在推进立场而不是重复。</li>
+            <li>题目是否已经绑定，自由写作和题库模式二选一，不要空着。</li>
+            <li>正文尽量达到建议字数，再提交评测链路。</li>
+          </ul>
+        </section>
+      </aside>
     </div>
 
     <div v-if="showConfirmDialog" class="dialog-overlay">
@@ -440,6 +510,7 @@ async function handleRecoverDraft() {
   }
 
   isRestoringDraft.value = true
+  let nextRestoreNotice = ''
   taskType.value = draft.task_type || 'task2'
   topicMode.value = draft.topic_mode || 'free'
   selectedCategory.value = normalizeCategory(draft.task_type || 'task2', draft.category || '')
@@ -453,13 +524,14 @@ async function handleRecoverDraft() {
       topicMode.value = 'free'
       selectedCategory.value = ''
       customTopicText.value = draft.topic_text || ''
-      restoreNotice.value = draft.topic_text
+      nextRestoreNotice = draft.topic_text
         ? '草稿关联的题库题目已失效，已切换为自由写作并保留题目文本。'
         : '草稿关联的题库题目已失效，请重新输入题目或重新选题。'
     }
   }
 
   await nextTick()
+  restoreNotice.value = nextRestoreNotice
   isRestoringDraft.value = false
   showDraftNotification.value = false
   scheduleSave()
@@ -561,238 +633,378 @@ async function submitEssay() {
 
 <style scoped>
 .compose-page {
-  max-width: 900px;
-  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: rise-in 0.45s var(--ease-smooth);
 }
 
-.draft-notification {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  margin-bottom: 20px;
-  padding: 16px 20px;
+.legacy-heading {
+  font-family: var(--font-family-base);
+  font-size: 0.98rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.draft-banner {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  animation: slideDown 0.3s ease-out;
+  gap: 18px;
+  padding: 18px 20px;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.notification-content {
+.draft-banner__copy {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.draft-banner__copy strong {
+  font-size: 18px;
+}
+
+.draft-banner__copy p {
+  color: var(--text-secondary);
+}
+
+.draft-banner__actions {
+  display: flex;
   gap: 12px;
 }
 
-.notification-icon {
-  font-size: 28px;
-}
-
-.notification-text strong {
-  display: block;
-  margin-bottom: 4px;
-}
-
-.notification-text p {
-  margin: 0;
-  opacity: 0.9;
-}
-
-.notification-actions {
+.compose-hero {
   display: flex;
-  gap: 10px;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 24px;
 }
 
-.compose-container {
-  padding: 28px;
+.compose-hero__copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 860px;
 }
 
-.compose-header {
+.compose-hero__copy h1 {
+  font-family: var(--font-family-display);
+  font-size: clamp(42px, 6vw, 74px);
+  line-height: 0.92;
+  letter-spacing: -0.05em;
+}
+
+.compose-hero__copy p {
+  max-width: 720px;
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+.compose-hero__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 420px;
+  padding: 16px;
+}
+
+.hero-metric {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 251, 246, 0.46);
+  border: 1px solid rgba(90, 73, 60, 0.08);
+}
+
+.hero-metric__label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.hero-metric strong {
+  font-family: var(--font-family-display);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.compose-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.7fr);
+  gap: 20px;
+}
+
+.compose-editor,
+.compose-panel {
+  padding: 24px;
+}
+
+.compose-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 720px;
+}
+
+.editor-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 18px;
 }
 
-.compose-header h2 {
-  margin: 0;
-}
-
-.task-type-selector,
-.mode-toggle {
-  display: inline-flex;
+.editor-head__copy {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 
-.task-btn,
-.mode-btn {
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  border-radius: 999px;
-  padding: 8px 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+.editor-head__copy h2,
+.panel-header h2 {
+  font-family: var(--font-family-display);
+  font-size: 34px;
+  line-height: 0.96;
+  letter-spacing: -0.04em;
 }
 
-.task-btn.active,
-.mode-btn.active {
-  background: var(--primary-color);
-  color: white;
-  border-color: var(--primary-color);
-}
-
-.task-info {
-  margin-bottom: 18px;
+.editor-head__copy p,
+.panel-header p {
   color: var(--text-secondary);
 }
 
-.task-info p {
-  margin: 0;
-}
-
-.mode-section {
-  margin-bottom: 18px;
-}
-
-.section-label {
-  display: inline-block;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
-}
-
-.card-subsection {
-  margin-bottom: 18px;
-  padding: 16px;
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.5);
-}
-
-.topic-toolbar {
+.editor-head__stats {
   display: flex;
-  gap: 14px;
+  flex-direction: column;
   align-items: flex-end;
+  gap: 8px;
+  min-width: 150px;
+}
+
+.word-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 132px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 251, 246, 0.84);
+  border: 1px solid var(--line-1);
+}
+
+.word-badge span,
+.word-meta,
+.word-status__label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.word-badge strong {
+  font-family: var(--font-family-display);
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.word-badge.is-warning strong,
+.word-status strong.is-warning {
+  color: var(--danger-color);
+}
+
+.editor-notices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.essay-input {
+  flex: 1;
+  min-height: 520px;
+  padding: 24px;
+  border-radius: var(--radius-xl);
+  background:
+    linear-gradient(180deg, rgba(255, 251, 246, 0.92), rgba(248, 242, 233, 0.96));
+  font-size: 16px;
+}
+
+.editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.word-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.word-status strong {
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.submit-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  max-width: 320px;
+  text-align: right;
+}
+
+.submit-btn {
+  min-width: 138px;
+}
+
+.compose-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.compose-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.panel-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toggle-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.toggle-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-1);
+  border-radius: var(--radius-md);
+  background: rgba(255, 251, 246, 0.56);
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease,
+    color var(--duration-fast) ease,
+    transform var(--duration-fast) ease;
+}
+
+.toggle-item:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+}
+
+.toggle-item.active {
+  background: var(--ink-1);
+  border-color: var(--ink-1);
+  color: #fcf7ef;
+}
+
+.toggle-item__label {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.toggle-item__meta {
+  font-size: 12px;
+  color: inherit;
+  opacity: 0.78;
+}
+
+.panel-note,
+.topic-status {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.topic-status--error {
+  color: var(--danger-color);
+}
+
+.topic-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.topic-input {
+  min-height: 176px;
+}
+
+.field-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .field {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-width: 160px;
 }
 
 .field-grow {
   flex: 1;
 }
 
-.field label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.select,
-.textarea {
-  width: 100%;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 12px 14px;
-  background: white;
-  color: var(--text-primary);
-  box-sizing: border-box;
-}
-
-.topic-status {
-  margin: 12px 0 0;
-  color: var(--text-secondary);
-}
-
-.topic-input {
-  min-height: 120px;
-  resize: vertical;
-  line-height: 1.6;
-}
-
-.topic-status-error {
-  color: #c2410c;
-}
-
 .topic-preview {
-  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   padding-top: 14px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--line-1);
 }
 
-.topic-preview-header {
+.topic-preview__meta {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  align-items: center;
-}
-
-.topic-meta {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
+.topic-preview__meta strong {
+  color: var(--text-primary);
+}
+
 .topic-preview p {
-  margin: 8px 0 0;
   white-space: pre-wrap;
-  line-height: 1.6;
+  color: var(--text-primary);
 }
 
-.editor-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.essay-input {
-  min-height: 340px;
-  resize: vertical;
-  line-height: 1.7;
-}
-
-.editor-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-}
-
-.word-count {
+.checklist {
+  margin: 0;
+  padding-left: 18px;
   color: var(--text-secondary);
 }
 
-.word-count.warning {
-  color: #dc2626;
-}
-
-.submit-btn {
-  min-width: 120px;
-}
-
-.error-message {
-  margin-top: 16px;
-  color: #dc2626;
-}
-
-.restore-notice {
-  margin-top: 16px;
-  color: #9a3412;
+.checklist li {
+  margin-bottom: 10px;
+  line-height: 1.7;
 }
 
 .dialog-overlay {
@@ -809,7 +1021,6 @@ async function submitEssay() {
 .dialog {
   max-width: 420px;
   width: 100%;
-  padding: 24px;
 }
 
 .dialog h3 {
@@ -823,28 +1034,50 @@ async function submitEssay() {
   margin-top: 20px;
 }
 
+@media (max-width: 1180px) {
+  .compose-hero {
+    flex-direction: column;
+  }
+
+  .compose-hero__metrics {
+    min-width: 0;
+  }
+
+  .compose-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 720px) {
-  .compose-header,
-  .topic-toolbar,
+  .draft-banner,
+  .editor-head,
   .editor-footer,
-  .notification-actions {
+  .editor-actions,
+  .draft-banner__actions {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .task-type-selector,
-  .mode-toggle {
+  .compose-hero__copy h1 {
+    font-size: 44px;
+  }
+
+  .compose-hero__metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .toggle-group {
     width: 100%;
+    grid-template-columns: 1fr;
   }
 
-  .task-btn,
-  .mode-btn {
-    flex: 1;
+  .editor-head__stats {
+    align-items: stretch;
   }
 
-  .topic-preview-header {
-    flex-direction: column;
-    align-items: flex-start;
+  .submit-hint {
+    max-width: none;
+    text-align: left;
   }
 }
 </style>
