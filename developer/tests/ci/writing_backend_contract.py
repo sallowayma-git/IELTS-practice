@@ -173,6 +173,39 @@ add_check(
     "已检测" if contains(ROOT / "electron/ipc-handlers.js", "dist/writing/index.html") else "未检测",
 )
 add_check(
+    "IPC handlers 注册前会 removeHandler 去重",
+    contains_all(
+        ROOT / "electron/ipc-handlers.js",
+        ["ipcMain.removeHandler(channel)", "this._removeRegisteredHandlers();"],
+    ),
+    "已检测" if contains_all(
+        ROOT / "electron/ipc-handlers.js",
+        ["ipcMain.removeHandler(channel)", "this._removeRegisteredHandlers();"],
+    ) else "未检测",
+)
+add_check(
+    "main 进程固化 userData 到 ielts-practice 目录",
+    contains_all(
+        ROOT / "electron/main.js",
+        ["STABLE_USER_DATA_DIR = 'ielts-practice'", "app.setPath('userData', preferredUserDataPath)"],
+    ),
+    "已检测" if contains_all(
+        ROOT / "electron/main.js",
+        ["STABLE_USER_DATA_DIR = 'ielts-practice'", "app.setPath('userData', preferredUserDataPath)"],
+    ) else "未检测",
+)
+add_check(
+    "TopicService 读题目前确保默认题库可用",
+    contains_all(
+        ROOT / "electron/services/topic.service.js",
+        ["ensureDefaultsAvailable()", "await this.ensureDefaultsAvailable();"],
+    ),
+    "已检测" if contains_all(
+        ROOT / "electron/services/topic.service.js",
+        ["ensureDefaultsAvailable()", "await this.ensureDefaultsAvailable();"],
+    ) else "未检测",
+)
+add_check(
     "preload 评测事件精确解绑而非 removeAllListeners",
     (
         contains(ROOT / "electron/preload.js", "removeListener('evaluate:event'")
