@@ -2,9 +2,7 @@
   <div class="result-page">
     <header class="result-hero">
       <div class="result-hero__copy">
-        <p class="panel-label">Evaluation report</p>
-        <h1>评分结果已经整理完成</h1>
-        <p>左侧读原文和逐句问题，右侧看分数、任务诊断和提分动作。</p>
+        <h1>评分结果</h1>
       </div>
 
       <div class="result-hero__score surface-muted">
@@ -18,7 +16,6 @@
       <section class="reading-panel surface">
         <div class="reading-head">
           <div>
-            <p class="panel-label">Essay review</p>
             <h2>{{ viewMode === 'full' ? '作文原文' : `重点纠错（${sentences.length}句）` }}</h2>
           </div>
           <div class="view-switcher">
@@ -95,7 +92,6 @@
         <section v-if="topicText" class="rail-card surface">
           <div class="rail-head">
             <h3>题目要求</h3>
-            <span>{{ topicSourceLabel }}</span>
           </div>
           <p class="topic-text">{{ topicText }}</p>
         </section>
@@ -103,7 +99,6 @@
         <section class="rail-card surface">
           <div class="rail-head">
             <h3>分项评分</h3>
-            <span>Band breakdown</span>
           </div>
           <div class="score-breakdown">
             <div class="breakdown-item">
@@ -140,7 +135,6 @@
         <section v-if="reviewDegraded" class="rail-card rail-card-warning surface">
           <div class="rail-head">
             <h3>详解降级提示</h3>
-            <span>Fallback</span>
           </div>
           <p class="feedback-text">
             本次评测只完整返回了评分结果，段落和句级详解没有全部生成。建议稍后重试拿完整报告。
@@ -150,7 +144,6 @@
         <section v-if="feedback" class="rail-card surface">
           <div class="rail-head">
             <h3>整体改进建议</h3>
-            <span>Summary</span>
           </div>
           <p class="feedback-text">{{ feedback }}</p>
         </section>
@@ -158,7 +151,6 @@
         <section v-if="reviewBlocks.length > 0" class="rail-card surface">
           <div class="rail-head">
             <h3>段落详解</h3>
-            <span>{{ reviewBlocks.length }} 段</span>
           </div>
           <div class="rationale-list">
             <div
@@ -175,7 +167,6 @@
         <section v-if="taskAnalysisEntries.length > 0" class="rail-card surface">
           <div class="rail-head">
             <h3>任务诊断</h3>
-            <span>Task analysis</span>
           </div>
           <div class="analysis-grid">
             <div
@@ -192,7 +183,6 @@
         <section v-if="bandRationaleEntries.length > 0" class="rail-card surface">
           <div class="rail-head">
             <h3>评分理由</h3>
-            <span>Band rationale</span>
           </div>
           <div class="rationale-list">
             <div
@@ -209,7 +199,6 @@
         <section v-if="improvementPlan.length > 0" class="rail-card surface">
           <div class="rail-head">
             <h3>提分计划</h3>
-            <span>Next actions</span>
           </div>
           <ul class="plan-list">
             <li v-for="(item, index) in improvementPlan" :key="`${index}-${item}`">

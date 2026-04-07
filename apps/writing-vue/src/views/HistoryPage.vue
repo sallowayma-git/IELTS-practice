@@ -2,9 +2,7 @@
   <div class="history-page">
     <div class="page-header page-header--workspace">
       <div class="page-header__copy">
-        <span class="panel-label">History Workspace</span>
         <h1>历史记录</h1>
-        <p>筛选、对比和复盘每一篇作文，不再在碎卡片里找旧结果。</p>
       </div>
       <div class="header-actions">
         <button 
@@ -1233,11 +1231,11 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 16px;
   padding: 16px;
-  transition: box-shadow 0.2s;
+  transition: background-color 0.2s;
 }
 
 .essay-item:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background-color: var(--bg-muted);
 }
 
 .essay-checkbox {

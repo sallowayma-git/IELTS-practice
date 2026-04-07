@@ -2,11 +2,7 @@
   <nav class="nav-shell">
     <div class="nav-inner">
       <router-link to="/" class="brand-block">
-        <span class="brand-mark">IW</span>
-        <div class="brand-copy">
-          <span class="brand-eyebrow">IELTS writing workspace</span>
-          <strong class="brand-title">写作评分工作台</strong>
-        </div>
+        <strong class="brand-title">IELTS / Writing</strong>
       </router-link>
 
       <div class="nav-cluster">
@@ -18,7 +14,6 @@
             class="nav-item"
           >
             <span class="nav-label">{{ item.label }}</span>
-            <span class="nav-caption">{{ item.caption }}</span>
           </router-link>
         </div>
 
@@ -43,10 +38,10 @@ const router = useRouter()
 const route = useRoute()
 
 const navItems = [
-  { to: '/', label: '写作', caption: 'Compose' },
-  { to: '/topics', label: '题库', caption: 'Topics' },
-  { to: '/history', label: '历史', caption: 'History' },
-  { to: '/settings', label: '设置', caption: 'Settings' }
+  { to: '/', label: '写作' },
+  { to: '/topics', label: '题库' },
+  { to: '/history', label: '历史' },
+  { to: '/settings', label: '设置' }
 ]
 
 const canOpenLegacy = computed(() => (
@@ -81,125 +76,69 @@ function goBackToLegacy() {
   position: sticky;
   top: 0;
   z-index: 120;
-  padding: 18px 0 0;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-surface);
 }
 
 .nav-inner {
-  width: min(1480px, calc(100vw - 48px));
+  width: min(1520px, 100%);
   margin: 0 auto;
-  padding: 14px 18px;
+  padding: 12px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  border: 1px solid rgba(88, 64, 46, 0.12);
-  border-radius: 28px;
-  background: rgba(255, 250, 242, 0.84);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 14px 30px rgba(68, 46, 29, 0.06);
 }
 
 .brand-block {
   display: flex;
   align-items: center;
-  gap: 14px;
   color: inherit;
   text-decoration: none;
-}
-
-.brand-mark {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(180deg, #9b6c49 0%, #7d5133 100%);
-  color: #fff7ee;
-  font-family: var(--font-family-display);
-  font-size: 1rem;
-  letter-spacing: 0.08em;
-}
-
-.brand-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.brand-eyebrow {
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .brand-title {
   font-size: 1.18rem;
   font-family: var(--font-family-display);
+  font-weight: 500;
 }
 
 .nav-cluster {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 24px;
 }
 
 .nav-links {
   display: flex;
-  gap: 8px;
+  gap: 16px;
 }
 
 .nav-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 88px;
-  padding: 10px 12px;
-  border-radius: 16px;
   color: var(--text-secondary);
   text-decoration: none;
-  transition: all var(--duration-fast) var(--ease-smooth);
-}
-
-.nav-item:hover {
-  background: rgba(143, 95, 63, 0.08);
-  color: var(--text-primary);
-}
-
-.nav-item.router-link-active {
-  background: rgba(143, 95, 63, 0.12);
-  color: var(--text-primary);
-  box-shadow: inset 0 0 0 1px rgba(143, 95, 63, 0.16);
-}
-
-.nav-label {
   font-size: 0.95rem;
-  font-weight: 600;
+  transition: color var(--duration-fast) var(--ease-smooth);
 }
 
-.nav-caption {
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.nav-item:hover,
+.nav-item.router-link-active {
+  color: var(--text-primary);
 }
 
 .return-link {
-  min-height: 44px;
-  padding: 0 18px;
-  border-radius: 999px;
-  border: 1px solid rgba(88, 64, 46, 0.12);
-  background: rgba(255, 251, 245, 0.92);
-  color: var(--text-primary);
-  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
+  color: var(--secondary-color);
+  font-weight: 500;
+  border: none;
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-smooth);
 }
 
 .return-link:hover {
-  background: #fffdf9;
-  border-color: var(--border-strong);
+  background: var(--bg-muted-strong);
 }
 
 .return-link:disabled,
@@ -208,26 +147,9 @@ function goBackToLegacy() {
   cursor: not-allowed;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 900px) {
   .nav-inner {
-    width: min(100vw - 24px, 1480px);
-    flex-direction: column;
-    align-items: stretch;
-    border-radius: 24px;
-  }
-
-  .nav-cluster {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .nav-links {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .return-link {
-    min-height: 46px;
+    padding: 12px 16px;
   }
 }
 </style>

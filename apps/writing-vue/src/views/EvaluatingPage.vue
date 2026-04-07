@@ -2,7 +2,6 @@
   <div class="evaluating-page">
     <header class="evaluating-hero">
       <div class="evaluating-hero__copy">
-        <p class="panel-label">Evaluation session</p>
         <h1>评分链路正在推进</h1>
         <p>{{ statusMessage }}</p>
       </div>
@@ -17,7 +16,6 @@
       <section class="focus-panel surface">
         <div class="focus-head">
           <div>
-            <p class="panel-label">Pipeline</p>
             <h2>{{ currentStageLabel }}</h2>
           </div>
           <div class="focus-meta">
