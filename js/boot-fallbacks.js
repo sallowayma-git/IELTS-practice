@@ -115,6 +115,44 @@
     return window.dataIntegrityManager || null;
   }
 
+  var _fallbackDataIntegrityLoadPromise = null;
+
+  function _ensureFallbackDataIntegrityManagerAsync() {
+    var manager = _ensureFallbackDataIntegrityManager();
+    if (manager) {
+      return Promise.resolve(manager);
+    }
+
+    if (!_fallbackDataIntegrityLoadPromise) {
+      if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+        _fallbackDataIntegrityLoadPromise = window.AppLazyLoader.ensureGroup('browse-runtime');
+      } else if (typeof document !== 'undefined' && !window.DataIntegrityManager) {
+        _fallbackDataIntegrityLoadPromise = new Promise(function (resolve, reject) {
+          var script = document.createElement('script');
+          script.src = 'js/components/DataIntegrityManager.js';
+          script.onload = resolve;
+          script.onerror = function (error) {
+            reject(error || new Error('failed to load DataIntegrityManager'));
+          };
+          document.head.appendChild(script);
+        });
+      } else {
+        _fallbackDataIntegrityLoadPromise = Promise.resolve();
+      }
+    }
+
+    return _fallbackDataIntegrityLoadPromise.then(function () {
+      var readyManager = _ensureFallbackDataIntegrityManager();
+      if (!readyManager) {
+        throw new Error('数据管理模块未初始化');
+      }
+      return readyManager;
+    }).catch(function (error) {
+      _fallbackDataIntegrityLoadPromise = null;
+      throw error;
+    });
+  }
+
   function _fallbackCreateElement(tag, attributes, children) {
     if (typeof document === 'undefined') {
       return null;
@@ -221,9 +259,11 @@
       return;
     }
 
-    var manager = _ensureFallbackDataIntegrityManager();
-    if (!manager) {
-      window.showMessage && window.showMessage('数据管理模块未初始化', 'error');
+    var manager = null;
+    try {
+      manager = await _ensureFallbackDataIntegrityManagerAsync();
+    } catch (error) {
+      window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
       return;
     }
 
@@ -287,11 +327,6 @@
       } catch (_) { console.log('[Toast]', type || 'info', message); }
     };
   }
-
-  // Fallbacks for data export/import buttons in Settings
-  var disabledMessage = function (action) {
-    window.showMessage && window.showMessage(action + '功能已移除', 'warning');
-  };
 
   var ensureDataBackupManager = (function () {
     let loading = null;
@@ -515,8 +550,23 @@
   }
 
   if (typeof window.exportAllData !== 'function') {
-    window.exportAllData = function () {
-      disabledMessage('数据导出');
+    window.exportAllData = async function () {
+      var manager = null;
+      try {
+        manager = await _ensureFallbackDataIntegrityManagerAsync();
+      } catch (error) {
+        console.error('[Fallback] 数据导出模块加载失败:', error);
+        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
+        return;
+      }
+
+      try {
+        await manager.exportData();
+        window.showMessage && window.showMessage('数据导出成功', 'success');
+      } catch (error) {
+        console.error('[Fallback] 数据导出失败:', error);
+        window.showMessage && window.showMessage('数据导出失败: ' + (error && error.message ? error.message : error), 'error');
+      }
     };
   }
 
@@ -546,9 +596,11 @@
   // Fallbacks for backup operations used by Settings
   if (typeof window.createManualBackup !== 'function') {
     window.createManualBackup = async function () {
-      var manager = _ensureFallbackDataIntegrityManager();
-      if (!manager) {
-        window.showMessage && window.showMessage('数据管理模块未初始化', 'error');
+      var manager = null;
+      try {
+        manager = await _ensureFallbackDataIntegrityManagerAsync();
+      } catch (error) {
+        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
         return;
       }
       try {
@@ -562,7 +614,7 @@
       } catch (error) {
         if (_fallbackIsQuotaExceeded(error)) {
           try {
-            manager.exportData();
+            await manager.exportData();
             window.showMessage && window.showMessage('存储不足：已将数据导出为文件', 'warning');
           } catch (exportErr) {
             window.showMessage && window.showMessage('备份失败且导出失败: ' + (exportErr && exportErr.message ? exportErr.message : exportErr), 'error');
@@ -576,9 +628,11 @@
 
   if (typeof window.showBackupList !== 'function') {
     window.showBackupList = async function () {
-      var manager = _ensureFallbackDataIntegrityManager();
-      if (!manager) {
-        window.showMessage && window.showMessage('数据管理模块未初始化', 'error');
+      var manager = null;
+      try {
+        manager = await _ensureFallbackDataIntegrityManagerAsync();
+      } catch (error) {
+        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
         return;
       }
 
