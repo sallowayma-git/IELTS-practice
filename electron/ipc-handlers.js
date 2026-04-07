@@ -11,6 +11,49 @@ const SettingsService = require('./services/settings.service');
 const UploadService = require('./services/upload.service');
 const logger = require('./utils/logger');
 
+const IPC_HANDLE_CHANNELS = [
+    'app:getUserDataPath',
+    'app:getLocalApiInfo',
+    'configs:list',
+    'configs:create',
+    'configs:update',
+    'configs:delete',
+    'configs:setDefault',
+    'configs:toggleEnabled',
+    'configs:test',
+    'prompts:getActive',
+    'prompts:import',
+    'prompts:exportActive',
+    'prompts:listAll',
+    'prompts:activate',
+    'prompts:delete',
+    'evaluate:start',
+    'evaluate:getSessionState',
+    'evaluate:cancel',
+    'topics:list',
+    'topics:getById',
+    'topics:create',
+    'topics:update',
+    'topics:delete',
+    'topics:batchImport',
+    'topics:getStatistics',
+    'essays:list',
+    'essays:getById',
+    'essays:create',
+    'essays:delete',
+    'essays:batchDelete',
+    'essays:deleteAll',
+    'essays:getStatistics',
+    'essays:exportCSV',
+    'settings:getAll',
+    'settings:get',
+    'settings:update',
+    'settings:reset',
+    'upload:image',
+    'upload:deleteImage',
+    'upload:getImagePath'
+];
+
 /**
  * IPC 通信处理器
  * 
@@ -110,6 +153,7 @@ class IPCHandlers {
      * 注册所有 IPC handlers
      */
     register() {
+        this._removeRegisteredHandlers();
         this._registerAppHandlers();
         this._registerConfigHandlers();
         this._registerPromptHandlers();
@@ -120,6 +164,12 @@ class IPCHandlers {
         this._registerUploadHandlers();
 
         logger.info('All IPC handlers registered');
+    }
+
+    _removeRegisteredHandlers() {
+        for (const channel of IPC_HANDLE_CHANNELS) {
+            ipcMain.removeHandler(channel);
+        }
     }
 
     /**
@@ -384,8 +434,10 @@ class IPCHandlers {
      * 清理资源
      */
     cleanup() {
+        this._removeRegisteredHandlers();
         if (this.db) {
             this.db.close();
+            this.db = null;
             logger.info('Database connection closed');
         }
     }
