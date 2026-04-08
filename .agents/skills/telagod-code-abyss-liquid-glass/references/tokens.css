@@ -1,0 +1,81 @@
+/* Liquid Glass Design Tokens */
+
+:root {
+  color-scheme: light dark;
+
+  /* Blur */
+  --lg-blur-sm: 8px;
+  --lg-blur-md: 16px;
+  --lg-blur-lg: 32px;
+  --lg-blur-xl: 48px;
+
+  /* Saturation */
+  --lg-saturate: 1.8;
+
+  /* Radius */
+  --lg-radius-sm: 8px;
+  --lg-radius-md: 12px;
+  --lg-radius-lg: 16px;
+  --lg-radius-xl: 24px;
+
+  /* Shadows */
+  --lg-shadow-subtle: 0 1px 3px rgba(0,0,0,0.08);
+  --lg-shadow-elevated: 0 4px 16px rgba(0,0,0,0.1);
+  --lg-shadow-high: 0 8px 32px rgba(0,0,0,0.15);
+
+  /* Animation */
+  --lg-duration-fast: 150ms;
+  --lg-duration-normal: 300ms;
+  --lg-duration-slow: 500ms;
+  --lg-easing-spring: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Light mode (default) */
+  --lg-bg-primary: rgba(255,255,255,0.72);
+  --lg-bg-elevated: rgba(255,255,255,0.82);
+  --lg-bg-toolbar: rgba(255,255,255,0.65);
+  --lg-bg-interactive: rgba(255,255,255,0.5);
+  --lg-bg-pressed: rgba(255,255,255,0.35);
+  --lg-bg-scrim: rgba(0,0,0,0.25);
+  --lg-border-color: rgba(255,255,255,0.45);
+  --lg-border-subtle: rgba(0,0,0,0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lg-bg-primary: rgba(30,30,30,0.65);
+    --lg-bg-elevated: rgba(40,40,40,0.75);
+    --lg-bg-toolbar: rgba(25,25,25,0.6);
+    --lg-bg-interactive: rgba(255,255,255,0.1);
+    --lg-bg-pressed: rgba(255,255,255,0.06);
+    --lg-bg-scrim: rgba(0,0,0,0.5);
+    --lg-border-color: rgba(255,255,255,0.12);
+    --lg-border-subtle: rgba(255,255,255,0.06);
+    --lg-shadow-subtle: 0 1px 3px rgba(0,0,0,0.3);
+    --lg-shadow-elevated: 0 4px 16px rgba(0,0,0,0.4);
+    --lg-shadow-high: 0 8px 32px rgba(0,0,0,0.5);
+  }
+}
+
+@media (prefers-contrast: high) {
+  :root {
+    --lg-bg-primary: rgba(255,255,255,0.95);
+    --lg-bg-elevated: rgba(255,255,255,0.98);
+    --lg-border-color: rgba(0,0,0,0.3);
+  }
+}
+
+@media (prefers-contrast: high) and (prefers-color-scheme: dark) {
+  :root {
+    --lg-bg-primary: rgba(20,20,20,0.95);
+    --lg-bg-elevated: rgba(25,25,25,0.98);
+    --lg-border-color: rgba(255,255,255,0.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --lg-duration-fast: 0ms;
+    --lg-duration-normal: 0ms;
+    --lg-duration-slow: 0ms;
+  }
+}

@@ -36,16 +36,45 @@
         </div>
 
         <nav class="main-nav hero-nav" data-nav-controller="legacy">
-            <button class="nav-btn hero-nav__btn active" type="button" data-view="overview">📊 总览</button>
-            <button class="nav-btn hero-nav__btn" type="button" data-view="browse">📚 题库浏览</button>
-            <button class="nav-btn hero-nav__btn" type="button" data-view="practice">📝 练习记录</button>
-            <button class="nav-btn hero-nav__btn" type="button" data-view="more">✨ 更多</button>
-            <button class="nav-btn hero-nav__btn" type="button" data-view="settings">⚙️ 设置</button>
+            <button class="nav-btn hero-nav__btn active" type="button" data-view="overview"><svg width="18" height="18"
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    style="margin-right: 6px; vertical-align: text-bottom;">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="3" y1="9" x2="21" y2="9"></line>
+                    <line x1="9" y1="21" x2="9" y2="9"></line>
+                </svg>总览</button>
+            <button class="nav-btn hero-nav__btn" type="button" data-view="browse"><svg width="18" height="18"
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    style="margin-right: 6px; vertical-align: text-bottom;">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                </svg>题库浏览</button>
+            <button class="nav-btn hero-nav__btn" type="button" data-view="practice"><svg width="18" height="18"
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    style="margin-right: 6px; vertical-align: text-bottom;">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>练习记录</button>
+            <button class="nav-btn hero-nav__btn" type="button" data-view="more"><svg width="18" height="18"
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    style="margin-right: 6px; vertical-align: text-bottom;">
+                    <circle cx="12" cy="12" r="1"></circle>
+                    <circle cx="19" cy="12" r="1"></circle>
+                    <circle cx="5" cy="12" r="1"></circle>
+                </svg>更多</button>
+            <button class="nav-btn hero-nav__btn" type="button" data-view="settings"><svg width="18" height="18"
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    style="margin-right: 6px; vertical-align: text-bottom;">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path
+                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                    </path>
+                </svg>设置</button>
         </nav>
 
         <!-- 总览页面 -->
         <div id="overview-view" class="view active hero-panel hero-section">
-            <h2>📊 学习总览</h2>
+            <h2 class="heading-serif">学习总览</h2>
 
             <div class="category-grid" id="category-overview">
                 <!-- 分类卡片将通过JavaScript动态生成 -->
@@ -56,7 +85,11 @@
         <div id="browse-view" class="view hero-panel hero-section">
             <div class="browse-title-bar hero-panel__header">
                 <button class="browse-title-trigger" id="browse-title-trigger" type="button" aria-haspopup="true"
-                    aria-expanded="false" title="列表偏好">📚<span class="browse-title-dot" aria-hidden="true"></span></button>
+                    aria-expanded="false" title="列表偏好"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2">
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                    </svg><span class="browse-title-dot" aria-hidden="true"></span></button>
                 <h2 id="browse-title">题库浏览</h2>
                 <div class="browse-preference-panel" id="browse-preference-panel" hidden>
                     <label class="browse-preference-option">
@@ -65,18 +98,24 @@
                     </label>
                 </div>
                 <div id="type-filter-buttons" class="hero-panel__actions shui-filter-group">
-                    <button class="btn btn-sm shui-filter-btn active" type="button" aria-pressed="true" data-filter-type="all" data-action="filter-exam-type">全部</button>
-                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="reading" data-action="filter-exam-type">阅读</button>
-                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="listening" data-action="filter-exam-type">听力</button>
+                    <button class="btn btn-sm shui-filter-btn active" type="button" aria-pressed="true"
+                        data-filter-type="all" data-action="filter-exam-type">全部</button>
+                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false"
+                        data-filter-type="reading" data-action="filter-exam-type">阅读</button>
+                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false"
+                        data-filter-type="listening" data-action="filter-exam-type">听力</button>
                 </div>
             </div>
 
             <div class="search-box">
                 <div class="search-row">
                     <div class="search-input-wrap">
-                        <input type="text" class="search-input" id="exam-search-input" placeholder="搜索题目..." aria-label="搜索题目" data-input-action="search-exams" data-input-event="keyup">
-                        <button type="button" class="search-clear-btn" id="search-clear-btn" aria-label="清除搜索" hidden data-action="clear-exam-search">
-                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <input type="text" class="search-input" id="exam-search-input" placeholder="搜索题目..."
+                            aria-label="搜索题目" data-input-action="search-exams" data-input-event="keyup">
+                        <button type="button" class="search-clear-btn" id="search-clear-btn" aria-label="清除搜索" hidden
+                            data-action="clear-exam-search">
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2"
+                                fill="none" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
                             </svg>
@@ -88,8 +127,10 @@
                             <option value="frequency-desc">频率高→低</option>
                         </select>
                         <div class="browse-sort-icon">
-                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M3.5 5.25L7 8.75L10.5 5.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path d="M3.5 5.25L7 8.75L10.5 5.25" stroke="currentColor" stroke-width="1.5"
+                                    stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
                         </div>
                     </div>
@@ -105,7 +146,7 @@
 
         <!-- 练习记录页面 -->
         <div id="practice-view" class="view hero-panel hero-section">
-            <h2>📝 练习记录</h2>
+            <h2 class="heading-serif">练习记录</h2>
 
             <div class="practice-stats hero-grid hero-grid--stats">
                 <div class="hero-card hero-card--stat">
@@ -132,26 +173,55 @@
 
             <div class="practice-history hero-panel hero-section">
                 <div class="hero-panel__header">
-                    <h3 class="hero-panel__title">📈 练习历史 <span class="hero-tag">SHUI Timeline</span></h3>
+                    <h3 class="hero-panel__title heading-serif">练习历史 <span class="hero-tag">SHUI Timeline</span></h3>
                     <div id="record-type-filter-buttons" class="hero-panel__actions shui-filter-group">
-                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="true" data-filter-type="all" data-action="filter-record-type">全部</button>
-                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="reading" data-action="filter-record-type">阅读</button>
-                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="listening" data-action="filter-record-type">听力</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="true"
+                            data-filter-type="all" data-action="filter-record-type">全部</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false"
+                            data-filter-type="reading" data-action="filter-record-type">阅读</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false"
+                            data-filter-type="listening" data-action="filter-record-type">听力</button>
                     </div>
                     <div class="hero-panel__actions">
-                        <button class="btn btn-secondary hero-btn hero-btn--ghost" data-action="export-practice-markdown">📄
+                        <button class="btn btn-secondary hero-btn hero-btn--ghost"
+                            data-action="export-practice-markdown"><svg width="14" height="14" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2"
+                                style="margin-right: 4px; vertical-align: text-bottom;">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
                             导出Markdown</button>
-                        <button class="btn btn-info hero-btn" id="bulk-delete-btn" data-action="toggle-bulk-delete">📝
+                        <button class="btn btn-info hero-btn" id="bulk-delete-btn" data-action="toggle-bulk-delete"><svg
+                                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" style="margin-right: 4px; vertical-align: text-bottom;">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
                             批量删除</button>
-                        <button class="btn btn-warning hero-btn hero-btn--warn" data-action="clear-practice-data">🗑️
+                        <button class="btn btn-warning hero-btn hero-btn--warn" data-action="clear-practice-data"><svg
+                                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" style="margin-right: 4px; vertical-align: text-bottom;">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path
+                                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                </path>
+                            </svg>
                             清除记录</button>
                     </div>
                 </div>
                 <div class="practice-history-search-row">
                     <div class="search-input-wrap">
-                        <input type="text" class="search-input" id="history-search-input" placeholder="搜索练习记录（标题/分类/日期）..." aria-label="搜索练习记录" data-input-action="search-practice-history" data-input-event="input">
-                        <button type="button" class="search-clear-btn history-search-clear-btn" id="history-search-clear-btn" aria-label="清除练习记录搜索" hidden data-action="clear-history-search">
-                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <input type="text" class="search-input" id="history-search-input"
+                            placeholder="搜索练习记录（标题/分类/日期）..." aria-label="搜索练习记录"
+                            data-input-action="search-practice-history" data-input-event="input">
+                        <button type="button" class="search-clear-btn history-search-clear-btn"
+                            id="history-search-clear-btn" aria-label="清除练习记录搜索" hidden
+                            data-action="clear-history-search">
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2"
+                                fill="none" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
                             </svg>
@@ -161,7 +231,16 @@
 
                 <div id="history-list" class="practice-history-list">
                     <div style="text-align: center; padding: 40px; opacity: 0.7;">
-                        <div style="font-size: 3em; margin-bottom: 15px;">📋</div>
+                        <div style="font-size: 3em; margin-bottom: 15px;"><svg width="64" height="64"
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path
+                                    d="M16 2H8C6.9 2 6 2.9 6 4V20C6 21.1 6.9 22 8 22H16C17.1 22 18 21.1 18 20V4C18 2.9 17.1 2 16 2Z">
+                                </path>
+                                <path d="M12 18H8"></path>
+                                <path d="M16 14H8"></path>
+                                <path d="M16 10H8"></path>
+                                <path d="M12 6H8"></path>
+                            </svg></div>
                         <p>暂无练习记录</p>
                         <p style="font-size: 0.9em; margin-top: 10px;">开始练习后，记录将自动保存在这里</p>
                     </div>
@@ -171,36 +250,102 @@
 
         <!-- 设置页面 -->
         <div id="settings-view" class="view hero-panel hero-section">
-            <h2>⚙️ 系统设置</h2>
+            <h2 class="heading-serif">系统设置</h2>
             <div class="hero-settings-group">
                 <div class="hero-panel hero-section system-management-panel">
-                    <h3>🔧 系统管理</h3>
+                    <h3 class="heading-serif">系统管理</h3>
                     <p class="hero-panel__muted">系统工具和设置选项</p>
                     <div class="hero-settings-actions">
-                        <button class="btn btn-warning hero-btn hero-btn--warn" id="clear-cache-btn" data-action="clear-cache">🗑️ 清除缓存</button>
-                        <button class="btn btn-warning hero-btn hero-btn--warn" id="load-library-btn" data-action="load-library">📂 加载题库</button>
-                        <button class="btn btn-warning hero-btn hero-btn--warn" id="library-config-btn" data-action="library-config">⚙️
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="clear-cache-btn"
+                            data-action="clear-cache"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2"
+                                style="margin-right: 4px; vertical-align: text-bottom;">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path
+                                    d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                </path>
+                            </svg> 清除缓存</button>
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="load-library-btn"
+                            data-action="load-library"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2"
+                                style="margin-right: 4px; vertical-align: text-bottom;">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z">
+                                </path>
+                            </svg> 加载题库</button>
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="library-config-btn"
+                            data-action="library-config"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2"
+                                style="margin-right: 4px; vertical-align: text-bottom;">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path
+                                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                                </path>
+                            </svg>
                             题库配置切换</button>
-                        <button class="btn btn-warning hero-btn hero-btn--warn" id="force-refresh-btn" data-action="force-refresh">🔄
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="force-refresh-btn"
+                            data-action="force-refresh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2"
+                                style="margin-right: 4px; vertical-align: text-bottom;">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <polyline points="1 20 1 14 7 14"></polyline>
+                                <path
+                                    d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M11 20.49a9 9 0 0 1-10.49-6.49M1 14l5.64 5.64A9 9 0 0 0 20.49 15">
+                                </path>
+                            </svg>
                             强制刷新题库</button>
                     </div>
                 </div>
 
                 <div class="hero-panel hero-section data-management-panel">
-                    <h3>💾 数据管理</h3>
+                    <h3 class="heading-serif">数据管理</h3>
                     <p class="hero-panel__muted">数据备份、导入导出和完整性检查</p>
                     <div class="hero-settings-actions">
-                        <button class="btn hero-btn data-mgmt-btn" id="create-backup-btn" data-action="create-backup">💾 创建备份</button>
-                        <button class="btn hero-btn data-mgmt-btn" id="backup-list-btn" data-action="backup-list">📋 备份列表</button>
-                        <button class="btn hero-btn data-mgmt-btn" id="export-data-btn" data-action="export-data">📤 导出数据</button>
-                        <button class="btn hero-btn data-mgmt-btn" id="import-data-btn" data-action="import-data">📥 导入数据</button>
+                        <button class="btn hero-btn data-mgmt-btn" id="create-backup-btn"
+                            data-action="create-backup"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2"
+                                style="margin-right: 4px; vertical-align: text-bottom;">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                <polyline points="7 3 7 8 15 8"></polyline>
+                            </svg> 创建备份</button>
+                        <button class="btn hero-btn data-mgmt-btn" id="backup-list-btn" data-action="backup-list"><svg
+                                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" style="margin-right: 4px; vertical-align: text-bottom;">
+                                <line x1="8" y1="6" x2="21" y2="6"></line>
+                                <line x1="8" y1="12" x2="21" y2="12"></line>
+                                <line x1="8" y1="18" x2="21" y2="18"></line>
+                                <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                                <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                                <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                            </svg> 备份列表</button>
+                        <button class="btn hero-btn data-mgmt-btn" id="export-data-btn" data-action="export-data"><svg
+                                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" style="margin-right: 4px; vertical-align: text-bottom;">
+                                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                                <polyline points="16 6 12 2 8 6"></polyline>
+                                <line x1="12" y1="2" x2="12" y2="15"></line>
+                            </svg> 导出数据</button>
+                        <button class="btn hero-btn data-mgmt-btn" id="import-data-btn" data-action="import-data"><svg
+                                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" style="margin-right: 4px; vertical-align: text-bottom;">
+                                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                                <polyline points="8 12 12 15 16 12"></polyline>
+                                <line x1="12" y1="2" x2="12" y2="15"></line>
+                            </svg> 导入数据</button>
                     </div>
                 </div>
 
                 <div class="hero-panel hero-section">
-                    <h3>📊 系统信息</h3>
+                    <h3 class="heading-serif">系统信息</h3>
                     <div class="hero-surface" style="margin-top: 15px; line-height: 1.8; font-weight: bold;">
-                        <div style="color: #10b981;">题库状态: 已加载完整索引</div>
+                        <div style="color: #10b981; display: flex; align-items: center; gap: 4px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                            </svg>
+                            题库状态: 已加载完整索引
+                        </div>
                         <div>题目总数: <span id="total-exams">389</span></div>
                         <div>HTML题目: <span id="html-exams">387</span></div>
                         <div>PDF题目: <span id="pdf-exams">344</span></div>
@@ -210,14 +355,22 @@
                     <!-- 主题切换按钮 -->
                     <div style="margin-top: 25px;">
                         <button class="btn btn-secondary hero-btn hero-btn--ghost" data-action="show-theme-switcher">
-                            🎨 主题切换
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" style="margin-right: 4px; vertical-align: text-bottom;">
+                                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                            </svg> 主题切换
                         </button>
                     </div>
 
                     <!-- 引导流程按钮 -->
                     <div style="margin-top: 15px;">
                         <button class="btn hero-btn" id="show-onboarding-btn" data-action="show-onboarding">
-                            🎯 重新显示引导
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" style="margin-right: 4px; vertical-align: text-bottom;">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <circle cx="12" cy="12" r="6"></circle>
+                                <circle cx="12" cy="12" r="2"></circle>
+                            </svg> 重新显示引导
                         </button>
                     </div>
 
@@ -236,12 +389,16 @@
         <!-- 更多页面 -->
         <div id="more-view" class="view hero-panel hero-section">
             <div class="hero-panel__header">
-                <h2 class="hero-panel__title">✨ 更多工具</h2>
+                <h2 class="hero-panel__title heading-serif">更多工具</h2>
             </div>
             <p class="more-view-subtitle">探索额外的学习辅助功能，助你高效备考。</p>
             <div class="more-tools-grid">
                 <button class="tool-card tool-card--featured" type="button" id="writing-entry-btn">
-                    <div class="tool-card-icon">✍️</div>
+                    <div class="tool-card-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="1.5">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg></div>
                     <div class="tool-card-content">
                         <h3>写作评分</h3>
                         <p>AI驱动的雅思写作评分系统，获取专业四维度评分与详细反馈。</p>
@@ -249,7 +406,11 @@
                     <div class="tool-card-arrow">进入</div>
                 </button>
                 <button class="tool-card" type="button" data-action="open-clock">
-                    <div class="tool-card-icon">🕒</div>
+                    <div class="tool-card-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="1.5">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg></div>
                     <div class="tool-card-content">
                         <h3>全屏时钟</h3>
                         <p>沉浸式模拟指针时钟，实时同步系统时间，陪伴你的专注时刻。</p>
@@ -257,7 +418,14 @@
                     <div class="tool-card-arrow">进入</div>
                 </button>
                 <button class="tool-card" type="button" data-action="open-vocab">
-                    <div class="tool-card-icon">🧠</div>
+                    <div class="tool-card-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="1.5">
+                            <path
+                                d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z">
+                            </path>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                        </svg></div>
                     <div class="tool-card-content">
                         <h3>单词背诵</h3>
                         <p>本地 Leitner 分箱 + 艾宾浩斯复习节奏，随时继续你的词汇任务。</p>
@@ -265,7 +433,16 @@
                     <div class="tool-card-arrow">进入</div>
                 </button>
                 <button class="tool-card" type="button" data-action="show-achievements">
-                    <div class="tool-card-icon">🏆</div>
+                    <div class="tool-card-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="1.5">
+                            <path d="M8 21h8"></path>
+                            <path d="M12 17v4"></path>
+                            <path d="M7 4h10"></path>
+                            <path d="M17 4v8c0 2.8-2.2 5-5 5s-5-2.2-5-5V4"></path>
+                            <path d="M15 4V2H9v2"></path>
+                            <path d="M5 4H2v4c0 1.1.9 2 2 2h1"></path>
+                            <path d="M19 4h3v4c0 1.1-.9 2-2 2h-1"></path>
+                        </svg></div>
                     <div class="tool-card-content">
                         <h3>成就</h3>
                         <p>查看你解锁的徽章和荣誉。</p>
@@ -334,17 +511,17 @@
     <!-- 开发团队弹窗 -->
     <div id="developer-modal" class="developer-modal">
         <div class="developer-modal-content">
-            <h2>🎉 睡着过开发团队</h2>
+            <h2 class="heading-serif">睡着过开发团队</h2>
             <p style="text-align: center; margin-bottom: 25px; opacity: 0.9; font-size: 0.95em;">
                 感谢以下开发者的贡献 (排名不分先后)
             </p>
 
             <div class="developer-grid">
                 <div class="developer-card">
-                    <div class="developer-name">🕊️</div>
+                    <div class="developer-name">Peace</div>
                 </div>
                 <div class="developer-card">
-                    <div class="developer-name">Sallowaymmm(🧐)</div>
+                    <div class="developer-name">Sallowaymmm</div>
                 </div>
                 <div class="developer-card">
                     <div class="developer-name">julie</div>
@@ -413,7 +590,10 @@
     <div id="theme-switcher-modal" class="theme-modal">
         <div class="theme-modal-content">
             <div class="theme-modal-header">
-                <h3>🎨 主题切换</h3>
+                <h3 class="heading-serif"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" style="margin-right: 8px; vertical-align: text-bottom;">
+                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                    </svg>主题切换</h3>
                 <button class="theme-modal-close" data-action="hide-theme-switcher" aria-label="关闭">×</button>
             </div>
             <div class="theme-modal-body">
@@ -421,22 +601,39 @@
                     <div class="theme-options">
                         <div class="theme-option">
                             <div class="theme-info">
-                                <div class="theme-name">📚 Academic</div>
+                                <div class="theme-name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2"
+                                        style="margin-right: 4px; vertical-align: text-bottom;">
+                                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                                    </svg> Academic</div>
                                 <div class="theme-desc">专业 高效 可靠</div>
                             </div>
                             <button class="btn btn-sm" aria-label="切换到 Academic 主题" data-action="navigate-theme-portal"
-                                data-theme-url=".superdesign/design_iterations/ielts_academic_functional_2.html" data-theme-label="Academic">切换</button>
+                                data-theme-url=".superdesign/design_iterations/ielts_academic_functional_2.html"
+                                data-theme-label="Academic">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
-                                <div class="theme-name">🍂 Bloom</div>
+                                <div class="theme-name"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2"
+                                        style="margin-right: 4px; vertical-align: text-bottom;">
+                                        <path
+                                            d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12c0-2.42.86-4.64 2.3-6.38L12 12z">
+                                        </path>
+                                    </svg> Bloom</div>
                                 <div class="theme-desc">秋日 暖阳</div>
                             </div>
-                            <button id="bloom-theme-btn" class="btn btn-sm" aria-label="切换到 Bloom 主题" data-action="toggle-bloom-theme">切换</button>
+                            <button id="bloom-theme-btn" class="btn btn-sm" aria-label="切换到 Bloom 主题"
+                                data-action="toggle-bloom-theme">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
-                                <div class="theme-name" style="color: #0554F2;">🔵 Blue</div>
+                                <div class="theme-name" style="color: #0554F2;"><svg width="14" height="14"
+                                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        style="margin-right: 4px; vertical-align: text-bottom;">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                    </svg> Blue</div>
                                 <div class="theme-desc" style="color: #0788D9;">冷静 清爽 专注</div>
                             </div>
                             <button id="blue-theme-btn" class="btn btn-sm" aria-label="切换到 Blue 主题"
@@ -445,29 +642,53 @@
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
-                                <div class="theme-name" style="color: #ec4899;">🎀 Melody</div>
+                                <div class="theme-name" style="color: #ec4899;"><svg width="14" height="14"
+                                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        style="margin-right: 4px; vertical-align: text-bottom;">
+                                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                                    </svg> Melody</div>
                                 <div class="theme-desc" style="color: #ec4899;">美乐蒂</div>
                             </div>
-                            <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;" aria-label="切换到 Melody 主题"
-                                data-action="navigate-theme-portal" data-theme-url=".superdesign/design_iterations/my_melody_ielts_1.html" data-theme-label="MyMelody" data-theme-name="mymelody">切换</button>
+                            <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;"
+                                aria-label="切换到 Melody 主题" data-action="navigate-theme-portal"
+                                data-theme-url=".superdesign/design_iterations/my_melody_ielts_1.html"
+                                data-theme-label="MyMelody" data-theme-name="mymelody">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
-                                <div class="theme-name" style="color: #6a2bbf;">🧙 HarryPotter</div>
+                                <div class="theme-name" style="color: #6a2bbf;"><svg width="14" height="14"
+                                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        style="margin-right: 4px; vertical-align: text-bottom;">
+                                        <path
+                                            d="M12 2l-1.9 4.3L6 8.2l4.4 3.4L9.1 16l2.9-2.3 2.9 2.3-1.3-4.4 4.4-3.4-4.1-1.9L12 2z">
+                                        </path>
+                                    </svg> HarryPotter</div>
                                 <div class="theme-desc" style="color: #6a2bbf;">哈利波特</div>
                             </div>
                             <button class="btn btn-sm" style="background: #6a2bbf; border-color: #6a2bbf;"
                                 aria-label="哈利波特主题（冒险）" data-action="navigate-theme-portal"
-                                data-theme-url=".superdesign/design_iterations/HarryPoter.html" data-theme-label="HarryPotter" data-theme-name="harry">切换</button>
+                                data-theme-url=".superdesign/design_iterations/HarryPoter.html"
+                                data-theme-label="HarryPotter" data-theme-name="harry">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
-                                <div class="theme-name" style="color: #ffc83d;">🐷 小呆呆</div>
+                                <div class="theme-name" style="color: #ffc83d;"><svg width="14" height="14"
+                                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        style="margin-right: 4px; vertical-align: text-bottom;">
+                                        <path
+                                            d="M12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16z">
+                                        </path>
+                                        <circle cx="9" cy="10" r="1.5"></circle>
+                                        <circle cx="15" cy="10" r="1.5"></circle>
+                                        <path d="M8 15s1.5 2 4 2 4-2 4-2"></path>
+                                    </svg> 小呆呆</div>
                                 <div class="theme-desc" style="color: #f59e0b;">小呆呆控制台</div>
                             </div>
                             <button class="btn btn-sm" aria-label="切换到 小呆呆 主题"
                                 style="background: linear-gradient(120deg, #ffe08a, #ffc83d); border-color: #fbbf24; color: #3b2400;"
-                                data-action="navigate-theme-portal" data-theme-url=".superdesign/design_iterations/xiaodaidai_dashboard_1.html" data-theme-label="XiaoDaiDai" data-theme-name="xiaodaidai">切换</button>
+                                data-action="navigate-theme-portal"
+                                data-theme-url=".superdesign/design_iterations/xiaodaidai_dashboard_1.html"
+                                data-theme-label="XiaoDaiDai" data-theme-name="xiaodaidai">切换</button>
                         </div>
                     </div>
                 </div>
@@ -529,7 +750,16 @@
     <div id="achievements-modal" class="theme-modal">
         <div class="theme-modal-content" style="max-width: 600px;">
             <div class="theme-modal-header">
-                <h3>🏆 我的成就</h3>
+                <h3 class="heading-serif"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" style="margin-right: 8px; vertical-align: text-bottom;">
+                        <path d="M8 21h8"></path>
+                        <path d="M12 17v4"></path>
+                        <path d="M7 4h10"></path>
+                        <path d="M17 4v8c0 2.8-2.2 5-5 5s-5-2.2-5-5V4"></path>
+                        <path d="M15 4V2H9v2"></path>
+                        <path d="M5 4H2v4c0 1.1.9 2 2 2h1"></path>
+                        <path d="M19 4h3v4c0 1.1-.9 2-2 2h-1"></path>
+                    </svg>我的成就</h3>
                 <button class="theme-modal-close" data-action="hide-achievements" aria-label="关闭">×</button>
             </div>
             <div class="theme-modal-body">
@@ -539,6 +769,44 @@
             </div>
         </div>
     </div>
+    
+    <script>
+        // Liquid Glass flowing indicator controller
+        document.addEventListener('DOMContentLoaded', () => {
+            const nav = document.querySelector('.hero-nav');
+            if (!nav) return;
+            
+            function updateSlider() {
+                const activeBtn = nav.querySelector('.hero-nav__btn.active') || nav.querySelector('.nav-btn.active');
+                if (activeBtn) {
+                    nav.style.setProperty('--slider-left', `${activeBtn.offsetLeft}px`);
+                    nav.style.setProperty('--slider-width', `${activeBtn.offsetWidth}px`);
+                }
+            }
+            
+            // Setup observers for dynamic active class toggling
+            const observer = new MutationObserver((mutations) => {
+                let shouldUpdate = false;
+                mutations.forEach((m) => {
+                    if (m.attributeName === 'class' && m.target.classList.contains('active')) {
+                        shouldUpdate = true;
+                    }
+                });
+                if (shouldUpdate) updateSlider();
+            });
+            
+            nav.querySelectorAll('.hero-nav__btn, .nav-btn').forEach(btn => {
+                observer.observe(btn, { attributes: true });
+                btn.addEventListener('click', () => setTimeout(updateSlider, 10));
+            });
+            
+            window.addEventListener('resize', updateSlider);
+            // Initial position calculate
+            setTimeout(updateSlider, 50);
+            // Backup calculation after render cycles
+            setTimeout(updateSlider, 300);
+        });
+    </script>
 </body>
 
 </html>
