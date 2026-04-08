@@ -2,11 +2,11 @@
   <div class="history-page">
     <div class="page-header page-header--workspace">
       <div class="page-header__copy">
-        <h1>历史记录</h1>
+        <h1 class="heading-serif">历史记录</h1>
       </div>
       <div class="header-actions">
         <button 
-          class="btn btn-secondary" 
+          class="btn btn-warm-sand" 
           @click="exportCSV"
           :disabled="loading || total === 0"
         >
@@ -80,7 +80,7 @@
           </div>
         </div>
 
-        <button class="btn btn-secondary" @click="resetFilters">重置筛选</button>
+        <button class="btn btn-warm-sand" @click="resetFilters">重置筛选</button>
       </div>
 
       <div class="search-row">
@@ -204,9 +204,9 @@
     <div v-if="selectedIds.length > 0" class="batch-actions card">
       <span class="selection-count">已选择 {{ selectedIds.length }} 条记录</span>
       <button class="btn btn-danger btn-sm" @click="confirmBatchDelete">
-        🗑️ 删除选中
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: text-bottom;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> 删除选中
       </button>
-      <button class="btn btn-secondary btn-sm" @click="clearSelection">
+      <button class="btn btn-warm-sand btn-sm" @click="clearSelection">
         取消选择
       </button>
     </div>
@@ -216,16 +216,16 @@
     
     <div v-else-if="error" class="error-state card">
       <p>⚠️ {{ error }}</p>
-      <button class="btn btn-primary" @click="loadEssays">重试</button>
+      <button class="btn btn-brand" @click="loadEssays">重试</button>
     </div>
 
     <div v-else-if="essays.length === 0 && !hasActiveFilters" class="empty-state card">
-      <p>📝 暂无历史记录，提交作文后查看评分历史</p>
+      <p>暂无历史记录，提交作文后查看评分历史</p>
     </div>
 
     <div v-else-if="essays.length === 0 && hasActiveFilters" class="empty-state card">
-      <p>🔍 当前筛选条件无结果，请调整筛选条件</p>
-      <button class="btn btn-secondary" @click="resetFilters">重置筛选</button>
+      <p>当前筛选条件无结果，请调整筛选条件</p>
+      <button class="btn btn-warm-sand" @click="resetFilters">重置筛选</button>
     </div>
 
     <div v-else class="essay-list">
@@ -251,19 +251,19 @@
           </div>
 
           <div class="essay-stats">
-            <span class="stat-item">📝 {{ essay.word_count }} 词</span>
+            <span class="stat-item">单词数: {{ essay.word_count }}</span>
             <span :class="['stat-item', 'score', getScoreClass(essay.total_score)]">
-              ⭐ {{ essay.total_score }}
+              得分: {{ essay.total_score }}
             </span>
           </div>
         </div>
 
         <div class="essay-actions">
           <button class="btn-icon" @click.stop="viewDetail(essay.id)" title="查看详情">
-            👁️
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
           </button>
           <button class="btn-icon" @click.stop="confirmDelete(essay.id)" title="删除">
-            🗑️
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
           </button>
         </div>
       </div>
@@ -272,7 +272,7 @@
     <!-- 分页 -->
     <div v-if="total > pagination.limit" class="pagination">
       <button 
-        class="btn btn-secondary"
+        class="btn btn-warm-sand"
         :disabled="pagination.page === 1"
         @click="pagination.page--"
       >
@@ -282,7 +282,7 @@
         第 {{ pagination.page }} / {{ totalPages }} 页（共 {{ total }} 条）
       </span>
       <button 
-        class="btn btn-secondary"
+        class="btn btn-warm-sand"
         :disabled="pagination.page >= totalPages"
         @click="pagination.page++"
       >
@@ -294,7 +294,10 @@
     <div v-if="detailModalEssay" class="dialog-overlay" @click.self="closeDetail">
       <div class="dialog card detail-modal">
         <div class="modal-header">
-          <h3>📋 评分详情（只读）</h3>
+          <h3 class="heading-serif">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px; vertical-align: text-bottom;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            评分详情（只读）
+          </h3>
           <button class="btn-icon" @click="closeDetail">✕</button>
         </div>
         
@@ -303,8 +306,8 @@
         <div v-else-if="detailError" class="error-state detail-error-state card">
           <p>⚠️ {{ detailError }}</p>
           <div class="detail-error-actions">
-            <button class="btn btn-primary" @click="retryDetail">重试</button>
-            <button class="btn btn-secondary" @click="closeDetail">关闭</button>
+            <button class="btn btn-brand" @click="retryDetail">重试</button>
+            <button class="btn btn-warm-sand" @click="closeDetail">关闭</button>
           </div>
         </div>
         
@@ -313,20 +316,20 @@
           <div class="detail-grid">
             <!-- 左侧：作文内容 -->
             <div class="detail-left">
-              <div class="section-header">🧭 题目要求</div>
+              <div class="section-header">题目要求</div>
               <div class="topic-preview-card">
                 {{ detailData.display_topic_title || getTopicTitle(detailData.topic_title) }}
               </div>
 
-              <div class="section-header">📝 作文内容</div>
+              <div class="section-header">作文内容</div>
               <div class="essay-text">{{ detailData.content }}</div>
 
               <template v-if="detailFeedback">
-                <div class="section-header" style="margin-top: 20px;">💡 整体建议</div>
+                <div class="section-header" style="margin-top: 20px;">整体建议</div>
                 <div class="feedback-panel">{{ detailFeedback }}</div>
               </template>
               
-              <div class="section-header" style="margin-top: 20px;">ℹ️ 基本信息</div>
+              <div class="section-header" style="margin-top: 20px;">基本信息</div>
               <div class="info-grid">
                 <div class="info-item">
                   <span class="info-label">任务类型</span>
@@ -422,7 +425,7 @@
     <!-- 删除确认弹窗 -->
     <div v-if="showDeleteConfirm" class="dialog-overlay" @click.self="showDeleteConfirm = false">
       <div class="dialog card">
-        <h3>⚠️ {{ deleteConfirmTitle }}</h3>
+        <h3 class="heading-serif">{{ deleteConfirmTitle }}</h3>
         <p>{{ deleteConfirmMessage }}</p>
         
         <!-- 清空所有需要输入确认 -->
@@ -437,7 +440,7 @@
         </div>
 
         <div class="dialog-actions">
-          <button class="btn btn-secondary" @click="showDeleteConfirm = false">
+          <button class="btn btn-warm-sand" @click="showDeleteConfirm = false">
             取消
           </button>
           <button 

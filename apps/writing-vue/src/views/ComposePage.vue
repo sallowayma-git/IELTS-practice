@@ -1,16 +1,16 @@
 <template>
   <div class="compose-page">
-    <section v-if="showDraftNotification" class="draft-banner draft-notification surface">
+    <section v-if="showDraftNotification" class="draft-banner draft-notification card card-whisper">
       <div class="draft-banner__copy">
         <span class="panel-label">Draft Recovery</span>
         <strong>检测到未保存的草稿</strong>
         <p>可以直接恢复继续写，也可以丢弃后从空白工作台开始。</p>
       </div>
       <div class="draft-banner__actions">
-        <button class="btn btn-secondary" @click="handleDiscardDraft">
+        <button class="btn btn-warm-sand" @click="handleDiscardDraft">
           放弃
         </button>
-        <button class="btn btn-primary" @click="handleRecoverDraft">
+        <button class="btn btn-warm-sand" @click="handleRecoverDraft">
           恢复草稿
         </button>
       </div>
@@ -18,10 +18,10 @@
 
     <header class="compose-hero">
       <div class="compose-hero__copy">
-        <h1>Task {{ taskType === 'task1' ? '1' : '2' }} 写作</h1>
+        <h1 class="heading-serif">Task {{ taskType === 'task1' ? '1' : '2' }} 写作</h1>
       </div>
 
-      <div class="compose-hero__metrics surface">
+      <div class="compose-hero__metrics card card-whisper">
         <div class="hero-metric">
           <span class="hero-metric__label">建议字数</span>
           <strong>{{ minWordCount }} - {{ targetWordCount }}</strong>
@@ -35,7 +35,7 @@
 
     <div class="compose-layout-stacked">
       <!-- 顶部配置与题目展示区 -->
-      <section class="compose-config-top surface">
+      <section class="compose-config-top card">
         <div class="config-toolbar">
           <div class="config-section">
             <span class="config-label">任务分配</span>
@@ -73,7 +73,7 @@
             </div>
           </div>
 
-          </div>
+          
         </div>
 
         <div class="prompt-display">
@@ -138,10 +138,10 @@
       </section>
 
       <!-- 下方作答区 -->
-      <section class="compose-editor surface">
+      <section class="compose-editor card">
         <div class="editor-head">
           <div class="editor-head__copy">
-            <h2>正文</h2>
+            <h2 class="heading-serif">正文</h2>
             <div class="word-meta">
               目标 <strong>{{ targetWordCount }}</strong> 词
             </div>
@@ -180,7 +180,7 @@
 
           <div class="editor-actions">
             <button
-              class="btn btn-primary submit-btn"
+              class="btn btn-brand submit-btn"
               :disabled="!canSubmit"
               @click="handleSubmit"
             >
@@ -200,10 +200,10 @@
         </p>
         <p>是否仍要继续？</p>
         <div class="dialog-actions">
-          <button class="btn btn-secondary" @click="showConfirmDialog = false">
+          <button class="btn btn-warm-sand" @click="showConfirmDialog = false">
             取消
           </button>
-          <button class="btn btn-primary" @click="confirmSubmit">
+          <button class="btn btn-brand" @click="confirmSubmit">
             继续提交
           </button>
         </div>

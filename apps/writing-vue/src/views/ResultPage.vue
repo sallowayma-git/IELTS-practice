@@ -2,10 +2,10 @@
   <div class="result-page">
     <header class="result-hero">
       <div class="result-hero__copy">
-        <h1>评分结果</h1>
+        <h1 class="heading-serif">评分结果</h1>
       </div>
 
-      <div class="result-hero__score surface-muted">
+      <div class="result-hero__score card card-whisper">
         <span class="score-badge__label">Overall band</span>
         <strong>{{ scoreData?.total_score ?? '-' }}</strong>
         <span class="score-badge__meta">字数 {{ essayWordCount || '-' }}</span>
@@ -13,10 +13,10 @@
     </header>
 
     <div class="result-layout">
-      <section class="reading-panel surface">
+      <section class="reading-panel card card-whisper">
         <div class="reading-head">
           <div>
-            <h2>{{ viewMode === 'full' ? '作文原文' : `重点纠错（${sentences.length}句）` }}</h2>
+            <h2 class="heading-serif">{{ viewMode === 'full' ? '作文原文' : `重点纠错（${sentences.length}句）` }}</h2>
           </div>
           <div class="view-switcher">
             <button :class="['view-btn', { active: viewMode === 'full' }]" @click="viewMode = 'full'">
@@ -35,8 +35,8 @@
 
         <div v-else-if="sentences.length > 0" class="annotated-view">
           <div class="bulk-controls">
-            <button class="btn-text" @click="expandAll">全部展开</button>
-            <button class="btn-text" @click="collapseAll">全部折叠</button>
+            <button class="btn-link" @click="expandAll">全部展开</button>
+            <button class="btn-link" @click="collapseAll">全部折叠</button>
           </div>
 
           <div
@@ -89,14 +89,14 @@
       </section>
 
       <aside class="report-rail">
-        <section v-if="topicText" class="rail-card surface">
+        <section v-if="topicText" class="rail-card card card-whisper">
           <div class="rail-head">
             <h3>题目要求</h3>
           </div>
           <p class="topic-text">{{ topicText }}</p>
         </section>
 
-        <section class="rail-card surface">
+        <section class="rail-card card card-whisper">
           <div class="rail-head">
             <h3>分项评分</h3>
           </div>
@@ -132,7 +132,7 @@
           </div>
         </section>
 
-        <section v-if="reviewDegraded" class="rail-card rail-card-warning surface">
+        <section v-if="reviewDegraded" class="rail-card rail-card-warning card card-whisper">
           <div class="rail-head">
             <h3>详解降级提示</h3>
           </div>
@@ -141,14 +141,14 @@
           </p>
         </section>
 
-        <section v-if="feedback" class="rail-card surface">
+        <section v-if="feedback" class="rail-card card card-whisper">
           <div class="rail-head">
             <h3>整体改进建议</h3>
           </div>
           <p class="feedback-text">{{ feedback }}</p>
         </section>
 
-        <section v-if="reviewBlocks.length > 0" class="rail-card surface">
+        <section v-if="reviewBlocks.length > 0" class="rail-card card card-whisper">
           <div class="rail-head">
             <h3>段落详解</h3>
           </div>
@@ -164,7 +164,7 @@
           </div>
         </section>
 
-        <section v-if="taskAnalysisEntries.length > 0" class="rail-card surface">
+        <section v-if="taskAnalysisEntries.length > 0" class="rail-card card card-whisper">
           <div class="rail-head">
             <h3>任务诊断</h3>
           </div>
@@ -180,7 +180,7 @@
           </div>
         </section>
 
-        <section v-if="bandRationaleEntries.length > 0" class="rail-card surface">
+        <section v-if="bandRationaleEntries.length > 0" class="rail-card card card-whisper">
           <div class="rail-head">
             <h3>评分理由</h3>
           </div>
@@ -196,7 +196,7 @@
           </div>
         </section>
 
-        <section v-if="improvementPlan.length > 0" class="rail-card surface">
+        <section v-if="improvementPlan.length > 0" class="rail-card card card-whisper">
           <div class="rail-head">
             <h3>提分计划</h3>
           </div>
@@ -208,7 +208,7 @@
         </section>
 
         <div class="action-buttons">
-          <button class="btn btn-primary" @click="writeNew">
+          <button class="btn btn-brand" @click="writeNew">
             写新作文
           </button>
         </div>
@@ -547,6 +547,22 @@ function writeNew() {
 .bulk-controls {
   display: flex;
   gap: 16px;
+}
+
+.btn-link {
+  color: var(--color-terracotta);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 8px;
+  transition: color 0.15s;
+}
+
+.btn-link:hover {
+  color: var(--color-coral);
 }
 
 .sentence-block {

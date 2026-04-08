@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design System Preview: Claude / Anthropic (Dark)</title>
+<style>
+  :root {
+    /* Primary */
+    --color-near-black: #141413;
+    --color-terracotta: #c96442;
+    --color-coral: #d97757;
+    /* Secondary & Accent */
+    --color-error: #b53333;
+    --color-focus-blue: #3898ec;
+    /* Surface & Background */
+    --color-parchment: #f5f4ed;
+    --color-ivory: #faf9f5;
+    --color-white: #ffffff;
+    --color-warm-sand: #e8e6dc;
+    --color-dark-surface: #30302e;
+    --color-deep-dark: #141413;
+    /* Neutrals & Text */
+    --color-charcoal-warm: #4d4c48;
+    --color-olive-gray: #5e5d59;
+    --color-stone-gray: #87867f;
+    --color-dark-warm: #3d3d3a;
+    --color-warm-silver: #b0aea5;
+    /* Borders & Rings */
+    --color-border-cream: #f0eee6;
+    --color-border-warm: #e8e6dc;
+    --color-border-dark: #30302e;
+    --color-ring-warm: #d1cfc5;
+    --color-ring-deep: #c2c0b6;
+    /* Fonts */
+    --font-serif: Georgia, 'Times New Roman', Times, serif;
+    --font-sans: Arial, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace;
+    /* Dark mode tokens */
+    --bg-page: #141413;
+    --bg-card: #30302e;
+    --bg-nav: rgba(20,20,19,0.92);
+    --text-primary: #faf9f5;
+    --text-secondary: #87867f;
+    --text-tertiary: #b0aea5;
+    --border-color: #30302e;
+    --border-subtle: #30302e;
+    --section-label-color: #d97757;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.60;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* NAV */
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 40px;
+    background: var(--bg-nav);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-color);
+  }
+  .nav-brand {
+    font-family: var(--font-serif);
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .nav-brand .logo-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: var(--color-terracotta);
+    border-radius: 8px;
+    color: var(--color-ivory);
+    font-family: var(--font-serif);
+    font-size: 16px;
+    font-weight: 500;
+  }
+  .nav-links { display: flex; gap: 32px; align-items: center; }
+  .nav-links a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 400;
+    font-family: var(--font-sans);
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--text-primary); }
+  .nav-cta {
+    background: var(--color-terracotta);
+    color: var(--color-ivory);
+    padding: 8px 20px;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-family: var(--font-sans);
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: #c96442 0px 0px 0px 0px, #c96442 0px 0px 0px 1px;
+  }
+
+  /* HERO */
+  .hero {
+    position: relative;
+    text-align: center;
+    padding: 120px 40px 100px;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 700px;
+    height: 700px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(201,100,66,0.08) 0%, rgba(217,119,87,0.04) 40%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero h1 {
+    font-family: var(--font-serif);
+    font-size: 64px;
+    font-weight: 500;
+    line-height: 1.10;
+    letter-spacing: normal;
+    margin-bottom: 24px;
+    position: relative;
+    color: var(--text-primary);
+  }
+  .hero h1 span { color: var(--color-coral); }
+  .hero p {
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+    font-size: 20px;
+    line-height: 1.60;
+    margin-bottom: 40px;
+    position: relative;
+  }
+  .hero-buttons { display: flex; gap: 16px; justify-content: center; position: relative; }
+  .btn-brand {
+    background: var(--color-terracotta);
+    color: var(--color-ivory);
+    padding: 12px 24px;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-family: var(--font-sans);
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: #c96442 0px 0px 0px 0px, #c96442 0px 0px 0px 1px;
+  }
+  .btn-dark-primary {
+    background: var(--color-deep-dark);
+    color: var(--color-warm-silver);
+    padding: 12px 24px;
+    border: 1px solid var(--color-dark-surface);
+    border-radius: 12px;
+    font-size: 16px;
+    font-family: var(--font-sans);
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  /* SECTIONS */
+  .section {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 80px 40px;
+  }
+  .section-title {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    color: var(--section-label-color);
+    margin-bottom: 12px;
+  }
+  .section-heading {
+    font-family: var(--font-serif);
+    font-size: 36px;
+    font-weight: 500;
+    line-height: 1.20;
+    letter-spacing: normal;
+    margin-bottom: 48px;
+    color: var(--text-primary);
+  }
+  .section-divider {
+    border: none;
+    border-top: 1px solid var(--border-subtle);
+    margin: 0 40px;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* COLOR PALETTE */
+  .color-group { margin-bottom: 40px; }
+  .color-group-title {
+    font-family: var(--font-serif);
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 1.2;
+    margin-bottom: 20px;
+    color: var(--text-secondary);
+  }
+  .color-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+  }
+  .color-swatch {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .color-swatch-block {
+    height: 80px;
+    position: relative;
+  }
+  .color-swatch-info {
+    padding: 12px;
+    background: var(--bg-card);
+  }
+  .color-swatch-name { font-family: var(--font-sans); font-size: 13px; font-weight: 600; margin-bottom: 2px; color: var(--text-primary); }
+  .color-swatch-hex { font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary); margin-bottom: 4px; }
+  .color-swatch-role { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+
+  /* TYPOGRAPHY */
+  .type-sample { margin-bottom: 32px; padding-bottom: 32px; border-bottom: 1px solid var(--border-subtle); }
+  .type-sample:last-child { border-bottom: none; }
+  .type-sample-text { margin-bottom: 8px; }
+  .type-sample-label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  /* BUTTONS */
+  .button-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    align-items: flex-start;
+  }
+  .button-demo { text-align: center; }
+  .button-demo-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.55px;
+  }
+
+  /* CARDS */
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+  .card {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 28px;
+  }
+  .card-standard { border: 1px solid var(--border-color); }
+  .card-whisper {
+    border: 1px solid var(--border-color);
+    box-shadow: rgba(0,0,0,0.20) 0px 4px 24px;
+  }
+  .card-ring {
+    border: none;
+    box-shadow: 0px 0px 0px 1px #4d4c48;
+  }
+  .card h3 {
+    font-family: var(--font-serif);
+    font-size: 25px;
+    font-weight: 500;
+    line-height: 1.20;
+    margin-bottom: 12px;
+    color: var(--text-primary);
+  }
+  .card p { color: var(--text-secondary); font-size: 15px; line-height: 1.60; }
+  .card-label {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.55px;
+    color: var(--color-coral);
+    margin-bottom: 16px;
+    font-weight: 500;
+  }
+
+  /* SPACING */
+  .spacing-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+  .spacing-item { text-align: center; }
+  .spacing-box {
+    background: rgba(217,119,87,0.12);
+    border: 1px solid rgba(217,119,87,0.30);
+    border-radius: 4px;
+    margin-bottom: 8px;
+  }
+  .spacing-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  /* RADIUS */
+  .radius-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
+  .radius-item { text-align: center; }
+  .radius-box {
+    width: 80px;
+    height: 80px;
+    background: var(--bg-card);
+    border: 1px solid var(--color-charcoal-warm);
+    margin-bottom: 8px;
+  }
+  .radius-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .radius-context {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+
+  /* ELEVATION */
+  .elevation-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; }
+  .elevation-card {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 24px;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .elevation-flat { border: none; background: var(--bg-page); }
+  .elevation-contained { border: 1px solid var(--color-dark-surface); }
+  .elevation-ring { border: none; box-shadow: 0px 0px 0px 1px #4d4c48; }
+  .elevation-whisper { border: 1px solid var(--color-dark-surface); box-shadow: rgba(0,0,0,0.20) 0px 4px 24px; }
+  .elevation-inset { border: none; box-shadow: inset 0px 0px 0px 1px rgba(255,255,255,0.10); }
+  .elevation-name {
+    font-family: var(--font-serif);
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+  }
+  .elevation-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+  .elevation-level {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-coral);
+    text-transform: uppercase;
+    letter-spacing: 0.55px;
+    margin-top: 12px;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    .nav { padding: 12px 20px; }
+    .nav-links a:not(.nav-cta-wrapper) { display: none; }
+    .hero { padding: 80px 20px 60px; }
+    .hero h1 { font-size: 36px; }
+    .section { padding: 60px 20px; }
+    .section-heading { font-size: 28px; }
+    .color-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+    .card-grid { grid-template-columns: 1fr; }
+    .hero-buttons { flex-direction: column; align-items: center; }
+    .button-row { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand"><span class="logo-mark">C</span> Claude</div>
+  <div class="nav-links">
+    <a href="#colors">Colors</a>
+    <a href="#typography">Typography</a>
+    <a href="#buttons">Buttons</a>
+    <a href="#cards">Cards</a>
+    <a href="#spacing">Spacing</a>
+    <a href="#elevation">Elevation</a>
+    <button class="nav-cta">Try Claude</button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <h1>Design System Preview:<br><span>Claude</span></h1>
+  <p>Auto-generated design token catalog from DESIGN.md</p>
+  <div class="hero-buttons">
+    <button class="btn-brand">Explore Tokens</button>
+    <button class="btn-dark-primary">View Source</button>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- COLORS -->
+<section class="section" id="colors">
+  <div class="section-title">01 / Color Palette</div>
+  <h2 class="section-heading">Color Palette & Roles</h2>
+
+  <div class="color-group">
+    <h3 class="color-group-title">Primary</h3>
+    <div class="color-grid">
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #141413; border-bottom: 1px solid #30302e;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Anthropic Near Black</div>
+          <div class="color-swatch-hex">#141413</div>
+          <div class="color-swatch-role">Primary text, dark-theme surface</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #c96442;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Terracotta Brand</div>
+          <div class="color-swatch-hex">#c96442</div>
+          <div class="color-swatch-role">Core brand color, primary CTA buttons</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #d97757;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Coral Accent</div>
+          <div class="color-swatch-hex">#d97757</div>
+          <div class="color-swatch-role">Text accents, links on dark surfaces</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="color-group">
+    <h3 class="color-group-title">Secondary & Accent</h3>
+    <div class="color-grid">
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #b53333;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Error Crimson</div>
+          <div class="color-swatch-hex">#b53333</div>
+          <div class="color-swatch-role">Error states, warm red</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #3898ec;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Focus Blue</div>
+          <div class="color-swatch-hex">#3898ec</div>
+          <div class="color-swatch-role">Input focus rings (only cool color)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="color-group">
+    <h3 class="color-group-title">Surface & Background</h3>
+    <div class="color-grid">
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #f5f4ed; border-bottom: 1px solid #e8e6dc;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Parchment</div>
+          <div class="color-swatch-hex">#f5f4ed</div>
+          <div class="color-swatch-role">Primary page background (light mode)</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #faf9f5; border-bottom: 1px solid #f0eee6;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Ivory</div>
+          <div class="color-swatch-hex">#faf9f5</div>
+          <div class="color-swatch-role">Card surfaces, elevated containers</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #ffffff; border-bottom: 1px solid #f0eee6;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Pure White</div>
+          <div class="color-swatch-hex">#ffffff</div>
+          <div class="color-swatch-role">Button surfaces, max contrast</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #e8e6dc;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Warm Sand</div>
+          <div class="color-swatch-hex">#e8e6dc</div>
+          <div class="color-swatch-role">Button backgrounds, interactive surfaces</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #30302e;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Dark Surface</div>
+          <div class="color-swatch-hex">#30302e</div>
+          <div class="color-swatch-role">Dark-theme containers, card backgrounds</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="color-group">
+    <h3 class="color-group-title">Neutrals & Text</h3>
+    <div class="color-grid">
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #4d4c48;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Charcoal Warm</div>
+          <div class="color-swatch-hex">#4d4c48</div>
+          <div class="color-swatch-role">Button text on light surfaces</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #5e5d59;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Olive Gray</div>
+          <div class="color-swatch-hex">#5e5d59</div>
+          <div class="color-swatch-role">Secondary body text (light mode)</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #87867f;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Stone Gray</div>
+          <div class="color-swatch-hex">#87867f</div>
+          <div class="color-swatch-role">Secondary text (dark), tertiary (light)</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #3d3d3a;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Dark Warm</div>
+          <div class="color-swatch-hex">#3d3d3a</div>
+          <div class="color-swatch-role">Dark text links, emphasized secondary</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #b0aea5;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Warm Silver</div>
+          <div class="color-swatch-hex">#b0aea5</div>
+          <div class="color-swatch-role">Tertiary text on dark surfaces</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="color-group">
+    <h3 class="color-group-title">Semantic & Borders</h3>
+    <div class="color-grid">
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #f0eee6; border-bottom: 1px solid #e8e6dc;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Border Cream</div>
+          <div class="color-swatch-hex">#f0eee6</div>
+          <div class="color-swatch-role">Standard light-theme border</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #e8e6dc;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Border Warm</div>
+          <div class="color-swatch-hex">#e8e6dc</div>
+          <div class="color-swatch-role">Prominent borders, section dividers</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #d1cfc5;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Ring Warm</div>
+          <div class="color-swatch-hex">#d1cfc5</div>
+          <div class="color-swatch-role">Button hover/focus ring shadow</div>
+        </div>
+      </div>
+      <div class="color-swatch">
+        <div class="color-swatch-block" style="background: #c2c0b6;"></div>
+        <div class="color-swatch-info">
+          <div class="color-swatch-name">Ring Deep</div>
+          <div class="color-swatch-hex">#c2c0b6</div>
+          <div class="color-swatch-role">Active/pressed ring states</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- TYPOGRAPHY -->
+<section class="section" id="typography">
+  <div class="section-title">02 / Typography Scale</div>
+  <h2 class="section-heading">Typography Rules</h2>
+
+  <div class="type-sample">
+    <div class="type-sample-text" style="font-family: Georgia, serif; font-size: 64px; font-weight: 500; line-height: 1.10;">Display Hero</div>
+    <div class="type-sample-label">Display / Hero &mdash; 64px / 500 / 1.10 / normal &mdash; Anthropic Serif (Georgia fallback)</div>
+  </div>
+
+  <div class="type-sample">
+    <div class="type-sample-text" style="font-family: Georgia, serif; font-size: 52px; font-weight: 500; line-height: 1.20;">Section Heading</div>
+    <div class="type-sample-label">Section Heading &mdash; 52px / 500 / 1.20 / normal &mdash; Anthropic Serif</div>
+  </div>
+
+  <div class="type-sample">
+    <div class="type-sample-text" style="font-family: Georgia, serif; font-size: 36px; font-weight: 500; line-height: 1.30;">Sub-heading Large</div>
+    <div class="type-sample-label">Sub-heading Large &mdash; 36px / 500 / 1.30 / normal &mdash; Anthropic Serif</div>
+  </div>
+
+  <div class="type-sample">
+    <div class="type-sample-text" style="font-family: Georgia, serif; font-size: 32px; font-weight: 500; line-height: 1.10;">Sub-heading</div>
+    <div class="type-sample-label">Sub-heading &mdash; 32px / 500 / 1.10 / normal &mdash; Anthropic Serif</div>
+  </div>
+
+  <div class="type-sample">
+    <div class="type-sample-text" style="font-family: Georgia, serif; font-size: 25px; font-weight: 500; line-height: 1.20;">Sub-heading Small</div>
+    <div class="type-sample-label">Sub-heading Small &mdash; 25px / 500 / 1.20 / normal &mdash; Anthropic Serif</div>
+  </div>
+
+  <div class="type-sample">
+    <div class="type-sample-text" style="font-family: Georgia, serif; font-size: 17px; font-weight: 400; line-height: 1.60; color: var(--text-secondary);">Body serif text for editorial passages. The generous 1.60 line-height creates a literary reading experience closer to a book than a dashboard, with warm tones throughout.</div>
+    <div class="type-sample-label">Body Serif &mdash; 17px / 400 / 1.60 / normal &mdash; Anthropic Serif</div>
+  </div>
+
+  <div class="type-sample">
+    <div class="type-sample-text" style="font-family: Arial, system-ui, sans-serif; font-size: 20px; font-weight: 400; line-height: 1.60;">Body Large Sans</div>
+    <div class="type-sample-label">Body Large &mdash; 20px / 400 / 1.60 / normal &mdash; Anthropic Sans (Arial fallback)</div>
+  </div>
+
+  <div class="type-sample">
+    <div class="type-sample-text" style="font-family: Arial, system-ui, sans-serif; font-size: 16px; font-weight: 400; line-height: 1.60;">Standard body text for UI copy, navigation, and button labels. Anthropic Sans handles all functional text with quiet efficiency.</div>
+    <div class="type-sample-label">Body Standard &mdash; 16px / 400 / 1.60 / normal &mdash; Anthropic Sans</div>
+  </div>
+
+  <div class="type-sample">
+    <div class="type-sample-text" style="font-family: Arial, system-ui, sans-serif; font-size: 14px; font-weight: 400; line-height: 1.43; color: var(--text-secondary);">Caption and metadata text for descriptions</div>
+    <div class="type-sample-label">Caption &mdash; 14px / 400 / 1.43 / normal &mdash; Anthropic Sans</div>
+  </div>
+
+  <div class="type-sample">
+    <div class="type-sample-text" style="font-family: Arial, system-ui, sans-serif; font-size: 12px; font-weight: 500; line-height: 1.60; letter-spacing: 0.12px; color: var(--text-tertiary);">LABEL TEXT</div>
+    <div class="type-sample-label">Label &mdash; 12px / 500 / 1.60 / 0.12px &mdash; Anthropic Sans</div>
+  </div>
+
+  <div class="type-sample">
+    <div class="type-sample-text" style="font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 15px; font-weight: 400; line-height: 1.60; letter-spacing: -0.32px;">const response = await claude.messages.create()</div>
+    <div class="type-sample-label">Code &mdash; 15px / 400 / 1.60 / -0.32px &mdash; Anthropic Mono (SFMono fallback)</div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- BUTTONS -->
+<section class="section" id="buttons">
+  <div class="section-title">03 / Button Variants</div>
+  <h2 class="section-heading">Buttons</h2>
+
+  <div class="button-row">
+    <div class="button-demo">
+      <button style="background: #e8e6dc; color: #4d4c48; padding: 10px 12px 10px 8px; border: none; border-radius: 8px; font-size: 16px; font-family: Arial, system-ui, sans-serif; font-weight: 500; cursor: pointer; box-shadow: #e8e6dc 0px 0px 0px 0px, #d1cfc5 0px 0px 0px 1px;">Warm Sand</button>
+      <div class="button-demo-label">Warm Sand (Secondary)</div>
+    </div>
+    <div class="button-demo">
+      <button style="background: #ffffff; color: #141413; padding: 8px 16px 8px 12px; border: 1px solid #f0eee6; border-radius: 12px; font-size: 16px; font-family: Arial, system-ui, sans-serif; font-weight: 500; cursor: pointer;">White Surface</button>
+      <div class="button-demo-label">White Surface</div>
+    </div>
+    <div class="button-demo">
+      <button style="background: #30302e; color: #faf9f5; padding: 10px 12px 10px 8px; border: none; border-radius: 8px; font-size: 16px; font-family: Arial, system-ui, sans-serif; font-weight: 500; cursor: pointer; box-shadow: #30302e 0px 0px 0px 0px, #30302e 0px 0px 0px 1px;">Dark Charcoal</button>
+      <div class="button-demo-label">Dark Charcoal</div>
+    </div>
+    <div class="button-demo">
+      <button style="background: #c96442; color: #faf9f5; padding: 10px 20px; border: none; border-radius: 12px; font-size: 16px; font-family: Arial, system-ui, sans-serif; font-weight: 500; cursor: pointer; box-shadow: #c96442 0px 0px 0px 0px, #c96442 0px 0px 0px 1px;">Brand CTA</button>
+      <div class="button-demo-label">Terracotta Brand</div>
+    </div>
+    <div class="button-demo">
+      <button style="background: #141413; color: #b0aea5; padding: 9.6px 16.8px; border: 1px solid #30302e; border-radius: 12px; font-size: 16px; font-family: Arial, system-ui, sans-serif; font-weight: 500; cursor: pointer;">Dark Primary</button>
+      <div class="button-demo-label">Dark Primary</div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- CARDS -->
+<section class="section" id="cards">
+  <div class="section-title">04 / Card Examples</div>
+  <h2 class="section-heading">Cards & Containers</h2>
+
+  <div class="card-grid">
+    <div class="card card-standard">
+      <div class="card-label">Standard Card</div>
+      <h3>Dark Surface Contained</h3>
+      <p>Standard content card with 1px solid Dark Surface border and 12px radius. The default container on the dark Near Black canvas.</p>
+    </div>
+    <div class="card card-whisper">
+      <div class="card-label">Whisper Shadow</div>
+      <h3>Soft Elevated Card</h3>
+      <p>Elevated card with deeper shadow on dark surfaces. The 0.20 opacity and 24px blur create subtle depth against the dark canvas.</p>
+    </div>
+    <div class="card card-ring">
+      <div class="card-label">Ring Shadow</div>
+      <h3>Warm Ring Halo</h3>
+      <p>Interactive card using the signature ring shadow. On dark surfaces the ring uses Charcoal Warm for a subtle warm boundary.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- SPACING -->
+<section class="section" id="spacing">
+  <div class="section-title">05 / Spacing Scale</div>
+  <h2 class="section-heading">Spacing System</h2>
+  <p style="color: var(--text-secondary); margin-bottom: 32px; font-family: var(--font-sans);">Base unit: 8px. Scale: 3px, 4px, 6px, 8px, 10px, 12px, 16px, 20px, 24px, 30px.</p>
+
+  <div class="spacing-row">
+    <div class="spacing-item"><div class="spacing-box" style="width: 12px; height: 12px;"></div><div class="spacing-label">3px</div></div>
+    <div class="spacing-item"><div class="spacing-box" style="width: 16px; height: 16px;"></div><div class="spacing-label">4px</div></div>
+    <div class="spacing-item"><div class="spacing-box" style="width: 24px; height: 24px;"></div><div class="spacing-label">6px</div></div>
+    <div class="spacing-item"><div class="spacing-box" style="width: 32px; height: 32px;"></div><div class="spacing-label">8px</div></div>
+    <div class="spacing-item"><div class="spacing-box" style="width: 40px; height: 40px;"></div><div class="spacing-label">10px</div></div>
+    <div class="spacing-item"><div class="spacing-box" style="width: 48px; height: 48px;"></div><div class="spacing-label">12px</div></div>
+    <div class="spacing-item"><div class="spacing-box" style="width: 64px; height: 64px;"></div><div class="spacing-label">16px</div></div>
+    <div class="spacing-item"><div class="spacing-box" style="width: 80px; height: 80px;"></div><div class="spacing-label">20px</div></div>
+    <div class="spacing-item"><div class="spacing-box" style="width: 96px; height: 96px;"></div><div class="spacing-label">24px</div></div>
+    <div class="spacing-item"><div class="spacing-box" style="width: 120px; height: 120px;"></div><div class="spacing-label">30px</div></div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- BORDER RADIUS -->
+<section class="section">
+  <div class="section-title">06 / Border Radius Scale</div>
+  <h2 class="section-heading">Border Radius</h2>
+
+  <div class="radius-row">
+    <div class="radius-item"><div class="radius-box" style="border-radius: 4px;"></div><div class="radius-label">4px</div><div class="radius-context">Sharp</div></div>
+    <div class="radius-item"><div class="radius-box" style="border-radius: 6px;"></div><div class="radius-label">6px</div><div class="radius-context">Subtly rounded</div></div>
+    <div class="radius-item"><div class="radius-box" style="border-radius: 8px;"></div><div class="radius-label">8px</div><div class="radius-context">Comfortably rounded</div></div>
+    <div class="radius-item"><div class="radius-box" style="border-radius: 12px;"></div><div class="radius-label">12px</div><div class="radius-context">Generously rounded</div></div>
+    <div class="radius-item"><div class="radius-box" style="border-radius: 16px;"></div><div class="radius-label">16px</div><div class="radius-context">Very rounded</div></div>
+    <div class="radius-item"><div class="radius-box" style="border-radius: 24px;"></div><div class="radius-label">24px</div><div class="radius-context">Highly rounded</div></div>
+    <div class="radius-item"><div class="radius-box" style="border-radius: 32px;"></div><div class="radius-label">32px</div><div class="radius-context">Maximum rounded</div></div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ELEVATION -->
+<section class="section" id="elevation">
+  <div class="section-title">07 / Elevation & Depth</div>
+  <h2 class="section-heading">Depth & Elevation</h2>
+
+  <div class="elevation-grid">
+    <div class="elevation-card elevation-flat">
+      <div><div class="elevation-name">Flat</div><div class="elevation-desc">No shadow, no border. Near Black background and inline text.</div></div>
+      <div class="elevation-level">Level 0</div>
+    </div>
+    <div class="elevation-card elevation-contained">
+      <div><div class="elevation-name">Contained</div><div class="elevation-desc">1px solid Dark Surface. Standard cards and sections.</div></div>
+      <div class="elevation-level">Level 1</div>
+    </div>
+    <div class="elevation-card elevation-ring">
+      <div><div class="elevation-name">Ring</div><div class="elevation-desc">0px 0px 0px 1px ring shadow using Charcoal Warm. Interactive cards, buttons, hover states.</div></div>
+      <div class="elevation-level">Level 2</div>
+    </div>
+    <div class="elevation-card elevation-whisper">
+      <div><div class="elevation-name">Whisper</div><div class="elevation-desc">rgba(0,0,0,0.20) 0px 4px 24px. Deeper shadow on dark canvas for elevated cards.</div></div>
+      <div class="elevation-level">Level 3</div>
+    </div>
+    <div class="elevation-card elevation-inset">
+      <div><div class="elevation-name">Inset</div><div class="elevation-desc">inset 0px 0px 0px 1px at 10% white opacity. Active/pressed button states on dark.</div></div>
+      <div class="elevation-level">Level 4</div>
+    </div>
+  </div>
+</section>
+
+<div style="height: 80px;"></div>
+
+</body>
+</html>
