@@ -129,41 +129,114 @@ body.hero-body {
 
 .hero-nav {
     display: flex;
-    gap: 12px;
-    padding: 12px;
-    background: rgba(255, 255, 255, 0.35);
-    border-radius: var(--shui-radius-xl);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
-    backdrop-filter: blur(var(--shui-blur));
+    gap: 8px;
+    padding: 6px;
+    background: rgba(255, 255, 255, 0.15) !important;
+    backdrop-filter: blur(48px) saturate(200%) !important;
+    -webkit-backdrop-filter: blur(48px) saturate(200%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    border-radius: 999px !important; /* Apple-style pill shape */
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.8), 0 12px 30px rgba(0, 0, 0, 0.08) !important;
+    margin-bottom: 32px;
+    position: relative;
+    z-index: 10;
 }
 
-.hero-nav__btn {
+/* Fluid sliding drop indicator */
+.hero-nav::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: var(--slider-left, 6px);
+    width: var(--slider-width, calc((100% - 44px) / 5));
+    background: rgba(255, 255, 255, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.9), inset 0 -1px 1px rgba(0, 0, 0, 0.05), 0 8px 20px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border-radius: 999px;
+    /* Fluid, non-bouncy transition like liquid drop sliding */
+    transition: left 0.5s cubic-bezier(0.4, 0.0, 0.2, 1), width 0.5s cubic-bezier(0.4, 0.0, 0.2, 1) !important;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.hero-nav__btn,
+.nav-btn.hero-nav__btn {
     flex: 1;
     border: none;
-    background: transparent;
+    background: transparent !important;
     color: var(--shui-text-muted);
-    padding: 16px;
-    border-radius: var(--shui-radius-md);
+    padding: 12px 24px !important;
+    border-radius: 999px !important;
     font-size: 1rem;
     font-weight: 600;
     display: flex;
     justify-content: center;
     align-items: center;
     gap: 8px;
-    transition: color var(--transition-normal), background var(--transition-normal), transform var(--transition-normal);
+    position: relative;
+    overflow: hidden;
+    /* Fluid flow transition */
+    transition: all 0.4s cubic-bezier(0.4, 0.0, 0.2, 1) !important;
+    z-index: 2;
 }
 
-.hero-nav__btn:hover {
-    color: var(--shui-text-strong);
-    background: rgba(255, 255, 255, 0.6);
-    transform: translateY(-1px);
+/* Liquid flow effect layer */
+.hero-nav__btn::before,
+.nav-btn.hero-nav__btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: radial-gradient(circle at center, rgba(255, 255, 255, 0.8) 0%, transparent 70%) !important;
+    opacity: 0;
+    transform: scale(0.5);
+    transition: all 0.8s cubic-bezier(0.19, 1, 0.22, 1) !important;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+    display: block !important;
+    z-index: -1;
 }
 
-.hero-nav__btn.active {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.35), rgba(118, 75, 162, 0.4));
-    color: var(--color-white);
-    box-shadow: 0 12px 25px rgba(102, 126, 234, 0.35);
+.hero-nav__btn > svg, .hero-nav__btn > span,
+.nav-btn.hero-nav__btn > svg, .nav-btn.hero-nav__btn > span {
+    position: relative;
+    z-index: 1;
+}
+
+.hero-nav__btn:hover::before,
+.nav-btn.hero-nav__btn:hover::before {
+    opacity: 1;
+    transform: scale(1.5);
+}
+
+.hero-nav__btn:hover,
+.nav-btn.hero-nav__btn:hover {
+    color: var(--text-primary, #1d1d1f) !important;
+    background: rgba(255, 255, 255, 0.15) !important;
+    transform: translateY(0);
+    box-shadow: none !important;
+    border-color: transparent !important;
+}
+
+.hero-nav__btn:active,
+.nav-btn.hero-nav__btn:active {
+    transform: scale(0.96) !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Removed the static active background because .hero-nav::after slides to cover it */
+.hero-nav__btn.active,
+.nav-btn.hero-nav__btn.active {
+    background: transparent !important;
+    color: var(--text-primary, #1d1d1f) !important;
+    border: 1px solid transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    transform: scale(1) !important;
 }
 
 .hero-grid {
@@ -761,4 +834,84 @@ body.hero-body.shui-bg-static {
     #settings-view .hero-settings-group {
         grid-template-columns: 1fr;
     }
+}/* Liquid Glass Design Tokens */
+
+:root {
+  color-scheme: light dark;
+
+  /* Blur */
+  --lg-blur-sm: 8px;
+  --lg-blur-md: 16px;
+  --lg-blur-lg: 32px;
+  --lg-blur-xl: 48px;
+
+  /* Saturation */
+  --lg-saturate: 1.8;
+
+  /* Radius */
+  --lg-radius-sm: 8px;
+  --lg-radius-md: 12px;
+  --lg-radius-lg: 16px;
+  --lg-radius-xl: 24px;
+
+  /* Shadows */
+  --lg-shadow-subtle: 0 1px 3px rgba(0,0,0,0.08);
+  --lg-shadow-elevated: 0 4px 16px rgba(0,0,0,0.1);
+  --lg-shadow-high: 0 8px 32px rgba(0,0,0,0.15);
+
+  /* Animation */
+  --lg-duration-fast: 150ms;
+  --lg-duration-normal: 300ms;
+  --lg-duration-slow: 500ms;
+  --lg-easing-spring: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Light mode (default) */
+  --lg-bg-primary: rgba(255,255,255,0.72);
+  --lg-bg-elevated: rgba(255,255,255,0.82);
+  --lg-bg-toolbar: rgba(255,255,255,0.65);
+  --lg-bg-interactive: rgba(255,255,255,0.5);
+  --lg-bg-pressed: rgba(255,255,255,0.35);
+  --lg-bg-scrim: rgba(0,0,0,0.25);
+  --lg-border-color: rgba(255,255,255,0.45);
+  --lg-border-subtle: rgba(0,0,0,0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lg-bg-primary: rgba(30,30,30,0.65);
+    --lg-bg-elevated: rgba(40,40,40,0.75);
+    --lg-bg-toolbar: rgba(25,25,25,0.6);
+    --lg-bg-interactive: rgba(255,255,255,0.1);
+    --lg-bg-pressed: rgba(255,255,255,0.06);
+    --lg-bg-scrim: rgba(0,0,0,0.5);
+    --lg-border-color: rgba(255,255,255,0.12);
+    --lg-border-subtle: rgba(255,255,255,0.06);
+    --lg-shadow-subtle: 0 1px 3px rgba(0,0,0,0.3);
+    --lg-shadow-elevated: 0 4px 16px rgba(0,0,0,0.4);
+    --lg-shadow-high: 0 8px 32px rgba(0,0,0,0.5);
+  }
+}
+
+@media (prefers-contrast: high) {
+  :root {
+    --lg-bg-primary: rgba(255,255,255,0.95);
+    --lg-bg-elevated: rgba(255,255,255,0.98);
+    --lg-border-color: rgba(0,0,0,0.3);
+  }
+}
+
+@media (prefers-contrast: high) and (prefers-color-scheme: dark) {
+  :root {
+    --lg-bg-primary: rgba(20,20,20,0.95);
+    --lg-bg-elevated: rgba(25,25,25,0.98);
+    --lg-border-color: rgba(255,255,255,0.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --lg-duration-fast: 0ms;
+    --lg-duration-normal: 0ms;
+    --lg-duration-slow: 0ms;
+  }
 }

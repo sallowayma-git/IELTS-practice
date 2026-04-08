@@ -2,13 +2,13 @@
   <div class="topic-manage-page">
     <div class="page-header">
       <div class="header-content">
-        <h2 class="page-title">题库管理 <span class="count-badge" v-if="total > 0">{{ total }}</span></h2>
+        <h2 class="page-title heading-serif">题库管理 <span class="count-badge" v-if="total > 0">{{ total }}</span></h2>
       </div>
       <div class="header-actions">
-        <button class="btn btn-secondary glass-btn" @click="showImportDialog = true">
+        <button class="btn btn-warm-sand" @click="showImportDialog = true">
           批量导入
         </button>
-        <button class="btn btn-primary" @click="openEditor()">
+        <button class="btn btn-brand" @click="openEditor()">
           添加题目
         </button>
       </div>
@@ -78,11 +78,13 @@
       <p>正在加载题库...</p>
     </div>
     
-    <div v-else-if="topics.length === 0" class="empty-state card">
-      <div class="empty-icon">📝</div>
+    <div v-else-if="topics.length === 0" class="empty-state card card-whisper">
+      <div class="empty-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+      </div>
       <h3>暂无题目数据</h3>
       <p>当前筛选条件下没有找到题目，尝试调整筛选或添加新题目</p>
-      <button class="btn btn-primary" @click="openEditor()">
+      <button class="btn btn-brand" @click="openEditor()">
         创建第一道题目
       </button>
     </div>
@@ -119,7 +121,7 @@
           </span>
           <div class="actions">
             <button class="action-btn edit" @click="openEditor(topic)" title="编辑">
-              ✏️
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
             </button>
             <button 
               class="action-btn delete" 
@@ -127,7 +129,7 @@
               :title="topic.is_official ? '官方题目不可删除' : '删除'"
               :disabled="topic.is_official"
             >
-              🗑️
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
             </button>
           </div>
         </div>
@@ -161,7 +163,7 @@
     <div v-if="showEditor" class="dialog-overlay" @click.self="closeEditor">
       <!-- (弹窗内容保持原有结构，样式由 main.css 控制) -->
       <div class="dialog card editor-dialog">
-        <h3>{{ editingTopic ? '✏️ 编辑题目' : '✨ 添加新题目' }}</h3>
+        <h3 class="heading-serif">{{ editingTopic ? '编辑题目' : '添加新题目' }}</h3>
         
         <div class="form-scroll-area">
           <div class="form-group">
@@ -169,12 +171,12 @@
             <div class="radio-cards">
               <label class="radio-card" :class="{ active: editorForm.type === 'task1' }">
                 <input type="radio" v-model="editorForm.type" value="task1" />
-                <span class="radio-icon">📊</span>
+                <span class="radio-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg></span>
                 <span class="radio-label">Task 1 (小作文)</span>
               </label>
               <label class="radio-card" :class="{ active: editorForm.type === 'task2' }">
                 <input type="radio" v-model="editorForm.type" value="task2" />
-                <span class="radio-icon">📝</span>
+                <span class="radio-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg></span>
                 <span class="radio-label">Task 2 (大作文)</span>
               </label>
             </div>
@@ -240,7 +242,7 @@
                 <button class="remove-btn" @click.stop="removeImage">✕</button>
               </div>
               <div v-else class="upload-placeholder">
-                <span class="upload-icon">📷</span>
+                <span class="upload-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg></span>
                 <p>点击上传图片 (PNG/JPG)</p>
               </div>
             </div>
@@ -259,8 +261,8 @@
         </div>
 
         <div class="dialog-actions">
-          <button class="btn btn-secondary" @click="closeEditor">取消</button>
-          <button class="btn btn-primary" @click="saveTopic" :disabled="!isEditorValid">
+          <button class="btn btn-warm-sand" @click="closeEditor">取消</button>
+          <button class="btn btn-brand" @click="saveTopic" :disabled="!isEditorValid">
             {{ editingTopic ? '保存修改' : '立即创建' }}
           </button>
         </div>
@@ -270,7 +272,7 @@
     <!-- 批量导入弹窗 (保持逻辑，简化样式引用) -->
     <div v-if="showImportDialog" class="dialog-overlay" @click.self="closeImportDialog">
       <div class="dialog card">
-        <h3>📥 批量导入题目</h3>
+        <h3 class="heading-serif">批量导入题目</h3>
         <p class="dialog-hint">请上传符合格式要求的 JSON 文件</p>
         
         <div class="file-drop-zone">
@@ -292,8 +294,8 @@
         </div>
 
         <div class="dialog-actions">
-          <button class="btn btn-secondary" @click="closeImportDialog">取消</button>
-          <button class="btn btn-primary" @click="confirmImport" :disabled="!importPreview">
+          <button class="btn btn-warm-sand" @click="closeImportDialog">取消</button>
+          <button class="btn btn-brand" @click="confirmImport" :disabled="!importPreview">
             确认导入
           </button>
         </div>
@@ -305,7 +307,7 @@
         <h3>删除题目</h3>
         <p>确定删除该题目？关联的历史记录不会被删除。</p>
         <div class="dialog-actions">
-          <button class="btn btn-secondary" @click="closeDeleteDialog">取消</button>
+          <button class="btn btn-warm-sand" @click="closeDeleteDialog">取消</button>
           <button class="btn btn-danger" @click="confirmDeleteTopic">确认删除</button>
         </div>
       </div>

@@ -2,7 +2,7 @@
   <div class="settings-page">
     <div class="page-header">
       <div class="page-header__copy">
-        <h1>系统设置</h1>
+        <h1 class="heading-serif">系统设置</h1>
       </div>
     </div>
 
@@ -95,8 +95,8 @@
             <input v-model="apiForm.api_key" placeholder="API Key（编辑时留空=不变）" />
           </div>
           <div class="form-actions">
-            <button class="btn btn-primary" @click="saveApiConfig">保存配置</button>
-            <button class="btn btn-secondary" @click="resetApiForm">重置</button>
+            <button class="btn btn-brand" @click="saveApiConfig">保存配置</button>
+            <button class="btn btn-warm-sand" @click="resetApiForm">重置</button>
           </div>
         </div>
       </div>
@@ -143,8 +143,8 @@
             placeholder='粘贴 JSON（支持 {version,task1,task2} 或 [{task_type,...}]）'
           ></textarea>
           <div class="form-actions">
-            <button class="btn btn-primary" @click="importPromptConfig">导入提示词</button>
-            <button class="btn btn-secondary" @click="exportPromptConfig">导出当前激活</button>
+            <button class="btn btn-brand" @click="importPromptConfig">导入提示词</button>
+            <button class="btn btn-warm-sand" @click="exportPromptConfig">导出当前激活</button>
           </div>
         </div>
       </div>
@@ -152,7 +152,7 @@
       <!-- 模型参数 -->
       <div v-if="activeTab === 'model'" class="tab-content">
         <div class="section">
-          <h3>温度模式选择</h3>
+          <h3 class="heading-serif">温度模式选择</h3>
           <p class="hint">温度值影响 AI 评分的严格程度和反馈详细度</p>
           <div v-if="sectionMessages.model.message" :class="['inline-message', `inline-message-${sectionMessages.model.type}`]">
             {{ sectionMessages.model.message }}
@@ -166,7 +166,7 @@
               @click="modelSettings.temperature_mode = mode.value"
             >
               <div class="mode-header">
-                <span class="mode-icon">{{ mode.icon }}</span>
+                <span class="mode-icon" v-html="mode.icon"></span>
                 <span class="mode-name">{{ mode.name }}</span>
               </div>
               <div class="mode-temp">{{ getModeTemperatureLabel(mode) }}</div>
@@ -201,7 +201,7 @@
             <p class="hint">自定义模式允许分别设置 Task 1 / Task 2，范围 0.0-2.0。</p>
           </div>
 
-          <button class="btn btn-primary" @click="saveModelSettings" :disabled="modelSaving">
+          <button class="btn btn-brand" @click="saveModelSettings" :disabled="modelSaving">
             {{ modelSaving ? '保存中...' : '保存设置' }}
           </button>
         </div>
@@ -229,7 +229,7 @@
               <span class="input-suffix">条</span>
             </div>
             <p class="hint">超过此数量时，系统会自动清理最早记录，避免历史数据无限增长</p>
-            <button class="btn btn-primary" @click="saveDataSettings" :disabled="dataSaving">
+            <button class="btn btn-brand" @click="saveDataSettings" :disabled="dataSaving">
               {{ dataSaving ? '保存中...' : '保存' }}
             </button>
           </div>
@@ -243,7 +243,7 @@
               <p class="hint">此操作将删除所有评分历史，且不可恢复</p>
             </div>
             <button class="btn btn-danger" @click="confirmClearHistory">
-              🗑️ 清空历史
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: text-bottom;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> 清空历史
             </button>
           </div>
         </div>
@@ -252,8 +252,8 @@
       <!-- 关于 -->
       <div v-if="activeTab === 'about'" class="tab-content">
         <div class="about-section">
-          <div class="app-icon">✍️</div>
-          <h2>雅思写作 AI 评判</h2>
+          <div class="app-icon"><span class="logo-mark" style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;background:var(--color-terracotta);border-radius:12px;color:var(--color-ivory);font-family:var(--font-serif);font-size:24px;font-weight:500;">C</span></div>
+          <h2 class="heading-serif">雅思写作 AI 评判</h2>
           <p class="version">Version 0.3.1</p>
           
           <div class="about-info">
@@ -311,11 +311,11 @@
         />
 
         <div class="dialog-actions">
-          <button class="btn btn-secondary" @click="closeConfirmDialog">
+          <button class="btn btn-warm-sand" @click="closeConfirmDialog">
             取消
           </button>
           <button 
-            :class="['btn', confirmDialog.danger ? 'btn-danger' : 'btn-primary']"
+            :class="['btn', confirmDialog.danger ? 'btn-danger' : 'btn-brand']"
             @click="executeConfirmAction"
             :disabled="!confirmDialogReady"
           >
@@ -362,7 +362,7 @@ const temperatureModes = [
   {
     value: 'precise',
     name: '精确模式',
-    icon: '🎯',
+    icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>',
     task1: 0.3,
     task2: 0.3,
     desc: '适合客观评分，输出稳定一致'
@@ -370,7 +370,7 @@ const temperatureModes = [
   {
     value: 'balanced',
     name: '平衡模式',
-    icon: '⚖️',
+    icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>',
     task1: 0.5,
     task2: 0.5,
     desc: '推荐使用，兼顾准确性与详细度'
@@ -378,7 +378,7 @@ const temperatureModes = [
   {
     value: 'creative',
     name: '创意模式',
-    icon: '💡',
+    icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"></path><path d="M10 22h4"></path><path d="M12 2a7 7 0 0 0-7 7c0 2 1.5 4.5 3 6.5h8c1.5-2 3-4.5 3-6.5a7 7 0 0 0-7-7z"></path></svg>',
     task1: 0.8,
     task2: 0.8,
     desc: '详细反馈，适合学习分析'
@@ -386,7 +386,7 @@ const temperatureModes = [
   {
     value: 'custom',
     name: '自定义模式',
-    icon: '🛠️',
+    icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>',
     task1: null,
     task2: null,
     desc: '兼容旧设置并允许分别配置两个任务'
