@@ -40,35 +40,37 @@
 }
 
 body {
-  background: var(--bg-page);
+  background: transparent;
   color: var(--text-primary);
   font-family: var(--font-sans);
 }
 
 .btn-brand {
-  background: var(--color-terracotta);
+  background: linear-gradient(135deg, var(--color-terracotta), var(--color-coral));
   color: var(--color-ivory);
   padding: 12px 24px;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.32);
   border-radius: 12px;
   font-size: 16px;
   font-family: var(--font-sans);
   font-weight: 500;
   cursor: pointer;
-  box-shadow: var(--color-terracotta) 0px 0px 0px 0px, var(--color-terracotta) 0px 0px 0px 1px;
+  box-shadow: 0 10px 20px rgba(201, 100, 66, 0.28);
 }
 
 .btn-warm-sand {
-  background: var(--color-warm-sand);
+  background: rgba(255, 255, 255, 0.5);
   color: var(--color-charcoal-warm);
   padding: 12px 24px;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.56);
   border-radius: 8px;
   font-size: 16px;
   font-family: var(--font-sans);
   font-weight: 500;
   cursor: pointer;
-  box-shadow: var(--color-warm-sand) 0px 0px 0px 0px, var(--color-ring-warm) 0px 0px 0px 1px;
+  box-shadow: 0 4px 16px rgba(38, 36, 54, 0.09);
+  backdrop-filter: blur(10px) saturate(1.6);
+  -webkit-backdrop-filter: blur(10px) saturate(1.6);
 }
 
 .btn-white {
@@ -84,7 +86,7 @@ body {
 }
 
 .btn-dark {
-  background: var(--color-dark-surface);
+  background: rgba(48, 48, 46, 0.84);
   color: var(--color-ivory);
   padding: 9.6px 16.8px;
   border: none;
@@ -110,22 +112,24 @@ body {
 }
 
 .card {
-  background: var(--bg-card);
+  background: rgba(255, 255, 255, 0.56);
   border-radius: 12px;
   padding: 28px;
-  border: 1px solid var(--border-color);
+  border: 1px solid rgba(255, 255, 255, 0.56);
+  backdrop-filter: blur(16px) saturate(1.65);
+  -webkit-backdrop-filter: blur(16px) saturate(1.65);
 }
 
 .card-whisper {
-  border: 1px solid var(--border-color);
-  box-shadow: rgba(0,0,0,0.05) 0px 4px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  box-shadow: rgba(21, 22, 38, 0.12) 0 8px 28px;
   border-radius: 12px;
 }
 
 .card-ring {
-  background: var(--bg-card);
+  background: rgba(255, 255, 255, 0.5);
   border-radius: 12px;
   padding: 28px;
-  border: none;
-  box-shadow: 0px 0px 0px 1px var(--color-ring-warm);
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  box-shadow: rgba(21, 22, 38, 0.08) 0 6px 20px;
 }

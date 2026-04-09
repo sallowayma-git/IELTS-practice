@@ -2,12 +2,18 @@
   <div class="result-page">
     <header class="result-hero">
       <div class="result-hero__copy">
-        <h1 class="heading-serif">评分结果</h1>
+        <span class="result-chip">AI Feedback</span>
+        <h1 class="heading-serif">Results Analysis</h1>
       </div>
 
       <div class="result-hero__score card card-whisper">
-        <span class="score-badge__label">Overall band</span>
-        <strong>{{ scoreData?.total_score ?? '-' }}</strong>
+        <span class="score-badge__label">AI Evaluation Summary</span>
+        <div class="score-ring" :style="{ '--score-progress': ((Number(scoreData?.total_score) || 0) / 9).toFixed(3) }">
+          <div class="score-ring__inner">
+            <strong>{{ scoreData?.total_score ?? '-' }}</strong>
+            <span>Overall Band</span>
+          </div>
+        </div>
         <span class="score-badge__meta">字数 {{ essayWordCount || '-' }}</span>
       </div>
     </header>
@@ -432,9 +438,23 @@ function writeNew() {
   gap: 10px;
 }
 
+.result-chip {
+  display: inline-flex;
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary-color);
+  background: rgba(201, 100, 66, 0.12);
+  border: 1px solid rgba(201, 100, 66, 0.24);
+}
+
 .result-hero__copy h1 {
-  font-size: clamp(2.2rem, 4vw, 3.8rem);
-  max-width: 11ch;
+  font-size: clamp(2.4rem, 4.4vw, 4.2rem);
+  max-width: 13ch;
 }
 
 .result-hero__copy p:last-child {
@@ -444,8 +464,12 @@ function writeNew() {
 .result-hero__score {
   min-width: 220px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
   padding: 18px 20px;
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.42));
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
 }
 
 .score-badge__label,
@@ -454,12 +478,52 @@ function writeNew() {
   font-size: 0.78rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  text-transform: uppercase;
 }
 
-.result-hero__score strong {
-  font-size: 3rem;
+.score-ring {
+  width: 118px;
+  height: 118px;
+  border-radius: 50%;
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+  background:
+    conic-gradient(
+      #5456aa calc((var(--score-progress, 0.8)) * 360deg),
+      rgba(180, 184, 222, 0.32) 0
+    );
+  position: relative;
+}
+
+.score-ring::before {
+  content: '';
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.score-ring__inner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.score-ring__inner strong {
+  font-size: 2rem;
   line-height: 1;
-  color: var(--primary-color);
+  color: #5456aa;
+}
+
+.score-ring__inner span {
+  font-size: 0.52rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .result-layout {
@@ -479,6 +543,10 @@ function writeNew() {
   gap: 18px;
   max-height: calc(100vh - 180px);
   overflow: auto;
+  background: var(--lg-bg-elevated);
+  border: 1px solid var(--lg-border-color);
+  backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
 }
 
 .reading-head,
@@ -499,12 +567,20 @@ function writeNew() {
   font-size: 0.88rem;
 }
 
+.rail-card {
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.42));
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
+}
+
 .view-switcher {
   display: inline-flex;
   gap: 8px;
   padding: 6px;
   border-radius: 999px;
-  background: rgba(143, 95, 63, 0.08);
+  background: rgba(255, 255, 255, 0.54);
+  border: 1px solid var(--lg-border-color);
 }
 
 .view-btn {
@@ -519,8 +595,8 @@ function writeNew() {
 
 .view-btn.active {
   color: var(--text-primary);
-  background: #fffdf8;
-  box-shadow: var(--shadow-xs);
+  background: #fffdf8d1;
+  box-shadow: var(--lg-shadow-subtle);
 }
 
 .essay-view,
@@ -534,7 +610,8 @@ function writeNew() {
 .empty-hint {
   padding: 20px;
   border-radius: var(--radius-lg);
-  background: rgba(255, 249, 241, 0.78);
+  background: rgba(255, 255, 255, 0.48);
+  border: 1px solid var(--lg-border-color);
   color: var(--text-secondary);
   line-height: 1.9;
   white-space: pre-wrap;
@@ -569,7 +646,7 @@ function writeNew() {
   display: grid;
   gap: 12px;
   padding: 16px 0;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--lg-border-subtle);
 }
 
 .sentence-block:last-child {
@@ -595,9 +672,9 @@ function writeNew() {
 .expand-btn {
   min-height: 34px;
   padding: 0 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--lg-border-color);
   border-radius: 999px;
-  background: rgba(255, 252, 247, 0.92);
+  background: rgba(255, 255, 255, 0.62);
   cursor: pointer;
 }
 
@@ -631,7 +708,8 @@ function writeNew() {
   gap: 12px;
   padding: 16px;
   border-radius: var(--radius-lg);
-  background: rgba(255, 249, 241, 0.78);
+  background: rgba(255, 255, 255, 0.48);
+  border: 1px solid var(--lg-border-color);
 }
 
 .error-item {
@@ -696,13 +774,10 @@ function writeNew() {
 .breakdown-item {
   display: grid;
   gap: 4px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.breakdown-item:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: rgba(186, 187, 255, 0.16);
 }
 
 .breakdown-header {
@@ -717,8 +792,8 @@ function writeNew() {
 }
 
 .breakdown-score {
-  font-size: 1.5rem;
-  color: var(--primary-color);
+  font-size: 1.4rem;
+  color: #393b8e;
 }
 
 .breakdown-desc,
@@ -731,7 +806,16 @@ function writeNew() {
 .rationale-item {
   padding: 14px 16px;
   border-radius: var(--radius-md);
-  background: rgba(255, 249, 241, 0.78);
+  background: rgba(255, 255, 255, 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.74);
+}
+
+.action-buttons {
+  justify-content: stretch;
+}
+
+.action-buttons .btn {
+  width: 100%;
 }
 
 .analysis-label {
