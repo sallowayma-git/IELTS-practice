@@ -11,7 +11,7 @@ const ERROR_MESSAGES = {
     rate_limit_exceeded: '请求频率超限，请稍后重试',
     rate_limited: '请求频率超限，请稍后重试',
     model_not_found: '模型不存在，请检查模型名称配置',
-    timeout: '请求超时（120秒），请检查网络连接或稍后重试',
+    timeout: '请求超时（240秒），请检查网络连接或稍后重试',
     network_error: '网络连接失败，请检查网络设置',
     server_error: 'LLM 服务商服务异常，请稍后重试',
     invalid_response_format: '评分数据解析失败，请点击"重试"按钮',

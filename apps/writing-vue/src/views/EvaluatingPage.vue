@@ -1,163 +1,86 @@
 <template>
   <div class="evaluating-page">
-    <header class="evaluating-hero">
-      <div class="evaluating-hero__copy">
-        <span class="evaluating-chip">AI Pipeline</span>
-        <h1>评分链路正在推进</h1>
-        <p>{{ statusMessage }}</p>
-      </div>
-
-      <div class="evaluating-hero__badge surface-muted">
-        <span class="badge-label">当前完成度</span>
-        <strong>{{ progress }}%</strong>
-      </div>
-    </header>
-
     <div class="evaluating-layout">
-      <section class="focus-panel surface">
-        <div class="orb-zone">
-          <div class="analysis-orb">
-            <div class="analysis-orb__core">
-              <span>{{ progress }}%</span>
-            </div>
+      <!-- Left: Essay Display with Typewriter -->
+      <section class="essay-panel card card-whisper">
+        <div class="essay-head border-base">
+          <div>
+            <h2 class="heading-serif display-heading">Essay Analysis</h2>
+            <p class="topic-meta">{{ displayTopicText }}</p>
           </div>
+          <span class="word-badge">{{ displayWordCount }} Words</span>
         </div>
-
-        <div class="focus-head">
-          <h2>{{ currentStageLabel }}</h2>
-          <span class="stage-summary">{{ stageMessage }}</span>
-        </div>
-
-        <div class="progress-rail">
-          <div class="progress-bar">
-            <div class="progress-bar-fill" :style="{ width: `${progress}%` }"></div>
+        
+        <div class="essay-body relative">
+          <!-- Floating Loader watermark under the text -->
+          <div class="floating-loader" :class="{'fade-out': progress > 98}">
+            <span class="material-symbols-outlined xl-icon pulse">document_scanner</span>
+            <p>Intelligence parsing layer...</p>
           </div>
-          <div class="progress-meta">
-            <span class="progress-text">{{ progress }}%</span>
-            <span class="progress-phase">{{ currentStageLabel }}</span>
-          </div>
-        </div>
-
-        <div class="stage-track">
-          <span :class="['stage-chip', getStageClass('preparing')]">准备</span>
-          <span :class="['stage-chip', getStageClass('scoring')]">评分</span>
-          <span :class="['stage-chip', getStageClass('reviewing')]">详解</span>
-          <span :class="['stage-chip', getStageClass('completed')]">完成</span>
-        </div>
-
-        <p v-if="scoreData && !isComplete" class="stage-hint">
-          分数已出来，系统正在继续生成段落详解和句级问题定位。
-        </p>
-
-        <div class="insight-grid">
-          <div class="insight-card">
-            <span class="insight-dot"></span>
-            <div>
-              <h4>Cognitive Load</h4>
-              <p>正在扫描连接词、段落过渡与逻辑链完整度。</p>
-            </div>
-          </div>
-          <div class="insight-card">
-            <span class="insight-dot insight-dot-2"></span>
-            <div>
-              <h4>Lexical Resource</h4>
-              <p>正在评估词汇层次、搭配自然度与表达精确度。</p>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="scoreData" class="score-preview">
-          <div class="score-summary">
-            <span class="score-summary__label">总分</span>
-            <strong class="score-summary__value">{{ scoreData.total_score ?? '-' }}</strong>
-          </div>
-          <div class="score-grid">
-            <div class="score-card">
-              <span>任务完成</span>
-              <strong>{{ scoreData.task_achievement ?? '-' }}</strong>
-            </div>
-            <div class="score-card">
-              <span>连贯衔接</span>
-              <strong>{{ scoreData.coherence_cohesion ?? '-' }}</strong>
-            </div>
-            <div class="score-card">
-              <span>词汇资源</span>
-              <strong>{{ scoreData.lexical_resource ?? '-' }}</strong>
-            </div>
-            <div class="score-card">
-              <span>语法范围</span>
-              <strong>{{ scoreData.grammatical_range ?? '-' }}</strong>
-            </div>
+          
+          <!-- Text Typewriter layer -->
+          <div class="typewriter-content" v-if="essayContentFull">
+            {{ displayedEssayContent }}<span class="cursor-blink" v-if="progress < 100"></span>
           </div>
         </div>
       </section>
 
-      <aside class="status-rail">
-        <section class="rail-card surface">
-          <div class="rail-head">
-            <h3>实时日志</h3>
-            <span>最近 3 条</span>
+      <!-- Right: Analyzing Panel (glass style) -->
+      <aside class="status-rail right-panel">
+        <div class="ai-hero glass-card">
+          <div class="orb-zone">
+            <!-- Breathing aurora sphere -->
+            <div class="aurora-sphere"></div>
+            <div class="orb-inner">
+              <span class="orb-percentage">{{ progress }}%</span>
+            </div>
           </div>
+          <h2 class="heading-serif">Intelligence at Work</h2>
+          <p class="subtitle">Evaluating your essay against formal IELTS band descriptors.</p>
+        </div>
 
-          <div v-if="recentLogs.length > 0" class="log-list">
-            <div v-for="item in recentLogs" :key="item.id" class="log-item">
+        <section class="glass-card rail-section">
+          <div class="rail-head">
+            <h3>实时进度</h3>
+            <span class="status-meta uppercase">{{ progress }}% / {{ currentStageLabel }}</span>
+          </div>
+          <div class="progress-rail mt-3">
+            <div class="progress-bar">
+              <div class="progress-bar-fill" :style="{ width: `${progress}%` }"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="glass-card rail-section flex-1 overflow-hidden flex-col">
+          <div class="rail-head header-fixed">
+            <h3>实时日志</h3>
+            <span class="status-meta">Streaming</span>
+          </div>
+          <div v-if="recentLogs.length > 0" class="log-list custom-scroll">
+            <div v-for="item in recentLogs" :key="item.id" class="log-item fade-in-up">
               <span class="log-time">{{ item.time }}</span>
               <span class="log-message">{{ item.message }}</span>
             </div>
           </div>
-          <p v-else class="rail-empty">链路已启动，等待后台返回第一条进度消息。</p>
-        </section>
-
-        <section class="rail-card surface">
-          <div class="rail-head">
-            <h3>链路状态</h3>
-            <span>结构化输出</span>
-          </div>
-          <div class="rail-stack">
-            <p v-if="sentences.length > 0" class="status-pill">
-              已分析 {{ sentences.length }} 个句子
-            </p>
-            <p v-if="analysisSummary.length > 0" class="status-pill">
-              {{ analysisSummary.join(' · ') }}
-            </p>
-            <p v-if="providerPath.length > 0" class="provider-path">
-              {{ providerPath.map(item => `${item.provider}/${item.model}(${item.status})`).join(' -> ') }}
-            </p>
+          <div v-else class="log-list empty-log">
+             <p class="rail-empty">准备进入智能评测链路...</p>
           </div>
         </section>
-
-        <section v-if="error" class="rail-card rail-card-error surface">
-          <div class="rail-head">
-            <h3>链路异常</h3>
-            <span>{{ error.code || 'error' }}</span>
-          </div>
-          <p class="error-copy">{{ error.message }}</p>
-          <div class="error-actions">
-            <button class="btn btn-primary" @click="handleRetry">
-              重试
-            </button>
-            <button class="btn btn-secondary" @click="handleBack">
-              返回编辑
-            </button>
-          </div>
-        </section>
-
-        <section class="rail-card surface-muted">
-          <div class="rail-head">
-            <h3>会话控制</h3>
-            <span>Session</span>
-          </div>
-          <button class="btn btn-danger" @click="handleCancel">
+        <div class="action-row mt-auto">
+          <button class="btn btn-secondary w-full" :disabled="isRetrying || isComplete" @click="handleRetry">
+            {{ isRetrying ? '重试中...' : '重试评分' }}
+          </button>
+          <button class="btn btn-warn w-full" :disabled="isRetrying" @click="handleCancel">
             取消评分
           </button>
-        </section>
+        </div>
       </aside>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { evaluate, getErrorMessage } from '@/api/client.js'
 import {
@@ -191,6 +114,7 @@ const hasNavigatedToResult = ref(false)
 const analysisData = ref({})
 const reviewData = ref({})
 const timelineLogs = ref([])
+const isRetrying = ref(false)
 let eventListenerId = null
 let lastPersistedCache = ''
 let cachePersistRetryAt = 0
@@ -251,6 +175,74 @@ const analysisSummary = computed(() => {
 const recentLogs = computed(() => timelineLogs.value.slice(-3))
 
 const currentStageLabel = computed(() => stageLabel(currentStage.value, stageMessage.value))
+
+const tempDraft = ref(null)
+
+onMounted(() => {
+  const cachedDraft = sessionStorage.getItem('temp_essay_' + props.sessionId)
+  if (cachedDraft) {
+    try {
+      tempDraft.value = JSON.parse(cachedDraft)
+    } catch(e) {}
+  }
+})
+
+const essayContentFull = computed(() => {
+  return tempDraft.value?.content || (fullResult.value.input_context?.content || '')
+})
+
+const displayedEssayContent = ref('')
+const currentDisplayLength = ref(0)
+let typewriterTimeout = null
+// 三种打字速度（毫秒/字符）：慢 35，中 15，快 5
+const typeSpeeds = [35, 15, 5]
+let currentSpeed = 15
+
+function startTypewriter(newProgress) {
+  if (typewriterTimeout) clearTimeout(typewriterTimeout)
+  
+  const text = essayContentFull.value
+  if (!text) return
+  
+  const targetRatio = Math.max(0, Math.min(100, newProgress)) / 100
+  const targetLen = Math.floor(text.length * targetRatio)
+  
+  if (currentDisplayLength.value >= targetLen && newProgress < 100) return
+  
+  const tick = () => {
+    if (currentDisplayLength.value < targetLen) {
+      const gap = targetLen - currentDisplayLength.value
+      let step = gap > 80 ? Math.floor(gap / 25) + 1 : 1
+      
+      currentDisplayLength.value += step
+      if (currentDisplayLength.value > targetLen) {
+        currentDisplayLength.value = targetLen
+      }
+      displayedEssayContent.value = text.substring(0, currentDisplayLength.value)
+      
+      if (currentDisplayLength.value < text.length) {
+        typewriterTimeout = setTimeout(tick, currentSpeed)
+      }
+    }
+  }
+  tick()
+}
+
+watch(progress, (newVal) => {
+  currentSpeed = typeSpeeds[Math.floor(Math.random() * typeSpeeds.length)]
+  startTypewriter(newVal)
+})
+
+const displayTopicText = computed(() => {
+  return fullResult.value.input_context?.topic_text || tempDraft.value?.topic_text || 'Preparing assessment context...'
+})
+
+const displayWordCount = computed(() => {
+  return fullResult.value.input_context?.word_count || tempDraft.value?.word_count || 0
+})
+
+
+
 
 function handleEvent(event) {
   if (!event || typeof event !== 'object') return
@@ -389,6 +381,7 @@ async function hydrateSessionState() {
 }
 
 async function handleCancel() {
+  if (isRetrying.value) return
   try {
     await evaluate.cancel(props.sessionId)
   } catch (err) {
@@ -397,9 +390,99 @@ async function handleCancel() {
   router.push({ name: 'Compose' })
 }
 
-function handleRetry() {
+function buildRetryPayload() {
+  const draft = normalizeMap(tempDraft.value)
+  const inputContext = normalizeMap(fullResult.value.input_context)
+  const rawTaskType = String(draft.task_type || inputContext.task_type || '').trim()
+  const taskType = rawTaskType === 'task1' ? 'task1' : (rawTaskType === 'task2' ? 'task2' : '')
+  const topicIdRaw = draft.topic_id ?? inputContext.topic_id
+  const topicIdNumber = Number(topicIdRaw)
+  const topicId = Number.isInteger(topicIdNumber) && topicIdNumber > 0 ? topicIdNumber : null
+  const topicText = String(
+    draft.topic_text
+    || inputContext.topic_text
+    || ''
+  ).trim()
+  const content = String(
+    draft.content
+    || inputContext.content
+    || essayContentFull.value
+    || ''
+  ).trim()
+  const wordCountRaw = Number(draft.word_count ?? inputContext.word_count)
+  const wordCount = Number.isInteger(wordCountRaw) && wordCountRaw > 0
+    ? wordCountRaw
+    : (content ? content.split(/\s+/).filter((word) => word.length > 0).length : 0)
+
+  if (!taskType || !content) {
+    return null
+  }
+
+  if (topicId === null && !topicText) {
+    return null
+  }
+
+  return {
+    task_type: taskType,
+    topic_id: topicId,
+    topic_text: topicText,
+    content,
+    word_count: wordCount
+  }
+}
+
+async function handleRetry() {
+  if (isRetrying.value || isComplete.value) return
+
   error.value = null
-  router.push({ name: 'Compose' })
+  const retryPayload = buildRetryPayload()
+  if (!retryPayload) {
+    error.value = {
+      code: 'start_failed',
+      message: '缺少可重试的题目或作文内容，请返回写作页重新提交'
+    }
+    appendLog('error', error.value.message)
+    return
+  }
+
+  isRetrying.value = true
+  appendLog('system', '正在重新发起评测请求...')
+
+  try {
+    try {
+      await evaluate.cancel(props.sessionId)
+    } catch (cancelError) {
+      console.warn('重试前取消旧会话失败，继续创建新会话', cancelError)
+    }
+
+    const result = await evaluate.start({
+      task_type: retryPayload.task_type,
+      topic_id: retryPayload.topic_id,
+      topic_text: retryPayload.topic_id ? null : retryPayload.topic_text,
+      content: retryPayload.content,
+      word_count: retryPayload.word_count
+    })
+
+    try {
+      sessionStorage.setItem(`temp_essay_${result.sessionId}`, JSON.stringify(retryPayload))
+    } catch (cacheError) {
+      console.warn('重试会话草稿缓存写入失败', cacheError)
+    }
+
+    appendLog('system', '新会话已创建，正在重启评分流程。')
+    await router.replace({
+      name: 'Evaluating',
+      params: { sessionId: result.sessionId }
+    })
+  } catch (retryError) {
+    console.error('重试失败:', retryError)
+    const code = String(retryError?.code || 'unknown_error')
+    const message = retryError?.message || getErrorMessage(code)
+    error.value = { code, message }
+    appendLog('error', `重试失败：${message}`)
+  } finally {
+    isRetrying.value = false
+  }
 }
 
 function handleBack() {
@@ -646,394 +729,346 @@ function persistCachedResult() {
   }
 }
 </script>
-
 <style scoped>
 .evaluating-page {
-  display: grid;
-  gap: 22px;
-  animation: rise-in 0.45s var(--ease-smooth);
-}
-
-.evaluating-hero {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.evaluating-hero__copy {
-  display: grid;
-  gap: 10px;
-}
-
-.evaluating-chip {
-  display: inline-flex;
-  width: fit-content;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--primary-color);
-  background: rgba(201, 100, 66, 0.12);
-  border: 1px solid rgba(201, 100, 66, 0.24);
-}
-
-.evaluating-hero__copy h1 {
-  font-size: clamp(2.2rem, 4vw, 3.8rem);
-  max-width: 10ch;
-}
-
-.evaluating-hero__copy p:last-child {
-  color: var(--text-secondary);
-  max-width: 60ch;
-}
-
-.evaluating-hero__badge {
-  min-width: 190px;
-  display: grid;
-  gap: 10px;
-  padding: 18px 20px;
-  background: var(--lg-bg-elevated);
-  border: 1px solid var(--lg-border-color);
-  backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
-  -webkit-backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
-}
-
-.badge-label {
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.evaluating-hero__badge strong {
-  font-size: 2.4rem;
-  line-height: 1;
+  animation: fade-in 0.3s ease-out;
 }
 
 .evaluating-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.75fr);
-  gap: 22px;
-  align-items: start;
+  display: flex;
+  gap: 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+  height: calc(100vh - 120px);
 }
 
-.focus-panel,
-.rail-card {
-  padding: 22px;
-  background: linear-gradient(140deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.44));
-  border: 1px solid rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
-  -webkit-backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
+.essay-panel {
+  flex: 1.2;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  animation: slideFromRight 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.focus-panel {
-  display: grid;
-  gap: 20px;
+.right-panel {
+  flex: 0.8;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: slideFromLeft 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.action-row {
+  display: flex;
+  gap: 10px;
+}
+
+.border-base {
+  border-bottom: 1px solid var(--color-border-warm);
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+}
+
+.essay-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.display-heading {
+  font-size: 2rem;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.topic-meta {
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 0.95rem;
+}
+
+.word-badge {
+  background: var(--color-warm-sand);
+  color: var(--text-primary);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.essay-body {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  padding-right: 12px;
+}
+
+.floating-loader {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.15;
+  pointer-events: none;
+  transition: opacity 1s ease;
+  z-index: 10;
+}
+
+.floating-loader p {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.05rem;
+  text-transform: uppercase;
+}
+
+.fade-out {
+  opacity: 0 !important;
+}
+
+.typewriter-content {
+  position: relative;
+  z-index: 1;
+  white-space: pre-wrap;
+  line-height: 1.9;
+  color: var(--text-primary);
+  font-size: 1.05rem;
+}
+
+.cursor-blink {
+  display: inline-block;
+  width: 6px;
+  height: 18px;
+  background-color: var(--color-terracotta);
+  margin-left: 4px;
+  animation: blink 1s step-start infinite;
+  vertical-align: middle;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+.xl-icon {
+  font-size: 5rem;
+  margin-bottom: 16px;
+}
+
+.pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px 0 rgba(77, 76, 72, 0.05);
+  padding: 24px;
+}
+
+.ai-hero {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .orb-zone {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin-bottom: 24px;
   display: flex;
+  align-items: center;
   justify-content: center;
-  padding: 8px 0;
 }
 
-.analysis-orb {
-  width: 170px;
-  height: 170px;
+.aurora-sphere {
+  position: absolute;
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.7), rgba(186, 187, 255, 0.72) 45%, rgba(84, 86, 170, 0.74));
-  filter: blur(0.2px);
-  box-shadow:
-    0 0 48px rgba(84, 86, 170, 0.22),
-    0 0 90px rgba(170, 172, 255, 0.2),
-    inset 0 0 32px rgba(255, 255, 255, 0.28);
-  display: grid;
-  place-items: center;
+  background: linear-gradient(135deg, var(--color-parchment) 0%, var(--color-terracotta) 100%);
+  filter: blur(20px);
+  opacity: 0.4;
+  animation: breathe 4s ease-in-out infinite alternate;
 }
 
-.analysis-orb__core {
-  width: 78px;
-  height: 78px;
+.orb-inner {
+  position: relative;
+  z-index: 10;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: rgba(255, 255, 255, 0.44);
-  border: 1px solid rgba(255, 255, 255, 0.68);
-  box-shadow: inset 0 0 16px rgba(255, 255, 255, 0.36);
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  border: 1px solid rgba(255,255,255,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.analysis-orb__core span {
-  font-size: 1.3rem;
+.orb-percentage {
+  font-size: 1.5rem;
+  font-family: var(--font-mono);
   font-weight: 700;
-  color: #303284;
+  color: var(--color-terracotta);
 }
 
-.focus-head,
+.ai-hero .heading-serif {
+  font-size: 1.6rem;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.rail-section {
+  display: flex;
+  flex-direction: column;
+}
+
 .rail-head {
   display: flex;
-  align-items: start;
   justify-content: space-between;
-  gap: 14px;
+  align-items: baseline;
 }
 
-.focus-head h2,
 .rail-head h3 {
-  font-size: 1.6rem;
+  font-weight: 600;
+  font-size: 1.1rem;
 }
 
-.focus-meta,
-.rail-head span,
-.stage-summary {
-  color: var(--text-muted);
-  font-size: 0.9rem;
+.status-meta {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.uppercase {
+  text-transform: uppercase;
 }
 
 .progress-rail {
-  display: grid;
-  gap: 10px;
+  margin-top: 12px;
 }
 
 .progress-bar {
   height: 6px;
-  overflow: hidden;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid var(--lg-border-color);
+  background: var(--color-border-warm);
+  overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #5456aa 0%, #babbff 100%);
-  box-shadow: 0 0 12px rgba(84, 86, 170, 0.32);
-  transition: width var(--duration-normal) var(--ease-standard);
+  background: var(--color-terracotta);
+  transition: width 0.3s ease;
 }
 
-.progress-meta {
+.log-list {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+  overflow-y: auto;
+}
+
+.empty-log {
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.progress-text,
-.progress-phase {
-  color: var(--text-muted);
-  font-size: 0.82rem;
-}
-
-.progress-phase {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.stage-track {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.stage-chip {
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid var(--lg-border-color);
-  color: var(--text-muted);
-  font-size: 0.86rem;
-}
-
-.stage-chip.active {
-  color: #fff8f0;
-  background: #5456aa;
-  border-color: rgba(84, 86, 170, 0.4);
-}
-
-.stage-chip.done {
-  color: var(--success-color);
-  background: rgba(83, 120, 93, 0.14);
-}
-
-.stage-hint {
+  justify-content: center;
+  height: 100px;
   color: var(--text-secondary);
-}
-
-.insight-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.insight-card {
-  display: flex;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.58);
-  border: 1px solid rgba(255, 255, 255, 0.74);
-}
-
-.insight-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  margin-top: 4px;
-  background: #7a9447;
-  box-shadow: 0 0 12px rgba(122, 148, 71, 0.34);
-}
-
-.insight-dot-2 {
-  background: #a0b84e;
-  box-shadow: 0 0 12px rgba(160, 184, 78, 0.34);
-}
-
-.insight-card h4 {
-  font-size: 0.9rem;
-  margin-bottom: 3px;
-}
-
-.insight-card p {
-  color: var(--text-secondary);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
-.score-preview {
-  display: grid;
-  gap: 16px;
-  padding-top: 6px;
-}
-
-.score-summary {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 18px 20px;
-  border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.56);
-  border: 1px solid rgba(255, 255, 255, 0.74);
-}
-
-.score-summary__label {
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.score-summary__value {
-  font-size: 3rem;
-  line-height: 1;
-  color: #5456aa;
-}
-
-.score-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.score-card {
-  display: grid;
-  gap: 8px;
-  padding: 16px;
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.74);
-  background: rgba(255, 255, 255, 0.52);
-}
-
-.score-card span {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-}
-
-.score-card strong {
-  font-size: 1.4rem;
-}
-
-.status-rail {
-  display: grid;
-  gap: 16px;
-}
-
-.log-list,
-.rail-stack {
-  display: grid;
-  gap: 10px;
 }
 
 .log-item {
   display: grid;
-  grid-template-columns: 78px 1fr;
+  grid-template-columns: 70px 1fr;
   gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--lg-border-subtle);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border-warm);
 }
 
 .log-item:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
+  border-bottom: none;
 }
 
 .log-time {
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.log-message,
-.rail-empty,
-.provider-path {
   color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
 }
 
-.provider-path {
-  word-break: break-word;
-}
-
-.status-pill {
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.58);
-  border: 1px solid rgba(255, 255, 255, 0.72);
+.log-message {
   color: var(--text-primary);
+  font-size: 0.9rem;
 }
 
-.rail-card-error {
-  border-color: rgba(162, 72, 54, 0.18);
-  background: rgba(255, 246, 243, 0.9);
+.btn-warn {
+  background: var(--color-warm-sand);
+  color: var(--text-primary);
+  padding: 12px;
+  border: 1px solid var(--color-border-cream);
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.error-copy {
-  color: var(--danger-color);
+.btn-warn:hover {
+  background: #e1dfd4;
 }
 
-.error-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+.w-full {
+  width: 100%;
+}
+.mt-auto {
+  margin-top: auto;
 }
 
-@media (max-width: 1080px) {
-  .evaluating-hero,
-  .evaluating-layout {
-    grid-template-columns: 1fr;
-    flex-direction: column;
-  }
+@keyframes breathe {
+  0% { transform: scale(1); opacity: 0.3; }
+  100% { transform: scale(1.15); opacity: 0.6; }
 }
 
-@media (max-width: 720px) {
-  .focus-panel,
-  .rail-card {
-    padding: 18px;
-  }
+@keyframes slideFromRight {
+  0% { transform: translateX(30px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
 
-  .insight-grid,
-  .score-grid {
-    grid-template-columns: 1fr;
-  }
+@keyframes slideFromLeft {
+  0% { transform: translateX(-30px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes pulse {
+  50% { opacity: 0.2; }
+}
+
+@keyframes fadeInUp {
+  from { transform: translateY(5px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.4s ease forwards;
+}
+
+/* Custom Scroll */
+.custom-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-ring-warm);
+  border-radius: 4px;
 }
 </style>

@@ -121,8 +121,13 @@ class LLMProvider {
 
         } catch (error) {
             if (error.name === 'AbortError') {
-                logger.info('LLM stream aborted by user');
-                throw new Error('请求已取消');
+                const abortError = this._buildAbortError(signal);
+                logger.info('LLM stream aborted', null, {
+                    provider: this.provider,
+                    model: this.model,
+                    code: abortError.code
+                });
+                throw abortError;
             }
             logger.error('LLM stream error', error);
             throw error;
@@ -258,6 +263,31 @@ class LLMProvider {
         }
 
         return new Error(`API Error (${status}): ${errorMessage}`);
+    }
+
+    _buildAbortError(signal) {
+        const reasonRaw = signal ? signal.reason : null;
+        const reason = String(
+            typeof reasonRaw === 'string'
+                ? reasonRaw
+                : reasonRaw?.code || reasonRaw?.reason || reasonRaw?.message || ''
+        ).toLowerCase();
+
+        if (reason.includes('timeout')) {
+            const timeoutError = new Error('请求超时已取消');
+            timeoutError.code = 'timeout';
+            return timeoutError;
+        }
+
+        if (reason.includes('user')) {
+            const cancelError = new Error('用户已取消请求');
+            cancelError.code = 'request_cancelled';
+            return cancelError;
+        }
+
+        const cancelError = new Error('请求已取消');
+        cancelError.code = 'request_cancelled';
+        return cancelError;
     }
 }
 

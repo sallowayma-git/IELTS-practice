@@ -568,13 +568,24 @@ async function submitEssay() {
   restoreNotice.value = ''
 
   try {
-    const result = await evaluate.start({
+    const payload = {
       task_type: taskType.value,
       topic_id: bankTopicId,
-      topic_text: topicMode.value === 'free' ? customTopicText.value.trim() : null,
+      topic_text: topicMode.value === 'free' ? customTopicText.value.trim() : (selectedTopicText.value || ''),
       content: content.value.trim(),
       word_count: wordCount.value
+    }
+    const result = await evaluate.start({
+      task_type: payload.task_type,
+      topic_id: payload.topic_id,
+      topic_text: topicMode.value === 'free' ? customTopicText.value.trim() : null,
+      content: payload.content,
+      word_count: payload.word_count
     })
+
+    try {
+      sessionStorage.setItem('temp_essay_' + result.sessionId, JSON.stringify(payload))
+    } catch(err) { console.warn(err) }
 
     clearDraft()
     stopAutoSave()
@@ -816,8 +827,9 @@ async function submitEssay() {
 }
 
 .prompt-text {
-  font-size: 15px;
-  line-height: 1.75;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.8;
   color: var(--text-primary);
   white-space: pre-wrap;
 }
@@ -930,6 +942,9 @@ async function submitEssay() {
 .essay-input {
   flex: 1;
   min-height: 460px;
+  width: calc(100% - 36px);
+  max-width: calc(100% - 36px);
+  box-sizing: border-box;
   margin: 0 18px;
   padding: 26px 24px;
   border-radius: 18px;
@@ -945,6 +960,9 @@ async function submitEssay() {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  width: calc(100% - 36px);
+  max-width: calc(100% - 36px);
+  box-sizing: border-box;
   margin: 0 18px 18px;
   padding: 14px 14px 6px;
   border-radius: 999px;
@@ -995,10 +1013,10 @@ async function submitEssay() {
 }
 
 .toggle-item.active {
-  background: linear-gradient(135deg, rgba(89, 96, 198, 0.92), rgba(84, 86, 170, 0.88));
-  border-color: rgba(84, 86, 170, 0.55);
-  color: #fbf7ff;
-  box-shadow: 0 8px 20px rgba(84, 86, 170, 0.24);
+  background: linear-gradient(135deg, var(--color-terracotta), var(--color-coral));
+  border-color: rgba(201, 100, 66, 0.4);
+  color: var(--color-ivory);
+  box-shadow: 0 6px 16px rgba(201, 100, 66, 0.28);
 }
 
 .toggle-item__label {
