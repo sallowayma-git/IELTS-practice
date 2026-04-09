@@ -9,13 +9,26 @@
     <!-- 标签页 -->
     <div class="tabs-container card">
       <div class="tabs">
+        <div class="tabs-head">
+          <h2>System Settings</h2>
+          <p>Refractive Scholar Engine</p>
+        </div>
         <button 
           v-for="tab in tabs" 
           :key="tab.key"
           :class="['tab', { active: activeTab === tab.key }]"
           @click="activeTab = tab.key"
         >
-          {{ tab.label }}
+          <span class="tab-icon">
+            {{
+              tab.key === 'api' ? '◎'
+              : tab.key === 'prompts' ? '◈'
+              : tab.key === 'model' ? '◉'
+              : tab.key === 'data' ? '◍'
+              : '◌'
+            }}
+          </span>
+          <span>{{ tab.label }}</span>
         </button>
       </div>
 
@@ -152,7 +165,10 @@
       <!-- 模型参数 -->
       <div v-if="activeTab === 'model'" class="tab-content">
         <div class="section">
-          <h3 class="heading-serif">温度模式选择</h3>
+          <div class="model-head">
+            <h3 class="heading-serif">温度模式选择</h3>
+            <span class="preset-badge">AI ASSISTED PRESETS</span>
+          </div>
           <p class="hint">温度值影响 AI 评分的严格程度和反馈详细度</p>
           <div v-if="sectionMessages.model.message" :class="['inline-message', `inline-message-${sectionMessages.model.type}`]">
             {{ sectionMessages.model.message }}
@@ -942,7 +958,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .settings-page {
-  max-width: 1000px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 20px;
 }
@@ -1384,18 +1400,77 @@ onBeforeUnmount(() => {
   align-self: start;
   position: sticky;
   top: 108px;
-  padding: 18px;
-  border: 1px solid var(--line-1);
+  padding: 14px;
+  border: 1px solid var(--lg-border-color);
   border-radius: var(--radius-lg);
-  background: var(--surface-0);
+  background: var(--lg-bg-elevated);
+  backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
+}
+
+.settings-page .tabs-head {
+  display: grid;
+  gap: 2px;
+  padding: 4px 6px 10px;
+  border-bottom: 1px solid var(--lg-border-subtle);
+  margin-bottom: 2px;
+}
+
+.settings-page .tabs-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.settings-page .tabs-head p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .settings-page .tab-content {
   min-width: 0;
   padding: 22px;
-  border: 1px solid var(--line-1);
+  border: 1px solid var(--lg-border-color);
   border-radius: var(--radius-lg);
-  background: var(--surface-0);
+  background: var(--lg-bg-elevated);
+  backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
+}
+
+.settings-page .tab {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.settings-page .tab-icon {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.settings-page .tab:hover {
+  background: rgba(255, 255, 255, 0.42);
+  border-color: var(--lg-border-color);
+}
+
+.settings-page .tab.active {
+  color: var(--text-primary);
+  border-bottom-color: transparent;
+  border-color: var(--lg-border-color);
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: var(--lg-shadow-subtle);
 }
 
 .settings-page .section + .section {
@@ -1409,6 +1484,28 @@ onBeforeUnmount(() => {
   font-size: 28px;
   line-height: 0.96;
   letter-spacing: -0.04em;
+}
+
+.settings-page .model-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-page .preset-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary-color);
+  background: rgba(201, 100, 66, 0.1);
+  border: 1px solid rgba(201, 100, 66, 0.18);
 }
 
 .settings-page .form-actions {
@@ -1425,10 +1522,13 @@ onBeforeUnmount(() => {
 
 .settings-page .mode-card {
   padding: 14px 16px;
-  border: 1px solid var(--line-1);
-  border-radius: var(--radius-md);
-  background: rgba(255, 251, 246, 0.62);
+  border: 1px solid var(--lg-border-color);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.56);
   cursor: pointer;
+  box-shadow: var(--lg-shadow-subtle);
+  backdrop-filter: blur(var(--lg-blur-sm)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-sm)) saturate(var(--lg-saturate));
   transition:
     border-color var(--duration-fast) ease,
     background-color var(--duration-fast) ease,
@@ -1437,12 +1537,13 @@ onBeforeUnmount(() => {
 
 .settings-page .mode-card:hover {
   transform: translateY(-1px);
-  border-color: var(--line-strong);
+  border-color: rgba(201, 100, 66, 0.28);
 }
 
 .settings-page .mode-card.active {
-  background: rgba(139, 77, 49, 0.08);
-  border-color: rgba(139, 77, 49, 0.22);
+  background: rgba(255, 255, 255, 0.74);
+  border-color: rgba(201, 100, 66, 0.36);
+  box-shadow: var(--lg-shadow-elevated);
 }
 
 .settings-page .config-table,
@@ -1455,8 +1556,8 @@ onBeforeUnmount(() => {
 }
 
 .settings-page .danger-zone {
-  border-color: rgba(138, 64, 49, 0.2);
-  background: rgba(138, 64, 49, 0.05);
+  border-color: rgba(181, 51, 51, 0.22);
+  background: rgba(255, 240, 238, 0.6);
 }
 
 .settings-page .about-section {

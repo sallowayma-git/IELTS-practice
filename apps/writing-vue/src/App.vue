@@ -22,18 +22,29 @@ import ShuiBackground from './components/ShuiBackground.vue'
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: rgba(245, 244, 237, 0.45); /* WebGL is visually beneath this glass layer */
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: transparent;
   color: var(--text-primary);
   position: relative;
+  isolation: isolate;
+}
+
+.app-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% -8%, rgba(255, 236, 192, 0.35), transparent 55%),
+    radial-gradient(circle at 88% 8%, rgba(177, 232, 226, 0.28), transparent 48%),
+    linear-gradient(180deg, rgba(250, 249, 245, 0.54), rgba(250, 249, 245, 0.3));
 }
 
 .app-main {
   flex: 1;
   width: min(1520px, 100%);
   margin: 0 auto;
-  padding: 32px 32px 48px;
+  padding: 24px 32px 48px;
 }
 
 .page-enter-active,

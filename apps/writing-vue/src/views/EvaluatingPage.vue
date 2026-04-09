@@ -2,6 +2,7 @@
   <div class="evaluating-page">
     <header class="evaluating-hero">
       <div class="evaluating-hero__copy">
+        <span class="evaluating-chip">AI Pipeline</span>
         <h1>评分链路正在推进</h1>
         <p>{{ statusMessage }}</p>
       </div>
@@ -14,20 +15,27 @@
 
     <div class="evaluating-layout">
       <section class="focus-panel surface">
+        <div class="orb-zone">
+          <div class="analysis-orb">
+            <div class="analysis-orb__core">
+              <span>{{ progress }}%</span>
+            </div>
+          </div>
+        </div>
+
         <div class="focus-head">
-          <div>
-            <h2>{{ currentStageLabel }}</h2>
-          </div>
-          <div class="focus-meta">
-            <span class="stage-summary">{{ stageMessage }}</span>
-          </div>
+          <h2>{{ currentStageLabel }}</h2>
+          <span class="stage-summary">{{ stageMessage }}</span>
         </div>
 
         <div class="progress-rail">
           <div class="progress-bar">
             <div class="progress-bar-fill" :style="{ width: `${progress}%` }"></div>
           </div>
-          <span class="progress-text">{{ progress }}%</span>
+          <div class="progress-meta">
+            <span class="progress-text">{{ progress }}%</span>
+            <span class="progress-phase">{{ currentStageLabel }}</span>
+          </div>
         </div>
 
         <div class="stage-track">
@@ -40,6 +48,23 @@
         <p v-if="scoreData && !isComplete" class="stage-hint">
           分数已出来，系统正在继续生成段落详解和句级问题定位。
         </p>
+
+        <div class="insight-grid">
+          <div class="insight-card">
+            <span class="insight-dot"></span>
+            <div>
+              <h4>Cognitive Load</h4>
+              <p>正在扫描连接词、段落过渡与逻辑链完整度。</p>
+            </div>
+          </div>
+          <div class="insight-card">
+            <span class="insight-dot insight-dot-2"></span>
+            <div>
+              <h4>Lexical Resource</h4>
+              <p>正在评估词汇层次、搭配自然度与表达精确度。</p>
+            </div>
+          </div>
+        </div>
 
         <div v-if="scoreData" class="score-preview">
           <div class="score-summary">
@@ -641,6 +666,20 @@ function persistCachedResult() {
   gap: 10px;
 }
 
+.evaluating-chip {
+  display: inline-flex;
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary-color);
+  background: rgba(201, 100, 66, 0.12);
+  border: 1px solid rgba(201, 100, 66, 0.24);
+}
+
 .evaluating-hero__copy h1 {
   font-size: clamp(2.2rem, 4vw, 3.8rem);
   max-width: 10ch;
@@ -656,6 +695,10 @@ function persistCachedResult() {
   display: grid;
   gap: 10px;
   padding: 18px 20px;
+  background: var(--lg-bg-elevated);
+  border: 1px solid var(--lg-border-color);
+  backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
 }
 
 .badge-label {
@@ -673,18 +716,60 @@ function persistCachedResult() {
 .evaluating-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.75fr);
-  gap: 20px;
+  gap: 22px;
   align-items: start;
 }
 
 .focus-panel,
 .rail-card {
   padding: 22px;
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.44));
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
 }
 
 .focus-panel {
   display: grid;
-  gap: 18px;
+  gap: 20px;
+}
+
+.orb-zone {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.analysis-orb {
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.7), rgba(186, 187, 255, 0.72) 45%, rgba(84, 86, 170, 0.74));
+  filter: blur(0.2px);
+  box-shadow:
+    0 0 48px rgba(84, 86, 170, 0.22),
+    0 0 90px rgba(170, 172, 255, 0.2),
+    inset 0 0 32px rgba(255, 255, 255, 0.28);
+  display: grid;
+  place-items: center;
+}
+
+.analysis-orb__core {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.44);
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  box-shadow: inset 0 0 16px rgba(255, 255, 255, 0.36);
+}
+
+.analysis-orb__core span {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #303284;
 }
 
 .focus-head,
@@ -709,26 +794,41 @@ function persistCachedResult() {
 
 .progress-rail {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .progress-bar {
-  height: 12px;
+  height: 6px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(143, 95, 63, 0.08);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--lg-border-color);
 }
 
 .progress-bar-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #7b5234 0%, #c59a73 100%);
+  background: linear-gradient(90deg, #5456aa 0%, #babbff 100%);
+  box-shadow: 0 0 12px rgba(84, 86, 170, 0.32);
   transition: width var(--duration-normal) var(--ease-standard);
 }
 
-.progress-text {
+.progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progress-text,
+.progress-phase {
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
+}
+
+.progress-phase {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .stage-track {
@@ -740,14 +840,16 @@ function persistCachedResult() {
 .stage-chip {
   padding: 8px 12px;
   border-radius: 999px;
-  background: rgba(143, 95, 63, 0.08);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--lg-border-color);
   color: var(--text-muted);
   font-size: 0.86rem;
 }
 
 .stage-chip.active {
   color: #fff8f0;
-  background: var(--primary-color);
+  background: #5456aa;
+  border-color: rgba(84, 86, 170, 0.4);
 }
 
 .stage-chip.done {
@@ -757,6 +859,46 @@ function persistCachedResult() {
 
 .stage-hint {
   color: var(--text-secondary);
+}
+
+.insight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.insight-card {
+  display: flex;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.74);
+}
+
+.insight-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-top: 4px;
+  background: #7a9447;
+  box-shadow: 0 0 12px rgba(122, 148, 71, 0.34);
+}
+
+.insight-dot-2 {
+  background: #a0b84e;
+  box-shadow: 0 0 12px rgba(160, 184, 78, 0.34);
+}
+
+.insight-card h4 {
+  font-size: 0.9rem;
+  margin-bottom: 3px;
+}
+
+.insight-card p {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 .score-preview {
@@ -772,7 +914,8 @@ function persistCachedResult() {
   gap: 12px;
   padding: 18px 20px;
   border-radius: var(--radius-lg);
-  background: rgba(255, 248, 239, 0.8);
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid rgba(255, 255, 255, 0.74);
 }
 
 .score-summary__label {
@@ -785,7 +928,7 @@ function persistCachedResult() {
 .score-summary__value {
   font-size: 3rem;
   line-height: 1;
-  color: var(--primary-color);
+  color: #5456aa;
 }
 
 .score-grid {
@@ -799,8 +942,8 @@ function persistCachedResult() {
   gap: 8px;
   padding: 16px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-  background: rgba(255, 252, 247, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  background: rgba(255, 255, 255, 0.52);
 }
 
 .score-card span {
@@ -828,7 +971,7 @@ function persistCachedResult() {
   grid-template-columns: 78px 1fr;
   gap: 12px;
   padding: 12px 0;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--lg-border-subtle);
 }
 
 .log-item:last-child {
@@ -854,7 +997,8 @@ function persistCachedResult() {
 .status-pill {
   padding: 10px 12px;
   border-radius: var(--radius-md);
-  background: rgba(143, 95, 63, 0.08);
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.72);
   color: var(--text-primary);
 }
 
@@ -887,6 +1031,7 @@ function persistCachedResult() {
     padding: 18px;
   }
 
+  .insight-grid,
   .score-grid {
     grid-template-columns: 1fr;
   }

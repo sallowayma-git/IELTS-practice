@@ -2,7 +2,7 @@
   <div class="history-page">
     <div class="page-header page-header--workspace">
       <div class="page-header__copy">
-        <h1 class="heading-serif">历史记录</h1>
+        <h1 class="heading-serif">Performance Analytics</h1>
       </div>
       <div class="header-actions">
         <button 
@@ -96,39 +96,48 @@
 
     <!-- 统计分析区域 -->
     <div v-if="total > 0" class="statistics-section card">
-      <div class="section-header">
-        <h2>历史统计与对比</h2>
-        <div class="range-selector">
-          <label>对比范围：</label>
-          <select v-model="statisticsRange">
-            <option value="all">全部历史</option>
-            <option value="recent10">最近10次</option>
-            <option value="thisMonth">本月</option>
-            <option value="task1">Task 1专项</option>
-            <option value="task2">Task 2专项</option>
-          </select>
-        </div>
-      </div>
-
-      <div v-if="statistics" class="statistics-content">
-        <div class="stat-grid">
-          <!-- 雷达图 -->
-          <div class="stat-chart">
-            <h3>四项评分对比</h3>
-            <RadarChart 
-              v-if="statistics.count > 0"
-              :currentScores="statistics.latest"
-              :averageScores="statistics.average"
-              :taskType="statistics.latest_task_type"
-            />
-            <div v-else class="empty-chart">
-              <p>暂无可对比的数据</p>
+      <div v-if="statistics" class="statistics-content analytics-layout">
+        <section class="stat-chart analytics-radar-card">
+          <div class="section-header">
+            <h2>4-Dimensional Scoring Analysis</h2>
+          </div>
+          <RadarChart
+            v-if="statistics.count > 0"
+            :currentScores="statistics.latest"
+            :averageScores="statistics.average"
+            :taskType="statistics.latest_task_type"
+          />
+          <div v-else class="empty-chart">
+            <p>暂无可对比的数据</p>
+          </div>
+          <div v-if="statistics.count > 0" class="radar-metrics">
+            <div class="radar-metric">
+              <span>本次得分</span>
+              <strong>{{ latestOverallScore }}</strong>
+            </div>
+            <div class="radar-divider"></div>
+            <div class="radar-metric">
+              <span>历史平均</span>
+              <strong>{{ historyAverageScore }}</strong>
             </div>
           </div>
+        </section>
 
-          <!-- 对比表格 -->
-          <div class="stat-comparison">
-            <h3>详细对比数据</h3>
+        <div class="analytics-side">
+          <section class="stat-comparison analytics-compare-card">
+            <div class="section-header">
+              <h3>Detailed Comparison</h3>
+              <div class="range-selector">
+                <label>范围</label>
+                <select v-model="statisticsRange">
+                  <option value="all">全部历史</option>
+                  <option value="recent10">最近10次</option>
+                  <option value="thisMonth">本月</option>
+                  <option value="task1">Task 1专项</option>
+                  <option value="task2">Task 2专项</option>
+                </select>
+              </div>
+            </div>
             <table v-if="statistics.count > 0" class="comparison-table">
               <thead>
                 <tr>
@@ -176,22 +185,20 @@
             <div v-else class="empty-comparison">
               <p>{{ getRangeDescription() }}下暂无数据</p>
             </div>
-            
             <div v-if="statistics.count > 0" class="stat-summary">
               <p><strong>统计范围：</strong>{{ getRangeDescription() }}</p>
               <p><strong>记录数量：</strong>{{ statistics.count }} 次</p>
               <p><strong>最新提交：</strong>{{ formatDate(statistics.latest_date) }}</p>
             </div>
-          </div>
-        </div>
+          </section>
 
-        <!-- 历史趋势折线图 -->
-        <div class="trend-chart-container test-dashboard-card" style="margin-top: 32px; background: var(--surface-0); padding: 24px; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
-          <h3 style="margin-top: 0; margin-bottom: 24px; font-size: 16px; display: flex; align-items: center; gap: 8px;">
-            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-            历次练习得分曲线
-          </h3>
-          <LineChart :historyData="trendData" />
+          <section class="trend-chart-container analytics-trend-card test-dashboard-card">
+            <h3>
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+              Score Trend
+            </h3>
+            <LineChart :historyData="trendData" />
+          </section>
         </div>
       </div>
       <div v-else-if="loadingStatistics" class="loading">加载统计数据中...</div>
@@ -228,48 +235,61 @@
       <button class="btn btn-warm-sand" @click="resetFilters">重置筛选</button>
     </div>
 
-    <div v-else class="essay-list">
-      <div v-for="essay in essays" :key="essay.id" class="essay-item card">
-        <div class="essay-checkbox">
-          <input 
-            type="checkbox"
-            :checked="selectedIds.includes(essay.id)"
-            @change="toggleSelection(essay.id)"
-          />
-        </div>
+    <template v-else>
+      <div class="recent-practices-head">
+        <h2 class="heading-serif">Recent Practices</h2>
+        <button class="btn-text" @click="exportCSV">View History Report</button>
+      </div>
 
-        <div class="essay-content" @click="viewDetail(essay.id)">
-          <div class="essay-header">
-            <span :class="['task-badge', essay.task_type]">
-              {{ essay.task_type === 'task1' ? 'Task 1' : 'Task 2' }}
-            </span>
-            <span class="essay-date">{{ formatDate(essay.submitted_at) }}</span>
+      <div class="essay-list">
+        <div v-for="essay in essays" :key="essay.id" class="essay-item card">
+          <div class="essay-checkbox">
+            <input 
+              type="checkbox"
+              :checked="selectedIds.includes(essay.id)"
+              @change="toggleSelection(essay.id)"
+            />
           </div>
 
-          <div class="essay-title">
-            {{ essay.display_topic_title || getTopicTitle(essay.topic_title) }}
+          <div class="essay-content" @click="viewDetail(essay.id)">
+            <div class="essay-header">
+              <span :class="['task-badge', essay.task_type]">
+                {{ essay.task_type === 'task1' ? 'Task 1' : 'Task 2' }}
+              </span>
+              <span class="essay-date">{{ formatDate(essay.submitted_at) }}</span>
+            </div>
+
+            <div class="essay-title">
+              {{ essay.display_topic_title || getTopicTitle(essay.topic_title) }}
+            </div>
+
+            <div class="essay-stats">
+              <span class="stat-item">{{ essay.task_type === 'task1' ? '20 min' : '40 min' }}</span>
+              <span class="stat-item">字数 {{ essay.word_count }}</span>
+              <span :class="['stat-item', 'score', getScoreClass(essay.total_score)]">
+                {{ formatDate(essay.submitted_at).split(' ')[0] }}
+              </span>
+            </div>
           </div>
 
-          <div class="essay-stats">
-            <span class="stat-item">单词数: {{ essay.word_count }}</span>
-            <span :class="['stat-item', 'score', getScoreClass(essay.total_score)]">
-              得分: {{ essay.total_score }}
-            </span>
+          <div class="essay-right">
+            <div class="essay-score-pod">
+              <span>Overall Score</span>
+              <strong>{{ Number(essay.total_score || 0).toFixed(1) }}</strong>
+            </div>
+            <div class="essay-actions">
+              <button class="btn-icon" @click.stop="viewDetail(essay.id)" title="查看详情">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </button>
+              <button class="btn-icon" @click.stop="confirmDelete(essay.id)" title="删除">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
+            </div>
           </div>
-        </div>
-
-        <div class="essay-actions">
-          <button class="btn-icon" @click.stop="viewDetail(essay.id)" title="查看详情">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-          </button>
-          <button class="btn-icon" @click.stop="confirmDelete(essay.id)" title="删除">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-          </button>
         </div>
       </div>
-    </div>
+    </template>
 
-    <!-- 分页 -->
     <div v-if="total > pagination.limit" class="pagination">
       <button 
         class="btn btn-warm-sand"
@@ -495,11 +515,16 @@ const statisticsRange = ref('all')
 
 const trendData = computed(() => {
   if (!essaysList.value) return [];
-  return [...essaysList.value].slice(0, 15).reverse().map(record => {
-    const d = new Date(record.created_at);
+  const sorted = [...essaysList.value].sort((a, b) => {
+    const ta = new Date(a.submitted_at || a.created_at || 0).getTime()
+    const tb = new Date(b.submitted_at || b.created_at || 0).getTime()
+    return ta - tb
+  })
+  return sorted.slice(-15).map(record => {
+    const d = new Date(record.submitted_at || record.created_at);
     return {
       date: `${d.getMonth() + 1}/${d.getDate()}`,
-      score: record.overall_score || 0
+      score: Number(record.total_score ?? record.overall_score ?? 0)
     };
   });
 })
@@ -585,6 +610,31 @@ const detailBandRationaleEntries = computed(() => (
   )
 ))
 const detailImprovementPlan = computed(() => normalizeList(detailEvaluation.value.improvement_plan))
+const historyAverageScore = computed(() => {
+  if (!statistics.value || statistics.value.count <= 0) return '0.0'
+  const avg = statistics.value.average || {}
+  const values = [
+    Number(avg.tr_ta || 0),
+    Number(avg.cc || 0),
+    Number(avg.lr || 0),
+    Number(avg.gra || 0)
+  ]
+  const totalScore = values.reduce((sum, item) => sum + item, 0)
+  return (totalScore / 4).toFixed(1)
+})
+
+const latestOverallScore = computed(() => {
+  if (!statistics.value || statistics.value.count <= 0) return '0.0'
+  const latest = statistics.value.latest || {}
+  const values = [
+    Number(latest.tr_ta || 0),
+    Number(latest.cc || 0),
+    Number(latest.lr || 0),
+    Number(latest.gra || 0)
+  ]
+  const totalScore = values.reduce((sum, item) => sum + item, 0)
+  return (totalScore / 4).toFixed(1)
+})
 
 function setPageNotice(type, message) {
   pageNotice.value = message
@@ -1723,7 +1773,217 @@ onBeforeUnmount(() => {
   box-shadow: none;
 }
 
+.history-page .statistics-section {
+  padding: 24px;
+}
+
+.history-page .analytics-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
+  gap: 18px;
+}
+
+.history-page .analytics-radar-card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 22px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.64), rgba(255, 255, 255, 0.34));
+}
+
+.history-page .analytics-radar-card .section-header {
+  margin: 0;
+}
+
+.history-page .analytics-radar-card .section-header h2 {
+  font-family: var(--font-family-display);
+  font-size: 1.9rem;
+  line-height: 1.02;
+}
+
+.history-page .radar-metrics {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 6px;
+}
+
+.history-page .radar-metric {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.history-page .radar-metric span {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.history-page .radar-metric strong {
+  font-family: var(--font-family-display);
+  font-size: 2rem;
+  line-height: 1;
+  color: #334a47;
+}
+
+.history-page .radar-divider {
+  width: 1px;
+  height: 42px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.history-page .analytics-side {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.history-page .analytics-compare-card,
+.history-page .analytics-trend-card {
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.32));
+  border: 1px solid rgba(255, 255, 255, 0.74);
+}
+
+.history-page .analytics-compare-card .section-header {
+  margin-bottom: 14px;
+}
+
+.history-page .analytics-compare-card .section-header h3 {
+  font-family: var(--font-family-display);
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+.history-page .range-selector {
+  gap: 6px;
+}
+
+.history-page .range-selector label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.history-page .comparison-table th {
+  background: transparent;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.history-page .comparison-table td {
+  font-size: 13px;
+}
+
+.history-page .stat-summary {
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.history-page .analytics-trend-card h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-family: var(--font-family-display);
+  font-size: 1.45rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.history-page .recent-practices-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-page .recent-practices-head h2 {
+  font-family: var(--font-family-display);
+  font-size: clamp(2rem, 3.2vw, 3rem);
+  line-height: 1;
+}
+
+.history-page .essay-list {
+  display: grid;
+  gap: 12px;
+  border: none;
+}
+
+.history-page .essay-item {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 14px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.38));
+}
+
+.history-page .essay-title {
+  margin: 4px 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.history-page .essay-stats {
+  gap: 12px;
+  font-size: 12px;
+}
+
+.history-page .essay-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.history-page .essay-score-pod {
+  min-width: 88px;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(51, 74, 71, 0.08);
+  border: 1px solid rgba(51, 74, 71, 0.18);
+}
+
+.history-page .essay-score-pod span {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.history-page .essay-score-pod strong {
+  font-family: var(--font-family-display);
+  font-size: 1.5rem;
+  line-height: 1;
+  color: #334a47;
+}
+
+.history-page .pagination {
+  justify-content: center;
+  gap: 14px;
+}
+
 @media (max-width: 960px) {
+  .history-page .analytics-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .history-page .analytics-radar-card .section-header h2,
+  .history-page .analytics-compare-card .section-header h3,
+  .history-page .analytics-trend-card h3 {
+    font-size: 1.4rem;
+  }
+
+  .history-page .recent-practices-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .history-page .batch-actions,
   .history-page .pagination,
   .history-page .essay-item {

@@ -2,7 +2,7 @@
   <div class="topic-manage-page">
     <div class="page-header">
       <div class="header-content">
-        <h2 class="page-title heading-serif">题库管理 <span class="count-badge" v-if="total > 0">{{ total }}</span></h2>
+        <h2 class="page-title heading-serif">Question <em>Bank</em> <span class="count-badge" v-if="displayCount > 0">{{ displayCount }}</span></h2>
       </div>
       <div class="header-actions">
         <button class="btn btn-warm-sand" @click="showImportDialog = true">
@@ -14,7 +14,12 @@
       </div>
     </div>
 
-    <!-- 筛选工具栏 (Glass Toolbar) -->
+    <div class="search-glass">
+      <input v-model.trim="searchKeyword" type="text" class="search-input-glass" placeholder="Find a topic or keyword..." />
+      <span class="search-note">Search</span>
+    </div>
+
+    <!-- 筛选工具栏 -->
     <div class="filter-toolbar card">
       <div class="filter-group">
         <div class="filter-item">
@@ -78,7 +83,7 @@
       <p>正在加载题库...</p>
     </div>
     
-    <div v-else-if="topics.length === 0" class="empty-state card card-whisper">
+    <div v-else-if="filteredTopics.length === 0" class="empty-state card card-whisper">
       <div class="empty-icon">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
       </div>
@@ -90,7 +95,7 @@
     </div>
 
     <div v-else class="topic-grid">
-      <div v-for="topic in topics" :key="topic.id" class="topic-card card">
+      <div v-for="topic in filteredTopics" :key="topic.id" class="topic-card card">
         <!-- 卡片头部 -->
         <div class="card-header">
           <div class="badges">
@@ -361,13 +366,25 @@ const importPreview = ref(null)
 const importError = ref('')
 const importFileInput = ref(null)
 const topicsRequestGate = createRequestGate()
+const searchKeyword = ref('')
 const deleteDialog = ref({
   visible: false,
   topicId: null
 })
 
 // 计算属性
-const topics = computed(() => topicsList.value)
+const filteredTopics = computed(() => {
+  const keyword = searchKeyword.value.trim().toLowerCase()
+  if (!keyword) return topicsList.value
+  return topicsList.value.filter((topic) => {
+    const title = extractTextFromTiptap(topic.title_json).toLowerCase()
+    const category = String(topic.category || '').toLowerCase()
+    return title.includes(keyword) || category.includes(keyword)
+  })
+})
+const displayCount = computed(() => (
+  searchKeyword.value.trim() ? filteredTopics.value.length : total.value
+))
 const totalPages = computed(() => Math.ceil(total.value / pagination.value.limit))
 const hasActiveFilters = computed(() => (
   Boolean(filters.value.type)
@@ -1245,6 +1262,37 @@ onBeforeUnmount(() => {
   font-size: 15px;
 }
 
+.topic-manage-page .search-glass {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--lg-bg-elevated);
+  border: 1px solid var(--lg-border-color);
+  backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
+}
+
+.topic-manage-page .search-input-glass {
+  border: none;
+  background: transparent;
+  min-height: 28px;
+  padding: 0 8px;
+  color: var(--text-secondary);
+}
+
+.topic-manage-page .search-input-glass::placeholder {
+  color: var(--text-muted);
+}
+
+.topic-manage-page .search-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .topic-manage-page .count-badge {
   display: inline-flex;
   align-items: center;
@@ -1263,11 +1311,13 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 16px;
   align-items: center;
-  padding: 18px 20px;
-  border-radius: var(--radius-lg);
-  background: var(--surface-0);
-  border: 1px solid var(--line-1);
-  box-shadow: none;
+  padding: 14px;
+  border-radius: 999px;
+  background: var(--lg-bg-elevated);
+  border: 1px solid var(--lg-border-color);
+  box-shadow: var(--lg-shadow-subtle);
+  backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
 }
 
 .topic-manage-page .filter-group {
@@ -1278,41 +1328,51 @@ onBeforeUnmount(() => {
 }
 
 .topic-manage-page .filter-item {
-  min-width: 180px;
+  min-width: 148px;
 }
 
 .topic-manage-page .glass-select {
   width: 100%;
+  min-height: 38px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.48);
+  border: 1px solid var(--lg-border-color);
 }
 
 .topic-manage-page .topic-grid {
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--line-1);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+  border: none;
 }
 
 .topic-manage-page .topic-card {
-  display: grid;
-  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr) minmax(140px, auto);
-  grid-template-areas:
-    "header body footer"
-    "image body footer";
-  gap: 14px 18px;
-  align-items: start;
-  padding: 18px 0;
-  margin: 0;
-  border: none;
-  border-bottom: 1px solid var(--line-1);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 340px;
+  padding: 0;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--lg-border-color);
+  background: var(--lg-bg-elevated);
+  box-shadow: var(--lg-shadow-subtle);
+  backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
+  transition: transform var(--duration-fast) var(--ease-smooth), box-shadow var(--duration-fast) var(--ease-smooth);
+}
+
+.topic-manage-page .topic-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--lg-shadow-elevated);
 }
 
 .topic-manage-page .card-header {
-  grid-area: header;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 16px 12px;
 }
 
 .topic-manage-page .badges {
@@ -1338,7 +1398,7 @@ onBeforeUnmount(() => {
 
 .topic-manage-page .badge.task2 {
   background: rgba(139, 77, 49, 0.12);
-  color: var(--accent-1);
+  color: var(--primary-color);
 }
 
 .topic-manage-page .difficulty {
@@ -1347,38 +1407,42 @@ onBeforeUnmount(() => {
 }
 
 .topic-manage-page .topic-image {
-  grid-area: image;
-  width: 120px;
-  height: 90px;
+  width: 100%;
+  height: 160px;
 }
 
 .topic-manage-page .topic-image img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: var(--radius-md);
+  border-radius: 0;
   box-shadow: none;
 }
 
 .topic-manage-page .topic-body {
-  grid-area: body;
-  align-self: center;
+  padding: 14px 16px;
+  flex: 1;
 }
 
 .topic-manage-page .topic-title {
   font-size: 15px;
-  line-height: 1.8;
+  line-height: 1.7;
   color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .topic-manage-page .card-footer {
-  grid-area: footer;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-direction: row;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 100%;
+  padding: 12px 16px 16px;
+  background: rgba(255, 255, 255, 0.35);
+  border-top: 1px solid var(--lg-border-color);
 }
 
 .topic-manage-page .usage-info {
@@ -1395,17 +1459,23 @@ onBeforeUnmount(() => {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  border: 1px solid var(--line-1);
-  background: rgba(255, 251, 246, 0.72);
+  border: 1px solid var(--lg-border-color);
+  background: rgba(255, 255, 255, 0.52);
   cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-smooth), transform var(--duration-fast) var(--ease-smooth);
+}
+
+.topic-manage-page .action-btn:hover {
+  background: rgba(255, 255, 255, 0.78);
+  transform: translateY(-1px);
 }
 
 .topic-manage-page .loading-state,
 .topic-manage-page .empty-state {
   padding: 40px 20px;
   border-radius: var(--radius-lg);
-  background: var(--surface-0);
-  border: 1px solid var(--line-1);
+  background: var(--lg-bg-elevated);
+  border: 1px solid var(--lg-border-color);
   color: var(--text-secondary);
 }
 
@@ -1419,32 +1489,224 @@ onBeforeUnmount(() => {
 .topic-manage-page .page-btn {
   min-height: 40px;
   padding: 8px 14px;
-  border: 1px solid var(--line-1);
+  border: 1px solid var(--lg-border-color);
   border-radius: 999px;
-  background: rgba(255, 251, 246, 0.74);
+  background: rgba(255, 255, 255, 0.52);
   cursor: pointer;
 }
 
 @media (max-width: 900px) {
   .topic-manage-page .page-header,
   .topic-manage-page .filter-toolbar,
-  .topic-manage-page .pagination-glass,
-  .topic-manage-page .topic-card {
-    grid-template-columns: 1fr;
+  .topic-manage-page .pagination-glass {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .topic-manage-page .topic-card {
-    grid-template-areas:
-      "header"
-      "image"
-      "body"
-      "footer";
+  .topic-manage-page .search-glass {
+    flex-direction: column;
+    align-items: flex-start;
+    border-radius: var(--radius-lg);
+  }
+
+  .topic-manage-page .filter-item {
+    min-width: 0;
   }
 
   .topic-manage-page .card-footer {
+    flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+/* Stitch 849c1331 + History Var3 overrides */
+.topic-manage-page {
+  gap: 20px;
+}
+
+.topic-manage-page .header-content {
+  gap: 8px;
+}
+
+.topic-manage-page .page-title {
+  font-size: clamp(2.2rem, 5vw, 3.6rem);
+  letter-spacing: -0.04em;
+}
+
+.topic-manage-page .page-title em {
+  font-style: italic;
+  color: var(--primary-color);
+}
+
+.topic-manage-page .count-badge {
+  background: rgba(84, 86, 170, 0.12);
+  color: var(--primary-color);
+}
+
+.topic-manage-page .search-glass {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+}
+
+.topic-manage-page .search-input-glass {
+  min-height: 34px;
+  color: var(--text-primary);
+}
+
+.topic-manage-page .search-note {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.topic-manage-page .filter-toolbar {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+}
+
+.topic-manage-page .filter-group {
+  gap: 8px;
+}
+
+.topic-manage-page .filter-item {
+  min-width: 138px;
+}
+
+.topic-manage-page .glass-select {
+  min-height: 38px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.78);
+}
+
+.topic-manage-page .topic-grid {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 18px;
+}
+
+.topic-manage-page .topic-card {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+}
+
+.topic-manage-page .badges {
+  gap: 6px;
+}
+
+.topic-manage-page .badge,
+.topic-manage-page .category-badge {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.topic-manage-page .badge.task1 {
+  background: rgba(209, 233, 172, 0.52);
+  color: #384d1e;
+}
+
+.topic-manage-page .badge.task2 {
+  background: rgba(186, 187, 255, 0.44);
+  color: #393b8e;
+}
+
+.topic-manage-page .category-badge {
+  text-transform: none;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.topic-manage-page .difficulty {
+  color: #c07d2f;
+  letter-spacing: 1px;
+}
+
+.topic-manage-page .topic-image {
+  border-top: 1px solid rgba(255, 255, 255, 0.34);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.34);
+}
+
+.topic-manage-page .card-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.32);
+  background: transparent;
+}
+
+.topic-manage-page .usage-info {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.topic-manage-page .action-btn {
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.topic-manage-page .action-btn:hover {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.topic-manage-page .page-btn {
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--text-primary);
+}
+
+.topic-manage-page .page-info {
+  color: var(--text-secondary);
+}
+
+.topic-manage-page .loading-state,
+.topic-manage-page .empty-state {
+  color: var(--text-secondary);
+}
+
+.topic-manage-page .spinner {
+  border-top-color: var(--primary-color);
+}
+
+.topic-manage-page .editor-dialog .form-scroll-area {
+  max-height: min(66vh, 620px);
+}
+
+.topic-manage-page .radio-card {
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.topic-manage-page .radio-card.active {
+  border-color: rgba(84, 86, 170, 0.5);
+  background: rgba(186, 187, 255, 0.22);
+}
+
+.topic-manage-page .image-uploader,
+.topic-manage-page .file-drop-zone {
+  border: 1px dashed rgba(84, 86, 170, 0.35);
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.topic-manage-page .error-banner {
+  color: #8d2a2a;
+  background: rgba(245, 211, 211, 0.72);
+  border: 1px solid rgba(181, 51, 51, 0.26);
+}
+
+.topic-manage-page .import-preview {
+  color: #215f2f;
+  background: rgba(203, 243, 205, 0.58);
+  border: 1px solid rgba(83, 120, 93, 0.28);
+}
+
+@media (max-width: 980px) {
+  .topic-manage-page .page-header,
+  .topic-manage-page .filter-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .topic-manage-page .filter-item {
+    min-width: 0;
   }
 }
 </style>
