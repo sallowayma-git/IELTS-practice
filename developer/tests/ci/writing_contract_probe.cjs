@@ -6,6 +6,8 @@ const path = require('path');
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const EvaluateService = require(path.join(repoRoot, 'electron', 'services', 'evaluate.service.js'));
+const providerOrchestratorPath = path.join(repoRoot, 'electron', 'services', 'provider-orchestrator.service.js');
+const llmProviderPath = path.join(repoRoot, 'electron', 'services', 'llm-provider.js');
 const {
   decorateEvaluationForStorage,
   mergeStageResults,
@@ -83,6 +85,142 @@ async function runExecutionProbe({ scoringEvaluation, reviewStageResult, reviewS
     finishPayload,
     cleanedUp
   };
+}
+
+async function runProviderOrchestratorProbes() {
+  const orchestratorResolvedPath = require.resolve(providerOrchestratorPath);
+  const llmProviderResolvedPath = require.resolve(llmProviderPath);
+  const originalLlmCacheEntry = require.cache[llmProviderResolvedPath];
+  const originalOrchestratorCacheEntry = require.cache[orchestratorResolvedPath];
+
+  const providerCalls = [];
+  const providerBehaviors = new Map();
+
+  class FakeLLMProvider {
+    constructor({ provider, model }) {
+      this.provider = provider;
+      this.model = model;
+    }
+
+    async streamCompletion({ signal, onChunk }) {
+      providerCalls.push(`${this.provider}/${this.model}`);
+      const behavior = providerBehaviors.get(this.model);
+      if (!behavior) {
+        throw new Error(`Missing fake provider behavior for model: ${this.model}`);
+      }
+      await behavior({ signal, onChunk });
+    }
+  }
+
+  require.cache[llmProviderResolvedPath] = {
+    id: llmProviderResolvedPath,
+    filename: llmProviderResolvedPath,
+    loaded: true,
+    exports: FakeLLMProvider
+  };
+  delete require.cache[orchestratorResolvedPath];
+
+  try {
+    const ProviderOrchestratorService = require(orchestratorResolvedPath);
+    const markSuccessCalls = [];
+    const markFailureCalls = [];
+    const baseConfigs = [
+      {
+        id: 1,
+        provider: 'openai',
+        base_url: 'https://fake-a.example/v1',
+        api_key: 'k-a',
+        default_model: 'model-a',
+        enabled: 1,
+        max_retries: 0
+      },
+      {
+        id: 2,
+        provider: 'openai',
+        base_url: 'https://fake-b.example/v1',
+        api_key: 'k-b',
+        default_model: 'model-b',
+        enabled: 1,
+        max_retries: 0
+      }
+    ];
+    const configService = {
+      async getDecryptedEnabledConfigs() {
+        return baseConfigs;
+      },
+      async getConfigByIdDecrypted(id) {
+        return baseConfigs.find((item) => item.id === id) || null;
+      },
+      markSuccess(id) {
+        markSuccessCalls.push(id);
+      },
+      markFailure(id) {
+        markFailureCalls.push(id);
+      }
+    };
+    const orchestrator = new ProviderOrchestratorService(configService);
+
+    providerBehaviors.set('model-a', async () => {
+      throw new Error('Server Error: 供应商服务器错误 (500)');
+    });
+    providerBehaviors.set('model-b', async ({ onChunk }) => {
+      onChunk('{"ok":true}');
+    });
+    providerCalls.length = 0;
+    const fallbackResult = await orchestrator.streamCompletion({
+      messages: [{ role: 'user', content: 'probe' }],
+      temperature: 0.3,
+      max_tokens: 32,
+      onChunk: () => {},
+      signal: new AbortController().signal
+    });
+    assert.strictEqual(fallbackResult.usedConfig.id, 2, 'normal provider failure should fallback to next enabled provider');
+    assert.deepStrictEqual(providerCalls, ['openai/model-a', 'openai/model-b']);
+    assert.deepStrictEqual(markSuccessCalls, [2], 'fallback success should only mark successful provider');
+    assert(markFailureCalls.includes(1), 'failed primary provider should be marked as failure');
+
+    const timeoutController = new AbortController();
+    providerBehaviors.set('model-a', async () => {
+      timeoutController.abort('session_timeout');
+      const cancelledError = new Error('请求已取消');
+      cancelledError.code = 'request_cancelled';
+      throw cancelledError;
+    });
+    providerBehaviors.set('model-b', async ({ onChunk }) => {
+      onChunk('{"ok":true}');
+    });
+    providerCalls.length = 0;
+
+    await assert.rejects(
+      () => orchestrator.streamCompletion({
+        messages: [{ role: 'user', content: 'probe' }],
+        temperature: 0.3,
+        max_tokens: 32,
+        onChunk: () => {},
+        signal: timeoutController.signal
+      }),
+      (error) => {
+        assert.strictEqual(error.code, 'timeout', 'session timeout should be surfaced as timeout code');
+        return true;
+      }
+    );
+    assert.deepStrictEqual(
+      providerCalls,
+      ['openai/model-a'],
+      'once session signal is aborted, orchestrator must stop fallback and should not call next provider'
+    );
+  } finally {
+    if (originalLlmCacheEntry) {
+      require.cache[llmProviderResolvedPath] = originalLlmCacheEntry;
+    } else {
+      delete require.cache[llmProviderResolvedPath];
+    }
+    if (originalOrchestratorCacheEntry) {
+      require.cache[orchestratorResolvedPath] = originalOrchestratorCacheEntry;
+    } else {
+      delete require.cache[orchestratorResolvedPath];
+    }
+  }
 }
 
 async function main() {
@@ -250,6 +388,28 @@ async function main() {
   assert.strictEqual(successProbe.persistedPayload.evaluation.review_status?.degraded, false);
   assert.strictEqual(successProbe.finishPayload.status, 'completed');
   assert.strictEqual(successProbe.cleanedUp, true);
+  const successProgressEvents = successProbe.emitted
+    .filter((item) => item.type === 'progress')
+    .map((item) => Number(item.data?.percent || 0));
+  assert(successProgressEvents.length > 0, 'success flow should emit progress events');
+  for (let i = 1; i < successProgressEvents.length; i++) {
+    assert(
+      successProgressEvents[i] >= successProgressEvents[i - 1],
+      'progress percentage must stay monotonic and never go backwards'
+    );
+  }
+  assert(
+    successProbe.emitted.some((item) => item.type === 'progress' && item.data?.step === 'stage_review_block_delivered'),
+    'review stage should emit per-block progress updates'
+  );
+  assert(
+    successProbe.emitted.some((item) => item.type === 'progress' && item.data?.step === 'stage_review_sentence_delivered'),
+    'review stage should emit per-sentence progress updates'
+  );
+  assert(
+    successProbe.emitted.some((item) => item.type === 'progress' && item.data?.step === 'stage_review_feedback_ready'),
+    'review stage should emit overall feedback progress updates'
+  );
 
   const degradedProbe = await runExecutionProbe({
     scoringEvaluation,
@@ -317,6 +477,8 @@ async function main() {
   assert.strictEqual(timeoutProbe.finishPayload.errorCode, 'timeout', 'timeout review stage should preserve timeout error code');
   assert.strictEqual(timeoutProbe.cleanedUp, true);
 
+  await runProviderOrchestratorProbes();
+
   const sessionStateProbe = new EvaluateService({}, null);
   sessionStateProbe.sessions.set('state-probe', createSessionState());
   sessionStateProbe._emitProgress('state-probe', 'starting', 0, '正在准备评测...');
@@ -344,7 +506,8 @@ async function main() {
     degraded_complete_review_degraded: degradedCompleteEvent.data.review_degraded,
     cancelled_event_types: cancelledEventTypes,
     timeout_event_types: timeoutEventTypes,
-    session_state_last_sequence: sessionState.lastSequence
+    session_state_last_sequence: sessionState.lastSequence,
+    success_progress_events: successProgressEvents.length
   }));
 }
 

@@ -73,7 +73,7 @@ router.beforeEach((to, from, next) => {
             return next({ name: 'Compose' })
         }
 
-        if (from.name === 'Compose') {
+        if (from.name === 'Compose' || from.name === 'Evaluating') {
             return next()
         }
 
