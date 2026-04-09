@@ -513,6 +513,10 @@
     .hl {
       background: #ffeb3b;
       color: #000;
+      /* Prevent highlighted English words from being split by inherited wrapping rules. */
+      word-break: normal;
+      overflow-wrap: normal;
+      white-space: normal;
     }
 
     body.dark .hl {
