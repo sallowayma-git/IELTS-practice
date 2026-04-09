@@ -71,7 +71,32 @@
 
   --font-family-base: "Arial", "PingFang SC", "Noto Sans SC", "Helvetica", sans-serif;
   --font-family-display: "Georgia", "Noto Serif SC", "Source Han Serif SC", serif;
+  --font-family-serif: var(--font-family-display);
   --font-family-mono: "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", monospace;
+
+  --surface-0: rgba(255, 255, 255, 0.54);
+
+  /* Liquid Glass tokens */
+  --lg-blur-sm: 10px;
+  --lg-blur-md: 18px;
+  --lg-blur-lg: 30px;
+  --lg-blur-xl: 46px;
+  --lg-saturate: 1.65;
+  --lg-bg-primary: rgba(255, 255, 255, 0.56);
+  --lg-bg-elevated: rgba(255, 255, 255, 0.72);
+  --lg-bg-toolbar: rgba(255, 255, 255, 0.5);
+  --lg-bg-interactive: rgba(255, 255, 255, 0.44);
+  --lg-bg-pressed: rgba(255, 255, 255, 0.32);
+  --lg-bg-scrim: rgba(8, 11, 20, 0.3);
+  --lg-border-color: rgba(255, 255, 255, 0.48);
+  --lg-border-subtle: rgba(41, 39, 56, 0.1);
+  --lg-shadow-subtle: 0 1px 3px rgba(16, 18, 35, 0.08);
+  --lg-shadow-elevated: 0 6px 24px rgba(16, 18, 35, 0.12);
+  --lg-shadow-high: 0 12px 40px rgba(16, 18, 35, 0.18);
+  --lg-rim-highlight: rgba(255, 255, 255, 0.9);
+  --lg-rim-shade: rgba(255, 255, 255, 0.24);
+  --lg-rim-glow: 0 20px 40px -12px rgba(15, 20, 34, 0.14), 0 10px 20px -8px rgba(15, 20, 34, 0.08);
+  --lg-refraction-layer: linear-gradient(120deg, rgba(255, 255, 255, 0) 32%, rgba(255, 255, 255, 0.16) 47%, rgba(255, 255, 255, 0) 58%);
 }
 
 * {
@@ -134,16 +159,90 @@ button {
 
 .card,
 .surface,
-.surface-muted {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
+.surface-muted,
+.section,
+.setting-item,
+.danger-item,
+.about-section,
+.filter-panel,
+.statistics-section,
+.batch-actions {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0.4) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: var(--radius-lg);
-  box-shadow: none;
-  transition: box-shadow var(--duration-fast) var(--ease-smooth);
+  box-shadow:
+    inset 1px 1px 2px var(--lg-rim-highlight),
+    inset -1px -1px 2px var(--lg-rim-shade),
+    var(--lg-rim-glow);
+  backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
+  transition:
+    box-shadow var(--duration-fast) var(--ease-smooth),
+    transform var(--duration-fast) var(--ease-smooth);
+}
+
+.card::before,
+.surface::before,
+.surface-muted::before,
+.section::before,
+.setting-item::before,
+.danger-item::before,
+.about-section::before,
+.filter-panel::before,
+.statistics-section::before,
+.batch-actions::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--lg-refraction-layer);
+  opacity: 0.9;
+  z-index: 0;
+}
+
+.card > *,
+.surface > *,
+.surface-muted > *,
+.section > *,
+.setting-item > *,
+.danger-item > *,
+.about-section > *,
+.filter-panel > *,
+.statistics-section > *,
+.batch-actions > * {
+  position: relative;
+  z-index: 1;
 }
 
 .surface-muted {
-  background: var(--bg-muted);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.62) 0%, rgba(255, 255, 255, 0.34) 100%);
+}
+
+.card:hover,
+.surface:hover,
+.section:hover,
+.setting-item:hover,
+.danger-item:hover,
+.about-section:hover,
+.filter-panel:hover,
+.statistics-section:hover,
+.batch-actions:hover {
+  box-shadow:
+    inset 1px 1px 2px rgba(255, 255, 255, 0.92),
+    inset -1px -1px 2px rgba(255, 255, 255, 0.32),
+    0 24px 44px -12px rgba(15, 20, 34, 0.18),
+    0 12px 22px -10px rgba(15, 20, 34, 0.1);
+}
+
+.glass-toolbar {
+  background: var(--lg-bg-toolbar);
+  backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
+  border-bottom: 1px solid var(--lg-border-color);
+  box-shadow: var(--lg-shadow-subtle);
 }
 
 .panel-label {
@@ -177,22 +276,25 @@ button {
 
 .btn-primary {
   color: var(--text-inverse);
-  background: var(--primary-color);
-  box-shadow: var(--shadow-sm);
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-strong));
+  box-shadow: 0 8px 18px rgba(201, 100, 66, 0.24);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--primary-strong);
+  box-shadow: 0 10px 24px rgba(201, 100, 66, 0.32);
 }
 
 .btn-secondary {
   color: var(--secondary-color);
-  background: var(--bg-muted);
-  box-shadow: var(--shadow-warm);
+  background: var(--lg-bg-interactive);
+  border-color: var(--lg-border-color);
+  box-shadow: var(--lg-shadow-subtle);
+  backdrop-filter: blur(var(--lg-blur-sm)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-sm)) saturate(var(--lg-saturate));
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: var(--bg-muted-strong);
+  background: var(--lg-bg-elevated);
 }
 
 .btn-danger {
@@ -222,8 +324,8 @@ button {
 }
 
 .btn-icon:hover {
-  background: rgba(143, 95, 63, 0.08);
-  border-color: var(--border-color);
+  background: rgba(255, 255, 255, 0.45);
+  border-color: var(--lg-border-color);
 }
 
 .btn-text {
@@ -251,10 +353,12 @@ textarea {
   min-height: 40px;
   padding: 8px 12px;
   color: var(--text-primary);
-  background: var(--bg-surface-strong);
-  border: 1px solid var(--border-strong);
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.56);
   border-radius: var(--radius-md);
   outline: none;
+  backdrop-filter: blur(var(--lg-blur-sm));
+  -webkit-backdrop-filter: blur(var(--lg-blur-sm));
   transition: all var(--duration-fast) var(--ease-smooth);
 }
 
@@ -321,9 +425,6 @@ textarea:focus {
 
 .section {
   padding: 24px;
-  background: rgba(255, 252, 247, 0.62);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
 }
 
 .section + .section {
@@ -378,7 +479,7 @@ textarea:focus {
   gap: 8px;
   padding-bottom: 16px;
   margin-bottom: 20px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--lg-border-subtle);
 }
 
 .tab {
@@ -394,8 +495,9 @@ textarea:focus {
 
 .tab.active {
   color: var(--text-primary);
-  background: rgba(143, 95, 63, 0.1);
-  border-color: rgba(143, 95, 63, 0.18);
+  background: rgba(255, 255, 255, 0.56);
+  border-color: var(--lg-border-color);
+  box-shadow: var(--lg-shadow-subtle);
 }
 
 .tab-content {
@@ -441,14 +543,11 @@ textarea:focus {
 .statistics-section,
 .batch-actions {
   padding: 24px;
-  background: rgba(255, 252, 247, 0.62);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
 }
 
 .danger-zone {
-  border-color: rgba(162, 72, 54, 0.16);
-  background: rgba(255, 247, 244, 0.76);
+  border-color: rgba(181, 51, 51, 0.25);
+  background: rgba(255, 240, 238, 0.64);
 }
 
 .input-group {
@@ -476,8 +575,8 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(36, 27, 20, 0.28);
-  backdrop-filter: blur(8px);
+  background: var(--lg-bg-scrim);
+  backdrop-filter: blur(var(--lg-blur-sm));
   z-index: 200;
 }
 
@@ -486,10 +585,12 @@ textarea:focus {
   max-height: min(88vh, 860px);
   overflow: auto;
   padding: 24px;
-  background: linear-gradient(180deg, #fffdf9 0%, #f8f2e8 100%);
-  border: 1px solid rgba(88, 64, 46, 0.15);
+  background: var(--lg-bg-elevated);
+  border: 1px solid var(--lg-border-color);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--lg-shadow-high);
+  backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
 }
 
 .dialog h3 {
