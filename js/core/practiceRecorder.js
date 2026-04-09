@@ -1057,20 +1057,18 @@ class PracticeRecorder {
         const resolvedEndTime = (() => {
             if (results?.endTime) return new Date(results.endTime).toISOString();
             if (session && session.lastActivity) return new Date(session.lastActivity).toISOString();
-            if (results?.startTime && Number.isFinite(results?.duration)) {
-                const startTs = new Date(results.startTime).getTime();
-                return new Date(startTs + (Number(results.duration) || 0) * 1000).toISOString();
-            }
-            return new Date().toISOString();
+            return null;
         })();
 
         const resolvedStartTime = (() => {
             if (session?.startTime) return new Date(session.startTime).toISOString();
             if (results?.startTime) return new Date(results.startTime).toISOString();
-            return new Date(new Date(resolvedEndTime).getTime() - (Number(results?.duration) || 0) * 1000).toISOString();
+            return null;
         })();
 
-        session.startTime = resolvedStartTime;
+        if (resolvedStartTime) {
+            session.startTime = resolvedStartTime;
+        }
 
         const examEntry = this.lookupExamIndexEntry(resolvedExamId)
             || this.lookupExamIndexEntry(payload.originalExamId)
@@ -1125,7 +1123,11 @@ class PracticeRecorder {
             results?.answerComparison || results?.realData?.answerComparison || null
         );
 
-        const durationMs = Math.max(new Date(resolvedEndTime) - new Date(resolvedStartTime), 0);
+        const durationMs = (
+            resolvedStartTime
+            && resolvedEndTime
+            && new Date(resolvedEndTime).getTime() >= new Date(resolvedStartTime).getTime()
+        ) ? Math.max(new Date(resolvedEndTime) - new Date(resolvedStartTime), 0) : 0;
 
         const practiceRecord = {
             id: `record_${session.sessionId || this.generateSessionId(resolvedExamId)}`,

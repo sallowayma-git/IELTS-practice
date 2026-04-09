@@ -284,19 +284,15 @@ class PracticeRecordModal {
     }
 
     resolveDuration(record) {
-        if (typeof record.duration === 'number') {
-            return record.duration;
+        if (!record || !record.startTime || !record.endTime) {
+            return null;
         }
-        if (record.realData && typeof record.realData.duration === 'number') {
-            return record.realData.duration;
+        const start = new Date(record.startTime).getTime();
+        const end = new Date(record.endTime).getTime();
+        if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+            return null;
         }
-        if (record.startTime && record.endTime) {
-            const start = new Date(record.startTime);
-            const end = new Date(record.endTime);
-            const diff = Math.floor((end - start) / 1000);
-            return Number.isFinite(diff) && diff > 0 ? diff : null;
-        }
-        return null;
+        return Math.floor((end - start) / 1000);
     }
 
     resolveScore(record) {
