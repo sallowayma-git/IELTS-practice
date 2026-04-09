@@ -46,9 +46,10 @@ class EvaluateService {
         this.sessionEventCache = new Map();
         this.maxCachedEventsPerSession = 80;
         this.sessionCacheTtlMs = 15 * 60 * 1000;
+        this.sessionProgress = new Map();
 
-        // 超时时间 (120 秒)
-        this.SESSION_TIMEOUT = 120 * 1000;
+        // 超时时间（提升至 240 秒，覆盖两阶段长链路与慢模型）
+        this.SESSION_TIMEOUT = 240 * 1000;
     }
 
     /**
@@ -141,7 +142,7 @@ class EvaluateService {
             logger.info(`Cancelling evaluation session`, sessionId);
 
             // 触发 AbortController
-            session.controller.abort();
+            session.controller.abort('user_cancelled');
             this._recordSessionFinish(sessionId, {
                 status: 'cancelled',
                 durationMs: Date.now() - (session.startTime || Date.now())
@@ -282,22 +283,64 @@ class EvaluateService {
 
             validateEvaluation(evaluation);
 
-            this._emitProgress(sessionId, 'sending_results', 90, '正在发送结果...');
+            const reviewBlocks = this._normalizeReviewBlocks(evaluation);
+            const sentenceItems = Array.isArray(evaluation.sentences) ? evaluation.sentences : [];
+            const deliveryMilestones = Math.max(
+                1,
+                reviewBlocks.length + sentenceItems.length + (evaluation.overall_feedback ? 1 : 0) + 1
+            );
+            let deliveredCount = 0;
+            const emitDeliveryProgress = (step, message, logMessage = '') => {
+                deliveredCount += 1;
+                const percent = 84 + Math.floor((deliveredCount / deliveryMilestones) * 13);
+                this._emitProgress(sessionId, step, percent, message);
+                if (logMessage) {
+                    this._emitLog(sessionId, 'review', logMessage);
+                }
+            };
+
+            this._emitProgress(sessionId, 'stage_review_delivery_start', 84, '第二阶段详解已生成，正在分发结果...');
+
+            if (reviewBlocks.length > 0) {
+                for (let index = 0; index < reviewBlocks.length; index++) {
+                    const partialBlocks = reviewBlocks.slice(0, index + 1);
+                    this._emitReview(sessionId, {
+                        paragraph_reviews: partialBlocks,
+                        review_blocks: partialBlocks,
+                        review_degraded: evaluation.review_degraded === true
+                    });
+                    emitDeliveryProgress(
+                        'stage_review_block_delivered',
+                        `第二阶段段落详解 ${index + 1}/${reviewBlocks.length}`,
+                        `第二阶段段落详解已输出 ${index + 1}/${reviewBlocks.length}。`
+                    );
+                }
+            }
+
             this._emitReview(sessionId, {
-                paragraph_reviews: evaluation.paragraph_reviews || null,
-                review_blocks: evaluation.review_blocks || null,
+                paragraph_reviews: reviewBlocks.length > 0 ? reviewBlocks : (evaluation.paragraph_reviews || null),
+                review_blocks: reviewBlocks.length > 0 ? reviewBlocks : (evaluation.review_blocks || null),
                 improvement_plan: evaluation.improvement_plan || null,
                 rewrite_suggestions: evaluation.rewrite_suggestions || null,
                 review_degraded: evaluation.review_degraded === true
             });
+            emitDeliveryProgress('stage_review_payload_ready', '第二阶段详解结构已输出', '第二阶段详解结构输出完成。');
 
-            for (const sentence of evaluation.sentences || []) {
-                this._emitSentence(sessionId, sentence);
+            for (let index = 0; index < sentenceItems.length; index++) {
+                this._emitSentence(sessionId, sentenceItems[index]);
+                emitDeliveryProgress(
+                    'stage_review_sentence_delivered',
+                    `第二阶段句级诊断 ${index + 1}/${sentenceItems.length}`,
+                    `第二阶段句级诊断已输出 ${index + 1}/${sentenceItems.length}。`
+                );
             }
 
             if (evaluation.overall_feedback) {
                 this._emitFeedback(sessionId, evaluation.overall_feedback);
+                emitDeliveryProgress('stage_review_feedback_ready', '第二阶段整体评语已输出', '第二阶段整体评语已生成。');
             }
+
+            this._emitProgress(sessionId, 'sending_results', 98, '正在保存与发送最终结果...');
 
             if (!reviewStageDegraded) {
                 this._emitStage(sessionId, {
@@ -351,7 +394,7 @@ class EvaluateService {
                 } else {
                     const errorCode = this._isTimeoutLikeError(error) ? 'timeout' : 'unknown_error';
                     const errorMessage = this._isTimeoutLikeError(error)
-                        ? '评测超时 (120s),请重试'
+                        ? this._buildTimeoutMessage()
                         : (error.message || '评测请求已取消');
                     logger.warn('Evaluation aborted unexpectedly', sessionId, {
                         errorCode,
@@ -406,6 +449,8 @@ class EvaluateService {
             controller,
             responseFormat: buildScoringResponseFormat(task_type),
             streamPercent: 35,
+            streamProgressStart: 28,
+            streamProgressEnd: 35,
             streamMessage: '第一阶段正在接收评分...'
         });
 
@@ -445,11 +490,13 @@ class EvaluateService {
             controller,
             responseFormat: buildReviewResponseFormat(),
             streamPercent: 72,
+            streamProgressStart: 60,
+            streamProgressEnd: 74,
             streamMessage: '第二阶段正在接收详解...'
         });
 
         try {
-            this._emitProgress(sessionId, 'stage_review_parsing', 82, '正在解析第二阶段详解...');
+            this._emitProgress(sessionId, 'stage_review_parsing', 76, '正在解析第二阶段详解...');
             const parsed = this._parseEvaluation(stageResult.accumulatedContent, 'review');
             const evaluation = validateReviewStage(parsed);
 
@@ -460,7 +507,7 @@ class EvaluateService {
             };
         } catch (error) {
             this._emitLog(sessionId, 'review', `第二阶段输出校验失败，正在尝试自动修复：${error.message}`);
-            this._emitProgress(sessionId, 'stage_review_repair', 78, '第二阶段输出异常，正在自动修复...');
+            this._emitProgress(sessionId, 'stage_review_repair', 79, '第二阶段输出异常，正在自动修复...');
 
             try {
                 const repairedStage = await this._repairReviewStage(sessionId, {
@@ -474,7 +521,7 @@ class EvaluateService {
                     controller
                 });
 
-                this._emitProgress(sessionId, 'stage_review_repair_parsing', 84, '修复结果已生成，正在重新校验...');
+                this._emitProgress(sessionId, 'stage_review_repair_parsing', 82, '修复结果已生成，正在重新校验...');
                 const repairedEvaluation = validateReviewStage(repairedStage.evaluation);
                 this._emitLog(sessionId, 'review', '第二阶段输出修复成功。');
 
@@ -556,6 +603,8 @@ class EvaluateService {
             controller,
             responseFormat: buildReviewResponseFormat(),
             streamPercent: 80,
+            streamProgressStart: 80,
+            streamProgressEnd: 81,
             streamMessage: '正在自动修复第二阶段输出...'
         });
 
@@ -583,10 +632,14 @@ class EvaluateService {
         controller,
         responseFormat,
         streamPercent,
+        streamProgressStart = null,
+        streamProgressEnd = null,
         streamMessage
     }) {
         let accumulatedContent = '';
         let hasFirstChunk = false;
+        let streamedChars = 0;
+        let emittedStreamPercent = Number.isFinite(Number(streamPercent)) ? Number(streamPercent) : 0;
         const temperature = await this._getTemperature(task_type);
         const session = this.sessions.get(sessionId);
         const waitingFloor = Math.max(10, streamPercent - 20);
@@ -629,7 +682,25 @@ class EvaluateService {
                         hasFirstChunk = true;
                         this._emitLog(sessionId, stageName, `${stageName} 阶段已收到首个响应片段。`);
                     }
-                    this._emitProgress(sessionId, `stage_${stageName}_streaming`, streamPercent, streamMessage);
+                    streamedChars += String(chunk || '').length;
+                    const resolvedStart = Number.isFinite(Number(streamProgressStart))
+                        ? Number(streamProgressStart)
+                        : streamPercent;
+                    const resolvedEnd = Number.isFinite(Number(streamProgressEnd))
+                        ? Number(streamProgressEnd)
+                        : streamPercent;
+                    const clampedStart = Math.min(resolvedStart, resolvedEnd);
+                    const clampedEnd = Math.max(resolvedStart, resolvedEnd);
+                    const range = Math.max(0, clampedEnd - clampedStart);
+                    const dynamicStep = range > 0
+                        ? Math.min(range, Math.floor(streamedChars / 140))
+                        : 0;
+                    const nextPercent = Math.max(
+                        emittedStreamPercent,
+                        Math.min(clampedEnd, clampedStart + dynamicStep)
+                    );
+                    emittedStreamPercent = nextPercent;
+                    this._emitProgress(sessionId, `stage_${stageName}_streaming`, nextPercent, streamMessage);
                 }
             });
 
@@ -837,6 +908,21 @@ class EvaluateService {
         };
     }
 
+    _normalizeReviewBlocks(evaluation) {
+        if (Array.isArray(evaluation?.review_blocks) && evaluation.review_blocks.length > 0) {
+            return evaluation.review_blocks;
+        }
+        if (Array.isArray(evaluation?.paragraph_reviews) && evaluation.paragraph_reviews.length > 0) {
+            return evaluation.paragraph_reviews;
+        }
+        return [];
+    }
+
+    _buildTimeoutMessage() {
+        const seconds = Math.round(this.SESSION_TIMEOUT / 1000);
+        return `评测超时 (${seconds}s),请重试`;
+    }
+
     _extractTextFromTiptap(json) {
         if (typeof json === 'string') {
             try {
@@ -999,12 +1085,12 @@ class EvaluateService {
 
         const session = this.sessions.get(sessionId);
         if (session) {
-            session.controller.abort();
-            this._emitError(sessionId, 'timeout', '评测超时 (120s),请重试');
+            session.controller.abort('session_timeout');
+            this._emitError(sessionId, 'timeout', this._buildTimeoutMessage());
             this._recordSessionFinish(sessionId, {
                 status: 'failed',
                 errorCode: 'timeout',
-                errorMessage: '评测超时 (120s),请重试',
+                errorMessage: this._buildTimeoutMessage(),
                 durationMs: Date.now() - (session.startTime || Date.now())
             });
             this._cleanupSession(sessionId);
@@ -1021,6 +1107,7 @@ class EvaluateService {
             this.sessions.delete(sessionId);
             logger.debug(`Session cleaned up: ${sessionId}`);
         }
+        this.sessionProgress.delete(sessionId);
         this._pruneSessionEventCache();
     }
 
@@ -1028,9 +1115,16 @@ class EvaluateService {
      * 发送进度事件
      */
     _emitProgress(sessionId, step, percent, message) {
+        const lastPercent = Number(this.sessionProgress.get(sessionId) || 0);
+        const targetPercentRaw = Number(percent);
+        const targetPercent = Number.isFinite(targetPercentRaw)
+            ? Math.max(0, Math.min(100, Math.round(targetPercentRaw)))
+            : lastPercent;
+        const safePercent = Math.max(lastPercent, targetPercent);
+        this.sessionProgress.set(sessionId, safePercent);
         this._emitEvent(sessionId, {
             type: 'progress',
-            data: { step, percent, message }
+            data: { step, percent: safePercent, message }
         });
     }
 
@@ -1218,6 +1312,7 @@ class EvaluateService {
     }
 
     _resetSessionEventCache(sessionId) {
+        this.sessionProgress.set(sessionId, 0);
         this.sessionEventCache.set(sessionId, {
             seq: 0,
             updatedAt: Date.now(),
@@ -1283,10 +1378,14 @@ class EvaluateService {
         if (!error) {
             return false;
         }
+        const code = String(error.code || '').toLowerCase();
         const name = String(error.name || '').toLowerCase();
         const message = String(error.message || '').toLowerCase();
         return (
-            name === 'aborterror'
+            code === 'request_cancelled'
+            || code === 'cancelled'
+            || name === 'aborterror'
+            || message.includes('用户已取消')
             || message.includes('请求已取消')
             || message.includes('已取消')
             || message.includes('aborted')
@@ -1295,10 +1394,14 @@ class EvaluateService {
     }
 
     _isTimeoutLikeError(error) {
+        if (String(error?.code || '').toLowerCase() === 'timeout') {
+            return true;
+        }
         const message = String(error?.message || '').toLowerCase();
         return (
             message.includes('timeout')
             || message.includes('timed out')
+            || message.includes('请求超时已取消')
             || message.includes('超时')
         );
     }

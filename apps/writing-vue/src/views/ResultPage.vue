@@ -1,222 +1,189 @@
 <template>
   <div class="result-page">
-    <header class="result-hero">
-      <div class="result-hero__copy">
-        <span class="result-chip">AI Feedback</span>
-        <h1 class="heading-serif">Results Analysis</h1>
-      </div>
-
-      <div class="result-hero__score card card-whisper">
-        <span class="score-badge__label">AI Evaluation Summary</span>
-        <div class="score-ring" :style="{ '--score-progress': ((Number(scoreData?.total_score) || 0) / 9).toFixed(3) }">
-          <div class="score-ring__inner">
-            <strong>{{ scoreData?.total_score ?? '-' }}</strong>
-            <span>Overall Band</span>
-          </div>
-        </div>
-        <span class="score-badge__meta">字数 {{ essayWordCount || '-' }}</span>
-      </div>
-    </header>
-
     <div class="result-layout">
-      <section class="reading-panel card card-whisper">
-        <div class="reading-head">
+      <!-- Left Column: Essay & Annotated Errors -->
+      <section class="essay-panel card card-whisper" style="animation: slideFromLeft 0.6s ease-out;">
+        <header class="essay-head border-base">
           <div>
-            <h2 class="heading-serif">{{ viewMode === 'full' ? '作文原文' : `重点纠错（${sentences.length}句）` }}</h2>
+            <h1 class="heading-serif display-heading">Feedback &amp; Results</h1>
+            <p class="topic-meta">IELTS Writing Evaluation</p>
           </div>
-          <div class="view-switcher">
-            <button :class="['view-btn', { active: viewMode === 'full' }]" @click="viewMode = 'full'">
-              全文
-            </button>
-            <button :class="['view-btn', { active: viewMode === 'annotated' }]" @click="viewMode = 'annotated'">
-              重点纠错
-            </button>
-          </div>
+          <span class="word-badge">{{ essayWordCount }} Words</span>
+        </header>
+
+        <div v-if="topicText" class="glass-card mb-4 p-4">
+          <h3 class="flex-align text-sm font-bold text-primary mb-2">
+            <span class="material-symbols-outlined mr-2">menu_book</span>
+            {{ topicSourceLabel }}
+          </h3>
+          <p class="topic-meta">{{ topicText }}</p>
         </div>
 
-        <div v-if="viewMode === 'full'" class="essay-view">
-          <div v-if="essayText" class="essay-text">{{ essayText }}</div>
-          <p v-else class="empty-hint">暂无作文原文。</p>
+        <div class="view-controls mb-4">
+          <button :class="['btn', viewMode === 'full' ? 'btn-brand' : 'btn-warm-sand']" @click="viewMode = 'full'">Original View</button>
+          <button v-if="sentences.length > 0" :class="['btn', viewMode === 'annotated' ? 'btn-brand' : 'btn-warm-sand']" @click="viewMode = 'annotated'">Annotated Errors</button>
         </div>
 
-        <div v-else-if="sentences.length > 0" class="annotated-view">
-          <div class="bulk-controls">
-            <button class="btn-link" @click="expandAll">全部展开</button>
-            <button class="btn-link" @click="collapseAll">全部折叠</button>
-          </div>
-
-          <div
-            v-for="(sentence, index) in sentences"
-            :key="index"
-            class="sentence-block"
-          >
-            <div class="sentence-header">
-              <span class="sentence-index">[{{ index + 1 }}]</span>
-              <span class="sentence-text" v-html="highlightErrors(sentence)"></span>
-              <button
-                v-if="sentence.errors && sentence.errors.length > 0"
-                class="expand-btn"
-                @click="toggleExpand(index)"
-              >
-                {{ expandedSentences.has(index) ? '收起' : '展开' }}
-              </button>
-            </div>
-
-            <div
-              v-if="sentence.errors && sentence.errors.length > 0 && expandedSentences.has(index)"
-              class="error-details"
-            >
-              <div
-                v-for="(err, errIdx) in sentence.errors"
-                :key="errIdx"
-                class="error-item"
-              >
-                <span :class="['error-type', `error-${err.type}`]">
-                  {{ getErrorTypeLabel(err.type) }}
-                </span>
-                <div class="error-content">
-                  <p class="error-word">{{ err.word }}</p>
-                  <p class="error-reason">{{ err.reason }}</p>
-                  <p class="error-correction">
-                    建议修改为：<strong>{{ err.correction }}</strong>
-                  </p>
-                </div>
-              </div>
-              <div v-if="sentence.corrected" class="corrected-sentence">
-                <strong>修正后：</strong>{{ sentence.corrected }}
-              </div>
-            </div>
-          </div>
+        <div class="essay-body custom-scroll" v-if="viewMode === 'full'">
+            {{ essayText || 'No text found.' }}
         </div>
+        
+        <div class="essay-body custom-scroll" v-else>
+           <div v-if="sentences.length > 0">
+             <template v-for="(sentence, index) in sentences" :key="index">
+               
+               <span class="sentence-container"
+                     :class="{'has-error': sentence.errors?.length > 0}"
+                     @click="sentence.errors?.length > 0 ? toggleExpand(index) : null"
+               >
+                 <span v-html="highlightErrors(sentence)"></span>
+               </span>
 
-        <div v-else class="original-view">
-          <p class="empty-hint">{{ sentenceEmptyHint }}</p>
+               <component :is="'div'" v-if="sentence.errors?.length > 0 && expandedSentences.has(index)" class="error-details glass-card shadow-elevated mb-3 mt-1">
+                 <div v-for="(err, errIdx) in sentence.errors" :key="errIdx" class="error-item border-base-light pb-2 mb-2 last-no-border">
+                    <div class="error-type mb-1" :class="'text-' + err.type.replace('_', '-')">
+                      <span class="material-symbols-outlined mr-1" style="font-size: 14px;">error</span>
+                      <strong>{{ getErrorTypeLabel(err.type) }}</strong>
+                    </div>
+                    <div class="error-word mb-1">
+                      <span class="label">原文: </span><span class="text-secondary line-through">{{ err.word }}</span>
+                    </div>
+                    <div class="error-reason text-sm text-secondary mb-1">
+                      {{ err.reason }}
+                    </div>
+                    <div class="error-correction">
+                      <span class="label">建议: </span><strong class="text-primary">{{ err.correction }}</strong>
+                    </div>
+                 </div>
+                 <div class="corrected-sentence mt-3 pt-3 border-top-dashed text-primary font-bold">
+                    <span class="label text-secondary font-normal text-xs mb-1 block">Revised Sentence:</span>
+                    {{ sentence.corrected }}
+                 </div>
+               </component>
+               
+             </template>
+           </div>
+           <div v-else class="text-secondary italic">
+              {{ sentenceEmptyHint }}
+           </div>
         </div>
       </section>
 
-      <aside class="report-rail">
-        <section v-if="topicText" class="rail-card card card-whisper">
-          <div class="rail-head">
-            <h3>题目要求</h3>
-          </div>
-          <p class="topic-text">{{ topicText }}</p>
-        </section>
-
-        <section class="rail-card card card-whisper">
-          <div class="rail-head">
-            <h3>分项评分</h3>
-          </div>
-          <div class="score-breakdown">
-            <div class="breakdown-item">
-              <div class="breakdown-header">
-                <span class="breakdown-name">任务完成度</span>
-                <span class="breakdown-score">{{ scoreData?.task_achievement ?? '-' }}</span>
-              </div>
-              <p class="breakdown-desc">Task Achievement / Task Response</p>
-            </div>
-            <div class="breakdown-item">
-              <div class="breakdown-header">
-                <span class="breakdown-name">连贯与衔接</span>
-                <span class="breakdown-score">{{ scoreData?.coherence_cohesion ?? '-' }}</span>
-              </div>
-              <p class="breakdown-desc">Coherence and Cohesion</p>
-            </div>
-            <div class="breakdown-item">
-              <div class="breakdown-header">
-                <span class="breakdown-name">词汇丰富度</span>
-                <span class="breakdown-score">{{ scoreData?.lexical_resource ?? '-' }}</span>
-              </div>
-              <p class="breakdown-desc">Lexical Resource</p>
-            </div>
-            <div class="breakdown-item">
-              <div class="breakdown-header">
-                <span class="breakdown-name">语法范围与准确性</span>
-                <span class="breakdown-score">{{ scoreData?.grammatical_range ?? '-' }}</span>
-              </div>
-              <p class="breakdown-desc">Grammatical Range and Accuracy</p>
+      <!-- Right Column: Sidebar Analysis -->
+      <aside class="right-panel custom-scroll" style="animation: slideFromRight 0.6s ease-out; flex: 0.8 !important;">
+        
+        <!-- Score summary -->
+        <div class="glass-card text-center relative overflow-hidden p-6 mb-4">
+          <h3 class="font-bold text-lg mb-4 z-10 relative">AI Evaluation Summary</h3>
+          <div class="score-ring-container">
+            <svg class="score-svg" viewBox="0 0 192 192">
+              <circle class="score-bg" cx="96" cy="96" r="80"></circle>
+              <circle class="score-fill" cx="96" cy="96" r="80" 
+                :style="{ strokeDashoffset: (2 * Math.PI * 80) - ((2 * Math.PI * 80) * ((Number(scoreData?.total_score) || 0) / 9)) }"></circle>
+            </svg>
+            <div class="score-info">
+              <span class="score-total">{{ scoreData?.total_score ?? '-' }}</span>
+              <span class="score-label">Overall Band</span>
             </div>
           </div>
-        </section>
+        </div>
 
-        <section v-if="reviewDegraded" class="rail-card rail-card-warning card card-whisper">
-          <div class="rail-head">
-            <h3>详解降级提示</h3>
-          </div>
-          <p class="feedback-text">
-            本次评测只完整返回了评分结果，段落和句级详解没有全部生成。建议稍后重试拿完整报告。
-          </p>
-        </section>
+        <div v-if="reviewDegraded" class="degraded-warning mb-4">
+          <h4 class="font-bold mb-1 flex-align">
+              <span class="material-symbols-outlined mr-2">warning</span>
+              Analysis Degraded
+          </h4>
+          <p class="text-xs">{{ sentenceEmptyHint }}</p>
+        </div>
 
-        <section v-if="feedback" class="rail-card card card-whisper">
-          <div class="rail-head">
-            <h3>整体改进建议</h3>
+        <!-- Metrics Grid -->
+        <div class="metrics-grid mb-4">
+          <div class="metric-card glass-card hover-lift p-4">
+            <span class="material-symbols-outlined text-primary mb-2">assignment_turned_in</span>
+            <div class="metric-label">Task Response</div>
+            <div class="metric-value">{{ scoreData?.task_achievement ?? '-' }}</div>
           </div>
-          <p class="feedback-text">{{ feedback }}</p>
-        </section>
+          <div class="metric-card glass-card hover-lift p-4">
+            <span class="material-symbols-outlined text-primary mb-2">account_tree</span>
+            <div class="metric-label">Coherence</div>
+            <div class="metric-value">{{ scoreData?.coherence_cohesion ?? '-' }}</div>
+          </div>
+          <div class="metric-card glass-card hover-lift p-4">
+            <span class="material-symbols-outlined text-primary mb-2">menu_book</span>
+            <div class="metric-label">Lexical Resource</div>
+            <div class="metric-value">{{ scoreData?.lexical_resource ?? '-' }}</div>
+          </div>
+          <div class="metric-card glass-card hover-lift p-4">
+            <span class="material-symbols-outlined text-primary mb-2">spellcheck</span>
+            <div class="metric-label">Grammar</div>
+            <div class="metric-value">{{ scoreData?.grammatical_range ?? '-' }}</div>
+          </div>
+        </div>
 
-        <section v-if="reviewBlocks.length > 0" class="rail-card card card-whisper">
-          <div class="rail-head">
-            <h3>段落详解</h3>
-          </div>
-          <div class="rationale-list">
-            <div
-              v-for="(item, index) in reviewBlocks"
-              :key="`review-${index}`"
-              class="rationale-item"
-            >
-              <span class="analysis-label">段落 {{ item.paragraph_index || (index + 1) }}</span>
-              <p>{{ item.comment || item.analysis || item.feedback || '' }}</p>
-            </div>
-          </div>
-        </section>
+        <div v-if="feedback" class="glass-card mb-4">
+          <h3 class="font-bold flex-align mb-3 text-sm">
+            <span class="material-symbols-outlined text-primary mr-2">lightbulb</span>
+            整体改进建议
+          </h3>
+          <p class="text-sm text-secondary leading-relaxed">{{ feedback }}</p>
+        </div>
 
-        <section v-if="taskAnalysisEntries.length > 0" class="rail-card card card-whisper">
-          <div class="rail-head">
-            <h3>任务诊断</h3>
-          </div>
-          <div class="analysis-grid">
-            <div
-              v-for="item in taskAnalysisEntries"
-              :key="item.label"
-              class="analysis-item"
-            >
-              <span class="analysis-label">{{ item.label }}</span>
-              <p>{{ item.value }}</p>
-            </div>
-          </div>
-        </section>
-
-        <section v-if="bandRationaleEntries.length > 0" class="rail-card card card-whisper">
-          <div class="rail-head">
-            <h3>评分理由</h3>
-          </div>
-          <div class="rationale-list">
-            <div
-              v-for="item in bandRationaleEntries"
-              :key="item.label"
-              class="rationale-item"
-            >
-              <span class="analysis-label">{{ item.label }}</span>
-              <p>{{ item.value }}</p>
-            </div>
-          </div>
-        </section>
-
-        <section v-if="improvementPlan.length > 0" class="rail-card card card-whisper">
-          <div class="rail-head">
-            <h3>提分计划</h3>
-          </div>
+        <div v-if="improvementPlan && improvementPlan.length > 0" class="glass-card mb-4">
+          <h3 class="font-bold flex-align mb-3 text-sm">
+              <span class="material-symbols-outlined text-primary mr-2">build</span>
+              核心提分计划
+          </h3>
           <ul class="plan-list">
-            <li v-for="(item, index) in improvementPlan" :key="`${index}-${item}`">
-              {{ item }}
-            </li>
+              <li v-for="(item, idx) in improvementPlan" :key="idx" class="flex-align-start text-sm mb-2">
+                  <span class="bullet"></span>
+                  <span class="text-secondary leading-relaxed">{{ item }}</span>
+              </li>
           </ul>
-        </section>
+        </div>
+        
+        <div v-if="reviewBlocks && reviewBlocks.length > 0" class="glass-card mb-4">
+          <h3 class="font-bold flex-align mb-3 text-sm">
+            <span class="material-symbols-outlined text-primary mr-2">segment</span>
+            段落详评
+          </h3>
+          <div class="rationale-list">
+            <div v-for="(item, idx) in reviewBlocks" :key="idx" class="rationale-item border-base text-sm mb-3">
+              <strong class="text-primary block text-xs uppercase mb-1">Paragraph {{ item.paragraph_index || (idx + 1) }}</strong>
+              <span class="text-secondary block mt-1 leading-relaxed">{{ typeof item === 'object' ? (item.comment || item.analysis || item.feedback || '') : item }}</span>
+            </div>
+          </div>
+        </div>
 
-        <div class="action-buttons">
-          <button class="btn btn-brand" @click="writeNew">
-            写新作文
-          </button>
+        <div v-if="bandRationaleEntries && bandRationaleEntries.length > 0" class="glass-card mb-4">
+          <h3 class="font-bold flex-align mb-3 text-sm">
+              <span class="material-symbols-outlined text-primary mr-2">analytics</span>
+              得分解析
+          </h3>
+          <div class="rationale-list">
+            <div v-for="item in bandRationaleEntries" :key="item.label" class="rationale-item border-base text-sm mb-3">
+              <strong class="text-primary block text-xs uppercase">{{ item.label }}</strong>
+              <span class="text-secondary block mt-1 leading-relaxed">{{ item.value }}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div v-if="taskAnalysisEntries && taskAnalysisEntries.length > 0" class="glass-card mb-4">
+          <h3 class="font-bold flex-align mb-3 text-sm">
+              <span class="material-symbols-outlined text-primary mr-2">query_stats</span>
+              任务诊断
+          </h3>
+          <div class="rationale-list">
+            <div v-for="item in taskAnalysisEntries" :key="item.label" class="rationale-item border-base text-sm mb-3">
+              <strong class="text-primary block text-xs uppercase">{{ item.label }}</strong>
+              <span class="text-secondary block mt-1 leading-relaxed">{{ item.value }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 mb-4">
+            <button @click="writeNew" class="btn btn-brand w-full p-4">
+                回到主页练新题
+            </button>
         </div>
       </aside>
     </div>
@@ -418,450 +385,345 @@ function writeNew() {
   router.push({ name: 'Compose' })
 }
 </script>
-
 <style scoped>
 .result-page {
-  display: grid;
-  gap: 22px;
-  animation: rise-in 0.45s var(--ease-smooth);
-}
-
-.result-hero {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.result-hero__copy {
-  display: grid;
-  gap: 10px;
-}
-
-.result-chip {
-  display: inline-flex;
-  width: fit-content;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--primary-color);
-  background: rgba(201, 100, 66, 0.12);
-  border: 1px solid rgba(201, 100, 66, 0.24);
-}
-
-.result-hero__copy h1 {
-  font-size: clamp(2.4rem, 4.4vw, 4.2rem);
-  max-width: 13ch;
-}
-
-.result-hero__copy p:last-child {
-  color: var(--text-secondary);
-}
-
-.result-hero__score {
-  min-width: 220px;
-  display: grid;
-  gap: 12px;
-  padding: 18px 20px;
-  background: linear-gradient(140deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.42));
-  border: 1px solid rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
-  -webkit-backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
-}
-
-.score-badge__label,
-.score-badge__meta {
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  text-transform: uppercase;
-}
-
-.score-ring {
-  width: 118px;
-  height: 118px;
-  border-radius: 50%;
-  margin: 0 auto;
-  display: grid;
-  place-items: center;
-  background:
-    conic-gradient(
-      #5456aa calc((var(--score-progress, 0.8)) * 360deg),
-      rgba(180, 184, 222, 0.32) 0
-    );
-  position: relative;
-}
-
-.score-ring::before {
-  content: '';
-  position: absolute;
-  inset: 9px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-}
-
-.score-ring__inner {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  justify-items: center;
-  gap: 2px;
-}
-
-.score-ring__inner strong {
-  font-size: 2rem;
-  line-height: 1;
-  color: #5456aa;
-}
-
-.score-ring__inner span {
-  font-size: 0.52rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  animation: fade-in 0.3s ease-out;
 }
 
 .result-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.8fr);
-  gap: 20px;
-  align-items: start;
-}
-
-.reading-panel,
-.rail-card {
-  padding: 22px;
-}
-
-.reading-panel {
-  display: grid;
-  gap: 18px;
-  max-height: calc(100vh - 180px);
-  overflow: auto;
-  background: var(--lg-bg-elevated);
-  border: 1px solid var(--lg-border-color);
-  backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
-  -webkit-backdrop-filter: blur(var(--lg-blur-md)) saturate(var(--lg-saturate));
-}
-
-.reading-head,
-.rail-head {
   display: flex;
-  align-items: start;
+  gap: 24px;
+  max-width: 1600px;
+  margin: 0 auto;
+  height: calc(100vh - 120px);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+  padding: 24px;
+}
+.shadow-elevated {
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+.essay-panel {
+  flex: 1.2;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.right-panel {
+  flex: 0.8 !important;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding-right: 12px;
+}
+
+.border-base {
+  border-bottom: 1px solid var(--color-border-warm);
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+}
+
+.border-base-light {
+  border-bottom: 1px dashed var(--color-border-warm);
+}
+.border-top-dashed {
+  border-top: 1px dashed var(--color-border-warm);
+}
+.last-no-border:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+.essay-head {
+  display: flex;
   justify-content: space-between;
-  gap: 14px;
+  align-items: flex-end;
 }
 
-.reading-head h2,
-.rail-head h3 {
-  font-size: 1.55rem;
-}
-
-.rail-head span {
-  color: var(--text-muted);
-  font-size: 0.88rem;
-}
-
-.rail-card {
-  background: linear-gradient(140deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.42));
-  border: 1px solid rgba(255, 255, 255, 0.76);
-  backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
-  -webkit-backdrop-filter: blur(var(--lg-blur-lg)) saturate(var(--lg-saturate));
-}
-
-.view-switcher {
-  display: inline-flex;
-  gap: 8px;
-  padding: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.54);
-  border: 1px solid var(--lg-border-color);
-}
-
-.view-btn {
-  min-height: 36px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.view-btn.active {
+.display-heading {
+  font-size: 2rem;
   color: var(--text-primary);
-  background: #fffdf8d1;
-  box-shadow: var(--lg-shadow-subtle);
+  margin-bottom: 6px;
 }
 
-.essay-view,
-.annotated-view,
-.original-view {
-  display: grid;
-  gap: 14px;
-}
-
-.essay-text,
-.empty-hint {
-  padding: 20px;
-  border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.48);
-  border: 1px solid var(--lg-border-color);
+.topic-meta {
   color: var(--text-secondary);
-  line-height: 1.9;
-  white-space: pre-wrap;
+  font-style: italic;
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
-.empty-hint {
-  margin: 0;
-}
-
-.bulk-controls {
-  display: flex;
-  gap: 16px;
-}
-
-.btn-link {
-  color: var(--color-terracotta);
-  text-decoration: underline;
-  text-underline-offset: 4px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 4px 8px;
-  transition: color 0.15s;
-}
-
-.btn-link:hover {
-  color: var(--color-coral);
-}
-
-.sentence-block {
-  display: grid;
-  gap: 12px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--lg-border-subtle);
-}
-
-.sentence-block:last-child {
-  border-bottom: 0;
-}
-
-.sentence-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.sentence-index {
-  color: var(--text-muted);
+.word-badge {
+  background: var(--color-warm-sand);
+  color: var(--text-primary);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 500;
   font-size: 0.85rem;
 }
 
-.sentence-text {
+.essay-body {
   flex: 1;
-  line-height: 1.85;
+  white-space: pre-wrap;
+  line-height: 2;
+  color: var(--text-primary);
+  font-size: 1.05rem;
+  overflow-y: auto;
+  padding-right: 12px;
 }
 
-.expand-btn {
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid var(--lg-border-color);
+.view-controls {
+  display: flex;
+  gap: 12px;
+}
+
+.view-controls .btn {
+  padding: 8px 16px;
+  font-size: 0.9rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.62);
+}
+
+.sentence-container {
+  display: inline;
+  margin-right: 4px;
+  transition: all 0.2s;
+}
+
+.has-error {
   cursor: pointer;
+  border-bottom: 2px dashed var(--color-error);
 }
 
-:deep(.highlight-grammar) {
-  background: rgba(179, 86, 68, 0.18);
-  border-bottom: 2px solid var(--error-grammar);
-}
-
-:deep(.highlight-spelling) {
-  background: rgba(186, 122, 50, 0.18);
-  border-bottom: 2px solid var(--error-spelling);
-}
-
-:deep(.highlight-word_choice) {
-  background: rgba(86, 120, 153, 0.18);
-  border-bottom: 2px solid var(--error-word-choice);
-}
-
-:deep(.highlight-sentence_structure) {
-  background: rgba(122, 95, 152, 0.18);
-  border-bottom: 2px solid var(--error-sentence-structure);
-}
-
-:deep(.highlight-coherence) {
-  background: rgba(93, 135, 98, 0.18);
-  border-bottom: 2px solid var(--error-coherence);
+.has-error:hover {
+  background: rgba(181, 51, 51, 0.05); /* very light error red */
 }
 
 .error-details {
-  display: grid;
-  gap: 12px;
+  display: block;   /* Important: inline to block transition inside text loop */
   padding: 16px;
-  border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.48);
-  border: 1px solid var(--lg-border-color);
+  margin-left: 0;
+  margin-right: 0;
 }
 
-.error-item {
-  display: flex;
-  gap: 12px;
-}
-
-.error-type {
-  flex-shrink: 0;
-  padding: 5px 9px;
-  border-radius: 999px;
-  color: #fffaf2;
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
-.error-grammar { background: var(--error-grammar); }
-.error-spelling { background: var(--error-spelling); }
-.error-word_choice { background: var(--error-word-choice); }
-.error-sentence_structure { background: var(--error-sentence-structure); }
-.error-coherence { background: var(--error-coherence); }
-
-.error-content {
-  display: grid;
-  gap: 4px;
-}
-
-.error-word {
-  font-weight: 700;
-}
-
-.error-reason,
-.error-correction,
-.corrected-sentence,
-.topic-text,
-.feedback-text,
-.analysis-item p,
-.rationale-item p,
-.plan-list {
-  color: var(--text-secondary);
-}
-
-.corrected-sentence {
-  padding-top: 10px;
-  border-top: 1px dashed var(--border-color);
-}
-
-.report-rail {
-  display: grid;
-  gap: 16px;
-  max-height: calc(100vh - 180px);
-  overflow: auto;
-}
-
-.score-breakdown,
-.analysis-grid,
-.rationale-list {
-  display: grid;
-  gap: 12px;
-}
-
-.breakdown-item {
-  display: grid;
-  gap: 4px;
-  padding: 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  background: rgba(186, 187, 255, 0.16);
-}
-
-.breakdown-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.breakdown-name {
-  font-weight: 600;
-}
-
-.breakdown-score {
-  font-size: 1.4rem;
-  color: #393b8e;
-}
-
-.breakdown-desc,
-.analysis-label {
-  color: var(--text-muted);
+.label {
   font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-right: 6px;
+}
+.line-through {
+  text-decoration: line-through;
 }
 
-.analysis-item,
-.rationale-item {
-  padding: 14px 16px;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.52);
-  border: 1px solid rgba(255, 255, 255, 0.74);
+.uppercase { text-transform: uppercase; }
+.mr-1 { margin-right: 4px; }
+.mr-2 { margin-right: 8px; }
+.mb-1 { margin-bottom: 4px; }
+.mb-2 { margin-bottom: 8px; }
+.mb-3 { margin-bottom: 12px; }
+.mb-4 { margin-bottom: 16px; }
+.mt-1 { margin-top: 4px; }
+.mt-3 { margin-top: 12px; }
+.mt-4 { margin-top: 16px; }
+.pt-3 { padding-top: 12px; }
+.pb-2 { padding-bottom: 8px; }
+.p-4 { padding: 16px; }
+.p-6 { padding: 24px; }
+.w-full { width: 100%; }
+
+.text-primary { color: var(--color-terracotta); }
+.text-secondary { color: var(--color-olive-gray); }
+.font-bold { font-weight: 600; }
+.font-normal { font-weight: 400; }
+.italic { font-style: italic; }
+.block { display: block; }
+.text-sm { font-size: 0.9rem; }
+.text-xs { font-size: 0.8rem; }
+.text-lg { font-size: 1.25rem; }
+.leading-relaxed { line-height: 1.6; }
+
+.flex-align {
+  display: flex;
+  align-items: center;
 }
 
-.action-buttons {
-  justify-content: stretch;
+.flex-align-start {
+  display: flex;
+  align-items: flex-start;
 }
 
-.action-buttons .btn {
+.score-ring-container {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.score-svg {
   width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.05));
 }
 
-.analysis-label {
-  display: inline-block;
-  margin-bottom: 6px;
-  letter-spacing: 0.04em;
+.score-bg {
+  fill: transparent;
+  stroke: var(--color-border-warm);
+  stroke-width: 14;
+}
+
+.score-fill {
+  fill: transparent;
+  stroke: var(--color-terracotta);
+  stroke-width: 14;
+  stroke-linecap: round;
+  stroke-dasharray: 502;
+  transition: stroke-dashoffset 1s ease-out;
+}
+
+.score-info {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.score-total {
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.score-label {
+  font-size: 0.75rem;
   text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.1em;
+  margin-top: 4px;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.metric-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.metric-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.hover-lift {
+  transition: transform 0.2s;
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
 }
 
 .plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  padding: 0;
   margin: 0;
-  padding-left: 18px;
 }
 
-.plan-list li + li {
-  margin-top: 8px;
+.bullet {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-terracotta);
+  margin-top: 7px;
+  margin-right: 12px;
+  flex-shrink: 0;
 }
 
-.rail-card-warning {
-  border-color: rgba(166, 107, 45, 0.2);
-  background: rgba(255, 246, 236, 0.9);
+.rationale-item:last-child {
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: none;
 }
 
-@media (max-width: 1080px) {
-  .result-hero,
-  .result-layout {
-    grid-template-columns: 1fr;
-    flex-direction: column;
-  }
-
-  .reading-panel,
-  .report-rail {
-    max-height: none;
-  }
+.degraded-warning {
+  background: rgba(181, 51, 51, 0.1);
+  border: 1px solid rgba(181, 51, 51, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+  color: var(--color-error);
 }
 
-@media (max-width: 720px) {
-  .reading-panel,
-  .rail-card {
-    padding: 18px;
-  }
+@keyframes slideFromRight {
+  0% { transform: translateX(30px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
 
-  .reading-head,
-  .sentence-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
+@keyframes slideFromLeft {
+  0% { transform: translateX(-30px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+/* Error highlights inside v-html */
+:deep(.highlight-grammar) {
+  background: rgba(181, 51, 51, 0.1);
+  border-bottom: 2px solid var(--color-error);
+}
+
+:deep(.highlight-spelling) {
+  background: rgba(201, 100, 66, 0.1);
+  border-bottom: 2px solid var(--color-terracotta);
+}
+
+:deep(.highlight-word_choice) {
+  background: rgba(56, 152, 236, 0.1);
+  border-bottom: 2px solid var(--color-focus-blue);
+}
+
+:deep(.highlight-sentence_structure) {
+  background: rgba(135, 134, 127, 0.15);
+  border-bottom: 2px solid var(--color-stone-gray);
+}
+
+:deep(.highlight-coherence) {
+  background: rgba(94, 93, 89, 0.15);
+  border-bottom: 2px solid var(--color-olive-gray);
+}
+
+/* Custom Scroll for cards */
+.custom-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-ring-warm);
+  border-radius: 4px;
 }
 </style>

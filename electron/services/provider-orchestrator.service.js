@@ -33,6 +33,9 @@ class ProviderOrchestratorService {
         let lastError = null;
 
         for (const config of candidates.slice(0, this.maxFallbackProviders + 1)) {
+            if (this._isSignalAborted(signal)) {
+                throw this._buildCancelledError(signal, lastError);
+            }
             const maxRetries = Number.isFinite(Number(config.max_retries))
                 ? Math.max(0, Number(config.max_retries))
                 : 2;
@@ -54,6 +57,9 @@ class ProviderOrchestratorService {
             }
 
             for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+                if (this._isSignalAborted(signal)) {
+                    throw this._buildCancelledError(signal, lastError);
+                }
                 this._notifyProviderEvent(onProviderEvent, {
                     type: attempt === 1 ? 'candidate_start' : 'candidate_retry',
                     provider: config.provider,
@@ -99,6 +105,9 @@ class ProviderOrchestratorService {
                         providerPath
                     };
                 } catch (error) {
+                    if (this._isCancellationError(error, signal)) {
+                        throw this._buildCancelledError(signal, error);
+                    }
                     lastError = error;
                     const errorCode = this._getErrorCode(error);
                     this._notifyProviderEvent(onProviderEvent, {
@@ -207,6 +216,7 @@ class ProviderOrchestratorService {
 
     _getErrorCode(error) {
         const message = String(error?.message || '').toLowerCase();
+        if (message.includes('请求已取消') || message.includes('cancelled') || message.includes('canceled')) return 'cancelled';
         if (message.includes('unauthorized') || message.includes('api key')) return 'invalid_api_key';
         if (message.includes('insufficient') && message.includes('quota')) return 'insufficient_quota';
         if (message.includes('rate limit')) return 'rate_limit_exceeded';
@@ -225,10 +235,58 @@ class ProviderOrchestratorService {
             if (signal) {
                 signal.addEventListener('abort', () => {
                     clearTimeout(timer);
-                    reject(new Error('请求已取消'));
+                    reject(this._buildCancelledError(signal));
                 }, { once: true });
             }
         });
+    }
+
+    _isSignalAborted(signal) {
+        return Boolean(signal?.aborted);
+    }
+
+    _isCancellationError(error, signal) {
+        if (this._isSignalAborted(signal)) {
+            return true;
+        }
+        const code = String(error?.code || '').toLowerCase();
+        const name = String(error?.name || '').toLowerCase();
+        const message = String(error?.message || '').toLowerCase();
+        return (
+            code === 'request_cancelled'
+            || code === 'timeout'
+            || name === 'aborterror'
+            || message.includes('请求已取消')
+            || message.includes('cancelled')
+            || message.includes('canceled')
+            || message.includes('aborted')
+            || message.includes('abort')
+        );
+    }
+
+    _buildCancelledError(signal, fallbackError = null) {
+        const reasonRaw = signal ? signal.reason : null;
+        const reason = String(
+            typeof reasonRaw === 'string'
+                ? reasonRaw
+                : reasonRaw?.code || reasonRaw?.reason || reasonRaw?.message || ''
+        ).toLowerCase();
+
+        if (reason.includes('timeout')) {
+            const timeoutError = new Error('请求超时已取消');
+            timeoutError.code = 'timeout';
+            return timeoutError;
+        }
+
+        if (fallbackError && String(fallbackError?.message || '').toLowerCase().includes('timeout')) {
+            const timeoutError = new Error('请求超时已取消');
+            timeoutError.code = 'timeout';
+            return timeoutError;
+        }
+
+        const cancelledError = new Error('请求已取消');
+        cancelledError.code = 'request_cancelled';
+        return cancelledError;
     }
 
     _notifyProviderEvent(handler, payload) {
