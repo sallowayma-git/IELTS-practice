@@ -1,0 +1,13 @@
+[2026-04-10 17:36:41] [ERROR] Evaluation validation failed
+[2026-04-10 17:36:41] [INFO] [probe-session-success] Evaluation completed successfully {"duration":1}
+[2026-04-10 17:36:41] [WARN] [probe-session-degraded] Review stage failed, degrade to scoring-only result {"message":"forced review failure"}
+[2026-04-10 17:36:41] [INFO] [probe-session-degraded] Evaluation completed successfully {"duration":0}
+[2026-04-10 17:36:41] [WARN] [probe-session-degraded] Evaluation aborted unexpectedly {"errorCode":"unknown_error","message":"请求已取消"}
+[2026-04-10 17:36:41] [ERROR] [probe-session-degraded] Evaluation execution failed {"name":"Error","message":"Network timeout: 连接超时,请检查网络或 base_url","stack":"Error: Network timeout: 连接超时,请检查网络或 base_url\n    at main (/Users/maziheng/Downloads/0.3.1 working/developer/tests/ci/writing_contract_probe.cjs:470:23)"}
+[2026-04-10 17:36:41] [WARN] webContents not available, cannot emit event
+[2026-04-10 17:36:41] [WARN] webContents not available, cannot emit event
+[2026-04-10 17:36:41] [WARN] webContents not available, cannot emit event
+[2026-04-10 17:36:45] [ERROR] Reading analysis parse failed {"name":"SyntaxError","message":"Unterminated string in JSON at position 39 (line 1 column 40)","stack":"SyntaxError: Unterminated string in JSON at position 39 (line 1 column 40)\n    at JSON.parse (<anonymous>)\n    at ReadingAnalysisService._parseJsonObject (/Users/maziheng/Downloads/0.3.1 working/electron/services/reading-analysis.service.js:186:25)\n    at ReadingAnalysisService.generateSingleAttemptAnalysis (/Users/maziheng/Downloads/0.3.1 working/electron/services/reading-analysis.service.js:54:31)\n    at async testParseErrorShouldDegradeInsteadOfThrow (file:///Users/maziheng/Downloads/0.3.1%20working/developer/tests/js/readingAnalysisService.test.js:69:20)\n    at async main (file:///Users/maziheng/Downloads/0.3.1%20working/developer/tests/js/readingAnalysisService.test.js:115:9)"}
+[2026-04-10 17:36:45] [WARN] Reading analysis parse degraded to stage1 guidance {"code":"parse_error","message":"LLM 响应解析失败: Unterminated string in JSON at position 39 (line 1 column 40)"}
+[2026-04-10 17:36:45] [WARN] Reading analysis degraded to stage1-derived guidance {"diagnosis":1,"nextActions":1}
+[2026-04-10 17:36:45] [WARN] Reading analysis request degraded to stage1 guidance {"code":"provider_unavailable","message":"provider unavailable"}

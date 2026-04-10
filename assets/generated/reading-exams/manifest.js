@@ -1440,7 +1440,7 @@
     "examId": "p3-high-206",
     "dataKey": "p3-high-206",
     "script": "./p3-high-206.js",
-    "title": "200 Years of Australian Landscapes at the Royal Academy in London 亚洲风景展【高】",
+    "title": "200 Years of Australian Landscapes at the Royal Academy in London 澳洲风景展【高】",
     "category": "P3"
   },
   "p3-high-212": {
