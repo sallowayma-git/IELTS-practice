@@ -11,6 +11,7 @@ let app = null;
 let pdfHandler = null;
 let browseStateManager = null;
 const PENDING_PRACTICE_MESSAGES_KEY = 'exam_system_pending_practice_messages_v1';
+const WINDOW_NAME_PENDING_PREFIX = '__exam_pending_practice_v1__';
 
 function normalizeRecordId(id) {
     if (id == null) {
@@ -784,6 +785,19 @@ function loadPendingPracticeMessagesFromStore(store) {
     }
 }
 
+function loadPendingPracticeMessagesFromWindowName() {
+    try {
+        const rawWindowName = typeof window.name === 'string' ? window.name : '';
+        if (!rawWindowName.startsWith(WINDOW_NAME_PENDING_PREFIX)) {
+            return [];
+        }
+        const parsed = JSON.parse(rawWindowName.slice(WINDOW_NAME_PENDING_PREFIX.length));
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+        return [];
+    }
+}
+
 function clearPendingPracticeMessagesFromStore(store) {
     if (!store || typeof store.removeItem !== 'function') {
         return;
@@ -792,6 +806,17 @@ function clearPendingPracticeMessagesFromStore(store) {
         store.removeItem(PENDING_PRACTICE_MESSAGES_KEY);
     } catch (_) {
         // ignore storage cleanup errors
+    }
+}
+
+function clearPendingPracticeMessagesFromWindowName() {
+    try {
+        const rawWindowName = typeof window.name === 'string' ? window.name : '';
+        if (rawWindowName.startsWith(WINDOW_NAME_PENDING_PREFIX)) {
+            window.name = '';
+        }
+    } catch (_) {
+        // ignore window.name cleanup errors
     }
 }
 
@@ -809,9 +834,11 @@ function extractPendingExamId(entry) {
 async function consumePendingPracticeMessages() {
     const localQueue = loadPendingPracticeMessagesFromStore(window.localStorage);
     const sessionQueue = loadPendingPracticeMessagesFromStore(window.sessionStorage);
-    const mergedQueue = [...localQueue, ...sessionQueue];
+    const windowNameQueue = loadPendingPracticeMessagesFromWindowName();
+    const mergedQueue = [...localQueue, ...sessionQueue, ...windowNameQueue];
     clearPendingPracticeMessagesFromStore(window.localStorage);
     clearPendingPracticeMessagesFromStore(window.sessionStorage);
+    clearPendingPracticeMessagesFromWindowName();
     if (!mergedQueue.length) {
         return;
     }

@@ -15,8 +15,8 @@ class ReadingAnalysisService {
         const normalizedPayload = payload && typeof payload === 'object' ? payload : {};
         const stage1Input = this._ensurePlainObject(normalizedPayload.singleAttemptAnalysisInput);
         const stage1Analysis = this._ensurePlainObject(normalizedPayload.singleAttemptAnalysis);
-        const stage1Summary = this._ensurePlainObject(stage1Analysis.summary);
-        const stage1Radar = this._ensurePlainObject(stage1Analysis.radar);
+        const stage1Summary = this._ensurePlainObject(stage1Analysis && stage1Analysis.summary);
+        const stage1Radar = this._ensurePlainObject(stage1Analysis && stage1Analysis.radar);
 
         if (!stage1Input || !stage1Analysis || !stage1Summary || !stage1Radar) {
             const error = new Error('singleAttemptAnalysisInput / singleAttemptAnalysis 缺失，无法执行二阶段分析');
@@ -28,9 +28,11 @@ class ReadingAnalysisService {
         const timeoutController = new AbortController();
         const timeoutId = setTimeout(() => timeoutController.abort('timeout'), this.REQUEST_TIMEOUT_MS);
         let rawContent = '';
+        let usedConfig = null;
+        let providerPath = [];
 
         try {
-            const { usedConfig, providerPath } = await this.providerOrchestrator.streamCompletion({
+            const streamResult = await this.providerOrchestrator.streamCompletion({
                 preferredConfigId: normalizedPayload.api_config_id || normalizedPayload.config_id || null,
                 messages: this._buildMessages(stage1Input, stage1Analysis),
                 temperature: 0.2,
@@ -43,8 +45,20 @@ class ReadingAnalysisService {
                 },
                 response_format: buildReadingSingleAttemptResponseFormat()
             });
+            usedConfig = streamResult?.usedConfig || null;
+            providerPath = Array.isArray(streamResult?.providerPath) ? streamResult.providerPath : [];
 
-            const parsed = this._parseJsonObject(rawContent);
+            let parsed = {};
+            let degradedReason = null;
+            try {
+                parsed = this._parseJsonObject(rawContent);
+            } catch (parseError) {
+                degradedReason = parseError?.code || 'parse_error';
+                logger.warn('Reading analysis parse degraded to stage1 guidance', null, {
+                    code: degradedReason,
+                    message: parseError?.message || 'parse_failed'
+                });
+            }
             const normalizedLlm = normalizeReadingSingleAttemptLlm(parsed);
             const latencyMs = Date.now() - startedAt;
             const result = {
@@ -55,16 +69,16 @@ class ReadingAnalysisService {
                     provider: usedConfig?.provider || null,
                     model: usedConfig?.default_model || null,
                     latency_ms: latencyMs,
-                    provider_path: Array.isArray(providerPath) ? providerPath : []
+                    provider_path: providerPath
                 }
             };
 
-            if (!result.diagnosis.length || !result.nextActions.length) {
+            if (!result.diagnosis.length || !result.nextActions.length || degradedReason) {
                 const fallback = this._buildFallbackLlmFromStage1(stage1Analysis);
                 result.diagnosis = result.diagnosis.length ? result.diagnosis : fallback.diagnosis;
                 result.nextActions = result.nextActions.length ? result.nextActions : fallback.nextActions;
                 result.model_trace.degraded = true;
-                result.model_trace.degraded_reason = 'llm_missing_diagnosis_or_actions';
+                result.model_trace.degraded_reason = degradedReason || 'llm_missing_diagnosis_or_actions';
                 logger.warn('Reading analysis degraded to stage1-derived guidance', null, {
                     diagnosis: result.diagnosis.length,
                     nextActions: result.nextActions.length
@@ -73,9 +87,34 @@ class ReadingAnalysisService {
 
             return result;
         } catch (error) {
-            const normalizedError = new Error(error?.message || '二阶段分析失败');
-            normalizedError.code = error?.code || 'reading_analysis_failed';
-            throw normalizedError;
+            const errorCode = String(error?.code || '').trim() || 'reading_analysis_failed';
+            if (errorCode === 'invalid_payload') {
+                throw error;
+            }
+            const fallback = this._buildFallbackLlmFromStage1(stage1Analysis);
+            const normalizedFallback = normalizeReadingSingleAttemptLlm({
+                diagnosis: fallback.diagnosis,
+                nextActions: fallback.nextActions,
+                confidence: 0.35
+            });
+            logger.warn('Reading analysis request degraded to stage1 guidance', null, {
+                code: errorCode,
+                message: error?.message || 'reading_analysis_failed'
+            });
+            return {
+                ...normalizedFallback,
+                generatedAt: new Date().toISOString(),
+                model_trace: {
+                    config_id: usedConfig?.id || null,
+                    provider: usedConfig?.provider || null,
+                    model: usedConfig?.default_model || null,
+                    latency_ms: Date.now() - startedAt,
+                    provider_path: providerPath,
+                    degraded: true,
+                    degraded_reason: errorCode,
+                    error_message: error?.message || null
+                }
+            };
         } finally {
             clearTimeout(timeoutId);
         }
@@ -244,6 +283,21 @@ class ReadingAnalysisService {
                 .filter(Boolean)
                 .slice(0, 3)
             : [];
+        if (!diagnosis.length) {
+            diagnosis.push({
+                code: 'overall_accuracy',
+                reason: '本次先使用结构化分析结果，建议按题型拆分复盘。',
+                evidence: []
+            });
+        }
+        if (!nextActions.length) {
+            nextActions.push({
+                type: 'maintain_and_iterate',
+                target: 'overall',
+                instruction: '先复盘错题定位依据，再进行同题型限时练习。',
+                evidence: []
+            });
+        }
         return {
             diagnosis,
             nextActions
