@@ -5,6 +5,7 @@
     const INIT_RETRY_MS = 1500;
     const SIMULATION_DRAFT_SYNC_MS = 1200;
     const PENDING_PRACTICE_MESSAGES_KEY = 'exam_system_pending_practice_messages_v1';
+    const WINDOW_NAME_PENDING_PREFIX = '__exam_pending_practice_v1__';
     const READING_ANALYSIS_API_PATH = '/api/reading/single-attempt-analysis';
     const EXPLANATION_STYLE_ID = 'reading-explanation-style';
     const ANALYSIS_STYLE_ID = 'reading-single-attempt-analysis-style';
@@ -427,9 +428,74 @@
                 margin: 0;
                 font-size: 12px;
                 color: #0e7490;
+                min-height: 18px;
             }
             .reading-guidance-card__status--failed {
                 color: #b91c1c;
+            }
+            .reading-guidance-card__status-line {
+                display: inline-block;
+                max-width: 100%;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .reading-guidance-card__status-line--flow {
+                background-image: linear-gradient(
+                    90deg,
+                    rgba(14, 116, 144, 0.42) 0%,
+                    rgba(14, 116, 144, 0.42) 34%,
+                    rgba(255, 255, 255, 0.98) 48%,
+                    rgba(14, 116, 144, 0.42) 62%,
+                    rgba(14, 116, 144, 0.42) 100%
+                );
+                background-size: 260% 100%;
+                background-position: -180% 50%;
+                -webkit-background-clip: text;
+                background-clip: text;
+                -webkit-text-fill-color: transparent;
+                color: transparent;
+                animation: reading-status-flow 1.35s linear infinite;
+            }
+            .reading-guidance-card__status--failed .reading-guidance-card__status-line--flow {
+                background-image: linear-gradient(
+                    90deg,
+                    rgba(185, 28, 28, 0.48) 0%,
+                    rgba(185, 28, 28, 0.48) 34%,
+                    rgba(255, 255, 255, 0.92) 48%,
+                    rgba(185, 28, 28, 0.48) 62%,
+                    rgba(185, 28, 28, 0.48) 100%
+                );
+            }
+            .reading-guidance-card__status--degraded {
+                color: #b45309;
+            }
+            .reading-guidance-card__retry {
+                border: 1px solid rgba(180, 83, 9, 0.35);
+                border-radius: 8px;
+                background: rgba(251, 191, 36, 0.14);
+                color: #92400e;
+                font-size: 12px;
+                font-weight: 600;
+                padding: 6px 10px;
+                cursor: pointer;
+                transition: background-color 0.2s ease, border-color 0.2s ease;
+            }
+            .reading-guidance-card__retry:hover {
+                background: rgba(251, 191, 36, 0.2);
+                border-color: rgba(180, 83, 9, 0.48);
+            }
+            .reading-guidance-card__retry:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
+            @keyframes reading-status-flow {
+                0% {
+                    background-position: -180% 50%;
+                }
+                100% {
+                    background-position: 180% 50%;
+                }
             }
             @media (max-width: 640px) {
                 .reading-kind-radar__layout {
@@ -2126,12 +2192,29 @@
         }
     }
 
-    async function requestSingleAttemptLlmAnalysis(results) {
+    function setLlmAnalysisStatus(status, message, options = {}) {
+        state.llmAnalysisStatus = status || 'idle';
+        state.llmAnalysisMessage = String(message || '').trim();
+        if (options.render && state.lastResults) {
+            renderResults(state.lastResults);
+        }
+    }
+
+    async function requestSingleAttemptLlmAnalysis(results, onLog = null) {
+        if (typeof onLog === 'function') {
+            onLog('模型正在联通...');
+        }
         const baseUrl = await resolveLocalApiBaseUrl();
         if (!baseUrl) {
             const error = new Error('本地分析服务不可用');
             error.code = 'local_api_unavailable';
             throw error;
+        }
+        if (typeof onLog === 'function') {
+            onLog('数据正在上传...');
+        }
+        if (typeof onLog === 'function') {
+            onLog('消息已发送！AI 正在思考中...');
         }
         const response = await fetch(`${baseUrl}${READING_ANALYSIS_API_PATH}`, {
             method: 'POST',
@@ -2141,6 +2224,9 @@
                 singleAttemptAnalysis: results.singleAttemptAnalysis
             })
         });
+        if (typeof onLog === 'function') {
+            onLog('模型回复已收到，正在整理结果...');
+        }
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || payload?.success === false) {
             const message = payload?.message || payload?.error?.message || payload?.error_code || `HTTP_${response.status}`;
@@ -2166,12 +2252,16 @@
         }
         const requestId = state.llmAnalysisRequestId + 1;
         state.llmAnalysisRequestId = requestId;
-        state.llmAnalysisStatus = 'running';
-        state.llmAnalysisMessage = '正在生成证据化诊断...';
+        setLlmAnalysisStatus('running', '模型正在联通...');
         renderResults(results);
 
         try {
-            const llm = await requestSingleAttemptLlmAnalysis(results);
+            const llm = await requestSingleAttemptLlmAnalysis(results, (message) => {
+                if (requestId !== state.llmAnalysisRequestId) {
+                    return;
+                }
+                setLlmAnalysisStatus('running', message, { render: true });
+            });
             if (requestId !== state.llmAnalysisRequestId) {
                 return;
             }
@@ -2181,8 +2271,18 @@
                 singleAttemptAnalysis: results.singleAttemptAnalysis,
                 singleAttemptAnalysisLlm: llm
             });
-            state.llmAnalysisStatus = 'success';
-            state.llmAnalysisMessage = '';
+            const degraded = Boolean(llm?.model_trace?.degraded);
+            const provider = String(llm?.model_trace?.provider || '').trim();
+            const model = String(llm?.model_trace?.model || '').trim();
+            const modelId = provider && model
+                ? `${provider}/${model}`
+                : (model || provider || 'unknown-model');
+            setLlmAnalysisStatus(
+                degraded ? 'degraded' : 'success',
+                degraded
+                    ? 'AI 分析失败，已回退结构化分析，请点击重试。'
+                    : `数据分析完毕！本次由「${modelId}」分析`
+            );
             renderResults(results);
             postMessage('PRACTICE_ANALYSIS_PATCH', {
                 examId: state.examId,
@@ -2200,8 +2300,7 @@
             if (requestId !== state.llmAnalysisRequestId) {
                 return;
             }
-            state.llmAnalysisStatus = 'failed';
-            state.llmAnalysisMessage = `证据化诊断失败，已回退结构化分析：${error?.message || 'unknown_error'}`;
+            setLlmAnalysisStatus('failed', `证据化诊断失败，已回退结构化分析：${error?.message || 'unknown_error'}`);
             renderResults(results);
         }
     }
@@ -2234,15 +2333,25 @@
             ? `<ul>${actionsList.map((text) => `<li>${escapeHtml(text)}</li>`).join('')}</ul>`
             : '<p class="reading-guidance-card__empty">暂无下一步动作。</p>';
         let statusHtml = '';
-        if (llmStatus?.status === 'running') {
-            statusHtml = `<p class="reading-guidance-card__status">${escapeHtml(llmStatus.message || '正在生成证据化诊断...')}</p>`;
-        } else if (llmStatus?.status === 'failed') {
-            statusHtml = `<p class="reading-guidance-card__status reading-guidance-card__status--failed">${escapeHtml(llmStatus.message || '证据化诊断失败，已使用结构化分析结果')}</p>`;
+        if (llmStatus?.status === 'running' || llmStatus?.status === 'failed' || llmStatus?.status === 'success' || llmStatus?.status === 'degraded') {
+            let extraClass = '';
+            if (llmStatus?.status === 'failed') {
+                extraClass = ' reading-guidance-card__status--failed';
+            } else if (llmStatus?.status === 'degraded') {
+                extraClass = ' reading-guidance-card__status--degraded';
+            }
+            const flowClass = llmStatus?.status === 'running' ? ' reading-guidance-card__status-line--flow' : '';
+            statusHtml = `<p class="reading-guidance-card__status${extraClass}"><span class="reading-guidance-card__status-line${flowClass}">${escapeHtml(llmStatus.message || '模型正在联通...')}</span></p>`;
         }
+        const showRetry = llmStatus?.status === 'failed' || llmStatus?.status === 'degraded';
+        const retryHtml = showRetry
+            ? '<button type="button" class="reading-guidance-card__retry" data-action="retry-llm-analysis">重试 AI 分析</button>'
+            : '';
         return `
             <section class="reading-guidance-card">
                 <h5>本次分析指导</h5>
                 ${statusHtml}
+                ${retryHtml}
                 <div class="reading-guidance-card__row">
                     <div class="reading-guidance-card__label">诊断结论</div>
                     ${diagnosisHtml}
@@ -2324,6 +2433,15 @@
             </table>
         `;
         dom.results.style.display = 'block';
+        const retryButton = dom.results.querySelector('[data-action="retry-llm-analysis"]');
+        if (retryButton) {
+            retryButton.addEventListener('click', () => {
+                if (state.llmAnalysisStatus === 'running') {
+                    return;
+                }
+                triggerSingleAttemptLlmAnalysis(results);
+            }, { once: true });
+        }
     }
 
     function escapeSelector(value) {
@@ -2719,6 +2837,7 @@
 
     function loadPendingPracticeMessages() {
         const stores = [global.localStorage, global.sessionStorage].filter(Boolean);
+        let storageQueue = [];
         for (let index = 0; index < stores.length; index += 1) {
             const store = stores[index];
             try {
@@ -2726,13 +2845,32 @@
                 if (!raw) continue;
                 const parsed = JSON.parse(raw);
                 if (Array.isArray(parsed)) {
-                    return parsed;
+                    storageQueue = parsed;
+                    break;
                 }
             } catch (_) {
                 // ignore malformed payload
             }
         }
-        return [];
+        let windowNameQueue = [];
+        try {
+            const rawWindowName = typeof global.name === 'string' ? global.name : '';
+            if (rawWindowName.startsWith(WINDOW_NAME_PENDING_PREFIX)) {
+                const parsed = JSON.parse(rawWindowName.slice(WINDOW_NAME_PENDING_PREFIX.length));
+                if (Array.isArray(parsed)) {
+                    windowNameQueue = parsed;
+                }
+            }
+        } catch (_) {
+            // ignore malformed window.name payload
+        }
+        if (!storageQueue.length) {
+            return windowNameQueue;
+        }
+        if (!windowNameQueue.length) {
+            return storageQueue;
+        }
+        return storageQueue.concat(windowNameQueue);
     }
 
     function persistPendingPracticeMessages(messages) {
@@ -2745,6 +2883,14 @@
                 // ignore quota/storage errors
             }
         });
+        try {
+            const currentName = typeof global.name === 'string' ? global.name : '';
+            if (!currentName || currentName.startsWith(WINDOW_NAME_PENDING_PREFIX)) {
+                global.name = `${WINDOW_NAME_PENDING_PREFIX}${serialized}`;
+            }
+        } catch (_) {
+            // ignore window.name write errors
+        }
     }
 
     function appendPendingPracticeMessage(envelope) {
@@ -3403,6 +3549,59 @@
         }
     }
 
+    function resolveLegacyIndexUrl() {
+        const href = global.location && typeof global.location.href === 'string'
+            ? String(global.location.href)
+            : '';
+        if (!href.startsWith('file://')) {
+            return '';
+        }
+        try {
+            const decodedPath = decodeURIComponent(href.replace(/^file:\/\//, '').split(/[?#]/)[0]);
+            const normalizedPath = decodedPath.replace(/\\/g, '/');
+            const markers = ['/templates/', '/dist/writing/', '/apps/writing-vue/', '/assets/'];
+            for (let i = 0; i < markers.length; i += 1) {
+                const marker = markers[i];
+                const markerIndex = normalizedPath.indexOf(marker);
+                if (markerIndex > 0) {
+                    return `file://${normalizedPath.slice(0, markerIndex)}/index.html`;
+                }
+            }
+            const lastSlash = normalizedPath.lastIndexOf('/');
+            if (lastSlash > 0) {
+                return `file://${normalizedPath.slice(0, lastSlash + 1)}index.html`;
+            }
+        } catch (_) {
+            return '';
+        }
+        return '';
+    }
+
+    function navigateToLegacyHome() {
+        if (global.electronAPI && typeof global.electronAPI.openLegacy === 'function') {
+            try {
+                global.electronAPI.openLegacy();
+                return true;
+            } catch (_) {
+                // ignore and continue fallback
+            }
+        }
+        const legacyIndexUrl = resolveLegacyIndexUrl();
+        if (!legacyIndexUrl) {
+            return false;
+        }
+        try {
+            if (global.location && typeof global.location.replace === 'function') {
+                global.location.replace(legacyIndexUrl);
+            } else if (global.location) {
+                global.location.href = legacyIndexUrl;
+            }
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
     function handleIncoming(event) {
         const payload = event?.data;
         if (!payload || typeof payload !== 'object') {
@@ -3509,9 +3708,7 @@
         if (type === 'SUITE_FORCE_CLOSE') {
             clearSimulationState(true);
             try {
-                if (global.electronAPI && typeof global.electronAPI.openLegacy === 'function') {
-                    global.electronAPI.openLegacy();
-                } else {
+                if (!navigateToLegacyHome()) {
                     global.close();
                 }
             } catch (_) {

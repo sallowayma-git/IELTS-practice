@@ -1680,6 +1680,35 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("统一阅读页协议回归测试", False, "测试脚本缺失"))
         all_passed = False
 
+    reading_analysis_service_test = REPO_ROOT / "developer" / "tests" / "js" / "readingAnalysisService.test.js"
+    if reading_analysis_service_test.exists():
+        try:
+            completed_reading_analysis_service = subprocess.run(
+                ["node", str(reading_analysis_service_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            reading_analysis_service_passed = False
+            reading_analysis_service_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_reading_analysis_service_output = completed_reading_analysis_service.stdout.strip() or completed_reading_analysis_service.stderr.strip()
+            try:
+                reading_analysis_service_payload = json.loads(raw_reading_analysis_service_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                reading_analysis_service_passed = False
+                reading_analysis_service_detail = f"输出解析失败: {parse_error}"
+            else:
+                reading_analysis_service_passed = reading_analysis_service_payload.get("status") == "pass"
+                reading_analysis_service_detail = reading_analysis_service_payload.get("detail", reading_analysis_service_payload)
+        results.append(_format_result("阅读二阶段分析服务回归测试", reading_analysis_service_passed, reading_analysis_service_detail))
+        all_passed &= reading_analysis_service_passed
+    else:
+        results.append(_format_result("阅读二阶段分析服务回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
     # Integration tests
     deprecated_reading_source_dir = REPO_ROOT / "developer" / "reading-exams"
     integration_tests = [

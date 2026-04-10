@@ -111,9 +111,11 @@
 
     const ENHANCER_BASE_URL = resolveEnhancerBaseUrl();
     const PENDING_PRACTICE_MESSAGES_KEY = 'exam_system_pending_practice_messages_v1';
+    const WINDOW_NAME_PENDING_PREFIX = '__exam_pending_practice_v1__';
 
     function loadPendingPracticeMessages() {
         const stores = [window.localStorage, window.sessionStorage].filter(Boolean);
+        let storageQueue = [];
         for (let index = 0; index < stores.length; index += 1) {
             const store = stores[index];
             try {
@@ -123,13 +125,32 @@
                 }
                 const parsed = JSON.parse(raw);
                 if (Array.isArray(parsed)) {
-                    return parsed;
+                    storageQueue = parsed;
+                    break;
                 }
             } catch (_) {
                 // ignore malformed payload
             }
         }
-        return [];
+        let windowNameQueue = [];
+        try {
+            const rawWindowName = typeof window.name === 'string' ? window.name : '';
+            if (rawWindowName.startsWith(WINDOW_NAME_PENDING_PREFIX)) {
+                const parsed = JSON.parse(rawWindowName.slice(WINDOW_NAME_PENDING_PREFIX.length));
+                if (Array.isArray(parsed)) {
+                    windowNameQueue = parsed;
+                }
+            }
+        } catch (_) {
+            // ignore malformed window.name payload
+        }
+        if (!storageQueue.length) {
+            return windowNameQueue;
+        }
+        if (!windowNameQueue.length) {
+            return storageQueue;
+        }
+        return storageQueue.concat(windowNameQueue);
     }
 
     function persistPendingPracticeMessages(messages) {
@@ -142,6 +163,14 @@
                 // ignore quota/storage errors
             }
         });
+        try {
+            const currentName = typeof window.name === 'string' ? window.name : '';
+            if (!currentName || currentName.startsWith(WINDOW_NAME_PENDING_PREFIX)) {
+                window.name = `${WINDOW_NAME_PENDING_PREFIX}${serialized}`;
+            }
+        } catch (_) {
+            // ignore window.name write errors
+        }
     }
 
     function appendPendingPracticeMessage(envelope) {
@@ -1508,6 +1537,49 @@
             };
 
             const styleConfig = getAdaptiveButtonStyle();
+            const resolveLegacyIndexUrl = () => {
+                const href = window.location && typeof window.location.href === 'string'
+                    ? String(window.location.href)
+                    : '';
+                if (!href.startsWith('file://')) {
+                    return '';
+                }
+                try {
+                    const decodedPath = decodeURIComponent(href.replace(/^file:\/\//, '').split(/[?#]/)[0]);
+                    const normalizedPath = decodedPath.replace(/\\/g, '/');
+                    const markers = ['/templates/', '/dist/writing/', '/apps/writing-vue/', '/assets/'];
+                    for (let i = 0; i < markers.length; i += 1) {
+                        const marker = markers[i];
+                        const markerIndex = normalizedPath.indexOf(marker);
+                        if (markerIndex > 0) {
+                            return `file://${normalizedPath.slice(0, markerIndex)}/index.html`;
+                        }
+                    }
+                    const lastSlash = normalizedPath.lastIndexOf('/');
+                    if (lastSlash > 0) {
+                        return `file://${normalizedPath.slice(0, lastSlash + 1)}index.html`;
+                    }
+                } catch (_) {
+                    return '';
+                }
+                return '';
+            };
+            const navigateLegacyByLocation = () => {
+                const legacyIndexUrl = resolveLegacyIndexUrl();
+                if (!legacyIndexUrl) {
+                    return false;
+                }
+                try {
+                    if (window.location && typeof window.location.replace === 'function') {
+                        window.location.replace(legacyIndexUrl);
+                    } else if (window.location) {
+                        window.location.href = legacyIndexUrl;
+                    }
+                    return true;
+                } catch (_) {
+                    return false;
+                }
+            };
 
             // 创建返回按钮
             const backButton = document.createElement('button');
@@ -1554,6 +1626,18 @@
                     console.log('[PracticeEnhancer] 正在返回主页...');
                 } catch (error) {
                     console.error('[PracticeEnhancer] 返回主页失败:', error);
+                    if (navigateLegacyByLocation()) {
+                        return;
+                    }
+                    const opener = window.opener && !window.opener.closed ? window.opener : null;
+                    if (opener && typeof opener.postMessage === 'function') {
+                        try {
+                            opener.postMessage({ type: 'PRACTICE_EXIT', data: { source: 'practice_page' } }, '*');
+                        } catch (_) {
+                            // ignore opener communication errors
+                        }
+                    }
+                    window.close();
                 }
             });
 
@@ -2047,6 +2131,7 @@
         setupCommunication: function () {
             this.parentWindow = window.opener || window.parent;
             if (!this.parentWindow || this.parentWindow === window) {
+                this.parentWindow = null;
                 console.warn('[PracticeEnhancer] 未检测到父窗口');
                 return;
             }
@@ -4796,7 +4881,8 @@
         },
 
         sendMessage: function (type, data) {
-            if (!this.parentWindow) {
+            if (!this.parentWindow || this.parentWindow === window) {
+                this.parentWindow = null;
                 if (String(type || '').toUpperCase() === 'PRACTICE_COMPLETE') {
                     const pendingEnvelope = this.buildMessageEnvelope(type, data);
                     appendPendingPracticeMessage(pendingEnvelope);

@@ -1267,6 +1267,33 @@
     // 内联增强器（降级方案）
     function loadInlineEnhancer() {
       if (window.practicePageEnhancer) return;
+      const INLINE_PENDING_MESSAGES_KEY = 'exam_system_pending_practice_messages_v1';
+      const INLINE_WINDOW_NAME_PENDING_PREFIX = '__exam_pending_practice_v1__';
+      function appendInlinePendingPracticeMessage(envelope) {
+        if (!envelope || typeof envelope !== 'object') return;
+        let queue = [];
+        try {
+          const raw = localStorage.getItem(INLINE_PENDING_MESSAGES_KEY);
+          const parsed = raw ? JSON.parse(raw) : [];
+          queue = Array.isArray(parsed) ? parsed : [];
+        } catch (_) {
+          queue = [];
+        }
+        queue.push({
+          createdAt: Date.now(),
+          message: envelope
+        });
+        const normalized = queue.slice(-10);
+        const serialized = JSON.stringify(normalized);
+        try { localStorage.setItem(INLINE_PENDING_MESSAGES_KEY, serialized); } catch (_) {}
+        try { sessionStorage.setItem(INLINE_PENDING_MESSAGES_KEY, serialized); } catch (_) {}
+        try {
+          const currentName = typeof window.name === 'string' ? window.name : '';
+          if (!currentName || currentName.startsWith(INLINE_WINDOW_NAME_PENDING_PREFIX)) {
+            window.name = `${INLINE_WINDOW_NAME_PENDING_PREFIX}${serialized}`;
+          }
+        } catch (_) {}
+      }
 
       window.practicePageEnhancer = {
         initialize: function () {
@@ -1278,6 +1305,9 @@
 
         setupCommunication: function () {
           this.parentWindow = window.opener || window.parent;
+          if (!this.parentWindow || this.parentWindow === window) {
+            this.parentWindow = null;
+          }
           window.addEventListener('message', (event) => {
             if (event.data && event.data.type === 'INIT_SESSION') {
               this.sessionId = event.data.data.sessionId;
@@ -1371,12 +1401,24 @@
         },
 
         sendMessage: function (type, data) {
-          if (this.parentWindow) {
-            this.parentWindow.postMessage({
-              type: type,
-              data: data,
-              source: 'practice_page'
-            }, '*');
+          const envelope = {
+            type: type,
+            data: data,
+            source: 'practice_page'
+          };
+          if (!this.parentWindow || this.parentWindow === window) {
+            this.parentWindow = null;
+            if (String(type || '').toUpperCase() === 'PRACTICE_COMPLETE') {
+              appendInlinePendingPracticeMessage(envelope);
+            }
+            return;
+          }
+          try {
+            this.parentWindow.postMessage(envelope, '*');
+          } catch (_) {
+            if (String(type || '').toUpperCase() === 'PRACTICE_COMPLETE') {
+              appendInlinePendingPracticeMessage(envelope);
+            }
           }
         }
       };

@@ -477,6 +477,7 @@ function buildHarness(options = {}) {
     const sessionStorage = createWebStorage();
     const localStorage = createWebStorage();
     const closeLog = [];
+    const locationReplaceLog = [];
     let electronOpenLegacyCalls = 0;
     const openerStub = {
         closed: false,
@@ -503,10 +504,18 @@ function buildHarness(options = {}) {
             href: 'file:///Users/test/practice.html',
             pathname: '/Users/test/practice.html',
             search: '?examId=reading-p1',
-            origin: 'null'
+            origin: 'null',
+            replace(nextUrl) {
+                const normalized = String(nextUrl || '');
+                this.href = normalized;
+                if (normalized.startsWith('file://')) {
+                    this.pathname = decodeURIComponent(normalized.replace(/^file:\/\//, '').split(/[?#]/)[0]);
+                }
+                locationReplaceLog.push(normalized);
+            }
         },
         navigator: {},
-        opener: openerStub,
+        opener: options.withoutOpener ? null : openerStub,
         parent: null,
         console: {
             log() {},
@@ -597,6 +606,7 @@ function buildHarness(options = {}) {
         document,
         elements: { submitBtn, resetBtn, exitBtn, navContainer, q1, q2, q3, results },
         closeLog,
+        locationReplaceLog,
         getElectronOpenLegacyCalls() {
             return electronOpenLegacyCalls;
         },
@@ -727,6 +737,18 @@ function testLiveModeExitUsesElectronNavigationWhenAvailable() {
     assert.strictEqual(harness.getElectronOpenLegacyCalls(), 1, 'Electron 环境下点击 exit 应优先走 openLegacy');
     assert.strictEqual(harness.closeLog.length, 0, 'Electron 环境下点击 exit 不应直接 window.close');
 }
+function testLiveModeExitFallsBackToIndexWhenNoElectronAndNoOpener() {
+    const harness = buildHarness({ simulationMode: false, withoutOpener: true });
+    harness.elements.submitBtn.click();
+    harness.elements.exitBtn.click();
+    assert.strictEqual(harness.closeLog.length, 0, '无 opener 且无 Electron API 时不应直接关闭窗口');
+    assert.strictEqual(harness.locationReplaceLog.length, 1, '无 opener 且无 Electron API 时应回退到 index.html');
+    assert.strictEqual(
+        harness.locationReplaceLog[0],
+        'file:///Users/test/index.html',
+        '无 opener 且无 Electron API 时应回退到同目录 index.html'
+    );
+}
 function testSuiteModeUiContractStaysHidden() {
     const harness = buildHarness();
     const suiteFlowModeSection = harness.document.getElementById('suite-flow-mode-section');
@@ -759,11 +781,12 @@ function main() {
         testPracticeResultsPendingContract();
         testLiveModeSubmitLocksAndExitClosesWindow();
         testLiveModeExitUsesElectronNavigationWhenAvailable();
+        testLiveModeExitFallsBackToIndexWhenNoElectronAndNoOpener();
         testSuiteModeUiContractStaysHidden();
         testEndlessCountdownExitContract();
         console.log(JSON.stringify({
             status: 'pass',
-            detail: 'practice-page-ui 已覆盖 marked questions、practiceResultsReady 结果链路、simulation mode、suite mode UI 合同与 endless exit 链路'
+            detail: 'practice-page-ui 已覆盖 marked questions、practiceResultsReady 结果链路、simulation mode、suite mode UI、endless exit 与无 opener 回退 index 合同'
         }, null, 2));
     } catch (error) {
         console.log(JSON.stringify({

@@ -249,6 +249,32 @@ function testSendMessageQueuesPracticeCompleteWhenParentMissing() {
     const queue = JSON.parse(raw);
     assert.ok(Array.isArray(queue) && queue.length === 1, '待处理队列应追加一条消息');
     assert.strictEqual(queue[0].message.type, 'PRACTICE_COMPLETE', '待处理队列中的消息类型应保持 PRACTICE_COMPLETE');
+    assert.ok(
+        String(harness.windowStub.name || '').startsWith('__exam_pending_practice_v1__'),
+        '无父窗口时应同步写入 window.name 持久化通道'
+    );
+}
+
+function testSendMessageQueuesPracticeCompleteWhenParentIsSelf() {
+    const harness = createHarness();
+    harness.enhancer.parentWindow = harness.windowStub;
+    harness.enhancer.readOnly = false;
+
+    harness.enhancer.sendMessage('PRACTICE_COMPLETE', {
+        examId: 'reading-p2',
+        sessionId: 'session-self-parent',
+        scoreInfo: { correct: 3, total: 5, accuracy: 0.6, percentage: 60 }
+    });
+
+    const raw = harness.windowStub.localStorage.getItem('exam_system_pending_practice_messages_v1');
+    assert.ok(raw, 'parentWindow===window 时也应写入待处理队列');
+    const queue = JSON.parse(raw);
+    assert.ok(Array.isArray(queue) && queue.length === 1, 'self-parent 场景应有一条待处理消息');
+    assert.strictEqual(queue[0].message.type, 'PRACTICE_COMPLETE', 'self-parent 场景消息类型应保持 PRACTICE_COMPLETE');
+    assert.ok(
+        String(harness.windowStub.name || '').startsWith('__exam_pending_practice_v1__'),
+        'self-parent 场景也应同步写入 window.name 持久化通道'
+    );
 }
 function testApplyReplayRecordRestoresMarkedQuestions() {
     const harness = createHarness();
@@ -503,6 +529,7 @@ function main() {
         testGetCorrectAnswersDelegatesToEnhancer();
         testSendMessageRespectsReadOnlyGuard();
         testSendMessageQueuesPracticeCompleteWhenParentMissing();
+        testSendMessageQueuesPracticeCompleteWhenParentIsSelf();
         testApplyReplayRecordRestoresMarkedQuestions();
         testApplyReplayRecordSchedulesReplayFallbackOnce();
         testResultsMonitoringAndScoreContracts();

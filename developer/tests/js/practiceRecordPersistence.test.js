@@ -233,6 +233,40 @@ async function testDeleteRecordForcesUiRefreshWhenPracticeCoreAlreadySyncedState
     );
 }
 
+async function testConsumePendingPracticeMessagesReadsWindowNameChannel() {
+    const harness = createHarness();
+    const consumed = [];
+    let syncCalled = 0;
+    harness.sandbox.savePracticeRecordFallback = async (examId, payload) => {
+        consumed.push({ examId, payload });
+    };
+    harness.sandbox.syncPracticeRecords = () => {
+        syncCalled += 1;
+    };
+    const pendingEnvelope = {
+        createdAt: Date.now(),
+        message: {
+            type: 'PRACTICE_COMPLETE',
+            source: 'practice_page',
+            data: {
+                examId: 'reading-electron-window-name',
+                sessionId: 'session-electron-window-name',
+                scoreInfo: { correct: 6, total: 10, accuracy: 0.6, percentage: 60 }
+            }
+        }
+    };
+    harness.sandbox.window.name = `__exam_pending_practice_v1__${JSON.stringify([pendingEnvelope])}`;
+
+    await harness.sandbox.consumePendingPracticeMessages();
+    await new Promise((resolve) => setTimeout(resolve, 360));
+
+    assert.strictEqual(consumed.length, 1, 'consumePendingPracticeMessages 应消费 window.name 待处理消息');
+    assert.strictEqual(consumed[0].examId, 'reading-electron-window-name', 'window.name 通道应保留 examId');
+    assert.strictEqual(consumed[0].payload.sessionId, 'session-electron-window-name', 'window.name 通道应保留 sessionId');
+    assert.strictEqual(harness.sandbox.window.name, '', '消息消费后应清空 window.name 通道');
+    assert.ok(syncCalled > 0, '消费成功后应触发练习记录同步');
+}
+
 function testScoreStorageDurationPrefersTimelineWhenConflict() {
     const quietConsole = {
         log() {},
@@ -795,6 +829,7 @@ async function main() {
         await testDeleteRecordPersistsAndCleansLegacyKeys();
         await testClearPracticeDataPersistsAndClearsLegacyKeys();
         await testDeleteRecordForcesUiRefreshWhenPracticeCoreAlreadySyncedState();
+        await testConsumePendingPracticeMessagesReadsWindowNameChannel();
         testScoreStorageDurationPrefersTimelineWhenConflict();
         testScoreStorageDurationRejectsRawFallbackWithoutTimeline();
         testScoreStorageAnalysisInputCanonicalization();

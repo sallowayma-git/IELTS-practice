@@ -102,7 +102,51 @@
         }
 
         function isSimulationMode() { return window.__UNIFIED_READING_SIMULATION_MODE__ === true; }
-        function closePracticeWindow() {
+        function resolveLegacyIndexUrl() {
+            const href = window.location && typeof window.location.href === 'string'
+                ? String(window.location.href)
+                : '';
+            if (!href.startsWith('file://')) {
+                return '';
+            }
+            try {
+                const decodedPath = decodeURIComponent(href.replace(/^file:\/\//, '').split(/[?#]/)[0]);
+                const normalizedPath = decodedPath.replace(/\\/g, '/');
+                const markers = ['/templates/', '/dist/writing/', '/apps/writing-vue/', '/assets/'];
+                for (let i = 0; i < markers.length; i += 1) {
+                    const marker = markers[i];
+                    const markerIndex = normalizedPath.indexOf(marker);
+                    if (markerIndex > 0) {
+                        return `file://${normalizedPath.slice(0, markerIndex)}/index.html`;
+                    }
+                }
+                const lastSlash = normalizedPath.lastIndexOf('/');
+                if (lastSlash > 0) {
+                    return `file://${normalizedPath.slice(0, lastSlash + 1)}index.html`;
+                }
+            } catch (_) {
+                return '';
+            }
+            return '';
+        }
+        function navigateToLegacyByLocation() {
+            const legacyIndexUrl = resolveLegacyIndexUrl();
+            if (!legacyIndexUrl) {
+                return false;
+            }
+            try {
+                if (window.location && typeof window.location.replace === 'function') {
+                    window.location.replace(legacyIndexUrl);
+                } else if (window.location) {
+                    window.location.href = legacyIndexUrl;
+                }
+                return true;
+            } catch (_) {
+                return false;
+            }
+        }
+        function closePracticeWindow(options = {}) {
+            const skipParentExitMessage = options && options.skipParentExitMessage === true;
             const hasElectronLegacyNavigation = window.electronAPI
                 && typeof window.electronAPI.openLegacy === 'function';
             if (hasElectronLegacyNavigation) {
@@ -110,8 +154,19 @@
                     window.electronAPI.openLegacy();
                     return;
                 } catch (_) {
-                    // fall through to native close
+                    // ignore and continue fallback chain
                 }
+            }
+            const opener = window.opener && !window.opener.closed ? window.opener : null;
+            if (!skipParentExitMessage && opener && typeof opener.postMessage === 'function') {
+                try {
+                    opener.postMessage({ type: 'PRACTICE_EXIT', data: { source: 'practice_page' } }, '*');
+                } catch (_) {
+                    // ignore opener message errors
+                }
+            }
+            if (!opener && navigateToLegacyByLocation()) {
+                return;
             }
             window.close();
         }
@@ -1233,7 +1288,7 @@
                     setExitButtonVisible(true);
                     setExitButtonAction(function () {
                         notifyEndlessUserExit();
-                        closePracticeWindow();
+                        closePracticeWindow({ skipParentExitMessage: true });
                     }, '\u9000\u51fa\u65e0\u5c3d\u6a21\u5f0f');
                 } else if (msg.type === 'ENDLESS_COUNTDOWN_TICK') {
                     if (!endlessCountdownActive) return;

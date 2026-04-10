@@ -116,6 +116,7 @@ function createHarness(options = {}) {
         document: documentStub,
         opener: options.noParent ? null : openerStub,
         parent: options.noParent ? null : openerStub,
+        name: '',
         localStorage,
         sessionStorage,
         location: {
@@ -327,6 +328,66 @@ async function testSingleAttemptLlmAnalysisPatchFlow() {
     assert.strictEqual(harness.hooks.state.llmAnalysisStatus, 'success', '二阶段成功后状态应为 success');
     assert.ok(results.singleAttemptAnalysisLlm, '成功后应回填 singleAttemptAnalysisLlm');
     assert.strictEqual(harness.postedMessages[harness.postedMessages.length - 1].message.type, 'PRACTICE_ANALYSIS_PATCH', '成功后应发送分析补丁消息');
+}
+
+async function testSingleAttemptLlmAnalysisDegradedShowsRetryWithoutModelId() {
+    const harness = createHarness({
+        withElectronAPI: true,
+        localApiBaseUrl: 'http://127.0.0.1:3900',
+        fetchImpl: async () => ({
+            ok: true,
+            async json() {
+                return {
+                    success: true,
+                    data: {
+                        diagnosis: [],
+                        nextActions: [],
+                        confidence: 0.45,
+                        model_trace: {
+                            provider: 'openai',
+                            model: 'MiniMax-M2.7-free',
+                            degraded: true
+                        }
+                    }
+                };
+            }
+        })
+    });
+    harness.hooks.state.examId = 'reading-p1';
+    harness.hooks.state.sessionId = 'session-llm-degraded';
+    const results = {
+        answers: { q1: 'A' },
+        answerComparison: {
+            q1: { questionId: 'q1', userAnswer: 'A', correctAnswer: 'B', isCorrect: false }
+        },
+        scoreInfo: {
+            correct: 0,
+            total: 1,
+            totalQuestions: 1,
+            percentage: 0
+        },
+        singleAttemptAnalysisInput: {
+            totalQuestions: 1,
+            analysisSignals: { unansweredCount: 0, changedAnswerCount: 0 },
+            questionTypePerformance: {
+                summary_completion: { total: 1, correct: 0, accuracy: 0, confidence: 0.5 }
+            }
+        },
+        singleAttemptAnalysis: {
+            summary: { accuracy: 0, durationSec: 75, unansweredRate: 0, changedAnswerRate: 0 },
+            radar: { byQuestionKind: [{ kind: 'summary_completion', total: 1, correct: 0, accuracy: 0, confidence: 0.5 }], byPassageCategory: [] },
+            diagnosis: [{ code: 'fallback', reason: '结构化诊断', evidence: {} }],
+            nextActions: [{ type: 'fallback', target: 'overall', instruction: '结构化建议', evidence: {} }],
+            confidence: 0.5
+        },
+        realData: {}
+    };
+
+    await harness.hooks.triggerSingleAttemptLlmAnalysis(results);
+    assert.strictEqual(harness.hooks.state.llmAnalysisStatus, 'degraded', '降级响应应进入 degraded 状态');
+    assert.ok(harness.hooks.state.llmAnalysisMessage.includes('AI 分析失败'), '降级状态应给出失败提示');
+    assert.ok(!harness.hooks.state.llmAnalysisMessage.includes('MiniMax-M2.7-free'), '降级状态不应显示模型 ID');
+    assert.ok(String(harness.resultsContainer.innerHTML || '').includes('重试 AI 分析'), '降级状态应展示重试按钮');
 }
 
 function testInitSessionSimulationSyncsButtonsAndSuiteState() {
@@ -643,6 +704,10 @@ function testPostMessageQueuesPracticeCompleteWhenParentMissing() {
     const queue = JSON.parse(raw);
     assert.ok(Array.isArray(queue) && queue.length === 1, '待处理队列应新增一条消息');
     assert.strictEqual(queue[0].message.type, 'PRACTICE_COMPLETE', '待处理队列消息类型应保持 PRACTICE_COMPLETE');
+    assert.ok(
+        String(harness.windowStub.name || '').startsWith('__exam_pending_practice_v1__'),
+        '无父窗口时应同步写入 window.name 持久化通道'
+    );
 }
 
 function testSuiteForceCloseUsesElectronNavigation() {
@@ -670,9 +735,10 @@ async function main() {
         testPostMessageQueuesPracticeCompleteWhenParentMissing();
         testSuiteForceCloseUsesElectronNavigation();
         await testSingleAttemptLlmAnalysisPatchFlow();
+        await testSingleAttemptLlmAnalysisDegradedShowsRetryWithoutModelId();
         console.log(JSON.stringify({
             status: 'pass',
-            detail: 'unifiedReadingPage 已覆盖 INIT_SESSION/SIMULATION_CONTEXT 协议、review init 可编辑合同、REVIEW_CONTEXT answering 退只读合同、SESSION_READY envelope、review navigate payload 及二阶段 LLM 分析补丁链路'
+            detail: 'unifiedReadingPage 已覆盖 INIT_SESSION/SIMULATION_CONTEXT 协议、review init 可编辑合同、REVIEW_CONTEXT answering 退只读合同、SESSION_READY envelope、review navigate payload、降级重试 UI 及二阶段 LLM 分析补丁链路'
         }, null, 2));
     } catch (error) {
         console.log(JSON.stringify({
