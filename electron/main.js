@@ -63,12 +63,27 @@ function configureStableUserDataPath() {
  * @returns {boolean} 是否为合法来源
  */
 function isValidNavigationSource(event) {
-    const senderURL = event.senderFrame.url;
+    const senderURL = event?.senderFrame?.url || event?.sender?.getURL?.() || '';
 
     // 必须是 file:// 协议
     if (!senderURL.startsWith('file://')) {
         console.warn(`[Security] IPC navigation rejected: non-file protocol (${senderURL})`);
         return false;
+    }
+
+    // 允许项目目录内的本地页面（练习子页、模板页、构建产物）
+    try {
+        const senderPath = decodeURIComponent(String(senderURL).replace(/^file:\/\//, '').split(/[?#]/)[0]);
+        const normalizedSenderPath = path.resolve(senderPath);
+        const projectDir = path.resolve(__dirname, '..');
+        if (
+            normalizedSenderPath === projectDir
+            || normalizedSenderPath.startsWith(`${projectDir}${path.sep}`)
+        ) {
+            return true;
+        }
+    } catch (_) {
+        // ignore parse error and continue legacy allowlist check
     }
 
     // 检查是否在白名单中
