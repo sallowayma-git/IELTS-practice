@@ -10,6 +10,7 @@ let practiceListScroller = null;
 let app = null;
 let pdfHandler = null;
 let browseStateManager = null;
+const PENDING_PRACTICE_MESSAGES_KEY = 'exam_system_pending_practice_messages_v1';
 
 function normalizeRecordId(id) {
     if (id == null) {
@@ -274,6 +275,7 @@ async function initializeLegacyComponents() {
     await loadLibraryInternal();
     startPracticeRecordsSyncInBackground('boot'); // 后台静默加载练习记录，避免阻塞首页
     setupMessageListener(); // Listen for updates from child windows
+    await consumePendingPracticeMessages(); // Electron 单窗口场景：回收子页暂存的完成消息
     setupStorageSyncListener(); // Listen for storage changes from other tabs
 }
 
@@ -569,6 +571,26 @@ function extractCompletionPayload(envelope) {
     return null;
 }
 
+function extractAnalysisPatchPayload(envelope) {
+    if (!envelope || typeof envelope !== 'object') {
+        return null;
+    }
+    const candidates = [envelope.data, envelope.payload, envelope.results, envelope.detail, envelope];
+    for (let i = 0; i < candidates.length; i += 1) {
+        const candidate = candidates[i];
+        if (!candidate || typeof candidate !== 'object') {
+            continue;
+        }
+        if (candidate.singleAttemptAnalysisLlm && typeof candidate.singleAttemptAnalysisLlm === 'object') {
+            return candidate;
+        }
+        if (candidate.realData && candidate.realData.singleAttemptAnalysisLlm && typeof candidate.realData.singleAttemptAnalysisLlm === 'object') {
+            return candidate;
+        }
+    }
+    return null;
+}
+
 function extractCompletionSessionId(envelope) {
     if (!envelope || typeof envelope !== 'object') {
         return null;
@@ -581,6 +603,68 @@ function extractCompletionSessionId(envelope) {
         return payload.sessionId.trim();
     }
     return null;
+}
+
+async function applySingleAttemptAnalysisPatch(payload) {
+    if (!payload || typeof payload !== 'object') {
+        return false;
+    }
+    const sessionId = String(
+        payload.sessionId
+        || payload.realData?.sessionId
+        || ''
+    ).trim();
+    if (!sessionId) {
+        return false;
+    }
+    const llmPatch = payload.singleAttemptAnalysisLlm || payload.realData?.singleAttemptAnalysisLlm;
+    if (!llmPatch || typeof llmPatch !== 'object') {
+        return false;
+    }
+
+    const patchBundle = {
+        singleAttemptAnalysisInput: payload.singleAttemptAnalysisInput || payload.realData?.singleAttemptAnalysisInput || null,
+        singleAttemptAnalysis: payload.singleAttemptAnalysis || payload.realData?.singleAttemptAnalysis || null,
+        singleAttemptAnalysisLlm: llmPatch
+    };
+
+    const practiceCore = window.PracticeCore;
+    if (
+        practiceCore
+        && practiceCore.store
+        && typeof practiceCore.store.listPracticeRecords === 'function'
+        && typeof practiceCore.store.savePracticeRecord === 'function'
+    ) {
+        const records = await practiceCore.store.listPracticeRecords();
+        const list = Array.isArray(records) ? records : [];
+        const target = list.find((entry) => String(entry?.sessionId || '').trim() === sessionId);
+        if (!target) {
+            return false;
+        }
+        const merged = Object.assign({}, target, patchBundle, {
+            realData: Object.assign({}, target.realData || {}, patchBundle),
+            updatedAt: new Date().toISOString()
+        });
+        await practiceCore.store.savePracticeRecord(merged, {
+            currentVersion: merged.version || ((window.scoreStorage && window.scoreStorage.currentVersion) || '1.0.0'),
+            maxRecords: (window.scoreStorage && window.scoreStorage.maxRecords) || 1000
+        });
+        return true;
+    }
+
+    const existing = getPracticeRecordsState();
+    const records = Array.isArray(existing) ? existing.slice() : [];
+    const index = records.findIndex((entry) => String(entry?.sessionId || '').trim() === sessionId);
+    if (index < 0) {
+        return false;
+    }
+    const target = records[index];
+    records[index] = Object.assign({}, target, patchBundle, {
+        realData: Object.assign({}, target.realData || {}, patchBundle),
+        updatedAt: new Date().toISOString()
+    });
+    await persistPracticeRecordsAndRefresh(records, 'analysis-patch');
+    return true;
 }
 
 function shouldAnnounceCompletion(sessionId) {
@@ -684,6 +768,108 @@ function showCompletionSummary(envelope) {
     showMessage(`📊 ${parts.join('，')}`, 'info');
 }
 
+function loadPendingPracticeMessagesFromStore(store) {
+    if (!store || typeof store.getItem !== 'function') {
+        return [];
+    }
+    try {
+        const raw = store.getItem(PENDING_PRACTICE_MESSAGES_KEY);
+        if (!raw) {
+            return [];
+        }
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+        return [];
+    }
+}
+
+function clearPendingPracticeMessagesFromStore(store) {
+    if (!store || typeof store.removeItem !== 'function') {
+        return;
+    }
+    try {
+        store.removeItem(PENDING_PRACTICE_MESSAGES_KEY);
+    } catch (_) {
+        // ignore storage cleanup errors
+    }
+}
+
+function extractPendingExamId(entry) {
+    const envelope = entry && entry.message && typeof entry.message === 'object'
+        ? entry.message
+        : entry;
+    const payload = extractCompletionPayload(envelope) || {};
+    return payload.examId
+        || payload.metadata?.examId
+        || payload.realData?.examId
+        || null;
+}
+
+async function consumePendingPracticeMessages() {
+    const localQueue = loadPendingPracticeMessagesFromStore(window.localStorage);
+    const sessionQueue = loadPendingPracticeMessagesFromStore(window.sessionStorage);
+    const mergedQueue = [...localQueue, ...sessionQueue];
+    clearPendingPracticeMessagesFromStore(window.localStorage);
+    clearPendingPracticeMessagesFromStore(window.sessionStorage);
+    if (!mergedQueue.length) {
+        return;
+    }
+
+    const seen = new Set();
+    const uniqueEntries = mergedQueue.filter((entry) => {
+        const envelope = entry && entry.message && typeof entry.message === 'object'
+            ? entry.message
+            : entry;
+        const normalizedType = String(envelope?.type || '').toUpperCase();
+        if (normalizedType === 'PRACTICE_ANALYSIS_PATCH') {
+            const patchPayload = extractAnalysisPatchPayload(envelope) || {};
+            const sessionId = patchPayload.sessionId || patchPayload.realData?.sessionId || '';
+            const generatedAt = patchPayload.singleAttemptAnalysisLlm?.generatedAt || '';
+            const dedupeKey = `${normalizedType}|${sessionId}|${generatedAt}`;
+            if (seen.has(dedupeKey)) {
+                return false;
+            }
+            seen.add(dedupeKey);
+            return true;
+        }
+        const payload = extractCompletionPayload(envelope) || {};
+        const sessionId = payload.sessionId || payload.realData?.sessionId || '';
+        const examId = extractPendingExamId(entry) || '';
+        const endTime = payload.endTime || payload.realData?.endTime || '';
+        const dedupeKey = `${normalizedType}|${sessionId}|${examId}|${endTime}`;
+        if (seen.has(dedupeKey)) {
+            return false;
+        }
+        seen.add(dedupeKey);
+        return true;
+    });
+
+    let hasProcessedEntry = false;
+    for (let index = 0; index < uniqueEntries.length; index += 1) {
+        const entry = uniqueEntries[index];
+        const envelope = entry && entry.message && typeof entry.message === 'object'
+            ? entry.message
+            : entry;
+        const type = String(envelope && envelope.type ? envelope.type : '').toUpperCase();
+        if (type === 'PRACTICE_COMPLETE' || type === 'PRACTICE_COMPLETED') {
+            const payload = extractCompletionPayload(envelope) || {};
+            await savePracticeRecordFallback(extractPendingExamId(entry), payload);
+            hasProcessedEntry = true;
+        } else if (type === 'PRACTICE_ANALYSIS_PATCH') {
+            const patchPayload = extractAnalysisPatchPayload(envelope);
+            if (patchPayload) {
+                await applySingleAttemptAnalysisPatch(patchPayload);
+                hasProcessedEntry = true;
+            }
+        }
+    }
+
+    if (hasProcessedEntry) {
+        setTimeout(syncPracticeRecords, 300);
+    }
+}
+
 function setupMessageListener() {
     window.addEventListener('message', (event) => {
         // 更兼容的安全检查：允许同源或file协议下的子窗口
@@ -730,6 +916,18 @@ function setupMessageListener() {
                 }
                 setTimeout(syncPracticeRecords, 300);
             }
+        } else if (type === 'PRACTICE_ANALYSIS_PATCH' || type === 'practice_analysis_patch') {
+            const patchPayload = extractAnalysisPatchPayload(data);
+            if (!patchPayload) {
+                return;
+            }
+            applySingleAttemptAnalysisPatch(patchPayload).then((updated) => {
+                if (updated) {
+                    setTimeout(syncPracticeRecords, 300);
+                }
+            }).catch((error) => {
+                console.warn('[System] 应用分析补丁失败:', error);
+            });
         }
     });
 }

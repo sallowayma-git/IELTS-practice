@@ -159,6 +159,330 @@ class ScoreStorage {
         return Number.isFinite(num) ? num : fallback;
     }
 
+    clampNumber(value, min, max) {
+        if (!Number.isFinite(value)) {
+            return min;
+        }
+        return Math.max(min, Math.min(max, value));
+    }
+
+    isFilledAnswerValue(value) {
+        if (Array.isArray(value)) {
+            return value.some((item) => this.isFilledAnswerValue(item));
+        }
+        if (value == null) {
+            return false;
+        }
+        return String(value).trim().length > 0;
+    }
+
+    parseTimelineTimestamp(value) {
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) {
+            return numeric;
+        }
+        if (typeof value === 'string') {
+            const parsed = Date.parse(value);
+            if (Number.isFinite(parsed)) {
+                return parsed;
+            }
+        }
+        return 0;
+    }
+
+    normalizeQuestionTimelineLiteFallback(rawTimeline) {
+        if (!Array.isArray(rawTimeline)) {
+            return [];
+        }
+        return rawTimeline
+            .map((entry) => {
+                if (!entry || typeof entry !== 'object') {
+                    return null;
+                }
+                const questionId = String(entry.questionId || '').trim();
+                if (!questionId) {
+                    return null;
+                }
+                return {
+                    questionId,
+                    firstAnsweredAt: Math.max(0, this.parseTimelineTimestamp(entry.firstAnsweredAt)),
+                    lastAnsweredAt: Math.max(0, this.parseTimelineTimestamp(entry.lastAnsweredAt)),
+                    changeCount: Math.max(0, this.ensureNumber(entry.changeCount, 0))
+                };
+            })
+            .filter(Boolean);
+    }
+
+    sanitizeQuestionTypePerformanceFallback(rawPerformance, options = {}) {
+        const source = rawPerformance && typeof rawPerformance === 'object' ? rawPerformance : {};
+        const totalQuestions = Math.max(0, this.ensureNumber(options.totalQuestions, 0));
+        const correctAnswers = Math.max(0, this.ensureNumber(options.correctAnswers, 0));
+        const dataQuality = options.dataQuality && typeof options.dataQuality === 'object'
+            ? options.dataQuality
+            : {};
+        const baseConfidence = this.clampNumber(this.ensureNumber(dataQuality.confidence, 0.5), 0, 1);
+        const normalized = {};
+
+        const mergeEntry = (targetType, rawEntry) => {
+            if (!rawEntry || typeof rawEntry !== 'object') {
+                return;
+            }
+            const parsedTotal = Math.max(0, this.ensureNumber(
+                rawEntry.total ?? rawEntry.questionCount ?? rawEntry.questions ?? rawEntry.count,
+                0
+            ));
+            const parsedCorrectRaw = Math.max(0, this.ensureNumber(
+                rawEntry.correct ?? rawEntry.correctAnswers ?? rawEntry.score,
+                0
+            ));
+            const parsedCorrect = parsedTotal > 0 ? Math.min(parsedCorrectRaw, parsedTotal) : parsedCorrectRaw;
+            const current = normalized[targetType] || { total: 0, correct: 0, accuracy: 0 };
+            current.total += parsedTotal;
+            current.correct += parsedCorrect;
+            if (rawEntry.timeSpent != null || current.timeSpent != null) {
+                current.timeSpent = Math.max(
+                    0,
+                    this.ensureNumber(current.timeSpent, 0) + this.ensureNumber(rawEntry.timeSpent, 0)
+                );
+            }
+            current.correct = Math.max(0, Math.min(current.total, current.correct));
+            current.accuracy = current.total > 0 ? current.correct / current.total : 0;
+            normalized[targetType] = current;
+        };
+
+        Object.entries(source).forEach(([rawType, rawEntry]) => {
+            const normalizedType = String(rawType || '').trim().toLowerCase();
+            const targetType = (!normalizedType || normalizedType === 'general') ? 'unknown' : normalizedType;
+            mergeEntry(targetType, rawEntry);
+        });
+
+        let knownQuestions = 0;
+        let knownCorrect = 0;
+        Object.entries(normalized).forEach(([type, performance]) => {
+            if (type === 'unknown') return;
+            knownQuestions += this.ensureNumber(performance.total, 0);
+            knownCorrect += this.ensureNumber(performance.correct, 0);
+        });
+
+        let unknownQuestions = this.ensureNumber(normalized.unknown?.total, 0);
+        let unknownCorrect = this.ensureNumber(normalized.unknown?.correct, 0);
+        if (totalQuestions > 0) {
+            unknownQuestions = Math.max(unknownQuestions, Math.max(totalQuestions - knownQuestions, 0));
+            unknownQuestions = Math.min(totalQuestions, unknownQuestions);
+            unknownCorrect = Math.max(unknownCorrect, Math.max(correctAnswers - knownCorrect, 0));
+        }
+
+        if (unknownQuestions > 0 || normalized.unknown) {
+            unknownCorrect = Math.max(0, Math.min(unknownQuestions, unknownCorrect));
+            const missingKindRatio = totalQuestions > 0
+                ? this.clampNumber(unknownQuestions / totalQuestions, 0, 1)
+                : 1;
+            normalized.unknown = Object.assign({}, normalized.unknown || {}, {
+                total: unknownQuestions,
+                correct: unknownCorrect,
+                accuracy: unknownQuestions > 0 ? unknownCorrect / unknownQuestions : 0,
+                confidence: this.clampNumber(baseConfidence * (1 - missingKindRatio), 0.2, 0.6)
+            });
+        } else {
+            delete normalized.unknown;
+        }
+
+        return normalized;
+    }
+
+    buildSingleAttemptAnalysisInputFallback(recordData = {}, options = {}) {
+        const now = options.now || new Date().toISOString();
+        const normalizedAnswers = this.standardizeAnswers(recordData.answers || recordData.answerList || []);
+        const totalQuestions = Math.max(0, this.ensureNumber(
+            options.totalQuestions,
+            this.deriveTotalQuestionCount(recordData, normalizedAnswers.length)
+        ));
+        const correctAnswers = Math.max(0, this.ensureNumber(
+            options.correctAnswers,
+            this.deriveCorrectAnswerCount(recordData, normalizedAnswers)
+        ));
+        let accuracy = this.ensureNumber(
+            options.accuracy,
+            totalQuestions > 0 ? correctAnswers / totalQuestions : 0
+        );
+        if (accuracy > 1 && accuracy <= 100) {
+            accuracy = accuracy / 100;
+        }
+        accuracy = this.clampNumber(accuracy, 0, 1);
+        const category = options.category
+            || recordData.category
+            || recordData.metadata?.category
+            || recordData.singleAttemptAnalysisInput?.category
+            || null;
+        const durationSec = Math.max(0, this.ensureNumber(
+            options.durationSec,
+            recordData.duration
+        ));
+
+        const rawDataQuality = options.dataQuality
+            || recordData.metadata?.dataQuality
+            || recordData.singleAttemptAnalysisInput?.dataQuality
+            || {};
+        const dataQuality = rawDataQuality && typeof rawDataQuality === 'object'
+            ? this.clonePlainObject(rawDataQuality) || {}
+            : {};
+        dataQuality.confidence = this.clampNumber(this.ensureNumber(dataQuality.confidence, 0.5), 0, 1);
+
+        const questionTypePerformance = this.sanitizeQuestionTypePerformanceFallback(
+            options.questionTypePerformance
+            || recordData.questionTypePerformance
+            || recordData.singleAttemptAnalysisInput?.questionTypePerformance
+            || {},
+            {
+                totalQuestions,
+                correctAnswers,
+                dataQuality
+            }
+        );
+        const unknownQuestions = Math.max(0, this.ensureNumber(questionTypePerformance.unknown?.total, 0));
+        const missingKindRatio = totalQuestions > 0
+            ? this.clampNumber(unknownQuestions / totalQuestions, 0, 1)
+            : 1;
+        const questionTimelineLite = this.normalizeQuestionTimelineLiteFallback(
+            options.questionTimelineLite
+            || recordData.questionTimelineLite
+            || recordData.realData?.questionTimelineLite
+            || recordData.singleAttemptAnalysisInput?.questionTimelineLite
+            || []
+        );
+        const answerComparison = (
+            options.answerComparison
+            || recordData.answerComparison
+            || recordData.realData?.answerComparison
+            || {}
+        );
+        const normalizedComparison = answerComparison && typeof answerComparison === 'object'
+            ? answerComparison
+            : {};
+        const unresolvedUnansweredCount = Object.values(normalizedComparison).reduce((count, entry) => (
+            this.isFilledAnswerValue(entry?.userAnswer) ? count : count + 1
+        ), 0);
+        const unresolvedChangedCount = questionTimelineLite.reduce(
+            (count, entry) => (this.ensureNumber(entry?.changeCount, 0) > 0 ? count + 1 : count),
+            0
+        );
+        const interactions = Array.isArray(options.interactions)
+            ? options.interactions
+            : (Array.isArray(recordData.interactions)
+                ? recordData.interactions
+                : (Array.isArray(recordData.realData?.interactions) ? recordData.realData.interactions : []));
+        const analysisSignalsSource = (
+            options.analysisSignals
+            || recordData.analysisSignals
+            || recordData.realData?.analysisSignals
+            || recordData.singleAttemptAnalysisInput?.analysisSignals
+            || {}
+        );
+        const analysisSignals = {
+            unansweredCount: Math.max(0, this.ensureNumber(analysisSignalsSource.unansweredCount, unresolvedUnansweredCount)),
+            changedAnswerCount: Math.max(0, this.ensureNumber(analysisSignalsSource.changedAnswerCount, unresolvedChangedCount)),
+            interactionDensity: Number.isFinite(Number(analysisSignalsSource.interactionDensity))
+                ? Number(analysisSignalsSource.interactionDensity)
+                : (interactions.length / Math.max(durationSec / 60, 1))
+        };
+
+        return {
+            version: '1.0.0',
+            generatedAt: now,
+            examId: recordData.examId || this.inferExamId(recordData) || null,
+            sessionId: recordData.sessionId || null,
+            type: recordData.type || recordData.metadata?.type || recordData.metadata?.examType || this.inferPracticeType(recordData),
+            category: category ? String(category) : null,
+            totalQuestions,
+            correctAnswers,
+            accuracy,
+            durationSec,
+            dataQuality,
+            analysisSignals,
+            questionTimelineLite,
+            questionTypePerformance,
+            unknownQuestions,
+            missingKindRatio,
+            confidence: this.clampNumber(dataQuality.confidence * (1 - missingKindRatio), 0.2, 0.6)
+        };
+    }
+
+    buildSingleAttemptAnalysisFallback(input = {}) {
+        if (!input || typeof input !== 'object') {
+            return null;
+        }
+        const totalQuestions = Math.max(0, this.ensureNumber(input.totalQuestions, 0));
+        const safeTotal = totalQuestions > 0 ? totalQuestions : 1;
+        const baseConfidence = this.clampNumber(this.ensureNumber(input.dataQuality?.confidence, 0.5), 0.1, 1);
+        const byQuestionKind = Object.entries(input.questionTypePerformance || {})
+            .map(([kind, entry]) => {
+                const total = Math.max(0, this.ensureNumber(entry?.total, 0));
+                const correct = Math.max(0, Math.min(total, this.ensureNumber(entry?.correct, 0)));
+                const entryConfidence = Number(entry?.confidence);
+                return {
+                    kind,
+                    total,
+                    correct,
+                    accuracy: total > 0 ? correct / total : 0,
+                    confidence: Number.isFinite(entryConfidence)
+                        ? this.clampNumber(entryConfidence, 0.1, 1)
+                        : baseConfidence
+                };
+            })
+            .filter((entry) => entry.total > 0);
+        const category = input.category || input.metadata?.category || null;
+        const overallAccuracy = this.clampNumber(this.ensureNumber(input.accuracy, 0), 0, 1);
+        return {
+            summary: {
+                accuracy: overallAccuracy,
+                durationSec: Math.max(0, this.ensureNumber(input.durationSec, 0)),
+                unansweredRate: this.clampNumber(this.ensureNumber(input.analysisSignals?.unansweredCount, 0) / safeTotal, 0, 1),
+                changedAnswerRate: this.clampNumber(this.ensureNumber(input.analysisSignals?.changedAnswerCount, 0) / safeTotal, 0, 1)
+            },
+            radar: {
+                byQuestionKind,
+                byPassageCategory: category ? [{
+                    category: String(category),
+                    total: totalQuestions,
+                    correct: Math.max(0, this.ensureNumber(input.correctAnswers, 0)),
+                    accuracy: overallAccuracy,
+                    confidence: baseConfidence
+                }] : []
+            },
+            diagnosis: [],
+            nextActions: [],
+            confidence: byQuestionKind.length > 0
+                ? byQuestionKind.reduce((sum, entry) => sum + entry.confidence, 0) / byQuestionKind.length
+                : baseConfidence
+        };
+    }
+
+    buildSingleAttemptAnalysisArtifacts(recordData = {}, options = {}) {
+        const coreContracts = this.getPracticeCoreContracts();
+        if (coreContracts && typeof coreContracts.buildSingleAttemptAnalysisArtifacts === 'function') {
+            return coreContracts.buildSingleAttemptAnalysisArtifacts(recordData, options);
+        }
+        const input = this.buildSingleAttemptAnalysisInputFallback(recordData, options);
+        const coreAnalysis = window.PracticeCore && window.PracticeCore.analysis;
+        const generatedAnalysis = (
+            coreAnalysis
+            && typeof coreAnalysis.buildSingleAttemptAnalysis === 'function'
+        )
+            ? coreAnalysis.buildSingleAttemptAnalysis(input)
+            : this.buildSingleAttemptAnalysisFallback(input);
+        return {
+            questionTypePerformance: input.questionTypePerformance,
+            singleAttemptAnalysisInput: input,
+            singleAttemptAnalysis: generatedAnalysis,
+            singleAttemptAnalysisLlm: (
+                options.singleAttemptAnalysisLlm
+                || recordData.singleAttemptAnalysisLlm
+                || recordData.realData?.singleAttemptAnalysisLlm
+                || null
+            )
+        };
+    }
+
     parseTimeMs(value) {
         if (value == null) {
             return null;
@@ -958,6 +1282,13 @@ class ScoreStorage {
         const normalizedComparison = comparisonSource && typeof comparisonSource === 'object'
             ? this.clonePlainObject(comparisonSource)
             : null;
+        const analysisArtifacts = this.buildSingleAttemptAnalysisArtifacts(recordData, {
+            now,
+            totalQuestions,
+            correctAnswers,
+            accuracy,
+            dataQuality: metadata?.dataQuality
+        });
 
         return {
             // 基础信息
@@ -984,7 +1315,10 @@ class ScoreStorage {
             answers: normalizedAnswers,
             answerDetails: detailSource || null,
             correctAnswerMap: normalizedCorrectMap || {},
-            questionTypePerformance: recordData.questionTypePerformance || {},
+            questionTypePerformance: analysisArtifacts.questionTypePerformance,
+            singleAttemptAnalysisInput: analysisArtifacts.singleAttemptAnalysisInput,
+            singleAttemptAnalysis: analysisArtifacts.singleAttemptAnalysis,
+            singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null,
 
             // 元数据
             metadata,
@@ -1007,7 +1341,8 @@ class ScoreStorage {
                     }),
                     answerComparison: recordData.realData.answerComparison
                         ? this.clonePlainObject(recordData.realData.answerComparison)
-                        : (normalizedComparison || null)
+                        : (normalizedComparison || null),
+                    singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null
                 })
                 : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
             answerComparison: normalizedComparison,
@@ -1634,6 +1969,17 @@ class ScoreStorage {
                     r.percentage = Math.round(acc * 100);
                 }
             }
+
+            const analysisArtifacts = this.buildSingleAttemptAnalysisArtifacts(r, {
+                totalQuestions: this.ensureNumber(r.totalQuestions, 0),
+                correctAnswers: this.ensureNumber(r.correctAnswers, 0),
+                accuracy: this.ensureNumber(r.accuracy, 0),
+                dataQuality: r.metadata?.dataQuality || r.singleAttemptAnalysisInput?.dataQuality
+            });
+            r.questionTypePerformance = analysisArtifacts.questionTypePerformance;
+            r.singleAttemptAnalysisInput = analysisArtifacts.singleAttemptAnalysisInput;
+            r.singleAttemptAnalysis = analysisArtifacts.singleAttemptAnalysis;
+            r.singleAttemptAnalysisLlm = analysisArtifacts.singleAttemptAnalysisLlm || r.singleAttemptAnalysisLlm || r.realData?.singleAttemptAnalysisLlm || null;
 
             // 状态兜底
             if (!r.status) r.status = 'completed';

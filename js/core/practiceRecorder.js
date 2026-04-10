@@ -43,6 +43,10 @@ class PracticeRecorder {
         return window.PracticeCore && window.PracticeCore.store;
     }
 
+    getPracticeCoreAnalysis() {
+        return window.PracticeCore && window.PracticeCore.analysis;
+    }
+
     getDefaultUserStats() {
         return {
             totalPractices: 0,
@@ -301,6 +305,326 @@ class PracticeRecorder {
         return metadata;
     }
 
+    clampNumber(value, min, max) {
+        if (!Number.isFinite(value)) {
+            return min;
+        }
+        return Math.max(min, Math.min(max, value));
+    }
+
+    isFilledAnswerValue(value) {
+        if (Array.isArray(value)) {
+            return value.some((item) => this.isFilledAnswerValue(item));
+        }
+        if (value == null) {
+            return false;
+        }
+        return String(value).trim().length > 0;
+    }
+
+    parseTimelineTimestamp(value) {
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) {
+            return numeric;
+        }
+        if (typeof value === 'string') {
+            const parsed = Date.parse(value);
+            if (Number.isFinite(parsed)) {
+                return parsed;
+            }
+        }
+        return 0;
+    }
+
+    normalizeQuestionTimelineLiteFallback(rawTimeline) {
+        if (!Array.isArray(rawTimeline)) {
+            return [];
+        }
+        return rawTimeline
+            .map((entry) => {
+                if (!entry || typeof entry !== 'object') {
+                    return null;
+                }
+                const questionId = String(entry.questionId || '').trim();
+                if (!questionId) {
+                    return null;
+                }
+                return {
+                    questionId,
+                    firstAnsweredAt: Math.max(0, this.parseTimelineTimestamp(entry.firstAnsweredAt)),
+                    lastAnsweredAt: Math.max(0, this.parseTimelineTimestamp(entry.lastAnsweredAt)),
+                    changeCount: Math.max(0, Number(entry.changeCount) || 0)
+                };
+            })
+            .filter(Boolean);
+    }
+
+    sanitizeQuestionTypePerformanceFallback(rawPerformance, options = {}) {
+        const source = rawPerformance && typeof rawPerformance === 'object' ? rawPerformance : {};
+        const totalQuestions = Math.max(0, Number(options.totalQuestions) || 0);
+        const correctAnswers = Math.max(0, Number(options.correctAnswers) || 0);
+        const dataQuality = options.dataQuality && typeof options.dataQuality === 'object'
+            ? options.dataQuality
+            : {};
+        const baseConfidence = this.clampNumber(Number(dataQuality.confidence), 0, 1) || 0.5;
+        const normalized = {};
+
+        const mergeEntry = (targetType, rawEntry) => {
+            if (!rawEntry || typeof rawEntry !== 'object') {
+                return;
+            }
+            const parsedTotal = Math.max(0, Number(rawEntry.total ?? rawEntry.questionCount ?? rawEntry.count) || 0);
+            const parsedCorrectRaw = Math.max(0, Number(rawEntry.correct ?? rawEntry.correctAnswers ?? rawEntry.score) || 0);
+            const parsedCorrect = parsedTotal > 0 ? Math.min(parsedCorrectRaw, parsedTotal) : parsedCorrectRaw;
+            const current = normalized[targetType] || { total: 0, correct: 0, accuracy: 0 };
+            current.total += parsedTotal;
+            current.correct += parsedCorrect;
+            if (rawEntry.timeSpent != null || current.timeSpent != null) {
+                current.timeSpent = Math.max(0, Number(current.timeSpent || 0) + (Number(rawEntry.timeSpent) || 0));
+            }
+            current.correct = Math.max(0, Math.min(current.total, current.correct));
+            current.accuracy = current.total > 0 ? current.correct / current.total : 0;
+            normalized[targetType] = current;
+        };
+
+        Object.entries(source).forEach(([rawType, rawEntry]) => {
+            const normalizedType = String(rawType || '').trim().toLowerCase();
+            const targetType = (!normalizedType || normalizedType === 'general') ? 'unknown' : normalizedType;
+            mergeEntry(targetType, rawEntry);
+        });
+
+        let knownQuestions = 0;
+        let knownCorrect = 0;
+        Object.entries(normalized).forEach(([type, performance]) => {
+            if (type === 'unknown') return;
+            knownQuestions += Number(performance.total) || 0;
+            knownCorrect += Number(performance.correct) || 0;
+        });
+
+        let unknownQuestions = Number(normalized.unknown?.total) || 0;
+        let unknownCorrect = Number(normalized.unknown?.correct) || 0;
+
+        if (totalQuestions > 0) {
+            unknownQuestions = Math.max(unknownQuestions, Math.max(totalQuestions - knownQuestions, 0));
+            unknownQuestions = Math.min(totalQuestions, unknownQuestions);
+            unknownCorrect = Math.max(unknownCorrect, Math.max(correctAnswers - knownCorrect, 0));
+        }
+
+        if (unknownQuestions > 0 || normalized.unknown) {
+            unknownCorrect = Math.max(0, Math.min(unknownQuestions, unknownCorrect));
+            const missingKindRatio = totalQuestions > 0
+                ? this.clampNumber(unknownQuestions / totalQuestions, 0, 1)
+                : 1;
+            normalized.unknown = Object.assign({}, normalized.unknown || {}, {
+                total: unknownQuestions,
+                correct: unknownCorrect,
+                accuracy: unknownQuestions > 0 ? unknownCorrect / unknownQuestions : 0,
+                confidence: this.clampNumber(baseConfidence * (1 - missingKindRatio), 0.2, 0.6)
+            });
+        } else {
+            delete normalized.unknown;
+        }
+
+        return normalized;
+    }
+
+    buildSingleAttemptAnalysisInputFallback(recordData = {}, options = {}) {
+        const now = options.now || new Date().toISOString();
+        const answerMap = this.normalizeAnswerMap(recordData.answers || recordData.answerList || {});
+        const totalQuestions = Math.max(0, Number(options.totalQuestions) || Number(recordData.totalQuestions) || Object.keys(answerMap).length);
+        const correctAnswers = Math.max(
+            0,
+            Number(options.correctAnswers)
+            || Number(recordData.correctAnswers)
+            || Number(recordData.score)
+            || 0
+        );
+        let accuracy = Number(options.accuracy);
+        if (!Number.isFinite(accuracy)) {
+            const fromRecord = Number(recordData.accuracy);
+            accuracy = Number.isFinite(fromRecord)
+                ? fromRecord
+                : (totalQuestions > 0 ? correctAnswers / totalQuestions : 0);
+        }
+        if (accuracy > 1 && accuracy <= 100) {
+            accuracy = accuracy / 100;
+        }
+        accuracy = this.clampNumber(accuracy, 0, 1);
+        const category = options.category
+            || recordData.category
+            || recordData.metadata?.category
+            || recordData.singleAttemptAnalysisInput?.category
+            || null;
+        const durationSec = Math.max(
+            0,
+            Number(options.durationSec)
+            || Number(recordData.duration)
+            || 0
+        );
+
+        const rawDataQuality = options.dataQuality
+            || recordData.metadata?.dataQuality
+            || recordData.singleAttemptAnalysisInput?.dataQuality
+            || {};
+        const dataQuality = rawDataQuality && typeof rawDataQuality === 'object'
+            ? { ...rawDataQuality }
+            : {};
+        dataQuality.confidence = this.clampNumber(Number(dataQuality.confidence), 0, 1) || 0.5;
+
+        const questionTypePerformance = this.sanitizeQuestionTypePerformanceFallback(
+            options.questionTypePerformance
+            || recordData.questionTypePerformance
+            || recordData.singleAttemptAnalysisInput?.questionTypePerformance
+            || {},
+            {
+                totalQuestions,
+                correctAnswers,
+                dataQuality
+            }
+        );
+        const unknownQuestions = Math.max(0, Number(questionTypePerformance.unknown?.total) || 0);
+        const missingKindRatio = totalQuestions > 0
+            ? this.clampNumber(unknownQuestions / totalQuestions, 0, 1)
+            : 1;
+        const questionTimelineLite = this.normalizeQuestionTimelineLiteFallback(
+            options.questionTimelineLite
+            || recordData.questionTimelineLite
+            || recordData.realData?.questionTimelineLite
+            || recordData.singleAttemptAnalysisInput?.questionTimelineLite
+            || []
+        );
+        const answerComparison = (
+            options.answerComparison
+            || recordData.answerComparison
+            || recordData.realData?.answerComparison
+            || {}
+        );
+        const normalizedComparison = answerComparison && typeof answerComparison === 'object'
+            ? answerComparison
+            : {};
+        const unresolvedUnansweredCount = Object.values(normalizedComparison).reduce((count, entry) => (
+            this.isFilledAnswerValue(entry?.userAnswer) ? count : count + 1
+        ), 0);
+        const unresolvedChangedCount = questionTimelineLite.reduce(
+            (count, entry) => (Number(entry?.changeCount) > 0 ? count + 1 : count),
+            0
+        );
+        const interactions = Array.isArray(options.interactions)
+            ? options.interactions
+            : (Array.isArray(recordData.interactions)
+                ? recordData.interactions
+                : (Array.isArray(recordData.realData?.interactions) ? recordData.realData.interactions : []));
+        const analysisSignalsSource = (
+            options.analysisSignals
+            || recordData.analysisSignals
+            || recordData.realData?.analysisSignals
+            || recordData.singleAttemptAnalysisInput?.analysisSignals
+            || {}
+        );
+        const analysisSignals = {
+            unansweredCount: Math.max(0, Number(analysisSignalsSource.unansweredCount) || unresolvedUnansweredCount),
+            changedAnswerCount: Math.max(0, Number(analysisSignalsSource.changedAnswerCount) || unresolvedChangedCount),
+            interactionDensity: Number.isFinite(Number(analysisSignalsSource.interactionDensity))
+                ? Number(analysisSignalsSource.interactionDensity)
+                : (interactions.length / Math.max(durationSec / 60, 1))
+        };
+
+        return {
+            version: '1.0.0',
+            generatedAt: now,
+            examId: recordData.examId || null,
+            sessionId: recordData.sessionId || null,
+            type: recordData.type || recordData.metadata?.type || recordData.metadata?.examType || 'reading',
+            category: category ? String(category) : null,
+            totalQuestions,
+            correctAnswers,
+            accuracy,
+            durationSec,
+            dataQuality,
+            analysisSignals,
+            questionTimelineLite,
+            questionTypePerformance,
+            unknownQuestions,
+            missingKindRatio,
+            confidence: this.clampNumber(dataQuality.confidence * (1 - missingKindRatio), 0.2, 0.6)
+        };
+    }
+
+    buildSingleAttemptAnalysisFallback(input = {}) {
+        if (!input || typeof input !== 'object') {
+            return null;
+        }
+        const totalQuestions = Math.max(0, Number(input.totalQuestions) || 0);
+        const safeTotal = totalQuestions > 0 ? totalQuestions : 1;
+        const baseConfidence = this.clampNumber(Number(input.dataQuality?.confidence), 0.1, 1) || 0.5;
+        const byQuestionKind = Object.entries(input.questionTypePerformance || {})
+            .map(([kind, entry]) => {
+                const total = Math.max(0, Number(entry?.total) || 0);
+                const correct = Math.max(0, Math.min(total, Number(entry?.correct) || 0));
+                const entryConfidenceRaw = Number(entry?.confidence);
+                return {
+                    kind,
+                    total,
+                    correct,
+                    accuracy: total > 0 ? correct / total : 0,
+                    confidence: Number.isFinite(entryConfidenceRaw)
+                        ? this.clampNumber(entryConfidenceRaw, 0.1, 1)
+                        : baseConfidence
+                };
+            })
+            .filter((entry) => entry.total > 0);
+        const category = input.category || input.metadata?.category || null;
+        return {
+            summary: {
+                accuracy: this.clampNumber(Number(input.accuracy), 0, 1) || 0,
+                durationSec: Math.max(0, Number(input.durationSec) || 0),
+                unansweredRate: this.clampNumber((Number(input.analysisSignals?.unansweredCount) || 0) / safeTotal, 0, 1),
+                changedAnswerRate: this.clampNumber((Number(input.analysisSignals?.changedAnswerCount) || 0) / safeTotal, 0, 1)
+            },
+            radar: {
+                byQuestionKind,
+                byPassageCategory: category ? [{
+                    category: String(category),
+                    total: totalQuestions,
+                    correct: Math.max(0, Number(input.correctAnswers) || 0),
+                    accuracy: this.clampNumber(Number(input.accuracy), 0, 1) || 0,
+                    confidence: this.clampNumber(Number(input.dataQuality?.confidence), 0.1, 1) || 0.5
+                }] : []
+            },
+            diagnosis: [],
+            nextActions: [],
+            confidence: byQuestionKind.length > 0
+                ? byQuestionKind.reduce((sum, entry) => sum + entry.confidence, 0) / byQuestionKind.length
+                : baseConfidence
+        };
+    }
+
+    buildSingleAttemptAnalysisArtifacts(recordData = {}, options = {}) {
+        const coreContracts = this.getPracticeCoreContracts();
+        if (coreContracts && typeof coreContracts.buildSingleAttemptAnalysisArtifacts === 'function') {
+            return coreContracts.buildSingleAttemptAnalysisArtifacts(recordData, options);
+        }
+        const input = this.buildSingleAttemptAnalysisInputFallback(recordData, options);
+        const coreAnalysis = this.getPracticeCoreAnalysis();
+        const generatedAnalysis = (
+            coreAnalysis
+            && typeof coreAnalysis.buildSingleAttemptAnalysis === 'function'
+        )
+            ? coreAnalysis.buildSingleAttemptAnalysis(input)
+            : this.buildSingleAttemptAnalysisFallback(input);
+        return {
+            questionTypePerformance: input.questionTypePerformance,
+            singleAttemptAnalysisInput: input,
+            singleAttemptAnalysis: generatedAnalysis,
+            singleAttemptAnalysisLlm: (
+                options.singleAttemptAnalysisLlm
+                || recordData.singleAttemptAnalysisLlm
+                || recordData.realData?.singleAttemptAnalysisLlm
+                || null
+            )
+        };
+    }
+
     /**
      * 初始化练习记录器
      */
@@ -518,6 +842,9 @@ class PracticeRecorder {
                 answerDetails,
                 answerComparison: normalizedComparison,
                 questionTypePerformance: payload.questionTypePerformance || {},
+                singleAttemptAnalysisInput: payload.singleAttemptAnalysisInput || null,
+                singleAttemptAnalysis: payload.singleAttemptAnalysis || null,
+                singleAttemptAnalysisLlm: payload.singleAttemptAnalysisLlm || payload.realData?.singleAttemptAnalysisLlm || null,
                 interactions: payload.interactions || [],
                 startTime: payload.startTime || null,
                 endTime: payload.endTime || null,
@@ -554,7 +881,7 @@ class PracticeRecorder {
             || metadata.type
             || metadata.examType
             || results?.pageType
-            || (Array.isArray(results?.questionTypePerformance) ? 'reading' : null)
+            || ((results?.questionTypePerformance && typeof results.questionTypePerformance === 'object') ? 'reading' : null)
         );
         if (inferredType) {
             metadata.type = inferredType;
@@ -1128,6 +1455,32 @@ class PracticeRecorder {
             && resolvedEndTime
             && new Date(resolvedEndTime).getTime() >= new Date(resolvedStartTime).getTime()
         ) ? Math.max(new Date(resolvedEndTime) - new Date(resolvedStartTime), 0) : 0;
+        const totalQuestions = Number(results?.totalQuestions) || session.progress?.totalQuestions || 0;
+        const correctAnswers = Number(results?.correctAnswers) || 0;
+        let accuracy = typeof results?.accuracy === 'number'
+            ? results.accuracy
+            : (totalQuestions > 0 ? correctAnswers / totalQuestions : 0);
+        if (accuracy > 1 && accuracy <= 100) {
+            accuracy = accuracy / 100;
+        }
+        accuracy = this.clampNumber(accuracy, 0, 1);
+        const analysisArtifacts = this.buildSingleAttemptAnalysisArtifacts({
+            examId: resolvedExamId,
+            sessionId: session.sessionId || payload.sessionId || null,
+            type,
+            totalQuestions,
+            correctAnswers,
+            accuracy,
+            questionTypePerformance: results?.questionTypePerformance || {},
+            singleAttemptAnalysisInput: results?.singleAttemptAnalysisInput || null,
+            singleAttemptAnalysis: results?.singleAttemptAnalysis || null,
+            metadata
+        }, {
+            totalQuestions,
+            correctAnswers,
+            accuracy,
+            dataQuality: metadata?.dataQuality
+        });
 
         const practiceRecord = {
             id: `record_${session.sessionId || this.generateSessionId(resolvedExamId)}`,
@@ -1140,15 +1493,18 @@ class PracticeRecorder {
             type,
             date: recordDate,
             score: results?.score || 0,
-            totalQuestions: results?.totalQuestions || session.progress?.totalQuestions || 0,
-            correctAnswers: results?.correctAnswers || 0,
-            accuracy: results?.accuracy || 0,
+            totalQuestions,
+            correctAnswers,
+            accuracy,
             answers: answerMap,
             answerList,
             answerDetails,
             correctAnswerMap,
             scoreInfo,
-            questionTypePerformance: results?.questionTypePerformance || {},
+            questionTypePerformance: analysisArtifacts.questionTypePerformance,
+            singleAttemptAnalysisInput: analysisArtifacts.singleAttemptAnalysisInput,
+            singleAttemptAnalysis: analysisArtifacts.singleAttemptAnalysis,
+            singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null,
             metadata,
             suiteSessionId,
             createdAt: resolvedEndTime,
@@ -1157,6 +1513,7 @@ class PracticeRecorder {
                 correctAnswers: correctAnswerMap,
                 scoreInfo,
                 interactions: results?.interactions || [],
+                singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null,
                 isRealData: true,
                 source: results?.source || 'practice_page'
             })
@@ -1600,6 +1957,33 @@ class PracticeRecorder {
             : this.convertAnswerArrayToMap(recordData.answerList || []);
         const correctAnswerMap = recordData.correctAnswerMap || {};
         const answerDetails = recordData.answerDetails || this.buildAnswerDetails(answerMap, correctAnswerMap);
+        const totalQuestions = Number(recordData.totalQuestions) || 0;
+        const correctAnswers = Number(recordData.correctAnswers) || 0;
+        let accuracy = Number(recordData.accuracy);
+        if (!Number.isFinite(accuracy)) {
+            accuracy = totalQuestions > 0 ? correctAnswers / totalQuestions : 0;
+        }
+        if (accuracy > 1 && accuracy <= 100) {
+            accuracy = accuracy / 100;
+        }
+        accuracy = this.clampNumber(accuracy, 0, 1);
+        const analysisArtifacts = this.buildSingleAttemptAnalysisArtifacts({
+            examId: resolvedExamId,
+            sessionId: recordData.sessionId,
+            type: inferredType,
+            totalQuestions,
+            correctAnswers,
+            accuracy,
+            questionTypePerformance: recordData.questionTypePerformance || {},
+            singleAttemptAnalysisInput: recordData.singleAttemptAnalysisInput || null,
+            singleAttemptAnalysis: recordData.singleAttemptAnalysis || null,
+            metadata
+        }, {
+            totalQuestions,
+            correctAnswers,
+            accuracy,
+            dataQuality: metadata?.dataQuality
+        });
 
         return {
             // 基础信息
@@ -1628,11 +2012,15 @@ class PracticeRecorder {
             answerDetails,
             correctAnswerMap,
             scoreInfo: Object.assign({}, recordData.scoreInfo || {}, { details: answerDetails }),
-            questionTypePerformance: recordData.questionTypePerformance || {},
+            questionTypePerformance: analysisArtifacts.questionTypePerformance,
+            singleAttemptAnalysisInput: analysisArtifacts.singleAttemptAnalysisInput,
+            singleAttemptAnalysis: analysisArtifacts.singleAttemptAnalysis,
+            singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null,
             realData: Object.assign({}, recordData.realData || {}, {
                 answers: answerMap,
                 correctAnswers: correctAnswerMap,
-                scoreInfo: Object.assign({}, recordData.realData?.scoreInfo || {}, { details: answerDetails })
+                scoreInfo: Object.assign({}, recordData.realData?.scoreInfo || {}, { details: answerDetails }),
+                singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null
             }),
 
             // 元数据
@@ -2192,6 +2580,25 @@ class PracticeRecorder {
         const score = scoreInfo.correct || 0;
         const totalQuestions = scoreInfo.total || Object.keys(realData.answers || {}).length;
         const accuracy = scoreInfo.accuracy || (totalQuestions > 0 ? score / totalQuestions : 0);
+        const dataQuality = this.assessDataQuality(realData);
+        const initialQuestionTypePerformance = this.extractQuestionTypePerformance(realData);
+        const analysisArtifacts = this.buildSingleAttemptAnalysisArtifacts({
+            examId: exam.id,
+            sessionId: realData.sessionId,
+            type: this.normalizePracticeType(exam.type) || 'reading',
+            totalQuestions,
+            correctAnswers: score,
+            accuracy,
+            questionTypePerformance: initialQuestionTypePerformance,
+            singleAttemptAnalysisInput: realData.singleAttemptAnalysisInput || null,
+            singleAttemptAnalysis: realData.singleAttemptAnalysis || null,
+            metadata: { dataQuality }
+        }, {
+            totalQuestions,
+            correctAnswers: score,
+            accuracy,
+            dataQuality
+        });
 
         const practiceRecord = {
             // 基础信息 - 与ScoreStorage兼容
@@ -2214,7 +2621,10 @@ class PracticeRecorder {
 
             // 答题详情 - 转换为ScoreStorage期望的格式
             answers: this.convertAnswersFormat(realData.answers || {}),
-            questionTypePerformance: this.extractQuestionTypePerformance(realData),
+            questionTypePerformance: analysisArtifacts.questionTypePerformance,
+            singleAttemptAnalysisInput: analysisArtifacts.singleAttemptAnalysisInput,
+            singleAttemptAnalysis: analysisArtifacts.singleAttemptAnalysis,
+            singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null,
 
             // 元数据 - 与ScoreStorage兼容
             metadata: {
@@ -2222,7 +2632,7 @@ class PracticeRecorder {
                 category: exam.category || '',
                 frequency: exam.frequency || '',
                 collectionMethod: 'automatic',
-                dataQuality: this.assessDataQuality(realData),
+                dataQuality,
                 processingTime: Date.now()
             },
 
@@ -2231,6 +2641,7 @@ class PracticeRecorder {
                 sessionId: realData.sessionId,
                 answers: realData.answers || {},
                 answerHistory: realData.answerHistory || {},
+                singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null,
                 interactions: realData.interactions || [],
                 scoreInfo: scoreInfo,
                 pageType: realData.pageType,
@@ -2270,16 +2681,16 @@ class PracticeRecorder {
      */
     extractQuestionTypePerformance(realData) {
         // 从realData中提取题型表现，如果没有则返回空对象
-        if (realData.questionTypePerformance) {
+        if (realData.questionTypePerformance && typeof realData.questionTypePerformance === 'object') {
             return realData.questionTypePerformance;
         }
 
-        // 如果有scoreInfo，尝试从中提取
+        // 如果有scoreInfo，统一转为 unknown（禁止回退 general）
         if (realData.scoreInfo) {
             const { correct, total } = realData.scoreInfo;
             if (correct !== undefined && total !== undefined) {
                 return {
-                    'general': {
+                    unknown: {
                         total: total,
                         correct: correct,
                         accuracy: total > 0 ? correct / total : 0

@@ -4,7 +4,10 @@
     const MESSAGE_SOURCE = 'practice_page';
     const INIT_RETRY_MS = 1500;
     const SIMULATION_DRAFT_SYNC_MS = 1200;
+    const PENDING_PRACTICE_MESSAGES_KEY = 'exam_system_pending_practice_messages_v1';
+    const READING_ANALYSIS_API_PATH = '/api/reading/single-attempt-analysis';
     const EXPLANATION_STYLE_ID = 'reading-explanation-style';
+    const ANALYSIS_STYLE_ID = 'reading-single-attempt-analysis-style';
     const EXPLANATION_SPLIT_KINDS = new Set([
         'single_choice',
         'multi_choice',
@@ -13,6 +16,33 @@
     ]);
     const navStatus = new Map();
     const scriptCache = new Map();
+    const QUESTION_KIND_LABELS = {
+        single_choice: '单选题',
+        multi_choice: '多选题',
+        true_false_not_given: '判断题（T/F/NG）',
+        yes_no_not_given: '判断题（Y/N/NG）',
+        sentence_completion: '句子填空',
+        summary_completion: '摘要填空',
+        table_completion: '表格填空',
+        note_completion: '笔记填空',
+        form_completion: '表单填空',
+        flow_chart_completion: '流程图填空',
+        matching: '匹配题',
+        matching_headings: '标题匹配',
+        matching_information: '信息匹配',
+        matching_features: '特征匹配',
+        matching_sentence_endings: '句尾匹配',
+        short_answer: '简答题',
+        diagram_label_completion: '图示标注',
+        map_labeling: '地图标注',
+        plan_map_diagram_labeling: '地图/图示标注',
+        unknown: '未映射题型'
+    };
+
+    function formatQuestionKindLabel(kind) {
+        const normalized = normalizeAnalysisLabel(kind, 'unknown');
+        return QUESTION_KIND_LABELS[normalized] || normalized;
+    }
     function getAnswerMatchCore() {
         const core = global.AnswerMatchCore;
         if (!core || typeof core !== 'object') {
@@ -51,7 +81,13 @@
         lastInitSignature: '',
         lastReplaySignature: '',
         sessionReadySent: false,
-        parentWindow: global.opener || global.parent || null
+        interactionCount: 0,
+        questionTimeline: new Map(),
+        answerSnapshot: {},
+        parentWindow: global.opener || global.parent || null,
+        llmAnalysisStatus: 'idle',
+        llmAnalysisMessage: '',
+        llmAnalysisRequestId: 0
     };
 
     const dom = {
@@ -293,6 +329,116 @@
             }
             .reading-question-explanation-list .reading-question-explanation-item + .reading-question-explanation-item {
                 margin-top: 8px;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function ensureAnalysisStyles() {
+        if (document.getElementById(ANALYSIS_STYLE_ID)) {
+            return;
+        }
+        const style = document.createElement('style');
+        style.id = ANALYSIS_STYLE_ID;
+        style.textContent = `
+            .reading-kind-radar {
+                margin: 14px 0 12px;
+                padding: 12px;
+                border: 1px solid rgba(148, 163, 184, 0.35);
+                border-radius: 10px;
+                background: rgba(248, 250, 252, 0.92);
+            }
+            .reading-kind-radar h5 {
+                margin: 0 0 10px;
+                font-size: 14px;
+                color: #0f172a;
+            }
+            .reading-kind-radar__layout {
+                display: grid;
+                grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+                gap: 12px;
+                align-items: center;
+            }
+            .reading-kind-radar__svg {
+                width: 100%;
+                max-width: 260px;
+                height: auto;
+            }
+            .reading-kind-radar__legend {
+                margin: 0;
+                padding: 0;
+                list-style: none;
+                display: grid;
+                gap: 6px;
+            }
+            .reading-kind-radar__legend-item {
+                display: flex;
+                justify-content: space-between;
+                gap: 8px;
+                font-size: 12px;
+                color: #1f2937;
+            }
+            .reading-kind-radar__legend-item strong {
+                color: #0f172a;
+                font-weight: 700;
+            }
+            .reading-kind-radar--empty p {
+                margin: 0;
+                color: #475569;
+                font-size: 12px;
+            }
+            .reading-guidance-card {
+                margin: 0 0 12px;
+                padding: 12px;
+                border: 1px solid rgba(148, 163, 184, 0.3);
+                border-radius: 10px;
+                background: rgba(248, 250, 252, 0.92);
+                display: grid;
+                gap: 8px;
+            }
+            .reading-guidance-card h5 {
+                margin: 0;
+                font-size: 14px;
+                color: #0f172a;
+            }
+            .reading-guidance-card__row {
+                display: grid;
+                gap: 6px;
+            }
+            .reading-guidance-card__label {
+                font-size: 12px;
+                color: #475569;
+                font-weight: 600;
+            }
+            .reading-guidance-card ul {
+                margin: 0;
+                padding-left: 18px;
+                color: #1f2937;
+                font-size: 12px;
+                display: grid;
+                gap: 4px;
+            }
+            .reading-guidance-card__empty {
+                margin: 0;
+                font-size: 12px;
+                color: #64748b;
+            }
+            .reading-guidance-card__status {
+                margin: 0;
+                font-size: 12px;
+                color: #0e7490;
+            }
+            .reading-guidance-card__status--failed {
+                color: #b91c1c;
+            }
+            @media (max-width: 640px) {
+                .reading-kind-radar__layout {
+                    grid-template-columns: 1fr;
+                    justify-items: center;
+                }
+                .reading-kind-radar__legend {
+                    width: 100%;
+                }
             }
         `;
         document.head.appendChild(style);
@@ -1218,10 +1364,198 @@
         return Array.isArray(value) ? value.some(Boolean) : !!String(value || '').trim();
     }
 
-    function buildResults() {
+    function getQuestionOrder(answers = {}) {
+        const answerKey = state.dataset?.answerKey || {};
+        const datasetOrder = Array.isArray(state.dataset?.questionOrder)
+            ? state.dataset.questionOrder
+            : [];
+        const order = datasetOrder.length
+            ? datasetOrder.slice()
+            : Object.keys(answerKey);
+        if (!order.length) {
+            return Object.keys(answers || {});
+        }
+        return order;
+    }
+
+    function hasMeaningfulAnswer(value) {
+        const normalized = normalizeAnswerValue(value);
+        if (Array.isArray(normalized)) {
+            return normalized.some((entry) => !!String(entry || '').trim());
+        }
+        return !!String(normalized || '').trim();
+    }
+
+    function buildAnswerFingerprint(value) {
+        const normalized = normalizeAnswerValue(value);
+        if (Array.isArray(normalized)) {
+            return normalized
+                .map((entry) => canonicalizeAnswerToken(entry))
+                .filter(Boolean)
+                .sort((left, right) => left.localeCompare(right, 'en'))
+                .join('|');
+        }
+        return canonicalizeAnswerToken(normalized);
+    }
+
+    function ensureQuestionTimelineEntry(questionId) {
+        if (state.questionTimeline.has(questionId)) {
+            return state.questionTimeline.get(questionId);
+        }
+        const entry = {
+            questionId,
+            firstAnsweredAt: null,
+            lastAnsweredAt: null,
+            changeCount: 0,
+            lastFingerprint: ''
+        };
+        state.questionTimeline.set(questionId, entry);
+        return entry;
+    }
+
+    function trackAnswerTimeline(answers = {}, timestamp = Date.now()) {
+        const questionOrder = getQuestionOrder(answers);
+        questionOrder.forEach((questionId) => {
+            const value = Object.prototype.hasOwnProperty.call(answers, questionId)
+                ? answers[questionId]
+                : '';
+            const answered = hasMeaningfulAnswer(value);
+            const fingerprint = answered ? buildAnswerFingerprint(value) : '';
+            const previousFingerprint = Object.prototype.hasOwnProperty.call(state.answerSnapshot, questionId)
+                ? state.answerSnapshot[questionId]
+                : '';
+
+            if (fingerprint === previousFingerprint) {
+                return;
+            }
+
+            const timelineEntry = ensureQuestionTimelineEntry(questionId);
+            if (previousFingerprint && previousFingerprint !== fingerprint) {
+                timelineEntry.changeCount += 1;
+            }
+            if (answered && !timelineEntry.firstAnsweredAt) {
+                timelineEntry.firstAnsweredAt = timestamp;
+            }
+            if (answered) {
+                timelineEntry.lastAnsweredAt = timestamp;
+            }
+            timelineEntry.lastFingerprint = fingerprint;
+            state.answerSnapshot[questionId] = fingerprint;
+        });
+    }
+
+    function buildQuestionTimelineLite(questionOrder = []) {
+        const orderedIds = Array.isArray(questionOrder) ? questionOrder.slice() : [];
+        const knownIds = new Set(orderedIds);
+        state.questionTimeline.forEach((_, questionId) => {
+            if (!knownIds.has(questionId)) {
+                orderedIds.push(questionId);
+            }
+        });
+        return orderedIds.map((questionId) => {
+            const entry = state.questionTimeline.get(questionId);
+            const firstTimestamp = entry?.firstAnsweredAt;
+            const lastTimestamp = entry?.lastAnsweredAt;
+            const firstAnsweredAt = firstTimestamp != null && Number.isFinite(Number(firstTimestamp))
+                ? new Date(Number(firstTimestamp)).toISOString()
+                : null;
+            const lastAnsweredAt = lastTimestamp != null && Number.isFinite(Number(lastTimestamp))
+                ? new Date(Number(lastTimestamp)).toISOString()
+                : null;
+            return {
+                questionId,
+                firstAnsweredAt,
+                lastAnsweredAt,
+                changeCount: Number.isFinite(Number(entry?.changeCount)) ? Number(entry.changeCount) : 0
+            };
+        });
+    }
+
+    function buildAnalysisSignals(answerComparison = {}, questionTimelineLite = []) {
+        const entries = Object.values(answerComparison || {});
+        const unansweredCount = entries.reduce((count, entry) => (
+            hasMeaningfulAnswer(entry?.userAnswer) ? count : count + 1
+        ), 0);
+        const changedAnswerCount = questionTimelineLite.reduce((count, item) => (
+            Number(item?.changeCount) > 0 ? count + 1 : count
+        ), 0);
+        const durationSeconds = Math.max(1, Math.round((Date.now() - state.startTime) / 1000));
+        const durationMinutes = Math.max(durationSeconds / 60, 1);
+        const interactionDensity = Number((state.interactionCount / durationMinutes).toFixed(4));
+        return {
+            unansweredCount,
+            changedAnswerCount,
+            interactionDensity
+        };
+    }
+
+    function normalizeQuestionKind(kind) {
+        if (typeof kind !== 'string') {
+            return 'unknown';
+        }
+        const normalized = kind.trim().toLowerCase();
+        return normalized || 'unknown';
+    }
+
+    function buildQuestionTypePerformance(questionOrder = [], answerComparison = {}) {
+        const groups = Array.isArray(state.dataset?.questionGroups) ? state.dataset.questionGroups : [];
+        const questionTypeMap = new Map();
+        groups.forEach((group) => {
+            const kind = normalizeQuestionKind(group?.kind);
+            const ids = Array.isArray(group?.questionIds) ? group.questionIds : [];
+            ids.forEach((rawQuestionId) => {
+                const normalizedQuestionId = normalizeQuestionId(rawQuestionId);
+                if (!normalizedQuestionId) {
+                    return;
+                }
+                if (!questionTypeMap.has(normalizedQuestionId) || questionTypeMap.get(normalizedQuestionId) === 'unknown') {
+                    questionTypeMap.set(normalizedQuestionId, kind);
+                }
+            });
+        });
+
+        const result = {};
+        questionOrder.forEach((questionId) => {
+            const kind = questionTypeMap.get(questionId) || 'unknown';
+            const comparisonEntry = answerComparison[questionId] || {};
+            const weight = questionWeight(comparisonEntry.correctAnswer);
+            if (!result[kind]) {
+                result[kind] = {
+                    total: 0,
+                    correct: 0,
+                    accuracy: 0,
+                    questionIds: [],
+                    kind
+                };
+            }
+            result[kind].total += weight;
+            if (comparisonEntry.isCorrect === true) {
+                result[kind].correct += weight;
+            }
+            if (!result[kind].questionIds.includes(questionId)) {
+                result[kind].questionIds.push(questionId);
+            }
+        });
+
+        Object.keys(result).forEach((kind) => {
+            const item = result[kind];
+            item.accuracy = item.total > 0 ? item.correct / item.total : 0;
+        });
+
+        return result;
+    }
+
+    function recordInteraction() {
+        if (state.readOnly) {
+            return;
+        }
+        state.interactionCount += 1;
+    }
+
+    function buildResults(options = {}) {
         const answers = collectAnswers();
         const answerKey = state.dataset?.answerKey || {};
-        const questionOrder = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : Object.keys(answerKey);
+        const questionOrder = getQuestionOrder(answers);
         const answerComparison = {};
         const details = {};
         let correctCount = 0;
@@ -1251,24 +1585,713 @@
         });
 
         const accuracy = totalQuestions > 0 ? correctCount / totalQuestions : 0;
-        return {
+        const questionTimelineLite = buildQuestionTimelineLite(questionOrder);
+        const analysisSignals = buildAnalysisSignals(answerComparison, questionTimelineLite);
+        const questionTypePerformance = buildQuestionTypePerformance(questionOrder, answerComparison);
+        const resolvedDurationSec = Math.max(
+            0,
+            Math.round(Number(options.durationSec ?? getElapsedSeconds()) || 0)
+        );
+        const results = {
             answers,
             answerComparison,
             correctAnswers: answerKey,
+            analysisSignals,
+            questionTimelineLite,
+            questionTypePerformance,
             scoreInfo: {
                 correct: correctCount,
                 total: totalQuestions,
                 totalQuestions,
                 accuracy,
                 percentage: Math.round(accuracy * 100),
+                duration: resolvedDurationSec,
                 details,
                 source: 'unified_reading_page'
             }
         };
+        const analysisArtifacts = resolveSingleAttemptAnalysisArtifacts(results, questionOrder, {
+            durationSec: resolvedDurationSec
+        });
+        results.questionTypePerformance = analysisArtifacts.questionTypePerformance || results.questionTypePerformance;
+        results.singleAttemptAnalysisInput = analysisArtifacts.input;
+        results.singleAttemptAnalysis = analysisArtifacts.analysis;
+        results.realData = Object.assign({}, results.realData || {}, {
+            singleAttemptAnalysisInput: analysisArtifacts.input,
+            singleAttemptAnalysis: results.singleAttemptAnalysis,
+            singleAttemptAnalysisLlm: results.singleAttemptAnalysisLlm || null
+        });
+        return results;
+    }
+
+    function roundRate(value, digits = 4) {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) {
+            return 0;
+        }
+        const factor = 10 ** digits;
+        return Math.round(parsed * factor) / factor;
+    }
+
+    function clampRate(value) {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+            return 0;
+        }
+        if (parsed >= 1) {
+            return 1;
+        }
+        return parsed;
+    }
+
+    function normalizeAnalysisLabel(value, fallback = 'unknown') {
+        const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+        return normalized || fallback;
+    }
+
+    function escapeHtml(value) {
+        if (value == null) {
+            return '';
+        }
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function normalizeQuestionTypePerformanceForAnalysis(rawPerformance = {}, summary = {}) {
+        const source = rawPerformance && typeof rawPerformance === 'object' ? rawPerformance : {};
+        const totalQuestions = Math.max(0, Number(summary.totalQuestions) || 0);
+        const correctAnswers = Math.max(0, Number(summary.correctAnswers) || 0);
+        const baseConfidence = clampRate(Number(summary.dataQualityConfidence) || 0.5);
+        const normalized = {};
+        Object.entries(source).forEach(([rawKind, rawEntry]) => {
+            if (!rawEntry || typeof rawEntry !== 'object') {
+                return;
+            }
+            const kind = normalizeAnalysisLabel(rawKind, 'unknown');
+            const targetKind = kind === 'general' ? 'unknown' : kind;
+            if (!normalized[targetKind]) {
+                normalized[targetKind] = { total: 0, correct: 0, accuracy: 0 };
+            }
+            const parsedTotal = Math.max(0, Number(rawEntry.total ?? rawEntry.questionCount ?? rawEntry.count) || 0);
+            const parsedCorrect = Math.max(0, Number(rawEntry.correct ?? rawEntry.correctAnswers ?? rawEntry.score) || 0);
+            normalized[targetKind].total += parsedTotal;
+            normalized[targetKind].correct += parsedCorrect;
+        });
+        let knownTotal = 0;
+        let knownCorrect = 0;
+        Object.entries(normalized).forEach(([kind, bucket]) => {
+            if (kind === 'unknown') {
+                return;
+            }
+            bucket.correct = Math.min(bucket.correct, bucket.total);
+            bucket.accuracy = bucket.total > 0 ? bucket.correct / bucket.total : 0;
+            knownTotal += bucket.total;
+            knownCorrect += bucket.correct;
+        });
+        let unknownTotal = Math.max(0, Number(normalized.unknown?.total) || 0);
+        let unknownCorrect = Math.max(0, Number(normalized.unknown?.correct) || 0);
+        if (totalQuestions > 0) {
+            unknownTotal = Math.max(unknownTotal, Math.max(totalQuestions - knownTotal, 0));
+            unknownTotal = Math.min(totalQuestions, unknownTotal);
+            unknownCorrect = Math.max(unknownCorrect, Math.max(correctAnswers - knownCorrect, 0));
+        }
+        if (unknownTotal > 0 || normalized.unknown) {
+            unknownCorrect = Math.max(0, Math.min(unknownTotal, unknownCorrect));
+            const missingKindRatio = totalQuestions > 0 ? clampRate(unknownTotal / totalQuestions) : 1;
+            normalized.unknown = {
+                total: unknownTotal,
+                correct: unknownCorrect,
+                accuracy: unknownTotal > 0 ? unknownCorrect / unknownTotal : 0,
+                confidence: Math.max(0.2, Math.min(0.6, baseConfidence * (1 - missingKindRatio)))
+            };
+        } else {
+            delete normalized.unknown;
+        }
+        return normalized;
+    }
+
+    function buildSingleAttemptDiagnosis(summary, byQuestionKind = []) {
+        const diagnosis = [];
+        const sortedByWeakness = byQuestionKind.slice().sort((left, right) => left.accuracy - right.accuracy || right.total - left.total);
+        const weakest = sortedByWeakness[0] || null;
+        const strongest = byQuestionKind.slice().sort((left, right) => right.accuracy - left.accuracy || right.total - left.total)[0] || null;
+        const asPercent = (value) => `${Math.round(clampRate(value) * 100)}%`;
+
+        if (weakest && weakest.total > 0 && weakest.accuracy < 0.7) {
+            const weakestLabel = formatQuestionKindLabel(weakest.kind);
+            diagnosis.push({
+                code: 'weakest_question_kind',
+                reason: `题型「${weakestLabel}」正确率 ${asPercent(weakest.accuracy)}（${weakest.correct}/${weakest.total}），是本次主要失分点。`,
+                evidence: {
+                    kind: weakest.kind,
+                    total: weakest.total,
+                    correct: weakest.correct,
+                    accuracy: roundRate(weakest.accuracy),
+                    confidence: roundRate(weakest.confidence)
+                }
+            });
+        }
+        if (summary.unansweredRate >= 0.15) {
+            diagnosis.push({
+                code: 'unanswered_ratio_high',
+                reason: `未作答率 ${asPercent(summary.unansweredRate)}，说明时间分配偏紧。`,
+                evidence: {
+                    unansweredRate: roundRate(summary.unansweredRate)
+                }
+            });
+        }
+        if (summary.changedAnswerRate >= 0.3) {
+            diagnosis.push({
+                code: 'answer_instability',
+                reason: `改答率 ${asPercent(summary.changedAnswerRate)}，临门一脚决策波动较大。`,
+                evidence: {
+                    changedAnswerRate: roundRate(summary.changedAnswerRate)
+                }
+            });
+        }
+        if (strongest && strongest.total > 0 && strongest.accuracy >= 0.8) {
+            const strongestLabel = formatQuestionKindLabel(strongest.kind);
+            diagnosis.push({
+                code: 'strongest_question_kind',
+                reason: `题型「${strongestLabel}」正确率 ${asPercent(strongest.accuracy)}（${strongest.correct}/${strongest.total}），可作为稳定得分点。`,
+                evidence: {
+                    kind: strongest.kind,
+                    total: strongest.total,
+                    correct: strongest.correct,
+                    accuracy: roundRate(strongest.accuracy),
+                    confidence: roundRate(strongest.confidence)
+                }
+            });
+        }
+        if (diagnosis.length < 2) {
+            diagnosis.push({
+                code: 'overall_accuracy',
+                reason: `整体正确率 ${asPercent(summary.accuracy)}，建议继续按题型拆分复盘。`,
+                evidence: {
+                    accuracy: roundRate(summary.accuracy)
+                }
+            });
+        }
+        return diagnosis.slice(0, 4);
+    }
+
+    function buildSingleAttemptNextActions(summary, byQuestionKind = []) {
+        const weakKinds = byQuestionKind
+            .filter((entry) => entry.total > 0)
+            .slice()
+            .sort((left, right) => left.accuracy - right.accuracy || right.total - left.total);
+        const nextActions = [];
+        weakKinds.slice(0, 2).forEach((entry) => {
+            const kindLabel = formatQuestionKindLabel(entry.kind);
+            nextActions.push({
+                type: 'targeted_drill',
+                target: entry.kind,
+                instruction: `题型「${kindLabel}」：做 8-12 题限时训练（每题 ≤ 75 秒），错题复盘只记录“定位句 + 排除依据”。`,
+                evidence: {
+                    kind: entry.kind,
+                    total: entry.total,
+                    correct: entry.correct,
+                    accuracy: roundRate(entry.accuracy)
+                }
+            });
+        });
+        if (summary.changedAnswerRate >= 0.3 && weakKinds.length > 0) {
+            const weakestLabel = formatQuestionKindLabel(weakKinds[0].kind);
+            nextActions.push({
+                type: 'decision_stability',
+                target: weakKinds[0].kind,
+                instruction: `题型「${weakestLabel}」：提交前最多改答 1 次，先补证据再改答案。`,
+                evidence: {
+                    changedAnswerRate: roundRate(summary.changedAnswerRate)
+                }
+            });
+        }
+        if (nextActions.length < 2 && weakKinds.length > 0) {
+            const stableKind = weakKinds.slice().sort((left, right) => right.accuracy - left.accuracy || right.total - left.total)[0];
+            const stableKindLabel = formatQuestionKindLabel(stableKind.kind);
+            nextActions.push({
+                type: 'maintain_strength',
+                target: stableKind.kind,
+                instruction: `题型「${stableKindLabel}」：每周保留 1 组混练，维持稳定命中率。`,
+                evidence: {
+                    kind: stableKind.kind,
+                    accuracy: roundRate(stableKind.accuracy)
+                }
+            });
+        }
+        if (nextActions.length < 2) {
+            nextActions.push({
+                type: 'mapping_fix',
+                target: 'unknown',
+                instruction: '题型「unknown」：先补齐题型映射数据，再执行题型粒度训练。',
+                evidence: {
+                    unknownBucket: true
+                }
+            });
+        }
+        return nextActions.slice(0, 3);
+    }
+
+    function buildSingleAttemptAnalysisFromCanonicalInput(input = {}) {
+        const normalizedInput = input && typeof input === 'object' ? input : {};
+        const totalQuestions = Math.max(0, Number(normalizedInput.totalQuestions) || 0);
+        const safeTotal = totalQuestions > 0 ? totalQuestions : 1;
+        const accuracy = clampRate(Number(normalizedInput.accuracy) || 0);
+        const durationSec = Math.max(0, Math.round(Number(normalizedInput.durationSec) || 0));
+        const unansweredRate = clampRate((Number(normalizedInput.analysisSignals?.unansweredCount) || 0) / safeTotal);
+        const changedAnswerRate = clampRate((Number(normalizedInput.analysisSignals?.changedAnswerCount) || 0) / safeTotal);
+        const byQuestionKind = Object.entries(normalizedInput.questionTypePerformance || {})
+            .map(([kind, bucket]) => {
+                const total = Math.max(0, Number(bucket?.total) || 0);
+                const correct = Math.max(0, Math.min(total, Number(bucket?.correct) || 0));
+                return {
+                    kind,
+                    total,
+                    correct,
+                    accuracy: total > 0 ? correct / total : 0,
+                    confidence: clampRate(Number(bucket?.confidence) || Number(normalizedInput.dataQuality?.confidence) || 0.5)
+                };
+            })
+            .filter((entry) => entry.total > 0);
+        const category = normalizedInput.category || normalizedInput.metadata?.category || null;
+        const byPassageCategory = category ? [{
+            category: String(category),
+            total: totalQuestions,
+            correct: Math.max(0, Number(normalizedInput.correctAnswers) || 0),
+            accuracy,
+            confidence: clampRate(Number(normalizedInput.dataQuality?.confidence) || 0.5)
+        }] : [];
+        return {
+            summary: {
+                accuracy: roundRate(accuracy),
+                durationSec,
+                unansweredRate: roundRate(unansweredRate),
+                changedAnswerRate: roundRate(changedAnswerRate)
+            },
+            radar: {
+                byQuestionKind,
+                byPassageCategory
+            },
+            diagnosis: buildSingleAttemptDiagnosis({ accuracy, unansweredRate, changedAnswerRate }, byQuestionKind),
+            nextActions: buildSingleAttemptNextActions({ accuracy, unansweredRate, changedAnswerRate }, byQuestionKind),
+            confidence: roundRate(
+                byQuestionKind.length > 0
+                    ? byQuestionKind.reduce((sum, item) => sum + item.confidence, 0) / byQuestionKind.length
+                    : clampRate(Number(normalizedInput.dataQuality?.confidence) || 0.5)
+            )
+        };
+    }
+
+    function resolveSingleAttemptAnalysisArtifacts(results = {}, questionOrder = [], options = {}) {
+        const scoreInfo = results.scoreInfo && typeof results.scoreInfo === 'object' ? results.scoreInfo : {};
+        const totalQuestions = Math.max(0, Number(scoreInfo.totalQuestions ?? scoreInfo.total ?? questionOrder.length) || 0);
+        const correctAnswers = Math.max(0, Number(scoreInfo.correct) || 0);
+        const accuracy = totalQuestions > 0
+            ? (Number.isFinite(Number(scoreInfo.accuracy)) ? Number(scoreInfo.accuracy) : (correctAnswers / totalQuestions))
+            : 0;
+        const durationSec = Math.max(0, Math.round(Number(options.durationSec ?? scoreInfo.duration ?? getElapsedSeconds()) || 0));
+        const category = state.dataset?.meta?.category || state.explanation?.category || null;
+        const dataQuality = Object.assign({ confidence: 0.5 }, results.dataQuality || {});
+        const rawQuestionTypePerformance = normalizeQuestionTypePerformanceForAnalysis(
+            results.questionTypePerformance || {},
+            { totalQuestions, correctAnswers, dataQualityConfidence: dataQuality.confidence }
+        );
+        const recordData = {
+            examId: state.examId || null,
+            sessionId: state.sessionId || null,
+            type: 'reading',
+            totalQuestions,
+            correctAnswers,
+            accuracy,
+            duration: durationSec,
+            answers: results.answers || {},
+            answerComparison: results.answerComparison || {},
+            questionTypePerformance: rawQuestionTypePerformance,
+            questionTimelineLite: results.questionTimelineLite || [],
+            analysisSignals: results.analysisSignals || {},
+            category,
+            metadata: {
+                category,
+                type: 'reading',
+                examType: 'reading',
+                dataQuality
+            }
+        };
+        const coreAnalysis = global.PracticeCore && global.PracticeCore.analysis;
+        if (
+            coreAnalysis
+            && typeof coreAnalysis.buildSingleAttemptAnalysisInput === 'function'
+            && typeof coreAnalysis.buildSingleAttemptAnalysis === 'function'
+        ) {
+            const input = coreAnalysis.buildSingleAttemptAnalysisInput(recordData, {
+                totalQuestions,
+                correctAnswers,
+                accuracy,
+                durationSec,
+                answerComparison: recordData.answerComparison,
+                questionTypePerformance: recordData.questionTypePerformance,
+                questionTimelineLite: recordData.questionTimelineLite,
+                analysisSignals: recordData.analysisSignals,
+                dataQuality,
+                category
+            });
+            const analysis = coreAnalysis.buildSingleAttemptAnalysis(input);
+            return {
+                input,
+                analysis,
+                questionTypePerformance: input.questionTypePerformance || rawQuestionTypePerformance
+            };
+        }
+        const input = {
+            version: '1.0.0',
+            generatedAt: new Date().toISOString(),
+            examId: recordData.examId,
+            sessionId: recordData.sessionId,
+            type: 'reading',
+            category: category ? String(category) : null,
+            totalQuestions,
+            correctAnswers,
+            accuracy: clampRate(accuracy),
+            durationSec,
+            dataQuality,
+            analysisSignals: recordData.analysisSignals,
+            questionTimelineLite: recordData.questionTimelineLite,
+            questionTypePerformance: rawQuestionTypePerformance,
+            unknownQuestions: Number(rawQuestionTypePerformance.unknown?.total) || 0,
+            missingKindRatio: totalQuestions > 0
+                ? clampRate((Number(rawQuestionTypePerformance.unknown?.total) || 0) / totalQuestions)
+                : 1,
+            confidence: Math.max(
+                0.2,
+                Math.min(
+                    0.6,
+                    clampRate(Number(dataQuality.confidence) || 0.5) * (1 - (totalQuestions > 0
+                        ? clampRate((Number(rawQuestionTypePerformance.unknown?.total) || 0) / totalQuestions)
+                        : 1))
+                )
+            )
+        };
+        return {
+            input,
+            analysis: buildSingleAttemptAnalysisFromCanonicalInput(input),
+            questionTypePerformance: rawQuestionTypePerformance
+        };
+    }
+
+    function buildRadarSvg(byQuestionKind = []) {
+        const metrics = Array.isArray(byQuestionKind)
+            ? byQuestionKind.filter((entry) => entry && Number(entry.total) > 0)
+            : [];
+        if (metrics.length === 0) {
+            return '';
+        }
+
+        const cx = 130;
+        const cy = 130;
+        const radius = 92;
+        const axisCount = metrics.length;
+        const axes = metrics.map((entry, index) => {
+            const angle = (-Math.PI / 2) + ((Math.PI * 2 * index) / axisCount);
+            const axisX = cx + (radius * Math.cos(angle));
+            const axisY = cy + (radius * Math.sin(angle));
+            const valueRadius = radius * clampRate(Number(entry.accuracy));
+            const valueX = cx + (valueRadius * Math.cos(angle));
+            const valueY = cy + (valueRadius * Math.sin(angle));
+            return {
+                ...entry,
+                axisX,
+                axisY,
+                valueX,
+                valueY
+            };
+        });
+
+        const levels = [0.25, 0.5, 0.75, 1];
+        const gridPolygons = levels.map((level) => {
+            const points = axes.map((axis) => {
+                const x = cx + ((axis.axisX - cx) * level);
+                const y = cy + ((axis.axisY - cy) * level);
+                return `${roundRate(x, 2)},${roundRate(y, 2)}`;
+            }).join(' ');
+            return `<polygon points="${points}" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="1" />`;
+        }).join('');
+
+        const axisLines = axes.map((axis) => (
+            `<line x1="${cx}" y1="${cy}" x2="${roundRate(axis.axisX, 2)}" y2="${roundRate(axis.axisY, 2)}" stroke="rgba(100,116,139,0.45)" stroke-width="1" />`
+        )).join('');
+        const dataPoints = axes.map((axis) => `${roundRate(axis.valueX, 2)},${roundRate(axis.valueY, 2)}`).join(' ');
+        const labels = axes.map((axis) => {
+            const labelX = cx + ((axis.axisX - cx) * 1.15);
+            const labelY = cy + ((axis.axisY - cy) * 1.15);
+            return `<text x="${roundRate(labelX, 2)}" y="${roundRate(labelY, 2)}" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="#0f172a">${escapeHtml(formatQuestionKindLabel(axis.kind))}</text>`;
+        }).join('');
+
+        return `
+            <svg class="reading-kind-radar__svg" viewBox="0 0 260 260" aria-hidden="true">
+                ${gridPolygons}
+                ${axisLines}
+                <polygon points="${dataPoints}" fill="rgba(14,116,144,0.2)" stroke="#0e7490" stroke-width="2" />
+                ${axes.map((axis) => `<circle cx="${roundRate(axis.valueX, 2)}" cy="${roundRate(axis.valueY, 2)}" r="3" fill="#0e7490" />`).join('')}
+                ${labels}
+            </svg>
+        `;
+    }
+
+    function renderSingleAttemptRadar(analysis) {
+        const byQuestionKind = Array.isArray(analysis?.radar?.byQuestionKind) ? analysis.radar.byQuestionKind : [];
+        const metrics = byQuestionKind.filter((entry) => entry && Number(entry.total) > 0 && normalizeAnalysisLabel(entry.kind) !== 'general');
+        if (metrics.length === 0) {
+            return `
+                <section class="reading-kind-radar reading-kind-radar--empty">
+                    <h5>题型雷达</h5>
+                    <p>暂无题型维度数据（未携带 <code>singleAttemptAnalysis.radar.byQuestionKind</code>）。</p>
+                </section>
+            `;
+        }
+
+        const legend = metrics
+            .map((entry) => (
+                `<li class="reading-kind-radar__legend-item"><strong>${escapeHtml(formatQuestionKindLabel(entry.kind))}</strong><span>${Math.round(clampRate(Number(entry.accuracy)) * 100)}% · ${Number(entry.correct)}/${Number(entry.total)}</span></li>`
+            ))
+            .join('');
+
+        return `
+            <section class="reading-kind-radar">
+                <h5>题型雷达</h5>
+                <div class="reading-kind-radar__layout">
+                    ${buildRadarSvg(metrics)}
+                    <ul class="reading-kind-radar__legend">${legend}</ul>
+                </div>
+            </section>
+        `;
+    }
+
+    function resolveAnalysisTextEntry(entry, preferredKeys = []) {
+        if (typeof entry === 'string') {
+            return entry.trim();
+        }
+        if (!entry || typeof entry !== 'object') {
+            return '';
+        }
+        for (let i = 0; i < preferredKeys.length; i += 1) {
+            const key = preferredKeys[i];
+            if (typeof entry[key] === 'string' && entry[key].trim()) {
+                return entry[key].trim();
+            }
+        }
+        return '';
+    }
+
+    function mergeSingleAttemptAnalysis(stage1Analysis, llmAnalysis) {
+        const base = stage1Analysis && typeof stage1Analysis === 'object'
+            ? stage1Analysis
+            : {
+                summary: {},
+                radar: { byQuestionKind: [], byPassageCategory: [] },
+                diagnosis: [],
+                nextActions: [],
+                confidence: 0.5
+            };
+        if (!llmAnalysis || typeof llmAnalysis !== 'object') {
+            return base;
+        }
+        const diagnosis = Array.isArray(llmAnalysis.diagnosis) ? llmAnalysis.diagnosis : [];
+        const nextActions = Array.isArray(llmAnalysis.nextActions) ? llmAnalysis.nextActions : [];
+        if (!diagnosis.length && !nextActions.length) {
+            return base;
+        }
+        return Object.assign({}, base, {
+            diagnosis: diagnosis.length ? diagnosis : (Array.isArray(base.diagnosis) ? base.diagnosis : []),
+            nextActions: nextActions.length ? nextActions : (Array.isArray(base.nextActions) ? base.nextActions : []),
+            confidence: Number.isFinite(Number(llmAnalysis.confidence))
+                ? clampRate(Number(llmAnalysis.confidence))
+                : base.confidence
+        });
+    }
+
+    async function resolveLocalApiBaseUrl() {
+        if (!global.electronAPI || typeof global.electronAPI.getLocalApiInfo !== 'function') {
+            return null;
+        }
+        try {
+            const response = await global.electronAPI.getLocalApiInfo();
+            const baseUrl = response?.data?.baseUrl || response?.baseUrl || null;
+            return typeof baseUrl === 'string' && baseUrl.trim() ? baseUrl.trim() : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    async function requestSingleAttemptLlmAnalysis(results) {
+        const baseUrl = await resolveLocalApiBaseUrl();
+        if (!baseUrl) {
+            const error = new Error('本地分析服务不可用');
+            error.code = 'local_api_unavailable';
+            throw error;
+        }
+        const response = await fetch(`${baseUrl}${READING_ANALYSIS_API_PATH}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
+                singleAttemptAnalysis: results.singleAttemptAnalysis
+            })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload?.success === false) {
+            const message = payload?.message || payload?.error?.message || payload?.error_code || `HTTP_${response.status}`;
+            const error = new Error(message || '二阶段分析请求失败');
+            error.code = payload?.error_code || 'reading_analysis_request_failed';
+            throw error;
+        }
+        const llm = payload?.data;
+        if (!llm || typeof llm !== 'object') {
+            const error = new Error('二阶段分析返回格式无效');
+            error.code = 'invalid_response_format';
+            throw error;
+        }
+        return llm;
+    }
+
+    async function triggerSingleAttemptLlmAnalysis(results) {
+        if (!results || typeof results !== 'object') {
+            return;
+        }
+        if (!results.singleAttemptAnalysisInput || !results.singleAttemptAnalysis) {
+            return;
+        }
+        const requestId = state.llmAnalysisRequestId + 1;
+        state.llmAnalysisRequestId = requestId;
+        state.llmAnalysisStatus = 'running';
+        state.llmAnalysisMessage = '正在生成证据化诊断...';
+        renderResults(results);
+
+        try {
+            const llm = await requestSingleAttemptLlmAnalysis(results);
+            if (requestId !== state.llmAnalysisRequestId) {
+                return;
+            }
+            results.singleAttemptAnalysisLlm = llm;
+            results.realData = Object.assign({}, results.realData || {}, {
+                singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
+                singleAttemptAnalysis: results.singleAttemptAnalysis,
+                singleAttemptAnalysisLlm: llm
+            });
+            state.llmAnalysisStatus = 'success';
+            state.llmAnalysisMessage = '';
+            renderResults(results);
+            postMessage('PRACTICE_ANALYSIS_PATCH', {
+                examId: state.examId,
+                sessionId: state.sessionId,
+                singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
+                singleAttemptAnalysis: results.singleAttemptAnalysis,
+                singleAttemptAnalysisLlm: llm,
+                realData: Object.assign({}, results.realData || {}, {
+                    singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
+                    singleAttemptAnalysis: results.singleAttemptAnalysis,
+                    singleAttemptAnalysisLlm: llm
+                })
+            });
+        } catch (error) {
+            if (requestId !== state.llmAnalysisRequestId) {
+                return;
+            }
+            state.llmAnalysisStatus = 'failed';
+            state.llmAnalysisMessage = `证据化诊断失败，已回退结构化分析：${error?.message || 'unknown_error'}`;
+            renderResults(results);
+        }
+    }
+
+    function renderSingleAttemptGuidance(analysis, llmStatus = null) {
+        const diagnosisList = Array.isArray(analysis?.diagnosis)
+            ? analysis.diagnosis
+                .map((entry) => resolveAnalysisTextEntry(entry, ['reason', 'message']))
+                .filter(Boolean)
+                .slice(0, 4)
+            : [];
+        const actionsList = Array.isArray(analysis?.nextActions)
+            ? analysis.nextActions
+                .map((entry) => resolveAnalysisTextEntry(entry, ['instruction', 'action']))
+                .filter(Boolean)
+                .slice(0, 3)
+            : [];
+        if (!diagnosisList.length && !actionsList.length) {
+            return `
+                <section class="reading-guidance-card">
+                    <h5>本次分析指导</h5>
+                    <p class="reading-guidance-card__empty">暂无可用指导内容，请先完成一轮完整作答。</p>
+                </section>
+            `;
+        }
+        const diagnosisHtml = diagnosisList.length
+            ? `<ul>${diagnosisList.map((text) => `<li>${escapeHtml(text)}</li>`).join('')}</ul>`
+            : '<p class="reading-guidance-card__empty">暂无诊断结论。</p>';
+        const actionsHtml = actionsList.length
+            ? `<ul>${actionsList.map((text) => `<li>${escapeHtml(text)}</li>`).join('')}</ul>`
+            : '<p class="reading-guidance-card__empty">暂无下一步动作。</p>';
+        let statusHtml = '';
+        if (llmStatus?.status === 'running') {
+            statusHtml = `<p class="reading-guidance-card__status">${escapeHtml(llmStatus.message || '正在生成证据化诊断...')}</p>`;
+        } else if (llmStatus?.status === 'failed') {
+            statusHtml = `<p class="reading-guidance-card__status reading-guidance-card__status--failed">${escapeHtml(llmStatus.message || '证据化诊断失败，已使用结构化分析结果')}</p>`;
+        }
+        return `
+            <section class="reading-guidance-card">
+                <h5>本次分析指导</h5>
+                ${statusHtml}
+                <div class="reading-guidance-card__row">
+                    <div class="reading-guidance-card__label">诊断结论</div>
+                    ${diagnosisHtml}
+                </div>
+                <div class="reading-guidance-card__row">
+                    <div class="reading-guidance-card__label">下一步动作</div>
+                    ${actionsHtml}
+                </div>
+            </section>
+        `;
     }
 
     function renderResults(results) {
         if (!dom.results) return;
+        ensureAnalysisStyles();
+        const hasCanonicalInput = results
+            && results.singleAttemptAnalysisInput
+            && typeof results.singleAttemptAnalysisInput === 'object'
+            && Number.isFinite(Number(results.singleAttemptAnalysisInput.totalQuestions));
+        const hasCanonicalAnalysis = results
+            && results.singleAttemptAnalysis
+            && typeof results.singleAttemptAnalysis === 'object'
+            && results.singleAttemptAnalysis.radar
+            && Array.isArray(results.singleAttemptAnalysis.radar.byQuestionKind);
+        const analysisBundle = (hasCanonicalInput && hasCanonicalAnalysis)
+            ? {
+                input: results.singleAttemptAnalysisInput,
+                analysis: results.singleAttemptAnalysis,
+                questionTypePerformance: results.questionTypePerformance
+            }
+            : resolveSingleAttemptAnalysisArtifacts(results, getQuestionOrder(results.answers || {}));
+        const mergedGuidanceAnalysis = mergeSingleAttemptAnalysis(
+            analysisBundle.analysis,
+            results.singleAttemptAnalysisLlm || results.realData?.singleAttemptAnalysisLlm || null
+        );
+        const radarSection = renderSingleAttemptRadar(analysisBundle.analysis);
+        const guidanceSection = renderSingleAttemptGuidance(mergedGuidanceAnalysis, {
+            status: state.llmAnalysisStatus,
+            message: state.llmAnalysisMessage
+        });
+        results.questionTypePerformance = analysisBundle.questionTypePerformance || results.questionTypePerformance;
+        results.singleAttemptAnalysisInput = analysisBundle.input;
+        results.singleAttemptAnalysis = analysisBundle.analysis;
+        results.singleAttemptAnalysisLlm = results.singleAttemptAnalysisLlm || results.realData?.singleAttemptAnalysisLlm || null;
+        results.realData = Object.assign({}, results.realData || {}, {
+            singleAttemptAnalysisInput: analysisBundle.input,
+            singleAttemptAnalysis: analysisBundle.analysis,
+            singleAttemptAnalysisLlm: results.singleAttemptAnalysisLlm || null
+        });
         const rows = Object.values(results.answerComparison).map((entry) => {
             const label = displayLabel(entry.questionId);
             const userAnswer = Array.isArray(entry.userAnswer) ? entry.userAnswer.join(', ') : (entry.userAnswer || '未作答');
@@ -1286,6 +2309,8 @@
         dom.results.innerHTML = `
             <h4>答题结果</h4>
             <p>得分 ${results.scoreInfo.correct} / ${results.scoreInfo.totalQuestions} · ${results.scoreInfo.percentage}%</p>
+            ${radarSection}
+            ${guidanceSection}
             <table class="results-table">
                 <thead>
                     <tr>
@@ -1602,6 +2627,9 @@
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
         }
+        state.llmAnalysisStatus = 'idle';
+        state.llmAnalysisMessage = '';
+        state.llmAnalysisRequestId += 1;
         clearExplanations();
         updateNavStatuses();
     }
@@ -1689,6 +2717,48 @@
         };
     }
 
+    function loadPendingPracticeMessages() {
+        const stores = [global.localStorage, global.sessionStorage].filter(Boolean);
+        for (let index = 0; index < stores.length; index += 1) {
+            const store = stores[index];
+            try {
+                const raw = store.getItem(PENDING_PRACTICE_MESSAGES_KEY);
+                if (!raw) continue;
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    return parsed;
+                }
+            } catch (_) {
+                // ignore malformed payload
+            }
+        }
+        return [];
+    }
+
+    function persistPendingPracticeMessages(messages) {
+        const normalized = Array.isArray(messages) ? messages.slice(-10) : [];
+        const serialized = JSON.stringify(normalized);
+        [global.localStorage, global.sessionStorage].filter(Boolean).forEach((store) => {
+            try {
+                store.setItem(PENDING_PRACTICE_MESSAGES_KEY, serialized);
+            } catch (_) {
+                // ignore quota/storage errors
+            }
+        });
+    }
+
+    function appendPendingPracticeMessage(envelope) {
+        if (!envelope || typeof envelope !== 'object') {
+            return;
+        }
+        const existing = loadPendingPracticeMessages();
+        existing.push({
+            createdAt: Date.now(),
+            message: envelope
+        });
+        persistPendingPracticeMessages(existing);
+    }
+
     function postMessage(type, payload) {
         const envelope = buildEnvelope(type, payload);
         const candidates = [global.opener, state.parentWindow, global.parent];
@@ -1702,11 +2772,16 @@
             try {
                 target.postMessage(envelope, '*');
                 state.parentWindow = target;
-                return;
+                return true;
             } catch (_) {
                 // try next candidate
             }
         }
+        const normalizedType = String(type || '').toUpperCase();
+        if (normalizedType === 'PRACTICE_COMPLETE' || normalizedType === 'PRACTICE_ANALYSIS_PATCH') {
+            appendPendingPracticeMessage(envelope);
+        }
+        return false;
     }
 
     function stopInitLoop() {
@@ -2200,6 +3275,8 @@
         if (state.readOnly) {
             return;
         }
+        const submitTimestamp = Date.now();
+        trackAnswerTimeline(collectAnswers(), submitTimestamp);
         if (state.simulationMode) {
             syncSimulationDraftSnapshot('submit');
         }
@@ -2207,14 +3284,19 @@
             dispatchSimulationNavigate('next');
             return;
         }
-        const results = buildResults();
+        const durationSec = Math.max(1, Math.round((Date.now() - state.startTime) / 1000));
+        const results = buildResults({ durationSec });
+        const normalizedInput = results.singleAttemptAnalysisInput;
+        const normalizedAnalysis = results.singleAttemptAnalysis;
+        state.llmAnalysisStatus = 'idle';
+        state.llmAnalysisMessage = '';
         state.lastResults = results;
         renderResults(results);
         await renderExplanations();
         updateNavStatuses(results);
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
         postMessage(messageType, Object.assign({
-            duration: Math.max(1, Math.round((Date.now() - state.startTime) / 1000)),
+            duration: durationSec,
             startTime: new Date(state.startTime).toISOString(),
             endTime: new Date().toISOString(),
             metadata: {
@@ -2230,9 +3312,21 @@
                 dataKey: state.dataKey,
                 markedQuestions: (typeof global.getPracticeMarkedQuestions === 'function')
                     ? global.getPracticeMarkedQuestions()
-                    : []
-            }
+                    : [],
+                singleAttemptAnalysisInput: normalizedInput,
+                singleAttemptAnalysis: normalizedAnalysis,
+                singleAttemptAnalysisLlm: results.singleAttemptAnalysisLlm || null
+            },
+            singleAttemptAnalysisInput: normalizedInput,
+            singleAttemptAnalysis: normalizedAnalysis,
+            singleAttemptAnalysisLlm: results.singleAttemptAnalysisLlm || null,
+            realData: Object.assign({}, results.realData || {}, {
+                singleAttemptAnalysisInput: normalizedInput,
+                singleAttemptAnalysis: normalizedAnalysis,
+                singleAttemptAnalysisLlm: results.singleAttemptAnalysisLlm || null
+            })
         }, results));
+        triggerSingleAttemptLlmAnalysis(results);
         if (state.simulationMode && state.simulationCtx && state.simulationCtx.isLast) {
             stopSimulationDraftSync();
             clearSimulationDraftMirror();
@@ -2273,10 +3367,25 @@
     function attachActionListeners() {
         dom.submitBtn?.addEventListener('click', handleSubmit);
         dom.resetBtn?.addEventListener('click', handleReset);
-        document.addEventListener('change', () => updateNavStatuses());
-        document.addEventListener('input', () => updateNavStatuses());
+        document.addEventListener('change', () => {
+            recordInteraction();
+            trackAnswerTimeline(collectAnswers(), Date.now());
+            updateNavStatuses();
+        });
+        document.addEventListener('input', () => {
+            recordInteraction();
+            trackAnswerTimeline(collectAnswers(), Date.now());
+            updateNavStatuses();
+        });
+        document.addEventListener('click', () => {
+            recordInteraction();
+        }, true);
         document.addEventListener('drop', () => {
-            global.setTimeout(() => updateNavStatuses(), 0);
+            recordInteraction();
+            global.setTimeout(() => {
+                trackAnswerTimeline(collectAnswers(), Date.now());
+                updateNavStatuses();
+            }, 0);
         }, true);
     }
 
@@ -2400,7 +3509,11 @@
         if (type === 'SUITE_FORCE_CLOSE') {
             clearSimulationState(true);
             try {
-                global.close();
+                if (global.electronAPI && typeof global.electronAPI.openLegacy === 'function') {
+                    global.electronAPI.openLegacy();
+                } else {
+                    global.close();
+                }
             } catch (_) {
                 // ignore
             }
@@ -2441,6 +3554,7 @@
         attachActionListeners();
         attachMessageBridge();
         syncSuiteModeState();
+        trackAnswerTimeline(collectAnswers(), Date.now());
         updateNavStatuses();
         refreshSimulationDraftSyncLifecycle();
         startInitLoop();

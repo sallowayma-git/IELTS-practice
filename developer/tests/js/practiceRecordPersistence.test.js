@@ -337,6 +337,459 @@ function testScoreStorageDurationRejectsRawFallbackWithoutTimeline() {
     );
 }
 
+function testScoreStorageAnalysisInputCanonicalization() {
+    const quietConsole = {
+        log() {},
+        warn() {},
+        error() {},
+        info() {},
+        debug() {}
+    };
+    const sandbox = {
+        console: quietConsole,
+        window: {
+            console: quietConsole
+        },
+        Date,
+        Math,
+        JSON,
+        Map,
+        Set,
+        Promise
+    };
+    sandbox.globalThis = sandbox.window;
+
+    loadScript('js/core/scoreStorage.js', vm.createContext(sandbox));
+    const ScoreStorage = sandbox.window.ScoreStorage;
+    const storageLike = Object.create(ScoreStorage.prototype);
+    storageLike.currentVersion = '1.0.0';
+    storageLike.generateRecordId = () => 'generated-analysis-id';
+    storageLike.convertComparisonToMap = () => ({});
+    storageLike.deriveCorrectMapFromDetails = () => ({});
+    storageLike.convertComparisonToDetails = () => null;
+    storageLike.buildAnswerDetailsFromMaps = () => null;
+
+    const standardized = storageLike.standardizeRecord({
+        id: 'legacy-general-record',
+        examId: 'reading-analysis-canonical',
+        type: 'reading',
+        startTime: '2026-03-09T10:00:00.000Z',
+        endTime: '2026-03-09T10:20:00.000Z',
+        score: 3,
+        totalQuestions: 5,
+        correctAnswers: 3,
+        accuracy: 0.6,
+        answers: { q1: 'A', q2: 'B', q3: 'C', q4: 'D', q5: 'E' },
+        questionTypePerformance: {
+            general: { total: 3, correct: 2, accuracy: 0.67 },
+            matching: { total: 2, correct: 1, accuracy: 0.5 }
+        },
+        metadata: {
+            type: 'reading',
+            examType: 'reading',
+            dataQuality: { confidence: 0.8 }
+        }
+    });
+
+    assert.strictEqual(standardized.questionTypePerformance.general, undefined, 'standardizeRecord 不能回写 general');
+    assert.strictEqual(standardized.questionTypePerformance.unknown.total, 3, 'general 应归并为 unknown');
+    assert(standardized.singleAttemptAnalysisInput, 'standardizeRecord 应持久化 singleAttemptAnalysisInput');
+    assert.strictEqual(standardized.singleAttemptAnalysisInput.missingKindRatio, 0.6, 'missingKindRatio 应正确计算');
+    assert(
+        Math.abs(standardized.singleAttemptAnalysisInput.confidence - 0.32) < 1e-9,
+        'unknown 置信度公式应生效'
+    );
+}
+
+function testScoreStorageNormalizeRecordBackfillsAnalysisInputForLegacyRecord() {
+    const quietConsole = {
+        log() {},
+        warn() {},
+        error() {},
+        info() {},
+        debug() {}
+    };
+    const sandbox = {
+        console: quietConsole,
+        window: {
+            console: quietConsole
+        },
+        Date,
+        Math,
+        JSON,
+        Map,
+        Set,
+        Promise
+    };
+    sandbox.globalThis = sandbox.window;
+
+    loadScript('js/core/scoreStorage.js', vm.createContext(sandbox));
+    const ScoreStorage = sandbox.window.ScoreStorage;
+    const storageLike = Object.create(ScoreStorage.prototype);
+    storageLike.convertComparisonToMap = () => ({});
+    storageLike.deriveCorrectMapFromDetails = () => ({});
+    storageLike.convertComparisonToDetails = () => null;
+    storageLike.buildAnswerDetailsFromMaps = () => null;
+
+    const normalized = storageLike.normalizeRecordFields({
+        id: 'legacy-read-record',
+        examId: 'reading-legacy',
+        type: 'reading',
+        totalQuestions: 4,
+        correctAnswers: 2,
+        accuracy: 0.5,
+        metadata: {
+            type: 'reading',
+            examType: 'reading',
+            dataQuality: { confidence: 0.9 }
+        },
+        answers: { q1: 'A', q2: 'B', q3: 'C', q4: 'D' },
+        questionTypePerformance: {
+            general: { total: 4, correct: 2, accuracy: 0.5 }
+        },
+        realData: {}
+    });
+
+    assert(normalized.singleAttemptAnalysisInput, 'legacy 记录读取时应补齐 singleAttemptAnalysisInput');
+    assert(normalized.singleAttemptAnalysis && typeof normalized.singleAttemptAnalysis === 'object', 'legacy 记录读取时应补齐 singleAttemptAnalysis');
+    assert.strictEqual(normalized.questionTypePerformance.general, undefined, 'legacy 读取结果不应包含 general');
+    assert.strictEqual(normalized.questionTypePerformance.unknown.total, 4, 'legacy general 应迁移为 unknown');
+    assert(
+        Math.abs(normalized.singleAttemptAnalysisInput.confidence - 0.2) < 1e-9,
+        '置信度应在下限 0.2 被 clamp'
+    );
+    assert(
+        Array.isArray(normalized.singleAttemptAnalysis.radar?.byQuestionKind),
+        'singleAttemptAnalysis 应包含雷达数据结构'
+    );
+}
+
+function testScoreStorageNormalizeRecordRebuildsLegacyAnalysisShape() {
+    const quietConsole = {
+        log() {},
+        warn() {},
+        error() {},
+        info() {},
+        debug() {}
+    };
+    const sandbox = {
+        console: quietConsole,
+        window: {
+            console: quietConsole
+        },
+        Date,
+        Math,
+        JSON,
+        Map,
+        Set,
+        Promise
+    };
+    sandbox.globalThis = sandbox.window;
+
+    loadScript('js/core/scoreStorage.js', vm.createContext(sandbox));
+    const ScoreStorage = sandbox.window.ScoreStorage;
+    const storageLike = Object.create(ScoreStorage.prototype);
+    storageLike.convertComparisonToMap = () => ({});
+    storageLike.deriveCorrectMapFromDetails = () => ({});
+    storageLike.convertComparisonToDetails = () => null;
+    storageLike.buildAnswerDetailsFromMaps = () => null;
+
+    const normalized = storageLike.normalizeRecordFields({
+        id: 'legacy-analysis-shape-record',
+        examId: 'reading-legacy-shape',
+        type: 'reading',
+        totalQuestions: 3,
+        correctAnswers: 2,
+        accuracy: 0.6667,
+        metadata: {
+            type: 'reading',
+            examType: 'reading',
+            dataQuality: { confidence: 0.8 }
+        },
+        answers: { q1: 'A', q2: 'B', q3: 'C' },
+        questionTypePerformance: {
+            unknown: { total: 3, correct: 2, accuracy: 0.6667 }
+        },
+        singleAttemptAnalysis: {
+            summary: { accuracy: 0.6667 },
+            questions: [{ questionId: 'q1' }]
+        },
+        realData: {}
+    });
+
+    assert(
+        normalized.singleAttemptAnalysis
+        && normalized.singleAttemptAnalysis.radar
+        && Array.isArray(normalized.singleAttemptAnalysis.radar.byQuestionKind),
+        '旧版 singleAttemptAnalysis 结构应被重建为 canonical radar 结构'
+    );
+    assert.strictEqual(
+        Object.prototype.hasOwnProperty.call(normalized.singleAttemptAnalysis, 'questions'),
+        false,
+        '旧版 questions 字段不应继续保留在 canonical 分析对象'
+    );
+}
+
+function testScoreStorageFallbackInputCarriesSignalsAndTimeline() {
+    const quietConsole = {
+        log() {},
+        warn() {},
+        error() {},
+        info() {},
+        debug() {}
+    };
+    const sandbox = {
+        console: quietConsole,
+        window: {
+            console: quietConsole
+        },
+        Date,
+        Math,
+        JSON,
+        Map,
+        Set,
+        Promise
+    };
+    sandbox.globalThis = sandbox.window;
+
+    loadScript('js/core/scoreStorage.js', vm.createContext(sandbox));
+    const ScoreStorage = sandbox.window.ScoreStorage;
+    const storageLike = Object.create(ScoreStorage.prototype);
+
+    const input = storageLike.buildSingleAttemptAnalysisInputFallback({
+        examId: 'reading-fallback-signals',
+        type: 'reading',
+        duration: 120,
+        metadata: {
+            type: 'reading',
+            examType: 'reading',
+            category: 'p2',
+            dataQuality: { confidence: 0.8 }
+        },
+        questionTypePerformance: {
+            single_choice: { total: 3, correct: 2, accuracy: 0.6667 }
+        },
+        answerComparison: {
+            q1: { userAnswer: 'A' },
+            q2: { userAnswer: '' },
+            q3: { userAnswer: 'C' }
+        },
+        questionTimelineLite: [
+            { questionId: 'q1', firstAnsweredAt: Date.now() - 2000, lastAnsweredAt: Date.now() - 1000, changeCount: 2 },
+            { questionId: 'q2', firstAnsweredAt: null, lastAnsweredAt: null, changeCount: 0 },
+            { questionId: 'q3', firstAnsweredAt: Date.now() - 1500, lastAnsweredAt: Date.now() - 500, changeCount: 1 }
+        ],
+        interactions: Array.from({ length: 12 }, (_, idx) => ({ type: 'answer', questionId: `q${idx + 1}` }))
+    }, {
+        totalQuestions: 3,
+        correctAnswers: 2,
+        accuracy: 2 / 3,
+        durationSec: 120
+    });
+
+    assert.strictEqual(input.durationSec, 120, 'fallback input 应补齐 durationSec');
+    assert.strictEqual(input.category, 'p2', 'fallback input 应保留 category');
+    assert(Array.isArray(input.questionTimelineLite), 'fallback input 应补齐 questionTimelineLite');
+    assert(input.analysisSignals && typeof input.analysisSignals === 'object', 'fallback input 应补齐 analysisSignals');
+    assert.strictEqual(input.analysisSignals.unansweredCount, 1, 'fallback input 应正确统计 unansweredCount');
+    assert.strictEqual(input.analysisSignals.changedAnswerCount, 2, 'fallback input 应按改答题数统计 changedAnswerCount');
+    assert.strictEqual(input.analysisSignals.interactionDensity, 6, 'fallback input 应按每分钟口径计算 interactionDensity');
+
+    const artifacts = storageLike.buildSingleAttemptAnalysisArtifacts({
+        examId: 'reading-fallback-signals',
+        type: 'reading',
+        metadata: {
+            type: 'reading',
+            examType: 'reading',
+            category: 'p2',
+            dataQuality: { confidence: 0.8 }
+        },
+        totalQuestions: 3,
+        correctAnswers: 2,
+        accuracy: 2 / 3,
+        duration: 120,
+        questionTypePerformance: {
+            single_choice: { total: 3, correct: 2, accuracy: 0.6667 }
+        }
+    }, {
+        totalQuestions: 3,
+        correctAnswers: 2,
+        accuracy: 2 / 3,
+        durationSec: 120
+    });
+    assert(
+        Array.isArray(artifacts.singleAttemptAnalysis?.radar?.byPassageCategory)
+        && artifacts.singleAttemptAnalysis.radar.byPassageCategory.some((item) => item.category === 'p2'),
+        'fallback analysis 应包含 byPassageCategory 维度'
+    );
+}
+
+function testScoreStorageFallbackArtifactsRebuildAnalysisFromInput() {
+    const quietConsole = {
+        log() {},
+        warn() {},
+        error() {},
+        info() {},
+        debug() {}
+    };
+    const sandbox = {
+        console: quietConsole,
+        window: {
+            console: quietConsole
+        },
+        Date,
+        Math,
+        JSON,
+        Map,
+        Set,
+        Promise
+    };
+    sandbox.globalThis = sandbox.window;
+
+    loadScript('js/core/scoreStorage.js', vm.createContext(sandbox));
+    const ScoreStorage = sandbox.window.ScoreStorage;
+    const storageLike = Object.create(ScoreStorage.prototype);
+
+    const artifacts = storageLike.buildSingleAttemptAnalysisArtifacts({
+        examId: 'reading-stale-analysis',
+        type: 'reading',
+        metadata: {
+            type: 'reading',
+            examType: 'reading',
+            dataQuality: { confidence: 0.8 }
+        },
+        totalQuestions: 4,
+        correctAnswers: 1,
+        accuracy: 0.25,
+        questionTypePerformance: {
+            unknown: { total: 4, correct: 1, accuracy: 0.25 }
+        },
+        singleAttemptAnalysis: {
+            summary: {
+                accuracy: 0.1,
+                durationSec: 10,
+                unansweredRate: 0.5,
+                changedAnswerRate: 0.5
+            },
+            radar: {
+                byQuestionKind: [{ kind: 'unknown', total: 4, correct: 0, accuracy: 0, confidence: 0.2 }],
+                byPassageCategory: []
+            },
+            diagnosis: [{ reason: 'stale' }],
+            nextActions: [{ instruction: 'stale' }],
+            confidence: 0.2
+        }
+    }, {
+        totalQuestions: 4,
+        correctAnswers: 3,
+        accuracy: 0.75,
+        durationSec: 120,
+        questionTypePerformance: {
+            single_choice: { total: 4, correct: 3, accuracy: 0.75, confidence: 0.8 }
+        },
+        analysisSignals: {
+            unansweredCount: 0,
+            changedAnswerCount: 1,
+            interactionDensity: 3
+        }
+    });
+
+    assert.strictEqual(
+        artifacts.singleAttemptAnalysis.summary.accuracy,
+        0.75,
+        'fallback artifacts 不应复用陈旧 canonical analysis；应按最新 input 重建'
+    );
+    assert.strictEqual(
+        artifacts.singleAttemptAnalysis.radar.byQuestionKind[0].kind,
+        'single_choice',
+        'fallback artifacts 的题型维度应来自最新 input.questionTypePerformance'
+    );
+}
+
+function testPracticeRecorderFallbackArtifactsRebuildAnalysisFromInput() {
+    const quietConsole = {
+        log() {},
+        warn() {},
+        error() {},
+        info() {},
+        debug() {}
+    };
+    const sandbox = {
+        console: quietConsole,
+        window: {
+            console: quietConsole
+        },
+        Date,
+        Math,
+        JSON,
+        Map,
+        Set,
+        Promise
+    };
+    sandbox.globalThis = sandbox.window;
+
+    loadScript('js/core/practiceRecorder.js', vm.createContext(sandbox));
+    const PracticeRecorder = sandbox.window.PracticeRecorder;
+    const recorderLike = Object.create(PracticeRecorder.prototype);
+    recorderLike.getPracticeCoreContracts = () => null;
+    recorderLike.getPracticeCoreAnalysis = () => null;
+
+    const artifacts = recorderLike.buildSingleAttemptAnalysisArtifacts({
+        examId: 'reading-stale-analysis-recorder',
+        type: 'reading',
+        metadata: {
+            type: 'reading',
+            examType: 'reading',
+            dataQuality: { confidence: 0.8 }
+        },
+        totalQuestions: 4,
+        correctAnswers: 1,
+        accuracy: 0.25,
+        questionTypePerformance: {
+            unknown: { total: 4, correct: 1, accuracy: 0.25 }
+        },
+        singleAttemptAnalysis: {
+            summary: {
+                accuracy: 0.1,
+                durationSec: 9,
+                unansweredRate: 0.5,
+                changedAnswerRate: 0.5
+            },
+            radar: {
+                byQuestionKind: [{ kind: 'unknown', total: 4, correct: 0, accuracy: 0, confidence: 0.2 }],
+                byPassageCategory: []
+            },
+            diagnosis: [{ reason: 'stale' }],
+            nextActions: [{ instruction: 'stale' }],
+            confidence: 0.2
+        }
+    }, {
+        totalQuestions: 4,
+        correctAnswers: 3,
+        accuracy: 0.75,
+        durationSec: 90,
+        questionTypePerformance: {
+            single_choice: { total: 4, correct: 3, accuracy: 0.75, confidence: 0.8 }
+        },
+        analysisSignals: {
+            unansweredCount: 0,
+            changedAnswerCount: 1,
+            interactionDensity: 3
+        }
+    });
+
+    assert.strictEqual(
+        artifacts.singleAttemptAnalysis.summary.accuracy,
+        0.75,
+        'PracticeRecorder fallback artifacts 不应复用陈旧 canonical analysis；应按最新 input 重建'
+    );
+    assert.strictEqual(
+        artifacts.singleAttemptAnalysis.radar.byQuestionKind[0].kind,
+        'single_choice',
+        'PracticeRecorder fallback artifacts 的题型维度应来自最新 input.questionTypePerformance'
+    );
+}
+
 async function main() {
     try {
         await testDeleteRecordPersistsAndCleansLegacyKeys();
@@ -344,6 +797,12 @@ async function main() {
         await testDeleteRecordForcesUiRefreshWhenPracticeCoreAlreadySyncedState();
         testScoreStorageDurationPrefersTimelineWhenConflict();
         testScoreStorageDurationRejectsRawFallbackWithoutTimeline();
+        testScoreStorageAnalysisInputCanonicalization();
+        testScoreStorageNormalizeRecordBackfillsAnalysisInputForLegacyRecord();
+        testScoreStorageNormalizeRecordRebuildsLegacyAnalysisShape();
+        testScoreStorageFallbackInputCarriesSignalsAndTimeline();
+        testScoreStorageFallbackArtifactsRebuildAnalysisFromInput();
+        testPracticeRecorderFallbackArtifactsRebuildAnalysisFromInput();
         console.log(JSON.stringify({
             status: 'pass',
             detail: 'deleteRecord / clearPracticeData 已覆盖 canonical store、legacy shadow key 与删除后的强制 UI 刷新链路'

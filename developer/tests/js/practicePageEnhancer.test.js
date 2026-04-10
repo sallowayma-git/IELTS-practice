@@ -15,6 +15,21 @@ function loadScript(relativePath, context) {
     vm.runInContext(source, context, { filename: relativePath });
 }
 
+function createWebStorage() {
+    const map = new Map();
+    return {
+        getItem(key) {
+            return map.has(key) ? map.get(key) : null;
+        },
+        setItem(key, value) {
+            map.set(key, String(value));
+        },
+        removeItem(key) {
+            map.delete(key);
+        }
+    };
+}
+
 function createHarness(options = {}) {
     const immediateTimers = options.immediateTimers === true;
     const markedQuestionsCalls = [];
@@ -76,6 +91,8 @@ function createHarness(options = {}) {
         error() {},
         info() {}
     };
+    const localStorage = createWebStorage();
+    const sessionStorage = createWebStorage();
 
     const windowStub = {
         document: documentStub,
@@ -94,6 +111,8 @@ function createHarness(options = {}) {
         },
         opener: null,
         parent: null,
+        localStorage,
+        sessionStorage,
         practicePageEnhancerConfig: {
             autoInitialize: false
         },
@@ -132,6 +151,8 @@ function createHarness(options = {}) {
         Map,
         Set,
         Promise,
+        localStorage,
+        sessionStorage,
         CustomEvent: function CustomEvent(type, init = {}) {
             return {
                 type,
@@ -210,6 +231,24 @@ function testSendMessageRespectsReadOnlyGuard() {
     assert.strictEqual(posted[0].message.type, 'SESSION_READY', '消息类型应原样保留');
     assert.strictEqual(posted[0].message.source, 'practice_page', '消息来源应保持 practice_page');
     assert.deepStrictEqual(hookArgs, ['beforeSendMessage', 'SESSION_READY', { ok: true }], '发送前应调用 beforeSendMessage hook');
+}
+
+function testSendMessageQueuesPracticeCompleteWhenParentMissing() {
+    const harness = createHarness();
+    harness.enhancer.parentWindow = null;
+    harness.enhancer.readOnly = false;
+
+    harness.enhancer.sendMessage('PRACTICE_COMPLETE', {
+        examId: 'reading-p1',
+        sessionId: 'session-no-parent',
+        scoreInfo: { correct: 2, total: 3, accuracy: 2 / 3, percentage: 67 }
+    });
+
+    const raw = harness.windowStub.localStorage.getItem('exam_system_pending_practice_messages_v1');
+    assert.ok(raw, '无父窗口时应把 PRACTICE_COMPLETE 写入待处理队列');
+    const queue = JSON.parse(raw);
+    assert.ok(Array.isArray(queue) && queue.length === 1, '待处理队列应追加一条消息');
+    assert.strictEqual(queue[0].message.type, 'PRACTICE_COMPLETE', '待处理队列中的消息类型应保持 PRACTICE_COMPLETE');
 }
 function testApplyReplayRecordRestoresMarkedQuestions() {
     const harness = createHarness();
@@ -375,9 +414,60 @@ function testSuiteComparisonScoreAndPayloadContracts() {
     assert.deepStrictEqual(normalizedCorrectAnswers, { q1: 'A', q2: 'C' }, 'suite payload correctAnswers 应保持去前缀合同');
     assert.strictEqual(messages[0].payload.scoreInfo.percentage, 50, 'suite payload scoreInfo 应保持兼容');
     assert.deepStrictEqual(messages[0].payload.spellingErrors, [{ token: 'sp1' }], 'suite payload spellingErrors 应保持透传合同');
+    assert.strictEqual(messages[0].payload.questionTypePerformance.unknown.total, 2, 'suite payload 题型映射缺失时应归入 unknown');
+    assert.strictEqual(Boolean(messages[0].payload.questionTypePerformance.general), false, 'suite payload 不应引入 general 兜底');
+    assert.ok(Array.isArray(messages[0].payload.questionTimelineLite), 'suite payload 应补充 questionTimelineLite');
+    assert.ok(messages[0].payload.analysisSignals && typeof messages[0].payload.analysisSignals === 'object', 'suite payload 应补充 analysisSignals');
 
     harness.enhancer.sendSuiteCompleteMessage('set1', comparison, null, []);
     assert.strictEqual(messages[1].payload.scoreInfo.percentage, 50, 'suite payload 缺省 scoreInfo 时应走 comparison 计算且保持百分比');
+}
+
+function testBuildResultsPayloadAddsAnalyticsAndUnknownTypeFallback() {
+    const harness = createHarness();
+    const now = Date.now();
+
+    harness.windowStub.practicePageMetadata = {
+        questionGroups: [
+            {
+                kind: 'single_choice',
+                questionIds: ['q1']
+            }
+        ]
+    };
+    harness.enhancer.sessionId = 'session-analytics';
+    harness.enhancer.examId = 'exam-analytics';
+    harness.enhancer.startTime = now - 120000;
+    harness.enhancer.answers = { q1: 'B', q2: 'C' };
+    harness.enhancer.correctAnswers = { q1: 'A', q2: 'C', q3: 'D' };
+    harness.enhancer.interactions = [
+        { type: 'answer', questionId: 'q1', value: 'A', timestamp: now - 100000 },
+        { type: 'answer', questionId: 'q1', value: 'B', timestamp: now - 90000 },
+        { type: 'answer', questionId: 'q2', value: 'C', timestamp: now - 80000 },
+        { type: 'click', timestamp: now - 70000 }
+    ];
+    harness.enhancer.captureQuestionSet = () => ['q1', 'q2', 'q3'];
+
+    const payload = harness.enhancer.buildResultsPayload({
+        includeComparison: true,
+        includeScore: false
+    });
+
+    assert.strictEqual(payload.answerComparison.q2.isCorrect, true, 'answerComparison 语义应保持');
+    assert.strictEqual(payload.analysisSignals.unansweredCount, 1, 'analysisSignals 应统计未作答数量');
+    assert.strictEqual(payload.analysisSignals.changedAnswerCount, 1, 'analysisSignals 应统计改答题数量');
+    assert.ok(Number.isFinite(payload.analysisSignals.interactionDensity), 'analysisSignals.interactionDensity 应为数值');
+    assert.ok(payload.analysisSignals.interactionDensity > 0, 'analysisSignals.interactionDensity 应大于 0');
+
+    const q1Timeline = payload.questionTimelineLite.find((item) => item.questionId === 'q1');
+    const q3Timeline = payload.questionTimelineLite.find((item) => item.questionId === 'q3');
+    assert.strictEqual(q1Timeline.changeCount, 1, 'questionTimelineLite 应记录题目改答次数');
+    assert.ok(q1Timeline.firstAnsweredAt && q1Timeline.lastAnsweredAt, 'questionTimelineLite 应记录已答题时间');
+    assert.strictEqual(q3Timeline.firstAnsweredAt, null, '未作答题 firstAnsweredAt 应为 null');
+
+    assert.strictEqual(payload.questionTypePerformance.single_choice.total, 1, '映射到 kind 的题目应在对应题型统计');
+    assert.strictEqual(payload.questionTypePerformance.unknown.total, 2, '未映射题目应归入 unknown');
+    assert.strictEqual(Boolean(payload.questionTypePerformance.general), false, '题型兜底不应使用 general');
 }
 
 function testCorrectAnswerExtractorKeepsSingleLetterChoices() {
@@ -412,10 +502,12 @@ function main() {
         testCollectAnswersNowDelegatesToEnhancer();
         testGetCorrectAnswersDelegatesToEnhancer();
         testSendMessageRespectsReadOnlyGuard();
+        testSendMessageQueuesPracticeCompleteWhenParentMissing();
         testApplyReplayRecordRestoresMarkedQuestions();
         testApplyReplayRecordSchedulesReplayFallbackOnce();
         testResultsMonitoringAndScoreContracts();
         testSuiteComparisonScoreAndPayloadContracts();
+        testBuildResultsPayloadAddsAnalyticsAndUnknownTypeFallback();
         testCorrectAnswerExtractorKeepsSingleLetterChoices();
         console.log(JSON.stringify({
             status: 'pass',

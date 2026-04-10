@@ -13,6 +13,23 @@ class PracticeRecordModal {
         window.practiceRecordModal = this;
     }
 
+    ensureSingleAttemptAnalysisStyles() {
+        const styleId = 'single-attempt-analysis-style';
+        if (document.getElementById(styleId)) {
+            return;
+        }
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+            .single-attempt-analysis-card { margin-top: 14px; }
+            .single-attempt-analysis-empty {
+                color: #64748b;
+                font-size: 13px;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
     show(record) {
         // 暂存当前焦点，稍后在 hide() 之后重新赋值给 this.previousActiveElement
         const currentFocus = document.activeElement;
@@ -27,6 +44,7 @@ class PracticeRecordModal {
             }
 
             processedRecord = this.prepareRecordForDisplay(processedRecord);
+            this.ensureSingleAttemptAnalysisStyles();
 
             const modalHtml = this.createModalHtml(processedRecord);
 
