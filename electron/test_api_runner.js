@@ -36,6 +36,7 @@ const TopicService = require('./services/topic.service');
 const EssayService = require('./services/essay.service');
 const SettingsService = require('./services/settings.service');
 const UploadService = require('./services/upload.service');
+const ReadingAnalysisService = require('./services/reading-analysis.service');
 
 // Mock webContents
 const mockWebContents = {
@@ -50,14 +51,16 @@ async function run() {
     migrator.migrate();
     const db = migrator.getDatabase();
 
+    const configService = new ConfigService(db);
     const services = {
-        configService: new ConfigService(db),
+        configService,
         promptService: new PromptService(db),
         evaluateService: new EvaluateService(db, mockWebContents),
         topicService: new TopicService(db),
         essayService: new EssayService(db),
         settingsService: new SettingsService(db),
-        uploadService: new UploadService(mockUserDataPath)
+        uploadService: new UploadService(mockUserDataPath),
+        readingAnalysisService: new ReadingAnalysisService(configService)
     };
 
     const server = new LocalApiServer(services);

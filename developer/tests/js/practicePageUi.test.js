@@ -477,6 +477,7 @@ function buildHarness(options = {}) {
     const sessionStorage = createWebStorage();
     const localStorage = createWebStorage();
     const closeLog = [];
+    let electronOpenLegacyCalls = 0;
     const openerStub = {
         closed: false,
         messages: openerMessages,
@@ -553,6 +554,13 @@ function buildHarness(options = {}) {
         },
         __UNIFIED_READING_SIMULATION_MODE__: options.simulationMode === true
     };
+    if (options.withElectronAPI) {
+        windowStub.electronAPI = {
+            openLegacy() {
+                electronOpenLegacyCalls += 1;
+            }
+        };
+    }
     const sandbox = {
         window: windowStub,
         document,
@@ -589,6 +597,9 @@ function buildHarness(options = {}) {
         document,
         elements: { submitBtn, resetBtn, exitBtn, navContainer, q1, q2, q3, results },
         closeLog,
+        getElectronOpenLegacyCalls() {
+            return electronOpenLegacyCalls;
+        },
         openerMessages,
         openerStub,
         dispatchWindowMessage(message) {
@@ -709,6 +720,13 @@ function testLiveModeSubmitLocksAndExitClosesWindow() {
     harness.elements.exitBtn.click();
     assert.strictEqual(harness.closeLog.length, 1, '点击 exit 应调用 window.close');
 }
+function testLiveModeExitUsesElectronNavigationWhenAvailable() {
+    const harness = buildHarness({ simulationMode: false, withElectronAPI: true });
+    harness.elements.submitBtn.click();
+    harness.elements.exitBtn.click();
+    assert.strictEqual(harness.getElectronOpenLegacyCalls(), 1, 'Electron 环境下点击 exit 应优先走 openLegacy');
+    assert.strictEqual(harness.closeLog.length, 0, 'Electron 环境下点击 exit 不应直接 window.close');
+}
 function testSuiteModeUiContractStaysHidden() {
     const harness = buildHarness();
     const suiteFlowModeSection = harness.document.getElementById('suite-flow-mode-section');
@@ -740,6 +758,7 @@ function main() {
         testPracticeResultsReadyRendersSummaryAndNavState();
         testPracticeResultsPendingContract();
         testLiveModeSubmitLocksAndExitClosesWindow();
+        testLiveModeExitUsesElectronNavigationWhenAvailable();
         testSuiteModeUiContractStaysHidden();
         testEndlessCountdownExitContract();
         console.log(JSON.stringify({

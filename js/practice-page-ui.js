@@ -102,7 +102,19 @@
         }
 
         function isSimulationMode() { return window.__UNIFIED_READING_SIMULATION_MODE__ === true; }
-        function closePracticeWindow() { window.close(); }
+        function closePracticeWindow() {
+            const hasElectronLegacyNavigation = window.electronAPI
+                && typeof window.electronAPI.openLegacy === 'function';
+            if (hasElectronLegacyNavigation) {
+                try {
+                    window.electronAPI.openLegacy();
+                    return;
+                } catch (_) {
+                    // fall through to native close
+                }
+            }
+            window.close();
+        }
         function parseSessionJson(key, fallbackValue = null) {
             let raw = null;
             try { raw = window.sessionStorage.getItem(key); } catch (_) { return fallbackValue; }

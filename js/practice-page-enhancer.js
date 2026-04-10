@@ -110,6 +110,52 @@
     };
 
     const ENHANCER_BASE_URL = resolveEnhancerBaseUrl();
+    const PENDING_PRACTICE_MESSAGES_KEY = 'exam_system_pending_practice_messages_v1';
+
+    function loadPendingPracticeMessages() {
+        const stores = [window.localStorage, window.sessionStorage].filter(Boolean);
+        for (let index = 0; index < stores.length; index += 1) {
+            const store = stores[index];
+            try {
+                const raw = store.getItem(PENDING_PRACTICE_MESSAGES_KEY);
+                if (!raw) {
+                    continue;
+                }
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    return parsed;
+                }
+            } catch (_) {
+                // ignore malformed payload
+            }
+        }
+        return [];
+    }
+
+    function persistPendingPracticeMessages(messages) {
+        const normalized = Array.isArray(messages) ? messages.slice(-10) : [];
+        const serialized = JSON.stringify(normalized);
+        [window.localStorage, window.sessionStorage].filter(Boolean).forEach((store) => {
+            try {
+                store.setItem(PENDING_PRACTICE_MESSAGES_KEY, serialized);
+            } catch (_) {
+                // ignore quota/storage errors
+            }
+        });
+    }
+
+    function appendPendingPracticeMessage(envelope) {
+        if (!envelope || typeof envelope !== 'object') {
+            return;
+        }
+        const existing = loadPendingPracticeMessages();
+        existing.push({
+            createdAt: Date.now(),
+            message: envelope
+        });
+        persistPendingPracticeMessages(existing);
+    }
+
     const dependencyLoader = {
         cache: new Map(),
         loadScript(url) {
@@ -2330,7 +2376,9 @@
                 doc.title || ''
             ];
             const url = this.getWindowHref().toLowerCase();
-            const bodyClass = doc.body ? doc.body.className.toLowerCase() : '';
+            const bodyClass = (doc.body && typeof doc.body.className === 'string')
+                ? doc.body.className.toLowerCase()
+                : '';
             const joined = hints
                 .filter(Boolean)
                 .map((hint) => hint.toLowerCase())
@@ -3427,6 +3475,8 @@
             const suiteAnswers = this.extractPrefixedAnswerMap(this.answers, prefix);
             const suiteCorrectAnswers = this.extractPrefixedAnswerMap(this.correctAnswers, prefix);
             const normalizedScore = scoreInfo || this.calculateSuiteScore(comparison || {});
+            const suiteInteractions = this.filterSuiteInteractions(suiteId);
+            const suiteQuestionIds = Object.keys(comparison || {}).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
             const message = {
                 examId: `${this.examId}_${suiteId}`,
@@ -3448,10 +3498,31 @@
                 duration: this.startTime ? Math.round((now - this.startTime) / 1000) : 0,
                 pageType: this.detectPageType(),
                 url: this.getWindowHref(),
-                title: document.title
+                title: document.title,
+                interactions: suiteInteractions,
+                allQuestionIds: suiteQuestionIds
             };
 
+            message.questionTypePerformance = this.buildQuestionTypePerformance(
+                comparison || {},
+                this.resolveQuestionGroups(message),
+                suiteQuestionIds
+            );
+            message.questionTimelineLite = this.buildQuestionTimelineLite(
+                comparison || {},
+                suiteInteractions,
+                suiteQuestionIds,
+                now
+            );
+            message.analysisSignals = this.buildAnalysisSignals(
+                comparison || {},
+                message.questionTimelineLite,
+                suiteInteractions,
+                message.duration
+            );
+
             this.runHooks('afterSuiteMessageBuilt', message, suiteId);
+            this.ensurePracticeCompleteSupplements(message);
             this.sendMessage('PRACTICE_COMPLETE', message);
         },
 
@@ -4098,6 +4169,303 @@
             this.dispatchPracticeResultsEvent(results);
         },
 
+        normalizeQuestionKind: function (kind) {
+            if (typeof kind !== 'string') {
+                return 'unknown';
+            }
+            const normalized = kind.trim().toLowerCase();
+            return normalized || 'unknown';
+        },
+
+        stripSuitePrefix: function (questionId) {
+            const raw = questionId == null ? '' : String(questionId).trim();
+            if (!raw) {
+                return '';
+            }
+            const index = raw.lastIndexOf('::');
+            if (index === -1 || index >= raw.length - 2) {
+                return raw;
+            }
+            return raw.slice(index + 2);
+        },
+
+        hasMeaningfulAnswerValue: function (value) {
+            if (Array.isArray(value)) {
+                return value.some((entry) => !!String(entry == null ? '' : entry).trim());
+            }
+            return !!String(value == null ? '' : value).trim();
+        },
+
+        buildAnswerFingerprint: function (value) {
+            if (Array.isArray(value)) {
+                return value
+                    .map((item) => String(item == null ? '' : item).trim())
+                    .filter(Boolean)
+                    .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+                    .join('|');
+            }
+            return String(value == null ? '' : value).trim();
+        },
+
+        resolveQuestionGroups: function (payload = {}) {
+            const direct = Array.isArray(payload.questionGroups) ? payload.questionGroups : null;
+            if (direct) {
+                return direct;
+            }
+            const metadataGroups = payload.metadata && Array.isArray(payload.metadata.questionGroups)
+                ? payload.metadata.questionGroups
+                : null;
+            if (metadataGroups) {
+                return metadataGroups;
+            }
+            const globalGroups = window.practicePageMetadata && Array.isArray(window.practicePageMetadata.questionGroups)
+                ? window.practicePageMetadata.questionGroups
+                : null;
+            return globalGroups || [];
+        },
+
+        buildQuestionTypePerformance: function (answerComparison = {}, questionGroups = [], allQuestionIds = []) {
+            const typeMap = new Map();
+            (Array.isArray(questionGroups) ? questionGroups : []).forEach((group) => {
+                const kind = this.normalizeQuestionKind(group && group.kind);
+                const ids = Array.isArray(group && group.questionIds) ? group.questionIds : [];
+                ids.forEach((questionId) => {
+                    const normalizedId = this.normalizeQuestionId(questionId);
+                    if (!normalizedId) {
+                        return;
+                    }
+                    const baseId = this.stripSuitePrefix(normalizedId);
+                    if (!typeMap.has(baseId) || typeMap.get(baseId) === 'unknown') {
+                        typeMap.set(baseId, kind);
+                    }
+                });
+            });
+
+            const questionIds = new Set();
+            Object.keys(answerComparison || {}).forEach((questionId) => {
+                const normalizedId = this.normalizeQuestionId(questionId);
+                if (normalizedId) {
+                    questionIds.add(normalizedId);
+                }
+            });
+            (Array.isArray(allQuestionIds) ? allQuestionIds : []).forEach((questionId) => {
+                const normalizedId = this.normalizeQuestionId(questionId);
+                if (normalizedId) {
+                    questionIds.add(normalizedId);
+                }
+            });
+
+            const performance = {};
+            questionIds.forEach((questionId) => {
+                const comparisonEntry = answerComparison[questionId] || {};
+                const baseId = this.stripSuitePrefix(questionId);
+                const kind = typeMap.get(baseId) || 'unknown';
+                if (!performance[kind]) {
+                    performance[kind] = {
+                        total: 0,
+                        correct: 0,
+                        accuracy: 0,
+                        questionIds: [],
+                        kind
+                    };
+                }
+                performance[kind].total += 1;
+                if (comparisonEntry && comparisonEntry.isCorrect === true) {
+                    performance[kind].correct += 1;
+                }
+                if (!performance[kind].questionIds.includes(questionId)) {
+                    performance[kind].questionIds.push(questionId);
+                }
+            });
+
+            Object.keys(performance).forEach((kind) => {
+                const item = performance[kind];
+                item.accuracy = item.total > 0 ? item.correct / item.total : 0;
+            });
+
+            return performance;
+        },
+
+        buildQuestionTimelineLite: function (answerComparison = {}, interactions = [], allQuestionIds = [], fallbackTimestamp = Date.now()) {
+            const timelineMap = new Map();
+            const ensureEntry = (questionId) => {
+                if (timelineMap.has(questionId)) {
+                    return timelineMap.get(questionId);
+                }
+                const entry = {
+                    questionId,
+                    firstAnsweredAt: null,
+                    lastAnsweredAt: null,
+                    changeCount: 0,
+                    lastFingerprint: ''
+                };
+                timelineMap.set(questionId, entry);
+                return entry;
+            };
+            const normalizeTimestamp = (value) => {
+                const numeric = Number(value);
+                if (Number.isFinite(numeric)) {
+                    return numeric;
+                }
+                if (typeof value === 'string') {
+                    const parsed = Date.parse(value);
+                    if (Number.isFinite(parsed)) {
+                        return parsed;
+                    }
+                }
+                return null;
+            };
+            const resolvedFallbackTimestamp = normalizeTimestamp(fallbackTimestamp) || Date.now();
+
+            (Array.isArray(interactions) ? interactions : []).forEach((interaction) => {
+                if (!interaction || interaction.type !== 'answer') {
+                    return;
+                }
+                const normalizedId = this.normalizeQuestionId(interaction.questionId);
+                if (!normalizedId) {
+                    return;
+                }
+                const entry = ensureEntry(normalizedId);
+                const timestamp = normalizeTimestamp(interaction.timestamp);
+                const answered = this.hasMeaningfulAnswerValue(interaction.value);
+                const fingerprint = answered ? this.buildAnswerFingerprint(interaction.value) : '';
+                if (entry.lastFingerprint && entry.lastFingerprint !== fingerprint) {
+                    entry.changeCount += 1;
+                }
+                if (answered && !entry.firstAnsweredAt && Number.isFinite(timestamp)) {
+                    entry.firstAnsweredAt = timestamp;
+                }
+                if (answered && Number.isFinite(timestamp)) {
+                    entry.lastAnsweredAt = timestamp;
+                }
+                entry.lastFingerprint = fingerprint;
+            });
+
+            const questionIds = new Set();
+            Object.keys(answerComparison || {}).forEach((questionId) => {
+                const normalizedId = this.normalizeQuestionId(questionId);
+                if (normalizedId) {
+                    questionIds.add(normalizedId);
+                }
+            });
+            (Array.isArray(allQuestionIds) ? allQuestionIds : []).forEach((questionId) => {
+                const normalizedId = this.normalizeQuestionId(questionId);
+                if (normalizedId) {
+                    questionIds.add(normalizedId);
+                }
+            });
+
+            questionIds.forEach((questionId) => {
+                const entry = ensureEntry(questionId);
+                const comparisonEntry = answerComparison[questionId];
+                if (!comparisonEntry) {
+                    return;
+                }
+                if (!entry.firstAnsweredAt && this.hasMeaningfulAnswerValue(comparisonEntry.userAnswer)) {
+                    entry.firstAnsweredAt = resolvedFallbackTimestamp;
+                }
+                if (!entry.lastAnsweredAt && this.hasMeaningfulAnswerValue(comparisonEntry.userAnswer)) {
+                    entry.lastAnsweredAt = resolvedFallbackTimestamp;
+                }
+            });
+
+            const orderedIds = Array.from(questionIds).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+            timelineMap.forEach((_, questionId) => {
+                if (!questionIds.has(questionId)) {
+                    orderedIds.push(questionId);
+                }
+            });
+
+            return orderedIds.map((questionId) => {
+                const entry = timelineMap.get(questionId);
+                const firstAnsweredAt = entry ? entry.firstAnsweredAt : null;
+                const lastAnsweredAt = entry ? entry.lastAnsweredAt : null;
+                return {
+                    questionId,
+                    firstAnsweredAt: firstAnsweredAt != null && Number.isFinite(Number(firstAnsweredAt))
+                        ? new Date(Number(firstAnsweredAt)).toISOString()
+                        : null,
+                    lastAnsweredAt: lastAnsweredAt != null && Number.isFinite(Number(lastAnsweredAt))
+                        ? new Date(Number(lastAnsweredAt)).toISOString()
+                        : null,
+                    changeCount: Number.isFinite(Number(entry && entry.changeCount))
+                        ? Number(entry.changeCount)
+                        : 0
+                };
+            });
+        },
+
+        buildAnalysisSignals: function (answerComparison = {}, timelineLite = [], interactions = [], durationSeconds = 0) {
+            const unansweredCount = Object.values(answerComparison || {}).reduce((count, entry) => (
+                this.hasMeaningfulAnswerValue(entry && entry.userAnswer) ? count : count + 1
+            ), 0);
+            const changedAnswerCount = (Array.isArray(timelineLite) ? timelineLite : []).reduce((count, item) => (
+                Number(item && item.changeCount) > 0 ? count + 1 : count
+            ), 0);
+            const safeDurationSeconds = Number.isFinite(Number(durationSeconds)) ? Number(durationSeconds) : 0;
+            const durationMinutes = Math.max(safeDurationSeconds / 60, 1);
+            const interactionsCount = Array.isArray(interactions) ? interactions.length : 0;
+            const interactionDensity = Number((interactionsCount / durationMinutes).toFixed(4));
+            return {
+                unansweredCount,
+                changedAnswerCount,
+                interactionDensity
+            };
+        },
+
+        ensurePracticeCompleteSupplements: function (payload = {}) {
+            if (!payload || typeof payload !== 'object') {
+                return payload;
+            }
+            const answerComparison = payload.answerComparison && typeof payload.answerComparison === 'object'
+                ? payload.answerComparison
+                : {};
+            const allQuestionIds = Array.isArray(payload.allQuestionIds) ? payload.allQuestionIds : Object.keys(answerComparison);
+            const interactions = Array.isArray(payload.interactions) ? payload.interactions : [];
+            const questionGroups = this.resolveQuestionGroups(payload);
+            const fallbackTimestamp = payload.endTime || Date.now();
+
+            if (!payload.questionTypePerformance || typeof payload.questionTypePerformance !== 'object' || Object.keys(payload.questionTypePerformance).length === 0) {
+                payload.questionTypePerformance = this.buildQuestionTypePerformance(answerComparison, questionGroups, allQuestionIds);
+            }
+
+            if (!Array.isArray(payload.questionTimelineLite) || payload.questionTimelineLite.length === 0) {
+                payload.questionTimelineLite = this.buildQuestionTimelineLite(
+                    answerComparison,
+                    interactions,
+                    allQuestionIds,
+                    fallbackTimestamp
+                );
+            }
+
+            if (!payload.analysisSignals || typeof payload.analysisSignals !== 'object') {
+                payload.analysisSignals = this.buildAnalysisSignals(
+                    answerComparison,
+                    payload.questionTimelineLite,
+                    interactions,
+                    payload.duration
+                );
+            }
+
+            return payload;
+        },
+
+        filterSuiteInteractions: function (suiteId) {
+            if (!suiteId || !Array.isArray(this.interactions)) {
+                return [];
+            }
+            const prefix = `${suiteId}::`;
+            return this.interactions.filter((interaction) => {
+                if (!interaction || interaction.type !== 'answer') {
+                    return false;
+                }
+                const questionId = interaction.questionId == null ? '' : String(interaction.questionId).trim();
+                return questionId.startsWith(prefix);
+            }).map((interaction) => Object.assign({}, interaction, {
+                questionId: this.stripSuitePrefix(interaction.questionId)
+            }));
+        },
+
         buildResultsPayload: function (options) {
             const endTime = Date.now();
             const resolvedExamId = this.resolveExamId();
@@ -4197,6 +4565,8 @@
                     }
                 }
             }
+
+            this.ensurePracticeCompleteSupplements(payload);
 
             this.runHooks('afterBuildPayload', payload);
 
@@ -4427,6 +4797,12 @@
 
         sendMessage: function (type, data) {
             if (!this.parentWindow) {
+                if (String(type || '').toUpperCase() === 'PRACTICE_COMPLETE') {
+                    const pendingEnvelope = this.buildMessageEnvelope(type, data);
+                    appendPendingPracticeMessage(pendingEnvelope);
+                    console.info('[PracticeEnhancer] 无父窗口，已将 PRACTICE_COMPLETE 写入本地待处理队列');
+                    return;
+                }
                 console.warn('[PracticeEnhancer] 无父窗口，无法发送消息');
                 return;
             }
@@ -4435,6 +4811,9 @@
                 return;
             }
 
+            if (type === 'PRACTICE_COMPLETE' && data && typeof data === 'object') {
+                this.ensurePracticeCompleteSupplements(data);
+            }
             this.runHooks('beforeSendMessage', type, data);
             const message = this.buildMessageEnvelope(type, data);
 
@@ -4443,6 +4822,10 @@
                 console.log('[PracticeEnhancer] 消息已发送:', type);
             } catch (error) {
                 console.error('[PracticeEnhancer] 发送消息失败:', error);
+                if (String(type || '').toUpperCase() === 'PRACTICE_COMPLETE') {
+                    appendPendingPracticeMessage(message);
+                    console.info('[PracticeEnhancer] postMessage 失败，已回退写入本地待处理队列');
+                }
             }
         },
 

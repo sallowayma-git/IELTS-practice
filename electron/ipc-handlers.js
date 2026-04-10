@@ -9,6 +9,7 @@ const TopicService = require('./services/topic.service');
 const EssayService = require('./services/essay.service');
 const SettingsService = require('./services/settings.service');
 const UploadService = require('./services/upload.service');
+const ReadingAnalysisService = require('./services/reading-analysis.service');
 const logger = require('./utils/logger');
 
 const IPC_HANDLE_CHANNELS = [
@@ -75,6 +76,7 @@ class IPCHandlers {
         this.essayService = null;
         this.settingsService = null;
         this.uploadService = null;
+        this.readingAnalysisService = null;
         this.localApiInfo = null;
 
         // 允许调用 writing API 的页面白名单
@@ -135,6 +137,7 @@ class IPCHandlers {
             this.essayService = new EssayService(this.db);
             this.settingsService = new SettingsService(this.db);
             this.uploadService = new UploadService(app);
+            this.readingAnalysisService = new ReadingAnalysisService(this.configService);
 
             logger.info('Services initialized successfully');
 
@@ -454,7 +457,8 @@ class IPCHandlers {
             topicService: this.topicService,
             essayService: this.essayService,
             settingsService: this.settingsService,
-            uploadService: this.uploadService
+            uploadService: this.uploadService,
+            readingAnalysisService: this.readingAnalysisService
         };
     }
 }

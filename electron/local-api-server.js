@@ -41,6 +41,7 @@ class LocalApiServer {
         });
 
         this._registerEvaluateRoutes();
+        this._registerReadingAnalysisRoutes();
         this._registerConfigRoutes();
         this._registerPromptRoutes();
         this._registerEssayRoutes();
@@ -153,6 +154,23 @@ class LocalApiServer {
             try {
                 const result = await evaluateService.cancel(req.params.sessionId);
                 res.json({ success: true, data: result, message: '评分任务已取消' });
+            } catch (error) {
+                this._sendError(res, error);
+            }
+        });
+    }
+
+    _registerReadingAnalysisRoutes() {
+        const { readingAnalysisService } = this.services;
+        if (!readingAnalysisService) {
+            return;
+        }
+
+        this.app.post('/api/reading/single-attempt-analysis', async (req, res) => {
+            try {
+                const payload = req.body || {};
+                const data = await readingAnalysisService.generateSingleAttemptAnalysis(payload);
+                res.json({ success: true, data });
             } catch (error) {
                 this._sendError(res, error);
             }
