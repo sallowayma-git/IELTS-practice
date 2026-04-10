@@ -2930,7 +2930,7 @@ window.completeExamIndex = [
     },
     {
         id: 'p3-high-206',
-        title: '200 Years of Australian Landscapes at the Royal Academy in London 亚洲风景展',
+        title: '200 Years of Australian Landscapes at the Royal Academy in London 澳洲风景展',
         category: 'P3',
         frequency: 'high',
         path: '三月/5.P3 高频/',
