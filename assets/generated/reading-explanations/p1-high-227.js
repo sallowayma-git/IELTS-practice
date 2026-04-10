@@ -97,32 +97,32 @@
       "items": [
         {
           "questionNumber": 8,
-          "text": "（1）题目 8：Samuel Mitchill worked as a congressman and a ______.\n题目翻译：塞缪尔・米切尔担任国会议员和 ______。\n答案：scientist\n解析：定位 Paragraph D 中 “Referred to as a 'living encyclopaedia', Mitchill was called upon to present the biology of the case”。米切尔被称为“活百科全书”，被要求陈述案件的生物学依据，说明他同时具备科学家身份。且 Paragraph A 中提及他作为“congressman”（国会议员），结合上下文，他同时是科学家（scientist），因此答案为 scientist。",
+          "text": "（1）题目 8：Samuel Mitchill worked as a congressman and a ______.\n题目翻译：Samuel Mitchill 的身份是国会议员兼一名 ______。\n答案：lecturer\n解析：题目说“worked as a congressman and a ___”。原文先给出身份 congressman，后给出另一个职业身份 lecturer。注意只能填 ONE WORD ONLY，所以答案填 lecturer。\n定位句：\"...the congressman Samuel Mitchill... Mitchill was a renowned natural history lecturer...\"\n定位句翻译：......国会议员 Samuel Mitchill......Mitchill 是一位著名的自然史讲师......",
           "questionId": "q8"
         },
         {
           "questionNumber": 9,
-          "text": "（2）题目 9：William Sampson called ______ as witnesses in order to appeal to the common sense of the jury.\n题目翻译：威廉・桑普森传唤 ______ 作为证人，以诉诸陪审团的常识。\n答案：whalers\n解析：定位 Paragraph D 中 “Sampson turned the trial into a contest between scientific learning and common sense, by asking plain-spoken whalers to make their case before the jury”。桑普森请直言不讳的捕鲸者（whalers）在陪审团面前陈述，以诉诸常识，因此答案为 whalers。",
+          "text": "（2）题目 9：William Sampson called ______ as witnesses in order to appeal to the common sense of the jury.\n题目翻译：William Sampson 叫来 ______ 作为证人，以迎合陪审团的常识判断。\n答案：whalers\n解析：题干中的“called as witnesses”对应原文 asking ... to make their case before the jury。证人是谁？是 whalers。这里常识与科学形成对立，Sampson 故意请普通、直白、贴近现实经验的人来影响陪审团。\n定位句：\"...by asking plain-spoken whalers to make their case before the jury.\"\n定位句翻译：......他让说话直白的捕鲸人在陪审团面前陈述他们的观点。",
           "questionId": "q9"
         },
         {
           "questionNumber": 10,
-          "text": "（3）题目 10：New Yorkers disliked Mitchill because his ideas came from ______.\n题目翻译：纽约人不喜欢米切尔，因为他的观点来自 ______。\n答案：Europe\n解析：定位 Paragraph E 中 “Sampson then claimed Mitchill's beliefs had their origin in Europe – something he rightly judged would infuriate the citizens of always-independent New York”。桑普森声称米切尔的观点源于欧洲，这激怒了纽约市民，因此答案为 Europe。",
+          "text": "（3）题目 10：New Yorkers disliked Mitchill because his ideas came from ______.\n题目翻译：纽约人不喜欢 Mitchill，因为他的观点来自 ______。\n答案：Europe\n解析：题干是 ideas came from，对应原文 had their origin in __。答案直接取原词 Europe。\n定位句：\"The smooth-talking Sampson then claimed Mitchill's beliefs had their origin in Europe...\"\n定位句翻译：口才很好的 Sampson 随后声称，Mitchill 的信念起源于欧洲......",
           "questionId": "q10"
         },
         {
           "questionNumber": 11,
-          "text": "（4）题目 11：In the end it was statements from local ______, not Mitchill's testimony which helped Judd win.\n题目翻译：最终帮助贾德获胜的是当地 ______ 的陈述，而非米切尔的证词。\n答案：merchants\n解析：定位 Paragraph F 中 “In New York's markets, the merchants implicitly understood that whale oil and fish oil were not the same... In the end it was this testimony that led to Judd's victory”。纽约市场中的商人（merchants）提供了关键证词，帮助贾德获胜，因此答案为 merchants。",
+          "text": "（4）题目 11：In the end it was statements from local ______, not Mitchill's testimony which helped Judd win.\n题目翻译：最终帮助 Judd 获胜的不是 Mitchill 的证词，而是当地 ______ 的说法。\n答案：merchants\n解析：题干中的“statements from local ___”对应原文中真正起作用的是来自市场经验的证词，而这一经验主体就是 merchants。后面句子 “In the end it was this testimony that led to Judd's victory.” 进一步确认答案。\n定位句：\"In New York's markets, the merchants implicitly understood that whale oil and fish oil were not the same...\"\n定位句翻译：在纽约的市场里，商人们心照不宣地明白，鲸油和鱼油并不一样......",
           "questionId": "q11"
         },
         {
           "questionNumber": 12,
-          "text": "（5）题目 12：Whale oil made a good ______ because it was clean.\n题目翻译：鲸油是一种很好的 ______，因为它很干净。\n答案：fuel\n解析：定位 Paragraph F 中 “whale oil could be used as a fuel for lamps because it could be burned without giving off smoke”。鲸油可用作灯的燃料（fuel），因为燃烧时不冒烟，因此答案为 fuel。",
+          "text": "（5）题目 12：Whale oil made a good ______ because it was clean.\n题目翻译：鲸油是一种很好的 ______，因为它很干净。\n答案：fuel\n解析：题干里的“because it was clean”对应原文“without giving off smoke（不会冒烟）”。这说明鲸油适合作为 fuel。注意不能填 lamps，因为题目结构是“made a good ___”，最合适的是 fuel。\n定位句：\"...whale oil could be used as a fuel for lamps because it could be burned without giving off smoke...\"\n定位句翻译：......鲸油可以作为灯的燃料，因为燃烧时不会冒烟......",
           "questionId": "q12"
         },
         {
           "questionNumber": 13,
-          "text": "（6）题目 13：Judd's case is relevant today, e.g. in the debate about Earth's ______.\n题目翻译：贾德的案件在今天仍有现实意义，例如在关于地球 ______ 的辩论中。\n答案：climate\n解析：定位 Paragraph G 中 “Whether the issue today is the effects of human activity on the climate or some other matter, the debate continues”。文中明确提及人类活动对气候（climate）的影响，因此答案为 climate。",
+          "text": "（6）题目 13：Judd's case is relevant today, e.g. in the debate about Earth's ______.\n题目翻译：Judd 的案件在今天仍然相关，例如关于地球 ______ 的争论。\n答案：climate\n解析：题干“Earth's ___”对应原文“the climate of this planet”。因此答案是 climate。这里也是典型同义转换：Earth = this planet。\n定位句：\"Whether the issue today is the effects of human activity on the climate of this planet...\"\n定位句翻译：无论今天的问题是人类活动对这个星球气候的影响......",
           "questionId": "q13"
         }
       ],
@@ -130,7 +130,7 @@
         "start": 8,
         "end": 13
       },
-      "text": "题目翻译：塞缪尔・米切尔担任国会议员和 ______。\n答案：scientist\n解析：定位 Paragraph D 中 “Referred to as a 'living encyclopaedia', Mitchill was called upon to present the biology of the case”。米切尔被称为“活百科全书”，被要求陈述案件的生物学依据，说明他同时具备科学家身份。且 Paragraph A 中提及他作为“congressman”（国会议员），结合上下文，他同时是科学家（scientist），因此答案为 scientist。\n题目翻译：威廉・桑普森传唤 ______ 作为证人，以诉诸陪审团的常识。\n答案：whalers\n解析：定位 Paragraph D 中 “Sampson turned the trial into a contest between scientific learning and common sense, by asking plain-spoken whalers to make their case before the jury”。桑普森请直言不讳的捕鲸者（whalers）在陪审团面前陈述，以诉诸常识，因此答案为 whalers。\n题目翻译：纽约人不喜欢米切尔，因为他的观点来自 ______。\n答案：Europe\n解析：定位 Paragraph E 中 “Sampson then claimed Mitchill's beliefs had their origin in Europe – something he rightly judged would infuriate the citizens of always-independent New York”。桑普森声称米切尔的观点源于欧洲，这激怒了纽约市民，因此答案为 Europe。\n题目翻译：最终帮助贾德获胜的是当地 ______ 的陈述，而非米切尔的证词。\n答案：merchants\n解析：定位 Paragraph F 中 “In New York's markets, the merchants implicitly understood that whale oil and fish oil were not the same... In the end it was this testimony that led to Judd's victory”。纽约市场中的商人（merchants）提供了关键证词，帮助贾德获胜，因此答案为 merchants。\n题目翻译：鲸油是一种很好的 ______，因为它很干净。\n答案：fuel\n解析：定位 Paragraph F 中 “whale oil could be used as a fuel for lamps because it could be burned without giving off smoke”。鲸油可用作灯的燃料（fuel），因为燃烧时不冒烟，因此答案为 fuel。\n题目翻译：贾德的案件在今天仍有现实意义，例如在关于地球 ______ 的辩论中。\n答案：climate\n解析：定位 Paragraph G 中 “Whether the issue today is the effects of human activity on the climate or some other matter, the debate continues”。文中明确提及人类活动对气候（climate）的影响，因此答案为 climate。"
+      "text": "题目翻译：Samuel Mitchill 的身份是国会议员兼一名 ______。\n答案：lecturer\n解析：题目说“worked as a congressman and a ___”。原文先给出身份 congressman，后给出另一个职业身份 lecturer。注意只能填 ONE WORD ONLY，所以答案填 lecturer。\n定位句：\"...the congressman Samuel Mitchill... Mitchill was a renowned natural history lecturer...\"\n定位句翻译：......国会议员 Samuel Mitchill......Mitchill 是一位著名的自然史讲师......\n题目翻译：William Sampson 叫来 ______ 作为证人，以迎合陪审团的常识判断。\n答案：whalers\n解析：题干中的“called as witnesses”对应原文 asking ... to make their case before the jury。证人是谁？是 whalers。这里常识与科学形成对立，Sampson 故意请普通、直白、贴近现实经验的人来影响陪审团。\n定位句：\"...by asking plain-spoken whalers to make their case before the jury.\"\n定位句翻译：......他让说话直白的捕鲸人在陪审团面前陈述他们的观点。\n题目翻译：纽约人不喜欢 Mitchill，因为他的观点来自 ______。\n答案：Europe\n解析：题干是 ideas came from，对应原文 had their origin in __。答案直接取原词 Europe。\n定位句：\"The smooth-talking Sampson then claimed Mitchill's beliefs had their origin in Europe...\"\n定位句翻译：口才很好的 Sampson 随后声称，Mitchill 的信念起源于欧洲......\n题目翻译：最终帮助 Judd 获胜的不是 Mitchill 的证词，而是当地 ______ 的说法。\n答案：merchants\n解析：题干中的“statements from local ___”对应原文中真正起作用的是来自市场经验的证词，而这一经验主体就是 merchants。后面句子 “In the end it was this testimony that led to Judd's victory.” 进一步确认答案。\n定位句：\"In New York's markets, the merchants implicitly understood that whale oil and fish oil were not the same...\"\n定位句翻译：在纽约的市场里，商人们心照不宣地明白，鲸油和鱼油并不一样......\n题目翻译：鲸油是一种很好的 ______，因为它很干净。\n答案：fuel\n解析：题干里的“because it was clean”对应原文“without giving off smoke（不会冒烟）”。这说明鲸油适合作为 fuel。注意不能填 lamps，因为题目结构是“made a good ___”，最合适的是 fuel。\n定位句：\"...whale oil could be used as a fuel for lamps because it could be burned without giving off smoke...\"\n定位句翻译：......鲸油可以作为灯的燃料，因为燃烧时不会冒烟......\n题目翻译：Judd 的案件在今天仍然相关，例如关于地球 ______ 的争论。\n答案：climate\n解析：题干“Earth's ___”对应原文“the climate of this planet”。因此答案是 climate。这里也是典型同义转换：Earth = this planet。\n定位句：\"Whether the issue today is the effects of human activity on the climate of this planet...\"\n定位句翻译：无论今天的问题是人类活动对这个星球气候的影响......"
     }
   ]
 }
