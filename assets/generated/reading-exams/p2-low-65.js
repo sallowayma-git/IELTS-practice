@@ -59,7 +59,7 @@
         "q12",
         "q13"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                <h4>Questions 24–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"summary-completion\">\n                    <h4>Hearst Tower</h4>\n                    <p>Norman Foster's Hearst Tower was built in 2006. The 40-storey modern triangular-patterned building is made of glass and steel, contrasting with the base which is in the style of the 1920s. The sight of the building's <strong>24</strong> <input type=\"text\" id=\"q24_input\"> has a striking impact on commuters and employees. Some passers-by may find the building's design confusing, as it mixes old and new elements. Inside the tower <strong>25</strong> <input type=\"text\" id=\"q25_input\"> carry employees up past a large water sculpture in the light-filled <strong>26</strong> <input type=\"text\" id=\"q26_input\">.</p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                <h4>Questions 24–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"summary-completion\">\n                    <h4>Hearst Tower</h4>\n                    <p>Norman Foster's Hearst Tower was built in 2006. The 40-storey modern triangular-patterned building is made of glass and steel, contrasting with the base which is in the style of the 1920s. The sight of the building's <strong>24</strong> <input name=\"q11\" type=\"text\" id=\"q24_input\"> has a striking impact on commuters and employees. Some passers-by may find the building's design confusing, as it mixes old and new elements. Inside the tower <strong>25</strong> <input name=\"q12\" type=\"text\" id=\"q25_input\"> carry employees up past a large water sculpture in the light-filled <strong>26</strong> <input name=\"q13\" type=\"text\" id=\"q26_input\">.</p>\n                </div>\n            </div>"
     }
   ],
   "answerKey": {
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);

@@ -59,7 +59,7 @@
         "q12",
         "q13"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q9-10-11-12-13-anchor\">\n                 <h4>Questions 22–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h4>Auckland University's Centre for Brain Research</h4>\n                    <p>\n                    Associate Professor Johanna Montgomery says that current research into brain activity and behaviour only relates to <strong>22</strong> <input type=\"text\" id=\"q22_input\"> so Hanson's theories have not been proved correct. While scans do show that positive stimuli result in more <strong>23</strong> <input type=\"text\" id=\"q23_input\"> reaching parts of the brain, this isn't proof that the brain is getting stronger.\n                    </p>\n                    <p>\n                    But Montgomery is making progress. In laboratory experiments, scientists use <strong>24</strong> <input type=\"text\" id=\"q24_input\"> to initiate brain activity, because it's similar to natural processes. One finding is that hormones can be compared to the <strong>25</strong> <input type=\"text\" id=\"q25_input\"> because both can change human behaviour. But scientists understand some stimuli, such as <strong>26</strong> <input type=\"text\" id=\"q26_input\"> better than they understand more positive stimuli.\n                    </p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q9-10-11-12-13-anchor\">\n                 <h4>Questions 22–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h4>Auckland University's Centre for Brain Research</h4>\n                    <p>\n                    Associate Professor Johanna Montgomery says that current research into brain activity and behaviour only relates to <strong>22</strong> <input name=\"q9\" type=\"text\" id=\"q22_input\"> so Hanson's theories have not been proved correct. While scans do show that positive stimuli result in more <strong>23</strong> <input name=\"q10\" type=\"text\" id=\"q23_input\"> reaching parts of the brain, this isn't proof that the brain is getting stronger.\n                    </p>\n                    <p>\n                    But Montgomery is making progress. In laboratory experiments, scientists use <strong>24</strong> <input name=\"q11\" type=\"text\" id=\"q24_input\"> to initiate brain activity, because it's similar to natural processes. One finding is that hormones can be compared to the <strong>25</strong> <input name=\"q12\" type=\"text\" id=\"q25_input\"> because both can change human behaviour. But scientists understand some stimuli, such as <strong>26</strong> <input name=\"q13\" type=\"text\" id=\"q26_input\"> better than they understand more positive stimuli.\n                    </p>\n                </div>\n            </div>"
     }
   ],
   "answerKey": {
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);
