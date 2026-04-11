@@ -30,6 +30,7 @@
     var stateCorePromise = null;
     var sessionSuitePromise = null;
     var coreBootstrapStarted = false;
+    var runtimeReadyDispatched = false;
 
     function reapplyAppMixins() {
         if (global.ExamSystemAppMixins && typeof global.ExamSystemAppMixins.__applyToApp === 'function') {
@@ -38,6 +39,18 @@
             } catch (error) {
                 console.warn('[MainEntry] 重新应用 mixins 失败:', error);
             }
+        }
+    }
+
+    function dispatchRuntimeReady() {
+        if (runtimeReadyDispatched) {
+            return;
+        }
+        runtimeReadyDispatched = true;
+        try {
+            global.dispatchEvent(new CustomEvent('app-runtime-ready'));
+        } catch (error) {
+            console.warn('[MainEntry] 派发 app-runtime-ready 失败:', error);
         }
     }
 
@@ -328,7 +341,7 @@
         syncOverviewAfterIndexLoad();
         var activeView = getActiveViewName();
 
-        if (activeView === 'browse') {
+        function finalizeBrowseBoot() {
             ensureBrowseGroup().then(function afterBrowseReady() {
                 if (typeof global.loadExamList === 'function') {
                     try { global.loadExamList(); } catch (_) { }
@@ -337,9 +350,17 @@
                 if (loading) {
                     loading.style.display = 'none';
                 }
+                if (global.AppBootScreen && typeof global.AppBootScreen.complete === 'function') {
+                    global.AppBootScreen.complete();
+                }
+                dispatchRuntimeReady();
             }).catch(function handleBrowseLoadError(error) {
                 console.error('[MainEntry] browse-runtime 组加载失败:', error);
             });
+        }
+
+        if (activeView === 'browse') {
+            finalizeBrowseBoot();
             return;
         }
 
@@ -348,10 +369,17 @@
                 if (typeof global.updatePracticeView === 'function') {
                     try { global.updatePracticeView(); } catch (_) { }
                 }
+                if (global.AppBootScreen && typeof global.AppBootScreen.complete === 'function') {
+                    global.AppBootScreen.complete();
+                }
+                dispatchRuntimeReady();
             }).catch(function handlePracticeLoadError(error) {
                 console.error('[MainEntry] practice 视图模块加载失败:', error);
             });
+            return;
         }
+
+        finalizeBrowseBoot();
     }
 
     global.addEventListener('examIndexLoaded', function onExamIndexLoaded() {
@@ -362,6 +390,7 @@
         if (global.AppBootScreen && typeof global.AppBootScreen.complete === 'function') {
             global.AppBootScreen.complete();
         }
+        dispatchRuntimeReady();
     });
 
     function bootstrapCoreDataInBackground() {

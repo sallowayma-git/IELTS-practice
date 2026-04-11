@@ -5,7 +5,35 @@
 /documents/
 /docs/
 /tools/
+/developer/node_modules/
+/node_modules/
 /dist/
+/out/
+/build/
+/apps/dist/
+/apps/writing-vue/dist/
+/apps/writing-vue/node_modules/
+/.tmp/
+/.cache/
+/.electron/
+/.electron-builder/
+builder-debug.yml
+builder-effective-config.yaml
+latest.yml
+latest-mac.yml
+latest-linux.yml
+*.blockmap
+*.dmg
+*.pkg
+*.exe
+*.msi
+*.AppImage
+*.deb
+*.rpm
+*.snap
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
 /apps/
 !/apps
 !/apps/writing-vue/
@@ -30,8 +58,6 @@
 /templates/hp/
 /ielts-writing-assistant/
 /BACKUP/
-
-package-lock.json
 # 忽略可能的系统文件
 .DS_Store
 Thumbs.db
@@ -67,11 +93,6 @@ developer/tests/reports/listeningpractice-scan.md
 *.db-wal
 # Node.js 依赖
 node_modules/
-package-lock.json
-# Electron 构建产物
-dist/
-out/
-build/
 # 日志文件 (electron/utils/logger.js 生成)
 logs/
 *.log

@@ -1,0 +1,208 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-shell:
+    name: Build shell (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate update contracts
+        run: npm run check:update-syntax
+
+      - name: Run update runtime smoke
+        run: npm run verify:update-runtime
+
+      - name: Run release client smoke
+        run: npm run verify:release-client-smoke
+
+      - name: Run shell release smoke
+        run: npm run verify:shell-release-smoke
+
+      - name: Run shell support smoke
+        run: npm run verify:shell-support-smoke
+
+      - name: Build Electron artifacts
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run release:build
+
+      - name: Validate shell artifacts
+        run: npm run verify:shell-release -- --dir dist/electron --platform "${{ runner.os }}" --tag "${GITHUB_REF_NAME}"
+
+      - name: Upload shell artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: shell-${{ matrix.os }}
+          path: dist/electron/*
+          if-no-files-found: error
+
+  build-resource-packages:
+    name: Build resource packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: npm ci
+
+      - name: Validate resource release scripts
+        run: npm run check:update-syntax
+
+      - name: Run update runtime smoke
+        run: npm run verify:update-runtime
+
+      - name: Run release client smoke
+        run: npm run verify:release-client-smoke
+
+      - name: Resolve previous stable tag
+        id: previous-tag
+        run: |
+          PREVIOUS_TAG="$(git tag --list 'v*' --sort=-version:refname | awk -v current="${GITHUB_REF_NAME}" '$0 != current { print; exit }')"
+          echo "value=${PREVIOUS_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Build resource manifest and packages
+        run: |
+          if [ -n "${{ steps.previous-tag.outputs.value }}" ]; then
+            npm run build:resource-release -- --tag "${GITHUB_REF_NAME}" --previous-tag "${{ steps.previous-tag.outputs.value }}" --output "dist/resources"
+          else
+            npm run build:resource-release -- --tag "${GITHUB_REF_NAME}" --output "dist/resources"
+          fi
+
+      - name: Validate resource manifest contract
+        run: npm run verify:resource-release -- --dir dist/resources
+
+      - name: Run resource release smoke
+        run: npm run verify:resource-release-smoke -- --dir dist/resources
+
+      - name: Upload resource artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: resource-packages
+          path: dist/resources/*
+          if-no-files-found: error
+
+  publish-release-assets:
+    name: Publish verified release assets
+    needs:
+      - build-shell
+      - build-resource-packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: npm ci
+
+      - name: Download Windows shell artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: shell-windows-latest
+          path: dist/release-shell/windows
+
+      - name: Download macOS shell artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: shell-macos-latest
+          path: dist/release-shell/macos
+
+      - name: Download resource artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: resource-packages
+          path: dist/release-resources
+
+      - name: Re-verify downloaded shell artifacts
+        run: |
+          npm run verify:shell-release -- --dir dist/release-shell/windows --platform Windows --tag "${GITHUB_REF_NAME}"
+          npm run verify:shell-release -- --dir dist/release-shell/macos --platform macOS --tag "${GITHUB_REF_NAME}"
+
+      - name: Re-verify downloaded resource artifacts
+        run: npm run verify:resource-release -- --dir dist/release-resources
+
+      - name: Re-run resource release smoke
+        run: npm run verify:resource-release-smoke -- --dir dist/release-resources
+
+      - name: Ensure GitHub Release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
+          gh release create "${GITHUB_REF_NAME}" --verify-tag --title "${GITHUB_REF_NAME}" --generate-notes --draft
+
+      - name: Upload verified assets to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" \
+            dist/release-shell/windows/latest.yml \
+            dist/release-shell/windows/ielts-practice-*-windows-*-setup.exe \
+            dist/release-shell/windows/ielts-practice-*-windows-*-setup.exe.blockmap \
+            dist/release-shell/macos/latest-mac.yml \
+            dist/release-shell/macos/ielts-practice-*-macos-*.dmg \
+            dist/release-shell/macos/ielts-practice-*-macos-*.zip \
+            dist/release-shell/macos/ielts-practice-*-macos-*.zip.blockmap \
+            dist/release-resources/resources-manifest.json \
+            dist/release-resources/resources-delta.zip \
+            dist/release-resources/resources-full.zip \
+            --clobber
+
+      - name: Publish completed GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$(gh release view "${GITHUB_REF_NAME}" --json isDraft -q '.isDraft')" = "true" ]; then
+            gh release edit "${GITHUB_REF_NAME}" --draft=false
+          fi
