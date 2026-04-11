@@ -44,7 +44,7 @@
         "q6",
         "q7"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q4-5-6-7-anchor\">\n                <h4>Questions 30–33</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from paragraphs C, D and E for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h4>The goal of translation</h4>\n                    <p>\n                    Translation is an attempt to create a text in the target language which displays <strong>30</strong> <input type=\"text\" id=\"q30_input\"> with a source text. It is inevitable that not all information can be conveyed, however, so translations are best judged according to their <strong>31</strong> <input type=\"text\" id=\"q31_input\">; for example, the translator of a business letter or scientific text does not need to consider its <strong>32</strong> <input type=\"text\" id=\"q32_input\"> aspects, while someone dubbing a film may give a relatively low value to <strong>33</strong> <input type=\"text\" id=\"q33_input\">.\n                    </p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q4-5-6-7-anchor\">\n                <h4>Questions 30–33</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from paragraphs C, D and E for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h4>The goal of translation</h4>\n                    <p>\n                    Translation is an attempt to create a text in the target language which displays <strong>30</strong> <input name=\"q4\" type=\"text\" id=\"q30_input\"> with a source text. It is inevitable that not all information can be conveyed, however, so translations are best judged according to their <strong>31</strong> <input name=\"q5\" type=\"text\" id=\"q31_input\">; for example, the translator of a business letter or scientific text does not need to consider its <strong>32</strong> <input name=\"q6\" type=\"text\" id=\"q32_input\"> aspects, while someone dubbing a film may give a relatively low value to <strong>33</strong> <input name=\"q7\" type=\"text\" id=\"q33_input\">.\n                    </p>\n                </div>\n            </div>"
     },
     {
       "groupId": "group-3",
@@ -128,5 +128,6 @@
     "q13": "39",
     "q14": "40"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);

@@ -1,8 +1,47 @@
 (function (global) {
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
+    const PRACTICE_RECORDS_STORAGE_KEY = 'practice_records';
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/practice-page-enhancer.js';
+    const ANSWER_MATCH_CORE_SCRIPT_PATH = './js/utils/answerMatchCore.js';
+    const SUITE_BACK_GUARD_SCRIPT_PATH = './js/utils/suiteBackGuard.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
+
+    function resolvePracticeRecordBackends() {
+        const coreStore = global.PracticeCore && global.PracticeCore.store;
+        const wrapper = global.simpleStorageWrapper;
+        return {
+            coreStore: (coreStore && typeof coreStore.savePracticeRecord === 'function') ? coreStore : null,
+            wrapper: (wrapper && typeof wrapper.addPracticeRecord === 'function') ? wrapper : null
+        };
+    }
+
+    async function savePracticeRecordWithFallback(practiceRecord, maxLegacyRecords = null) {
+        const { coreStore, wrapper } = resolvePracticeRecordBackends();
+        if (coreStore) {
+            return coreStore.savePracticeRecord(practiceRecord);
+        }
+        if (wrapper) {
+            return wrapper.addPracticeRecord(practiceRecord);
+        }
+        let records = await storage.get(PRACTICE_RECORDS_STORAGE_KEY, []);
+        if (!Array.isArray(records)) {
+            records = [];
+        }
+        records.unshift(practiceRecord);
+        if (Number.isInteger(maxLegacyRecords) && maxLegacyRecords > 0 && records.length > maxLegacyRecords) {
+            records.splice(maxLegacyRecords);
+        }
+        return storage.set(PRACTICE_RECORDS_STORAGE_KEY, records);
+    }
+
+    async function listSavedPracticeRecords() {
+        const { coreStore } = resolvePracticeRecordBackends();
+        if (coreStore && typeof coreStore.listPracticeRecords === 'function') {
+            return coreStore.listPracticeRecords();
+        }
+        return storage.get(PRACTICE_RECORDS_STORAGE_KEY, []);
+    }
 
     async function getActiveExamIndexSnapshot() {
         const stateGetters = [
@@ -92,6 +131,7 @@
             const examIndex = await getActiveExamIndexSnapshot();
             const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
             const exam = list.find(e => e.id === examId);
+            const reviewMode = Boolean(options && options.reviewMode);
 
             if (!exam) {
                 window.showMessage('题目不存在', 'error');
@@ -127,6 +167,9 @@
                         examUrl = placeholderUrl;
                     }
                 }
+                if (guardOptions.suiteSessionId && readingLaunch && readingLaunch.mode === 'unified_html') {
+                    examUrl = this._appendSuiteContextToExamUrl(examUrl, guardOptions);
+                }
                 let examWindow = this.openExamWindow(examUrl, exam, guardOptions);
 
                 try {
@@ -139,17 +182,35 @@
                 }
 
                 // 再进行会话记录与脚本注入
-                await this.startPracticeSession(examId);
+                if (!reviewMode) {
+                    await this.startPracticeSession(examId);
+                }
                 this.injectDataCollectionScript(examWindow, examId, exam);
                 this.setupExamWindowManagement(examWindow, examId, exam, options);
 
                 if (options && options.suiteSessionId) {
                     const sessionInfo = this.ensureExamWindowSession(examId, examWindow);
                     sessionInfo.suiteSessionId = options.suiteSessionId;
+                    if (options.suiteFlowMode) {
+                        sessionInfo.suiteFlowMode = options.suiteFlowMode;
+                    }
+                    if (Number.isInteger(options.sequenceIndex)) {
+                        sessionInfo.suiteSequenceIndex = options.sequenceIndex;
+                    }
+                    if (Number.isInteger(options.sequenceTotal)) {
+                        sessionInfo.suiteSequenceTotal = options.sequenceTotal;
+                    }
                     this.examWindows && this.examWindows.set(examId, sessionInfo);
                 }
 
-                window.showMessage(`正在打开题目: ${exam.title}`, 'info');
+                if (reviewMode && typeof this._bindReviewWindowRef === 'function') {
+                    this._bindReviewWindowRef(options.reviewSessionId, examWindow);
+                }
+
+                window.showMessage(
+                    reviewMode ? `正在打开历史回顾: ${exam.title}` : `正在打开题目: ${exam.title}`,
+                    'info'
+                );
 
                 return examWindow;
 
@@ -300,6 +361,36 @@
                 return new URL(rawUrl, 'http://localhost/').href;
             } catch (error) {
                 console.warn('[App] 无法解析题目URL为绝对路径:', error, rawUrl);
+                return rawUrl;
+            }
+        },
+
+        _appendSuiteContextToExamUrl(rawUrl, options = {}) {
+            if (!rawUrl) {
+                return rawUrl;
+            }
+            try {
+                const parsed = new URL(rawUrl, (window && window.location && window.location.href) ? window.location.href : undefined);
+                const safeSet = (key, value) => {
+                    if (value == null) {
+                        return;
+                    }
+                    const normalized = String(value).trim();
+                    if (!normalized) {
+                        return;
+                    }
+                    parsed.searchParams.set(key, normalized);
+                };
+                safeSet('suiteSessionId', options.suiteSessionId);
+                safeSet('suiteFlowMode', options.suiteFlowMode);
+                if (Number.isInteger(options.sequenceIndex)) {
+                    parsed.searchParams.set('suiteSequenceIndex', String(options.sequenceIndex));
+                }
+                if (Number.isInteger(options.sequenceTotal)) {
+                    parsed.searchParams.set('suiteSequenceTotal', String(options.sequenceTotal));
+                }
+                return parsed.toString();
+            } catch (_) {
                 return rawUrl;
             }
         },
@@ -524,6 +615,14 @@
                     ? `${resolved}&v=${PRACTICE_ENHANCER_BUILD_ID}`
                     : `${resolved}?v=${PRACTICE_ENHANCER_BUILD_ID}`;
             };
+            const ensureCoreScriptUrl = () => {
+                const resolved = this._ensureAbsoluteUrl(ANSWER_MATCH_CORE_SCRIPT_PATH);
+                return resolved || ANSWER_MATCH_CORE_SCRIPT_PATH;
+            };
+            const ensureBackGuardScriptUrl = () => {
+                const resolved = this._ensureAbsoluteUrl(SUITE_BACK_GUARD_SCRIPT_PATH);
+                return resolved || SUITE_BACK_GUARD_SCRIPT_PATH;
+            };
 
             const injectScript = () => {
                 try {
@@ -558,28 +657,118 @@
                     } catch (_) { }
 
                     const host = doc.head || doc.body;
-                    const scriptEl = doc.createElement('script');
-                    scriptEl.type = 'text/javascript';
-                    scriptEl.defer = true;
-                    scriptEl.src = ensureScriptUrl();
+                    const existingEnhancerScript = host.querySelector('script[data-practice-enhancer="true"]');
+                    if (existingEnhancerScript) {
+                        return;
+                    }
+                    let enhancerInjected = false;
+                    const appendEnhancer = () => {
+                        if (enhancerInjected || (examWindow.practicePageEnhancer && typeof examWindow.practicePageEnhancer.initialize === 'function')) {
+                            return;
+                        }
+                        enhancerInjected = true;
+                        const scriptEl = doc.createElement('script');
+                        scriptEl.type = 'text/javascript';
+                        scriptEl.defer = true;
+                        scriptEl.dataset.practiceEnhancer = 'true';
+                        scriptEl.src = ensureScriptUrl();
 
-                    scriptEl.onload = () => {
-                        setTimeout(() => {
-                            try {
-                                this.initializePracticeSession(examWindow, examId);
-                            } catch (sessionError) {
-                                console.warn('[DataInjection] 初始化练习会话失败:', sessionError);
+                        scriptEl.onload = () => {
+                            setTimeout(() => {
+                                try {
+                                    this.initializePracticeSession(examWindow, examId);
+                                } catch (sessionError) {
+                                    console.warn('[DataInjection] 初始化练习会话失败:', sessionError);
+                                }
+                            }, 80);
+                        };
+
+                        scriptEl.onerror = (loadError) => {
+                            console.warn('[DataInjection] 加载增强器失败，回退到内联脚本:', loadError);
+                            scriptEl.remove();
+                            this.injectInlineScript(examWindow, examId);
+                        };
+
+                        host.appendChild(scriptEl);
+                    };
+
+                    const waitForDependencyReady = (isReady, timeoutMs = 4500) => (
+                        new Promise((resolve) => {
+                            if (isReady()) {
+                                resolve(true);
+                                return;
                             }
-                        }, 80);
+                            const startedAt = Date.now();
+                            const poll = () => {
+                                if (isReady()) {
+                                    resolve(true);
+                                    return;
+                                }
+                                if ((Date.now() - startedAt) >= timeoutMs) {
+                                    resolve(false);
+                                    return;
+                                }
+                                setTimeout(poll, 40);
+                            };
+                            poll();
+                        })
+                    );
+
+                    const ensureDependencyScript = ({
+                        selector,
+                        dataKey,
+                        scriptUrl,
+                        isReady,
+                        timeoutMs = 4500
+                    }) => {
+                        if (isReady()) {
+                            return Promise.resolve(true);
+                        }
+                        const existingScript = host.querySelector(selector);
+                        if (!existingScript) {
+                            const scriptEl = doc.createElement('script');
+                            scriptEl.type = 'text/javascript';
+                            scriptEl.defer = true;
+                            scriptEl.dataset[dataKey] = 'true';
+                            scriptEl.src = scriptUrl;
+                            host.appendChild(scriptEl);
+                        }
+                        return waitForDependencyReady(isReady, timeoutMs);
                     };
 
-                    scriptEl.onerror = (loadError) => {
-                        console.warn('[DataInjection] 加载增强器失败，回退到内联脚本:', loadError);
-                        scriptEl.remove();
-                        this.injectInlineScript(examWindow, examId);
+                    const isAnswerMatchReady = () => {
+                        return !!(
+                            examWindow.AnswerMatchCore
+                            && typeof examWindow.AnswerMatchCore.compareAnswers === 'function'
+                        );
                     };
 
-                    host.appendChild(scriptEl);
+                    const isBackGuardReady = () => (
+                        typeof examWindow.createSuiteBackGuard === 'function'
+                        || (
+                            examWindow.SuiteBackGuard
+                            && typeof examWindow.SuiteBackGuard.create === 'function'
+                        )
+                    );
+
+                    Promise.all([
+                        ensureDependencyScript({
+                            selector: 'script[data-answer-match-core="true"]',
+                            dataKey: 'answerMatchCore',
+                            scriptUrl: ensureCoreScriptUrl(),
+                            isReady: isAnswerMatchReady,
+                            timeoutMs: 4500
+                        }),
+                        ensureDependencyScript({
+                            selector: 'script[data-suite-back-guard="true"]',
+                            dataKey: 'suiteBackGuard',
+                            scriptUrl: ensureBackGuardScriptUrl(),
+                            isReady: isBackGuardReady,
+                            timeoutMs: 2500
+                        })
+                    ]).finally(() => {
+                        appendEnhancer();
+                    });
                 } catch (error) {
                     console.error('[DataInjection] 注入增强器脚本时出错:', error);
                     this.injectInlineScript(examWindow, examId);
@@ -887,7 +1076,6 @@
          */
         initializePracticeSession(examWindow, examId) {
             try {
-                const sessionId = `${examId}_${Date.now()}`;
                 const now = Date.now();
 
                 let existingInfo = null;
@@ -914,13 +1102,11 @@
                     }
                 }
 
-                const initPayload = {
-                    sessionId: sessionId,
-                    examId: examId,
-                    parentOrigin: window.location.origin,
-                    timestamp: now,
-                    suiteSessionId: suiteSessionId || null
-                };
+                const windowInfo = this.ensureExamWindowSession(examId, examWindow);
+                if (suiteSessionId && !windowInfo.suiteSessionId) {
+                    windowInfo.suiteSessionId = suiteSessionId;
+                }
+                const initPayload = this._buildExamInitPayload(examId, windowInfo, { timestamp: now });
 
                 // 发送会话初始化消息
                 examWindow.postMessage({
@@ -934,7 +1120,7 @@
                 }
 
                 if (existingInfo) {
-                    existingInfo.sessionId = sessionId;
+                    existingInfo.sessionId = initPayload.sessionId;
                     existingInfo.initTime = now;
                     existingInfo.status = 'initialized';
                     if (suiteSessionId && !existingInfo.suiteSessionId) {
@@ -946,13 +1132,13 @@
                     this.examWindows.set(examId, existingInfo);
                 } else {
                     console.warn('[DataInjection] 未找到窗口信息，创建新的');
-                    this.examWindows.set(examId, {
+                    this.examWindows.set(examId, Object.assign({}, windowInfo, {
                         window: examWindow,
-                        sessionId: sessionId,
+                        sessionId: initPayload.sessionId,
                         initTime: now,
                         status: 'initialized',
                         suiteSessionId: suiteSessionId || null
-                    });
+                    }));
                 }
 
             } catch (error) {
@@ -1015,7 +1201,16 @@
                 status: 'active',
                 expectedSessionId: null,
                 origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : '',
-                suiteSessionId: (options && options.suiteSessionId) ? options.suiteSessionId : null
+                suiteSessionId: (options && options.suiteSessionId) ? options.suiteSessionId : null,
+                suiteFlowMode: (options && options.suiteFlowMode) ? String(options.suiteFlowMode) : null,
+                suiteSequenceIndex: Number.isInteger(options && options.sequenceIndex) ? options.sequenceIndex : null,
+                suiteSequenceTotal: Number.isInteger(options && options.sequenceTotal) ? options.sequenceTotal : null,
+                reviewMode: Boolean(options && options.reviewMode),
+                reviewSessionId: options && options.reviewSessionId ? String(options.reviewSessionId) : null,
+                reviewEntryIndex: Number.isInteger(options && options.reviewEntryIndex) ? options.reviewEntryIndex : 0,
+                readOnly: options && Object.prototype.hasOwnProperty.call(options, 'readOnly')
+                    ? Boolean(options.readOnly)
+                    : Boolean(options && options.reviewMode)
             });
 
             // 监听窗口关闭事件
@@ -1052,15 +1247,7 @@
 
             const emitInitEnvelope = () => {
                 const windowInfo = this.ensureExamWindowSession(examId, examWindow);
-                const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
-                    ? this._resolveSuiteSessionId(examId, windowInfo)
-                    : null;
-                const initPayload = {
-                    examId: examId,
-                    parentOrigin: window.location.origin,
-                    sessionId: windowInfo.expectedSessionId,
-                    suiteSessionId: suiteSessionId
-                };
+                const initPayload = this._buildExamInitPayload(examId, windowInfo);
                 try {
                     examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
                     examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
@@ -1081,7 +1268,9 @@
             }
 
             // 更新UI状态
-            this.updateExamStatus(examId, 'in-progress');
+            if (!(options && options.reviewMode)) {
+                this.updateExamStatus(examId, 'in-progress');
+            }
         },
 
         /**
@@ -1120,7 +1309,13 @@
                     'PROGRESS_UPDATE',
                     'PRACTICE_COMPLETE',
                     'ERROR_OCCURRED',
-                    'REQUEST_INIT'
+                    'REQUEST_INIT',
+                    'SUITE_CLOSE_ATTEMPT',
+                    'REVIEW_NAVIGATE',
+                    'SUITE_CONFIG_UPDATE',
+                    'SIMULATION_DRAFT_SYNC',
+                    'SIMULATION_NAVIGATE',
+                    'SIMULATION_SUBMIT'
                 ]);
 
                 const baseKeys = new Set(['type', 'messageType', 'action', 'event', 'data', 'payload', 'detail', 'args', 'source', 'message', 'messageData']);
@@ -1197,13 +1392,56 @@
                 return { type, data, sourceTag };
             };
 
+            const resolveWindowName = (targetWindow) => {
+                if (!targetWindow) {
+                    return '';
+                }
+                try {
+                    const rawName = typeof targetWindow.name === 'string'
+                        ? targetWindow.name
+                        : '';
+                    return rawName.trim();
+                } catch (_) {
+                    return '';
+                }
+            };
+
+            const isLikelySameWindowContext = (sourceWindow, expectedWindow) => {
+                if (!sourceWindow || !expectedWindow) {
+                    return false;
+                }
+                if (sourceWindow === expectedWindow) {
+                    return true;
+                }
+                const sourceName = resolveWindowName(sourceWindow);
+                const expectedName = resolveWindowName(expectedWindow);
+                if (sourceName && expectedName && sourceName === expectedName) {
+                    return true;
+                }
+                try {
+                    const sourceHref = sourceWindow.location && typeof sourceWindow.location.href === 'string'
+                        ? sourceWindow.location.href
+                        : '';
+                    const expectedHref = expectedWindow.location && typeof expectedWindow.location.href === 'string'
+                        ? expectedWindow.location.href
+                        : '';
+                    if (sourceHref && expectedHref && sourceHref === expectedHref && sourceHref !== 'about:blank') {
+                        return true;
+                    }
+                } catch (_) {
+                    // ignore cross-origin href checks
+                }
+                return false;
+            };
+
             const messageHandler = async (event) => {
                 // 取得当前题目窗口引用（可能在 handshake 期间被更新）
                 const storedInfo = (this.examWindows && this.examWindows.get(examId)) || {};
                 const expectedWindow = storedInfo.window || examWindow;
+                const sourceWindow = event ? (event.source || null) : null;
 
-                // 窗口来源不匹配直接拒绝，阻止其它 tab 注入消息
-                if (!event.source || !expectedWindow || event.source !== expectedWindow) {
+                // 缺少来源窗口直接拒绝
+                if (!sourceWindow || !expectedWindow) {
                     return;
                 }
 
@@ -1221,6 +1459,9 @@
                 }
 
                 const windowInfo = this.ensureExamWindowSession(examId, expectedWindow);
+                if (windowInfo && sourceWindow !== expectedWindow) {
+                    windowInfo.window = sourceWindow;
+                }
                 const expectedSessionId = windowInfo.expectedSessionId || '';
 
                 // 放宽消息源过滤，兼容 inline_collector 与 practice_page
@@ -1231,17 +1472,68 @@
                 }
 
                 const { type, data } = normalized;
+                const expectedExamId = String(examId);
+                const payloadExamId = data && data.examId != null ? String(data.examId) : '';
+                const payloadSuiteSessionId = data && typeof data.suiteSessionId === 'string'
+                    ? data.suiteSessionId.trim()
+                    : '';
+                const activeSuiteSessionId = this.currentSuiteSession && this.currentSuiteSession.id
+                    ? String(this.currentSuiteSession.id)
+                    : '';
+                const isExamInActiveSuite = Boolean(
+                    this.currentSuiteSession
+                    && Array.isArray(this.currentSuiteSession.sequence)
+                    && this.currentSuiteSession.sequence.some(item => item && String(item.examId) === expectedExamId)
+                );
+                const sourceMatched = isLikelySameWindowContext(sourceWindow, expectedWindow);
+                const allowSuiteSourceFallback = Boolean(
+                    !sourceMatched
+                    && payloadExamId
+                    && payloadExamId === expectedExamId
+                    && (
+                        (payloadSuiteSessionId && activeSuiteSessionId && payloadSuiteSessionId === activeSuiteSessionId)
+                        || isExamInActiveSuite
+                    )
+                );
+                if (!sourceMatched && !allowSuiteSourceFallback) {
+                    return;
+                }
+                const isSuiteFlowPayload = Boolean(
+                    (type === 'PRACTICE_COMPLETE'
+                        || type === 'SIMULATION_NAVIGATE'
+                        || type === 'SIMULATION_SUBMIT'
+                        || type === 'SESSION_READY')
+                    && payloadSuiteSessionId
+                    && activeSuiteSessionId
+                    && payloadSuiteSessionId === activeSuiteSessionId
+                    && payloadExamId
+                    && payloadExamId === expectedExamId
+                );
                 const payloadSessionId = data && typeof data.sessionId === 'string'
                     ? data.sessionId.trim()
                     : '';
 
                 if (payloadSessionId) {
                     if (expectedSessionId && payloadSessionId !== expectedSessionId) {
-                        return;
-                    }
-                    windowInfo.sessionId = payloadSessionId;
-                    if (!windowInfo.expectedSessionId) {
-                        windowInfo.expectedSessionId = payloadSessionId;
+                        const windowSuiteSessionId = windowInfo && typeof windowInfo.suiteSessionId === 'string'
+                            ? windowInfo.suiteSessionId.trim()
+                            : '';
+                        const allowSuiteSessionMismatch = Boolean(
+                            isSuiteFlowPayload
+                            && (
+                                (windowSuiteSessionId && windowSuiteSessionId === payloadSuiteSessionId)
+                                || isExamInActiveSuite
+                            )
+                        );
+                        if (!allowSuiteSessionMismatch) {
+                            return;
+                        }
+                        data.sessionId = expectedSessionId;
+                    } else {
+                        windowInfo.sessionId = payloadSessionId;
+                        if (!windowInfo.expectedSessionId) {
+                            windowInfo.expectedSessionId = payloadSessionId;
+                        }
                     }
                 } else if (type === 'PRACTICE_COMPLETE') {
                     if (!expectedSessionId) {
@@ -1250,12 +1542,9 @@
                     data.sessionId = expectedSessionId;
                 }
 
-                const expectedExamId = String(examId);
-                const payloadExamId = data && data.examId != null ? String(data.examId) : '';
                 if (payloadExamId && payloadExamId !== expectedExamId) {
-                    const derivedExamId = (payloadSessionId || expectedSessionId || '').split('_')[0];
                     const allowedLegacy = payloadExamId === 'session';
-                    if (derivedExamId !== expectedExamId && !allowedLegacy) {
+                    if (!allowedLegacy) {
                         return;
                     }
                 }
@@ -1283,30 +1572,116 @@
                     // 新增：处理数据采集器的消息
                     case 'SESSION_READY':
                         this.handleSessionReady(examId, data);
+                        if (typeof this._maybeRestoreSuiteReviewState === 'function') {
+                            this._maybeRestoreSuiteReviewState(examId, sourceWindow || expectedWindow, windowInfo).catch((restoreError) => {
+                                console.warn('[SuitePractice] 恢复回看态失败:', restoreError);
+                            });
+                        }
                         break;
                     case 'PROGRESS_UPDATE':
                         this.handleProgressUpdate(examId, data);
                         break;
                     case 'PRACTICE_COMPLETE':
+                        if (windowInfo && windowInfo.reviewMode) {
+                            console.info('[ReviewReplay] 回顾模式忽略 PRACTICE_COMPLETE:', examId);
+                            break;
+                        }
                         if (data && data.suiteSessionId && windowInfo) {
                             windowInfo.suiteSessionId = data.suiteSessionId;
                             this.examWindows && this.examWindows.set(examId, windowInfo);
                         }
-                        await this.handlePracticeComplete(examId, data);
+                        await this.handlePracticeComplete(examId, data, sourceWindow || expectedWindow);
                         break;
                     case 'ERROR_OCCURRED':
                         this.handleDataCollectionError(examId, data);
                         break;
                     case 'REQUEST_INIT':
-                        sendInitEnvelope(event.source || examWindow);
+                        sendInitEnvelope(sourceWindow || examWindow);
                         break;
                     case 'SUITE_CLOSE_ATTEMPT':
                         console.warn('[SuitePractice] 练习页尝试关闭套题窗口:', data);
+                        break;
+                    case 'SUITE_CONFIG_UPDATE': {
+                        const autoAdvance = typeof data.autoAdvanceAfterSubmit === 'boolean'
+                            ? data.autoAdvanceAfterSubmit
+                            : true;
+                        if (!window.practiceConfig || typeof window.practiceConfig !== 'object') {
+                            window.practiceConfig = {};
+                        }
+                        if (!window.practiceConfig.suite || typeof window.practiceConfig.suite !== 'object') {
+                            window.practiceConfig.suite = {};
+                        }
+                        window.practiceConfig.suite.autoAdvanceAfterSubmit = autoAdvance;
+                        try {
+                            if (window.localStorage) {
+                                window.localStorage.setItem('suite_auto_advance_after_submit', String(autoAdvance));
+                            }
+                        } catch (_) {
+                            // ignore storage write failures
+                        }
+                        break;
+                    }
+                    case 'REVIEW_NAVIGATE':
+                        if (data && typeof this.handleSuiteReviewNavigate === 'function') {
+                            const activeSuiteId = this.currentSuiteSession && this.currentSuiteSession.id
+                                ? String(this.currentSuiteSession.id)
+                                : '';
+                            const windowSuiteId = windowInfo && windowInfo.suiteSessionId
+                                ? String(windowInfo.suiteSessionId)
+                                : '';
+                            const isExplicitSuiteNavigate = data.suiteReviewMode === true;
+                            const isActiveSuiteWindow = Boolean(windowSuiteId && activeSuiteId && windowSuiteId === activeSuiteId);
+                            if (isExplicitSuiteNavigate || isActiveSuiteWindow) {
+                                const payloadExamId = data.examId != null ? String(data.examId).trim() : '';
+                                const hasPayloadExamInActiveSuite = Boolean(
+                                    payloadExamId
+                                    && this.currentSuiteSession
+                                    && Array.isArray(this.currentSuiteSession.sequence)
+                                    && this.currentSuiteSession.sequence.some(item => item && item.examId === payloadExamId)
+                                );
+                                const routedExamId = hasPayloadExamInActiveSuite ? payloadExamId : examId;
+                                const handledSuiteReview = await this.handleSuiteReviewNavigate(routedExamId, data, sourceWindow || expectedWindow);
+                                if (handledSuiteReview) {
+                                    break;
+                                }
+                            }
+                        }
+                        await this.handleReviewReplayNavigate(examId, data, sourceWindow || expectedWindow);
+                        break;
+                    case 'SIMULATION_DRAFT_SYNC':
+                        if (this.currentSuiteSession && data && data.draft) {
+                            this.currentSuiteSession.draftsByExam[examId] = data.draft;
+                            if (typeof this._mirrorSessionToStorage === 'function') {
+                                this._mirrorSessionToStorage(this.currentSuiteSession);
+                            }
+                        }
+                        break;
+                    case 'SIMULATION_NAVIGATE':
+                        if (typeof this._handleSimulationNavigate === 'function') {
+                            await this._handleSimulationNavigate(examId, data, sourceWindow || expectedWindow);
+                        }
+                        break;
+                    case 'SIMULATION_SUBMIT':
+                        if (windowInfo && windowInfo.reviewMode) {
+                            break;
+                        }
+                        await this.handlePracticeComplete(examId, data, sourceWindow || expectedWindow);
                         break;
                     default:
                 }
             };
 
+            if (this.messageHandlers && this.messageHandlers.has(examId)) {
+                try {
+                    const previousHandler = this.messageHandlers.get(examId);
+                    if (previousHandler) {
+                        window.removeEventListener('message', previousHandler);
+                    }
+                } catch (_) {
+                    // ignore stale listener cleanup errors
+                }
+                this.messageHandlers.delete(examId);
+            }
             window.addEventListener('message', messageHandler);
 
             // 存储消息处理器以便清理
@@ -1319,15 +1694,7 @@
             const sendInitEnvelope = (targetWindow) => {
                 try {
                     const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
-                    const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
-                        ? this._resolveSuiteSessionId(examId, windowInfo)
-                        : null;
-                    const initPayload = {
-                        examId: examId,
-                        parentOrigin: window.location.origin,
-                        sessionId: windowInfo.expectedSessionId,
-                        suiteSessionId: suiteSessionId
-                    };
+                    const initPayload = this._buildExamInitPayload(examId, windowInfo);
                     targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
                     targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
                 } catch (initError) {
@@ -1379,15 +1746,7 @@
             if (this._handshakeTimers.has(examId)) return;
 
             const windowInfo = this.ensureExamWindowSession(examId, examWindow);
-            const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
-                ? this._resolveSuiteSessionId(examId, windowInfo)
-                : null;
-            const initPayload = {
-                examId,
-                parentOrigin: window.location.origin,
-                sessionId: windowInfo.expectedSessionId,
-                suiteSessionId
-            };
+            const initPayload = this._buildExamInitPayload(examId, windowInfo);
 
             let attempts = 0;
             const maxAttempts = 30; // ~9s
@@ -1432,17 +1791,7 @@
                         // 创建练习记录
                         const practiceRecord = this.createSimplePracticeRecord(exam, realData);
 
-                        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
-                            await window.PracticeCore.store.savePracticeRecord(practiceRecord);
-                        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
-                            await window.simpleStorageWrapper.addPracticeRecord(practiceRecord);
-                        } else {
-                            // 直接保存到localStorage
-                            const records = await storage.get('practice_records', []);
-                            records.unshift(practiceRecord);
-                            const practiceKey = ['practice', 'records'].join('_');
-                            await storage.set(practiceKey, records);
-                        }
+                        await savePracticeRecordWithFallback(practiceRecord);
 
                         // 检查成就
                         if (window.AchievementManager) {
@@ -1522,6 +1871,51 @@
             return date.toLocaleString('zh-CN');
         },
 
+        _parseTimeMs(value) {
+            if (value == null) {
+                return null;
+            }
+            if (typeof value === 'number' && Number.isFinite(value)) {
+                return value;
+            }
+            const parsed = new Date(value).getTime();
+            return Number.isFinite(parsed) ? parsed : null;
+        },
+
+        _resolveTrustedDurationSeconds(data = {}) {
+            const startMs = this._parseTimeMs(data.startTime);
+            const endMs = this._parseTimeMs(data.endTime);
+            if (
+                startMs != null
+                && endMs != null
+                && endMs >= startMs
+            ) {
+                return Math.floor((endMs - startMs) / 1000);
+            }
+            return 0;
+        },
+
+        _resolveTrustedTimeRange(data = {}) {
+            const startMs = this._parseTimeMs(data.startTime);
+            const endMs = this._parseTimeMs(data.endTime);
+            if (
+                startMs != null
+                && endMs != null
+                && endMs >= startMs
+            ) {
+                return {
+                    startTime: new Date(startMs).toISOString(),
+                    endTime: new Date(endMs).toISOString(),
+                    duration: Math.floor((endMs - startMs) / 1000)
+                };
+            }
+            return {
+                startTime: null,
+                endTime: null,
+                duration: 0
+            };
+        },
+
         /**
          * 检查是否为移动设备
          */
@@ -1535,6 +1929,7 @@
         createSimplePracticeRecord(exam, realData) {
             const now = new Date();
             const recordId = `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const resolvedTime = this._resolveTrustedTimeRange(realData || {});
 
             // 提取分数信息
             const scoreInfo = realData.scoreInfo || {};
@@ -1554,9 +1949,8 @@
                 isRealData: true,
 
                 // 基本信息
-                startTime: realData.startTime ? new Date(realData.startTime).toISOString() :
-                    new Date(Date.now() - realData.duration * 1000).toISOString(),
-                endTime: realData.endTime ? new Date(realData.endTime).toISOString() : now.toISOString(),
+                startTime: resolvedTime.startTime,
+                endTime: resolvedTime.endTime,
                 date: now.toISOString(),
 
                 // 成绩数据
@@ -1564,7 +1958,7 @@
                 totalQuestions: totalQuestions,
                 accuracy: accuracy,
                 percentage: Math.round(accuracy * 100),
-                duration: realData.duration, // 秒
+                duration: resolvedTime.duration, // 秒
 
                 // 详细数据
                 realData: {
@@ -1572,6 +1966,7 @@
                     answers: realData.answers || {},
                     interactions: realData.interactions || [],
                     scoreInfo: scoreInfo,
+                    duration: resolvedTime.duration,
                     pageType: realData.pageType,
                     url: realData.url,
                     source: scoreInfo.source || 'fallback_recorder'
@@ -1595,6 +1990,618 @@
             return `session_${suffix}`;
         },
 
+        _cloneReviewData(value) {
+            if (value == null) {
+                return value;
+            }
+            try {
+                return JSON.parse(JSON.stringify(value));
+            } catch (_) {
+                return value;
+            }
+        },
+
+        _isReplayObject(value) {
+            return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+        },
+
+        _normalizeReplayQuestionKey(rawKey) {
+            if (rawKey == null) {
+                return '';
+            }
+            const key = String(rawKey).trim();
+            if (!key) {
+                return '';
+            }
+            if (/^q\d+$/i.test(key)) {
+                return key.toLowerCase();
+            }
+            const numericOnly = key.match(/^\d+$/);
+            if (numericOnly) {
+                return `q${numericOnly[0]}`;
+            }
+            const ranged = key.match(/^q?(\d+\s*-\s*\d+)$/i);
+            if (ranged) {
+                return `q${ranged[1].replace(/\s+/g, '')}`;
+            }
+            const questionMatch = key.match(/^question[-_\s]*(\d+)$/i);
+            if (questionMatch) {
+                return `q${questionMatch[1]}`;
+            }
+            return key;
+        },
+
+        _splitReplayCompositeKey(rawKey) {
+            if (rawKey == null) {
+                return { examPrefix: '', questionKey: '' };
+            }
+            const key = String(rawKey).trim();
+            if (!key) {
+                return { examPrefix: '', questionKey: '' };
+            }
+            const sep = key.indexOf('::');
+            if (sep === -1) {
+                return {
+                    examPrefix: '',
+                    questionKey: this._normalizeReplayQuestionKey(key)
+                };
+            }
+            const examPrefix = key.slice(0, sep).trim();
+            const questionKey = this._normalizeReplayQuestionKey(key.slice(sep + 2));
+            return { examPrefix, questionKey };
+        },
+
+        _normalizeReplayAnswerMap(rawMap, targetExamId = '', allowUnprefixed = true) {
+            const normalized = {};
+            if (!this._isReplayObject(rawMap)) {
+                return normalized;
+            }
+            const normalizedTarget = targetExamId ? String(targetExamId).trim().toLowerCase() : '';
+            Object.entries(rawMap).forEach(([rawKey, rawValue]) => {
+                const split = this._splitReplayCompositeKey(rawKey);
+                if (!split.questionKey) {
+                    return;
+                }
+                const hasPrefix = !!split.examPrefix;
+                if (hasPrefix) {
+                    if (!normalizedTarget || split.examPrefix.toLowerCase() !== normalizedTarget) {
+                        return;
+                    }
+                } else if (!allowUnprefixed) {
+                    return;
+                }
+                normalized[split.questionKey] = this._cloneReviewData(rawValue);
+            });
+            return normalized;
+        },
+
+        _normalizeReplayComparison(rawComparison, targetExamId = '', allowUnprefixed = true) {
+            const normalized = {};
+            if (!this._isReplayObject(rawComparison)) {
+                return normalized;
+            }
+            const normalizedTarget = targetExamId ? String(targetExamId).trim().toLowerCase() : '';
+            Object.entries(rawComparison).forEach(([rawKey, rawValue]) => {
+                const split = this._splitReplayCompositeKey(rawKey);
+                if (!split.questionKey) {
+                    return;
+                }
+                const hasPrefix = !!split.examPrefix;
+                if (hasPrefix) {
+                    if (!normalizedTarget || split.examPrefix.toLowerCase() !== normalizedTarget) {
+                        return;
+                    }
+                } else if (!allowUnprefixed) {
+                    return;
+                }
+                const entry = this._isReplayObject(rawValue) ? rawValue : { userAnswer: rawValue };
+                normalized[split.questionKey] = {
+                    questionId: split.questionKey,
+                    userAnswer: this._cloneReviewData(entry.userAnswer),
+                    correctAnswer: this._cloneReviewData(entry.correctAnswer),
+                    isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
+                };
+            });
+            return normalized;
+        },
+
+        _deriveReplayExamIdFromSources(...sources) {
+            for (let i = 0; i < sources.length; i += 1) {
+                const source = sources[i];
+                if (!this._isReplayObject(source)) {
+                    continue;
+                }
+                const keys = Object.keys(source);
+                for (let j = 0; j < keys.length; j += 1) {
+                    const split = this._splitReplayCompositeKey(keys[j]);
+                    if (split.examPrefix) {
+                        return split.examPrefix;
+                    }
+                }
+            }
+            return '';
+        },
+
+        _hydrateReplayCorrectAnswersFromDetails(detailSource, correctAnswers, comparison, targetExamId = '', allowUnprefixed = true) {
+            if (!this._isReplayObject(detailSource)) {
+                return;
+            }
+            const normalizedTarget = targetExamId ? String(targetExamId).trim().toLowerCase() : '';
+            Object.entries(detailSource).forEach(([rawKey, rawDetail]) => {
+                const split = this._splitReplayCompositeKey(rawKey);
+                if (!split.questionKey) {
+                    return;
+                }
+                const hasPrefix = !!split.examPrefix;
+                if (hasPrefix) {
+                    if (!normalizedTarget || split.examPrefix.toLowerCase() !== normalizedTarget) {
+                        return;
+                    }
+                } else if (!allowUnprefixed) {
+                    return;
+                }
+                const detail = this._isReplayObject(rawDetail) ? rawDetail : {};
+                const userAnswer = detail.userAnswer != null ? detail.userAnswer : '';
+                const correctAnswer = detail.correctAnswer != null ? detail.correctAnswer : '';
+                if (!Object.prototype.hasOwnProperty.call(correctAnswers, split.questionKey) && correctAnswer !== '') {
+                    correctAnswers[split.questionKey] = this._cloneReviewData(correctAnswer);
+                }
+                if (!comparison[split.questionKey]) {
+                    comparison[split.questionKey] = {
+                        questionId: split.questionKey,
+                        userAnswer: this._cloneReviewData(userAnswer),
+                        correctAnswer: this._cloneReviewData(correctAnswer),
+                        isCorrect: typeof detail.isCorrect === 'boolean' ? detail.isCorrect : null
+                    };
+                } else if (comparison[split.questionKey].correctAnswer == null || comparison[split.questionKey].correctAnswer === '') {
+                    comparison[split.questionKey].correctAnswer = this._cloneReviewData(correctAnswer);
+                }
+            });
+        },
+
+        _finalizeReplayComparison(answers, correctAnswers, comparison) {
+            const merged = this._isReplayObject(comparison) ? comparison : {};
+            const keySet = new Set([
+                ...Object.keys(answers || {}),
+                ...Object.keys(correctAnswers || {}),
+                ...Object.keys(merged || {})
+            ]);
+            keySet.forEach((questionId) => {
+                if (!questionId) {
+                    return;
+                }
+                const existing = merged[questionId] && this._isReplayObject(merged[questionId])
+                    ? merged[questionId]
+                    : {};
+                const userAnswer = Object.prototype.hasOwnProperty.call(existing, 'userAnswer')
+                    ? existing.userAnswer
+                    : (Object.prototype.hasOwnProperty.call(answers, questionId) ? answers[questionId] : '');
+                const correctAnswer = Object.prototype.hasOwnProperty.call(existing, 'correctAnswer')
+                    ? existing.correctAnswer
+                    : (Object.prototype.hasOwnProperty.call(correctAnswers, questionId) ? correctAnswers[questionId] : '');
+                let isCorrect = typeof existing.isCorrect === 'boolean' ? existing.isCorrect : null;
+                if (isCorrect === null && userAnswer != null && correctAnswer != null && String(correctAnswer).trim()) {
+                    isCorrect = String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
+                }
+                merged[questionId] = {
+                    questionId,
+                    userAnswer: this._cloneReviewData(userAnswer),
+                    correctAnswer: this._cloneReviewData(correctAnswer),
+                    isCorrect
+                };
+            });
+            return merged;
+        },
+
+        _deriveReplayScoreInfo(sourceScoreInfo, comparison) {
+            const scoreInfo = this._isReplayObject(sourceScoreInfo) ? this._cloneReviewData(sourceScoreInfo) : {};
+            const stats = {
+                total: 0,
+                correct: 0
+            };
+            Object.values(comparison || {}).forEach((entry) => {
+                if (!this._isReplayObject(entry)) {
+                    return;
+                }
+                const hasContent = entry.userAnswer != null
+                    || entry.correctAnswer != null
+                    || typeof entry.isCorrect === 'boolean';
+                if (!hasContent) {
+                    return;
+                }
+                stats.total += 1;
+                if (entry.isCorrect === true) {
+                    stats.correct += 1;
+                }
+            });
+
+            const resolvedTotal = Number(scoreInfo.total ?? scoreInfo.totalQuestions);
+            const resolvedCorrect = Number(scoreInfo.correct ?? scoreInfo.score);
+            const finalTotal = Number.isFinite(resolvedTotal) && resolvedTotal >= 0 ? resolvedTotal : stats.total;
+            const finalCorrect = Number.isFinite(resolvedCorrect) && resolvedCorrect >= 0 ? resolvedCorrect : stats.correct;
+            const derivedAccuracy = finalTotal > 0 ? finalCorrect / finalTotal : 0;
+            const resolvedAccuracy = Number(scoreInfo.accuracy);
+            const finalAccuracy = Number.isFinite(resolvedAccuracy) ? resolvedAccuracy : derivedAccuracy;
+            const resolvedPercentage = Number(scoreInfo.percentage);
+            const finalPercentage = Number.isFinite(resolvedPercentage)
+                ? resolvedPercentage
+                : Math.round(finalAccuracy * 100);
+
+            scoreInfo.correct = finalCorrect;
+            scoreInfo.total = finalTotal;
+            scoreInfo.totalQuestions = finalTotal;
+            scoreInfo.accuracy = finalAccuracy;
+            scoreInfo.percentage = finalPercentage;
+            return scoreInfo;
+        },
+
+        _collectReplayQuestionIds(entry) {
+            const keys = new Set();
+            const collect = (source) => {
+                if (!this._isReplayObject(source)) {
+                    return;
+                }
+                Object.keys(source).forEach((key) => {
+                    const normalized = this._normalizeReplayQuestionKey(key);
+                    if (normalized) {
+                        keys.add(normalized);
+                    }
+                });
+            };
+            collect(entry.answers);
+            collect(entry.correctAnswers);
+            collect(entry.answerComparison);
+            if (Array.isArray(entry.allQuestionIds)) {
+                entry.allQuestionIds.forEach((key) => {
+                    const normalized = this._normalizeReplayQuestionKey(key);
+                    if (normalized) {
+                        keys.add(normalized);
+                    }
+                });
+            }
+            return Array.from(keys).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        },
+
+        _buildReviewReplayEntriesFromRecord(record) {
+            if (!record || typeof record !== 'object') {
+                return [];
+            }
+            const recordMetadata = this._isReplayObject(record.metadata) ? record.metadata : {};
+            const hasSuiteEntries = Array.isArray(record.suiteEntries) && record.suiteEntries.length > 0;
+            const baseEntries = hasSuiteEntries ? record.suiteEntries : [record];
+            const isAggregated = baseEntries.length > 1;
+            const recordAnswersSource = this._isReplayObject(record.answers) ? record.answers : (this._isReplayObject(record.realData?.answers) ? record.realData.answers : {});
+            const recordComparisonSource = this._isReplayObject(record.answerComparison) ? record.answerComparison : (this._isReplayObject(record.realData?.answerComparison) ? record.realData.answerComparison : {});
+            const recordCorrectSource = this._isReplayObject(record.correctAnswerMap)
+                ? record.correctAnswerMap
+                : (this._isReplayObject(record.correctAnswers)
+                    ? record.correctAnswers
+                    : (this._isReplayObject(record.realData?.correctAnswers) ? record.realData.correctAnswers : {}));
+            const recordDetailSource = record.scoreInfo?.details
+                || record.realData?.scoreInfo?.details
+                || null;
+
+            const builtEntries = [];
+            baseEntries.forEach((rawEntry, index) => {
+                const entry = this._isReplayObject(rawEntry) ? rawEntry : {};
+                const entryMetadata = this._isReplayObject(entry.metadata) ? entry.metadata : {};
+                const entryExamId = entry.examId
+                    || entryMetadata.examId
+                    || this._deriveReplayExamIdFromSources(entry.answers, entry.answerComparison, recordAnswersSource, recordComparisonSource)
+                    || (!isAggregated ? (record.examId || recordMetadata.examId) : '');
+                const allowUnprefixed = !isAggregated;
+
+                if (!entryExamId) {
+                    return;
+                }
+
+                let answers = this._normalizeReplayAnswerMap(
+                    this._isReplayObject(entry.answers) ? entry.answers : (this._isReplayObject(entry.realData?.answers) ? entry.realData.answers : {}),
+                    entryExamId,
+                    true
+                );
+                if (Object.keys(answers).length === 0) {
+                    answers = this._normalizeReplayAnswerMap(recordAnswersSource, entryExamId, allowUnprefixed);
+                }
+
+                let comparison = this._normalizeReplayComparison(
+                    this._isReplayObject(entry.answerComparison) ? entry.answerComparison : (this._isReplayObject(entry.realData?.answerComparison) ? entry.realData.answerComparison : {}),
+                    entryExamId,
+                    true
+                );
+                if (Object.keys(comparison).length === 0) {
+                    comparison = this._normalizeReplayComparison(recordComparisonSource, entryExamId, allowUnprefixed);
+                }
+
+                let correctAnswers = this._normalizeReplayAnswerMap(
+                    this._isReplayObject(entry.correctAnswerMap)
+                        ? entry.correctAnswerMap
+                        : (this._isReplayObject(entry.correctAnswers)
+                            ? entry.correctAnswers
+                            : (this._isReplayObject(entry.realData?.correctAnswers) ? entry.realData.correctAnswers : {})),
+                    entryExamId,
+                    true
+                );
+                if (Object.keys(correctAnswers).length === 0) {
+                    correctAnswers = this._normalizeReplayAnswerMap(recordCorrectSource, entryExamId, allowUnprefixed);
+                }
+
+                const detailSource = entry.scoreInfo?.details
+                    || entry.realData?.scoreInfo?.details
+                    || recordDetailSource;
+                this._hydrateReplayCorrectAnswersFromDetails(
+                    detailSource,
+                    correctAnswers,
+                    comparison,
+                    entryExamId,
+                    allowUnprefixed
+                );
+
+                comparison = this._finalizeReplayComparison(answers, correctAnswers, comparison);
+                const scoreInfo = this._deriveReplayScoreInfo(entry.scoreInfo || entry.realData?.scoreInfo || record.scoreInfo || record.realData?.scoreInfo, comparison);
+                const mergedMetadata = Object.assign({}, recordMetadata, entryMetadata, {
+                    examId: entryExamId
+                });
+                const built = {
+                    examId: String(entryExamId),
+                    title: entry.title
+                        || mergedMetadata.examTitle
+                        || mergedMetadata.title
+                        || record.title
+                        || recordMetadata.examTitle
+                        || `回顾题目 ${index + 1}`,
+                    answers,
+                    correctAnswers,
+                    answerComparison: comparison,
+                    scoreInfo,
+                    allQuestionIds: [],
+                    startTime: entry.startTime || record.startTime || record.date || null,
+                    endTime: entry.endTime || record.endTime || record.date || null,
+                    duration: Number(entry.duration ?? record.duration) || 0,
+                    markedQuestions: Array.isArray(entry.markedQuestions)
+                        ? entry.markedQuestions.slice()
+                        : (Array.isArray(entryMetadata.markedQuestions)
+                            ? entryMetadata.markedQuestions.slice()
+                            : (Array.isArray(recordMetadata.markedQuestions) ? recordMetadata.markedQuestions.slice() : [])),
+                    metadata: mergedMetadata
+                };
+                built.allQuestionIds = this._collectReplayQuestionIds(built);
+                builtEntries.push(built);
+            });
+            return builtEntries;
+        },
+
+        _ensureReviewReplayStore() {
+            if (!this.reviewReplaySessions) {
+                this.reviewReplaySessions = new Map();
+            }
+            return this.reviewReplaySessions;
+        },
+
+        _buildReviewSession(record) {
+            const entries = this._buildReviewReplayEntriesFromRecord(record);
+            const validEntries = entries.filter((entry) => entry && entry.examId);
+            if (validEntries.length === 0) {
+                return null;
+            }
+            return {
+                sessionId: `review_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+                entries: validEntries,
+                currentIndex: 0,
+                windowRef: null,
+                readOnly: true
+            };
+        },
+
+        _bindReviewWindowRef(reviewSessionId, windowRef) {
+            if (!reviewSessionId || !windowRef || windowRef.closed) {
+                return;
+            }
+            const store = this._ensureReviewReplayStore();
+            const session = store.get(String(reviewSessionId));
+            if (!session) {
+                return;
+            }
+            session.windowRef = windowRef;
+            store.set(String(reviewSessionId), session);
+        },
+
+        _buildReviewContextPayload(session, entryIndex) {
+            const safeIndex = Number.isInteger(entryIndex) ? entryIndex : 0;
+            const total = Array.isArray(session.entries) ? session.entries.length : 0;
+            const current = session.entries[safeIndex] || {};
+            return {
+                reviewSessionId: session.sessionId,
+                index: safeIndex + 1,
+                currentIndex: safeIndex,
+                total,
+                canPrev: safeIndex > 0,
+                canNext: safeIndex < total - 1,
+                title: current.title || current.metadata?.examTitle || current.examId || '',
+                examId: current.examId || '',
+                readOnly: session.readOnly !== false
+            };
+        },
+
+        _sendReviewReplayMessages(examId, targetWindow, session, entryIndex) {
+            if (!targetWindow || targetWindow.closed || !session || !Array.isArray(session.entries)) {
+                return false;
+            }
+            const safeIndex = Number.isInteger(entryIndex) ? entryIndex : 0;
+            const entry = session.entries[safeIndex];
+            if (!entry || !entry.examId) {
+                return false;
+            }
+            const replayPayload = {
+                reviewSessionId: session.sessionId,
+                reviewEntryIndex: safeIndex,
+                readOnly: session.readOnly !== false,
+                entry: this._cloneReviewData(entry)
+            };
+            const contextPayload = this._buildReviewContextPayload(session, safeIndex);
+            try {
+                targetWindow.postMessage({ type: 'REPLAY_PRACTICE_RECORD', data: replayPayload }, '*');
+                targetWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, '*');
+                return true;
+            } catch (error) {
+                console.warn('[ReviewReplay] 向题目页发送回放数据失败:', error);
+                return false;
+            }
+        },
+
+        _dispatchReviewReplayForExam(examId, targetWindow = null) {
+            const windowInfo = this.examWindows && this.examWindows.get(examId);
+            if (!windowInfo || !windowInfo.reviewMode || !windowInfo.reviewSessionId) {
+                return false;
+            }
+            const store = this._ensureReviewReplayStore();
+            const session = store.get(String(windowInfo.reviewSessionId));
+            if (!session) {
+                return false;
+            }
+            const index = Number.isInteger(windowInfo.reviewEntryIndex)
+                ? windowInfo.reviewEntryIndex
+                : (Number.isInteger(session.currentIndex) ? session.currentIndex : 0);
+            const resolvedWindow = targetWindow || windowInfo.window || session.windowRef || null;
+            const sent = this._sendReviewReplayMessages(examId, resolvedWindow, session, index);
+            if (sent) {
+                session.currentIndex = index;
+                if (resolvedWindow && !resolvedWindow.closed) {
+                    session.windowRef = resolvedWindow;
+                }
+                store.set(String(session.sessionId), session);
+                windowInfo.reviewEntryIndex = index;
+                if (resolvedWindow && !resolvedWindow.closed) {
+                    windowInfo.window = resolvedWindow;
+                }
+                this.examWindows && this.examWindows.set(examId, windowInfo);
+            }
+            return sent;
+        },
+
+        async handleReviewReplayNavigate(examId, data = {}, sourceWindow = null) {
+            const windowInfo = this.examWindows && this.examWindows.get(examId);
+            if (!windowInfo || !windowInfo.reviewMode) {
+                return;
+            }
+            const sessionId = data.reviewSessionId
+                ? String(data.reviewSessionId)
+                : (windowInfo.reviewSessionId ? String(windowInfo.reviewSessionId) : '');
+            if (!sessionId) {
+                return;
+            }
+            const store = this._ensureReviewReplayStore();
+            const session = store.get(sessionId);
+            if (!session || !Array.isArray(session.entries) || session.entries.length === 0) {
+                return;
+            }
+            const direction = String(data.direction || data.action || '').toLowerCase();
+            let nextIndex = Number.isInteger(session.currentIndex) ? session.currentIndex : 0;
+            if (direction === 'next') {
+                nextIndex += 1;
+            } else if (direction === 'prev' || direction === 'previous') {
+                nextIndex -= 1;
+            } else if (Number.isInteger(data.targetIndex)) {
+                nextIndex = data.targetIndex;
+            } else {
+                return;
+            }
+
+            if (nextIndex < 0) {
+                nextIndex = 0;
+            }
+            if (nextIndex >= session.entries.length) {
+                nextIndex = session.entries.length - 1;
+            }
+
+            const nextEntry = session.entries[nextIndex];
+            if (!nextEntry || !nextEntry.examId) {
+                return;
+            }
+
+            session.currentIndex = nextIndex;
+            session.windowRef = sourceWindow || windowInfo.window || session.windowRef || null;
+            store.set(sessionId, session);
+
+            if (String(nextEntry.examId) === String(examId)) {
+                windowInfo.reviewEntryIndex = nextIndex;
+                this.examWindows && this.examWindows.set(examId, windowInfo);
+                this._sendReviewReplayMessages(examId, session.windowRef, session, nextIndex);
+                return;
+            }
+
+            try {
+                await this.cleanupExamSession(examId);
+            } catch (error) {
+                console.warn('[ReviewReplay] 清理旧题目会话失败:', error);
+            }
+
+            await this.openExam(nextEntry.examId, {
+                reviewMode: true,
+                readOnly: true,
+                reviewSessionId: sessionId,
+                reviewEntryIndex: nextIndex,
+                reuseWindow: session.windowRef || null
+            });
+        },
+
+        async openPracticeRecordReplay(record) {
+            const session = this._buildReviewSession(record);
+            if (!session) {
+                throw new Error('该练习记录缺少可回放的题目映射');
+            }
+            const store = this._ensureReviewReplayStore();
+            store.set(session.sessionId, session);
+
+            const firstEntry = session.entries[0];
+            if (!firstEntry || !firstEntry.examId) {
+                store.delete(session.sessionId);
+                throw new Error('无法解析首题题目标识');
+            }
+
+            const openedWindow = await this.openExam(firstEntry.examId, {
+                reviewMode: true,
+                readOnly: true,
+                reviewSessionId: session.sessionId,
+                reviewEntryIndex: 0
+            });
+            if (!openedWindow) {
+                store.delete(session.sessionId);
+                throw new Error('无法打开回顾页面');
+            }
+            this._bindReviewWindowRef(session.sessionId, openedWindow);
+            return session;
+        },
+
+        _buildExamInitPayload(examId, windowInfo = {}, extras = {}) {
+            const info = windowInfo || {};
+            if (!info.expectedSessionId) {
+                info.expectedSessionId = this.generateSessionId(examId);
+            }
+            const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
+                ? this._resolveSuiteSessionId(examId, info)
+                : (info.suiteSessionId || null);
+            const payload = {
+                examId: examId,
+                parentOrigin: window.location.origin,
+                sessionId: info.expectedSessionId,
+                suiteSessionId: suiteSessionId || null,
+                suiteFlowMode: info.suiteFlowMode || null,
+                suiteSequenceIndex: Number.isInteger(info.suiteSequenceIndex) ? info.suiteSequenceIndex : null,
+                suiteSequenceTotal: Number.isInteger(info.suiteSequenceTotal) ? info.suiteSequenceTotal : null,
+                reviewMode: Boolean(info.reviewMode),
+                reviewSessionId: info.reviewSessionId ? String(info.reviewSessionId) : null,
+                reviewEntryIndex: Number.isInteger(info.reviewEntryIndex) ? info.reviewEntryIndex : 0,
+                readOnly: Object.prototype.hasOwnProperty.call(info, 'readOnly')
+                    ? Boolean(info.readOnly)
+                    : Boolean(info.reviewMode)
+            };
+            if (extras && typeof extras === 'object') {
+                Object.assign(payload, extras);
+            }
+            return payload;
+        },
+
         ensureExamWindowSession(examId, examWindow = null) {
             if (!this.examWindows) {
                 this.examWindows = new Map();
@@ -1606,7 +2613,14 @@
                     startTime: Date.now(),
                     status: 'active',
                     expectedSessionId: this.generateSessionId(examId),
-                    origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : ''
+                    origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : '',
+                    suiteFlowMode: null,
+                    suiteSequenceIndex: null,
+                    suiteSequenceTotal: null,
+                    reviewMode: false,
+                    reviewSessionId: null,
+                    reviewEntryIndex: 0,
+                    readOnly: false
                 });
             }
 
@@ -1618,6 +2632,15 @@
 
             if (!windowInfo.expectedSessionId) {
                 windowInfo.expectedSessionId = this.generateSessionId(examId);
+            }
+            if (typeof windowInfo.reviewMode !== 'boolean') {
+                windowInfo.reviewMode = false;
+            }
+            if (!Number.isInteger(windowInfo.reviewEntryIndex)) {
+                windowInfo.reviewEntryIndex = 0;
+            }
+            if (!Object.prototype.hasOwnProperty.call(windowInfo, 'readOnly')) {
+                windowInfo.readOnly = Boolean(windowInfo.reviewMode);
             }
 
             this.examWindows.set(examId, windowInfo);
@@ -1767,6 +2790,15 @@
                 if (payload.suiteSessionId && !windowInfo.suiteSessionId) {
                     windowInfo.suiteSessionId = payload.suiteSessionId;
                 }
+                if (payload.suiteFlowMode && !windowInfo.suiteFlowMode) {
+                    windowInfo.suiteFlowMode = payload.suiteFlowMode;
+                }
+                if (Number.isInteger(payload.suiteSequenceIndex)) {
+                    windowInfo.suiteSequenceIndex = payload.suiteSequenceIndex;
+                }
+                if (Number.isInteger(payload.suiteSequenceTotal)) {
+                    windowInfo.suiteSequenceTotal = payload.suiteSequenceTotal;
+                }
                 if (payload.url) {
                     windowInfo.latestUrl = payload.url;
                 }
@@ -1781,7 +2813,8 @@
                 }
             }
 
-            if (this.components
+            if (!(windowInfo && windowInfo.reviewMode)
+                && this.components
                 && this.components.practiceRecorder
                 && typeof this.components.practiceRecorder.handleSessionStarted === 'function') {
                 const recorderSessionId = (windowInfo && windowInfo.expectedSessionId) || payload.sessionId || this.generateSessionId(examId);
@@ -1809,6 +2842,10 @@
                 }
             } catch (_) { }
 
+            if (windowInfo && windowInfo.reviewMode) {
+                this._dispatchReviewReplayForExam(examId, windowInfo.window || null);
+            }
+
             // 可以在这里发送额外的配置信息给数据采集器
             // 例如题目信息、特殊设置等
         },
@@ -1833,7 +2870,7 @@
         /**
          * 处理练习完成（真实数据）
          */
-        async handlePracticeComplete(examId, data) {
+        async handlePracticeComplete(examId, data, sourceWindow = null) {
             if (data && !data.sessionId) {
                 data.sessionId = `${examId}_${Date.now()}`;
             }
@@ -1885,7 +2922,7 @@
 
             if (shouldDelegateToSuiteHandler && typeof this.handleSuitePracticeComplete === 'function') {
                 try {
-                    const handled = await this.handleSuitePracticeComplete(examId, data);
+                    const handled = await this.handleSuitePracticeComplete(examId, data, sourceWindow);
                     if (handled) {
                         return;
                     }
@@ -2111,17 +3148,16 @@
                 );
                 const savingAsFallback = Boolean(options && options.savingAsFallback);
 
-                if (!savingAsFallback) {
-                    if (isSuiteFlow && !aggregatePayload && !forceIndividualSave) {
-                        console.log('[DataCollection] 套题模式结果由套题流程接管，跳过单篇降级保存:', {
-                            examId,
-                            suiteSessionId: suiteSessionId || null
-                        });
-                        return;
-                    }
+                if (!savingAsFallback && isSuiteFlow && !aggregatePayload && !forceIndividualSave) {
+                    console.log('[DataCollection] 套题模式结果由套题流程接管，跳过单篇降级保存:', {
+                        examId,
+                        suiteSessionId: suiteSessionId || null
+                    });
+                    return;
                 }
 
                 const exam = await findExamDefinition(examId);
+                const resolvedTime = this._resolveTrustedTimeRange(realData || {});
 
                 if (!exam) {
                     console.error('[DataCollection] 无法找到题目信息:', examId);
@@ -2131,7 +3167,7 @@
                 // 构造练习记录（与旧版本完全相同的格式）
                 const practiceRecord = {
                     id: Date.now(),
-                    examId: examId,
+                    examId,
                     title: exam.title,
                     category: exam.category,
                     frequency: exam.frequency,
@@ -2142,7 +3178,7 @@
                         totalQuestions: realData.scoreInfo?.total || 0,
                         accuracy: realData.scoreInfo?.accuracy || 0,
                         percentage: realData.scoreInfo?.percentage || 0,
-                        duration: realData.duration,
+                        duration: resolvedTime.duration,
                         answers: normalizedAnswers,
                         correctAnswers: normalizedCorrectMap,
                         answerHistory: realData.answerHistory,
@@ -2172,9 +3208,10 @@
                     practiceRecord.totalQuestions = total;
                     practiceRecord.accuracy = acc;
                     practiceRecord.percentage = pct;
+                    practiceRecord.duration = resolvedTime.duration;
                     practiceRecord.answers = normalizedAnswers;
-                    practiceRecord.startTime = new Date((realData.startTime ?? (Date.now() - (realData.duration || 0) * 1000))).toISOString();
-                    practiceRecord.endTime = new Date((realData.endTime ?? Date.now())).toISOString();
+                    practiceRecord.startTime = resolvedTime.startTime;
+                    practiceRecord.endTime = resolvedTime.endTime;
 
                     // 填充详情，便于在练习记录详情中显示正确答案
                     const comp = realData && realData.answerComparison ? realData.answerComparison : {};
@@ -2211,40 +3248,15 @@
                     console.warn('[DataCollection] 兼容字段填充失败:', compatErr);
                 }
 
-                // 直接保存到localStorage（与旧版本完全相同的方式）
-                let practiceRecords = await storage.get('practice_records', []);
-                if (!Array.isArray(practiceRecords)) {
-                    // 迁移修复：历史上可能被错误压缩为对象，这里强制纠正为数组
-                    practiceRecords = [];
-                }
-
-                practiceRecords.unshift(practiceRecord);
-
-                // 限制记录数量
-                if (practiceRecords.length > MAX_LEGACY_PRACTICE_RECORDS) {
-                    practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
-                }
-
-                let saveResult = null;
-                if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
-                    saveResult = await window.PracticeCore.store.savePracticeRecord(practiceRecord);
-                } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
-                    saveResult = await window.simpleStorageWrapper.addPracticeRecord(practiceRecord);
-                } else {
-                    const practiceKey = ['practice', 'records'].join('_');
-                    saveResult = await storage.set(practiceKey, practiceRecords);
-                }
+                await savePracticeRecordWithFallback(practiceRecord, MAX_LEGACY_PRACTICE_RECORDS);
 
                 // 立即验证保存是否成功
-                const verifyRecords = window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function'
-                    ? await window.PracticeCore.store.listPracticeRecords()
-                    : await storage.get('practice_records', []);
+                const verifyRecords = await listSavedPracticeRecords();
                 const savedRecord = Array.isArray(verifyRecords)
                     ? verifyRecords.find(r => r.id === practiceRecord.id)
                     : undefined;
 
-                if (savedRecord) {
-                } else {
+                if (!savedRecord) {
                     console.error('[DataCollection] ✗ 保存验证失败，记录未找到');
                 }
 
@@ -2258,15 +3270,15 @@
          */
         async showRealCompletionNotification(examId, realData) {
             const examIndex = await getActiveExamIndexSnapshot();
-            const list = Array.isArray(examIndex) ? examIndex : [];
-            const exam = list.find(e => e.id === examId);
+            const exam = (Array.isArray(examIndex) ? examIndex : []).find(e => e.id === examId);
 
             if (!exam) return;
 
             const scoreInfo = realData.scoreInfo;
+            const resolvedDuration = this._resolveTrustedDurationSeconds(realData || {});
             if (scoreInfo) {
                 const accuracy = scoreInfo.percentage || Math.round((scoreInfo.accuracy || 0) * 100);
-                const duration = Math.round(realData.duration / 60); // 转换为分钟
+                const duration = Math.round(resolvedDuration / 60); // 转换为分钟
 
                 let message = `练习完成！\n${exam.title}\n`;
 
@@ -2285,7 +3297,7 @@
                 window.showMessage(message, 'success');
             } else {
                 // 没有分数信息的情况
-                const duration = Math.round(realData.duration / 60);
+                const duration = Math.round(resolvedDuration / 60);
                 window.showMessage(`练习完成！\n${exam.title}\n用时: ${duration} 分钟`, 'success');
             }
         },
@@ -2298,7 +3310,7 @@
             if (this.suiteExamMap && this.suiteExamMap.has(examId) && this.currentSuiteSession && this.currentSuiteSession.status === 'active' && this.suiteExamMap.get(examId) === this.currentSuiteSession.id) {
                 window.showMessage && window.showMessage('套题练习窗口已关闭，套题模式将被中断并回退到普通模式。', 'warning');
                 if (typeof this._abortSuiteSession === 'function') {
-                    this._abortSuiteSession(this.currentSuiteSession, { skipExamId: examId }).catch(error => {
+                    this._abortSuiteSession(this.currentSuiteSession, {}).catch(error => {
                         console.error('[SuitePractice] 中断套题失败:', error);
                     });
                 }
@@ -2374,8 +3386,7 @@
          * 显示题目完成通知
          */
         async showExamCompletionNotification(examId, resultData) {
-            const examIndex = await getActiveExamIndexSnapshot();
-            const exam = examIndex.find(e => e.id === examId);
+            const exam = (await getActiveExamIndexSnapshot()).find(e => e.id === examId);
 
             if (!exam) return;
 
@@ -2384,72 +3395,16 @@
 
             window.showMessage(message, 'success');
 
-            // 可以显示更详细的结果模态框
             this.showDetailedResults(examId, resultData);
         },
 
         /**
          * 显示详细结果
          */
-        async showDetailedResults(examId, resultData) {
-            const examIndex = await getActiveExamIndexSnapshot();
-            const exam = examIndex.find(e => e.id === examId);
-
-            if (!exam) return;
-
-            const accuracy = Math.round((resultData.accuracy || 0) * 100);
-            const duration = this.formatDuration(resultData.duration || 0);
-
-            const resultContent = `
-                <div class="exam-result-modal">
-                    <div class="result-header">
-                        <h3>练习完成</h3>
-                        <div class="result-score ${accuracy >= 80 ? 'excellent' : accuracy >= 60 ? 'good' : 'needs-improvement'}">
-                            ${accuracy}%
-                        </div>
-                    </div>
-                    <div class="result-body">
-                        <h4>${exam.title}</h4>
-                        <div class="result-stats">
-                            <div class="result-stat">
-                                <span class="stat-label">正确率</span>
-                                <span class="stat-value">${accuracy}%</span>
-                            </div>
-                            <div class="result-stat">
-                                <span class="stat-label">用时</span>
-                                <span class="stat-value">${duration}</span>
-                            </div>
-                            <div class="result-stat">
-                                <span class="stat-label">题目数</span>
-                                <span class="stat-value">${resultData.totalQuestions || exam.totalQuestions || 0}</span>
-                            </div>
-                            <div class="result-stat">
-                                <span class="stat-label">正确数</span>
-                                <span class="stat-value">${resultData.correctAnswers || 0}</span>
-                            </div>
-                        </div>
-                        <div class="result-actions">
-                            <button class="btn btn-primary" onclick="window.app.openExam('${examId}')">
-                                再次练习
-                            </button>
-                            <button class="btn btn-secondary" onclick="window.app.navigateToView('analysis')">
-                                查看分析
-                            </button>
-                            <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">
-                                关闭
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // 显示结果模态框
-            // 模态框功能已移除(resultContent);
+        async showDetailedResults() {
+            // 兼容保留：历史上这里会渲染详细结果模态框，当前功能已移除。
+            return;
         },
-
-        /**
-         * 显示模态框
-         */
 
         /**
          * 清理题目会话
@@ -2531,8 +3486,7 @@
          * 显示练习完成通知
          */
         async showPracticeCompletionNotification(examId, practiceRecord) {
-            const examIndex = await getActiveExamIndexSnapshot();
-            const exam = examIndex.find(e => e.id === examId);
+            const exam = (await getActiveExamIndexSnapshot()).find(e => e.id === examId);
 
             if (!exam) return;
 
@@ -2542,104 +3496,17 @@
             // 显示简单通知
             const message = `练习完成！\n${exam.title}\n正确率: ${accuracy}% | 用时: ${duration}`;
             window.showMessage(message, 'success');
-
-            // 显示详细结果模态框
-            setTimeout(() => {
-                this.showDetailedPracticeResults(examId, practiceRecord);
-            }, 1000);
         },
 
         /**
          * 显示详细练习结果
          */
         async showDetailedPracticeResults(examId, practiceRecord) {
-            const examIndex = await getActiveExamIndexSnapshot();
-            const exam = examIndex.find(e => e.id === examId);
-
-            if (!exam) return;
-
-            const accuracy = Math.round((practiceRecord.accuracy || 0) * 100);
-            const duration = this.formatDuration(practiceRecord.duration || 0);
-
-            const resultContent = `
-                <div class="practice-result-modal">
-                    <div class="result-header">
-                        <h3>练习完成</h3>
-                        <div class="result-score ${accuracy >= 80 ? 'excellent' : accuracy >= 60 ? 'good' : 'needs-improvement'}">
-                            ${accuracy}%
-                        </div>
-                    </div>
-                    <div class="result-body">
-                        <h4>${exam.title}</h4>
-                        <div class="result-stats">
-                            <div class="result-stat">
-                                <span class="stat-label">正确率</span>
-                                <span class="stat-value">${accuracy}%</span>
-                            </div>
-                            <div class="result-stat">
-                                <span class="stat-label">用时</span>
-                                <span class="stat-value">${duration}</span>
-                            </div>
-                            <div class="result-stat">
-                                <span class="stat-label">题目数</span>
-                                <span class="stat-value">${practiceRecord.totalQuestions || 0}</span>
-                            </div>
-                            <div class="result-stat">
-                                <span class="stat-label">正确数</span>
-                                <span class="stat-value">${practiceRecord.correctAnswers || 0}</span>
-                            </div>
-                        </div>
-                        ${practiceRecord.questionTypePerformance && Object.keys(practiceRecord.questionTypePerformance).length > 0 ? `
-                            <div class="question-type-performance">
-                                <h5>题型表现</h5>
-                                <div class="type-performance-list">
-                                    ${Object.entries(practiceRecord.questionTypePerformance).map(([type, perf]) => `
-                                        <div class="type-performance-item">
-                                            <span class="type-name">${this.formatQuestionType(type)}</span>
-                                            <span class="type-accuracy">${Math.round((perf.accuracy || 0) * 100)}%</span>
-                                            <span class="type-count">(${perf.correct || 0}/${perf.total || 0})</span>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        ` : ''}
-                        <div class="result-actions">
-                            <button class="btn btn-primary" onclick="window.app.openExam('${examId}')">
-                                再次练习
-                            </button>
-                            <button class="btn btn-secondary" onclick="window.app.navigateToView('practice')">
-                                查看记录
-                            </button>
-                            <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">
-                                关闭
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // 模态框功能已移除(resultContent);
+            return this.showDetailedResults(examId, practiceRecord);
         },
 
-        /**
-         * 格式化题型名称
-         */
         formatQuestionType(type) {
-            const typeMap = {
-                'heading-matching': '标题匹配',
-                'true-false-not-given': '判断题',
-                'yes-no-not-given': '是非题',
-                'multiple-choice': '选择题',
-                'matching-information': '信息匹配',
-                'matching-people-ideas': '人物观点匹配',
-                'summary-completion': '摘要填空',
-                'sentence-completion': '句子填空',
-                'short-answer': '简答题',
-                'diagram-labelling': '图表标注',
-                'flow-chart': '流程图',
-                'table-completion': '表格填空'
-            };
-            return typeMap[type] || type;
+            return type || '';
         },
 
         // createReturnNavigation 方法已删除
@@ -2653,57 +3520,16 @@
          */
         async showActiveSessionsDetails() {
             const activeSessions = await storage.get('active_sessions', []);
-            const examIndex = await getActiveExamIndexSnapshot();
 
             if (activeSessions.length === 0) {
                 window.showMessage('当前没有活动的练习会话', 'info');
                 return;
             }
 
-            const sessionsContent = `
-                <div class="active-sessions-modal">
-                    <div class="sessions-header">
-                        <h3>活动练习会话 (${activeSessions.length})</h3>
-                        <button class="close-sessions" onclick="this.closest('.modal-overlay').remove()">×</button>
-                    </div>
-                    <div class="sessions-body">
-                        ${activeSessions.map(session => {
-                const exam = examIndex.find(e => e.id === session.examId);
-                const duration = Date.now() - new Date(session.startTime).getTime();
-
-                return `
-                                <div class="session-item">
-                                    <div class="session-info">
-                                        <h4>${exam ? exam.title : '未知题目'}</h4>
-                                        <div class="session-meta">
-                                            <span>开始时间: ${this.formatDate(session.startTime, 'HH:mm')}</span>
-                                            <span>已用时: ${this.formatDuration(Math.floor(duration / 1000))}</span>
-                                        </div>
-                                    </div>
-                                    <div class="session-actions">
-                                        <button class="btn btn-sm btn-primary" onclick="window.app.focusExamWindow('${session.examId}')">
-                                            切换到窗口
-                                        </button>
-                                        <button class="btn btn-sm btn-secondary" onclick="window.app.closeExamSession('${session.examId}')">
-                                            结束会话
-                                        </button>
-                                    </div>
-                                </div>
-                            `;
-            }).join('')}
-                    </div>
-                    <div class="sessions-footer">
-                        <button class="btn btn-outline" onclick="window.app.closeAllExamSessions()">
-                            结束所有会话
-                        </button>
-                        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">
-                            关闭
-                        </button>
-                    </div>
-                </div>
-            `;
-
-            // 模态框功能已移除(sessionsContent);
+            const openWindowCount = this.examWindows
+                ? Array.from(this.examWindows.values()).filter((item) => item && item.window && !item.window.closed).length
+                : 0;
+            window.showMessage(`当前活动会话 ${activeSessions.length} 个，打开窗口 ${openWindowCount} 个`, 'info');
         },
 
         /**
@@ -2744,10 +3570,7 @@
          */
         async closeAllExamSessions() {
             const activeSessions = await storage.get('active_sessions', []);
-
-            activeSessions.forEach(session => {
-                this.closeExamSession(session.examId);
-            });
+            activeSessions.forEach((session) => this.closeExamSession(session.examId));
 
             // 关闭模态框
             const modal = document.querySelector('.modal-overlay');
