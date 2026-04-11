@@ -46,7 +46,7 @@
         "q7",
         "q8"
       ],
-      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-anchor\">\n                 <h4>Questions 18–21</h4>\n                <p>Complete the sentences below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"sentence-completion\">\n                    <p><strong>18</strong> Illustrations of merchant ships sailing from Punt were found on wall carvings in an ancient <input type=\"text\" id=\"q18_input\"> in Egypt.</p>\n                    <p><strong>19</strong> Bard and Fattovich hoped to find evidence of a <input type=\"text\" id=\"q19_input\"> in the area of Mersa Gawasis.</p>\n                    <p><strong>20</strong> When Bard first discovered a cave at Mersa Gawasis, the shape of its <input type=\"text\" id=\"q20_input\"> indicated that it was man-made.</p>\n                    <p><strong>21</strong> Bard and Fattovich discovered a considerable number of objects that had been damaged by small sea creatures known as <input type=\"text\" id=\"q21_input\">.</p>\n                </div>\n            </div>"
+      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-anchor\">\n                 <h4>Questions 18–21</h4>\n                <p>Complete the sentences below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"sentence-completion\">\n                    <p><strong>18</strong> Illustrations of merchant ships sailing from Punt were found on wall carvings in an ancient <input name=\"q5\" type=\"text\" id=\"q18_input\"> in Egypt.</p>\n                    <p><strong>19</strong> Bard and Fattovich hoped to find evidence of a <input name=\"q6\" type=\"text\" id=\"q19_input\"> in the area of Mersa Gawasis.</p>\n                    <p><strong>20</strong> When Bard first discovered a cave at Mersa Gawasis, the shape of its <input name=\"q7\" type=\"text\" id=\"q20_input\"> indicated that it was man-made.</p>\n                    <p><strong>21</strong> Bard and Fattovich discovered a considerable number of objects that had been damaged by small sea creatures known as <input name=\"q8\" type=\"text\" id=\"q21_input\">.</p>\n                </div>\n            </div>"
     },
     {
       "groupId": "group-3",
@@ -118,5 +118,6 @@
     "q12": "25",
     "q13": "26"
   }
-});
+}
+);
 })(typeof window !== "undefined" ? window : globalThis);

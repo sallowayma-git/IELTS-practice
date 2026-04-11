@@ -1440,7 +1440,7 @@
     "examId": "p3-high-206",
     "dataKey": "p3-high-206",
     "script": "./p3-high-206.js",
-    "title": "200 Years of Australian Landscapes at the Royal Academy in London 亚洲风景展【高】",
+    "title": "200 Years of Australian Landscapes at the Royal Academy in London 澳洲风景展【高】",
     "category": "P3"
   },
   "p3-high-212": {
@@ -1498,6 +1498,27 @@
     "script": "./p1-high-211.js",
     "title": "Ahead of its time 新西兰头骨【高】",
     "category": "P1"
+  },
+  "p1-high-227": {
+    "examId": "p1-high-227",
+    "dataKey": "p1-high-227",
+    "script": "./p1-high-227.js",
+    "title": "The Whale Goes to Court 鲸鱼油",
+    "category": "P1"
+  },
+  "p2-high-225": {
+    "examId": "p2-high-225",
+    "dataKey": "p2-high-225",
+    "script": "./p2-high-225.js",
+    "title": "The problem of graffiti 涂鸦之困",
+    "category": "P2"
+  },
+  "p3-high-228": {
+    "examId": "p3-high-228",
+    "dataKey": "p3-high-228",
+    "script": "./p3-high-228.js",
+    "title": "On art and artists 艺术与艺术家",
+    "category": "P3"
   }
 };
 })(typeof window !== "undefined" ? window : globalThis);

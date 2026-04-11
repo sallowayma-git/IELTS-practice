@@ -443,9 +443,18 @@
 
         /* Highlight visual */
         .hl {
-            background-color: #fef08a;
-            /* Yellow highlight */
-            color: #000;
+            background-color: #72361c;
+            color: #fff;
+            /* Keep highlighted English words intact even if parent containers use aggressive wrapping rules. */
+            word-break: normal;
+            overflow-wrap: normal;
+            white-space: normal;
+        }
+
+        /* Note highlight */
+        .hl[data-hl-type="note"] {
+            background-color: #0369d9;
+            color: #fff;
         }
 
         /* Dark Mode variables */
@@ -468,7 +477,12 @@
         }
 
         body.dark-mode .hl {
-            background-color: #854d0e;
+            background-color: #72361c;
+            color: #fff;
+        }
+
+        body.dark-mode .hl[data-hl-type="note"] {
+            background-color: #0369d9;
             color: #fff;
         }
 
@@ -660,9 +674,13 @@
 
         /* ---------------- Exam Option Layouts ---------------- */
         .choice-item label,
+        .checkbox-options label,
+        .options-list label,
         .multiple-choice-options label,
         .matching-options label,
+        .mcq-group label,
         .radio-options label,
+        .radio-group label,
         .multiple-choice label,
         .true-false-ng label {
             display: flex;
@@ -674,15 +692,95 @@
         }
 
         .choice-item label input[type="checkbox"],
+        .checkbox-options label input[type="checkbox"],
+        .options-list label input[type="checkbox"],
         .choice-item label input[type="radio"],
         .multiple-choice-options label input[type="radio"],
         .matching-options label input[type="radio"],
+        .mcq-group label input[type="radio"],
         .radio-options label input[type="radio"],
+        .radio-group label input[type="radio"],
         .multiple-choice label input[type="radio"],
         .true-false-ng label input[type="radio"] {
             margin-top: 4px;
             flex-shrink: 0;
             cursor: pointer;
+        }
+
+        /* ---------------- Table Completion Layout ---------------- */
+        .table-section {
+            margin-top: 12px;
+            overflow-x: auto;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--bg);
+            padding: 10px 12px;
+        }
+
+        .table-section table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .table-section thead th {
+            border: 1px solid var(--line);
+            background: var(--panel-alt);
+            font-weight: 700;
+            text-align: center;
+            padding: 10px 8px;
+        }
+
+        .table-section tbody td {
+            border: 1px solid var(--line);
+            padding: 10px 10px;
+            vertical-align: top;
+            line-height: 1.45;
+        }
+
+        .table-section thead th:first-child,
+        .table-section tbody td:first-child {
+            width: 16%;
+        }
+
+        .table-section thead th:nth-child(2),
+        .table-section tbody td:nth-child(2) {
+            width: 20%;
+        }
+
+        .table-section thead th:nth-child(3),
+        .table-section tbody td:nth-child(3) {
+            width: 64%;
+        }
+
+        .table-section ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .table-section li + li {
+            margin-top: 6px;
+        }
+
+        .table-section input.blank {
+            display: inline-block;
+            min-width: 120px;
+            max-width: 180px;
+            width: 40%;
+            padding: 2px 6px;
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            background: var(--panel);
+            color: var(--text);
+            vertical-align: middle;
+        }
+
+        @media (max-width: 900px) {
+            .table-section input.blank {
+                width: 100%;
+                max-width: none;
+                margin-top: 4px;
+            }
         }
 
         /* ---------------- Drop Targets ---------------- */
@@ -755,6 +853,13 @@
                 <button class="settings-option" data-mode="dark">深色</button>
             </div>
         </div>
+        <div class="settings-section" id="suite-flow-mode-section" style="display: none;">
+            <h3 class="settings-title">套题流程模式</h3>
+            <div class="settings-options">
+                <button class="settings-option" data-suite-flow-mode="auto">自动跳转下一篇</button>
+                <button class="settings-option" data-suite-flow-mode="manual">提交后停留回看</button>
+            </div>
+        </div>
     </div>
     <div id="notes-panel">
         <header>
@@ -789,7 +894,9 @@
     </div>
 
     <script src="../../../js/runtime/readingExamRegistry.js"></script>
+    <script src="../../../js/runtime/readingExplanationRegistry.js"></script>
     <script src="./manifest.js"></script>
+    <script src="../../../js/utils/answerMatchCore.js"></script>
     <script src="../../../js/practice-page-ui.js"></script>
     <script src="../../../js/runtime/unifiedReadingPage.js"></script>
 </body>
