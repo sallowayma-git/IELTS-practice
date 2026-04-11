@@ -2,7 +2,7 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/sallowayma-git/IELTS-practice)
 ## 系统简介
 
-这是一个本地化的 IELTS（雅思）练习系统，专为阅读和听力部分设计，支持 P1、P2、P3 难度级别。系统是纯前端应用，使用 HTML5、CSS3 和 JavaScript ES6+ 构建，无需服务器部署，直接在浏览器中运行。核心功能包括题库浏览、练习记录管理、数据备份/导入和系统设置。题库基于静态文件（HTML 交互式和 PDF 静态），通过 localStorage 持久化用户数据，支持跨窗口通信（postMessage）采集练习结果。当前版本 v1.0.0，总题目约 147 篇（包括阅读和听力），自动扫描题库路径，确保离线可用。
+这是一个本地化的 IELTS（雅思）练习系统，专为阅读和听力部分设计，支持 P1、P2、P3 难度级别。系统以静态前端资源为核心，并补齐了 Electron 宿主层；浏览器可直接 `file://` 打开 `index.html`，桌面端通过 Electron 加载同一套资源。核心功能包括题库浏览、练习记录管理、数据备份/导入和系统设置。题库基于静态文件（HTML 交互式和 PDF 静态），通过 localStorage 持久化用户数据，支持跨窗口通信（postMessage）采集练习结果。当前应用版本以 `package.json` 为准（当前为 `0.6.0`），总题目约 147 篇（包括阅读和听力），自动扫描题库路径，确保离线可用。
 
 系统目标：提供高效的雅思练习管理，帮助用户跟踪进度、分析统计，并通过简单设置维护数据完整性。维护焦点：题库路径标准化、localStorage 容量管理（<5MB）和浏览器兼容性。
 
@@ -16,12 +16,20 @@
 
 ### 2. 启动系统
 1. 下载并解压整个项目目录到本地文件夹（保持 `js/`、`css/`、`assets/` 和题库文件夹结构完整）
-2. 双击打开主文件 `improved-working-system.html`（或 `index.html` 如果是备用入口）
+2. 浏览器预览直接打开 `index.html`；Electron 桌面端先执行 `npm install`，再运行 `npm start`
 3. 系统自动初始化：加载题库索引（`exam_index`），显示主界面；DevTools（F12）Console 无错误表示成功
 4. 验证加载：点击“📚 题库浏览”，确认 P1/P2/P3 分类显示；检查“⚙️ 设置” > “系统信息” 中的题目总数（约 147）
 5. 多窗口使用：新开标签练习不会冲突（localStorage 隔离）；刷新页面（Ctrl+Shift+R）清缓存重载
 
 如果题库未加载，检查路径：阅读题库位于 `睡着过项目组/2. 所有文章(11.20)[192篇]/`，听力位于 `ListeningPractice/`；使用“⚙️ 设置” > “📂 加载题库” 手动导入。
+
+### Electron 与更新模块
+- 本仓库现在同时包含 Electron 宿主层，入口为 `electron/main.js`，本地开发可使用 `npm install` 后执行 `npm start`。
+- 正式打包与发布不在本地执行，统一由 GitHub Actions 在推送 `v*` tag 后构建并发布到 GitHub Releases。
+- Electron 应用启动后会自动检查一次 GitHub 最新 Release；前端“检查更新”按钮可手动触发。若只检测到兼容的资源 delta 包且不需要壳层升级，会在后台静默预取，并在下一次启动时优先激活；若激活失败则自动回滚到上一个 known good overlay。
+- 更新分为两条链路：壳层使用 `electron-updater` 差分更新；静态资源使用 `resources-manifest.json` 驱动的双包策略（`resources-delta.zip` 优先，`resources-full.zip` 作为 fallback），覆盖 `index.html`、`css/`、`js/`、`templates/`、`assets/` 和 `ListeningPractice/`。
+- 壳层更新是否可下载，不再靠 release 文件名猜测，而是以 `latest*.yml` 指向的精确安装包和对应 blockmap 为准；CI 也会按这套契约校验。
+- 从当前实现开始，资源清单以 `packages.delta/full` 为主契约；顶层 `files/managedPrefixes` 只保留过渡兼容，不再作为运行时主数据结构。
 
 ### 3. 基本操作
 - **总览**：点击“📊 总览”，查看分类卡片（P1/P2/P3 统计）

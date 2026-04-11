@@ -2597,6 +2597,9 @@ function updateSystemInfo() {
     if (htmlExamsEl) htmlExamsEl.textContent = readingExams.length + listeningExams.length; // Simplified
     if (pdfExamsEl) pdfExamsEl.textContent = examIndexSnapshot.filter(e => e.pdfFilename).length;
     if (lastUpdateEl) lastUpdateEl.textContent = new Date().toLocaleString();
+    if (window.appUpdateManager && typeof window.appUpdateManager.refreshDom === 'function') {
+        window.appUpdateManager.refreshDom();
+    }
 }
 
 function showMessage(message, type = 'info', duration = 4000) {

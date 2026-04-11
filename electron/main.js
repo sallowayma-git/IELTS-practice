@@ -1,27 +1,37 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
+const { app, BrowserWindow, dialog, ipcMain, protocol, shell } = require('electron');
+const { registerAppProtocol } = require('./protocol');
+const { UpdateService } = require('./update/updateService');
 
-// 延迟导入，避免循环依赖导致 electron API 未初始化
 let IPCHandlers = null;
 let LocalApiServer = null;
 
+protocol.registerSchemesAsPrivileged([
+    {
+        scheme: 'app',
+        privileges: {
+            standard: true,
+            secure: true,
+            supportFetchAPI: true,
+            stream: true,
+            corsEnabled: true
+        }
+    }
+]);
+
 let mainWindow = null;
+let mainWindowCreation = null;
+let updateService = null;
 let ipcHandlers = null;
 let localApiServer = null;
-let mainWindowCreation = null;
 let navigationHandlersRegistered = false;
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
+let rollbackAttempted = false;
+let rendererReadyReceived = false;
 
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
 const STABLE_USER_DATA_DIR = 'ielts-practice';
 const LEGACY_USER_DATA_DIRS = ['Electron', 'IELTS Practice'];
-
-// 安全配置：允许导航的文件白名单（防止恶意页面冒充导航）
-const ALLOWED_NAVIGATION_SOURCES = [
-    'index.html',           // Legacy 练习页面
-    'writing.html',         // 写作评判占位页
-    'dist/writing'          // Vue 写作模块构建目录
-];
 
 configureStableUserDataPath();
 
@@ -57,226 +67,130 @@ function configureStableUserDataPath() {
     app.setPath('userData', preferredUserDataPath);
 }
 
-/**
- * 验证 IPC 消息来源是否合法
- * @param {Electron.IpcMainEvent} event - IPC 事件对象
- * @returns {boolean} 是否为合法来源
- */
-function isValidNavigationSource(event) {
-    const senderURL = event?.senderFrame?.url || event?.sender?.getURL?.() || '';
+function getProjectRoot() {
+    return path.resolve(__dirname, '..');
+}
 
-    // 必须是 file:// 协议
-    if (!senderURL.startsWith('file://')) {
-        console.warn(`[Security] IPC navigation rejected: non-file protocol (${senderURL})`);
+function getAppAssetUrl(relativePath) {
+    const normalizedPath = String(relativePath || 'index.html')
+        .replace(/\\/g, '/')
+        .replace(/^\/+/, '');
+    return `app://app/${normalizedPath}`;
+}
+
+function resolveBundledPath(relativePath) {
+    if (updateService && typeof updateService.resolveBundledAsset === 'function') {
+        return updateService.resolveBundledAsset(relativePath);
+    }
+    return path.join(getProjectRoot(), relativePath);
+}
+
+function isProjectFileUrl(url) {
+    if (!url || !url.startsWith('file://')) {
         return false;
     }
 
-    // 允许项目目录内的本地页面（练习子页、模板页、构建产物）
     try {
-        const senderPath = decodeURIComponent(String(senderURL).replace(/^file:\/\//, '').split(/[?#]/)[0]);
+        const senderPath = decodeURIComponent(String(url).replace(/^file:\/\//, '').split(/[?#]/)[0]);
         const normalizedSenderPath = path.resolve(senderPath);
-        const projectDir = path.resolve(__dirname, '..');
-        if (
-            normalizedSenderPath === projectDir
-            || normalizedSenderPath.startsWith(`${projectDir}${path.sep}`)
-        ) {
-            return true;
-        }
+        const projectDir = getProjectRoot();
+        return normalizedSenderPath === projectDir || normalizedSenderPath.startsWith(`${projectDir}${path.sep}`);
     } catch (_) {
-        // ignore parse error and continue legacy allowlist check
+        return false;
     }
-
-    // 检查是否在白名单中
-    const isAllowed = ALLOWED_NAVIGATION_SOURCES.some(allowed =>
-        senderURL.includes(allowed)
-    );
-
-    if (!isAllowed) {
-        console.warn(`[Security] IPC navigation rejected: unauthorized source (${senderURL})`);
-    }
-
-    return isAllowed;
 }
 
-/**
- * 创建主窗口
- */
-async function createMainWindow() {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        return mainWindow;
+function isInternalAppUrl(url) {
+    return typeof url === 'string' && /^app:\/\/app(?:\/|$)/.test(url);
+}
+
+function isAllowedInternalUrl(url) {
+    return isInternalAppUrl(url) || isProjectFileUrl(url);
+}
+
+function isValidNavigationSource(event) {
+    const senderURL = event?.senderFrame?.url || event?.sender?.getURL?.() || '';
+    if (isAllowedInternalUrl(senderURL)) {
+        return true;
     }
-    if (mainWindowCreation) {
-        return mainWindowCreation;
+
+    console.warn(`[Security] IPC navigation rejected: unauthorized source (${senderURL})`);
+    return false;
+}
+
+function resetBootRecoveryState() {
+    rollbackAttempted = false;
+    rendererReadyReceived = false;
+}
+
+function isMainWindowSender(sender) {
+    return !!(mainWindow && !mainWindow.isDestroyed() && sender && sender === mainWindow.webContents);
+}
+
+function shouldRollbackOnLoadFailure(errorCode, isMainFrame) {
+    if (!isMainFrame || rendererReadyReceived || rollbackAttempted) {
+        return false;
     }
+    return errorCode !== -3;
+}
 
-    mainWindowCreation = (async () => {
-        mainWindow = new BrowserWindow({
-            width: 1200,
-            height: 800,
-            webPreferences: {
-                // 安全配置
-                contextIsolation: true,      // 隔离预加载脚本与网页上下文
-                nodeIntegration: false,       // 禁用渲染进程的 Node.js 访问
-                sandbox: false,               // 暂时关闭沙箱，等 Legacy + 写作稳定后再开启
-                webSecurity: true,            // 启用同源策略
-                preload: path.join(__dirname, 'preload.js')
-            },
-            show: false // 等待ready-to-show事件再显示
-        });
-
-        // 延迟导入模块，避免循环依赖
-        IPCHandlers = require('./ipc-handlers');
-        LocalApiServer = require('./local-api-server');
-
-        // 初始化 IPC handlers
-        ipcHandlers = new IPCHandlers(mainWindow);
-        await ipcHandlers.initialize();
-        ipcHandlers.register();
-
-        // 启动本地 HTTP/SSE API（127.0.0.1）
-        localApiServer = new LocalApiServer(ipcHandlers.getServiceBundle());
-        const apiInfo = await localApiServer.start();
-        ipcHandlers.setLocalApiInfo(apiInfo);
-
-        // 默认加载 Legacy 页面
-        loadLegacyPage();
-
-        // 窗口准备好后再显示，避免白屏闪烁
-        mainWindow.once('ready-to-show', () => {
-            mainWindow.show();
-        });
-
-        // 【安全加固】拦截页面内导航/重定向
-        // 允许本地 file:// 协议导航（Legacy 题目页面需要）
-        // 阻止外部 http/https 导航
-        mainWindow.webContents.on('will-navigate', (event, url) => {
-            // 允许本地 file:// 协议导航（项目内的 HTML 文件）
-            if (url.startsWith('file://')) {
-                // 检查是否在项目目录内
-                const projectDir = path.resolve(__dirname, '..');
-                try {
-                    const normalizedUrl = decodeURIComponent(url.replace('file://', ''));
-                    if (normalizedUrl.startsWith(projectDir)) {
-                        console.log(`[Navigation] Allowing local file: ${url.substring(0, 100)}...`);
-                        return; // 允许导航
-                    }
-                } catch (e) {
-                    console.warn(`[Security] Failed to parse navigation URL: ${e.message}`);
-                }
-            }
-
-            // 阻止其他所有导航（外部链接等）
-            event.preventDefault();
-            console.warn(`[Security] Prevented navigation to: ${url.substring(0, 100)}...`);
-        });
-
-        // 【安全加固】拦截 new-window 和 window.open，防止随意打开新窗口
-        mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-            // TODO: 后续应添加白名单（如官方网站、帮助文档等）
-            if (url.startsWith('http://') || url.startsWith('https://')) {
-                // 可选：添加用户提示
-                console.log(`[External] Opening in browser: ${url}`);
-                shell.openExternal(url);
-            } else {
-                console.warn(`[Security] Blocked non-http(s) window.open: ${url}`);
-            }
-            return { action: 'deny' }; // 阻止在 Electron 中打开新窗口
-        });
-
-        // 开发环境下打开 DevTools（可选）
-        if (process.env.NODE_ENV === 'development') {
-            mainWindow.webContents.openDevTools();
+function emitUpdateState(state) {
+    for (const windowInstance of BrowserWindow.getAllWindows()) {
+        if (!windowInstance.isDestroyed()) {
+            windowInstance.webContents.send('update:state-changed', state);
         }
-
-        mainWindow.on('closed', () => {
-            mainWindow = null;
-
-            // 清理 IPC handlers
-            if (ipcHandlers) {
-                ipcHandlers.cleanup();
-                ipcHandlers = null;
-            }
-            if (localApiServer) {
-                localApiServer.stop().catch((error) => {
-                    console.error('[LocalApi] stop failed on window close:', error);
-                });
-                localApiServer = null;
-            }
-        });
-
-        return mainWindow;
-    })().finally(() => {
-        mainWindowCreation = null;
-    });
-
-    return mainWindowCreation;
-}
-
-/**
- * 加载 Legacy 页面（听力/阅读练习系统）
- */
-function loadLegacyPage() {
-    if (!mainWindow) return;
-    const indexPath = path.join(__dirname, '..', 'index.html');
-    mainWindow.loadFile(indexPath);
-}
-
-/**
- * 加载写作页面（Vue 构建产物 或 回退到 Legacy）
- * Phase 05: 增强错误处理，缺失时明确提示并回退 Legacy
- */
-function loadWritingPage() {
-    if (!mainWindow) return;
-
-    const fs = require('fs');
-    const { dialog } = require('electron');
-
-    // 优先尝试加载 Vue 构建产物
-    const vueBuildPath = path.join(__dirname, '..', 'dist', 'writing', 'index.html');
-
-    if (fs.existsSync(vueBuildPath)) {
-        console.log('[Navigation] Loading Vue writing module:', vueBuildPath);
-        mainWindow.loadFile(vueBuildPath);
-    } else {
-        // 构建产物缺失：弹窗提示用户并回退到 Legacy
-        console.error('[Navigation] Writing module build missing at:', vueBuildPath);
-
-        dialog.showMessageBox(mainWindow, {
-            type: 'warning',
-            title: '写作模块未构建',
-            message: '写作模块构建文件缺失，将返回主界面',
-            detail: '请运行 "npm run build:writing" 构建写作模块，或使用 "npm start" 启动应用。',
-            buttons: ['确定']
-        }).then(() => {
-            // 回退到 Legacy 主界面
-            loadLegacyPage();
-        }).catch(err => {
-            console.error('[Navigation] Dialog error:', err);
-            loadLegacyPage();
-        });
     }
 }
 
-/**
- * 注册导航 IPC 事件处理器
- * 必须在 app ready 后调用，确保 ipcMain 已完全初始化
- */
+function loadLegacyPage() {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+    }
+    mainWindow.loadURL(getAppAssetUrl('index.html'));
+}
+
+function loadWritingPage() {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+    }
+
+    const writingRelativePath = path.join('dist', 'writing', 'index.html');
+    const writingFilePath = resolveBundledPath(writingRelativePath);
+    if (fs.existsSync(writingFilePath)) {
+        mainWindow.loadURL(getAppAssetUrl(writingRelativePath));
+        return;
+    }
+
+    console.error('[Navigation] Writing module build missing at:', writingFilePath);
+    dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        title: '写作模块未构建',
+        message: '写作模块构建文件缺失，将返回主界面',
+        detail: '请先构建写作模块，或检查发布产物是否完整。',
+        buttons: ['确定']
+    }).then(() => {
+        loadLegacyPage();
+    }).catch((error) => {
+        console.error('[Navigation] Dialog error:', error);
+        loadLegacyPage();
+    });
+}
+
 function registerNavigationHandlers() {
     if (navigationHandlersRegistered) {
         return;
     }
 
-    // 【安全加固】IPC 事件处理：导航切换（含来源校验）
     ipcMain.on('navigate-to-legacy', (event) => {
         if (!isValidNavigationSource(event)) {
-            return; // 拒绝非法来源
+            return;
         }
         loadLegacyPage();
     });
 
     ipcMain.on('navigate-to-writing', (event) => {
         if (!isValidNavigationSource(event)) {
-            return; // 拒绝非法来源
+            return;
         }
         loadWritingPage();
     });
@@ -298,7 +212,156 @@ function focusMainWindow() {
     mainWindow.focus();
 }
 
-// Electron 应用生命周期
+function cleanupWindowServices() {
+    if (ipcHandlers) {
+        ipcHandlers.cleanup();
+        ipcHandlers = null;
+    }
+
+    if (localApiServer) {
+        localApiServer.stop().catch((error) => {
+            console.error('[LocalApi] stop failed:', error);
+        });
+        localApiServer = null;
+    }
+}
+
+async function createMainWindow() {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        return mainWindow;
+    }
+    if (mainWindowCreation) {
+        return mainWindowCreation;
+    }
+
+    mainWindowCreation = (async () => {
+        mainWindow = new BrowserWindow({
+            width: 1440,
+            height: 960,
+            minWidth: 1024,
+            minHeight: 720,
+            show: false,
+            autoHideMenuBar: true,
+            webPreferences: {
+                preload: path.join(__dirname, 'preload.js'),
+                contextIsolation: true,
+                sandbox: false,
+                nodeIntegration: false,
+                webSecurity: true
+            }
+        });
+
+        IPCHandlers = require('./ipc-handlers');
+        LocalApiServer = require('./local-api-server');
+
+        ipcHandlers = new IPCHandlers(mainWindow);
+        await ipcHandlers.initialize();
+        ipcHandlers.register();
+
+        localApiServer = new LocalApiServer(ipcHandlers.getServiceBundle());
+        const apiInfo = await localApiServer.start();
+        ipcHandlers.setLocalApiInfo(apiInfo);
+
+        mainWindow.once('ready-to-show', () => {
+            mainWindow.show();
+        });
+
+        mainWindow.webContents.on('did-start-loading', () => {
+            resetBootRecoveryState();
+        });
+
+        mainWindow.webContents.on('did-fail-load', async (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+            if (!shouldRollbackOnLoadFailure(errorCode, isMainFrame)) {
+                return;
+            }
+            if (!updateService) {
+                return;
+            }
+
+            rollbackAttempted = true;
+            console.warn('[Updater] 检测到主框架启动失败，尝试回滚 overlay:', errorCode, errorDescription, validatedURL);
+            try {
+                await updateService.rollbackResourceOverlay();
+                await mainWindow.loadURL(getAppAssetUrl('index.html'));
+            } catch (error) {
+                console.error('[Updater] overlay 回滚失败:', error);
+            }
+        });
+
+        mainWindow.webContents.on('will-navigate', (event, url) => {
+            if (isAllowedInternalUrl(url)) {
+                return;
+            }
+
+            event.preventDefault();
+            console.warn(`[Security] Prevented navigation to: ${url.substring(0, 100)}...`);
+        });
+
+        mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+                shell.openExternal(url);
+            } else {
+                console.warn(`[Security] Blocked non-http(s) window.open: ${url}`);
+            }
+            return { action: 'deny' };
+        });
+
+        if (process.env.NODE_ENV === 'development') {
+            mainWindow.webContents.openDevTools();
+        }
+
+        mainWindow.on('closed', () => {
+            mainWindow = null;
+            resetBootRecoveryState();
+            cleanupWindowServices();
+        });
+
+        loadLegacyPage();
+        return mainWindow;
+    })().finally(() => {
+        mainWindowCreation = null;
+    });
+
+    return mainWindowCreation;
+}
+
+async function createApp() {
+    updateService = new UpdateService({ app });
+    await updateService.initialize();
+    updateService.on('state-changed', emitUpdateState);
+
+    await registerAppProtocol((relativePath) => updateService.resolveBundledAsset(relativePath));
+
+    ipcMain.handle('update:get-state', () => updateService.getState());
+    ipcMain.handle('update:check', (_event, payload) => updateService.checkForUpdates(payload || {}));
+    ipcMain.handle('update:download-resource', () => updateService.downloadResourceUpdate());
+    ipcMain.handle('update:apply-resource', () => updateService.applyResourceUpdate());
+    ipcMain.handle('update:download-shell', () => updateService.downloadShellUpdate());
+    ipcMain.handle('update:quit-and-install', () => {
+        updateService.quitAndInstall();
+        return true;
+    });
+    ipcMain.on('update:renderer-ready', (event) => {
+        if (!isMainWindowSender(event.sender)) {
+            return;
+        }
+
+        rendererReadyReceived = true;
+        updateService.markResourceBootSuccessful().catch((error) => {
+            console.warn('[Updater] 标记 overlay 健康状态失败:', error);
+        });
+    });
+
+    registerNavigationHandlers();
+    await createMainWindow();
+
+    setTimeout(() => {
+        updateService.checkForUpdates({ manual: false }).catch((error) => {
+            console.warn('[Updater] 启动静默检查失败:', error);
+        });
+    }, 1500);
+}
+
 if (hasSingleInstanceLock) {
     app.on('second-instance', () => {
         focusMainWindow();
@@ -306,13 +369,9 @@ if (hasSingleInstanceLock) {
 }
 
 app.whenReady().then(async () => {
-    // 注册导航处理器（必须在 app ready 后）
-    registerNavigationHandlers();
-
-    await createMainWindow();
+    await createApp();
 
     app.on('activate', () => {
-        // macOS: 点击 Dock 图标时重新创建窗口
         if (BrowserWindow.getAllWindows().length === 0) {
             void createMainWindow();
             return;
@@ -325,18 +384,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-    // 清理 IPC handlers
-    if (ipcHandlers) {
-        ipcHandlers.cleanup();
-    }
-    if (localApiServer) {
-        localApiServer.stop().catch((error) => {
-            console.error('[LocalApi] stop failed on app close:', error);
-        });
-        localApiServer = null;
-    }
-
-    // macOS: 通常不在关闭所有窗口时退出应用
+    cleanupWindowServices();
     if (process.platform !== 'darwin') {
         app.quit();
     }
