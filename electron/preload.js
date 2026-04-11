@@ -1,7 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 const { toIpcSerializable } = require('./utils/ipc-serialize');
+
 const evaluateEventListeners = new Map();
 let evaluateEventListenerSeq = 0;
+let rendererReadyReported = false;
 
 function invoke(channel, ...args) {
     return ipcRenderer.invoke(
@@ -10,34 +12,38 @@ function invoke(channel, ...args) {
     );
 }
 
-/**
- * 预加载脚本：向渲染进程暴露最小 API
- *
- * 安全原则：
- * 1. 不直接暴露 ipcRenderer，避免渲染进程获得完整 IPC 能力
- * 2. 只提供必要的导航方法和写作功能
- * 3. 使用 contextBridge 进行安全的上下文隔离
- */
+function reportRendererReady() {
+    if (rendererReadyReported) {
+        return;
+    }
+    rendererReadyReported = true;
+    ipcRenderer.send('update:renderer-ready');
+}
 
-// Legacy 导航 API + 系统信息
+function onUpdateStateChange(listener) {
+    if (typeof listener !== 'function') {
+        return function noop() {};
+    }
+
+    const handler = (_event, state) => {
+        listener(state);
+    };
+
+    ipcRenderer.on('update:state-changed', handler);
+    return function unsubscribe() {
+        ipcRenderer.removeListener('update:state-changed', handler);
+    };
+}
+
+window.addEventListener('app-runtime-ready', reportRendererReady);
+
 contextBridge.exposeInMainWorld('electronAPI', {
-    /**
-     * 切换到写作评判页面
-     */
     openWriting: () => {
         ipcRenderer.send('navigate-to-writing');
     },
-
-    /**
-     * 返回到 Legacy 练习页面
-     */
     openLegacy: () => {
         ipcRenderer.send('navigate-to-legacy');
     },
-
-    /**
-     * 获取版本信息（安全方式）
-     */
     getVersions: () => {
         return {
             electron: process.versions.electron || 'N/A',
@@ -45,23 +51,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
             chrome: process.versions.chrome || 'N/A'
         };
     },
-
-    /**
-     * 获取用户数据路径
-     */
     getUserDataPath: () => invoke('app:getUserDataPath'),
-
-    /**
-     * 获取本地 API 服务地址
-     */
     getLocalApiInfo: () => invoke('app:getLocalApiInfo')
 });
 
-// 写作模块 API
 contextBridge.exposeInMainWorld('writingAPI', {
-    /**
-     * API 配置管理
-     */
     configs: {
         list: () => invoke('configs:list'),
         create: (data) => invoke('configs:create', data),
@@ -71,10 +65,6 @@ contextBridge.exposeInMainWorld('writingAPI', {
         toggleEnabled: (id) => invoke('configs:toggleEnabled', id),
         test: (id) => invoke('configs:test', id)
     },
-
-    /**
-     * 提示词管理
-     */
     prompts: {
         getActive: (taskType) => invoke('prompts:getActive', taskType),
         import: (jsonData) => invoke('prompts:import', jsonData),
@@ -83,10 +73,6 @@ contextBridge.exposeInMainWorld('writingAPI', {
         activate: (id) => invoke('prompts:activate', id),
         delete: (id) => invoke('prompts:delete', id)
     },
-
-    /**
-     * 评测功能
-     */
     evaluate: {
         start: (payload) => invoke('evaluate:start', payload),
         getSessionState: (sessionId) => invoke('evaluate:getSessionState', sessionId),
@@ -97,7 +83,7 @@ contextBridge.exposeInMainWorld('writingAPI', {
             }
 
             const listenerId = `evaluate:${Date.now()}:${++evaluateEventListenerSeq}`;
-            const listener = (event, data) => callback(data);
+            const listener = (_event, data) => callback(data);
             evaluateEventListeners.set(listenerId, listener);
             ipcRenderer.on('evaluate:event', listener);
             return listenerId;
@@ -112,10 +98,6 @@ contextBridge.exposeInMainWorld('writingAPI', {
             evaluateEventListeners.delete(listenerId);
         }
     },
-
-    /**
-     * 题目管理
-     */
     topics: {
         list: (filters, pagination) => invoke('topics:list', filters, pagination),
         getById: (id) => invoke('topics:getById', id),
@@ -125,10 +107,6 @@ contextBridge.exposeInMainWorld('writingAPI', {
         batchImport: (topics) => invoke('topics:batchImport', topics),
         getStatistics: () => invoke('topics:getStatistics')
     },
-
-    /**
-     * 作文记录/历史管理
-     */
     essays: {
         list: (filters, pagination) => invoke('essays:list', filters, pagination),
         getById: (id) => invoke('essays:getById', id),
@@ -139,23 +117,37 @@ contextBridge.exposeInMainWorld('writingAPI', {
         getStatistics: (range, taskType) => invoke('essays:getStatistics', range, taskType),
         exportCSV: (filters) => invoke('essays:exportCSV', filters)
     },
-
-    /**
-     * 应用设置
-     */
     settings: {
         getAll: () => invoke('settings:getAll'),
         get: (key) => invoke('settings:get', key),
         update: (updates) => invoke('settings:update', updates),
         reset: () => invoke('settings:reset')
     },
-
-    /**
-     * 图片上传
-     */
     upload: {
         uploadImage: (fileData) => invoke('upload:image', fileData),
         deleteImage: (filename) => invoke('upload:deleteImage', filename),
         getImagePath: (filename) => invoke('upload:getImagePath', filename)
     }
+});
+
+contextBridge.exposeInMainWorld('updateAPI', {
+    getState() {
+        return ipcRenderer.invoke('update:get-state');
+    },
+    check(payload = {}) {
+        return ipcRenderer.invoke('update:check', payload);
+    },
+    downloadResourceUpdate() {
+        return ipcRenderer.invoke('update:download-resource');
+    },
+    applyResourceUpdate() {
+        return ipcRenderer.invoke('update:apply-resource');
+    },
+    downloadShellUpdate() {
+        return ipcRenderer.invoke('update:download-shell');
+    },
+    quitAndInstall() {
+        return ipcRenderer.invoke('update:quit-and-install');
+    },
+    onStateChange: onUpdateStateChange
 });

@@ -337,19 +337,74 @@
 
                 <div class="hero-panel hero-section">
                     <h3 class="heading-serif">系统信息</h3>
-                    <div class="hero-surface" style="margin-top: 15px; line-height: 1.8; font-weight: bold;">
-                        <div style="color: #10b981; display: flex; align-items: center; gap: 4px;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                            </svg>
-                            题库状态: 已加载完整索引
+                    <div class="hero-surface app-update-panel app-update-panel--summary-first">
+                        <div class="app-update-panel__header">
+                            <div class="app-update-status-row">
+                                <div>
+                                    <p class="app-update-library-status">题库状态：已加载完整索引</p>
+                                </div>
+                                <span class="app-update-status-badge" data-update-field="status-label">待检查</span>
+                            </div>
                         </div>
-                        <div>题目总数: <span id="total-exams">389</span></div>
-                        <div>HTML题目: <span id="html-exams">387</span></div>
-                        <div>PDF题目: <span id="pdf-exams">344</span></div>
-                        <div>最后更新: <span id="last-update">2025/12/13 21:03:12</span></div>
+
+                        <div class="app-update-summary-grid" aria-label="更新摘要信息">
+                            <div class="app-update-summary-item app-update-summary-item--versions">
+                                <span class="app-update-summary-item__label">本地版本</span>
+                                <div class="app-update-summary-pair">
+                                    <div class="app-update-summary-pair__entry">
+                                        <span class="app-update-summary-pair__label">应用</span>
+                                        <span class="app-update-summary-item__value" data-update-field="app-version">检测中...</span>
+                                    </div>
+                                    <div class="app-update-summary-pair__entry">
+                                        <span class="app-update-summary-pair__label">资源</span>
+                                        <span class="app-update-summary-item__value" data-update-field="resource-version">检测中...</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="app-update-summary-item">
+                                <span class="app-update-summary-item__label">最新 Release</span>
+                                <span class="app-update-summary-item__value" data-update-field="latest-release-tag">--</span>
+                            </div>
+                            <div class="app-update-summary-item">
+                                <span class="app-update-summary-item__label">最后检查</span>
+                                <span class="app-update-summary-item__value" data-update-field="last-check-time">未检查</span>
+                            </div>
+                        </div>
+
+                        <div class="app-update-actions">
+                            <button class="btn btn-secondary hero-btn hero-btn--ghost" id="check-updates-btn"
+                                data-update-action="open-modal">
+                                <span data-update-field="entry-action-label">查看更新</span>
+                            </button>
+                        </div>
+
+                        <details class="app-update-details">
+                            <summary class="app-update-details__summary">查看详细系统信息</summary>
+                            <div class="app-update-details__body">
+                                <div class="app-update-details-grid">
+                                    <div class="app-update-details-row">
+                                        <span>运行模式</span>
+                                        <span data-update-field="runtime-mode">检测中...</span>
+                                    </div>
+                                    <div class="app-update-details-row">
+                                        <span>题目总数</span>
+                                        <span id="total-exams">389</span>
+                                    </div>
+                                    <div class="app-update-details-row">
+                                        <span>HTML题目</span>
+                                        <span id="html-exams">387</span>
+                                    </div>
+                                    <div class="app-update-details-row">
+                                        <span>PDF题目</span>
+                                        <span id="pdf-exams">344</span>
+                                    </div>
+                                    <div class="app-update-details-row">
+                                        <span>题库更新时间</span>
+                                        <span id="last-update">2025/12/13 21:03:12</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
                     </div>
 
                     <!-- 主题切换按钮 -->
@@ -741,6 +796,7 @@
     <script src="js/app/lifecycleMixin.js"></script>
     <script src="js/app/navigationMixin.js"></script>
     <script src="js/app/fallbackMixin.js"></script>
+    <script src="js/integration/updateManager.js"></script>
     <script src="js/app.js"></script>
 
     <!-- 引导流程组件 -->
