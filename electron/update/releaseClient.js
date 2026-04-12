@@ -53,6 +53,13 @@ class GitHubReleaseClient {
         };
     }
 
+    createHttpError(prefix, response) {
+        const error = new Error(`${prefix}: ${response.status} ${response.statusText}`);
+        error.status = response.status;
+        error.statusText = response.statusText;
+        return error;
+    }
+
     getRepositoryBaseUrl() {
         return `${this.webBaseUrl}/${this.owner}/${this.repo}`;
     }
@@ -69,6 +76,17 @@ class GitHubReleaseClient {
             throw new Error('assetName is required');
         }
         return `${this.getRepositoryBaseUrl()}/releases/latest/download/${encodeURIComponent(assetName)}`;
+    }
+
+    buildEmptyReleasePayload() {
+        return this.normalizeReleasePayload({
+            tagName: '',
+            publishedAt: null,
+            body: '',
+            htmlUrl: `${this.getRepositoryBaseUrl()}/releases`,
+            source: 'none',
+            assets: []
+        });
     }
 
     normalizeReleasePayload(payload = {}) {
@@ -240,6 +258,15 @@ class GitHubReleaseClient {
                 allowCachedOnError
             });
         } catch (error) {
+            if (lastError?.status === 404 && error?.status === 404) {
+                const emptyRelease = this.buildEmptyReleasePayload();
+                await this.saveCache({
+                    etag: null,
+                    checkedAt: Date.now(),
+                    release: emptyRelease
+                });
+                return this.buildReleaseResult(emptyRelease, { fromCache: false });
+            }
             if (allowCachedOnError && cacheEntry && cacheEntry.release) {
                 return this.buildReleaseResult(cacheEntry.release, {
                     fromCache: true,
@@ -269,7 +296,7 @@ class GitHubReleaseClient {
                 return this.buildReleaseResult(this.memoryCache.release, { fromCache: true });
             }
             if (!response.ok) {
-                throw new Error(`获取最新 Release 失败: ${response.status} ${response.statusText}`);
+                throw this.createHttpError('获取最新 Release 失败', response);
             }
 
             const payload = await response.json();
@@ -297,7 +324,7 @@ class GitHubReleaseClient {
             headers: this.getJsonHeaders()
         });
         if (!response.ok) {
-            throw new Error(`获取 JSON 失败: ${response.status} ${response.statusText}`);
+            throw this.createHttpError('获取 JSON 失败', response);
         }
         return response.json();
     }

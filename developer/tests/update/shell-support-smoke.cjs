@@ -688,6 +688,56 @@ async function testAutomaticCheckFailureKeepsStableState() {
     assert.notEqual(nextState.lastCheckAt, previousLastCheckAt, '后台自动检查失败时仍应刷新最后检查时间用于节流');
 }
 
+async function testManualCheckWithoutPublishedReleaseDoesNotError() {
+    const { UpdateService } = loadUpdateServiceHelpers();
+
+    const service = new UpdateService({
+        app: {
+            getPath() {
+                return path.resolve('.tmp/test-user-data');
+            },
+            getVersion() {
+                return '0.6.0';
+            },
+            getAppPath() {
+                return path.resolve('.');
+            },
+            isPackaged: true
+        }
+    });
+
+    service.releaseClient = {
+        getLatestRelease() {
+            return Promise.resolve({
+                tagName: '',
+                body: '',
+                htmlUrl: 'https://github.com/demo/app/releases',
+                publishedAt: null,
+                fromCache: false,
+                source: 'none',
+                assets: []
+            });
+        },
+        findAsset() {
+            return null;
+        }
+    };
+    service.overlayManager = {
+        getCurrentResourceVersion() {
+            return 'v0.6.0';
+        }
+    };
+
+    const nextState = await service.checkForUpdates({ manual: true });
+
+    assert.equal(nextState.status, 'up-to-date', '没有已发布 Release 时，手动检查应平滑返回无更新');
+    assert.equal(nextState.error, null, '没有已发布 Release 时，不应向 UI 暴露错误');
+    assert.equal(nextState.latestReleaseTag, null, '没有已发布 Release 时不应展示伪造 tag');
+    assert.equal(nextState.releasePageUrl, 'https://github.com/demo/app/releases', '没有已发布 Release 时应指向 releases 列表页');
+    assert.equal(nextState.shell.available, false, '没有已发布 Release 时不应误报壳层更新');
+    assert.equal(nextState.resource.available, false, '没有已发布 Release 时不应误报资源更新');
+}
+
 function main() {
     testExtractShellAssetCandidates();
     testResolveShellSupportSkipsBrokenFirstCandidate();
@@ -704,6 +754,8 @@ function main() {
         return testAutomaticCheckSkippedWhenLocalTransitionPending();
     }).then(() => {
         return testAutomaticCheckFailureKeepsStableState();
+    }).then(() => {
+        return testManualCheckWithoutPublishedReleaseDoesNotError();
     }).then(() => {
         console.log('Shell support smoke passed.');
     });
