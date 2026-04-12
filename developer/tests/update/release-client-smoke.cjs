@@ -99,9 +99,42 @@ async function testFallsBackToApi() {
     assert.equal(release.source, 'api', 'API fallback source 应标记为 api');
 }
 
+async function testNoPublishedReleaseDegradesGracefully() {
+    const client = new GitHubReleaseClient({
+        owner: 'demo',
+        repo: 'app',
+        cacheFilePath: null,
+        fetchImpl: async (url) => {
+            if (String(url).includes('/releases/latest/download/resources-manifest.json')) {
+                return createResponse({
+                    ok: false,
+                    status: 404,
+                    statusText: 'Not Found'
+                });
+            }
+            if (String(url).includes('api.github.com/repos/demo/app/releases/latest')) {
+                return createResponse({
+                    ok: false,
+                    status: 404,
+                    statusText: 'Not Found'
+                });
+            }
+            throw new Error(`unexpected request: ${url}`);
+        }
+    });
+
+    const release = await client.getLatestRelease({ forceNetwork: true, allowCachedOnError: false });
+
+    assert.equal(release.tagName, '', '没有已发布 Release 时不应伪造 tag');
+    assert.equal(release.source, 'none', '没有已发布 Release 时应降级成 none source');
+    assert.equal(release.htmlUrl, 'https://github.com/demo/app/releases', '没有 Release 时应回退到 releases 列表页');
+    assert.deepEqual(release.assets, [], '没有 Release 时不应伪造资产列表');
+}
+
 (async function main() {
     await testPrefersStaticManifest();
     await testFallsBackToApi();
+    await testNoPublishedReleaseDegradesGracefully();
     console.log('Release client smoke passed.');
 })().catch((error) => {
     console.error(error);
