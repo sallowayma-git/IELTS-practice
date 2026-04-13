@@ -243,11 +243,11 @@ jobs:
             printf "macOS assets are signed, notarized, and stapled.\n" > dist/release-shell/macos-notarization-status.txt
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            cat > dist/release-shell/macos-notarization-status.txt <<'EOF'
-            macOS assets are intentionally omitted from this release.
-            Reason: signing/notarization prerequisites were unavailable in CI for this tag.
-            To maximize user double-click open success, unsigned/unnotarized macOS installers are blocked from distribution.
-            EOF
+            {
+              echo "macOS assets are intentionally omitted from this release."
+              echo "Reason: signing/notarization prerequisites were unavailable in CI for this tag."
+              echo "To maximize user double-click open success, unsigned/unnotarized macOS installers are blocked from distribution."
+            } > dist/release-shell/macos-notarization-status.txt
           fi
 
       - name: Download resource artifacts
