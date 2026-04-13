@@ -14,6 +14,31 @@
             this.options = options || {};
         }
 
+        isListeningEntry(exam) {
+            if (!exam || typeof exam !== 'object') {
+                return false;
+            }
+            const examType = typeof exam.type === 'string' ? exam.type.trim().toLowerCase() : '';
+            if (examType === 'listening' || examType === 'audio') {
+                return true;
+            }
+            const examId = typeof exam.id === 'string' ? exam.id.trim().toLowerCase() : '';
+            if (examId.startsWith('listening-')) {
+                return true;
+            }
+            const examPath = typeof exam.path === 'string' ? exam.path.trim().toLowerCase() : '';
+            return examPath.includes('listeningpractice/');
+        }
+
+        filterReadingOnly(exams) {
+            if (!Array.isArray(exams) || exams.length === 0) {
+                return [];
+            }
+            return exams
+                .filter((exam) => exam && !this.isListeningEntry(exam))
+                .map((exam) => Object.assign({}, exam, { type: 'reading' }));
+        }
+
         get resourceCore() {
             return getResourceCore();
         }
@@ -166,14 +191,15 @@
             }
 
             if (!forceReload && !isDefaultConfig && Array.isArray(cachedData) && cachedData.length > 0) {
-                const updatedIndex = global.setExamIndexState ? global.setExamIndexState(cachedData) : cachedData;
+                const readingOnlyData = this.filterReadingOnly(cachedData);
+                const updatedIndex = global.setExamIndexState ? global.setExamIndexState(readingOnlyData) : readingOnlyData;
                 await this.savePathMapForConfiguration(activeConfigKey, updatedIndex, { setActive: true });
                 this.finishLibraryLoading(startTime);
                 return updatedIndex;
             }
 
             if (!isDefaultConfig) {
-                const normalized = Array.isArray(cachedData) ? cachedData : [];
+                const normalized = this.filterReadingOnly(cachedData);
                 if (global.setExamIndexState) {
                     global.setExamIndexState(normalized);
                 }
@@ -195,11 +221,9 @@
                 const readingExams = Array.isArray(global.completeExamIndex)
                     ? global.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
                     : [];
-                const listeningExams = Array.isArray(global.listeningExamIndex)
-                    ? global.listeningExamIndex.map((exam) => Object.assign({}, exam, { type: 'listening' }))
-                    : [];
+                const combined = this.filterReadingOnly(readingExams);
 
-                if (!readingExams.length && !listeningExams.length) {
+                if (!combined.length) {
                     if (global.setExamIndexState) {
                         global.setExamIndexState([]);
                     }
@@ -208,7 +232,6 @@
                     return [];
                 }
 
-                const combined = cloneArray(readingExams).concat(listeningExams);
                 if (typeof global.assignExamSequenceNumbers === 'function') {
                     global.assignExamSequenceNumbers(combined);
                 }
@@ -220,11 +243,10 @@
                     counts: {
                         total: combined.length,
                         reading: readingExams.length,
-                        listening: listeningExams.length
+                        listening: 0
                     },
                     pathRoot: {
-                        reading: this.resolveScriptPathRoot('reading'),
-                        listening: this.resolveScriptPathRoot('listening')
+                        reading: this.resolveScriptPathRoot('reading')
                     }
                 };
                 try { global.examIndexMetadata = metadata; } catch (_) { }
@@ -309,7 +331,8 @@
         }
 
         async applyLibraryConfiguration(key, dataset, options = {}) {
-            const exams = Array.isArray(dataset) ? dataset.slice() : await this.fetchLibraryDataset(key);
+            const rawExams = Array.isArray(dataset) ? dataset.slice() : await this.fetchLibraryDataset(key);
+            const exams = this.filterReadingOnly(rawExams);
             if (!Array.isArray(exams) || exams.length === 0) {
                 if (typeof global.showMessage === 'function') {
                     global.showMessage('目标题库没有题目，请先加载数据', 'warning');

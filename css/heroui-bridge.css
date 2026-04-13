@@ -830,6 +830,35 @@ body.hero-body.shui-bg-static {
     backdrop-filter: blur(12px);
 }
 
+.hero-settings-links {
+    margin-top: 30px;
+    text-align: center;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.hero-settings-links a {
+    text-decoration: none;
+    font-size: 0.9em;
+    transition: opacity var(--transition-normal);
+}
+
+.hero-settings-links a:hover {
+    opacity: 0.82;
+}
+
+.hero-settings-links__feedback {
+    color: #ff3030;
+    font-weight: 700;
+}
+
+.hero-settings-links__github {
+    color: rgba(255, 255, 255, 0.75);
+}
+
 @media (max-width: 768px) {
     #settings-view .hero-settings-group {
         grid-template-columns: 1fr;

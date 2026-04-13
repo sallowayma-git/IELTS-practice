@@ -375,17 +375,21 @@
                 'inset: 0',
                 'z-index: 4200',
                 'display: none',
-                'background: rgba(15, 23, 42, 0.48)',
-                'backdrop-filter: blur(3px)'
+                'width: 100vw',
+                'height: 100vh',
+                'background: #0f172a',
+                'align-items: stretch',
+                'justify-content: stretch'
             ].join(';');
 
             const shell = document.createElement('div');
             shell.style.cssText = [
-                'width: min(1400px, 100%)',
+                'width: 100%',
                 'height: 100%',
-                'margin: 0 auto',
+                'margin: 0',
                 'background: #f8fafc',
-                'box-shadow: 0 18px 46px rgba(15, 23, 42, 0.28)'
+                'box-shadow: none',
+                'overflow: hidden'
             ].join(';');
 
             const frame = document.createElement('iframe');
