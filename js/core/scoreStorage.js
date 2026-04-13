@@ -362,6 +362,7 @@ class ScoreStorage {
         const unresolvedUnansweredCount = Object.values(normalizedComparison).reduce((count, entry) => (
             this.isFilledAnswerValue(entry?.userAnswer) ? count : count + 1
         ), 0);
+        const unresolvedQuestionCount = Object.keys(normalizedComparison).length || totalQuestions;
         const unresolvedChangedCount = questionTimelineLite.reduce(
             (count, entry) => (this.ensureNumber(entry?.changeCount, 0) > 0 ? count + 1 : count),
             0
@@ -379,6 +380,7 @@ class ScoreStorage {
             || {}
         );
         const analysisSignals = {
+            questionCount: Math.max(0, this.ensureNumber(analysisSignalsSource.questionCount, unresolvedQuestionCount)),
             unansweredCount: Math.max(0, this.ensureNumber(analysisSignalsSource.unansweredCount, unresolvedUnansweredCount)),
             changedAnswerCount: Math.max(0, this.ensureNumber(analysisSignalsSource.changedAnswerCount, unresolvedChangedCount)),
             interactionDensity: Number.isFinite(Number(analysisSignalsSource.interactionDensity))
@@ -412,7 +414,10 @@ class ScoreStorage {
             return null;
         }
         const totalQuestions = Math.max(0, this.ensureNumber(input.totalQuestions, 0));
-        const safeTotal = totalQuestions > 0 ? totalQuestions : 1;
+        const explicitQuestionCount = Math.max(0, this.ensureNumber(input.analysisSignals?.questionCount, 0));
+        const rateDenominator = explicitQuestionCount > 0
+            ? explicitQuestionCount
+            : (totalQuestions > 0 ? totalQuestions : 1);
         const baseConfidence = this.clampNumber(this.ensureNumber(input.dataQuality?.confidence, 0.5), 0.1, 1);
         const byQuestionKind = Object.entries(input.questionTypePerformance || {})
             .map(([kind, entry]) => {
@@ -436,8 +441,8 @@ class ScoreStorage {
             summary: {
                 accuracy: overallAccuracy,
                 durationSec: Math.max(0, this.ensureNumber(input.durationSec, 0)),
-                unansweredRate: this.clampNumber(this.ensureNumber(input.analysisSignals?.unansweredCount, 0) / safeTotal, 0, 1),
-                changedAnswerRate: this.clampNumber(this.ensureNumber(input.analysisSignals?.changedAnswerCount, 0) / safeTotal, 0, 1)
+                unansweredRate: this.clampNumber(this.ensureNumber(input.analysisSignals?.unansweredCount, 0) / rateDenominator, 0, 1),
+                changedAnswerRate: this.clampNumber(this.ensureNumber(input.analysisSignals?.changedAnswerCount, 0) / rateDenominator, 0, 1)
             },
             radar: {
                 byQuestionKind,

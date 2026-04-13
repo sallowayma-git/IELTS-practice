@@ -178,11 +178,137 @@
             return;
         }
         const existing = loadPendingPracticeMessages();
-        existing.push({
+        const normalizedQueue = normalizePendingPracticeQueue(existing);
+        const queuedMessage = normalizePendingEnvelope(envelope);
+        if (!queuedMessage) {
+            return;
+        }
+        const incomingKey = buildPendingMessageKey(queuedMessage);
+        const deduped = incomingKey
+            ? normalizedQueue.filter((entry) => buildPendingMessageKey(entry.message) !== incomingKey)
+            : normalizedQueue.slice();
+        deduped.push({
             createdAt: Date.now(),
-            message: envelope
+            message: queuedMessage
         });
-        persistPendingPracticeMessages(existing);
+        persistPendingPracticeMessages(deduped);
+    }
+
+    function normalizePendingEnvelope(rawEnvelope) {
+        if (!rawEnvelope || typeof rawEnvelope !== 'object') {
+            return null;
+        }
+        return rawEnvelope;
+    }
+
+    function normalizePendingPracticeQueue(queue) {
+        if (!Array.isArray(queue) || queue.length === 0) {
+            return [];
+        }
+        const normalized = queue
+            .map((entry) => {
+                if (entry && typeof entry === 'object' && entry.message && typeof entry.message === 'object') {
+                    return {
+                        createdAt: Number(entry.createdAt) || Date.now(),
+                        message: entry.message
+                    };
+                }
+                if (entry && typeof entry === 'object') {
+                    return {
+                        createdAt: Date.now(),
+                        message: entry
+                    };
+                }
+                return null;
+            })
+            .filter(Boolean);
+
+        const dedupedByKey = new Map();
+        normalized.forEach((entry) => {
+            const keyFromContract = buildPendingMessageKey(entry.message);
+            let fallbackKey = '';
+            if (!keyFromContract) {
+                try {
+                    fallbackKey = JSON.stringify(entry.message);
+                } catch (_) {
+                    fallbackKey = '';
+                }
+            }
+            const key = keyFromContract || fallbackKey || `__pending_${entry.createdAt}`;
+            const existing = dedupedByKey.get(key);
+            if (!existing || Number(entry.createdAt) >= Number(existing.createdAt)) {
+                dedupedByKey.set(key, entry);
+            }
+        });
+
+        return Array.from(dedupedByKey.values()).sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
+    }
+
+    function buildPendingMessageKey(envelope) {
+        if (!envelope || typeof envelope !== 'object') {
+            return '';
+        }
+        const type = typeof envelope.type === 'string' ? envelope.type.trim().toUpperCase() : '';
+        const data = envelope.data && typeof envelope.data === 'object' ? envelope.data : {};
+        const examId = data.examId != null ? String(data.examId).trim() : '';
+        const sessionId = data.sessionId != null ? String(data.sessionId).trim() : '';
+        const suiteSessionId = data.suiteSessionId != null ? String(data.suiteSessionId).trim() : '';
+        if (!type || !examId || !sessionId) {
+            return '';
+        }
+        return `${type}|${examId}|${sessionId}|${suiteSessionId}`;
+    }
+
+    function clearPendingPracticeMessages() {
+        [window.localStorage, window.sessionStorage].filter(Boolean).forEach((store) => {
+            try {
+                store.removeItem(PENDING_PRACTICE_MESSAGES_KEY);
+            } catch (_) {
+                // ignore storage errors
+            }
+        });
+        try {
+            const currentName = typeof window.name === 'string' ? window.name : '';
+            if (currentName.startsWith(WINDOW_NAME_PENDING_PREFIX)) {
+                window.name = '';
+            }
+        } catch (_) {
+            // ignore window.name clear errors
+        }
+    }
+
+    function drainPendingPracticeMessages(targetWindow) {
+        if (!targetWindow || targetWindow === window) {
+            return;
+        }
+        const queue = normalizePendingPracticeQueue(loadPendingPracticeMessages());
+        if (queue.length === 0) {
+            clearPendingPracticeMessages();
+            return;
+        }
+        const envelopes = queue
+            .map((entry) => entry.message)
+            .filter(Boolean)
+            .slice(-10);
+        if (!envelopes.length) {
+            clearPendingPracticeMessages();
+            return;
+        }
+
+        for (let index = 0; index < envelopes.length; index += 1) {
+            try {
+                targetWindow.postMessage(envelopes[index], '*');
+            } catch (_) {
+                const remaining = envelopes.slice(index).map((message) => ({
+                    createdAt: Date.now(),
+                    message
+                }));
+                persistPendingPracticeMessages(remaining);
+                return;
+            }
+        }
+
+        clearPendingPracticeMessages();
     }
 
     const dependencyLoader = {
@@ -4126,6 +4252,7 @@
                 const pushResults = function () {
                     console.log('[PracticeEnhancer] 发送练习完成数据:', finalResults);
                     self.sendMessage('PRACTICE_COMPLETE', finalResults);
+                    self.dispatchPracticeSubmissionFinalized(finalResults);
                     self.hasDispatchedFinalResults = true;
                     self.submitInProgress = false;
                 };
@@ -4242,6 +4369,18 @@
                 }
             } catch (eventError) {
                 console.warn('[PracticeEnhancer] 触发practiceResultsReady事件失败:', eventError);
+            }
+        },
+
+        dispatchPracticeSubmissionFinalized: function (results) {
+            try {
+                document.dispatchEvent(new CustomEvent('practiceSubmissionFinalized', {
+                    detail: Object.assign({
+                        status: 'final'
+                    }, results || {})
+                }));
+            } catch (eventError) {
+                console.warn('[PracticeEnhancer] 触发practiceSubmissionFinalized事件失败:', eventError);
             }
         },
 
@@ -4481,7 +4620,8 @@
         },
 
         buildAnalysisSignals: function (answerComparison = {}, timelineLite = [], interactions = [], durationSeconds = 0) {
-            const unansweredCount = Object.values(answerComparison || {}).reduce((count, entry) => (
+            const entries = Object.values(answerComparison || {});
+            const unansweredCount = entries.reduce((count, entry) => (
                 this.hasMeaningfulAnswerValue(entry && entry.userAnswer) ? count : count + 1
             ), 0);
             const changedAnswerCount = (Array.isArray(timelineLite) ? timelineLite : []).reduce((count, item) => (
@@ -4492,6 +4632,7 @@
             const interactionsCount = Array.isArray(interactions) ? interactions.length : 0;
             const interactionDensity = Number((interactionsCount / durationMinutes).toFixed(4));
             return {
+                questionCount: entries.length,
                 unansweredCount,
                 changedAnswerCount,
                 interactionDensity
@@ -4905,6 +5046,7 @@
 
             try {
                 this.parentWindow.postMessage(message, '*');
+                drainPendingPracticeMessages(this.parentWindow);
                 console.log('[PracticeEnhancer] 消息已发送:', type);
             } catch (error) {
                 console.error('[PracticeEnhancer] 发送消息失败:', error);

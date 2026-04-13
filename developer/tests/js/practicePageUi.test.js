@@ -721,25 +721,66 @@ function testPracticeResultsPendingContract() {
     assert.strictEqual(harness.elements.submitBtn.disabled, false, 'preliminary 事件不应触发提交锁定');
     assert.strictEqual(harness.elements.resetBtn.disabled, false, 'preliminary 事件不应触发重置锁定');
 }
-function testLiveModeSubmitLocksAndExitClosesWindow() {
+function testLiveModeSubmitLocksButDoesNotRevealExitBeforeFinalization() {
     const harness = buildHarness({ simulationMode: false });
     harness.elements.submitBtn.click();
     assert.strictEqual(harness.elements.submitBtn.disabled, true, 'live mode 下 submit 后应禁用 submit');
     assert.strictEqual(harness.elements.resetBtn.disabled, true, 'live mode 下 submit 后应禁用 reset');
-    assert.strictEqual(harness.elements.exitBtn.style.display, 'block', 'live mode 下 submit 后应显示 exit');
+    assert.strictEqual(harness.elements.exitBtn.style.display, 'none', 'live mode 下 submit 后在最终结果落地前不应显示 exit');
+}
+function testEmbeddedModeSubmitKeepsExitVisible() {
+    const harness = buildHarness({ simulationMode: false, withoutOpener: true });
+    harness.windowStub.parent = harness.openerStub;
+    harness.elements.submitBtn.click();
+    assert.strictEqual(harness.elements.exitBtn.style.display, 'block', '内嵌模式下应在原生顶部栏保留可见 Exit');
+}
+function testSubmissionFinalizedRevealsExitAndClosesWindow() {
+    const harness = buildHarness({ simulationMode: false });
+    harness.elements.submitBtn.click();
+    harness.document.dispatchEvent({
+        type: 'practiceSubmissionFinalized',
+        detail: { status: 'final' }
+    });
+    assert.strictEqual(harness.elements.exitBtn.style.display, 'block', '最终结果落地后应显示 exit');
     harness.elements.exitBtn.click();
+    assert.strictEqual(harness.openerMessages.length, 1, '点击 exit 应先向父页发送 PRACTICE_EXIT');
+    assert.strictEqual(harness.openerMessages[0].message.type, 'PRACTICE_EXIT', '退出消息类型应为 PRACTICE_EXIT');
     assert.strictEqual(harness.closeLog.length, 1, '点击 exit 应调用 window.close');
 }
 function testLiveModeExitUsesElectronNavigationWhenAvailable() {
     const harness = buildHarness({ simulationMode: false, withElectronAPI: true });
     harness.elements.submitBtn.click();
+    harness.document.dispatchEvent({
+        type: 'practiceSubmissionFinalized',
+        detail: { status: 'final' }
+    });
     harness.elements.exitBtn.click();
-    assert.strictEqual(harness.getElectronOpenLegacyCalls(), 1, 'Electron 环境下点击 exit 应优先走 openLegacy');
-    assert.strictEqual(harness.closeLog.length, 0, 'Electron 环境下点击 exit 不应直接 window.close');
+    assert.strictEqual(harness.openerMessages.length, 1, 'Electron 环境下有父页时应优先发送 PRACTICE_EXIT');
+    assert.strictEqual(harness.openerMessages[0].message.type, 'PRACTICE_EXIT', 'Electron 环境下退出消息类型应为 PRACTICE_EXIT');
+    assert.strictEqual(harness.getElectronOpenLegacyCalls(), 0, '有父页时不应触发 openLegacy');
+    assert.strictEqual(harness.closeLog.length, 1, 'Electron 环境下有父页时应关闭当前窗口');
+}
+function testEmbeddedExitOnlyNotifiesParentAndDoesNotCloseSelf() {
+    const harness = buildHarness({ simulationMode: false, withoutOpener: true, withElectronAPI: true });
+    harness.windowStub.parent = harness.openerStub;
+    harness.elements.submitBtn.click();
+    harness.document.dispatchEvent({
+        type: 'practiceSubmissionFinalized',
+        detail: { status: 'final' }
+    });
+    harness.elements.exitBtn.click();
+    assert.strictEqual(harness.openerMessages.length, 1, '内嵌模式应发送 PRACTICE_EXIT 到父页');
+    assert.strictEqual(harness.openerMessages[0].message.type, 'PRACTICE_EXIT', '内嵌退出消息类型应为 PRACTICE_EXIT');
+    assert.strictEqual(harness.getElectronOpenLegacyCalls(), 0, '内嵌模式不应触发 openLegacy');
+    assert.strictEqual(harness.closeLog.length, 0, '内嵌模式不应尝试关闭自身窗口');
 }
 function testLiveModeExitFallsBackToIndexWhenNoElectronAndNoOpener() {
     const harness = buildHarness({ simulationMode: false, withoutOpener: true });
     harness.elements.submitBtn.click();
+    harness.document.dispatchEvent({
+        type: 'practiceSubmissionFinalized',
+        detail: { status: 'final' }
+    });
     harness.elements.exitBtn.click();
     assert.strictEqual(harness.closeLog.length, 0, '无 opener 且无 Electron API 时不应直接关闭窗口');
     assert.strictEqual(harness.locationReplaceLog.length, 1, '无 opener 且无 Electron API 时应回退到 index.html');
@@ -772,6 +813,19 @@ function testEndlessCountdownExitContract() {
     assert.strictEqual(harness.openerStub.stopEndlessPracticeCalled, 1, '退出无尽模式时应尝试调用 opener.stopEndlessPractice');
     assert.strictEqual(harness.closeLog.length, 1, '退出无尽模式后应关闭当前窗口');
 }
+function testEndlessCountdownCompletionRestoresExitVisibility() {
+    const harness = buildHarness();
+    harness.dispatchWindowMessage({
+        type: 'ENDLESS_COUNTDOWN',
+        data: { seconds: 1 }
+    });
+    assert.strictEqual(harness.elements.exitBtn.style.display, 'block', 'ENDLESS_COUNTDOWN 激活时应显示 exit');
+    harness.dispatchWindowMessage({
+        type: 'ENDLESS_COUNTDOWN_TICK',
+        data: { seconds: 0 }
+    });
+    assert.strictEqual(harness.elements.exitBtn.style.display, 'none', 'ENDLESS_COUNTDOWN 结束后不应残留 exit');
+}
 function main() {
     try {
         testMarkedQuestionsRestoreAndNormalize();
@@ -779,11 +833,15 @@ function main() {
         testSimulationModeBlocksSubmitAndResetLock();
         testPracticeResultsReadyRendersSummaryAndNavState();
         testPracticeResultsPendingContract();
-        testLiveModeSubmitLocksAndExitClosesWindow();
+        testLiveModeSubmitLocksButDoesNotRevealExitBeforeFinalization();
+        testEmbeddedModeSubmitKeepsExitVisible();
+        testSubmissionFinalizedRevealsExitAndClosesWindow();
         testLiveModeExitUsesElectronNavigationWhenAvailable();
+        testEmbeddedExitOnlyNotifiesParentAndDoesNotCloseSelf();
         testLiveModeExitFallsBackToIndexWhenNoElectronAndNoOpener();
         testSuiteModeUiContractStaysHidden();
         testEndlessCountdownExitContract();
+        testEndlessCountdownCompletionRestoresExitVisibility();
         console.log(JSON.stringify({
             status: 'pass',
             detail: 'practice-page-ui 已覆盖 marked questions、practiceResultsReady 结果链路、simulation mode、suite mode UI、endless exit 与无 opener 回退 index 合同'

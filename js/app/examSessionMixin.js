@@ -157,6 +157,9 @@
                 }
 
                 const guardOptions = { ...options, examId };
+                if (readingLaunch && readingLaunch.mode === 'unified_html' && !guardOptions.target) {
+                    guardOptions.target = 'inline';
+                }
                 // 测试环境的套题练习统一使用占位页，避免因题目资源差异导致 E2E 不稳定
                 let examUrl = (readingLaunch && readingLaunch.mode === 'unified_html' && readingLaunch.url)
                     ? readingLaunch.url
@@ -170,6 +173,7 @@
                 if (guardOptions.suiteSessionId && readingLaunch && readingLaunch.mode === 'unified_html') {
                     examUrl = this._appendSuiteContextToExamUrl(examUrl, guardOptions);
                 }
+                examUrl = await this._appendRuntimeContextToExamUrl(examUrl);
                 let examWindow = this.openExamWindow(examUrl, exam, guardOptions);
 
                 try {
@@ -186,7 +190,7 @@
                     await this.startPracticeSession(examId);
                 }
                 this.injectDataCollectionScript(examWindow, examId, exam);
-                this.setupExamWindowManagement(examWindow, examId, exam, options);
+                this.setupExamWindowManagement(examWindow, examId, exam, guardOptions);
 
                 if (options && options.suiteSessionId) {
                     const sessionInfo = this.ensureExamWindowSession(examId, examWindow);
@@ -291,6 +295,18 @@
         openExamWindow(examUrl, exam, options = {}) {
             const reuseWindow = options.reuseWindow;
             const finalUrl = this._ensureAbsoluteUrl(examUrl);
+
+            if (options.target === 'inline') {
+                try {
+                    const inlineWindow = this._openInlineExamWindow(finalUrl, exam, options);
+                    if (inlineWindow) {
+                        return inlineWindow;
+                    }
+                } catch (error) {
+                    console.warn('[App] 内嵌练习页创建失败，回退到弹窗模式:', error);
+                }
+            }
+
             if (reuseWindow && !reuseWindow.closed) {
                 try {
                     reuseWindow.location.href = finalUrl;
@@ -344,6 +360,92 @@
             return examWindow;
         },
 
+        _ensureInlinePracticeHost() {
+            if (this.inlinePracticeHost && this.inlinePracticeHost.container && document.body && document.body.contains(this.inlinePracticeHost.container)) {
+                return this.inlinePracticeHost;
+            }
+            if (!document || !document.body) {
+                return null;
+            }
+
+            const container = document.createElement('div');
+            container.id = 'inline-practice-host';
+            container.style.cssText = [
+                'position: fixed',
+                'inset: 0',
+                'z-index: 4200',
+                'display: none',
+                'background: rgba(15, 23, 42, 0.48)',
+                'backdrop-filter: blur(3px)'
+            ].join(';');
+
+            const shell = document.createElement('div');
+            shell.style.cssText = [
+                'width: min(1400px, 100%)',
+                'height: 100%',
+                'margin: 0 auto',
+                'background: #f8fafc',
+                'box-shadow: 0 18px 46px rgba(15, 23, 42, 0.28)'
+            ].join(';');
+
+            const frame = document.createElement('iframe');
+            frame.id = 'inline-practice-frame';
+            frame.setAttribute('title', 'IELTS 练习');
+            frame.style.cssText = 'border: 0;background: #ffffff;width: 100%;height: 100%;display: block;';
+
+            shell.appendChild(frame);
+            container.appendChild(shell);
+            document.body.appendChild(container);
+
+            this.inlinePracticeHost = {
+                container,
+                shell,
+                frame,
+                activeExamId: null
+            };
+            return this.inlinePracticeHost;
+        },
+
+        _teardownInlinePracticeHost() {
+            const host = this.inlinePracticeHost;
+            if (!host) {
+                return;
+            }
+            try {
+                if (host.frame) {
+                    host.frame.src = 'about:blank';
+                }
+            } catch (_) {
+                // ignore iframe reset errors
+            }
+            try {
+                if (host.container && host.container.parentNode) {
+                    host.container.parentNode.removeChild(host.container);
+                }
+            } catch (_) {
+                // ignore DOM remove errors
+            }
+            this.inlinePracticeHost = null;
+        },
+
+        _openInlineExamWindow(examUrl, exam, options = {}) {
+            const host = this._ensureInlinePracticeHost();
+            if (!host || !host.frame) {
+                return null;
+            }
+            host.activeExamId = exam && exam.id ? exam.id : null;
+            host.container.style.display = 'flex';
+            options.inlineMode = true;
+            options.inlineFrame = host.frame;
+            try {
+                host.frame.src = examUrl;
+            } catch (error) {
+                console.warn('[InlinePractice] 无法设置 iframe src:', error);
+                return null;
+            }
+            return host.frame.contentWindow || null;
+        },
+
         _ensureAbsoluteUrl(rawUrl) {
             if (!rawUrl) {
                 return rawUrl;
@@ -391,6 +493,50 @@
                 }
                 return parsed.toString();
             } catch (_) {
+                return rawUrl;
+            }
+        },
+
+        async _appendRuntimeContextToExamUrl(rawUrl) {
+            if (!rawUrl) {
+                return rawUrl;
+            }
+            try {
+                const parsed = new URL(rawUrl, (window && window.location && window.location.href) ? window.location.href : undefined);
+                const safeSet = (key, value) => {
+                    if (value == null || parsed.searchParams.has(key)) {
+                        return;
+                    }
+                    const normalized = String(value).trim();
+                    if (!normalized) {
+                        return;
+                    }
+                    parsed.searchParams.set(key, normalized);
+                };
+
+                if (window && window.location && /^app:\/\/app(?:\/|$)/.test(String(window.location.href || ''))) {
+                    safeSet('legacyHomeUrl', 'app://app/index.html');
+                }
+
+                if (!window.electronAPI || typeof window.electronAPI.getLocalApiInfo !== 'function') {
+                    return parsed.toString();
+                }
+
+                safeSet('runtime', 'electron');
+
+                try {
+                    const response = await window.electronAPI.getLocalApiInfo();
+                    const baseUrl = response && response.data && typeof response.data.baseUrl === 'string'
+                        ? response.data.baseUrl.trim()
+                        : '';
+                    safeSet('localApiBaseUrl', baseUrl);
+                } catch (error) {
+                    console.warn('[App] 读取本地分析服务信息失败:', error);
+                }
+
+                return parsed.toString();
+            } catch (error) {
+                console.warn('[App] 添加练习页运行时上下文失败:', error);
                 return rawUrl;
             }
         },
@@ -1180,6 +1326,7 @@
                 console.warn('[App] 缺少题目窗口引用，无法完成窗口管理');
                 return;
             }
+            const isInlineMode = options && (options.inlineMode === true || options.target === 'inline');
 
             try {
                 const guardedWindow = this._guardExamWindowContent(examWindow, exam, { ...options, examId });
@@ -1208,6 +1355,8 @@
                 reviewMode: Boolean(options && options.reviewMode),
                 reviewSessionId: options && options.reviewSessionId ? String(options.reviewSessionId) : null,
                 reviewEntryIndex: Number.isInteger(options && options.reviewEntryIndex) ? options.reviewEntryIndex : 0,
+                inlineMode: isInlineMode,
+                inlineFrame: options && options.inlineFrame ? options.inlineFrame : null,
                 readOnly: options && Object.prototype.hasOwnProperty.call(options, 'readOnly')
                     ? Boolean(options.readOnly)
                     : Boolean(options && options.reviewMode)
@@ -1215,20 +1364,22 @@
 
             // 监听窗口关闭事件
             let checkClosed = null;
-            try {
-                checkClosed = setInterval(() => {
-                    try {
-                        if (examWindow.closed) {
+            if (!isInlineMode) {
+                try {
+                    checkClosed = setInterval(() => {
+                        try {
+                            if (examWindow.closed) {
+                                clearInterval(checkClosed);
+                                this.handleExamWindowClosed(examId);
+                            }
+                        } catch (monitorError) {
                             clearInterval(checkClosed);
-                            this.handleExamWindowClosed(examId);
+                            console.warn('[App] 无法检测题目窗口状态:', monitorError);
                         }
-                    } catch (monitorError) {
-                        clearInterval(checkClosed);
-                        console.warn('[App] 无法检测题目窗口状态:', monitorError);
-                    }
-                }, 1000);
-            } catch (error) {
-                console.warn('[App] 启动窗口关闭监控失败:', error);
+                    }, 1000);
+                } catch (error) {
+                    console.warn('[App] 启动窗口关闭监控失败:', error);
+                }
             }
 
             // 设置窗口通信
@@ -1256,9 +1407,16 @@
                 }
             };
 
-            if (!isFileProtocol) {
+            if (isInlineMode && options.inlineFrame && typeof options.inlineFrame.addEventListener === 'function') {
                 try {
-                    examWindow.addEventListener('load', emitInitEnvelope);
+                    options.inlineFrame.addEventListener('load', emitInitEnvelope, { once: true });
+                } catch (error) {
+                    console.warn('[App] 监听内嵌练习页 load 事件失败:', error);
+                    emitInitEnvelope();
+                }
+            } else if (!isFileProtocol) {
+                try {
+                    examWindow.addEventListener('load', emitInitEnvelope, { once: true });
                 } catch (error) {
                     console.warn('[App] 监听题目窗口 load 事件失败:', error);
                     emitInitEnvelope();
@@ -1308,6 +1466,8 @@
                     'SESSION_READY',
                     'PROGRESS_UPDATE',
                     'PRACTICE_COMPLETE',
+                    'PRACTICE_EXIT',
+                    'REQUEST_READING_ANALYSIS',
                     'ERROR_OCCURRED',
                     'REQUEST_INIT',
                     'SUITE_CLOSE_ATTEMPT',
@@ -1580,6 +1740,12 @@
                         break;
                     case 'PROGRESS_UPDATE':
                         this.handleProgressUpdate(examId, data);
+                        break;
+                    case 'PRACTICE_EXIT':
+                        await this.handlePracticeExit(examId, data, sourceWindow || expectedWindow);
+                        break;
+                    case 'REQUEST_READING_ANALYSIS':
+                        await this.handleReadingAnalysisRequest(examId, data, sourceWindow || expectedWindow);
                         break;
                     case 'PRACTICE_COMPLETE':
                         if (windowInfo && windowInfo.reviewMode) {
@@ -2867,6 +3033,103 @@
             }
         },
 
+        async handlePracticeExit(examId, data, sourceWindow = null) {
+            const payloadSuiteSessionId = (
+                data
+                && typeof data === 'object'
+                && typeof data.suiteSessionId === 'string'
+            ) ? data.suiteSessionId.trim() : '';
+            const hasMappedSuiteExam = Boolean(this.suiteExamMap && this.suiteExamMap.has(examId));
+            const hasActiveSuiteSession = Boolean(
+                this.currentSuiteSession
+                && this.currentSuiteSession.status === 'active'
+                && (!payloadSuiteSessionId || this.currentSuiteSession.id === payloadSuiteSessionId)
+            );
+            const inSuiteFlow = hasMappedSuiteExam || hasActiveSuiteSession || Boolean(payloadSuiteSessionId);
+
+            if (inSuiteFlow && typeof this._abortSuiteSession === 'function' && this.currentSuiteSession) {
+                window.showMessage && window.showMessage('已退出套题练习。', 'info');
+                await this._abortSuiteSession(this.currentSuiteSession, { reason: 'practice_exit' });
+                return;
+            }
+
+            this.updateExamStatus(examId, 'interrupted');
+            await this.cleanupExamSession(examId, {
+                forceCloseInlineHost: true,
+                sourceWindow
+            });
+        },
+
+        async handleReadingAnalysisRequest(examId, data, sourceWindow = null) {
+            const requestId = data && data.requestId != null ? String(data.requestId).trim() : '';
+            if (!requestId || !sourceWindow || typeof sourceWindow.postMessage !== 'function') {
+                return;
+            }
+            const respond = (payload = {}) => {
+                try {
+                    sourceWindow.postMessage({
+                        type: 'READING_ANALYSIS_RESULT',
+                        data: Object.assign({
+                            requestId,
+                            examId
+                        }, payload || {})
+                    }, '*');
+                } catch (_) {
+                    // ignore response post errors
+                }
+            };
+
+            if (!window.electronAPI || typeof window.electronAPI.analyzeReadingSingleAttempt !== 'function') {
+                respond({
+                    success: false,
+                    error: {
+                        code: 'analysis_bridge_unavailable',
+                        message: '父页分析桥不可用'
+                    }
+                });
+                return;
+            }
+
+            try {
+                const payload = await window.electronAPI.analyzeReadingSingleAttempt({
+                    singleAttemptAnalysisInput: data.singleAttemptAnalysisInput,
+                    singleAttemptAnalysis: data.singleAttemptAnalysis
+                });
+                if (!payload || payload.success === false) {
+                    respond({
+                        success: false,
+                        error: {
+                            code: payload?.error?.code || 'reading_analysis_ipc_failed',
+                            message: payload?.error?.message || payload?.message || '二阶段分析请求失败'
+                        }
+                    });
+                    return;
+                }
+                if (!payload.data || typeof payload.data !== 'object') {
+                    respond({
+                        success: false,
+                        error: {
+                            code: 'invalid_response_format',
+                            message: '二阶段分析返回格式无效'
+                        }
+                    });
+                    return;
+                }
+                respond({
+                    success: true,
+                    data: payload.data
+                });
+            } catch (error) {
+                respond({
+                    success: false,
+                    error: {
+                        code: error?.code || 'analysis_bridge_failed',
+                        message: error?.message || '分析桥调用失败'
+                    }
+                });
+            }
+        },
+
         /**
          * 处理练习完成（真实数据）
          */
@@ -3000,9 +3263,6 @@
                 console.error('[DataCollection] 处理练习完成数据失败:', error);
                 // 即使出错也要显示通知
                 window.showMessage('练习已完成，但数据保存可能有问题', 'warning');
-            } finally {
-                // 清理会话
-                this.cleanupExamSession(examId);
             }
         },
 
@@ -3409,7 +3669,10 @@
         /**
          * 清理题目会话
          */
-        async cleanupExamSession(examId) {
+        async cleanupExamSession(examId, options = {}) {
+            const windowInfo = (this.examWindows && this.examWindows.has(examId))
+                ? this.examWindows.get(examId)
+                : null;
             // 清理窗口引用
             if (this.examWindows && this.examWindows.has(examId)) {
                 this.examWindows.delete(examId);
@@ -3426,6 +3689,14 @@
             const activeSessions = await storage.get('active_sessions', []);
             const updatedSessions = activeSessions.filter(session => session.examId !== examId);
             await storage.set('active_sessions', updatedSessions);
+
+            const shouldCloseInlineHost = Boolean(
+                options.forceCloseInlineHost
+                || (windowInfo && windowInfo.inlineMode && this.inlinePracticeHost && this.inlinePracticeHost.activeExamId === examId)
+            );
+            if (shouldCloseInlineHost) {
+                this._teardownInlinePracticeHost();
+            }
         },
 
         /**

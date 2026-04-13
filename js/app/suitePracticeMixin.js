@@ -355,7 +355,7 @@
 
         _buildSuiteOpenExamOptions(session, sequenceIndex, reuseWindow = null) {
             const options = {
-                target: 'tab',
+                target: 'inline',
                 windowName: this._getSuiteWindowName(session),
                 suiteSessionId: session && session.id ? session.id : null,
                 suiteFlowMode: session && session.flowMode ? session.flowMode : 'simulation',
