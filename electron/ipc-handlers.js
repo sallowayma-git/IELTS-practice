@@ -15,6 +15,7 @@ const logger = require('./utils/logger');
 const IPC_HANDLE_CHANNELS = [
     'app:getUserDataPath',
     'app:getLocalApiInfo',
+    'reading:analyze-single-attempt',
     'configs:list',
     'configs:create',
     'configs:update',
@@ -95,9 +96,9 @@ class IPCHandlers {
     _isValidWritingSender(event) {
         const senderURL = event.sender.getURL();
 
-        // 必须是 file:// 协议
-        if (!senderURL.startsWith('file://')) {
-            logger.warn(`[Security] IPC rejected: non-file protocol (${senderURL})`);
+        const isAllowedProtocol = senderURL.startsWith('file://') || senderURL.startsWith('app://app/');
+        if (!isAllowedProtocol) {
+            logger.warn(`[Security] IPC rejected: unsupported protocol (${senderURL})`);
             return false;
         }
 
@@ -185,6 +186,22 @@ class IPCHandlers {
 
         ipcMain.handle('app:getLocalApiInfo', async () => {
             return { success: true, data: this.localApiInfo };
+        });
+
+        ipcMain.handle('reading:analyze-single-attempt', async (_event, payload) => {
+            try {
+                const data = await this.readingAnalysisService.generateSingleAttemptAnalysis(payload || {});
+                return { success: true, data };
+            } catch (error) {
+                logger.error('Reading analysis IPC error', error);
+                return {
+                    success: false,
+                    error: {
+                        code: error.code || 'reading_analysis_failed',
+                        message: error.message || 'reading_analysis_failed'
+                    }
+                };
+            }
         });
     }
 

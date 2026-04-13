@@ -8,6 +8,7 @@
       "force-refresh-btn",
       "create-backup-btn",
       "backup-list-btn",
+      "check-updates-btn",
       "export-data-btn",
       "import-data-btn",
       "show-onboarding-btn"

@@ -1,4 +1,4 @@
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID } = require('node:crypto');
 const { EventEmitter } = require('events');
 const ConfigService = require('./config.service');
 const PromptService = require('./prompt.service');
@@ -56,7 +56,7 @@ class EvaluateService {
      * 启动评测会话
      */
     async start({ task_type, topic_id, topic_text, content, word_count, config_id, prompt_version }) {
-        const sessionId = uuidv4();
+        const sessionId = randomUUID();
 
         try {
             this._resetSessionEventCache(sessionId);

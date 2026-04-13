@@ -7,6 +7,7 @@ const DEFAULT_INTERACTION_TARGETS = Object.freeze({
         'force-refresh-btn',
         'create-backup-btn',
         'backup-list-btn',
+        'check-updates-btn',
         'export-data-btn',
         'import-data-btn'
     ]
@@ -65,6 +66,13 @@ const SETTINGS_BUTTON_TESTS = {
         waitForSelector: '.backup-list-container',
         waitDescription: '备份列表渲染',
         cleanupSelector: '.backup-list-container'
+    },
+    'check-updates-btn': {
+        name: '设置 - 检查更新按钮',
+        expectInvocation: false,
+        waitForSelector: '.app-update-modal',
+        waitDescription: '更新弹窗渲染',
+        cleanupSelector: '.app-update-modal'
     },
     'export-data-btn': {
         name: '设置 - 导出数据按钮',

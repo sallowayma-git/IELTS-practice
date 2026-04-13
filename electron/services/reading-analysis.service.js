@@ -154,7 +154,8 @@ class ReadingAnalysisService {
                 '仅基于输入证据，不要杜撰题目文本或用户行为。',
                 'diagnosis 输出 2-4 条，nextActions 输出 2-3 条。',
                 'nextActions 必须可执行，优先题型粒度。',
-                'evidence 字段只写从输入可直接验证的事实。'
+                'evidence 字段只写从输入可直接验证的事实。',
+                'reason/instruction/evidence 必须使用简体中文表述；code/type/target 可使用英文标识。'
             ]
         };
         return [
@@ -165,7 +166,8 @@ class ReadingAnalysisService {
                     '只允许输出 JSON 对象，禁止 Markdown、解释文本、代码块。',
                     '顶层字段必须是 diagnosis, nextActions, confidence。',
                     'diagnosis 为 2-4 条，每条含 code, reason, evidence(1-3条字符串)。',
-                    'nextActions 为 2-3 条，每条含 type, target, instruction, evidence(1-3条字符串)。'
+                    'nextActions 为 2-3 条，每条含 type, target, instruction, evidence(1-3条字符串)。',
+                    'reason/instruction/evidence 必须是自然中文（简体），禁止英文句子。'
                 ].join('\n')
             },
             {

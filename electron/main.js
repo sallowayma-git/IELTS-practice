@@ -80,7 +80,10 @@ function getAppAssetUrl(relativePath) {
 
 function resolveBundledPath(relativePath) {
     if (updateService && typeof updateService.resolveBundledAsset === 'function') {
-        return updateService.resolveBundledAsset(relativePath);
+        const resolution = updateService.resolveBundledAsset(relativePath);
+        if (resolution && typeof resolution === 'object' && resolution.filePath) {
+            return resolution.filePath;
+        }
     }
     return path.join(getProjectRoot(), relativePath);
 }
@@ -235,6 +238,7 @@ async function createMainWindow() {
     }
 
     mainWindowCreation = (async () => {
+        const preloadScriptPath = path.join(__dirname, 'preload.js');
         mainWindow = new BrowserWindow({
             width: 1440,
             height: 960,
@@ -243,7 +247,7 @@ async function createMainWindow() {
             show: false,
             autoHideMenuBar: true,
             webPreferences: {
-                preload: path.join(__dirname, 'preload.js'),
+                preload: preloadScriptPath,
                 contextIsolation: true,
                 sandbox: false,
                 nodeIntegration: false,
@@ -298,6 +302,23 @@ async function createMainWindow() {
         });
 
         mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+            const isInternalOrBlankTarget = isAllowedInternalUrl(url) || String(url || '').trim() === 'about:blank';
+            if (isInternalOrBlankTarget) {
+                return {
+                    action: 'allow',
+                    overrideBrowserWindowOptions: {
+                        autoHideMenuBar: true,
+                        webPreferences: {
+                            preload: preloadScriptPath,
+                            contextIsolation: true,
+                            sandbox: false,
+                            nodeIntegration: false,
+                            webSecurity: true
+                        }
+                    }
+                };
+            }
+
             if (url.startsWith('http://') || url.startsWith('https://')) {
                 shell.openExternal(url);
             } else {

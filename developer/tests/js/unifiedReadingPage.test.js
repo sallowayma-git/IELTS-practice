@@ -144,19 +144,28 @@ function createHarness(options = {}) {
         }
     };
     if (options.withElectronAPI) {
-        windowStub.electronAPI = {
+        const electronAPI = {
             openLegacy() {
                 electronOpenLegacyCalls += 1;
-            },
-            async getLocalApiInfo() {
-                return {
-                    success: true,
-                    data: {
-                        baseUrl: options.localApiBaseUrl || 'http://127.0.0.1:3000'
-                    }
-                };
             }
         };
+        if (options.includeLocalApiInfo !== false) {
+            electronAPI.getLocalApiInfo = async () => ({
+                success: true,
+                data: {
+                    baseUrl: options.localApiBaseUrl || 'http://127.0.0.1:3000'
+                }
+            });
+        }
+        if (options.enableReadingAnalysisIpc !== false) {
+            electronAPI.analyzeReadingSingleAttempt = async (payload) => {
+                if (typeof options.analyzeReadingSingleAttempt === 'function') {
+                    return options.analyzeReadingSingleAttempt(payload);
+                }
+                throw new Error('analyzeReadingSingleAttempt not mocked');
+            };
+        }
+        windowStub.electronAPI = electronAPI;
     }
 
     const sandbox = {
@@ -221,8 +230,7 @@ function createHarness(options = {}) {
 async function testSingleAttemptLlmAnalysisPatchFlow() {
     const fetchCalls = [];
     const harness = createHarness({
-        withElectronAPI: true,
-        localApiBaseUrl: 'http://127.0.0.1:3900',
+        withElectronAPI: false,
         fetchImpl: async (url, init) => {
             fetchCalls.push({ url, init });
             return {
@@ -265,6 +273,7 @@ async function testSingleAttemptLlmAnalysisPatchFlow() {
             };
         }
     });
+    harness.windowStub.location.search = '?examId=reading-p1&localApiBaseUrl=http%3A%2F%2F127.0.0.1%3A3900';
     harness.hooks.state.examId = 'reading-p1';
     harness.hooks.state.sessionId = 'session-llm-1';
     const results = {
@@ -330,10 +339,66 @@ async function testSingleAttemptLlmAnalysisPatchFlow() {
     assert.strictEqual(harness.postedMessages[harness.postedMessages.length - 1].message.type, 'PRACTICE_ANALYSIS_PATCH', '成功后应发送分析补丁消息');
 }
 
-async function testSingleAttemptLlmAnalysisDegradedShowsRetryWithoutModelId() {
+async function testSingleAttemptLlmAnalysisPrefersElectronIpc() {
+    const ipcCalls = [];
+    const fetchCalls = [];
     const harness = createHarness({
         withElectronAPI: true,
-        localApiBaseUrl: 'http://127.0.0.1:3900',
+        analyzeReadingSingleAttempt: async (payload) => {
+            ipcCalls.push(payload);
+            return {
+                success: true,
+                data: {
+                    diagnosis: [],
+                    nextActions: [],
+                    confidence: 0.61
+                }
+            };
+        },
+        fetchImpl: async (url) => {
+            fetchCalls.push(url);
+            throw new Error('fetch should not be used when IPC is available');
+        }
+    });
+    harness.hooks.state.examId = 'reading-p1';
+    harness.hooks.state.sessionId = 'session-llm-ipc-1';
+    const results = {
+        answers: { q1: 'A' },
+        answerComparison: {
+            q1: { questionId: 'q1', userAnswer: 'A', correctAnswer: 'B', isCorrect: false }
+        },
+        scoreInfo: {
+            correct: 0,
+            total: 1,
+            totalQuestions: 1,
+            percentage: 0
+        },
+        singleAttemptAnalysisInput: {
+            totalQuestions: 1,
+            analysisSignals: { unansweredCount: 0, changedAnswerCount: 0 },
+            questionTypePerformance: {
+                summary_completion: { total: 1, correct: 0, accuracy: 0, confidence: 0.5 }
+            }
+        },
+        singleAttemptAnalysis: {
+            summary: { accuracy: 0, durationSec: 75, unansweredRate: 0, changedAnswerRate: 0 },
+            radar: { byQuestionKind: [{ kind: 'summary_completion', total: 1, correct: 0, accuracy: 0, confidence: 0.5 }], byPassageCategory: [] },
+            diagnosis: [{ code: 'fallback', reason: '结构化诊断', evidence: {} }],
+            nextActions: [{ type: 'fallback', target: 'overall', instruction: '结构化建议', evidence: {} }],
+            confidence: 0.5
+        },
+        realData: {}
+    };
+
+    await harness.hooks.triggerSingleAttemptLlmAnalysis(results);
+    assert.strictEqual(ipcCalls.length, 1, 'Electron 环境应优先走 IPC 分析通道');
+    assert.strictEqual(fetchCalls.length, 0, 'Electron IPC 可用时不应退回 fetch');
+    assert.strictEqual(harness.hooks.state.llmAnalysisStatus, 'success', 'IPC 成功后应进入 success 状态');
+}
+
+async function testSingleAttemptLlmAnalysisDegradedShowsRetryWithoutModelId() {
+    const harness = createHarness({
+        withElectronAPI: false,
         fetchImpl: async () => ({
             ok: true,
             async json() {
@@ -353,6 +418,7 @@ async function testSingleAttemptLlmAnalysisDegradedShowsRetryWithoutModelId() {
             }
         })
     });
+    harness.windowStub.location.search = '?examId=reading-p1&localApiBaseUrl=http%3A%2F%2F127.0.0.1%3A3900';
     harness.hooks.state.examId = 'reading-p1';
     harness.hooks.state.sessionId = 'session-llm-degraded';
     const results = {
@@ -388,6 +454,250 @@ async function testSingleAttemptLlmAnalysisDegradedShowsRetryWithoutModelId() {
     assert.ok(harness.hooks.state.llmAnalysisMessage.includes('AI 分析失败'), '降级状态应给出失败提示');
     assert.ok(!harness.hooks.state.llmAnalysisMessage.includes('MiniMax-M2.7-free'), '降级状态不应显示模型 ID');
     assert.ok(String(harness.resultsContainer.innerHTML || '').includes('重试 AI 分析'), '降级状态应展示重试按钮');
+}
+
+async function testSingleAttemptLlmAnalysisUsesRuntimeQueryBaseUrl() {
+    const fetchCalls = [];
+    const harness = createHarness({
+        withElectronAPI: false,
+        fetchImpl: async (url) => {
+            fetchCalls.push(String(url));
+            return {
+                ok: true,
+                async json() {
+                    return {
+                        success: true,
+                        data: {
+                            diagnosis: [],
+                            nextActions: [],
+                            confidence: 0.5
+                        }
+                    };
+                }
+            };
+        }
+    });
+    harness.windowStub.location.search = '?examId=reading-p1&localApiBaseUrl=http%3A%2F%2F127.0.0.1%3A3911';
+    harness.hooks.state.examId = 'reading-p1';
+    harness.hooks.state.sessionId = 'session-query-base-url';
+    const results = {
+        answers: { q1: 'A' },
+        answerComparison: {
+            q1: { questionId: 'q1', userAnswer: 'A', correctAnswer: 'B', isCorrect: false }
+        },
+        scoreInfo: {
+            correct: 0,
+            total: 1,
+            totalQuestions: 1,
+            percentage: 0
+        },
+        singleAttemptAnalysisInput: {
+            totalQuestions: 1,
+            analysisSignals: { unansweredCount: 0, changedAnswerCount: 0 },
+            questionTypePerformance: {
+                summary_completion: { total: 1, correct: 0, accuracy: 0, confidence: 0.5 }
+            }
+        },
+        singleAttemptAnalysis: {
+            summary: { accuracy: 0, durationSec: 75, unansweredRate: 0, changedAnswerRate: 0 },
+            radar: { byQuestionKind: [{ kind: 'summary_completion', total: 1, correct: 0, accuracy: 0, confidence: 0.5 }], byPassageCategory: [] },
+            diagnosis: [{ code: 'fallback', reason: '结构化诊断', evidence: {} }],
+            nextActions: [{ type: 'fallback', target: 'overall', instruction: '结构化建议', evidence: {} }],
+            confidence: 0.5
+        },
+        realData: {}
+    };
+
+    await harness.hooks.triggerSingleAttemptLlmAnalysis(results);
+    assert.strictEqual(fetchCalls.length, 1, 'query runtime baseUrl 应触发一次接口请求');
+    assert.strictEqual(fetchCalls[0], 'http://127.0.0.1:3911/api/reading/single-attempt-analysis', '应优先使用 query 中的 localApiBaseUrl');
+}
+
+async function testSingleAttemptLlmAnalysisNetworkFailureUsesClearMessage() {
+    const harness = createHarness({
+        withElectronAPI: false,
+        fetchImpl: async () => {
+            throw new Error('Failed to fetch');
+        }
+    });
+    harness.windowStub.location.search = '?examId=reading-p1&localApiBaseUrl=http%3A%2F%2F127.0.0.1%3A3900';
+    harness.hooks.state.examId = 'reading-p1';
+    harness.hooks.state.sessionId = 'session-network-failure';
+    const results = {
+        answers: { q1: 'A' },
+        answerComparison: {
+            q1: { questionId: 'q1', userAnswer: 'A', correctAnswer: 'B', isCorrect: false }
+        },
+        scoreInfo: {
+            correct: 0,
+            total: 1,
+            totalQuestions: 1,
+            percentage: 0
+        },
+        singleAttemptAnalysisInput: {
+            totalQuestions: 1,
+            analysisSignals: { unansweredCount: 0, changedAnswerCount: 0 },
+            questionTypePerformance: {
+                summary_completion: { total: 1, correct: 0, accuracy: 0, confidence: 0.5 }
+            }
+        },
+        singleAttemptAnalysis: {
+            summary: { accuracy: 0, durationSec: 75, unansweredRate: 0, changedAnswerRate: 0 },
+            radar: { byQuestionKind: [{ kind: 'summary_completion', total: 1, correct: 0, accuracy: 0, confidence: 0.5 }], byPassageCategory: [] },
+            diagnosis: [{ code: 'fallback', reason: '结构化诊断', evidence: {} }],
+            nextActions: [{ type: 'fallback', target: 'overall', instruction: '结构化建议', evidence: {} }],
+            confidence: 0.5
+        },
+        realData: {}
+    };
+
+    await harness.hooks.triggerSingleAttemptLlmAnalysis(results);
+    assert.strictEqual(harness.hooks.state.llmAnalysisStatus, 'failed', '网络失败时应进入 failed 状态');
+    assert.ok(harness.hooks.state.llmAnalysisMessage.includes('本地分析服务连接失败'), '网络失败文案应暴露明确诊断而不是 Failed to fetch');
+}
+
+async function testSingleAttemptLlmAnalysisIgnoresStaleCachedBaseUrlWhenElectronInfoAvailable() {
+    const fetchCalls = [];
+    const harness = createHarness({
+        withElectronAPI: true,
+        enableReadingAnalysisIpc: false,
+        localApiBaseUrl: 'http://127.0.0.1:3905',
+        fetchImpl: async (url) => {
+            fetchCalls.push(String(url));
+            return {
+                ok: true,
+                async json() {
+                    return { success: true, data: { diagnosis: [], nextActions: [], confidence: 0.51 } };
+                }
+            };
+        }
+    });
+    harness.localStorage.setItem('exam_system_local_api_info_v1', JSON.stringify({
+        baseUrl: 'http://127.0.0.1:3999',
+        updatedAt: Date.now() - 60000
+    }));
+    harness.windowStub.location.search = '?examId=reading-p1';
+    harness.hooks.state.examId = 'reading-p1';
+    harness.hooks.state.sessionId = 'session-stale-cache';
+    const results = {
+        answers: { q1: 'A' },
+        answerComparison: { q1: { questionId: 'q1', userAnswer: 'A', correctAnswer: 'B', isCorrect: false } },
+        scoreInfo: { correct: 0, total: 1, totalQuestions: 1, percentage: 0 },
+        singleAttemptAnalysisInput: {
+            totalQuestions: 1,
+            analysisSignals: { unansweredCount: 0, changedAnswerCount: 0 },
+            questionTypePerformance: { summary_completion: { total: 1, correct: 0, accuracy: 0, confidence: 0.5 } }
+        },
+        singleAttemptAnalysis: {
+            summary: { accuracy: 0, durationSec: 75, unansweredRate: 0, changedAnswerRate: 0 },
+            radar: { byQuestionKind: [{ kind: 'summary_completion', total: 1, correct: 0, accuracy: 0, confidence: 0.5 }], byPassageCategory: [] },
+            diagnosis: [{ code: 'fallback', reason: '结构化诊断', evidence: {} }],
+            nextActions: [{ type: 'fallback', target: 'overall', instruction: '结构化建议', evidence: {} }],
+            confidence: 0.5
+        },
+        realData: {}
+    };
+    await harness.hooks.triggerSingleAttemptLlmAnalysis(results);
+    assert.strictEqual(fetchCalls.length, 1, '应发起一次分析请求');
+    assert.strictEqual(fetchCalls[0], 'http://127.0.0.1:3905/api/reading/single-attempt-analysis', '应优先使用 Electron 实时 localApiInfo，而不是旧缓存地址');
+}
+
+async function testSingleAttemptLlmAnalysisNetworkFailureClearsCachedBaseUrl() {
+    const harness = createHarness({
+        withElectronAPI: false,
+        fetchImpl: async () => {
+            throw new Error('Failed to fetch');
+        }
+    });
+    harness.windowStub.location.search = '?examId=reading-p1';
+    harness.localStorage.setItem('exam_system_local_api_info_v1', JSON.stringify({
+        baseUrl: 'http://127.0.0.1:3999',
+        updatedAt: Date.now()
+    }));
+    harness.hooks.state.examId = 'reading-p1';
+    harness.hooks.state.sessionId = 'session-clear-cache';
+    const results = {
+        answers: { q1: 'A' },
+        answerComparison: { q1: { questionId: 'q1', userAnswer: 'A', correctAnswer: 'B', isCorrect: false } },
+        scoreInfo: { correct: 0, total: 1, totalQuestions: 1, percentage: 0 },
+        singleAttemptAnalysisInput: {
+            totalQuestions: 1,
+            analysisSignals: { unansweredCount: 0, changedAnswerCount: 0 },
+            questionTypePerformance: { summary_completion: { total: 1, correct: 0, accuracy: 0, confidence: 0.5 } }
+        },
+        singleAttemptAnalysis: {
+            summary: { accuracy: 0, durationSec: 75, unansweredRate: 0, changedAnswerRate: 0 },
+            radar: { byQuestionKind: [{ kind: 'summary_completion', total: 1, correct: 0, accuracy: 0, confidence: 0.5 }], byPassageCategory: [] },
+            diagnosis: [{ code: 'fallback', reason: '结构化诊断', evidence: {} }],
+            nextActions: [{ type: 'fallback', target: 'overall', instruction: '结构化建议', evidence: {} }],
+            confidence: 0.5
+        },
+        realData: {}
+    };
+
+    await harness.hooks.triggerSingleAttemptLlmAnalysis(results);
+    assert.strictEqual(
+        harness.localStorage.getItem('exam_system_local_api_info_v1'),
+        null,
+        '网络失败后应清理缓存的 localApiBaseUrl，避免后续持续命中坏地址'
+    );
+}
+
+async function testSingleAttemptLlmAnalysisUsesParentBridgeInElectronRuntime() {
+    const fetchCalls = [];
+    const harness = createHarness({
+        withElectronAPI: false,
+        fetchImpl: async (url) => {
+            fetchCalls.push(String(url));
+            throw new Error('fetch should not be used in electron runtime bridge mode');
+        }
+    });
+    harness.windowStub.location.search = '?examId=reading-p1&runtime=electron';
+    harness.hooks.state.examId = 'reading-p1';
+    harness.hooks.state.sessionId = 'session-electron-bridge';
+    const results = {
+        answers: { q1: 'A' },
+        answerComparison: { q1: { questionId: 'q1', userAnswer: 'A', correctAnswer: 'B', isCorrect: false } },
+        scoreInfo: { correct: 0, total: 1, totalQuestions: 1, percentage: 0 },
+        singleAttemptAnalysisInput: {
+            totalQuestions: 1,
+            analysisSignals: { unansweredCount: 0, changedAnswerCount: 0 },
+            questionTypePerformance: { summary_completion: { total: 1, correct: 0, accuracy: 0, confidence: 0.5 } }
+        },
+        singleAttemptAnalysis: {
+            summary: { accuracy: 0, durationSec: 75, unansweredRate: 0, changedAnswerRate: 0 },
+            radar: { byQuestionKind: [{ kind: 'summary_completion', total: 1, correct: 0, accuracy: 0, confidence: 0.5 }], byPassageCategory: [] },
+            diagnosis: [{ code: 'fallback', reason: '结构化诊断', evidence: {} }],
+            nextActions: [{ type: 'fallback', target: 'overall', instruction: '结构化建议', evidence: {} }],
+            confidence: 0.5
+        },
+        realData: {}
+    };
+
+    const pending = harness.hooks.triggerSingleAttemptLlmAnalysis(results);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const request = harness.postedMessages.find((entry) => entry && entry.message && entry.message.type === 'REQUEST_READING_ANALYSIS');
+    assert.ok(request, 'electron runtime 下应向父页发送 REQUEST_READING_ANALYSIS');
+    const requestId = request.message.data && request.message.data.requestId;
+    assert.ok(requestId, '父页分析请求应携带 requestId');
+    harness.hooks.handleIncoming({
+        data: {
+            type: 'READING_ANALYSIS_RESULT',
+            data: {
+                requestId,
+                success: true,
+                data: {
+                    diagnosis: [],
+                    nextActions: [],
+                    confidence: 0.62
+                }
+            }
+        }
+    });
+
+    await pending;
+    assert.strictEqual(fetchCalls.length, 0, 'electron runtime 桥接链路不应走本地 fetch');
+    assert.strictEqual(harness.hooks.state.llmAnalysisStatus, 'success', '父页分析桥返回成功后应进入 success 状态');
 }
 
 function testInitSessionSimulationSyncsButtonsAndSuiteState() {
@@ -567,6 +877,7 @@ function testReadingSubmissionAnalyticsAndQuestionTypePerformance() {
     const analysisSignals = harness.hooks.buildAnalysisSignals(answerComparison, timelineLite);
     const questionTypePerformance = harness.hooks.buildQuestionTypePerformance(['q1', 'q2', 'q3'], answerComparison);
 
+    assert.strictEqual(analysisSignals.questionCount, 3, 'analysisSignals 应透传题号分母 questionCount');
     assert.strictEqual(analysisSignals.unansweredCount, 1, 'analysisSignals 应统计未作答题数');
     assert.strictEqual(analysisSignals.changedAnswerCount, 1, 'analysisSignals 应统计改答案题数');
     assert.ok(Number.isFinite(analysisSignals.interactionDensity), 'analysisSignals.interactionDensity 应为数值');
@@ -710,6 +1021,73 @@ function testPostMessageQueuesPracticeCompleteWhenParentMissing() {
     );
 }
 
+function testPostMessageDedupesPendingPracticeCompleteBySession() {
+    const harness = createHarness({ noParent: true });
+    harness.hooks.state.examId = 'reading-p1';
+    harness.hooks.state.sessionId = 'session-dedupe';
+
+    harness.hooks.postMessage('PRACTICE_COMPLETE', {
+        examId: 'reading-p1',
+        sessionId: 'session-dedupe',
+        scoreInfo: { correct: 1, total: 3, accuracy: 1 / 3, percentage: 33 }
+    });
+    harness.hooks.postMessage('PRACTICE_COMPLETE', {
+        examId: 'reading-p1',
+        sessionId: 'session-dedupe',
+        scoreInfo: { correct: 2, total: 3, accuracy: 2 / 3, percentage: 67 }
+    });
+
+    const raw = harness.localStorage.getItem('exam_system_pending_practice_messages_v1');
+    assert.ok(raw, '去重场景应写入待处理队列');
+    const queue = JSON.parse(raw);
+    assert.strictEqual(queue.length, 1, '同 examId/sessionId 的 PRACTICE_COMPLETE 应去重为一条');
+    assert.strictEqual(
+        Number(queue[0].message?.data?.scoreInfo?.correct),
+        2,
+        '去重后应保留最新一条待处理 PRACTICE_COMPLETE'
+    );
+}
+
+function testPostMessageDrainsPendingQueueWhenParentRecovered() {
+    const harness = createHarness({ noParent: true });
+    harness.hooks.state.examId = 'reading-p1';
+    harness.hooks.state.sessionId = 'session-drain';
+
+    harness.hooks.postMessage('PRACTICE_COMPLETE', {
+        examId: 'reading-p1',
+        sessionId: 'session-drain',
+        scoreInfo: { correct: 2, total: 3, accuracy: 2 / 3, percentage: 67 }
+    });
+
+    const replayed = [];
+    const recoveredParent = {
+        postMessage(message, origin) {
+            replayed.push({ message, origin });
+        }
+    };
+    harness.windowStub.opener = recoveredParent;
+    harness.windowStub.parent = recoveredParent;
+
+    harness.hooks.postMessage('SESSION_READY', {
+        examId: 'reading-p1',
+        sessionId: 'session-drain'
+    });
+
+    assert.strictEqual(replayed.length, 2, '父窗口恢复后应发送当前消息并回放待处理队列');
+    assert.strictEqual(replayed[0].message.type, 'SESSION_READY', '恢复后应先发送当前消息');
+    assert.strictEqual(replayed[1].message.type, 'PRACTICE_COMPLETE', '恢复后应回放待处理 PRACTICE_COMPLETE');
+    assert.strictEqual(
+        harness.localStorage.getItem('exam_system_pending_practice_messages_v1'),
+        null,
+        '回放成功后应清空本地待处理队列'
+    );
+    assert.strictEqual(
+        String(harness.windowStub.name || ''),
+        '',
+        '回放成功后应清空 window.name 待处理缓存'
+    );
+}
+
 function testSuiteForceCloseUsesElectronNavigation() {
     const harness = createHarness({ withElectronAPI: true });
     harness.hooks.handleIncoming({
@@ -720,6 +1098,29 @@ function testSuiteForceCloseUsesElectronNavigation() {
     });
     assert.strictEqual(harness.getElectronOpenLegacyCalls(), 1, 'Electron 环境下 SUITE_FORCE_CLOSE 应优先回 Legacy');
     assert.strictEqual(harness.getCloseCalls(), 0, 'Electron 环境下 SUITE_FORCE_CLOSE 不应直接 close 窗口');
+}
+
+function testSuiteForceCloseInEmbeddedContextNotifiesParentWithoutNavigation() {
+    const harness = createHarness({ withElectronAPI: true, noParent: true });
+    const parentMessages = [];
+    const embeddedParent = {
+        postMessage(message, origin) {
+            parentMessages.push({ message, origin });
+        }
+    };
+    harness.windowStub.parent = embeddedParent;
+    harness.hooks.state.examId = 'reading-embedded';
+    harness.hooks.state.sessionId = 'session-embedded';
+    harness.hooks.handleIncoming({
+        data: {
+            type: 'SUITE_FORCE_CLOSE',
+            data: {}
+        }
+    });
+    assert.strictEqual(parentMessages.length, 1, '内嵌上下文应通知父页退出');
+    assert.strictEqual(parentMessages[0].message.type, 'PRACTICE_EXIT', '内嵌上下文应发送 PRACTICE_EXIT');
+    assert.strictEqual(harness.getElectronOpenLegacyCalls(), 0, '内嵌上下文不应触发 openLegacy');
+    assert.strictEqual(harness.getCloseCalls(), 0, '内嵌上下文不应直接关闭窗口');
 }
 
 async function main() {
@@ -733,12 +1134,21 @@ async function main() {
         testReadingSubmissionAnalyticsAndQuestionTypePerformance();
         testRenderResultsPrefersExistingCanonicalAnalysis();
         testPostMessageQueuesPracticeCompleteWhenParentMissing();
+        testPostMessageDedupesPendingPracticeCompleteBySession();
+        testPostMessageDrainsPendingQueueWhenParentRecovered();
         testSuiteForceCloseUsesElectronNavigation();
+        testSuiteForceCloseInEmbeddedContextNotifiesParentWithoutNavigation();
+        await testSingleAttemptLlmAnalysisPrefersElectronIpc();
         await testSingleAttemptLlmAnalysisPatchFlow();
         await testSingleAttemptLlmAnalysisDegradedShowsRetryWithoutModelId();
+        await testSingleAttemptLlmAnalysisUsesRuntimeQueryBaseUrl();
+        await testSingleAttemptLlmAnalysisNetworkFailureUsesClearMessage();
+        await testSingleAttemptLlmAnalysisIgnoresStaleCachedBaseUrlWhenElectronInfoAvailable();
+        await testSingleAttemptLlmAnalysisNetworkFailureClearsCachedBaseUrl();
+        await testSingleAttemptLlmAnalysisUsesParentBridgeInElectronRuntime();
         console.log(JSON.stringify({
             status: 'pass',
-            detail: 'unifiedReadingPage 已覆盖 INIT_SESSION/SIMULATION_CONTEXT 协议、review init 可编辑合同、REVIEW_CONTEXT answering 退只读合同、SESSION_READY envelope、review navigate payload、降级重试 UI 及二阶段 LLM 分析补丁链路'
+            detail: 'unifiedReadingPage 已覆盖 INIT_SESSION/SIMULATION_CONTEXT 协议、review init 可编辑合同、REVIEW_CONTEXT answering 退只读合同、SESSION_READY envelope、review navigate payload、运行时 localApiBaseUrl 恢复、降级重试 UI 及二阶段 LLM 分析补丁链路'
         }, null, 2));
     } catch (error) {
         console.log(JSON.stringify({
