@@ -118,10 +118,11 @@
     "better-sqlite3": "^12.6.2",
     "electron-updater": "^6.3.9",
     "express": "^4.21.2",
-    "uuid": "^13.0.0",
-    "semver": "^7.6.3"
+    "semver": "^7.6.3",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@electron/notarize": "^2.2.1",
     "electron": "^31.7.7",
     "electron-builder": "^24.13.3"
   }
