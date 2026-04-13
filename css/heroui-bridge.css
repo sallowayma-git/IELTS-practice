@@ -601,10 +601,18 @@ body.hero-body {
 }
 
 .boot-logo {
-    font-size: 1rem;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     margin-bottom: 10px;
+}
+
+.boot-logo__image {
+    width: 132px;
+    height: auto;
+    max-width: 100%;
+    display: block;
+    filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.24));
 }
 
 .boot-status {

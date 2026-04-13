@@ -1,6 +1,6 @@
 {
   "name": "ielts-practice",
-  "version": "0.6.0",
+  "version": "0.6.2",
   "description": "IELTS Practice Application",
   "private": true,
   "main": "electron/main.js",
@@ -43,6 +43,7 @@
       "js/**/*",
       "templates/**/*",
       "assets/**/*",
+      "assets/images/herbal_green_flat_logo_1776094316057.png",
       "README.md",
       "LICENSE",
       "package.json"
