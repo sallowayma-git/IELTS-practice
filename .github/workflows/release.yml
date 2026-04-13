@@ -51,7 +51,41 @@ jobs:
       - name: Run shell support smoke
         run: npm run verify:shell-support-smoke
 
+      - name: Check macOS notarization prerequisites
+        id: mac-prereq
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for key in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!key:-}" ]; then
+              missing+=("$key")
+            fi
+          done
+
+          if [ ${#missing[@]} -eq 0 ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "macOS 发布将执行签名 + 公证 + staple。" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "missing_keys=$(IFS=,; echo "${missing[*]}")" >> "$GITHUB_OUTPUT"
+            {
+              echo "### macOS 发布已降级（安全）"
+              echo ""
+              echo "- 缺失 secrets: ${missing[*]}"
+              echo "- 已阻止未公证 macOS 安装包进入 Release 分发"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Build Electron artifacts
+        if: runner.os != 'macOS' || steps.mac-prereq.outputs.ready == 'true'
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
@@ -60,12 +94,43 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run release:build
 
+      - name: Skip macOS shell build when notarization prerequisites are missing
+        if: runner.os == 'macOS' && steps.mac-prereq.outputs.ready != 'true'
+        run: echo "Skipping macOS build: required signing/notarization secrets are missing."
+
+      - name: Verify macOS signature/notarization/staple
+        if: runner.os == 'macOS' && steps.mac-prereq.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          app_path="$(find dist/electron -type d -name '*.app' | head -n 1)"
+          if [ -z "$app_path" ]; then
+            echo "未找到 .app 产物"
+            exit 1
+          fi
+
+          dmg_path="$(find dist/electron -type f -name 'ielts-practice-*-macos-*.dmg' | head -n 1)"
+          if [ -z "$dmg_path" ]; then
+            echo "未找到 dmg 产物"
+            exit 1
+          fi
+
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          xcrun stapler staple "$app_path"
+          xcrun stapler validate "$app_path"
+          xcrun stapler staple "$dmg_path"
+          xcrun stapler validate "$dmg_path"
+          spctl --assess --type execute --verbose=4 "$app_path"
+
       - name: Validate shell artifacts
+        if: runner.os != 'macOS' || steps.mac-prereq.outputs.ready == 'true'
         env:
           ALLOW_SHELL_RELEASE_VERSION_MISMATCH: ${{ github.ref_name == 'v0.0.1' && 'true' || 'false' }}
         run: npm run verify:shell-release -- --dir dist/electron --platform "${{ runner.os }}" --tag "${{ github.ref_name }}"
 
       - name: Upload shell artifacts
+        if: runner.os != 'macOS' || steps.mac-prereq.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: shell-${{ matrix.os }}
@@ -158,10 +223,31 @@ jobs:
           path: dist/release-shell/windows
 
       - name: Download macOS shell artifacts
+        id: download-macos-shell
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: shell-macos-latest
           path: dist/release-shell/macos
+
+      - name: Detect macOS release assets
+        id: mac-assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ls dist/release-shell/macos/latest-mac.yml >/dev/null 2>&1 \
+            && ls dist/release-shell/macos/ielts-practice-*-macos-*.dmg >/dev/null 2>&1 \
+            && ls dist/release-shell/macos/ielts-practice-*-macos-*.zip >/dev/null 2>&1; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            printf "macOS assets are signed, notarized, and stapled.\n" > dist/release-shell/macos-notarization-status.txt
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            cat > dist/release-shell/macos-notarization-status.txt <<'EOF'
+macOS assets are intentionally omitted from this release.
+Reason: signing/notarization prerequisites were unavailable in CI for this tag.
+To maximize user double-click open success, unsigned/unnotarized macOS installers are blocked from distribution.
+EOF
+          fi
 
       - name: Download resource artifacts
         uses: actions/download-artifact@v4
@@ -169,12 +255,16 @@ jobs:
           name: resource-packages
           path: dist/release-resources
 
-      - name: Re-verify downloaded shell artifacts
+      - name: Re-verify downloaded Windows shell artifacts
         env:
           ALLOW_SHELL_RELEASE_VERSION_MISMATCH: ${{ github.ref_name == 'v0.0.1' && 'true' || 'false' }}
-        run: |
-          npm run verify:shell-release -- --dir dist/release-shell/windows --platform Windows --tag "${{ github.ref_name }}"
-          npm run verify:shell-release -- --dir dist/release-shell/macos --platform macOS --tag "${{ github.ref_name }}"
+        run: npm run verify:shell-release -- --dir dist/release-shell/windows --platform Windows --tag "${{ github.ref_name }}"
+
+      - name: Re-verify downloaded macOS shell artifacts
+        if: steps.mac-assets.outputs.ready == 'true'
+        env:
+          ALLOW_SHELL_RELEASE_VERSION_MISMATCH: ${{ github.ref_name == 'v0.0.1' && 'true' || 'false' }}
+        run: npm run verify:shell-release -- --dir dist/release-shell/macos --platform macOS --tag "${{ github.ref_name }}"
 
       - name: Re-verify downloaded resource artifacts
         run: npm run verify:resource-release -- --dir dist/release-resources
@@ -189,7 +279,7 @@ jobs:
           gh release view "${{ github.ref_name }}" >/dev/null 2>&1 || \
           gh release create "${{ github.ref_name }}" --verify-tag --title "${{ github.ref_name }}" --generate-notes --draft
 
-      - name: Upload verified assets to GitHub Release
+      - name: Upload Windows/resource assets to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -197,13 +287,22 @@ jobs:
             dist/release-shell/windows/latest.yml \
             dist/release-shell/windows/ielts-practice-*-windows-*-setup.exe \
             dist/release-shell/windows/ielts-practice-*-windows-*-setup.exe.blockmap \
+            dist/release-shell/macos-notarization-status.txt \
+            dist/release-resources/resources-manifest.json \
+            dist/release-resources/resources-delta.zip \
+            dist/release-resources/resources-full.zip \
+            --clobber
+
+      - name: Upload notarized macOS assets to GitHub Release
+        if: steps.mac-assets.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
             dist/release-shell/macos/latest-mac.yml \
             dist/release-shell/macos/ielts-practice-*-macos-*.dmg \
             dist/release-shell/macos/ielts-practice-*-macos-*.zip \
             dist/release-shell/macos/ielts-practice-*-macos-*.zip.blockmap \
-            dist/release-resources/resources-manifest.json \
-            dist/release-resources/resources-delta.zip \
-            dist/release-resources/resources-full.zip \
             --clobber
 
       - name: Publish completed GitHub Release

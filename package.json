@@ -56,6 +56,7 @@
         "releaseType": "release"
       }
     ],
+    "afterSign": "scripts/notarize.js",
     "mac": {
       "category": "public.app-category.education",
       "artifactName": "ielts-practice-${version}-macos-${arch}.${ext}",
