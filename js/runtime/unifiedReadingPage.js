@@ -8,7 +8,9 @@
     const WINDOW_NAME_PENDING_PREFIX = '__exam_pending_practice_v1__';
     const LOCAL_API_INFO_STORAGE_KEY = 'exam_system_local_api_info_v1';
     const READING_ANALYSIS_API_PATH = '/api/reading/single-attempt-analysis';
-    const PARENT_ANALYSIS_REQUEST_TIMEOUT_MS = 20000;
+    const PARENT_ANALYSIS_REQUEST_TIMEOUT_MS = 22000;
+    const PARENT_ANALYSIS_RETRY_TIMEOUT_MS = [22000, 32000];
+    const PARENT_ANALYSIS_RETRY_BACKOFF_MS = [450];
     const EXPLANATION_STYLE_ID = 'reading-explanation-style';
     const ANALYSIS_STYLE_ID = 'reading-single-attempt-analysis-style';
     const EXPLANATION_SPLIT_KINDS = new Set([
@@ -2309,7 +2311,7 @@
             return payload.data;
         }
         if (isElectronRuntimeContext()) {
-            return requestSingleAttemptLlmAnalysisViaParentBridge(results);
+            return requestSingleAttemptLlmAnalysisViaParentBridge(results, onLog);
         }
         const baseUrl = await resolveLocalApiBaseUrl();
         if (!baseUrl) {
@@ -2392,6 +2394,7 @@
             const errorMessage = data?.error?.message || data?.message || '父页分析桥请求失败';
             const error = new Error(errorMessage);
             error.code = data?.error?.code || 'analysis_bridge_request_failed';
+            error.meta = data?.meta || null;
             pending.reject(error);
             return true;
         }
@@ -2405,10 +2408,119 @@
         return true;
     }
 
-    function requestSingleAttemptLlmAnalysisViaParentBridge(results) {
-        const target = (state.parentWindow && state.parentWindow !== global)
-            ? state.parentWindow
-            : ((global.parent && global.parent !== global) ? global.parent : (global.opener && !global.opener.closed ? global.opener : null));
+    function isWindowMessagingAvailable(target) {
+        if (!target || typeof target.postMessage !== 'function') {
+            return false;
+        }
+        try {
+            if (typeof target.closed === 'boolean' && target.closed) {
+                return false;
+            }
+        } catch (_) {
+            // ignore cross-context closed checks
+        }
+        return true;
+    }
+
+    function resolveParentBridgeTargets() {
+        const candidates = [
+            state.parentWindow,
+            (global.parent && global.parent !== global) ? global.parent : null,
+            (global.opener && !global.opener.closed) ? global.opener : null
+        ];
+        const unique = [];
+        const seen = new Set();
+        candidates.forEach((target) => {
+            if (!isWindowMessagingAvailable(target) || seen.has(target)) {
+                return;
+            }
+            seen.add(target);
+            unique.push(target);
+        });
+        return unique;
+    }
+
+    function waitForBridgeRetry(ms) {
+        const duration = Number.isFinite(Number(ms)) ? Math.max(0, Number(ms)) : 0;
+        if (!duration) {
+            return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+            global.setTimeout(resolve, duration);
+        });
+    }
+
+    function isRetryableBridgeError(error) {
+        const code = String(error?.code || '').trim().toLowerCase();
+        const message = String(error?.message || '').trim().toLowerCase();
+        if (!code && !message) {
+            return false;
+        }
+        const retryableCodes = new Set([
+            'analysis_bridge_timeout',
+            'analysis_bridge_post_failed',
+            'analysis_bridge_unavailable',
+            'analysis_bridge_failed',
+            'analysis_bridge_upstream_timeout',
+            'analysis_bridge_request_failed',
+            'reading_analysis_ipc_failed',
+            'reading_analysis_network_error',
+            'local_api_unavailable'
+        ]);
+        if (retryableCodes.has(code)) {
+            return true;
+        }
+        const retryHints = [
+            'timeout',
+            'timed out',
+            'network',
+            'socket',
+            'econn',
+            'reset',
+            'temporarily',
+            'unavailable',
+            'busy',
+            '429',
+            '502',
+            '503',
+            '504',
+            '超时',
+            '网络',
+            '拥堵',
+            '暂时不可用'
+        ];
+        for (let i = 0; i < retryHints.length; i += 1) {
+            if (message.includes(retryHints[i])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function formatBridgeFailureMessage(error, attempts) {
+        const totalAttempts = Math.max(1, Number(attempts) || 1);
+        const code = String(error?.code || '').trim().toLowerCase();
+        const upstreamMessage = String(error?.message || '').trim();
+        if (code === 'analysis_bridge_unavailable') {
+            return '证据化诊断暂不可用，已回退结构化分析：当前与主应用连接中断。请返回套题页重新进入后再点“重试 AI 分析”。';
+        }
+        if (code === 'analysis_bridge_post_failed') {
+            return '证据化诊断暂不可用，已回退结构化分析：分析请求发送失败。请关闭当前题页后重新进入，再点“重试 AI 分析”。';
+        }
+        if (code === 'analysis_bridge_timeout' || code === 'analysis_bridge_upstream_timeout') {
+            return `证据化诊断暂不可用，已回退结构化分析：AI 服务响应超时（已自动重试 ${totalAttempts} 次）。建议检查网络后重试。`;
+        }
+        if (upstreamMessage) {
+            return `证据化诊断暂不可用，已回退结构化分析：${upstreamMessage}。可稍后点击“重试 AI 分析”。`;
+        }
+        return `证据化诊断暂不可用，已回退结构化分析：服务暂时不稳定（已自动重试 ${totalAttempts} 次）。`;
+    }
+
+    function requestSingleAttemptLlmAnalysisViaParentBridgeOnce(results, options = {}) {
+        const target = options.target;
+        const timeoutMs = Number.isFinite(Number(options.timeoutMs))
+            ? Math.max(1500, Number(options.timeoutMs))
+            : PARENT_ANALYSIS_REQUEST_TIMEOUT_MS;
         if (!target || typeof target.postMessage !== 'function') {
             const error = new Error('父页分析桥不可用');
             error.code = 'analysis_bridge_unavailable';
@@ -2421,7 +2533,7 @@
                 const timeoutError = new Error('父页分析桥请求超时');
                 timeoutError.code = 'analysis_bridge_timeout';
                 reject(timeoutError);
-            }, PARENT_ANALYSIS_REQUEST_TIMEOUT_MS);
+            }, timeoutMs);
 
             pendingAnalysisBridgeRequests.set(requestId, { resolve, reject, timeoutId });
             try {
@@ -2433,6 +2545,11 @@
                         examId: state.examId,
                         sessionId: state.sessionId,
                         suiteSessionId: state.suiteSessionId,
+                        bridgeMeta: {
+                            attempt: Number.isFinite(Number(options.attempt)) ? Number(options.attempt) : 1,
+                            totalAttempts: Number.isFinite(Number(options.totalAttempts)) ? Number(options.totalAttempts) : 1,
+                            timeoutMs
+                        },
                         singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
                         singleAttemptAnalysis: results.singleAttemptAnalysis
                     }
@@ -2451,6 +2568,79 @@
                 reject(postError);
             }
         });
+    }
+
+    async function requestSingleAttemptLlmAnalysisViaParentBridge(results, onLog = null) {
+        const attemptTimeouts = Array.isArray(PARENT_ANALYSIS_RETRY_TIMEOUT_MS) && PARENT_ANALYSIS_RETRY_TIMEOUT_MS.length
+            ? PARENT_ANALYSIS_RETRY_TIMEOUT_MS
+            : [PARENT_ANALYSIS_REQUEST_TIMEOUT_MS];
+        const totalAttempts = attemptTimeouts.length;
+        let lastError = null;
+
+        for (let attemptIndex = 0; attemptIndex < totalAttempts; attemptIndex += 1) {
+            const targets = resolveParentBridgeTargets();
+            if (!targets.length) {
+                const unavailableError = new Error('父页分析桥不可用');
+                unavailableError.code = 'analysis_bridge_unavailable';
+                unavailableError.userMessage = formatBridgeFailureMessage(unavailableError, attemptIndex + 1);
+                throw unavailableError;
+            }
+            if (typeof onLog === 'function' && attemptIndex > 0) {
+                onLog(`连接波动，正在进行第 ${attemptIndex + 1}/${totalAttempts} 次重试...`);
+            }
+            const rotatedTargets = targets.slice(attemptIndex).concat(targets.slice(0, attemptIndex));
+            for (let targetIndex = 0; targetIndex < rotatedTargets.length; targetIndex += 1) {
+                const target = rotatedTargets[targetIndex];
+                try {
+                    const data = await requestSingleAttemptLlmAnalysisViaParentBridgeOnce(results, {
+                        target,
+                        timeoutMs: attemptTimeouts[attemptIndex],
+                        attempt: attemptIndex + 1,
+                        totalAttempts
+                    });
+                    return data;
+                } catch (error) {
+                    lastError = error;
+                    if (targetIndex < rotatedTargets.length - 1 && typeof onLog === 'function') {
+                        onLog('主通道异常，正在切换备用通信链路...');
+                    }
+                    if (!isRetryableBridgeError(error)) {
+                        error.userMessage = formatBridgeFailureMessage(error, attemptIndex + 1);
+                        throw error;
+                    }
+                }
+            }
+            if (attemptIndex < totalAttempts - 1) {
+                const backoff = PARENT_ANALYSIS_RETRY_BACKOFF_MS[Math.min(attemptIndex, PARENT_ANALYSIS_RETRY_BACKOFF_MS.length - 1)] || 0;
+                await waitForBridgeRetry(backoff);
+            }
+        }
+
+        const finalError = lastError || new Error('父页分析桥请求失败');
+        finalError.code = finalError.code || 'analysis_bridge_request_failed';
+        finalError.userMessage = formatBridgeFailureMessage(finalError, totalAttempts);
+        throw finalError;
+    }
+
+    function formatLlmFailureStatusMessage(error) {
+        if (error && typeof error.userMessage === 'string' && error.userMessage.trim()) {
+            return error.userMessage.trim();
+        }
+        const code = String(error?.code || '').trim().toLowerCase();
+        const rawMessage = String(error?.message || '').trim();
+        if (code === 'local_api_unavailable') {
+            return '证据化诊断暂不可用，已回退结构化分析：未发现本地分析服务。请确认客户端已完整启动后重试。';
+        }
+        if (code === 'reading_analysis_network_error') {
+            return '证据化诊断暂不可用，已回退结构化分析：本地分析服务连接失败（网络连接异常）。请检查网络后点击“重试 AI 分析”。';
+        }
+        if (code === 'invalid_response_format' || code === 'analysis_bridge_invalid_response') {
+            return '证据化诊断暂不可用，已回退结构化分析：服务返回格式异常。建议稍后重试。';
+        }
+        if (rawMessage) {
+            return `证据化诊断暂不可用，已回退结构化分析：${rawMessage}`;
+        }
+        return '证据化诊断暂不可用，已回退结构化分析：服务暂时不可用，请稍后重试。';
     }
 
     async function triggerSingleAttemptLlmAnalysis(results) {
@@ -2510,7 +2700,7 @@
             if (requestId !== state.llmAnalysisRequestId) {
                 return;
             }
-            setLlmAnalysisStatus('failed', `证据化诊断失败，已回退结构化分析：${error?.message || 'unknown_error'}`);
+            setLlmAnalysisStatus('failed', formatLlmFailureStatusMessage(error));
             renderResults(results);
         }
     }
