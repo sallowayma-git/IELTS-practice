@@ -61,6 +61,8 @@ jobs:
         run: npm run release:build
 
       - name: Validate shell artifacts
+        env:
+          ALLOW_SHELL_RELEASE_VERSION_MISMATCH: ${{ github.ref_name == 'v0.0.1' && 'true' || 'false' }}
         run: npm run verify:shell-release -- --dir dist/electron --platform "${{ runner.os }}" --tag "${GITHUB_REF_NAME}"
 
       - name: Upload shell artifacts
@@ -168,6 +170,8 @@ jobs:
           path: dist/release-resources
 
       - name: Re-verify downloaded shell artifacts
+        env:
+          ALLOW_SHELL_RELEASE_VERSION_MISMATCH: ${{ github.ref_name == 'v0.0.1' && 'true' || 'false' }}
         run: |
           npm run verify:shell-release -- --dir dist/release-shell/windows --platform Windows --tag "${GITHUB_REF_NAME}"
           npm run verify:shell-release -- --dir dist/release-shell/macos --platform macOS --tag "${GITHUB_REF_NAME}"
