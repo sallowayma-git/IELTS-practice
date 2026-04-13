@@ -96,7 +96,8 @@ jobs:
 
       - name: Skip macOS shell build when notarization prerequisites are missing
         if: runner.os == 'macOS' && steps.mac-prereq.outputs.ready != 'true'
-        run: echo "Skipping macOS build: required signing/notarization secrets are missing."
+        run: |
+          echo "Skipping macOS build: required signing/notarization secrets are missing."
 
       - name: Verify macOS signature/notarization/staple
         if: runner.os == 'macOS' && steps.mac-prereq.outputs.ready == 'true'
@@ -243,10 +244,10 @@ jobs:
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
             cat > dist/release-shell/macos-notarization-status.txt <<'EOF'
-macOS assets are intentionally omitted from this release.
-Reason: signing/notarization prerequisites were unavailable in CI for this tag.
-To maximize user double-click open success, unsigned/unnotarized macOS installers are blocked from distribution.
-EOF
+            macOS assets are intentionally omitted from this release.
+            Reason: signing/notarization prerequisites were unavailable in CI for this tag.
+            To maximize user double-click open success, unsigned/unnotarized macOS installers are blocked from distribution.
+            EOF
           fi
 
       - name: Download resource artifacts
