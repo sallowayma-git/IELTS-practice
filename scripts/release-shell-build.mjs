@@ -1,15 +1,12 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-const npmCliPath = require.resolve('npm/bin/npm-cli.js');
 
 function runNpm(args) {
     return new Promise((resolve, reject) => {
-        const child = spawn(process.execPath, [npmCliPath, ...args], {
+        const child = spawn('npm', args, {
             stdio: 'inherit',
-            env: process.env
+            env: process.env,
+            shell: process.platform === 'win32'
         });
         child.on('error', reject);
         child.on('close', (code) => {
