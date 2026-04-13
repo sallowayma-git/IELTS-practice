@@ -3069,6 +3069,7 @@
             if (!requestId || !sourceWindow || typeof sourceWindow.postMessage !== 'function') {
                 return;
             }
+            const startedAt = Date.now();
             const respond = (payload = {}) => {
                 try {
                     sourceWindow.postMessage({
@@ -3082,56 +3083,163 @@
                     // ignore response post errors
                 }
             };
+            const wait = (ms) => new Promise((resolve) => {
+                setTimeout(resolve, Math.max(0, Number(ms) || 0));
+            });
+            const runWithTimeout = (taskFactory, timeoutMs) => new Promise((resolve, reject) => {
+                const normalizedTimeout = Math.max(1500, Number(timeoutMs) || 0);
+                let settled = false;
+                const timer = setTimeout(() => {
+                    if (settled) return;
+                    settled = true;
+                    const timeoutError = new Error(`二阶段分析服务响应超时（${Math.ceil(normalizedTimeout / 1000)}s）`);
+                    timeoutError.code = 'analysis_bridge_upstream_timeout';
+                    reject(timeoutError);
+                }, normalizedTimeout);
+                Promise.resolve()
+                    .then(() => taskFactory())
+                    .then((result) => {
+                        if (settled) return;
+                        settled = true;
+                        clearTimeout(timer);
+                        resolve(result);
+                    })
+                    .catch((error) => {
+                        if (settled) return;
+                        settled = true;
+                        clearTimeout(timer);
+                        reject(error);
+                    });
+            });
+            const normalizeBridgeError = (errorLike, fallbackCode, fallbackMessage) => {
+                const normalized = errorLike instanceof Error
+                    ? errorLike
+                    : new Error(
+                        (errorLike && typeof errorLike.message === 'string' && errorLike.message.trim())
+                            ? errorLike.message.trim()
+                            : fallbackMessage
+                    );
+                normalized.code = (errorLike && errorLike.code)
+                    ? String(errorLike.code)
+                    : fallbackCode;
+                if (!normalized.message || !String(normalized.message).trim()) {
+                    normalized.message = fallbackMessage;
+                }
+                return normalized;
+            };
+            const isRetryableBridgeError = (error) => {
+                const code = String(error?.code || '').trim().toLowerCase();
+                const message = String(error?.message || '').trim().toLowerCase();
+                const nonRetryableCodes = new Set([
+                    'invalid_response_format',
+                    'invalid_request_payload',
+                    'analysis_bridge_unavailable'
+                ]);
+                if (nonRetryableCodes.has(code)) {
+                    return false;
+                }
+                const retryableCodes = new Set([
+                    'analysis_bridge_upstream_timeout',
+                    'reading_analysis_ipc_failed',
+                    'analysis_bridge_failed',
+                    'reading_analysis_network_error'
+                ]);
+                if (retryableCodes.has(code)) {
+                    return true;
+                }
+                const retryHints = [
+                    'timeout',
+                    'timed out',
+                    'network',
+                    'socket',
+                    'econn',
+                    'reset',
+                    'temporarily',
+                    'unavailable',
+                    'busy',
+                    '429',
+                    '502',
+                    '503',
+                    '504',
+                    '超时',
+                    '网络',
+                    '拥堵',
+                    '暂时不可用'
+                ];
+                for (let index = 0; index < retryHints.length; index += 1) {
+                    if (message.includes(retryHints[index])) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            const attemptPlan = [
+                { timeoutMs: 7000, retryDelayMs: 300 },
+                { timeoutMs: 14000, retryDelayMs: 0 }
+            ];
 
             if (!window.electronAPI || typeof window.electronAPI.analyzeReadingSingleAttempt !== 'function') {
                 respond({
                     success: false,
                     error: {
                         code: 'analysis_bridge_unavailable',
-                        message: '父页分析桥不可用'
+                        message: '父页分析桥不可用，请从主应用入口重新打开练习页'
                     }
                 });
                 return;
             }
 
-            try {
-                const payload = await window.electronAPI.analyzeReadingSingleAttempt({
-                    singleAttemptAnalysisInput: data.singleAttemptAnalysisInput,
-                    singleAttemptAnalysis: data.singleAttemptAnalysis
-                });
-                if (!payload || payload.success === false) {
-                    respond({
-                        success: false,
-                        error: {
+            let lastError = null;
+            for (let attemptIndex = 0; attemptIndex < attemptPlan.length; attemptIndex += 1) {
+                const currentAttempt = attemptPlan[attemptIndex];
+                try {
+                    const payload = await runWithTimeout(() => window.electronAPI.analyzeReadingSingleAttempt({
+                        singleAttemptAnalysisInput: data.singleAttemptAnalysisInput,
+                        singleAttemptAnalysis: data.singleAttemptAnalysis
+                    }), currentAttempt.timeoutMs);
+                    if (!payload || payload.success === false) {
+                        throw normalizeBridgeError({
                             code: payload?.error?.code || 'reading_analysis_ipc_failed',
                             message: payload?.error?.message || payload?.message || '二阶段分析请求失败'
-                        }
-                    });
-                    return;
-                }
-                if (!payload.data || typeof payload.data !== 'object') {
-                    respond({
-                        success: false,
-                        error: {
+                        }, 'reading_analysis_ipc_failed', '二阶段分析请求失败');
+                    }
+                    if (!payload.data || typeof payload.data !== 'object') {
+                        throw normalizeBridgeError({
                             code: 'invalid_response_format',
                             message: '二阶段分析返回格式无效'
+                        }, 'invalid_response_format', '二阶段分析返回格式无效');
+                    }
+                    respond({
+                        success: true,
+                        data: payload.data,
+                        meta: {
+                            attempt: attemptIndex + 1,
+                            attempts: attemptPlan.length,
+                            elapsedMs: Date.now() - startedAt
                         }
                     });
                     return;
-                }
-                respond({
-                    success: true,
-                    data: payload.data
-                });
-            } catch (error) {
-                respond({
-                    success: false,
-                    error: {
-                        code: error?.code || 'analysis_bridge_failed',
-                        message: error?.message || '分析桥调用失败'
+                } catch (error) {
+                    lastError = normalizeBridgeError(error, 'analysis_bridge_failed', '分析桥调用失败');
+                    if (!isRetryableBridgeError(lastError) || attemptIndex >= attemptPlan.length - 1) {
+                        break;
                     }
-                });
+                    await wait(currentAttempt.retryDelayMs);
+                }
             }
+
+            const finalError = lastError || normalizeBridgeError(null, 'analysis_bridge_failed', '分析桥调用失败');
+            respond({
+                success: false,
+                error: {
+                    code: finalError.code || 'analysis_bridge_failed',
+                    message: finalError.message || '分析桥调用失败'
+                },
+                meta: {
+                    attempts: attemptPlan.length,
+                    elapsedMs: Date.now() - startedAt
+                }
+            });
         },
 
         /**
