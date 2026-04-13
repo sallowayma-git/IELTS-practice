@@ -9,8 +9,7 @@ const DEFAULT_MANAGED_PREFIXES = [
     'css/',
     'js/',
     'templates/',
-    'assets/',
-    'ListeningPractice/'
+    'assets/'
 ];
 
 function normalizeRelativePath(relativePath) {

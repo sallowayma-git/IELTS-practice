@@ -8,7 +8,7 @@ import semver from 'semver';
 
 const RESOURCE_INCLUDE = Object.freeze({
   exact: ['index.html'],
-  prefixes: ['css/', 'js/', 'templates/', 'assets/', 'ListeningPractice/']
+  prefixes: ['css/', 'js/', 'templates/', 'assets/']
 });
 
 const RESOURCE_EXCLUDE = Object.freeze({
