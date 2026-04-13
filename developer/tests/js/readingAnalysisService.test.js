@@ -54,8 +54,10 @@ async function testParseErrorShouldDegradeInsteadOfThrow() {
             return null;
         }
     });
+    let capturedMessages = null;
     service.providerOrchestrator = {
         async streamCompletion(options = {}) {
+            capturedMessages = options.messages;
             if (typeof options.onChunk === 'function') {
                 options.onChunk('{"diagnosis":[{"code":"d1","reason":"截断');
             }
@@ -71,6 +73,14 @@ async function testParseErrorShouldDegradeInsteadOfThrow() {
     assert.strictEqual(result.model_trace.degraded_reason, 'parse_error', '解析失败应标记 parse_error');
     assert.ok(Array.isArray(result.diagnosis) && result.diagnosis.length > 0, '降级结果应包含 diagnosis');
     assert.ok(Array.isArray(result.nextActions) && result.nextActions.length > 0, '降级结果应包含 nextActions');
+    const combinedPrompt = Array.isArray(capturedMessages)
+        ? capturedMessages.map((item) => String(item?.content || '')).join('\n')
+        : '';
+    assert.ok(
+        combinedPrompt.includes('reason/instruction/evidence 必须使用简体中文')
+        || combinedPrompt.includes('reason/instruction/evidence 必须是自然中文'),
+        '构造消息时应包含中文输出约束'
+    );
 }
 
 async function testProviderErrorShouldDegradeInsteadOfThrow() {

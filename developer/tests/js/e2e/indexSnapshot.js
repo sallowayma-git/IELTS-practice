@@ -141,6 +141,7 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!DOCTYPE html>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <button class="btn" id="create-backup-btn">💾 创建备份</button>
                     <button class="btn btn-secondary" id="backup-list-btn">📋 备份列表</button>
+                    <button class="btn btn-secondary" id="check-updates-btn">查看更新</button>
                     <button class="btn btn-info" id="export-data-btn">📤 导出数据</button>
                     <button class="btn btn-warning" id="import-data-btn">📥 导入数据</button>
                 </div>

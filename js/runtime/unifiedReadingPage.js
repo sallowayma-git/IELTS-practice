@@ -6,7 +6,9 @@
     const SIMULATION_DRAFT_SYNC_MS = 1200;
     const PENDING_PRACTICE_MESSAGES_KEY = 'exam_system_pending_practice_messages_v1';
     const WINDOW_NAME_PENDING_PREFIX = '__exam_pending_practice_v1__';
+    const LOCAL_API_INFO_STORAGE_KEY = 'exam_system_local_api_info_v1';
     const READING_ANALYSIS_API_PATH = '/api/reading/single-attempt-analysis';
+    const PARENT_ANALYSIS_REQUEST_TIMEOUT_MS = 20000;
     const EXPLANATION_STYLE_ID = 'reading-explanation-style';
     const ANALYSIS_STYLE_ID = 'reading-single-attempt-analysis-style';
     const EXPLANATION_SPLIT_KINDS = new Set([
@@ -17,6 +19,7 @@
     ]);
     const navStatus = new Map();
     const scriptCache = new Map();
+    const pendingAnalysisBridgeRequests = new Map();
     const QUESTION_KIND_LABELS = {
         single_choice: '单选题',
         multi_choice: '多选题',
@@ -111,7 +114,67 @@
         }
     }
 
+    function readLocalApiInfoFromStorage() {
+        const stores = [global.sessionStorage, global.localStorage].filter(Boolean);
+        for (let index = 0; index < stores.length; index += 1) {
+            const store = stores[index];
+            try {
+                const raw = store.getItem(LOCAL_API_INFO_STORAGE_KEY);
+                if (!raw) {
+                    continue;
+                }
+                const parsed = JSON.parse(raw);
+                const baseUrl = parsed && typeof parsed.baseUrl === 'string' ? parsed.baseUrl.trim() : '';
+                if (baseUrl) {
+                    return baseUrl;
+                }
+            } catch (_) {
+                // ignore malformed cache
+            }
+        }
+        return null;
+    }
+
+    function clearLocalApiInfoCache() {
+        [global.sessionStorage, global.localStorage].filter(Boolean).forEach((store) => {
+            try {
+                store.removeItem(LOCAL_API_INFO_STORAGE_KEY);
+            } catch (_) {
+                // ignore storage failures
+            }
+        });
+    }
+
+    function persistLocalApiInfo(baseUrl) {
+        const normalized = typeof baseUrl === 'string' ? baseUrl.trim() : '';
+        if (!normalized) {
+            return;
+        }
+        const serialized = JSON.stringify({ baseUrl: normalized, updatedAt: Date.now() });
+        [global.sessionStorage, global.localStorage].filter(Boolean).forEach((store) => {
+            try {
+                store.setItem(LOCAL_API_INFO_STORAGE_KEY, serialized);
+            } catch (_) {
+                // ignore storage failures
+            }
+        });
+    }
+
+    function resolveRuntimeParam(name) {
+        try {
+            const params = new URLSearchParams(global.location && global.location.search ? global.location.search : '');
+            const value = params.get(name);
+            return value && String(value).trim() ? String(value).trim() : '';
+        } catch (_) {
+            return '';
+        }
+    }
+
     function normalizeFlowMode(value) { return typeof value === 'string' ? value.trim().toLowerCase() : ''; }
+
+    function isElectronRuntimeContext() {
+        return resolveRuntimeParam('runtime') === 'electron';
+    }
 
     function resolveSimulationSequence(rawIndex, rawTotal) {
         const currentIndex = Number.isFinite(rawIndex) ? Math.max(0, rawIndex) : 0;
@@ -1539,6 +1602,7 @@
 
     function buildAnalysisSignals(answerComparison = {}, questionTimelineLite = []) {
         const entries = Object.values(answerComparison || {});
+        const questionCount = entries.length;
         const unansweredCount = entries.reduce((count, entry) => (
             hasMeaningfulAnswer(entry?.userAnswer) ? count : count + 1
         ), 0);
@@ -1549,6 +1613,7 @@
         const durationMinutes = Math.max(durationSeconds / 60, 1);
         const interactionDensity = Number((state.interactionCount / durationMinutes).toFixed(4));
         return {
+            questionCount,
             unansweredCount,
             changedAnswerCount,
             interactionDensity
@@ -1905,11 +1970,14 @@
     function buildSingleAttemptAnalysisFromCanonicalInput(input = {}) {
         const normalizedInput = input && typeof input === 'object' ? input : {};
         const totalQuestions = Math.max(0, Number(normalizedInput.totalQuestions) || 0);
-        const safeTotal = totalQuestions > 0 ? totalQuestions : 1;
+        const explicitQuestionCount = Math.max(0, Number(normalizedInput.analysisSignals?.questionCount) || 0);
+        const analysisDenominator = explicitQuestionCount > 0
+            ? explicitQuestionCount
+            : (totalQuestions > 0 ? totalQuestions : 1);
         const accuracy = clampRate(Number(normalizedInput.accuracy) || 0);
         const durationSec = Math.max(0, Math.round(Number(normalizedInput.durationSec) || 0));
-        const unansweredRate = clampRate((Number(normalizedInput.analysisSignals?.unansweredCount) || 0) / safeTotal);
-        const changedAnswerRate = clampRate((Number(normalizedInput.analysisSignals?.changedAnswerCount) || 0) / safeTotal);
+        const unansweredRate = clampRate((Number(normalizedInput.analysisSignals?.unansweredCount) || 0) / analysisDenominator);
+        const changedAnswerRate = clampRate((Number(normalizedInput.analysisSignals?.changedAnswerCount) || 0) / analysisDenominator);
         const byQuestionKind = Object.entries(normalizedInput.questionTypePerformance || {})
             .map(([kind, bucket]) => {
                 const total = Math.max(0, Number(bucket?.total) || 0);
@@ -2179,17 +2247,33 @@
         });
     }
 
-    async function resolveLocalApiBaseUrl() {
-        if (!global.electronAPI || typeof global.electronAPI.getLocalApiInfo !== 'function') {
-            return null;
+    async function resolveLocalApiBaseUrl(options = {}) {
+        const skipCache = Boolean(options.skipCache);
+        const queryBaseUrl = resolveRuntimeParam('localApiBaseUrl');
+        if (queryBaseUrl) {
+            persistLocalApiInfo(queryBaseUrl);
+            return queryBaseUrl;
         }
-        try {
-            const response = await global.electronAPI.getLocalApiInfo();
-            const baseUrl = response?.data?.baseUrl || response?.baseUrl || null;
-            return typeof baseUrl === 'string' && baseUrl.trim() ? baseUrl.trim() : null;
-        } catch (_) {
-            return null;
+        if (global.electronAPI && typeof global.electronAPI.getLocalApiInfo === 'function') {
+            try {
+                const response = await global.electronAPI.getLocalApiInfo();
+                const baseUrl = response?.data?.baseUrl || response?.baseUrl || null;
+                const normalized = typeof baseUrl === 'string' && baseUrl.trim() ? baseUrl.trim() : null;
+                if (normalized) {
+                    persistLocalApiInfo(normalized);
+                    return normalized;
+                }
+            } catch (_) {
+                // ignore and continue to cache fallback
+            }
         }
+        if (!skipCache) {
+            const cachedBaseUrl = readLocalApiInfoFromStorage();
+            if (cachedBaseUrl) {
+                return cachedBaseUrl;
+            }
+        }
+        return null;
     }
 
     function setLlmAnalysisStatus(status, message, options = {}) {
@@ -2203,6 +2287,29 @@
     async function requestSingleAttemptLlmAnalysis(results, onLog = null) {
         if (typeof onLog === 'function') {
             onLog('模型正在联通...');
+            onLog('数据正在上传...');
+            onLog('消息已发送！AI 正在思考中...');
+        }
+        if (global.electronAPI && typeof global.electronAPI.analyzeReadingSingleAttempt === 'function') {
+            const payload = await global.electronAPI.analyzeReadingSingleAttempt({
+                singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
+                singleAttemptAnalysis: results.singleAttemptAnalysis
+            });
+            if (!payload || payload.success === false) {
+                const message = payload?.error?.message || payload?.message || '二阶段分析请求失败';
+                const error = new Error(message);
+                error.code = payload?.error?.code || 'reading_analysis_ipc_failed';
+                throw error;
+            }
+            if (!payload.data || typeof payload.data !== 'object') {
+                const error = new Error('二阶段分析返回格式无效');
+                error.code = 'invalid_response_format';
+                throw error;
+            }
+            return payload.data;
+        }
+        if (isElectronRuntimeContext()) {
+            return requestSingleAttemptLlmAnalysisViaParentBridge(results);
         }
         const baseUrl = await resolveLocalApiBaseUrl();
         if (!baseUrl) {
@@ -2210,20 +2317,43 @@
             error.code = 'local_api_unavailable';
             throw error;
         }
-        if (typeof onLog === 'function') {
-            onLog('数据正在上传...');
+        let response;
+        let networkError = null;
+        try {
+            response = await fetch(`${baseUrl}${READING_ANALYSIS_API_PATH}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
+                    singleAttemptAnalysis: results.singleAttemptAnalysis
+                })
+            });
+        } catch (error) {
+            networkError = error;
+            clearLocalApiInfoCache();
+            const refreshedBaseUrl = await resolveLocalApiBaseUrl({ skipCache: true });
+            if (refreshedBaseUrl && refreshedBaseUrl !== baseUrl) {
+                try {
+                    response = await fetch(`${refreshedBaseUrl}${READING_ANALYSIS_API_PATH}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
+                            singleAttemptAnalysis: results.singleAttemptAnalysis
+                        })
+                    });
+                } catch (_) {
+                    // keep original error semantics below
+                }
+            }
         }
-        if (typeof onLog === 'function') {
-            onLog('消息已发送！AI 正在思考中...');
+
+        if (!response) {
+            const wrapped = new Error('本地分析服务连接失败');
+            wrapped.code = 'reading_analysis_network_error';
+            wrapped.cause = networkError;
+            throw wrapped;
         }
-        const response = await fetch(`${baseUrl}${READING_ANALYSIS_API_PATH}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
-                singleAttemptAnalysis: results.singleAttemptAnalysis
-            })
-        });
         if (typeof onLog === 'function') {
             onLog('模型回复已收到，正在整理结果...');
         }
@@ -2241,6 +2371,86 @@
             throw error;
         }
         return llm;
+    }
+
+    function settleAnalysisBridgeRequest(requestId, data) {
+        const normalizedRequestId = requestId ? String(requestId).trim() : '';
+        if (!normalizedRequestId || !pendingAnalysisBridgeRequests.has(normalizedRequestId)) {
+            return false;
+        }
+        const pending = pendingAnalysisBridgeRequests.get(normalizedRequestId);
+        pendingAnalysisBridgeRequests.delete(normalizedRequestId);
+        try {
+            if (pending.timeoutId) {
+                global.clearTimeout(pending.timeoutId);
+            }
+        } catch (_) {
+            // ignore clearTimeout errors
+        }
+
+        if (!data || data.success === false) {
+            const errorMessage = data?.error?.message || data?.message || '父页分析桥请求失败';
+            const error = new Error(errorMessage);
+            error.code = data?.error?.code || 'analysis_bridge_request_failed';
+            pending.reject(error);
+            return true;
+        }
+        if (!data.data || typeof data.data !== 'object') {
+            const error = new Error('父页分析桥返回格式无效');
+            error.code = 'analysis_bridge_invalid_response';
+            pending.reject(error);
+            return true;
+        }
+        pending.resolve(data.data);
+        return true;
+    }
+
+    function requestSingleAttemptLlmAnalysisViaParentBridge(results) {
+        const target = (state.parentWindow && state.parentWindow !== global)
+            ? state.parentWindow
+            : ((global.parent && global.parent !== global) ? global.parent : (global.opener && !global.opener.closed ? global.opener : null));
+        if (!target || typeof target.postMessage !== 'function') {
+            const error = new Error('父页分析桥不可用');
+            error.code = 'analysis_bridge_unavailable';
+            throw error;
+        }
+        const requestId = `analysis_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        return new Promise((resolve, reject) => {
+            const timeoutId = global.setTimeout(() => {
+                pendingAnalysisBridgeRequests.delete(requestId);
+                const timeoutError = new Error('父页分析桥请求超时');
+                timeoutError.code = 'analysis_bridge_timeout';
+                reject(timeoutError);
+            }, PARENT_ANALYSIS_REQUEST_TIMEOUT_MS);
+
+            pendingAnalysisBridgeRequests.set(requestId, { resolve, reject, timeoutId });
+            try {
+                target.postMessage({
+                    type: 'REQUEST_READING_ANALYSIS',
+                    source: MESSAGE_SOURCE,
+                    data: {
+                        requestId,
+                        examId: state.examId,
+                        sessionId: state.sessionId,
+                        suiteSessionId: state.suiteSessionId,
+                        singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
+                        singleAttemptAnalysis: results.singleAttemptAnalysis
+                    }
+                }, '*');
+                state.parentWindow = target;
+            } catch (error) {
+                pendingAnalysisBridgeRequests.delete(requestId);
+                try {
+                    global.clearTimeout(timeoutId);
+                } catch (_) {
+                    // ignore clearTimeout errors
+                }
+                const postError = new Error('父页分析桥消息发送失败');
+                postError.code = 'analysis_bridge_post_failed';
+                postError.cause = error;
+                reject(postError);
+            }
+        });
     }
 
     async function triggerSingleAttemptLlmAnalysis(results) {
@@ -2898,11 +3108,137 @@
             return;
         }
         const existing = loadPendingPracticeMessages();
-        existing.push({
+        const normalizedQueue = normalizePendingPracticeQueue(existing);
+        const queuedMessage = normalizePendingEnvelope(envelope);
+        if (!queuedMessage) {
+            return;
+        }
+        const incomingKey = buildPendingMessageKey(queuedMessage);
+        const deduped = incomingKey
+            ? normalizedQueue.filter((entry) => buildPendingMessageKey(entry.message) !== incomingKey)
+            : normalizedQueue.slice();
+        deduped.push({
             createdAt: Date.now(),
-            message: envelope
+            message: queuedMessage
         });
-        persistPendingPracticeMessages(existing);
+        persistPendingPracticeMessages(deduped);
+    }
+
+    function normalizePendingEnvelope(rawEnvelope) {
+        if (!rawEnvelope || typeof rawEnvelope !== 'object') {
+            return null;
+        }
+        return rawEnvelope;
+    }
+
+    function normalizePendingPracticeQueue(queue) {
+        if (!Array.isArray(queue) || queue.length === 0) {
+            return [];
+        }
+        const normalized = queue
+            .map((entry) => {
+                if (entry && typeof entry === 'object' && entry.message && typeof entry.message === 'object') {
+                    return {
+                        createdAt: Number(entry.createdAt) || Date.now(),
+                        message: entry.message
+                    };
+                }
+                if (entry && typeof entry === 'object') {
+                    return {
+                        createdAt: Date.now(),
+                        message: entry
+                    };
+                }
+                return null;
+            })
+            .filter(Boolean);
+
+        const dedupedByKey = new Map();
+        normalized.forEach((entry) => {
+            const keyFromContract = buildPendingMessageKey(entry.message);
+            let fallbackKey = '';
+            if (!keyFromContract) {
+                try {
+                    fallbackKey = JSON.stringify(entry.message);
+                } catch (_) {
+                    fallbackKey = '';
+                }
+            }
+            const key = keyFromContract || fallbackKey || `__pending_${entry.createdAt}`;
+            const existing = dedupedByKey.get(key);
+            if (!existing || Number(entry.createdAt) >= Number(existing.createdAt)) {
+                dedupedByKey.set(key, entry);
+            }
+        });
+
+        return Array.from(dedupedByKey.values()).sort((a, b) => Number(a.createdAt) - Number(b.createdAt));
+    }
+
+    function buildPendingMessageKey(envelope) {
+        if (!envelope || typeof envelope !== 'object') {
+            return '';
+        }
+        const type = typeof envelope.type === 'string' ? envelope.type.trim().toUpperCase() : '';
+        const data = envelope.data && typeof envelope.data === 'object' ? envelope.data : {};
+        const examId = data.examId != null ? String(data.examId).trim() : '';
+        const sessionId = data.sessionId != null ? String(data.sessionId).trim() : '';
+        const suiteSessionId = data.suiteSessionId != null ? String(data.suiteSessionId).trim() : '';
+        if (!type || !examId || !sessionId) {
+            return '';
+        }
+        return `${type}|${examId}|${sessionId}|${suiteSessionId}`;
+    }
+
+    function clearPendingPracticeMessages() {
+        [global.localStorage, global.sessionStorage].filter(Boolean).forEach((store) => {
+            try {
+                store.removeItem(PENDING_PRACTICE_MESSAGES_KEY);
+            } catch (_) {
+                // ignore storage errors
+            }
+        });
+        try {
+            const currentName = typeof global.name === 'string' ? global.name : '';
+            if (currentName.startsWith(WINDOW_NAME_PENDING_PREFIX)) {
+                global.name = '';
+            }
+        } catch (_) {
+            // ignore window.name clear errors
+        }
+    }
+
+    function drainPendingPracticeMessages(targetWindow) {
+        if (!targetWindow || targetWindow === global) {
+            return;
+        }
+        const queue = normalizePendingPracticeQueue(loadPendingPracticeMessages());
+        if (queue.length === 0) {
+            clearPendingPracticeMessages();
+            return;
+        }
+        const envelopes = queue
+            .map((entry) => entry.message)
+            .filter(Boolean)
+            .slice(-10);
+        if (!envelopes.length) {
+            clearPendingPracticeMessages();
+            return;
+        }
+
+        for (let index = 0; index < envelopes.length; index += 1) {
+            try {
+                targetWindow.postMessage(envelopes[index], '*');
+            } catch (_) {
+                const remaining = envelopes.slice(index).map((message) => ({
+                    createdAt: Date.now(),
+                    message
+                }));
+                persistPendingPracticeMessages(remaining);
+                return;
+            }
+        }
+
+        clearPendingPracticeMessages();
     }
 
     function postMessage(type, payload) {
@@ -2918,6 +3254,7 @@
             try {
                 target.postMessage(envelope, '*');
                 state.parentWindow = target;
+                drainPendingPracticeMessages(target);
                 return true;
             } catch (_) {
                 // try next candidate
@@ -3472,6 +3809,17 @@
                 singleAttemptAnalysisLlm: results.singleAttemptAnalysisLlm || null
             })
         }, results));
+        try {
+            document.dispatchEvent(new CustomEvent('practiceSubmissionFinalized', {
+                detail: {
+                    status: 'final',
+                    examId: state.examId,
+                    sessionId: state.sessionId
+                }
+            }));
+        } catch (_) {
+            // ignore event dispatch failures
+        }
         triggerSingleAttemptLlmAnalysis(results);
         if (state.simulationMode && state.simulationCtx && state.simulationCtx.isLast) {
             stopSimulationDraftSync();
@@ -3578,12 +3926,25 @@
     }
 
     function navigateToLegacyHome() {
+        const runtimeLegacyHomeUrl = resolveRuntimeParam('legacyHomeUrl');
         if (global.electronAPI && typeof global.electronAPI.openLegacy === 'function') {
             try {
                 global.electronAPI.openLegacy();
                 return true;
             } catch (_) {
                 // ignore and continue fallback
+            }
+        }
+        if (runtimeLegacyHomeUrl) {
+            try {
+                if (global.location && typeof global.location.replace === 'function') {
+                    global.location.replace(runtimeLegacyHomeUrl);
+                } else if (global.location) {
+                    global.location.href = runtimeLegacyHomeUrl;
+                }
+                return true;
+            } catch (_) {
+                // continue to file:// fallback
             }
         }
         const legacyIndexUrl = resolveLegacyIndexUrl();
@@ -3602,6 +3963,10 @@
         }
     }
 
+    function isEmbeddedPracticeContext() {
+        return Boolean(!global.opener && global.parent && global.parent !== global);
+    }
+
     function handleIncoming(event) {
         const payload = event?.data;
         if (!payload || typeof payload !== 'object') {
@@ -3609,6 +3974,10 @@
         }
         const type = String(payload.type || payload.action || '').toUpperCase();
         const data = payload.data || {};
+        if (type === 'READING_ANALYSIS_RESULT') {
+            settleAnalysisBridgeRequest(data && data.requestId, data || {});
+            return;
+        }
         if (type === 'INIT_SESSION' || type === 'INIT_EXAM_SESSION') {
             const initSignature = buildInitSignature(data);
             const isDuplicateInit = initSignature && initSignature === state.lastInitSignature;
@@ -3707,6 +4076,12 @@
         }
         if (type === 'SUITE_FORCE_CLOSE') {
             clearSimulationState(true);
+            if (isEmbeddedPracticeContext()) {
+                postMessage('PRACTICE_EXIT', {
+                    reason: 'suite_force_close'
+                });
+                return;
+            }
             try {
                 if (!navigateToLegacyHome()) {
                     global.close();

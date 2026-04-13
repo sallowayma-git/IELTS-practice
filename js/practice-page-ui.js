@@ -12,6 +12,7 @@
         let seconds = 0;
         let timer;
         let submissionLocked = false;
+        let submissionFinalized = false;
         let isResizing = false;
         const selbar = document.getElementById('selbar');
         let lastRange = null;
@@ -102,6 +103,18 @@
         }
 
         function isSimulationMode() { return window.__UNIFIED_READING_SIMULATION_MODE__ === true; }
+        function isEmbeddedPracticeMode() {
+            return Boolean(!window.opener && window.parent && window.parent !== window);
+        }
+        function resolveRuntimeLegacyHomeUrl() {
+            try {
+                const params = new URLSearchParams(window.location && window.location.search ? window.location.search : '');
+                const value = params.get('legacyHomeUrl');
+                return value && String(value).trim() ? String(value).trim() : '';
+            } catch (_) {
+                return '';
+            }
+        }
         function resolveLegacyIndexUrl() {
             const href = window.location && typeof window.location.href === 'string'
                 ? String(window.location.href)
@@ -147,6 +160,26 @@
         }
         function closePracticeWindow(options = {}) {
             const skipParentExitMessage = options && options.skipParentExitMessage === true;
+            const opener = window.opener && !window.opener.closed ? window.opener : null;
+            const parentFrame = window.parent && window.parent !== window ? window.parent : null;
+            const parentPracticeWindow = opener || parentFrame;
+            if (!skipParentExitMessage && parentPracticeWindow && typeof parentPracticeWindow.postMessage === 'function') {
+                try {
+                    parentPracticeWindow.postMessage({ type: 'PRACTICE_EXIT', data: { source: 'practice_page' } }, '*');
+                } catch (_) {
+                    // ignore parent message errors
+                }
+            }
+            if (parentPracticeWindow) {
+                if (opener) {
+                    try {
+                        window.close();
+                    } catch (_) {
+                        // ignore close errors
+                    }
+                }
+                return;
+            }
             const hasElectronLegacyNavigation = window.electronAPI
                 && typeof window.electronAPI.openLegacy === 'function';
             if (hasElectronLegacyNavigation) {
@@ -157,15 +190,20 @@
                     // ignore and continue fallback chain
                 }
             }
-            const opener = window.opener && !window.opener.closed ? window.opener : null;
-            if (!skipParentExitMessage && opener && typeof opener.postMessage === 'function') {
+            const runtimeLegacyHomeUrl = resolveRuntimeLegacyHomeUrl();
+            if (runtimeLegacyHomeUrl) {
                 try {
-                    opener.postMessage({ type: 'PRACTICE_EXIT', data: { source: 'practice_page' } }, '*');
+                    if (window.location && typeof window.location.replace === 'function') {
+                        window.location.replace(runtimeLegacyHomeUrl);
+                    } else if (window.location) {
+                        window.location.href = runtimeLegacyHomeUrl;
+                    }
+                    return;
                 } catch (_) {
-                    // ignore opener message errors
+                    // continue to file:// fallback
                 }
             }
-            if (!opener && navigateToLegacyByLocation()) {
+            if (navigateToLegacyByLocation()) {
                 return;
             }
             window.close();
@@ -190,6 +228,21 @@
         }
         function restoreDefaultExitAction() {
             setExitButtonAction(null, defaultExitText);
+        }
+        let endlessCountdownActive = false;
+        function syncExitButtonState() {
+            if (endlessCountdownActive || isEmbeddedPracticeMode()) {
+                setExitButtonVisible(true);
+                return;
+            }
+            setExitButtonVisible(submissionFinalized);
+            if (!submissionFinalized) {
+                restoreDefaultExitAction();
+            }
+        }
+        function finalizeSubmissionUi() {
+            submissionFinalized = true;
+            syncExitButtonState();
         }
         function notifyEndlessUserExit() {
             const opener = window.opener;
@@ -911,7 +964,8 @@
             if (resetBtn) {
                 resetBtn.disabled = true;
             }
-            setExitButtonVisible(true);
+            submissionFinalized = false;
+            syncExitButtonState();
             disableAnswerInputs();
         }
 
@@ -1155,7 +1209,9 @@
             if (submissionLocked) {
                 return;
             }
-            setExitButtonVisible(false);
+            submissionFinalized = false;
+            endlessCountdownActive = false;
+            syncExitButtonState();
             restoreDefaultExitAction();
             document.querySelectorAll('input, textarea, select').forEach((field) => {
                 if (field.tagName === 'INPUT') {
@@ -1221,6 +1277,7 @@
         bindLiveModeClick(resetBtn, resetPracticePage);
         bindLiveModeClick(submitBtn, lockPracticeAfterSubmit);
 
+        syncExitButtonState();
         restoreDefaultExitAction();
         if (exitBtn) {
             exitBtn.addEventListener('click', () => {
@@ -1259,13 +1316,20 @@
             }
             handleResultsReady(detail);
             revealTranscriptPane();
-            lockPracticeAfterSubmit();
+        });
+        document.addEventListener('practiceSubmissionFinalized', (event) => {
+            const detail = event && event.detail ? event.detail : {};
+            if (detail.status && detail.status !== 'final') {
+                return;
+            }
+            if (!submissionLocked) {
+                lockPracticeAfterSubmit();
+            }
+            finalizeSubmissionUi();
         });
 
         // --- 无尽模式：监听来自父窗口的倒计时指令 ---
         (function setupEndlessCountdownListener() {
-            var endlessCountdownActive = false;
-
             function applyEndlessTimer(seconds) {
                 if (!timerEl) return;
                 timerEl.textContent = seconds + 's';
@@ -1285,7 +1349,7 @@
                     endlessCountdownActive = true;
                     var secs = (msg.data && typeof msg.data.seconds === 'number') ? msg.data.seconds : 5;
                     applyEndlessTimer(secs);
-                    setExitButtonVisible(true);
+                    syncExitButtonState();
                     setExitButtonAction(function () {
                         notifyEndlessUserExit();
                         closePracticeWindow({ skipParentExitMessage: true });
@@ -1297,6 +1361,7 @@
                     if (remaining <= 0) {
                         endlessCountdownActive = false;
                         resetEndlessTimer();
+                        syncExitButtonState();
                     }
                 }
             });

@@ -858,6 +858,9 @@
         const unresolvedUnansweredCount = answerComparison
             ? Object.values(answerComparison).filter((entry) => !isFilledAnswerValue(entry && entry.userAnswer)).length
             : 0;
+        const unresolvedQuestionCount = answerComparison
+            ? Object.keys(answerComparison).length
+            : totalQuestions;
         const unresolvedChangedCount = questionTimelineLite.reduce(
             (sum, entry) => (ensureNumber(entry.changeCount, 0) > 0 ? sum + 1 : sum),
             0
@@ -877,6 +880,10 @@
             || {}
         );
         const analysisSignals = {
+            questionCount: Math.max(0, ensureNumber(
+                analysisSignalsSource.questionCount,
+                unresolvedQuestionCount
+            )),
             unansweredCount: Math.max(0, ensureNumber(
                 analysisSignalsSource.unansweredCount,
                 unresolvedUnansweredCount
@@ -1004,8 +1011,12 @@
         const durationSec = Math.max(0, ensureNumber(input.durationSec, 0));
         const unansweredCount = Math.max(0, ensureNumber(input.analysisSignals && input.analysisSignals.unansweredCount, 0));
         const changedAnswerCount = Math.max(0, ensureNumber(input.analysisSignals && input.analysisSignals.changedAnswerCount, 0));
-        const unansweredRate = totalQuestions > 0 ? unansweredCount / totalQuestions : 0;
-        const changedAnswerRate = totalQuestions > 0 ? changedAnswerCount / totalQuestions : 0;
+        const explicitQuestionCount = Math.max(0, ensureNumber(input.analysisSignals && input.analysisSignals.questionCount, 0));
+        const rateDenominator = explicitQuestionCount > 0
+            ? explicitQuestionCount
+            : (totalQuestions > 0 ? totalQuestions : 1);
+        const unansweredRate = unansweredCount / rateDenominator;
+        const changedAnswerRate = changedAnswerCount / rateDenominator;
 
         const byQuestionKind = Object.entries(input.questionTypePerformance || {})
             .map(([kind, entry]) => ({

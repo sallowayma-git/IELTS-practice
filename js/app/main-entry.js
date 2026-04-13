@@ -379,7 +379,10 @@
             return;
         }
 
-        finalizeBrowseBoot();
+        if (global.AppBootScreen && typeof global.AppBootScreen.complete === 'function') {
+            global.AppBootScreen.complete();
+        }
+        dispatchRuntimeReady();
     }
 
     global.addEventListener('examIndexLoaded', function onExamIndexLoaded() {

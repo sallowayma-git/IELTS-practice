@@ -5,10 +5,13 @@
   "private": true,
   "main": "electron/main.js",
   "scripts": {
-    "start": "electron .",
+    "prepare:writing": "npm --prefix apps/writing-vue install --no-fund --no-audit",
+    "build:writing": "npm run prepare:writing && npm --prefix apps/writing-vue run build",
+    "start": "npm run build:writing && electron .",
     "start:electron": "electron .",
-    "release:build": "electron-builder --publish never",
-    "release:publish": "electron-builder --publish onTag",
+    "postinstall": "electron-builder install-app-deps",
+    "release:build": "npm run build:writing && electron-builder --publish never",
+    "release:publish": "npm run build:writing && electron-builder --publish onTag",
     "build:resource-release": "node scripts/build-resource-release.mjs",
     "check:update-syntax": "node scripts/check-update-syntax.mjs",
     "verify:release-client-smoke": "node developer/tests/update/release-client-smoke.cjs",
@@ -34,6 +37,7 @@
     },
     "files": [
       "electron/**/*",
+      "dist/writing/**/*",
       "index.html",
       "css/**/*",
       "js/**/*",
@@ -110,7 +114,10 @@
   },
   "dependencies": {
     "adm-zip": "^0.5.16",
+    "better-sqlite3": "^12.6.2",
     "electron-updater": "^6.3.9",
+    "express": "^4.21.2",
+    "uuid": "^13.0.0",
     "semver": "^7.6.3"
   },
   "devDependencies": {

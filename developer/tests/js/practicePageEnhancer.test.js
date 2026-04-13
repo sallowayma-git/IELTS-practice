@@ -276,6 +276,72 @@ function testSendMessageQueuesPracticeCompleteWhenParentIsSelf() {
         'self-parent 场景也应同步写入 window.name 持久化通道'
     );
 }
+
+function testSendMessageDedupesPendingPracticeCompleteBySession() {
+    const harness = createHarness();
+    harness.enhancer.parentWindow = null;
+    harness.enhancer.readOnly = false;
+
+    harness.enhancer.sendMessage('PRACTICE_COMPLETE', {
+        examId: 'reading-p3',
+        sessionId: 'session-enhancer-dedupe',
+        scoreInfo: { correct: 1, total: 3, accuracy: 1 / 3, percentage: 33 }
+    });
+    harness.enhancer.sendMessage('PRACTICE_COMPLETE', {
+        examId: 'reading-p3',
+        sessionId: 'session-enhancer-dedupe',
+        scoreInfo: { correct: 3, total: 3, accuracy: 1, percentage: 100 }
+    });
+
+    const raw = harness.windowStub.localStorage.getItem('exam_system_pending_practice_messages_v1');
+    assert.ok(raw, '去重场景应写入待处理队列');
+    const queue = JSON.parse(raw);
+    assert.strictEqual(queue.length, 1, 'enhancer 待处理队列应按 examId/sessionId 去重');
+    assert.strictEqual(
+        Number(queue[0].message?.data?.scoreInfo?.correct),
+        3,
+        'enhancer 去重后应保留最新待处理消息'
+    );
+}
+
+function testSendMessageDrainsPendingQueueWhenParentRecovered() {
+    const harness = createHarness();
+    harness.enhancer.parentWindow = null;
+    harness.enhancer.readOnly = false;
+
+    harness.enhancer.sendMessage('PRACTICE_COMPLETE', {
+        examId: 'reading-p4',
+        sessionId: 'session-enhancer-drain',
+        scoreInfo: { correct: 2, total: 3, accuracy: 2 / 3, percentage: 67 }
+    });
+
+    const posted = [];
+    harness.enhancer.parentWindow = {
+        postMessage(message, origin) {
+            posted.push({ message, origin });
+        }
+    };
+
+    harness.enhancer.sendMessage('SESSION_READY', {
+        examId: 'reading-p4',
+        sessionId: 'session-enhancer-drain',
+        ready: true
+    });
+
+    assert.strictEqual(posted.length, 2, '父窗口恢复后 enhancer 应发送当前消息并回放待处理队列');
+    assert.strictEqual(posted[0].message.type, 'SESSION_READY', 'enhancer 恢复后应先发送当前消息');
+    assert.strictEqual(posted[1].message.type, 'PRACTICE_COMPLETE', 'enhancer 恢复后应回放待处理 PRACTICE_COMPLETE');
+    assert.strictEqual(
+        harness.windowStub.localStorage.getItem('exam_system_pending_practice_messages_v1'),
+        null,
+        'enhancer 回放成功后应清空本地待处理队列'
+    );
+    assert.strictEqual(
+        String(harness.windowStub.name || ''),
+        '',
+        'enhancer 回放成功后应清空 window.name 待处理缓存'
+    );
+}
 function testApplyReplayRecordRestoresMarkedQuestions() {
     const harness = createHarness();
     let reviewModeArg = null;
@@ -530,6 +596,8 @@ function main() {
         testSendMessageRespectsReadOnlyGuard();
         testSendMessageQueuesPracticeCompleteWhenParentMissing();
         testSendMessageQueuesPracticeCompleteWhenParentIsSelf();
+        testSendMessageDedupesPendingPracticeCompleteBySession();
+        testSendMessageDrainsPendingQueueWhenParentRecovered();
         testApplyReplayRecordRestoresMarkedQuestions();
         testApplyReplayRecordSchedulesReplayFallbackOnce();
         testResultsMonitoringAndScoreContracts();

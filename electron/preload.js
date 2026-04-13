@@ -52,7 +52,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
         };
     },
     getUserDataPath: () => invoke('app:getUserDataPath'),
-    getLocalApiInfo: () => invoke('app:getLocalApiInfo')
+    getLocalApiInfo: () => invoke('app:getLocalApiInfo'),
+    analyzeReadingSingleAttempt: (payload) => invoke('reading:analyze-single-attempt', payload)
 });
 
 contextBridge.exposeInMainWorld('writingAPI', {
