@@ -135,8 +135,6 @@
     }
 
     var actionHandlers = {
-        'show-developer-team': callAction('showDeveloperTeam'),
-        'hide-developer-team': callAction('hideDeveloperTeam'),
         'show-theme-switcher': callAction('showThemeSwitcherModal'),
         'hide-theme-switcher': callAction('hideThemeSwitcherModal'),
         'show-achievements': callAction('showAchievements'),

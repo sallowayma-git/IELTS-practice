@@ -23,13 +23,12 @@
      * - 数据驱动：所有按钮和筛选逻辑由配置决定
      */
     const BROWSE_MODES = {
-        // 默认模式：全部/阅读/听力
+        // 默认模式：全部/阅读
         'default': {
             id: 'default',
             filters: [
                 { id: 'all', label: '全部', type: 'all' },
-                { id: 'reading', label: '阅读', type: 'reading' },
-                { id: 'listening', label: '听力', type: 'listening' }
+                { id: 'reading', label: '阅读', type: 'reading' }
             ],
             filterLogic: 'type-based'
         },
@@ -406,8 +405,7 @@
                 // 默认模式
                 const map = {
                     'all': '全部题目',
-                    'reading': '阅读理解',
-                    'listening': '听力训练'
+                    'reading': '阅读理解'
                 };
                 title = map[category] || '题库列表';
             }

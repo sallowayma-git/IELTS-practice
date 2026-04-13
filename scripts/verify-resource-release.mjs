@@ -274,7 +274,6 @@ function main() {
   const fullArchive = fs.readFileSync(fullArchivePath);
 
   const manifestPrefixes = ensureValidManagedPrefixes(manifest.managedPrefixes, 'manifest.managedPrefixes');
-  assert(manifestPrefixes.includes('ListeningPractice/'), 'ListeningPractice/ 未纳入资源更新白名单');
   assert(Array.isArray(manifest.files), 'manifest.files 缺失');
   assert(Array.isArray(manifest.packages?.delta?.files), 'packages.delta.files 缺失');
   assert(Array.isArray(manifest.packages?.full?.files), 'packages.full.files 缺失');
@@ -284,8 +283,6 @@ function main() {
 
   const deltaPrefixes = ensureValidManagedPrefixes(manifest.packages.delta.managedPrefixes, 'packages.delta.managedPrefixes');
   const fullPrefixes = ensureValidManagedPrefixes(manifest.packages.full.managedPrefixes, 'packages.full.managedPrefixes');
-  assert(deltaPrefixes.includes('ListeningPractice/'), 'packages.delta.managedPrefixes 缺少 ListeningPractice/');
-  assert(fullPrefixes.includes('ListeningPractice/'), 'packages.full.managedPrefixes 缺少 ListeningPractice/');
   assert(JSON.stringify(deltaPrefixes) === JSON.stringify(manifestPrefixes), 'packages.delta.managedPrefixes 与顶层 manifest.managedPrefixes 不一致');
   assert(JSON.stringify(fullPrefixes) === JSON.stringify(manifestPrefixes), 'packages.full.managedPrefixes 与顶层 manifest.managedPrefixes 不一致');
 
