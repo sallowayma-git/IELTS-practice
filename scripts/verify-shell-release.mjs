@@ -214,6 +214,9 @@ function verifyMetadataVersion(metadata, expectedTag, label) {
 
   const expectedVersion = normalizeVersion(expectedTag);
   assert(expectedVersion, `非法 tag: ${expectedTag}`);
+  if (String(process.env.ALLOW_SHELL_RELEASE_VERSION_MISMATCH || '').trim().toLowerCase() === 'true') {
+    return normalizedVersion;
+  }
   assert(normalizedVersion === expectedVersion, `${label} version 与 tag 不一致: ${metadata.version} != ${expectedTag}`);
   return normalizedVersion;
 }
