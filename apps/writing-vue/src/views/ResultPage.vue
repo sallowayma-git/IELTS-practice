@@ -13,7 +13,10 @@
 
         <div v-if="topicText" class="glass-card mb-4 p-4">
           <h3 class="flex-align text-sm font-bold text-primary mb-2">
-            <span class="material-symbols-outlined mr-2">menu_book</span>
+            <svg class="icon-inline mr-2" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            </svg>
             {{ topicSourceLabel }}
           </h3>
           <p class="topic-meta">{{ topicText }}</p>
@@ -42,7 +45,11 @@
                <component :is="'div'" v-if="sentence.errors?.length > 0 && expandedSentences.has(index)" class="error-details glass-card shadow-elevated mb-3 mt-1">
                  <div v-for="(err, errIdx) in sentence.errors" :key="errIdx" class="error-item border-base-light pb-2 mb-2 last-no-border">
                     <div class="error-type mb-1" :class="'text-' + err.type.replace('_', '-')">
-                      <span class="material-symbols-outlined mr-1" style="font-size: 14px;">error</span>
+                      <svg class="icon-inline icon-inline--xs mr-1" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="13"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                      </svg>
                       <strong>{{ getErrorTypeLabel(err.type) }}</strong>
                     </div>
                     <div class="error-word mb-1">
@@ -90,7 +97,11 @@
 
         <div v-if="reviewDegraded" class="degraded-warning mb-4">
           <h4 class="font-bold mb-1 flex-align">
-              <span class="material-symbols-outlined mr-2">warning</span>
+              <svg class="icon-inline mr-2" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
               Analysis Degraded
           </h4>
           <p class="text-xs">{{ sentenceEmptyHint }}</p>
@@ -99,22 +110,41 @@
         <!-- Metrics Grid -->
         <div class="metrics-grid mb-4">
           <div class="metric-card glass-card hover-lift p-4">
-            <span class="material-symbols-outlined text-primary mb-2">assignment_turned_in</span>
+            <svg class="icon-inline icon-inline--metric text-primary mb-2" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 11l3 3L22 4"></path>
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+            </svg>
             <div class="metric-label">Task Response</div>
             <div class="metric-value">{{ scoreData?.task_achievement ?? '-' }}</div>
           </div>
           <div class="metric-card glass-card hover-lift p-4">
-            <span class="material-symbols-outlined text-primary mb-2">account_tree</span>
+            <svg class="icon-inline icon-inline--metric text-primary mb-2" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 3v12"></path>
+              <path d="M18 9v12"></path>
+              <path d="M6 9h12"></path>
+              <circle cx="6" cy="18" r="2"></circle>
+              <circle cx="18" cy="6" r="2"></circle>
+              <circle cx="18" cy="18" r="2"></circle>
+            </svg>
             <div class="metric-label">Coherence</div>
             <div class="metric-value">{{ scoreData?.coherence_cohesion ?? '-' }}</div>
           </div>
           <div class="metric-card glass-card hover-lift p-4">
-            <span class="material-symbols-outlined text-primary mb-2">menu_book</span>
+            <svg class="icon-inline icon-inline--metric text-primary mb-2" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            </svg>
             <div class="metric-label">Lexical Resource</div>
             <div class="metric-value">{{ scoreData?.lexical_resource ?? '-' }}</div>
           </div>
           <div class="metric-card glass-card hover-lift p-4">
-            <span class="material-symbols-outlined text-primary mb-2">spellcheck</span>
+            <svg class="icon-inline icon-inline--metric text-primary mb-2" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 20h16"></path>
+              <path d="M6 16h12"></path>
+              <path d="M8 12h8"></path>
+              <path d="M10 4h4"></path>
+              <path d="M9 8h6"></path>
+            </svg>
             <div class="metric-label">Grammar</div>
             <div class="metric-value">{{ scoreData?.grammatical_range ?? '-' }}</div>
           </div>
@@ -122,7 +152,11 @@
 
         <div v-if="feedback" class="glass-card mb-4">
           <h3 class="font-bold flex-align mb-3 text-sm">
-            <span class="material-symbols-outlined text-primary mr-2">lightbulb</span>
+            <svg class="icon-inline text-primary mr-2" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 18h6"></path>
+              <path d="M10 22h4"></path>
+              <path d="M12 2a7 7 0 0 0-4 12.75c.58.4 1 1 1.2 1.67L9.5 18h5l.3-1.58c.2-.67.62-1.27 1.2-1.67A7 7 0 0 0 12 2z"></path>
+            </svg>
             整体改进建议
           </h3>
           <p class="text-sm text-secondary leading-relaxed">{{ feedback }}</p>
@@ -130,7 +164,10 @@
 
         <div v-if="improvementPlan && improvementPlan.length > 0" class="glass-card mb-4">
           <h3 class="font-bold flex-align mb-3 text-sm">
-              <span class="material-symbols-outlined text-primary mr-2">build</span>
+              <svg class="icon-inline text-primary mr-2" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4L14 13"></path>
+                <path d="M18 5l1 1"></path>
+              </svg>
               核心提分计划
           </h3>
           <ul class="plan-list">
@@ -143,7 +180,14 @@
         
         <div v-if="reviewBlocks && reviewBlocks.length > 0" class="glass-card mb-4">
           <h3 class="font-bold flex-align mb-3 text-sm">
-            <span class="material-symbols-outlined text-primary mr-2">segment</span>
+            <svg class="icon-inline text-primary mr-2" viewBox="0 0 24 24" aria-hidden="true">
+              <line x1="8" y1="6" x2="21" y2="6"></line>
+              <line x1="8" y1="12" x2="21" y2="12"></line>
+              <line x1="8" y1="18" x2="21" y2="18"></line>
+              <line x1="3" y1="6" x2="3.01" y2="6"></line>
+              <line x1="3" y1="12" x2="3.01" y2="12"></line>
+              <line x1="3" y1="18" x2="3.01" y2="18"></line>
+            </svg>
             段落详评
           </h3>
           <div class="rationale-list">
@@ -156,7 +200,11 @@
 
         <div v-if="bandRationaleEntries && bandRationaleEntries.length > 0" class="glass-card mb-4">
           <h3 class="font-bold flex-align mb-3 text-sm">
-              <span class="material-symbols-outlined text-primary mr-2">analytics</span>
+              <svg class="icon-inline text-primary mr-2" viewBox="0 0 24 24" aria-hidden="true">
+                <line x1="18" y1="20" x2="18" y2="10"></line>
+                <line x1="12" y1="20" x2="12" y2="4"></line>
+                <line x1="6" y1="20" x2="6" y2="14"></line>
+              </svg>
               得分解析
           </h3>
           <div class="rationale-list">
@@ -169,7 +217,9 @@
         
         <div v-if="taskAnalysisEntries && taskAnalysisEntries.length > 0" class="glass-card mb-4">
           <h3 class="font-bold flex-align mb-3 text-sm">
-              <span class="material-symbols-outlined text-primary mr-2">query_stats</span>
+              <svg class="icon-inline text-primary mr-2" viewBox="0 0 24 24" aria-hidden="true">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
               任务诊断
           </h3>
           <div class="rationale-list">
@@ -554,6 +604,32 @@ function writeNew() {
 .flex-align {
   display: flex;
   align-items: center;
+}
+
+.icon-inline {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-inline--xs {
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  min-height: 14px;
+}
+
+.icon-inline--metric {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
 }
 
 .flex-align-start {
