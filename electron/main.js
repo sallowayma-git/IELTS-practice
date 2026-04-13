@@ -32,6 +32,7 @@ let rendererReadyReceived = false;
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 const STABLE_USER_DATA_DIR = 'ielts-practice';
 const LEGACY_USER_DATA_DIRS = ['Electron', 'IELTS Practice'];
+const APP_LOGO_RELATIVE_PATH = path.join('assets', 'images', 'herbal_green_flat_logo_1776094316057.png');
 
 configureStableUserDataPath();
 
@@ -239,6 +240,7 @@ async function createMainWindow() {
 
     mainWindowCreation = (async () => {
         const preloadScriptPath = path.join(__dirname, 'preload.js');
+        const appWindowIcon = resolveBundledPath(APP_LOGO_RELATIVE_PATH);
         mainWindow = new BrowserWindow({
             width: 1440,
             height: 960,
@@ -246,6 +248,7 @@ async function createMainWindow() {
             minHeight: 720,
             show: false,
             autoHideMenuBar: true,
+            icon: appWindowIcon,
             webPreferences: {
                 preload: preloadScriptPath,
                 contextIsolation: true,
