@@ -77,11 +77,21 @@ if (packageJson.build?.dmg?.internetEnabled !== false) {
   throw new Error('DMG 必须禁用 internetEnabled，避免分发行为漂移');
 }
 const dmgContents = Array.isArray(packageJson.build?.dmg?.contents) ? packageJson.build.dmg.contents : [];
-if (dmgContents.length !== 2
+if (dmgContents.length < 2
   || dmgContents[0]?.type !== 'file'
   || dmgContents[1]?.type !== 'link'
   || dmgContents[1]?.path !== '/Applications') {
-  throw new Error('DMG 必须固定为应用拖入 /Applications 的双栏布局');
+  throw new Error('DMG 前两项必须固定为应用拖入 /Applications 的双栏布局');
+}
+
+const hasFirstLaunchScript = dmgContents.some((item) =>
+  item?.type === 'file' && item?.path === 'assets/release/macos/mac-first-launch.command'
+);
+const hasFirstLaunchGuide = dmgContents.some((item) =>
+  item?.type === 'file' && item?.path === 'assets/release/macos/mac-first-launch-guide.txt'
+);
+if (!hasFirstLaunchScript || !hasFirstLaunchGuide) {
+  throw new Error('DMG 必须包含 mac-first-launch.command 与 mac-first-launch-guide.txt');
 }
 if (packageJson.build?.mac?.hardenedRuntime !== true || packageJson.build?.mac?.strictVerify !== true) {
   throw new Error('macOS 构建必须开启 hardenedRuntime 与 strictVerify，避免签名分发变形');
