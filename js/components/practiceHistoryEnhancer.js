@@ -1,0 +1,361 @@
+/**
+ * 练习历史增强器
+ * 为练习历史组件添加 Markdown 导出和详情弹窗功能
+ */
+class PracticeHistoryEnhancer {
+    constructor() {
+        this.initialized = false;
+    }
+
+    ensureGlobalAPIs() {
+        if (typeof window.showRecordDetails !== 'function') {
+            window.showRecordDetails = (recordId) => this.showRecordDetails(recordId);
+        }
+        if (typeof window.exportPracticeDataEnhanced !== 'function') {
+            window.exportPracticeDataEnhanced = () => this.showExportDialog();
+        }
+    }
+
+    buildExportFilename() {
+        return `practice_history_${new Date().toISOString().split('T')[0]}.json`;
+    }
+
+    downloadJsonPayload(payload) {
+        const content = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+        const blob = new Blob([content], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = this.buildExportFilename();
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(url);
+    }
+
+    /**
+     * 初始化增强功能
+     */
+    initialize() {
+        if (this.initialized) {
+            console.log('[PracticeHistoryEnhancer] 已初始化，跳过重复初始化');
+            return;
+        }
+
+        // 立即标记为初始化中，防止重复调用
+        this.initialized = true;
+
+        try {
+            console.log('[PracticeHistoryEnhancer] 开始初始化');
+
+            // 等待练习历史组件加载
+            this.waitForPracticeHistory().then(() => {
+                this.enhancePracticeHistory();
+                console.log('[PracticeHistoryEnhancer] 练习历史增强功能已初始化');
+            }).catch(error => {
+                console.error('[PracticeHistoryEnhancer] 初始化失败:', error);
+                // 提供降级功能
+                this.initializeFallback();
+            });
+        } catch (error) {
+            console.error('[PracticeHistoryEnhancer] 初始化过程出错:', error);
+            this.initializeFallback();
+        }
+    }
+
+    /**
+     * 降级初始化
+     */
+    initializeFallback() {
+        console.log('[PracticeHistoryEnhancer] 使用降级初始化');
+
+        this.ensureGlobalAPIs();
+        this.initialized = true;
+        console.log('[PracticeHistoryEnhancer] 降级初始化完成');
+    }
+
+    /**
+     * 等待练习历史组件加载
+     */
+    async waitForPracticeHistory() {
+        return new Promise((resolve) => {
+            let checkCount = 0;
+            const maxChecks = 50; // 最多检查50次（5秒）
+            
+            const checkInterval = setInterval(() => {
+                checkCount++;
+                
+                // 检查是否有练习历史相关的函数或数据
+                const hasStandardComponent = window.app?.components?.practiceHistory;
+                const hasGlobalData = typeof window.exportPracticeData === 'function' && window.practiceRecords;
+                const hasBasicStructure = document.querySelector('.practice-history') || 
+                                        document.querySelector('#practice-records') ||
+                                        typeof window.practiceRecords !== 'undefined';
+                
+                if (hasStandardComponent || hasGlobalData || hasBasicStructure) {
+                    clearInterval(checkInterval);
+                    console.log('[PracticeHistoryEnhancer] 检测到练习历史组件');
+                    resolve();
+                    return;
+                }
+                
+                // 超时处理
+                if (checkCount >= maxChecks) {
+                    clearInterval(checkInterval);
+                    console.warn('[PracticeHistoryEnhancer] 等待超时，继续初始化');
+                    resolve(); // 不reject，继续初始化
+                }
+            }, 100);
+        });
+    }
+
+    /**
+     * 增强练习历史组件
+     */
+    enhancePracticeHistory() {
+        try {
+            this.ensureGlobalAPIs();
+            const practiceHistory = window.app?.components?.practiceHistory;
+            if (!practiceHistory) {
+                if (typeof window.exportPracticeData === 'function') {
+                    console.log('[PracticeHistoryEnhancer] 检测到全局导出函数');
+                }
+                console.log('[PracticeHistoryEnhancer] 全局函数已增强');
+                return;
+            }
+
+            const originalCreateRecordItem = practiceHistory.createRecordItem?.bind(practiceHistory);
+            if (originalCreateRecordItem) {
+                practiceHistory.createRecordItem = (record) => {
+                    const html = originalCreateRecordItem(record);
+                    return html.replace(
+                        /<h4 class="record-title clickable">([^<]+)<\/h4>/,
+                        `<h4 class="record-title practice-record-title" onclick="window.practiceHistoryEnhancer.showRecordDetails('${record.id}')" title="点击查看详情">$1</h4>`
+                    );
+                };
+            }
+
+            if (typeof practiceHistory.exportHistory === 'function') {
+                practiceHistory.exportHistory = () => this.showExportDialog();
+            }
+            practiceHistory.showRecordDetails = (recordId) => this.showRecordDetails(recordId);
+            console.log('[PracticeHistoryEnhancer] 标准练习历史组件已增强');
+        } catch (error) {
+            console.error('[PracticeHistoryEnhancer] 增强过程出错:', error);
+            this.ensureGlobalAPIs();
+        }
+    }
+
+    /**
+     * 显示导出选择对话框
+     */
+    showExportDialog() {
+        const dialogHtml = `
+            <div id="export-dialog" class="modal-overlay">
+                <div class="modal-container" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h3 class="modal-title">导出练习记录</h3>
+                        <button class="modal-close" onclick="document.getElementById('export-dialog').remove()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="modal-body">
+                        <div class="export-options">
+                            <h4>选择导出格式：</h4>
+                            <div class="format-options">
+                                <label class="format-option">
+                                    <input type="radio" name="export-format" value="json" checked>
+                                    <div class="option-content">
+                                        <strong>JSON 格式</strong>
+                                        <p>完整的数据格式，可用于备份和导入</p>
+                                    </div>
+                                </label>
+                                <label class="format-option">
+                                    <input type="radio" name="export-format" value="markdown">
+                                    <div class="option-content">
+                                        <strong>Markdown 格式</strong>
+                                        <p>易读的文档格式，包含详细的答题表格</p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" onclick="document.getElementById('export-dialog').remove()">
+                            取消
+                        </button>
+                        <button class="btn btn-primary" onclick="window.practiceHistoryEnhancer.performExport()">
+                            <i class="fas fa-download"></i> 导出
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', dialogHtml);
+    }
+
+    /**
+     * 执行导出
+     */
+    async performExport() {
+        try {
+            const selectedFormat = document.querySelector('input[name="export-format"]:checked')?.value || 'json';
+
+            if (selectedFormat === 'markdown') {
+                this.exportAsMarkdown();
+            } else {
+                await this.exportAsJSON();
+            }
+
+            document.getElementById('export-dialog')?.remove();
+
+        } catch (error) {
+            console.error('导出失败:', error);
+            window.showMessage('导出失败: ' + error.message, 'error');
+        }
+    }
+
+    /**
+     * 导出为 Markdown 格式
+     */
+    exportAsMarkdown() {
+        if (!window.MarkdownExporter) {
+            throw new Error('MarkdownExporter 未加载');
+        }
+        
+        const exporter = new MarkdownExporter();
+        exporter.exportToMarkdown();
+        
+        window.showMessage('Markdown 格式导出成功', 'success');
+    }
+
+    /**
+     * 导出为 JSON 格式
+     */
+    async exportAsJSON() {
+        try {
+            // 尝试使用标准的PracticeRecorder
+            const practiceRecorder = window.app?.components?.practiceRecorder;
+            if (practiceRecorder) {
+                const exportData = await practiceRecorder.exportData('json');
+                this.downloadJsonPayload(exportData);
+                
+                if (window.showMessage) {
+                    window.showMessage('JSON 格式导出成功', 'success');
+                }
+                return;
+            }
+            
+            // 降级到直接从全局变量导出
+            let practiceRecords = [];
+            let practiceStats = {};
+
+            if (Array.isArray(window.practiceRecords)) {
+                practiceRecords = window.practiceRecords;
+            } else if (window.storage && typeof window.storage.get === 'function') {
+                const storedRecords = await window.storage.get('practice_records', []);
+                practiceRecords = Array.isArray(storedRecords) ? storedRecords : [];
+            }
+
+            if (window.practiceStats) {
+                practiceStats = window.practiceStats;
+            }
+            
+            if (practiceRecords.length === 0) {
+                throw new Error('没有练习记录可导出');
+            }
+            
+            const data = {
+                exportDate: new Date().toISOString(),
+                stats: practiceStats,
+                records: practiceRecords
+            };
+
+            this.downloadJsonPayload(data);
+            
+            if (window.showMessage) {
+                window.showMessage('JSON 格式导出成功', 'success');
+            }
+            
+        } catch (error) {
+            console.error('JSON导出失败:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * 优先从核心数据仓库获取练习记录，避免 legacy storage 造成数据缺失
+     */
+    async fetchRecordById(recordId) {
+        const toIdStr = (v) => v == null ? '' : String(v);
+        const targetIdStr = toIdStr(recordId);
+
+        // 1) 优先通过 PracticeRecorder / ScoreStorage 获取最新记录
+        const practiceRecorder = window.app?.components?.practiceRecorder;
+        if (practiceRecorder && typeof practiceRecorder.getPracticeRecords === 'function') {
+            try {
+                const records = await Promise.resolve(practiceRecorder.getPracticeRecords());
+                const list = Array.isArray(records) ? records : [];
+                const hit = list.find(r => toIdStr(r.id) === targetIdStr || toIdStr(r.sessionId) === targetIdStr);
+                if (hit) return hit;
+            } catch (err) {
+                console.warn('[PracticeHistoryEnhancer] 从 PracticeRecorder 获取记录失败，继续降级:', err);
+            }
+        }
+
+        // 2) 兼容 legacy window.practiceRecords（只读兜底）
+        if (Array.isArray(window.practiceRecords)) {
+            const hit = window.practiceRecords.find(r => toIdStr(r.id) === targetIdStr || toIdStr(r.sessionId) === targetIdStr);
+            if (hit) return hit;
+        }
+
+        return null;
+    }
+
+    /**
+      * 显示记录详情
+      */
+    async showRecordDetails(recordId) {
+        try {
+            // 尝试从不同的数据源获取记录
+            const record = await this.fetchRecordById(recordId);
+            
+            if (!record) {
+                throw new Error('记录不存在');
+            }
+            
+            // 使用练习记录弹窗组件显示详情
+            if (window.practiceRecordModal) {
+                window.practiceRecordModal.show(record);
+            } else {
+                throw new Error('PracticeRecordModal 组件未加载');
+            }
+            
+        } catch (error) {
+            console.error('显示记录详情失败:', error);
+            if (window.showMessage) {
+                window.showMessage('无法显示记录详情: ' + error.message, 'error');
+            } else {
+                alert('无法显示记录详情: ' + error.message);
+            }
+        }
+    }
+}
+
+// 创建全局实例
+window.practiceHistoryEnhancer = new PracticeHistoryEnhancer();
+
+// 统一初始化逻辑
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        window.practiceHistoryEnhancer.initialize();
+    });
+} else {
+    // 页面已加载完成，延迟初始化
+    setTimeout(() => {
+        window.practiceHistoryEnhancer.initialize();
+    }, 100);
+}

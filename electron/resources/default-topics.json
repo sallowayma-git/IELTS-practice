@@ -1,0 +1,1682 @@
+[
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Governments should make people responsible for looking after their own local environment. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In recent years, responsible tourists' have paid attention to preserving both culture and environment of the places they visit. However, some people say that it is impossible to be a responsible tourist. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Individuals can do nothing to improve the environment. Only governments and large companies can make a difference. To what extent do you agree or disagree with this opinion?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Solving environmental problems should be the responsibility of an international organization rather than each national government. Do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people argue that too much attention and too many resources are given to protecting wild animals and birds. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe that it is the responsibility of politicians rather than individuals to reduce the global environmental damage. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think governments should focus more on reducing environmental pollution and housing problems to help people prevent illness and diseases. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that it is more important to plant more trees in open areas in towns and cities than provide more housing. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The best way to solve the world's environmental problems is to increase the cost of fuel. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The environmental problems facing today's world are so great that there is little ordinary people can do to improve the situation. Government and large companies should be responsible for reducing the amount of damage being done to the environment. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Traffic and housing problems in major cities could be solved by moving large companies and factories and their employees to the countryside. To what extent do you agree with this opinion?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"A country should spend money on skills training or vocational training for practical work, rather than on university education. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Education of young people is highly prioritized in many countries today. However, some believe that educating the adults who cannot read and write is also important so more public money should be spent on this. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"It is the responsibility of school to teach good behaviors in addition to providing formal education. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Lectures were used in the past as an old way of teaching a large number of students. As new technology is now available for education, some people suggest that there is no justification for lectures. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Nowadays, children spend too much time watching TV and playing computer games. Some people believe this has negative effects on children's mental abilities. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Once children start school, teachers have more influence on their intellectual and social development than parents do. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Parents should encourage children spend less time on studying and more time on doing physical activities. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe that schools are no longer necessary, because students can get so much information through the Internet and study just as well at home. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe that university students should pay all the cost of studies because university education only benefits students themselves but not society as a whole. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe that using books to teach children is boring and that films, TV, and video games should be used instead. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people contend that countries should spend more money on skills training and vocational training rather than university education. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people say that all young people should be required to stay in full-time education until they are at least 18 years old. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think painting and drawings are as important as other subjects, and they should be compulsory in high school education. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think schools should teach students to form good behavior in addition to providing formal education. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that using books to teach children is boring and that films, TV, and video games should be used instead. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think the main purpose of schools is to turn children into good citizens and workers, rather than to benefit them as individuals. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The government should pay for the course fees for everyone who wants to study at the university. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The teaching situation of teachers and students in a classroom will no longer exist by the year 2050. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"All fathers should be entitled to some time off from work after having a child. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"If a country is already rich, any additional economic wealth does not make its citizens happier. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Nowadays celebrities are more famous for their glamour and wealth than for their achievements, and this sets a bad example to young people. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Shops should not be allowed to sell any food or drink that have been scientifically proved to be bad for people's health. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe that employers should not be concerned about the way their employees dress, but be concerned about the quality of work. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think a lot of scientific research done today is a waste of time and money. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think it is a good thing for senior managers to have much higher salaries than the other workers in a company. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The only reason people work hard is to earn more money. There are no other reasons to do it. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Computers are often argued to be the most important invention of the last hundred years. To what extent do you agree or disagree with this statement?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In the past, important knowledge about culture and history was stored in museums. Nowadays, information is freely available on the Internet; therefore, there is no longer any need for museums. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"It is said that work is the most important thing of people’s life. Without the success of career, life will become meaningless. To what extent do you agree or disagree with the opinion?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Many employees can now do their work from home by using modern technology. However, this change may only benefit workers, not the employers. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Many employees can now do their work from home using modern technology. However, this change may only benefit workers, not the employers. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Many people think modern communication technology is having some negative effects on social relationships. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people say that the increasing use of computers and mobile phones for communication has had a negative effect on young people's reading and writing skills. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people say that the main aim of advertising is to improve the sales of products that people do not really need. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think technology makes life complex, so we should make our lives simpler without using technology. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that mobile phones should be banned in public places such as libraries, shops, and public transport. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that the detailed criminal description on newspaper and TV has bad consequence, so this kind of information should be restricted on the media. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that with the increasing use of mobile phones and computers, people lose the ability to communicate face to face. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The increasing use of computers and mobile phones for communication has a negative effect on young people's reading and writing skills. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "culture",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think news has no connection to people's lives, so it is a waste of time to read news in the newspaper and watch news programs on television. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "culture",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The media should include more stories which report good news. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "culture",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The news report from the media focuses on problems and emergencies rather than positive development, which is harmful to individuals and to society. Do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"As we are facing more and more problems which affect the whole planet, good relationships between different countries are becoming more important than ever before. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Extreme sports such as skydiving and skiing are very dangerous and should be banned. To what extent do you agree or disagree with this view?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Historical objects in museums all over the world should be returned to their country of origin. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"If people go to live in another country, they should follow the local customs and traditions. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Intelligence is the most important quality that a leader needs to have. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"People living in 21st century have a better life quality than the people who lived in the previous centuries. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe that competitive sports are a source of emotional stress for young people. Therefore, young people should be banned from participating in competitive sports events. To what extent do you agree or disagree with this statement?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe that younger family members should be legally responsible for supporting older family members when they become physically and mentally and financially unable to look after themselves. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that cyclists should pass a test before they are allowed to ride on the road. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that the best way to improve road safety is to increase the minimum legal age for driving cars and motorcycles. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that the best way to improve road transport safety is to let the driver test each year. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that the only way to improve safety of our roads is to give much stricter punishments on driving offenses. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think the most important thing of being rich is that it provides an opportunity to help other people. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some young people commit serious crimes, such as robbery or violent attacks. Some people think they should be punished in the same way as adults. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The best way for a country to prepare for the future is to invest more in young people. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The older generation has very traditional ideas about the correct ways of life, thinking and behaviour. However, some people think that these ideas are not helpful for the young generation to prepare for modern life. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The tendency of human beings to copy one another is shown in the popularity of fashion in clothes and consumer goods. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Young people who commit crimes should be treated in the same way as adults. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"As housing is a basic need for people, the government should provide free housing for everyone who cannot afford it. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"It is impossible to help all people around the world in need, so governments should focus on helping people in their own countries. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Scientific research should be carried out and controlled by government rather than private companies. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think more public money should be spent on roads and motorways than the public transport system. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The government money should be invested in teaching science rather than other subjects so as to help a country make progress and develop. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The restoration of old buildings in major cities in the world costs numerous governments' expenditures. This money should be used in new housing and road development. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"It is a natural process for animal species to become extinct (e.g. dinosaurs, dodos, etc.). There is no reason why people should try to prevent this from happening. Do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that instead of preventing climate change, we need to find a way to live with it. Do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some animals are in danger of extinction. Some people think that only animals that are useful to humans should be protected. To what extent do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Instead of asking the government to bear the cost of higher education, students should pay their own tuition fees themselves. Do you agree or disagree with this statement?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"It is shown that many criminals have a low level of education. Some people argue that the best way to reduce crime is to educate criminals in prison to help them find jobs when they leave prison. Do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people argue that when children commit crimes, their parents should also face punishment, because they are responsible for their children’s actions. Do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe everyone has the right to get university education, therefore, government should make it free to all people no matter of their financial background. To what extent do you agree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Students today can easily access information online, so libraries are no longer necessary. Do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe that it is a good idea for old people to continue working if it is possible for them to do. Do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In some countries, celebrities complain about the way the media publicize their private lives. Some people say that they should accept it as part of their fame. Do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that art (such as painting and music) does not directly improve the quality of people's life, so the government should spend money on other areas. Do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The crime rate nowadays is decreasing compared to the past due to advanced technology which can prevent and solve crime. Do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Towns and cities are attractive places. Some people suggest the government should spend money putting in more works of art like paintings and statues to make them better to live in. Do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Many customs and traditional ways of behaviors are no longer relevant to modern life and not worth keeping. Do you agree or disagree?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "culture",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"There is no need to attend a live performance (for example, a play or concert) because seeing it at home on television is better. To what extent do you agree or disagree??\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Because of traffic and housing problems in cities, the government encourages businesses to move to the rural area. Do you think the advantages outweigh the disadvantages?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"With the increasing demand for energy such as oil and gas, people start to look for their sources in remote and untouched places. Do the advantages outweigh the disadvantages?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In many cities, planners build shops, schools, offices, and homes in specific areas which may be separated from each other. Do you think the advantages outweigh the disadvantages?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In the past, people stored knowledge in the books. Nowadays, people store knowledge on the Internet. Do the advantages of this development outweigh the disadvantages?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In some cities, public parks and open spaces are changed into gardens where local residents can grow their own fruits and vegetables. Do you think the benefits outweigh the disadvantages?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Despite the increased access to education, a significant number of people cannot read or write. What are the disadvantages and what action should governments take?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In some countries, there has been an increase in the number of parents who educate their children themselves at home instead of sending them to school. Do the advantages of home education outweigh disadvantages?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some school leavers go traveling or work for a period of time instead of going directly to university. Do the advantages of this outweigh the disadvantages?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Universities and colleges are now offering qualifications through distance learning from the Internet rather than teachers in the classroom. Do you think the advantages of this outweigh the disadvantages？\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Nowadays, more people move away from their friends and families for work. Does this development have more advantages or disadvantages?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Nowadays, most countries improve the standard of living through economic development. But some social values are lost as a result. Do you think the advantages of the phenomenon outweigh the disadvantages?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In this time of technology, people’s personal information is held by some companies and organizations in some countries. Do you think the advantage of this situation outweigh the disadvantage?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "culture",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Differences between countries have become less evident, so we can enjoy the same films, brands, and TV programs. Do you think the disadvantages of this outweigh the advantages?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some cities have vehicle-free days when private cars, trucks, and motorcycles are banned from the city center. Public transportation like buses, taxis, and metros are advised. To what extent do you think the advantages of this policy outweigh the disadvantages?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that good health is very important to every person, so medical services should not be run by profit-making companies. Do the advantages of private health care outweigh the disadvantages?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some educationalists think that the program of international exchange visits would benefit all teenage school students. Do you think benefit of such a program overweight its disadvantage?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Nowadays it is easy to apply for and be given a credit card. However, some people experience problems when they are not able to pay their debts back. Do the advantages of credit cards outweigh the disadvantages?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In some countries around the world, men and women are having babies late in life. What are the reasons? Do the advantages outweigh the disadvantages?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In some cities, the governments have tried to reduce traffic. For instance, they imposed a congestion tax during rush hours. Do you think this development is positive or negative?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Organized tours to remote places and communities are becoming more and more popular. Is it a positive or negative development for local people and the environment?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In some parts of the world, children have more freedom than they used to have. Is it a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"People today can shop, work and communicate with others via the Internet. They do not need to do this face to face. Is it a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"People today can shop, work, and communicate with others via the Internet instead of face-to-face communication. Is it a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some countries achieve international success by building specialized sports facilities for top athletes to train instead of providing sports facilities that everyone can use. Is it a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "culture",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"More and more people buy a wide range of household goods like televisions, microwave ovens, and rice cookers. Do you think this is a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In the past, people lived in the same place for their whole life. However, it is common that people now change their living place several times during their lives. What are the reasons and is it a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 1,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"It has become easier and more affordable for people to visit other countries. Is it a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Young people spend their leisure time shopping rather than doing organized activities such as sports or listening to music. Do you think it is a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Today more people put personal and private information online (address, phone number and credit card number) do everyday activities such as banking, shopping. Is this a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Today, many tasks at home or work have been done by robots. Is this a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Today, more people put personal and private information online to do everyday activities such as banking, shopping, and socializing. Is this a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "culture",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Advertisements are becoming more and more common in everyday life. Is this a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Countries are becoming more and more similar because people are able to buy the same products anywhere in the world. Do you think this is a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In many countries today, people in cities either live alone or in small family units, rather than in large, extended family groups. Is this a positive or negative trend?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"With a growing population in cities, more and more people live in a home with small or no outdoor areas. Is this a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In some countries, more and more fathers take care of their children at home while mothers work full-time. What's the reason for this? Is it a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In today's world, people spend a lot of money on appearance because they want to look younger. Why does this happen? Do you think this is a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In many countries, shops open for longer hours daily every week. What is the negative or positive effects of this on the shoppers and local community?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some countries achieve international sports by building specialized facilities to train top athletes, instead of providing sports facilities that everyone can use. Do you think this is positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "culture",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"News media are important in modern society. Why are they so important? Are their influences generally positive or negative?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "culture",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Newspapers have an enormous influence on people's views. Why is that? Do you think it is a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "culture",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Research indicates that nowadays some consumers are much less influenced by advertising than in the past. What do you think are the reasons for this? Do you think this is a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"An increasing number of people are choosing cosmetic surgery in order to improve their appearance. Why? Is it a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In many countries, people like to wear western-style dress (e.g., suits, jeans, etc.) rather than more traditional clothing. Why is this? Is this a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In some parts of the world there are an increasing number of people trying to find out the history of their families. Why? Is this trend a positive or negative development?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Today, food travels thousands of miles from the farm to the consumers. Why is this? Is it a positive or negative trend?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Many believe that it is important to protect all wild animals, while others think that it is important to protect some, not all of them. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think climate change has a negative impact on business, while others think that it provides more business opportunities. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think it is acceptable to use animals for the benefit of humans. Other people think it is wrong to exploit animals for human purposes. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that it is possible for a country to be both economically successful and have a clean environment. Others disagree. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think zoos are cruel and the zoos should be closed. However, some people think zoos are useful to protect the rare animals. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"People believe that children that commit crimes should be punished. Others think the parents should be punished instead. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Schools have the social responsibility to discourage children from eating junk food. Others think it is the parent's responsibility. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe that children should always have activities organized for them in their free time. Others believe that children themselves should choose what they do in their free time. Discuss both view and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe that schools should choose their student according to their abilities. While other people think students with different abilities should learn together. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe that studying at college or university is the best route to a successful career, while others believe that it is better to get a job straight after school. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe that teenagers should concentrate on all school subjects. Others believe that teenagers should focus on the subject that they are best at or that they find the most interesting. Discuss both these views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people say that the governments should pay for health care and education but others think that this is not the government’s responsibility. Discuss both these views and give your opinion\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people say that what children watch on television influences their behaviour while others say the amount of time children spend watching television influences their behaviour. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think adults should learn practical skills by themselves, while others believe that learning from a teacher in a classroom is better. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think history has nothing or little to tell us. Others believe that studying past history can help us better understand the present. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think parents should read or tell stories to children. Others think parents needn't do that as children can read books or watch TV and movies by themselves. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think parents should supervise their children's activities closely, while others believe children should have more freedom. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think school students should learn the science of food and how to prepare it, while others think students should spend time on other more important subjects. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that it is more effective for students to study in a group while others believe that it is better for them to study alone. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that parents can raise their children in any way they want. Others think that all parents should be required to take childcare training courses. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think watching TV is bad for children in every way. Others think it is good for the development of children as they grow up. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some think that children should start school as early as possible, while others believe that they should start schools at the age of seven. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The government has the duty to ensure students have a healthy diet, while others believe it is parents' responsibility. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that family life and parents have great influence on children's development, while others consider that external influence plays a more important role in children's lives. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some companies sponsor sport as a way to advertise themselves. Some people think it is good for the world of sports, while others think there are disadvantages. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some companies sponsor sports as a way to advertise themselves. Some people think it is a good trend, while others think there are disadvantages to this. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe that it is better to live and work in vertical cities. Others, however, think that horizontal cities are better for living and working. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people prefer to stay in the same job for their entire lives, while others prefer to change their jobs frequently. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people regard the increasing business and cultural contact between countries as a positive development. Others, however, feel that this will lead to the loss of national identities. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think a job not only provides income but also a social life. Others think it is better to develop a social life with people you do not work with. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think charity organisations should help people in great need, wherever they live. However, others think that they should concentrate on helping people in their own countries. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that success of life is based on hard work and determination. Others, however, believe that there are more important factors such as having money or good appearance. Discuss both these views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think the Olympic Games is an exciting event which can bring nations together. Other people think the Olympic Games is a way for people to waste money that could be used for other events. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think the manufacturers and shopping malls should sell fewer packaged products while others argue that people have the responsibility to buy products with less packaging. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Scientists believe that computers will become more intelligent than human beings. Some people find it is positive while others think it is a negative development. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people say that travelling abroad is necessary to get knowledge about other countries, while others suggest that TV and the internet can also help people know about foreign countries. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think it's necessary to travel abroad to learn about other countries. However, other people think that it is not necessary to travel abroad because all the information can be seen at TV and the Internet. Discuss both opinions and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think museums should be enjoyable places to attract and entertain young people. Others think the purpose of museums is to educate, not to entertain. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think technological development can reduce crime, while others think it actually encourages crime. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think technology development decreases crime, while others believe it actually encourages crime. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "culture",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that family has the most powerful influence on a child’s development while others believe that other factors (friends, television, music…) have a stronger effect. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "culture",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that newspapers are the best way to learn about news while others believe that the more effective way is through other media. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In many parts of the world, people do research on their family history. Some people believe that finding out about previous generations is a useful thing to do. However, others believe that it is better to focus on present and future generations. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe that every human can create art. Other people think that art can only be created by people with special talents. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think individuals are more and more dependent on each other. Others believe we are more and more independent. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that printed books are not necessary in the digital era, as all writing can be stored electronically. Others believe that printed books still play an important role in our lives. Discuss both these views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that young people should follow the traditions of society. Others think young people are free to behave as individuals. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people believe that women should play an equal role as men in a country's police force or military force, while others think women are not suitable for these kinds of jobs. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people say that the government should regard health care as the first priority, but others believe that there are more important priorities to spend the taxpayers' money on. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people say the government should give health care the first priorities, some others believe there are more important priorities to spend the taxpayer's money. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think all lawbreakers should be sent to prison, while others think there are better alternatives for those whose crimes are minor, such as making them do work for the local community. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think creative artists should be financially supported by the government; others think that these artists should look for other sources of support. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think it is better for one single legal system throughout the world. Others say countries should have their own law. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think paying taxes is a big enough contribution to their society, while others think people have more responsibilities as members of society than only paying taxes. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that the government has the duty to ensure its citizens have a healthy diet, while others argue it is the responsibility of each individual. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Cheap air travel should be encouraged because it gives ordinary people freedom to travel further. However, others think this leads to environmental problems, so air travel should be more expensive in order to discourage people from having it. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think environmental problems are too big for individuals to solve. Others, however, think that those problems cannot be solved unless individuals take some action. Discuss both views and give your opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think the increasing business and cultural contact between countries brings many positive effects. Others say it causes the loss of national identities. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some scientists believe that intelligent life forms may exist on other planets and some want to send messages to contact them. Others, however, think it is a bad idea because these life forms may be too dangerous. Discuss both these views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some think most crime is the result of circumstances e.g. poverty and other social problems. Others believe that most crime is caused by people who are bad by nature. Discuss both sides and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that governments should spend money looking for life on other planets, while others think that it is a waste of public money and there are many problems on earth. Discuss both views and give your own opinion.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Today, advanced science and technology have made great changes to people's life, but artists are still valued high such as musicians, painters and writers. What can art tell us about life that science and technology cannot?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In some countries, young people are not only richer but also safer and healthier than ever before. However, they are less happy. What are the main reasons and possible solutions?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"It is difficult for people living in cities to get enough physical exercise. What are the causes and what solutions can be taken to solve the problem?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The quality of life in big cities is decreasing. What are the causes and what actions should be taken to solve this problem?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In many countries, the number of animals and plants is declining. Why do you think this is happening? How can this issue be solved?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In some countries the number of people who use bicycles as their main form of transport is decreasing even though riding bicycles has many benefits. What are the reasons? What could be done to encourage the use of bicycles.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In some countries, there is not enough recycling of waste materials (e.g., paper, glass, and cans). What are the reasons and solutions?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "environment",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Young people do not spend their holiday and weekend doing outdoor activities like hiking and climbing in natural environment. Why? And how to encourage them to go out?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Despite better access to education, many adults today still cannot read or write. In what ways are they disadvantaged? What can governments do to help them?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In education and employment, some people work harder than others. Why do some people work harder? Is it always a good thing to work hard?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In many countries, students who leave high school have no understanding of how to manage their money. What do you think are the reasons? What can be done to teach them how to manage personal finance?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In schools and universities, some girls tend to choose art subjects, but boys choose to study science subjects. What are the reasons? Do you think this trend should be changed?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Many students find it harder to study when they are at university or college than when they were at school. Why is this? What can be done to solve the problem?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "education",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Nowadays, not enough students choose science subjects in university in many countries. What are the reasons for this change? What are the effects on society?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In many countries, more and more people choose to buy imported food rather than food produced locally. Why do people buy imported food? What could be done to encourage people to buy local food?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"In some countries, people waste a lot of food which is bought in shops and restaurants. What do you think are the reasons? What can be done to solve this problem?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Older people who need employment have to compete with younger people. What problems will be caused? What are the solutions?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that money is one of the most essential factors in promoting happiness. Do you think people can be happy without much money? What other factors contribute towards happiness?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "economy",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Today people live longer after retiring from work. What problems does this cause for individuals and society? What can be done?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"It was predicted with the development of technology, people in the 21st century would have much more free time than in the past. To what extent has this prediction come true?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Many people aim to achieve a balance between work and other parts of lives, but few people achieve it. What are the causes of the problems? How to overcome it?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Mobile phones and the Internet could have many benefits for old people. However, this age group uses technology the least. What are the benefits for old people of using mobile phones and the Internet? How can we encourage them to use this new technology?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "technology",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Nowadays, people always throw the old things away when they buy new things, whereas in the past, old things were repaired and used again. What factors cause this phenomenon? What effects does this lead to?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Figures show that in some countries, there is an ever-increasing proportion of population aged 15 or younger. What do you think the current and future effects it may have in those countries?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"As major cities continue to grow, so do the problems. What are the problems that young people living in cities are facing with? How could these problems be solved?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Doctors recommend that older people should take regular exercise. However, many older people do not have enough exercise. What could be the reasons for this? What should be done to encourage them to do more exercise?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Many people like to eat unhealthy food even though they know it's bad for them. Why? What effective way can improve people's healthy eating habits?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Nowadays in many countries young people don't communicate with older people as much as they used to. Why is this happening? How could this situation be improved?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Nowadays, people from many countries do not have enough time to spend with families and friends. Why does this happen? What are the effects of this on themselves and on their families?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Problem of Loneliness and lack of physical fitness among old people. A lot of old people are suffering from loneliness these days. They also lack physical fitness. What do you think are the reasons for this problem? Can you think of possible solutions?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "society",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Throughout the history, people dream to live in a perfect society while they haven't agreed how the ideal society would be like. What do you think is the most important element of a perfect society in the modern world? What can people do to achieve an ideal society?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "culture",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some people think that we should invent a new language for international communication. Do the benefits of this outweigh the problems?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task2",
+    "category": "government",
+    "difficulty": 3,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"Some ex-prisoners commit crimes after being released from the prison. What do you think is the cause? How can it be solved?\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task1",
+    "category": "bar_chart",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The bar chart below shows the percentage of households with access to the internet in four countries in 2010 and 2025. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task1",
+    "category": "pie_chart",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The pie charts compare how a city council allocated its annual budget in 2005 and 2025. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task1",
+    "category": "line_chart",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The line graph illustrates changes in daily water consumption per person in three cities between 2000 and 2025. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task1",
+    "category": "flow_chart",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The flow chart shows the stages involved in producing instant noodles. Summarise the information by selecting and reporting the main features.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task1",
+    "category": "map",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The maps show the layout of a town centre in 2000 and at the present time. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task1",
+    "category": "table",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The table presents information about average monthly temperatures and rainfall in five cities. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task1",
+    "category": "process",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The diagram illustrates how electricity is generated in a hydroelectric power station. Summarise the information by selecting and reporting the main features.\"}]}]}",
+    "is_official": 1
+  },
+  {
+    "type": "task1",
+    "category": "mixed",
+    "difficulty": 2,
+    "title_json": "{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"The chart and table below show the number of international students in one university and their accommodation choices in 2015 and 2025. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.\"}]}]}",
+    "is_official": 1
+  }
+]

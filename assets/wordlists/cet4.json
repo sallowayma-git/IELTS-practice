@@ -1,0 +1,12 @@
+[
+  {"word": "abandon", "meaning": "放弃；抛弃", "example": "The sailors had to abandon the sinking ship.", "freq": 0.44},
+  {"word": "benefit", "meaning": "益处；使受益", "example": "Regular exercise can benefit both body and mind.", "freq": 0.57},
+  {"word": "campaign", "meaning": "活动；竞选", "example": "Volunteers launched a campaign to clean the river.", "freq": 0.51},
+  {"word": "demand", "meaning": "需求；要求", "example": "There is a growing demand for green energy solutions.", "freq": 0.62},
+  {"word": "ensure", "meaning": "确保；保证", "example": "Safety inspectors ensure the equipment meets standards.", "freq": 0.48},
+  {"word": "faculty", "meaning": "全体教员；能力", "example": "The university faculty approved the new syllabus.", "freq": 0.33},
+  {"word": "generate", "meaning": "产生；引起", "example": "Solar panels generate electricity during daylight.", "freq": 0.46},
+  {"word": "habitat", "meaning": "栖息地", "example": "Wetlands provide habitat for thousands of birds.", "freq": 0.39},
+  {"word": "impact", "meaning": "影响；冲击", "example": "The report assessed the impact of tourism on local culture.", "freq": 0.55},
+  {"word": "justify", "meaning": "证明…正当", "example": "The manager could not justify the additional expenses.", "freq": 0.36}
+]
