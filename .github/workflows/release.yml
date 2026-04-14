@@ -51,82 +51,29 @@ jobs:
       - name: Run shell support smoke
         run: npm run verify:shell-support-smoke
 
-      - name: Check macOS notarization prerequisites
-        id: mac-prereq
-        if: runner.os == 'macOS'
-        shell: bash
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          missing=()
-          for key in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
-            if [ -z "${!key:-}" ]; then
-              missing+=("$key")
-            fi
-          done
-
-          if [ ${#missing[@]} -eq 0 ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-            echo "macOS 发布将执行签名 + 公证 + staple。" >> "$GITHUB_STEP_SUMMARY"
-          else
-            {
-              echo "### macOS 发布失败：签名/公证 secrets 缺失"
-              echo ""
-              echo "- 缺失 secrets: ${missing[*]}"
-              echo "- 已阻止未签名/未公证 macOS 包进入 Release 分发"
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-
       - name: Build Electron artifacts
-        if: runner.os != 'macOS' || steps.mac-prereq.outputs.ready == 'true'
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          REQUIRE_MAC_NOTARIZE: ${{ runner.os == 'macOS' && '1' || '' }}
         run: npm run release:build
 
-      - name: Verify macOS signature/notarization/staple
-        if: runner.os == 'macOS' && steps.mac-prereq.outputs.ready == 'true'
+      - name: Inject macOS first-launch helper assets
+        if: runner.os == 'macOS'
         shell: bash
         run: |
           set -euo pipefail
-
-          app_path="$(find dist/electron -type d -name '*.app' | head -n 1)"
-          if [ -z "$app_path" ]; then
-            echo "未找到 .app 产物"
-            exit 1
-          fi
-
-          dmg_path="$(find dist/electron -type f -name 'ielts-practice-*-macos-*.dmg' | head -n 1)"
-          if [ -z "$dmg_path" ]; then
-            echo "未找到 dmg 产物"
-            exit 1
-          fi
-
-          codesign --verify --deep --strict --verbose=2 "$app_path"
-          xcrun stapler staple "$app_path"
-          xcrun stapler validate "$app_path"
-          xcrun stapler staple "$dmg_path"
-          xcrun stapler validate "$dmg_path"
-          spctl --assess --type execute --verbose=4 "$app_path"
+          cp assets/release/macos/mac-first-launch.command dist/electron/mac-first-launch.command
+          cp assets/release/macos/mac-first-launch-guide.txt dist/electron/mac-first-launch-guide.txt
 
       - name: Validate shell artifacts
-        if: runner.os != 'macOS' || steps.mac-prereq.outputs.ready == 'true'
         env:
           ALLOW_SHELL_RELEASE_VERSION_MISMATCH: ${{ github.ref_name == 'v0.0.1' && 'true' || 'false' }}
         run: npm run verify:shell-release -- --dir dist/electron --platform "${{ runner.os }}" --tag "${{ github.ref_name }}"
 
       - name: Upload shell artifacts
-        if: runner.os != 'macOS' || steps.mac-prereq.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: shell-${{ matrix.os }}
@@ -231,11 +178,13 @@ jobs:
           set -euo pipefail
           if ls dist/release-shell/macos/latest-mac.yml >/dev/null 2>&1 \
             && ls dist/release-shell/macos/ielts-practice-*-macos-*.dmg >/dev/null 2>&1 \
-            && ls dist/release-shell/macos/ielts-practice-*-macos-*.zip >/dev/null 2>&1; then
+            && ls dist/release-shell/macos/ielts-practice-*-macos-*.zip >/dev/null 2>&1 \
+            && ls dist/release-shell/macos/mac-first-launch.command >/dev/null 2>&1 \
+            && ls dist/release-shell/macos/mac-first-launch-guide.txt >/dev/null 2>&1; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
-            printf "macOS assets are signed, notarized, and stapled.\n" > dist/release-shell/macos-notarization-status.txt
+            printf "macOS package is not notarized.\nBefore first launch, run mac-first-launch.command.\nIf you copied the app to /Applications, the helper script will remove quarantine and open the app.\n" > dist/release-shell/macos-notarization-status.txt
           else
-            echo "缺少 macOS Release 资产（latest-mac.yml / dmg / zip），终止发布。"
+            echo "缺少 macOS Release 资产（latest-mac.yml / dmg / zip / mac-first-launch.*），终止发布。"
             exit 1
           fi
 
@@ -281,12 +230,14 @@ jobs:
             dist/release-resources/resources-full.zip \
             --clobber
 
-      - name: Upload notarized macOS assets to GitHub Release
+      - name: Upload macOS assets and first-launch guide to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ github.ref_name }}" \
             dist/release-shell/macos-notarization-status.txt \
+            dist/release-shell/macos/mac-first-launch.command \
+            dist/release-shell/macos/mac-first-launch-guide.txt \
             dist/release-shell/macos/latest-mac.yml \
             dist/release-shell/macos/ielts-practice-*-macos-*.dmg \
             dist/release-shell/macos/ielts-practice-*-macos-*.zip \
