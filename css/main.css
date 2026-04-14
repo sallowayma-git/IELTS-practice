@@ -5,14 +5,6 @@
     box-sizing: border-box;
 }
 
-@font-face {
-    font-family: 'WenKai';
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: url('../assets/fonts/wenkai-regular.woff2') format('woff2');
-}
-
 /* CSS Custom Properties (Design Tokens) */
 :root {
     /* Color System */
@@ -638,8 +630,8 @@ body.no-scroll {
     --vocab-shadow-soft: 0 12px 24px rgba(78, 60, 38, 0.14);
     --vocab-shadow-fine: 0 4px 10px rgba(78, 60, 38, 0.12);
     --vocab-shadow-strong: 0 30px 60px rgba(78, 60, 38, 0.24);
-    --vocab-font-body: 'WenKai', 'Kaiti SC', 'STKaiti', 'Songti SC', 'STSong', 'SimSun', serif;
-    --vocab-font-title: 'WenKai', 'Kaiti SC', 'STKaiti', 'Songti SC', 'STSong', 'SimSun', serif;
+    --vocab-font-body: 'Kaiti SC', 'STKaiti', 'Songti SC', 'STSong', 'SimSun', serif;
+    --vocab-font-title: 'Kaiti SC', 'STKaiti', 'Songti SC', 'STSong', 'SimSun', serif;
     position: relative;
     isolation: isolate;
     display: flex;

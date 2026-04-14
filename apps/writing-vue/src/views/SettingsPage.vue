@@ -268,7 +268,14 @@
       <!-- 关于 -->
       <div v-if="activeTab === 'about'" class="tab-content">
         <div class="about-section">
-          <div class="app-icon"><span class="logo-mark" style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;background:var(--color-terracotta);border-radius:12px;color:var(--color-ivory);font-family:var(--font-serif);font-size:24px;font-weight:500;">C</span></div>
+          <div class="app-icon">
+            <img
+              class="app-icon__image"
+              :src="appLogoSrc"
+              alt="IELTS Practice Logo"
+              loading="eager"
+            />
+          </div>
           <h2 class="heading-serif">雅思写作 AI 评判</h2>
           <p class="version">Version 0.3.1</p>
           
@@ -360,6 +367,7 @@ const tabs = [
   { key: 'data', label: '数据管理' },
   { key: 'about', label: '关于' }
 ]
+const appLogoSrc = '../../assets/images/herbal_green_flat_logo_1776094316057.png?v=20260414b'
 
 const activeTab = ref('model')
 const modelSaving = ref(false)
@@ -1286,8 +1294,17 @@ onBeforeUnmount(() => {
 }
 
 .app-icon {
-  font-size: 64px;
+  display: flex;
+  justify-content: center;
   margin-bottom: 16px;
+}
+
+.app-icon__image {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  object-fit: cover;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
 .about-section h2 {
