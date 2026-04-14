@@ -134,20 +134,32 @@
       "iconSize": 128,
       "internetEnabled": false,
       "window": {
-        "width": 540,
-        "height": 380
+        "width": 700,
+        "height": 430
       },
       "contents": [
         {
-          "x": 150,
-          "y": 190,
+          "x": 140,
+          "y": 180,
           "type": "file"
         },
         {
-          "x": 390,
-          "y": 190,
+          "x": 360,
+          "y": 180,
           "type": "link",
           "path": "/Applications"
+        },
+        {
+          "x": 140,
+          "y": 330,
+          "type": "file",
+          "path": "assets/release/macos/mac-first-launch.command"
+        },
+        {
+          "x": 360,
+          "y": 330,
+          "type": "file",
+          "path": "assets/release/macos/mac-first-launch-guide.txt"
         }
       ]
     },

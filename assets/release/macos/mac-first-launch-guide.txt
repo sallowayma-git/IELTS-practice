@@ -1,0 +1,16 @@
+IELTS Practice (macOS) 首次打开说明
+
+如果出现“已损坏，无法打开”或“来自身份不明开发者”等提示：
+
+步骤 1：把 IELTS Practice.app 拖到 Applications。
+步骤 2：在 DMG 中双击 mac-first-launch.command。
+步骤 3：等待脚本自动修复并启动应用。
+
+如仍被拦截，可在 Finder 里右键应用 -> 打开。
+
+命令行等价操作：
+xattr -dr com.apple.quarantine "/Applications/IELTS Practice.app" && open "/Applications/IELTS Practice.app"
+
+说明：
+- 当前发行版未做 Apple 公证，首次放行是预期行为。
+- 放行后后续正常启动，不需要重复执行脚本。
