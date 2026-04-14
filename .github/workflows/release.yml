@@ -74,37 +74,25 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
             echo "macOS 发布将执行签名 + 公证 + staple。" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "missing_keys=$(IFS=,; echo "${missing[*]}")" >> "$GITHUB_OUTPUT"
             {
-              echo "### macOS 发布将降级为未签名/未公证构建"
+              echo "### macOS 发布失败：签名/公证 secrets 缺失"
               echo ""
               echo "- 缺失 secrets: ${missing[*]}"
-              echo "- 仍会产出并上传 macOS 安装包到 Release 分发"
-              echo "- 该构建可能触发 Gatekeeper 提示，用户需手动放行"
+              echo "- 已阻止未签名/未公证 macOS 包进入 Release 分发"
             } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
 
       - name: Build Electron artifacts
+        if: runner.os != 'macOS' || steps.mac-prereq.outputs.ready == 'true'
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          SKIP_MAC_NOTARIZE: ${{ runner.os == 'macOS' && steps.mac-prereq.outputs.ready != 'true' && '1' || '' }}
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ runner.os == 'macOS' && steps.mac-prereq.outputs.ready != 'true' && 'false' || '' }}
+          REQUIRE_MAC_NOTARIZE: ${{ runner.os == 'macOS' && '1' || '' }}
         run: npm run release:build
-
-      - name: Annotate unsigned macOS build
-        if: runner.os == 'macOS' && steps.mac-prereq.outputs.ready != 'true'
-        run: |
-          {
-            echo "### macOS 构建状态"
-            echo ""
-            echo "- 已产出未签名/未公证安装包并进入 Release 分发流程"
-            echo "- 若需双击即开，请补齐签名与公证 secrets 后重发版"
-          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify macOS signature/notarization/staple
         if: runner.os == 'macOS' && steps.mac-prereq.outputs.ready == 'true'
@@ -132,11 +120,13 @@ jobs:
           spctl --assess --type execute --verbose=4 "$app_path"
 
       - name: Validate shell artifacts
+        if: runner.os != 'macOS' || steps.mac-prereq.outputs.ready == 'true'
         env:
           ALLOW_SHELL_RELEASE_VERSION_MISMATCH: ${{ github.ref_name == 'v0.0.1' && 'true' || 'false' }}
         run: npm run verify:shell-release -- --dir dist/electron --platform "${{ runner.os }}" --tag "${{ github.ref_name }}"
 
       - name: Upload shell artifacts
+        if: runner.os != 'macOS' || steps.mac-prereq.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: shell-${{ matrix.os }}
@@ -243,11 +233,7 @@ jobs:
             && ls dist/release-shell/macos/ielts-practice-*-macos-*.dmg >/dev/null 2>&1 \
             && ls dist/release-shell/macos/ielts-practice-*-macos-*.zip >/dev/null 2>&1; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
-            {
-              echo "macOS assets are available in this release."
-              echo "Notarization depends on CI secrets and tag build environment."
-              echo "If the app is blocked by Gatekeeper, use right-click Open or remove quarantine."
-            } > dist/release-shell/macos-notarization-status.txt
+            printf "macOS assets are signed, notarized, and stapled.\n" > dist/release-shell/macos-notarization-status.txt
           else
             echo "缺少 macOS Release 资产（latest-mac.yml / dmg / zip），终止发布。"
             exit 1
@@ -290,17 +276,17 @@ jobs:
             dist/release-shell/windows/latest.yml \
             dist/release-shell/windows/ielts-practice-*-windows-*-setup.exe \
             dist/release-shell/windows/ielts-practice-*-windows-*-setup.exe.blockmap \
-            dist/release-shell/macos-notarization-status.txt \
             dist/release-resources/resources-manifest.json \
             dist/release-resources/resources-delta.zip \
             dist/release-resources/resources-full.zip \
             --clobber
 
-      - name: Upload macOS assets to GitHub Release
+      - name: Upload notarized macOS assets to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ github.ref_name }}" \
+            dist/release-shell/macos-notarization-status.txt \
             dist/release-shell/macos/latest-mac.yml \
             dist/release-shell/macos/ielts-practice-*-macos-*.dmg \
             dist/release-shell/macos/ielts-practice-*-macos-*.zip \
