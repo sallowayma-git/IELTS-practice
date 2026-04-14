@@ -14,7 +14,9 @@
         <div class="essay-body relative">
           <!-- Floating Loader watermark under the text -->
           <div class="floating-loader" :class="{'fade-out': progress > 98}">
-            <span class="material-symbols-outlined xl-icon pulse">document_scanner</span>
+            <svg class="xl-icon pulse" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 3h8l4 4v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm7 1.5V8h3.5L13 4.5zM8 11h8v1.5H8V11zm0 3h8v1.5H8V14zm0 3h5v1.5H8V17z"/>
+            </svg>
             <p>Intelligence parsing layer...</p>
           </div>
           
@@ -854,7 +856,9 @@ function persistCachedResult() {
 }
 
 .xl-icon {
-  font-size: 5rem;
+  width: 5rem;
+  height: 5rem;
+  fill: currentColor;
   margin-bottom: 16px;
 }
 

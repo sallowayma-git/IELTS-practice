@@ -29,6 +29,13 @@
   "build": {
     "appId": "com.sallowayma.ieltspractice",
     "productName": "IELTS Practice",
+    "asar": true,
+    "compression": "maximum",
+    "electronLanguages": [
+      "en-US",
+      "zh-CN",
+      "zh-TW"
+    ],
     "directories": {
       "output": "dist/electron"
     },
@@ -41,11 +48,62 @@
       "index.html",
       "css/**/*",
       "js/**/*",
-      "templates/**/*",
-      "assets/**/*",
-      "assets/images/herbal_green_flat_logo_1776094316057.png",
-      "README.md",
-      "LICENSE",
+      "templates/exam-placeholder.html",
+      "templates/template_base.html",
+      "templates/question-types.js",
+      "assets/data/**/*",
+      "assets/generated/**/*",
+      "assets/wordlists/**/*",
+      "assets/images/**/*",
+      "assets/scripts/*.js",
+      "!assets/images/app-icon.icns",
+      "!assets/images/app-icon.ico",
+      "!templates/ci-practice-fixtures/**",
+      "!assets/scripts/*.py",
+      "!electron/test_*.js",
+      "!electron/test-*.js",
+      "!node_modules/better-sqlite3/deps/**",
+      "!node_modules/better-sqlite3/src/**",
+      "!node_modules/**/*.map",
+      "!node_modules/**/*.md",
+      "!node_modules/**/*.markdown",
+      "!node_modules/**/README*",
+      "!node_modules/**/readme*",
+      "!node_modules/**/CHANGELOG*",
+      "!node_modules/**/CHANGES*",
+      "!node_modules/**/HISTORY*",
+      "!node_modules/**/AUTHORS*",
+      "!node_modules/**/CONTRIBUTING*",
+      "!node_modules/**/GOVERNANCE*",
+      "!node_modules/**/SECURITY*",
+      "!node_modules/**/LICENSE*",
+      "!node_modules/**/LICENCE*",
+      "!node_modules/**/test/**",
+      "!node_modules/**/tests/**",
+      "!node_modules/**/__tests__/**",
+      "!node_modules/**/doc/**",
+      "!node_modules/**/example/**",
+      "!node_modules/**/examples/**",
+      "!node_modules/**/docs/**",
+      "!node_modules/**/History*",
+      "!node_modules/**/history*",
+      "!node_modules/js-yaml/dist/**",
+      "!node_modules/prebuild-install/**",
+      "!node_modules/detect-libc/**",
+      "!node_modules/expand-template/**",
+      "!node_modules/github-from-package/**",
+      "!node_modules/minimist/**",
+      "!node_modules/mkdirp-classic/**",
+      "!node_modules/napi-build-utils/**",
+      "!node_modules/node-abi/**",
+      "!node_modules/rc/**",
+      "!node_modules/simple-get/**",
+      "!node_modules/simple-concat/**",
+      "!node_modules/tar-fs/**",
+      "!node_modules/tar-stream/**",
+      "!node_modules/tunnel-agent/**",
+      "!**/.gitkeep",
+      "!**/.DS_Store",
       "package.json"
     ],
     "publish": [
@@ -56,9 +114,11 @@
         "releaseType": "release"
       }
     ],
+    "afterPack": "scripts/after-pack-prune-electron-locales.cjs",
     "afterSign": "scripts/notarize.js",
     "mac": {
       "category": "public.app-category.education",
+      "icon": "assets/images/app-icon.icns",
       "artifactName": "ielts-practice-${version}-macos-${arch}.${ext}",
       "hardenedRuntime": true,
       "strictVerify": true,
@@ -92,6 +152,7 @@
       ]
     },
     "win": {
+      "icon": "assets/images/app-icon.ico",
       "artifactName": "ielts-practice-${version}-windows-${arch}-setup.${ext}",
       "target": [
         {
@@ -118,8 +179,7 @@
     "better-sqlite3": "^12.6.2",
     "electron-updater": "^6.3.9",
     "express": "^4.21.2",
-    "semver": "^7.6.3",
-    "uuid": "^13.0.0"
+    "semver": "^7.6.3"
   },
   "devDependencies": {
     "@electron/notarize": "^2.2.1",

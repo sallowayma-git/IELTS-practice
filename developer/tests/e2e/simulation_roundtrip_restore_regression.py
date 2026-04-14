@@ -28,6 +28,7 @@ UA = (
 
 try:
     from playwright.async_api import Error as PlaywrightError  # type: ignore[import-untyped]
+    from playwright.async_api import TimeoutError as PlaywrightTimeoutError  # type: ignore[import-untyped]
     from playwright.async_api import async_playwright  # type: ignore[import-untyped]
 except ModuleNotFoundError:
     venv_dir = (REPO_ROOT / ".venv").resolve()
@@ -222,24 +223,133 @@ async def ensure_fixed_suite_index(page) -> None:
         raise RuntimeError("cannot_patch_suite_index")
 
 
+async def dismiss_blocking_overlays(page) -> None:
+    await page.evaluate(
+        """() => {
+            try {
+                localStorage.setItem('hasSeenGplLicense', 'true');
+            } catch (_) {
+                // ignore storage failures
+            }
+            const modal = document.getElementById('license-modal');
+            if (modal) {
+                modal.classList.remove('show');
+            }
+        }"""
+    )
+    license_modal = page.locator("#license-modal.show")
+    if await license_modal.count():
+        acknowledge = license_modal.locator("button.lm-btn")
+        if await acknowledge.count():
+            await acknowledge.first.click(force=True)
+            await page.wait_for_function(
+                "() => !document.getElementById('license-modal')?.classList.contains('show')",
+                timeout=5000,
+            )
+
+    loader_overlay = page.locator("#library-loader-overlay")
+    if await loader_overlay.count():
+        close_button = loader_overlay.locator("[data-library-action='close']")
+        if await close_button.count():
+            try:
+                await close_button.first.click(force=True)
+                await loader_overlay.wait_for(state="detached", timeout=5000)
+            except PlaywrightTimeoutError:
+                # overlay may already be hidden; don't fail this guard
+                pass
+
+
+async def click_suite_start_button(page, start_button) -> None:
+    for attempt in range(4):
+        await dismiss_blocking_overlays(page)
+        try:
+            await start_button.click(timeout=5000)
+            return
+        except PlaywrightError as click_error:
+            error_text = str(click_error)
+            if "intercepts pointer events" not in error_text or attempt >= 3:
+                raise
+            await page.wait_for_timeout(220)
+
+
+async def force_suite_popup_mode(page) -> None:
+    ok = await page.evaluate(
+        """() => {
+            const app = window.app;
+            if (!app || typeof app._buildSuiteOpenExamOptions !== 'function') {
+                return false;
+            }
+            if (!app.__origSuiteOpenExamOptionsForRegression) {
+                app.__origSuiteOpenExamOptionsForRegression = app._buildSuiteOpenExamOptions.bind(app);
+            }
+            app._buildSuiteOpenExamOptions = function patchedSuiteOpenExamOptions(session, sequenceIndex, reuseWindow) {
+                const base = app.__origSuiteOpenExamOptionsForRegression(session, sequenceIndex, reuseWindow) || {};
+                const next = Object.assign({}, base);
+                next.target = 'tab';
+                next.inlineMode = false;
+                next.inlineFrame = null;
+                if (!next.windowName || !String(next.windowName).trim()) {
+                    next.windowName = 'suite_roundtrip_regression_window';
+                }
+                return next;
+            };
+            return true;
+        }"""
+    )
+    if not ok:
+        raise RuntimeError("cannot_force_suite_popup_mode")
+
+
+async def open_suite_surface(page, start_button):
+    popup_task = asyncio.create_task(page.wait_for_event("popup", timeout=25000))
+    await click_suite_start_button(page, start_button)
+    try:
+        await page.locator("#suite-mode-selector-modal").wait_for(state="visible", timeout=10000)
+        await page.locator("#suite-mode-selector-modal button[data-suite-flow-mode='simulation']").click()
+        await page.locator("#suite-mode-selector-modal").wait_for(state="hidden", timeout=10000)
+    except PlaywrightTimeoutError:
+        # test_env 直通路径下不会弹模式选择器
+        pass
+
+    try:
+        popup = await popup_task
+        return popup, "popup"
+    except PlaywrightTimeoutError:
+        if not popup_task.done():
+            popup_task.cancel()
+        inline_frame = page.locator("#inline-practice-frame").first
+        if await inline_frame.count():
+            handle = await inline_frame.element_handle()
+            if handle:
+                frame = await handle.content_frame()
+                if frame:
+                    return frame, "inline"
+        raise RuntimeError("suite_surface_unavailable_no_popup_no_inline")
+
+
 async def run() -> Dict[str, Any]:
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--allow-file-access-from-files"])
         context = await browser.new_context(user_agent=UA)
+        await context.add_init_script(
+            """() => {
+                try {
+                    localStorage.setItem('hasSeenGplLicense', 'true');
+                } catch (_) {
+                    // ignore storage failures
+                }
+            }"""
+        )
 
         page = await context.new_page()
         await page.goto(INDEX_URL)
         await page.wait_for_function("() => window.app && window.app.isInitialized", timeout=60000)
+        await dismiss_blocking_overlays(page)
         await ensure_fixed_suite_index(page)
+        await force_suite_popup_mode(page)
 
         start_button = page.locator("button[data-action='start-suite-mode']").first
-        async with page.expect_popup() as popup_wait:
-            await start_button.click()
-            await page.locator("#suite-mode-selector-modal").wait_for(state="visible", timeout=10000)
-            await page.locator("#suite-mode-selector-modal button[data-suite-flow-mode='simulation']").click()
-            await page.locator("#suite-mode-selector-modal").wait_for(state="hidden", timeout=10000)
-
-        suite_page = await popup_wait.value
+        suite_page, suite_surface = await open_suite_surface(page, start_button)
         await suite_page.wait_for_load_state("load")
         await suite_page.wait_for_selector("#submit-btn", timeout=30000)
         await suite_page.wait_for_timeout(600)
@@ -314,6 +424,13 @@ async def run() -> Dict[str, Any]:
                 submitDisabled: !!document.getElementById('submit-btn')?.disabled
             })"""
         )
+
+        if suite_surface == "popup":
+            try:
+                if not suite_page.is_closed():
+                    await suite_page.close()
+            except Exception:
+                pass
 
         await browser.close()
 

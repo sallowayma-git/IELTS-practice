@@ -481,7 +481,9 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { essays as essaysApi } from '@/api/client.js'
 import RadarChart from '@/components/RadarChart.vue'
 import LineChart from '@/components/LineChart.vue'
+import { debounce } from '@/utils/debounce.js'
 import { createRequestGate } from '@/utils/request-gate.js'
+import { getTopicTitlePreview } from '@/utils/tiptap-text.js'
 import {
   BAND_RATIONALE_LABELS,
   TASK_ANALYSIS_LABELS,
@@ -489,15 +491,6 @@ import {
   normalizeList,
   resolveEvaluationConsumption
 } from '@/utils/evaluation-result.js'
-
-// Debounce 工具函数
-function debounce(fn, delay) {
-  let timeoutId = null
-  return function(...args) {
-    if (timeoutId) clearTimeout(timeoutId)
-    timeoutId = setTimeout(() => fn.apply(this, args), delay)
-  }
-}
 
 // 状态
 const loading = ref(false)
@@ -956,23 +949,7 @@ function formatDate(dateStr) {
 }
 
 function getTopicTitle(titleJson) {
-  if (!titleJson) return '自由写作'
-  
-  try {
-    const parsed = JSON.parse(titleJson)
-    return extractTextFromTiptap(parsed).substring(0, 50) || '自由写作'
-  } catch {
-    return titleJson.substring(0, 50)
-  }
-}
-
-function extractTextFromTiptap(json) {
-  if (typeof json === 'string') return json
-  if (json.type === 'text') return json.text || ''
-  if (json.content && Array.isArray(json.content)) {
-    return json.content.map(extractTextFromTiptap).join('')
-  }
-  return ''
+  return getTopicTitlePreview(titleJson, { fallback: '自由写作', maxLength: 50 })
 }
 
 function getTopicSourceLabel(source) {
@@ -1117,18 +1094,6 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
   font-size: 14px;
-}
-
-.stat-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-}
-
-@media (max-width: 1000px) {
-  .stat-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 .stat-chart,
@@ -1734,7 +1699,6 @@ onBeforeUnmount(() => {
 }
 
 .history-page .task-badge,
-.history-page .topic-source,
 .history-page .score-name {
   border-radius: 999px;
 }
