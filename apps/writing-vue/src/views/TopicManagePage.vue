@@ -33,25 +33,10 @@
         <div class="filter-item">
           <select v-model="filters.category" class="glass-select">
             <option value="">全部分类</option>
-            <optgroup v-if="!filters.type || filters.type === 'task1'" label="Task 1">
-              <option value="bar_chart">柱状图</option>
-              <option value="pie_chart">饼图</option>
-              <option value="line_chart">折线图</option>
-              <option value="flow_chart">流程图</option>
-              <option value="map">地图</option>
-              <option value="table">表格</option>
-              <option value="process">过程</option>
-              <option value="mixed">混合图</option>
-            </optgroup>
-            <optgroup v-if="!filters.type || filters.type === 'task2'" label="Task 2">
-              <option value="education">教育</option>
-              <option value="technology">科技</option>
-              <option value="society">社会</option>
-              <option value="environment">环境</option>
-              <option value="health">健康</option>
-              <option value="culture">文化</option>
-              <option value="government">政府</option>
-              <option value="economy">经济</option>
+            <optgroup v-for="group in filterCategoryGroups" :key="group.type" :label="group.label">
+              <option v-for="option in group.options" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
             </optgroup>
           </select>
         </div>
@@ -192,25 +177,10 @@
               <label>题目分类</label>
               <select v-model="editorForm.category" required class="select">
                 <option value="">请选择分类...</option>
-                <optgroup v-if="editorForm.type === 'task1'" label="Task 1 类型">
-                  <option value="bar_chart">柱状图</option>
-                  <option value="pie_chart">饼图</option>
-                  <option value="line_chart">折线图</option>
-                  <option value="flow_chart">流程图</option>
-                  <option value="map">地图</option>
-                  <option value="table">表格</option>
-                  <option value="process">过程</option>
-                  <option value="mixed">混合图</option>
-                </optgroup>
-                <optgroup v-if="editorForm.type === 'task2'" label="Task 2 话题">
-                  <option value="education">教育</option>
-                  <option value="technology">科技</option>
-                  <option value="society">社会</option>
-                  <option value="environment">环境</option>
-                  <option value="health">健康</option>
-                  <option value="culture">文化</option>
-                  <option value="government">政府</option>
-                  <option value="economy">经济</option>
+                <optgroup v-for="group in editorCategoryGroups" :key="group.type" :label="group.label">
+                  <option v-for="option in group.options" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
                 </optgroup>
               </select>
             </div>
@@ -323,16 +293,10 @@
 <script setup>
 import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import { topics as topicsApi, upload } from '@/api/client.js'
+import { debounce } from '@/utils/debounce.js'
 import { createRequestGate } from '@/utils/request-gate.js'
-
-// Debounce 工具函数
-function debounce(fn, delay) {
-  let timeoutId = null
-  return function(...args) {
-    if (timeoutId) clearTimeout(timeoutId)
-    timeoutId = setTimeout(() => fn.apply(this, args), delay)
-  }
-}
+import { renderTopicTitle, extractTextFromTiptap } from '@/utils/tiptap-text.js'
+import { getWritingCategoryLabel, getWritingCategoryOptions } from '@/utils/writing-categories.js'
 
 // 状态
 const loading = ref(false)
@@ -371,6 +335,16 @@ const deleteDialog = ref({
   visible: false,
   topicId: null
 })
+const getCategoryLabel = getWritingCategoryLabel
+const renderTitle = renderTopicTitle
+const FILTER_GROUP_LABELS = Object.freeze({
+  task1: 'Task 1',
+  task2: 'Task 2'
+})
+const EDITOR_GROUP_LABELS = Object.freeze({
+  task1: 'Task 1 类型',
+  task2: 'Task 2 话题'
+})
 
 // 计算属性
 const filteredTopics = computed(() => {
@@ -391,6 +365,23 @@ const hasActiveFilters = computed(() => (
   || Boolean(filters.value.category)
   || Number(filters.value.difficulty || 0) > 0
 ))
+const filterCategoryGroups = computed(() => {
+  const types = filters.value.type ? [filters.value.type] : ['task1', 'task2']
+  return types.map((type) => ({
+    type,
+    label: FILTER_GROUP_LABELS[type] || type,
+    options: getWritingCategoryOptions(type)
+  }))
+})
+const editorCategoryGroups = computed(() => {
+  const type = editorForm.value.type
+  if (!type) return []
+  return [{
+    type,
+    label: EDITOR_GROUP_LABELS[type] || type,
+    options: getWritingCategoryOptions(type)
+  }]
+})
 
 const isEditorValid = computed(() => {
   return editorForm.value.type && 
@@ -673,45 +664,6 @@ function closeImportDialog() {
   }
 }
 
-// 工具函数
-function getCategoryLabel(category) {
-  const labels = {
-    bar_chart: '柱状图', pie_chart: '饼图', line_chart: '折线图',
-    flow_chart: '流程图', map: '地图', table: '表格', process: '过程', mixed: '混合图',
-    education: '教育', technology: '科技', society: '社会', environment: '环境',
-    health: '健康', culture: '文化', government: '政府', economy: '经济'
-  }
-  return labels[category] || category
-}
-
-function renderTitle(titleJson) {
-  try {
-    const parsed = typeof titleJson === 'string' ? JSON.parse(titleJson) : titleJson
-    return extractTextFromTiptap(parsed)
-  } catch {
-    return titleJson
-  }
-}
-
-// 简化的 Tiptap JSON 文本提取（仅用于预览，不保留完整格式）
-function extractTextFromTiptap(json) {
-  if (typeof json === 'string') {
-    try {
-      json = JSON.parse(json)
-    } catch {
-      return json
-    }
-  }
-  
-  if (json.type === 'text') return json.text || ''
-  if (json.content && Array.isArray(json.content)) {
-    return json.content.map(extractTextFromTiptap).join('')
-  }
-  return ''
-}
-
-
-
 function readFileAsArrayBuffer(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -774,11 +726,6 @@ onBeforeUnmount(() => {
   margin-bottom: 8px;
 }
 
-.page-subtitle {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.95rem;
-}
-
 .count-badge {
   background: rgba(255, 255, 255, 0.2);
   padding: 4px 12px;
@@ -790,17 +737,6 @@ onBeforeUnmount(() => {
 .header-actions {
   display: flex;
   gap: 16px;
-}
-
-.glass-btn {
-  background: var(--surface-0);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-}
-
-.glass-btn:hover {
-  background: var(--bg-muted);
-  transform: translateY(-2px);
 }
 
 /* 筛选工具栏 (HeroUI Capsular Style) */
@@ -830,10 +766,6 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   align-items: center;
-}
-
-.filter-icon {
-  display: none; /* HeroUI 风格通常隐藏图标，追求简洁 */
 }
 
 .glass-select {
@@ -1254,12 +1186,6 @@ onBeforeUnmount(() => {
   line-height: 0.94;
   letter-spacing: -0.05em;
   color: var(--text-primary);
-}
-
-.topic-manage-page .page-subtitle {
-  max-width: 760px;
-  color: var(--text-secondary);
-  font-size: 15px;
 }
 
 .topic-manage-page .search-glass {

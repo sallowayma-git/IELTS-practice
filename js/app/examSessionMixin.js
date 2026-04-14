@@ -6,6 +6,257 @@
     const ANSWER_MATCH_CORE_SCRIPT_PATH = './js/utils/answerMatchCore.js';
     const SUITE_BACK_GUARD_SCRIPT_PATH = './js/utils/suiteBackGuard.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
+    const READING_ANALYSIS_ATTEMPT_PLAN = Object.freeze([
+        { timeoutMs: 7000, retryDelayMs: 300 },
+        { timeoutMs: 14000, retryDelayMs: 0 }
+    ]);
+    const READING_ANALYSIS_RETRYABLE_CODES = new Set([
+        'analysis_bridge_upstream_timeout',
+        'reading_analysis_ipc_failed',
+        'analysis_bridge_failed',
+        'reading_analysis_network_error'
+    ]);
+    const READING_ANALYSIS_NON_RETRYABLE_CODES = new Set([
+        'invalid_response_format',
+        'invalid_request_payload',
+        'analysis_bridge_unavailable'
+    ]);
+    const READING_ANALYSIS_RETRY_HINTS = [
+        'timeout',
+        'timed out',
+        'network',
+        'socket',
+        'econn',
+        'reset',
+        'temporarily',
+        'unavailable',
+        'busy',
+        '429',
+        '502',
+        '503',
+        '504',
+        '超时',
+        '网络',
+        '拥堵',
+        '暂时不可用'
+    ];
+    const PRACTICE_MESSAGE_ALLOWED_TYPES = new Set([
+        'exam_completed',
+        'exam_progress',
+        'exam_error',
+        'SESSION_READY',
+        'PROGRESS_UPDATE',
+        'PRACTICE_COMPLETE',
+        'PRACTICE_EXIT',
+        'REQUEST_READING_ANALYSIS',
+        'ERROR_OCCURRED',
+        'REQUEST_INIT',
+        'SUITE_CLOSE_ATTEMPT',
+        'REVIEW_NAVIGATE',
+        'SUITE_CONFIG_UPDATE',
+        'SIMULATION_DRAFT_SYNC',
+        'SIMULATION_NAVIGATE',
+        'SIMULATION_SUBMIT'
+    ]);
+    const PRACTICE_MESSAGE_ALLOWED_SOURCES = new Set(['practice_page', 'inline_collector', 'suite_placeholder']);
+    const PRACTICE_MESSAGE_BASE_KEYS = new Set([
+        'type',
+        'messageType',
+        'action',
+        'event',
+        'data',
+        'payload',
+        'detail',
+        'args',
+        'source',
+        'message',
+        'messageData'
+    ]);
+
+    function isRecordObject(value) {
+        return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function normalizeReadingAnalysisRequestPayload(data) {
+        const payload = isRecordObject(data) ? data : {};
+        const requestId = payload.requestId != null ? String(payload.requestId).trim() : '';
+        const singleAttemptAnalysisInput = isRecordObject(payload.singleAttemptAnalysisInput)
+            ? payload.singleAttemptAnalysisInput
+            : (isRecordObject(payload.analysisInput) ? payload.analysisInput : null);
+        const singleAttemptAnalysis = isRecordObject(payload.singleAttemptAnalysis)
+            ? payload.singleAttemptAnalysis
+            : (isRecordObject(payload.analysis) ? payload.analysis : null);
+        return {
+            requestId,
+            singleAttemptAnalysisInput,
+            singleAttemptAnalysis
+        };
+    }
+
+    function normalizeReadingAnalysisBridgeError(errorLike, fallbackCode, fallbackMessage) {
+        const normalized = errorLike instanceof Error
+            ? errorLike
+            : new Error(
+                (errorLike && typeof errorLike.message === 'string' && errorLike.message.trim())
+                    ? errorLike.message.trim()
+                    : fallbackMessage
+            );
+        normalized.code = (errorLike && errorLike.code)
+            ? String(errorLike.code)
+            : fallbackCode;
+        if (!normalized.message || !String(normalized.message).trim()) {
+            normalized.message = fallbackMessage;
+        }
+        return normalized;
+    }
+
+    function createReadingAnalysisBridgeError(errorLike, fallbackCode, fallbackMessage, meta = null, cause = null) {
+        const normalized = normalizeReadingAnalysisBridgeError(errorLike, fallbackCode, fallbackMessage);
+        if (isRecordObject(meta)) {
+            normalized.meta = Object.assign({}, meta, isRecordObject(normalized.meta) ? normalized.meta : {});
+        }
+        if (cause !== undefined && cause !== null) {
+            normalized.cause = cause;
+        }
+        return normalized;
+    }
+
+    function parseJsonRecord(value) {
+        if (typeof value !== 'string' || !value.trim()) {
+            return null;
+        }
+        try {
+            const parsed = JSON.parse(value);
+            return isRecordObject(parsed) ? parsed : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function coerceRecordObject(value) {
+        if (isRecordObject(value)) {
+            return value;
+        }
+        return parseJsonRecord(value);
+    }
+
+    function waitForDelay(ms) {
+        const delayMs = Math.max(0, Number(ms) || 0);
+        if (!delayMs) {
+            return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+            setTimeout(resolve, delayMs);
+        });
+    }
+
+    function runTaskWithTimeout(taskFactory, timeoutMs) {
+        const normalizedTimeout = Math.max(1500, Number(timeoutMs) || 0);
+        return new Promise((resolve, reject) => {
+            let settled = false;
+            const timer = setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                reject(createReadingAnalysisBridgeError({
+                    code: 'analysis_bridge_upstream_timeout',
+                    message: `二阶段分析服务响应超时（${Math.ceil(normalizedTimeout / 1000)}s）`
+                }, 'analysis_bridge_upstream_timeout', `二阶段分析服务响应超时（${Math.ceil(normalizedTimeout / 1000)}s）`, {
+                    stage: 'upstream_timeout',
+                    timeoutMs: normalizedTimeout
+                }));
+            }, normalizedTimeout);
+
+            Promise.resolve()
+                .then(() => taskFactory())
+                .then((result) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    resolve(result);
+                })
+                .catch((error) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    reject(error);
+                });
+        });
+    }
+
+    function createReadingAnalysisResponder(sourceWindow, examId, requestId) {
+        const post = (payload = {}) => {
+            try {
+                sourceWindow.postMessage({
+                    type: 'READING_ANALYSIS_RESULT',
+                    data: Object.assign({
+                        requestId,
+                        examId
+                    }, payload || {})
+                }, '*');
+            } catch (_) {
+                // ignore response post errors
+            }
+        };
+        return {
+            success(resultData, meta = {}) {
+                post({
+                    success: true,
+                    data: resultData,
+                    meta
+                });
+            },
+            error(code, message, meta = {}) {
+                post({
+                    success: false,
+                    error: {
+                        code: code || 'analysis_bridge_failed',
+                        message: message || '分析桥调用失败'
+                    },
+                    meta
+                });
+            }
+        };
+    }
+
+    function normalizeReadingAnalysisBridgeResultPayload(payload) {
+        if (!payload || payload.success === false) {
+            throw createReadingAnalysisBridgeError({
+                code: payload?.error?.code || 'reading_analysis_ipc_failed',
+                message: payload?.error?.message || payload?.message || '二阶段分析请求失败'
+            }, 'reading_analysis_ipc_failed', '二阶段分析请求失败', {
+                stage: 'ipc_response',
+                success: false
+            });
+        }
+        if (!isRecordObject(payload.data)) {
+            throw createReadingAnalysisBridgeError({
+                code: 'invalid_response_format',
+                message: '二阶段分析返回格式无效'
+            }, 'invalid_response_format', '二阶段分析返回格式无效', {
+                stage: 'ipc_response',
+                success: true,
+                hasData: false
+            });
+        }
+        return payload.data;
+    }
+
+    function isRetryableReadingAnalysisBridgeError(error) {
+        const code = String(error?.code || '').trim().toLowerCase();
+        const message = String(error?.message || '').trim().toLowerCase();
+        if (READING_ANALYSIS_NON_RETRYABLE_CODES.has(code)) {
+            return false;
+        }
+        if (READING_ANALYSIS_RETRYABLE_CODES.has(code)) {
+            return true;
+        }
+        for (let index = 0; index < READING_ANALYSIS_RETRY_HINTS.length; index += 1) {
+            if (message.includes(READING_ANALYSIS_RETRY_HINTS[index])) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     function resolvePracticeRecordBackends() {
         const coreStore = global.PracticeCore && global.PracticeCore.store;
@@ -1439,19 +1690,6 @@
          * 设置题目窗口通信
          */
         setupExamWindowCommunication(examWindow, examId, exam = null, options = {}) {
-            const parseJsonSafely = (value) => {
-                if (typeof value !== 'string' || !value.trim()) return null;
-                try {
-                    return JSON.parse(value);
-                } catch (_) {
-                    return null;
-                }
-            };
-
-            const isPlainObject = (value) => {
-                return value && typeof value === 'object' && !Array.isArray(value);
-            };
-
             const normalizeMessage = (rawEnvelope, depth = 0) => {
                 if (depth > 2) return null;
 
@@ -1463,34 +1701,8 @@
                     }
                 }
 
-                const allowedTypes = new Set([
-                    'exam_completed',
-                    'exam_progress',
-                    'exam_error',
-                    'SESSION_READY',
-                    'PROGRESS_UPDATE',
-                    'PRACTICE_COMPLETE',
-                    'PRACTICE_EXIT',
-                    'REQUEST_READING_ANALYSIS',
-                    'ERROR_OCCURRED',
-                    'REQUEST_INIT',
-                    'SUITE_CLOSE_ATTEMPT',
-                    'REVIEW_NAVIGATE',
-                    'SUITE_CONFIG_UPDATE',
-                    'SIMULATION_DRAFT_SYNC',
-                    'SIMULATION_NAVIGATE',
-                    'SIMULATION_SUBMIT'
-                ]);
-
-                const baseKeys = new Set(['type', 'messageType', 'action', 'event', 'data', 'payload', 'detail', 'args', 'source', 'message', 'messageData']);
-
                 const coerceObject = (value) => {
-                    if (isPlainObject(value)) return value;
-                    if (typeof value === 'string') {
-                        const parsed = parseJsonSafely(value);
-                        return isPlainObject(parsed) ? parsed : null;
-                    }
-                    return null;
+                    return coerceRecordObject(value);
                 };
 
                 const pickType = (envelope) => {
@@ -1516,7 +1728,7 @@
                     const fallback = {};
                     let hasFallback = false;
                     Object.keys(envelope || {}).forEach((key) => {
-                        if (!baseKeys.has(key)) {
+                        if (!PRACTICE_MESSAGE_BASE_KEYS.has(key)) {
                             fallback[key] = envelope[key];
                             hasFallback = true;
                         }
@@ -1527,9 +1739,9 @@
 
                 let envelope = rawEnvelope;
                 if (typeof envelope === 'string') {
-                    envelope = parseJsonSafely(envelope);
+                    envelope = parseJsonRecord(envelope);
                 }
-                if (!isPlainObject(envelope)) return null;
+                if (!isRecordObject(envelope)) return null;
 
                 const type = pickType(envelope);
                 if (!type) {
@@ -1540,12 +1752,12 @@
                     return null;
                 }
 
-                if (!allowedTypes.has(type)) {
+                if (!PRACTICE_MESSAGE_ALLOWED_TYPES.has(type)) {
                     return null;
                 }
 
                 const data = pickData(envelope) || {};
-                if (!isPlainObject(data)) {
+                if (!isRecordObject(data)) {
                     return null;
                 }
 
@@ -1609,17 +1821,47 @@
                     return;
                 }
 
+                const normalized = normalizeMessage(event.data);
+                if (!normalized) {
+                    return;
+                }
+                const { type, data } = normalized;
+                const analysisRequestId = data && data.requestId != null ? String(data.requestId).trim() : '';
+                const replyReadingAnalysisNack = (code, message, meta = {}) => {
+                    if (type !== 'REQUEST_READING_ANALYSIS' || !analysisRequestId || !sourceWindow || typeof sourceWindow.postMessage !== 'function') {
+                        return;
+                    }
+                    try {
+                        sourceWindow.postMessage({
+                            type: 'READING_ANALYSIS_RESULT',
+                            data: {
+                                requestId: analysisRequestId,
+                                examId,
+                                success: false,
+                                error: {
+                                    code: code || 'analysis_bridge_rejected',
+                                    message: message || '分析桥请求被父页拒绝'
+                                },
+                                meta: Object.assign({
+                                    reason: code || 'analysis_bridge_rejected'
+                                }, meta || {})
+                            }
+                        }, '*');
+                    } catch (_) {
+                        // ignore response post errors
+                    }
+                };
+
                 // 校验来源域，允许 file:// (origin 为 null) 与同源页面
                 if (event.origin && event.origin !== 'null') {
                     const allowedOrigin = window.location && window.location.origin;
                     if (allowedOrigin && event.origin !== allowedOrigin) {
+                        replyReadingAnalysisNack('analysis_bridge_origin_mismatch', '父页拒绝了跨域分析请求', {
+                            eventOrigin: event.origin,
+                            allowedOrigin
+                        });
                         return;
                     }
-                }
-
-                const normalized = normalizeMessage(event.data);
-                if (!normalized) {
-                    return;
                 }
 
                 const windowInfo = this.ensureExamWindowSession(examId, expectedWindow);
@@ -1632,10 +1874,11 @@
                 const src = normalized.sourceTag || '';
                 const allowedSources = new Set(['practice_page', 'inline_collector', 'suite_placeholder']);
                 if (src && !allowedSources.has(src)) {
+                    replyReadingAnalysisNack('analysis_bridge_source_not_allowed', '父页拒绝了未知来源的分析请求', {
+                        sourceTag: src
+                    });
                     return; // 非预期来源的消息忽略
                 }
-
-                const { type, data } = normalized;
                 const expectedExamId = String(examId);
                 const payloadExamId = data && data.examId != null ? String(data.examId) : '';
                 const payloadSuiteSessionId = data && typeof data.suiteSessionId === 'string'
@@ -1660,6 +1903,10 @@
                     )
                 );
                 if (!sourceMatched && !allowSuiteSourceFallback) {
+                    replyReadingAnalysisNack('analysis_bridge_source_mismatch', '父页未识别当前分析请求来源窗口', {
+                        payloadExamId,
+                        expectedExamId
+                    });
                     return;
                 }
                 const isSuiteFlowPayload = Boolean(
@@ -1690,6 +1937,10 @@
                             )
                         );
                         if (!allowSuiteSessionMismatch) {
+                            replyReadingAnalysisNack('analysis_bridge_session_mismatch', '父页拒绝了会话不匹配的分析请求', {
+                                payloadSessionId,
+                                expectedSessionId
+                            });
                             return;
                         }
                         data.sessionId = expectedSessionId;
@@ -1709,6 +1960,10 @@
                 if (payloadExamId && payloadExamId !== expectedExamId) {
                     const allowedLegacy = payloadExamId === 'session';
                     if (!allowedLegacy) {
+                        replyReadingAnalysisNack('analysis_bridge_exam_mismatch', '父页拒绝了题目编号不匹配的分析请求', {
+                            payloadExamId,
+                            expectedExamId
+                        });
                         return;
                     }
                 }
@@ -3065,10 +3320,11 @@
         },
 
         async handleReadingAnalysisRequest(examId, data, sourceWindow = null) {
-            const requestId = data && data.requestId != null ? String(data.requestId).trim() : '';
-            if (!requestId || !sourceWindow || typeof sourceWindow.postMessage !== 'function') {
+            if (!sourceWindow || typeof sourceWindow.postMessage !== 'function') {
                 return;
             }
+            const normalizedRequest = normalizeReadingAnalysisRequestPayload(data);
+            const requestId = normalizedRequest.requestId;
             const startedAt = Date.now();
             const respond = (payload = {}) => {
                 try {
@@ -3083,19 +3339,54 @@
                     // ignore response post errors
                 }
             };
+            const respondSuccess = (resultData, meta = {}) => {
+                respond({
+                    success: true,
+                    data: resultData,
+                    meta
+                });
+            };
+            const respondError = (code, message, meta = {}) => {
+                respond({
+                    success: false,
+                    error: {
+                        code: code || 'analysis_bridge_failed',
+                        message: message || '分析桥调用失败'
+                    },
+                    meta
+                });
+            };
+            if (!requestId) {
+                respondError('analysis_bridge_invalid_request', '父页收到的分析请求缺少 requestId', {
+                    stage: 'validate',
+                    status: 'rejected'
+                });
+                return;
+            }
+            if (!normalizedRequest.singleAttemptAnalysisInput || !normalizedRequest.singleAttemptAnalysis) {
+                respondError('analysis_bridge_invalid_payload', '父页收到的分析请求缺少结构化分析输入', {
+                    stage: 'validate',
+                    status: 'rejected'
+                });
+                return;
+            }
             const wait = (ms) => new Promise((resolve) => {
                 setTimeout(resolve, Math.max(0, Number(ms) || 0));
             });
             const runWithTimeout = (taskFactory, timeoutMs) => new Promise((resolve, reject) => {
                 const normalizedTimeout = Math.max(1500, Number(timeoutMs) || 0);
                 let settled = false;
-                const timer = setTimeout(() => {
-                    if (settled) return;
-                    settled = true;
-                    const timeoutError = new Error(`二阶段分析服务响应超时（${Math.ceil(normalizedTimeout / 1000)}s）`);
-                    timeoutError.code = 'analysis_bridge_upstream_timeout';
-                    reject(timeoutError);
-                }, normalizedTimeout);
+            const timer = setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                reject(createReadingAnalysisBridgeError({
+                    code: 'analysis_bridge_upstream_timeout',
+                    message: `二阶段分析服务响应超时（${Math.ceil(normalizedTimeout / 1000)}s）`
+                }, 'analysis_bridge_upstream_timeout', `二阶段分析服务响应超时（${Math.ceil(normalizedTimeout / 1000)}s）`, {
+                    stage: 'upstream_timeout',
+                    timeoutMs: normalizedTimeout
+                }));
+            }, normalizedTimeout);
                 Promise.resolve()
                     .then(() => taskFactory())
                     .then((result) => {
@@ -3111,134 +3402,49 @@
                         reject(error);
                     });
             });
-            const normalizeBridgeError = (errorLike, fallbackCode, fallbackMessage) => {
-                const normalized = errorLike instanceof Error
-                    ? errorLike
-                    : new Error(
-                        (errorLike && typeof errorLike.message === 'string' && errorLike.message.trim())
-                            ? errorLike.message.trim()
-                            : fallbackMessage
-                    );
-                normalized.code = (errorLike && errorLike.code)
-                    ? String(errorLike.code)
-                    : fallbackCode;
-                if (!normalized.message || !String(normalized.message).trim()) {
-                    normalized.message = fallbackMessage;
-                }
-                return normalized;
-            };
-            const isRetryableBridgeError = (error) => {
-                const code = String(error?.code || '').trim().toLowerCase();
-                const message = String(error?.message || '').trim().toLowerCase();
-                const nonRetryableCodes = new Set([
-                    'invalid_response_format',
-                    'invalid_request_payload',
-                    'analysis_bridge_unavailable'
-                ]);
-                if (nonRetryableCodes.has(code)) {
-                    return false;
-                }
-                const retryableCodes = new Set([
-                    'analysis_bridge_upstream_timeout',
-                    'reading_analysis_ipc_failed',
-                    'analysis_bridge_failed',
-                    'reading_analysis_network_error'
-                ]);
-                if (retryableCodes.has(code)) {
-                    return true;
-                }
-                const retryHints = [
-                    'timeout',
-                    'timed out',
-                    'network',
-                    'socket',
-                    'econn',
-                    'reset',
-                    'temporarily',
-                    'unavailable',
-                    'busy',
-                    '429',
-                    '502',
-                    '503',
-                    '504',
-                    '超时',
-                    '网络',
-                    '拥堵',
-                    '暂时不可用'
-                ];
-                for (let index = 0; index < retryHints.length; index += 1) {
-                    if (message.includes(retryHints[index])) {
-                        return true;
-                    }
-                }
-                return false;
-            };
-            const attemptPlan = [
-                { timeoutMs: 7000, retryDelayMs: 300 },
-                { timeoutMs: 14000, retryDelayMs: 0 }
-            ];
 
             if (!window.electronAPI || typeof window.electronAPI.analyzeReadingSingleAttempt !== 'function') {
-                respond({
-                    success: false,
-                    error: {
-                        code: 'analysis_bridge_unavailable',
-                        message: '父页分析桥不可用，请从主应用入口重新打开练习页'
-                    }
+                respondError('analysis_bridge_unavailable', '父页分析桥不可用，请从主应用入口重新打开练习页', {
+                    stage: 'bridge_unavailable'
                 });
                 return;
             }
 
             let lastError = null;
-            for (let attemptIndex = 0; attemptIndex < attemptPlan.length; attemptIndex += 1) {
-                const currentAttempt = attemptPlan[attemptIndex];
+            for (let attemptIndex = 0; attemptIndex < READING_ANALYSIS_ATTEMPT_PLAN.length; attemptIndex += 1) {
+                const currentAttempt = READING_ANALYSIS_ATTEMPT_PLAN[attemptIndex];
                 try {
                     const payload = await runWithTimeout(() => window.electronAPI.analyzeReadingSingleAttempt({
-                        singleAttemptAnalysisInput: data.singleAttemptAnalysisInput,
-                        singleAttemptAnalysis: data.singleAttemptAnalysis
+                        singleAttemptAnalysisInput: normalizedRequest.singleAttemptAnalysisInput,
+                        singleAttemptAnalysis: normalizedRequest.singleAttemptAnalysis
                     }), currentAttempt.timeoutMs);
-                    if (!payload || payload.success === false) {
-                        throw normalizeBridgeError({
-                            code: payload?.error?.code || 'reading_analysis_ipc_failed',
-                            message: payload?.error?.message || payload?.message || '二阶段分析请求失败'
-                        }, 'reading_analysis_ipc_failed', '二阶段分析请求失败');
-                    }
-                    if (!payload.data || typeof payload.data !== 'object') {
-                        throw normalizeBridgeError({
-                            code: 'invalid_response_format',
-                            message: '二阶段分析返回格式无效'
-                        }, 'invalid_response_format', '二阶段分析返回格式无效');
-                    }
-                    respond({
-                        success: true,
-                        data: payload.data,
-                        meta: {
-                            attempt: attemptIndex + 1,
-                            attempts: attemptPlan.length,
-                            elapsedMs: Date.now() - startedAt
-                        }
+                    const responseData = normalizeReadingAnalysisBridgeResultPayload(payload);
+                    respondSuccess(responseData, {
+                        attempt: attemptIndex + 1,
+                        attempts: READING_ANALYSIS_ATTEMPT_PLAN.length,
+                        elapsedMs: Date.now() - startedAt
                     });
                     return;
                 } catch (error) {
-                    lastError = normalizeBridgeError(error, 'analysis_bridge_failed', '分析桥调用失败');
-                    if (!isRetryableBridgeError(lastError) || attemptIndex >= attemptPlan.length - 1) {
+                    lastError = createReadingAnalysisBridgeError(error, 'analysis_bridge_failed', '分析桥调用失败', {
+                        stage: 'attempt',
+                        attempt: attemptIndex + 1,
+                        attempts: READING_ANALYSIS_ATTEMPT_PLAN.length
+                    });
+                    if (!isRetryableReadingAnalysisBridgeError(lastError) || attemptIndex >= READING_ANALYSIS_ATTEMPT_PLAN.length - 1) {
                         break;
                     }
                     await wait(currentAttempt.retryDelayMs);
                 }
             }
 
-            const finalError = lastError || normalizeBridgeError(null, 'analysis_bridge_failed', '分析桥调用失败');
-            respond({
-                success: false,
-                error: {
-                    code: finalError.code || 'analysis_bridge_failed',
-                    message: finalError.message || '分析桥调用失败'
-                },
-                meta: {
-                    attempts: attemptPlan.length,
-                    elapsedMs: Date.now() - startedAt
-                }
+            const finalError = lastError || createReadingAnalysisBridgeError(null, 'analysis_bridge_failed', '分析桥调用失败', {
+                stage: 'finalize_attempts'
+            });
+            respondError(finalError.code || 'analysis_bridge_failed', finalError.message || '分析桥调用失败', {
+                attempts: READING_ANALYSIS_ATTEMPT_PLAN.length,
+                elapsedMs: Date.now() - startedAt,
+                stage: finalError.meta && finalError.meta.stage ? finalError.meta.stage : 'finalize_attempts'
             });
         },
 
@@ -3766,15 +3972,15 @@
             const message = `题目完成！\n${exam.title}\n正确率: ${accuracy}%`;
 
             window.showMessage(message, 'success');
-
-            this.showDetailedResults(examId, resultData);
         },
 
-        /**
-         * 显示详细结果
-         */
+        // 兼容保留：历史上这里会渲染详细结果模态框，当前功能已移除。
         async showDetailedResults() {
-            // 兼容保留：历史上这里会渲染详细结果模态框，当前功能已移除。
+            return;
+        },
+
+        // 兼容保留：旧契约仍暴露该方法，避免外部调用断裂。
+        async showDetailedPracticeResults() {
             return;
         },
 
@@ -3879,13 +4085,6 @@
             // 显示简单通知
             const message = `练习完成！\n${exam.title}\n正确率: ${accuracy}% | 用时: ${duration}`;
             window.showMessage(message, 'success');
-        },
-
-        /**
-         * 显示详细练习结果
-         */
-        async showDetailedPracticeResults(examId, practiceRecord) {
-            return this.showDetailedResults(examId, practiceRecord);
         },
 
         formatQuestionType(type) {

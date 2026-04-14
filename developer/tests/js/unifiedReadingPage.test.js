@@ -700,6 +700,259 @@ async function testSingleAttemptLlmAnalysisUsesParentBridgeInElectronRuntime() {
     assert.strictEqual(harness.hooks.state.llmAnalysisStatus, 'success', '父页分析桥返回成功后应进入 success 状态');
 }
 
+async function testSingleAttemptLlmAnalysisReportsUnavailableBridgeClearly() {
+    const harness = createHarness({
+        withElectronAPI: false,
+        noParent: true,
+        fetchImpl: async () => {
+            throw new Error('fetch should not be used in electron runtime bridge mode');
+        }
+    });
+    harness.windowStub.location.search = '?examId=reading-p1&runtime=electron';
+    harness.hooks.state.examId = 'reading-p1';
+    harness.hooks.state.sessionId = 'session-electron-unavailable';
+    const results = {
+        answers: { q1: 'A' },
+        answerComparison: { q1: { questionId: 'q1', userAnswer: 'A', correctAnswer: 'B', isCorrect: false } },
+        scoreInfo: { correct: 0, total: 1, totalQuestions: 1, percentage: 0 },
+        singleAttemptAnalysisInput: {
+            totalQuestions: 1,
+            analysisSignals: { unansweredCount: 0, changedAnswerCount: 0 },
+            questionTypePerformance: { summary_completion: { total: 1, correct: 0, accuracy: 0, confidence: 0.5 } }
+        },
+        singleAttemptAnalysis: {
+            summary: { accuracy: 0, durationSec: 75, unansweredRate: 0, changedAnswerRate: 0 },
+            radar: { byQuestionKind: [{ kind: 'summary_completion', total: 1, correct: 0, accuracy: 0, confidence: 0.5 }], byPassageCategory: [] },
+            diagnosis: [{ code: 'fallback', reason: '结构化诊断', evidence: {} }],
+            nextActions: [{ type: 'fallback', target: 'overall', instruction: '结构化建议', evidence: {} }],
+            confidence: 0.5
+        },
+        realData: {}
+    };
+
+    await harness.hooks.triggerSingleAttemptLlmAnalysis(results);
+    assert.strictEqual(harness.hooks.state.llmAnalysisStatus, 'failed', '缺少父页桥时应进入 failed 状态');
+    assert.ok(
+        harness.hooks.state.llmAnalysisMessage.includes('当前与主应用连接中断'),
+        '桥不可用文案应明确指出连接中断，而不是统一成超时'
+    );
+    assert.ok(
+        !harness.hooks.state.llmAnalysisMessage.includes('父页分析桥请求超时'),
+        '桥不可用文案不应退化成超时提示'
+    );
+}
+
+async function testSingleAttemptLlmAnalysisReportsInvalidBridgePayloadClearly() {
+    const harness = createHarness({
+        withElectronAPI: false,
+        fetchImpl: async () => {
+            throw new Error('fetch should not be used in electron runtime bridge mode');
+        }
+    });
+    harness.windowStub.location.search = '?examId=reading-p1&runtime=electron';
+    harness.hooks.state.examId = 'reading-p1';
+    harness.hooks.state.sessionId = 'session-electron-invalid-payload';
+    const results = {
+        answers: { q1: 'A' },
+        answerComparison: { q1: { questionId: 'q1', userAnswer: 'A', correctAnswer: 'B', isCorrect: false } },
+        scoreInfo: { correct: 0, total: 1, totalQuestions: 1, percentage: 0 },
+        singleAttemptAnalysisInput: {
+            totalQuestions: 1,
+            analysisSignals: { unansweredCount: 0, changedAnswerCount: 0 },
+            questionTypePerformance: { summary_completion: { total: 1, correct: 0, accuracy: 0, confidence: 0.5 } }
+        },
+        singleAttemptAnalysis: {
+            summary: { accuracy: 0, durationSec: 75, unansweredRate: 0, changedAnswerRate: 0 },
+            radar: { byQuestionKind: [{ kind: 'summary_completion', total: 1, correct: 0, accuracy: 0, confidence: 0.5 }], byPassageCategory: [] },
+            diagnosis: [{ code: 'fallback', reason: '结构化诊断', evidence: {} }],
+            nextActions: [{ type: 'fallback', target: 'overall', instruction: '结构化建议', evidence: {} }],
+            confidence: 0.5
+        },
+        realData: {}
+    };
+
+    const pending = harness.hooks.triggerSingleAttemptLlmAnalysis(results);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const request = harness.postedMessages.find((entry) => entry && entry.message && entry.message.type === 'REQUEST_READING_ANALYSIS');
+    assert.ok(request, '无效 payload 测试前应先发送父页分析请求');
+    const requestId = request.message.data && request.message.data.requestId;
+
+    harness.hooks.handleIncoming({
+        data: {
+            type: 'READING_ANALYSIS_RESULT',
+            data: {
+                requestId,
+                success: true,
+                data: null
+            }
+        }
+    });
+
+    await pending;
+    assert.strictEqual(harness.hooks.state.llmAnalysisStatus, 'failed', '无效 payload 应进入 failed 状态');
+    assert.ok(
+        harness.hooks.state.llmAnalysisMessage.includes('主应用返回的数据结构异常'),
+        '无效 payload 文案应明确指出返回结构异常'
+    );
+}
+
+async function testParentBridgeAcceptsMessageTypeAndPayloadEnvelope() {
+    const harness = createHarness({
+        withElectronAPI: false,
+        fetchImpl: async () => {
+            throw new Error('fetch should not be used in electron runtime bridge mode');
+        }
+    });
+    harness.windowStub.location.search = '?examId=reading-p1&runtime=electron';
+    harness.hooks.state.examId = 'reading-p1';
+    harness.hooks.state.sessionId = 'session-envelope-compat';
+    const results = {
+        answers: { q1: 'A' },
+        answerComparison: { q1: { questionId: 'q1', userAnswer: 'A', correctAnswer: 'B', isCorrect: false } },
+        scoreInfo: { correct: 0, total: 1, totalQuestions: 1, percentage: 0 },
+        singleAttemptAnalysisInput: {
+            totalQuestions: 1,
+            analysisSignals: { unansweredCount: 0, changedAnswerCount: 0 },
+            questionTypePerformance: { summary_completion: { total: 1, correct: 0, accuracy: 0, confidence: 0.5 } }
+        },
+        singleAttemptAnalysis: {
+            summary: { accuracy: 0, durationSec: 75, unansweredRate: 0, changedAnswerRate: 0 },
+            radar: { byQuestionKind: [{ kind: 'summary_completion', total: 1, correct: 0, accuracy: 0, confidence: 0.5 }], byPassageCategory: [] },
+            diagnosis: [{ code: 'fallback', reason: '结构化诊断', evidence: {} }],
+            nextActions: [{ type: 'fallback', target: 'overall', instruction: '结构化建议', evidence: {} }],
+            confidence: 0.5
+        },
+        realData: {}
+    };
+
+    const pending = harness.hooks.triggerSingleAttemptLlmAnalysis(results);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const request = harness.postedMessages.find((entry) => entry && entry.message && entry.message.type === 'REQUEST_READING_ANALYSIS');
+    assert.ok(request, '兼容 envelope 测试前应先发送父页分析请求');
+    const requestId = request.message.data && request.message.data.requestId;
+
+    harness.hooks.handleIncoming({
+        data: {
+            messageType: 'READING_ANALYSIS_RESULT',
+            requestId,
+            payload: {
+                success: true,
+                data: {
+                    diagnosis: [],
+                    nextActions: [],
+                    confidence: 0.67
+                }
+            }
+        }
+    });
+
+    await pending;
+    assert.strictEqual(harness.hooks.state.llmAnalysisStatus, 'success', 'messageType/payload envelope 应被兼容解析');
+}
+
+async function testParentBridgeAcceptsLegacyDirectAnalysisData() {
+    const harness = createHarness({
+        withElectronAPI: false,
+        fetchImpl: async () => {
+            throw new Error('fetch should not be used in electron runtime bridge mode');
+        }
+    });
+    harness.windowStub.location.search = '?examId=reading-p1&runtime=electron';
+    harness.hooks.state.examId = 'reading-p1';
+    harness.hooks.state.sessionId = 'session-legacy-direct';
+    const results = {
+        answers: { q1: 'A' },
+        answerComparison: { q1: { questionId: 'q1', userAnswer: 'A', correctAnswer: 'B', isCorrect: false } },
+        scoreInfo: { correct: 0, total: 1, totalQuestions: 1, percentage: 0 },
+        singleAttemptAnalysisInput: {
+            totalQuestions: 1,
+            analysisSignals: { unansweredCount: 0, changedAnswerCount: 0 },
+            questionTypePerformance: { summary_completion: { total: 1, correct: 0, accuracy: 0, confidence: 0.5 } }
+        },
+        singleAttemptAnalysis: {
+            summary: { accuracy: 0, durationSec: 75, unansweredRate: 0, changedAnswerRate: 0 },
+            radar: { byQuestionKind: [{ kind: 'summary_completion', total: 1, correct: 0, accuracy: 0, confidence: 0.5 }], byPassageCategory: [] },
+            diagnosis: [{ code: 'fallback', reason: '结构化诊断', evidence: {} }],
+            nextActions: [{ type: 'fallback', target: 'overall', instruction: '结构化建议', evidence: {} }],
+            confidence: 0.5
+        },
+        realData: {}
+    };
+
+    const pending = harness.hooks.triggerSingleAttemptLlmAnalysis(results);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const request = harness.postedMessages.find((entry) => entry && entry.message && entry.message.type === 'REQUEST_READING_ANALYSIS');
+    assert.ok(request, 'legacy direct data 测试前应先发送父页分析请求');
+    const requestId = request.message.data && request.message.data.requestId;
+
+    harness.hooks.handleIncoming({
+        data: {
+            type: 'READING_ANALYSIS_RESULT',
+            data: {
+                requestId,
+                diagnosis: [],
+                nextActions: [],
+                confidence: 0.73
+            }
+        }
+    });
+
+    await pending;
+    assert.strictEqual(harness.hooks.state.llmAnalysisStatus, 'success', '直接 data 旧格式应被兼容解析');
+}
+
+async function testParentBridgeSettlesSinglePendingWithoutRequestId() {
+    const harness = createHarness({
+        withElectronAPI: false,
+        fetchImpl: async () => {
+            throw new Error('fetch should not be used in electron runtime bridge mode');
+        }
+    });
+    harness.windowStub.location.search = '?examId=reading-p1&runtime=electron';
+    harness.hooks.state.examId = 'reading-p1';
+    harness.hooks.state.sessionId = 'session-requestid-fallback';
+    const results = {
+        answers: { q1: 'A' },
+        answerComparison: { q1: { questionId: 'q1', userAnswer: 'A', correctAnswer: 'B', isCorrect: false } },
+        scoreInfo: { correct: 0, total: 1, totalQuestions: 1, percentage: 0 },
+        singleAttemptAnalysisInput: {
+            totalQuestions: 1,
+            analysisSignals: { unansweredCount: 0, changedAnswerCount: 0 },
+            questionTypePerformance: { summary_completion: { total: 1, correct: 0, accuracy: 0, confidence: 0.5 } }
+        },
+        singleAttemptAnalysis: {
+            summary: { accuracy: 0, durationSec: 75, unansweredRate: 0, changedAnswerRate: 0 },
+            radar: { byQuestionKind: [{ kind: 'summary_completion', total: 1, correct: 0, accuracy: 0, confidence: 0.5 }], byPassageCategory: [] },
+            diagnosis: [{ code: 'fallback', reason: '结构化诊断', evidence: {} }],
+            nextActions: [{ type: 'fallback', target: 'overall', instruction: '结构化建议', evidence: {} }],
+            confidence: 0.5
+        },
+        realData: {}
+    };
+
+    const pending = harness.hooks.triggerSingleAttemptLlmAnalysis(results);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const request = harness.postedMessages.find((entry) => entry && entry.message && entry.message.type === 'REQUEST_READING_ANALYSIS');
+    assert.ok(request, 'requestId fallback 测试前应先发送父页分析请求');
+
+    harness.hooks.handleIncoming({
+        data: {
+            type: 'READING_ANALYSIS_RESULT',
+            data: {
+                success: true,
+                data: {
+                    diagnosis: [],
+                    nextActions: [],
+                    confidence: 0.58
+                }
+            }
+        }
+    });
+
+    await pending;
+    assert.strictEqual(harness.hooks.state.llmAnalysisStatus, 'success', '单 pending 且缺 requestId 时应兜底结算成功');
+}
+
 function testInitSessionSimulationSyncsButtonsAndSuiteState() {
     const harness = createHarness();
 
@@ -1146,9 +1399,14 @@ async function main() {
         await testSingleAttemptLlmAnalysisIgnoresStaleCachedBaseUrlWhenElectronInfoAvailable();
         await testSingleAttemptLlmAnalysisNetworkFailureClearsCachedBaseUrl();
         await testSingleAttemptLlmAnalysisUsesParentBridgeInElectronRuntime();
+        await testSingleAttemptLlmAnalysisReportsUnavailableBridgeClearly();
+        await testSingleAttemptLlmAnalysisReportsInvalidBridgePayloadClearly();
+        await testParentBridgeAcceptsMessageTypeAndPayloadEnvelope();
+        await testParentBridgeAcceptsLegacyDirectAnalysisData();
+        await testParentBridgeSettlesSinglePendingWithoutRequestId();
         console.log(JSON.stringify({
             status: 'pass',
-            detail: 'unifiedReadingPage 已覆盖 INIT_SESSION/SIMULATION_CONTEXT 协议、review init 可编辑合同、REVIEW_CONTEXT answering 退只读合同、SESSION_READY envelope、review navigate payload、运行时 localApiBaseUrl 恢复、降级重试 UI 及二阶段 LLM 分析补丁链路'
+            detail: 'unifiedReadingPage 已覆盖 INIT_SESSION/SIMULATION_CONTEXT 协议、review init 可编辑合同、REVIEW_CONTEXT answering 退只读合同、SESSION_READY envelope、review navigate payload、运行时 localApiBaseUrl 恢复、降级重试 UI、父页分析桥 envelope/旧格式兼容与 requestId 兜底链路，以及桥不可用/无效响应的细化失败提示'
         }, null, 2));
     } catch (error) {
         console.log(JSON.stringify({

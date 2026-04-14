@@ -224,30 +224,15 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { evaluate, getErrorMessage, topics as topicsApi } from '@/api/client.js'
 import { useDraft } from '@/composables/useDraft.js'
+import { createRequestGate } from '@/utils/request-gate.js'
+import { extractTextFromTiptap, getTopicTitlePreview } from '@/utils/tiptap-text.js'
+import {
+  getWritingCategoryLabel,
+  getWritingCategoryOptions,
+  normalizeWritingCategory
+} from '@/utils/writing-categories.js'
 
 const router = useRouter()
-
-const TASK2_CATEGORIES = [
-  { value: 'education', label: '教育' },
-  { value: 'technology', label: '科技' },
-  { value: 'society', label: '社会' },
-  { value: 'environment', label: '环境' },
-  { value: 'health', label: '健康' },
-  { value: 'culture', label: '文化' },
-  { value: 'government', label: '政府' },
-  { value: 'economy', label: '经济' }
-]
-
-const TASK1_CATEGORIES = [
-  { value: 'bar_chart', label: '柱状图' },
-  { value: 'pie_chart', label: '饼图' },
-  { value: 'line_chart', label: '折线图' },
-  { value: 'flow_chart', label: '流程图' },
-  { value: 'map', label: '地图' },
-  { value: 'table', label: '表格' },
-  { value: 'process', label: '过程' },
-  { value: 'mixed', label: '混合图' }
-]
 
 const taskType = ref('task2')
 const topicMode = ref('free')
@@ -264,10 +249,10 @@ const restoreNotice = ref('')
 const showConfirmDialog = ref(false)
 const showDraftNotification = ref(false)
 const isRestoringDraft = ref(false)
-let topicsRequestSequence = 0
+const topicsRequestGate = createRequestGate()
 
 function invalidateTopicRequests() {
-  topicsRequestSequence += 1
+  topicsRequestGate.invalidate()
   topicLoading.value = false
   topicsList.value = []
 }
@@ -288,14 +273,7 @@ const {
   word_count: wordCount.value
 }))
 
-const categoryOptions = computed(() => (
-  taskType.value === 'task1' ? TASK1_CATEGORIES : TASK2_CATEGORIES
-))
-
-function normalizeCategory(type = taskType.value, category = selectedCategory.value) {
-  const options = type === 'task1' ? TASK1_CATEGORIES : TASK2_CATEGORIES
-  return options.some((item) => item.value === category) ? category : ''
-}
+const categoryOptions = computed(() => getWritingCategoryOptions(taskType.value))
 
 const selectedTopic = computed(() => (
   topicsList.value.find((topic) => topic.id === selectedTopicId.value) || null
@@ -307,13 +285,9 @@ const selectedTopicText = computed(() => (
 
 const currentTopicLabel = computed(() => {
   if (!selectedTopic.value) return ''
-  const option = categoryOptions.value.find((item) => item.value === selectedTopic.value.category)
-  return option ? option.label : selectedTopic.value.category
+  return getWritingCategoryLabel(selectedTopic.value.category)
 })
 
-const customTopicLabel = computed(() => (
-  taskType.value === 'task1' ? '图表题目或图示说明' : '写作题目'
-))
 
 const wordCount = computed(() => {
   const text = content.value.trim()
@@ -394,7 +368,7 @@ watch([taskType, topicMode, selectedCategory], async ([nextTaskType, nextMode], 
     selectedTopicId.value = null
   }
 
-  const normalizedCategory = normalizeCategory(nextTaskType, selectedCategory.value)
+  const normalizedCategory = normalizeWritingCategory(nextTaskType, selectedCategory.value)
   if (normalizedCategory !== selectedCategory.value) {
     selectedCategory.value = normalizedCategory
   }
@@ -422,7 +396,7 @@ watch(customTopicText, () => {
 })
 
 async function loadTopics(type = taskType.value) {
-  const requestId = ++topicsRequestSequence
+  const requestId = topicsRequestGate.begin()
   const category = selectedCategory.value
 
   topicLoading.value = true
@@ -436,7 +410,7 @@ async function loadTopics(type = taskType.value) {
     }
 
     const result = await topicsApi.list(filters, { page: 1, limit: 500 })
-    if (requestId !== topicsRequestSequence) {
+    if (!topicsRequestGate.isCurrent(requestId)) {
       return
     }
 
@@ -447,7 +421,7 @@ async function loadTopics(type = taskType.value) {
       selectedTopicId.value = null
     }
   } catch (loadError) {
-    if (requestId !== topicsRequestSequence) {
+    if (!topicsRequestGate.isCurrent(requestId)) {
       return
     }
     console.error('加载题库失败:', loadError)
@@ -457,7 +431,7 @@ async function loadTopics(type = taskType.value) {
     topicsList.value = []
     selectedTopicId.value = null
   } finally {
-    if (requestId === topicsRequestSequence) {
+    if (topicsRequestGate.isCurrent(requestId)) {
       topicLoading.value = false
     }
   }
@@ -474,7 +448,7 @@ async function handleRecoverDraft() {
   let nextRestoreNotice = ''
   taskType.value = draft.task_type || 'task2'
   topicMode.value = draft.topic_mode || 'free'
-  selectedCategory.value = normalizeCategory(draft.task_type || 'task2', draft.category || '')
+  selectedCategory.value = normalizeWritingCategory(draft.task_type || 'task2', draft.category || '')
   customTopicText.value = draft.topic_text || ''
   content.value = draft.content || ''
   selectedTopicId.value = draft.topic_id || null
@@ -511,25 +485,7 @@ function handleTopicChange(event) {
 }
 
 function getTopicOptionLabel(topic) {
-  const text = extractTextFromTiptap(topic.title_json)
-  return text.length > 90 ? `${text.slice(0, 90)}...` : text
-}
-
-function extractTextFromTiptap(json) {
-  if (typeof json === 'string') {
-    try {
-      return extractTextFromTiptap(JSON.parse(json))
-    } catch {
-      return json
-    }
-  }
-
-  if (!json || typeof json !== 'object') return ''
-  if (json.type === 'text') return json.text || ''
-  if (Array.isArray(json.content)) {
-    return json.content.map((item) => extractTextFromTiptap(item)).join('')
-  }
-  return ''
+  return getTopicTitlePreview(topic.title_json, { fallback: '', maxLength: 90 })
 }
 
 async function handleSubmit() {
