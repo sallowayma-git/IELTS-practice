@@ -54,7 +54,7 @@
             this._suiteModeReady = true;
             this.currentSuiteSession = null;
             this.suiteExamMap = new Map();
-            this.multiSuiteSessionsMap = new Map(); // 鏂板锛氬瓨鍌ㄥ濂楅浼氳瘽
+            this.multiSuiteSessionsMap = new Map(); // 新增：存储多套题会话
             if (typeof this._clearSuiteHandshakes === 'function') {
                 this._clearSuiteHandshakes();
             }
@@ -72,7 +72,7 @@
                 const frequencyScope = suitePreference.frequencyScope;
 
                 if (this.currentSuiteSession && this.currentSuiteSession.status === 'active') {
-                    window.showMessage && window.showMessage('濂楅缁冧範姝ｅ湪杩涜涓紝璇峰厛瀹屾垚褰撳墠濂楅銆?', 'warning');
+                    window.showMessage && window.showMessage('套题练习正在进行中，请先完成当前套题。', 'warning');
                     return;
                 }
 
@@ -91,13 +91,13 @@
                 }
 
                 if (typeof this.openExam !== 'function') {
-                    window.showMessage && window.showMessage('褰撳墠鐗堟湰鏆備笉鏀寔濂楅缁冧範鑷姩鎵撳紑棰樼洰銆?', 'error');
+                    window.showMessage && window.showMessage('当前版本暂不支持套题练习自动打开题目。', 'error');
                     return;
                 }
 
                 const examIndex = await this._fetchSuiteExamIndex();
                 if (!examIndex.length) {
-                    window.showMessage && window.showMessage('棰樺簱涓虹┖锛屾棤娉曞紑鍚棰樼粌涔犮€?', 'warning');
+                    window.showMessage && window.showMessage('题库为空，无法开启套题练习。', 'warning');
                     return;
                 }
 
@@ -131,8 +131,8 @@
                     const pool = frequencyFilteredIndex.filter(item => item.category === category);
                     if (!pool.length) {
                         const scopeLabel = frequencyScope === 'high'
-                            ? '浠呴珮棰?'
-                            : (frequencyScope === 'high_medium' ? '楂橀+娆￠珮棰?' : '鍏ㄩ儴棰戠巼');
+                            ? '仅高频'
+                            : (frequencyScope === 'high_medium' ? '高频+次高频' : '全部频率');
                         window.showMessage && window.showMessage('当前抽题范围（' + scopeLabel + '）缺少 ' + category + ' 阅读题目，无法开启套题练习。', 'warning');
                         return;
                     }
@@ -145,15 +145,15 @@
                     frequencyScope,
                     suiteWindowName,
                     launchLabel: flowMode === 'stationary'
-                        ? '椹昏冻妯″紡'
-                        : (flowMode === 'simulation' ? '妯℃嫙妯″紡' : '缁忓吀妯″紡')
+                        ? '驻足模式'
+                        : (flowMode === 'simulation' ? '模拟模式' : '经典模式')
                 });
                 if (!started && this.currentSuiteSession) {
                     await this._abortSuiteSession(this.currentSuiteSession, { reason: 'startup_failed' });
                 }
             } catch (error) {
-                console.error('[SuitePractice] 鍚姩澶辫触:', error);
-                window.showMessage && window.showMessage('濂楅缁冧範鍚姩澶辫触锛岃绋嶅悗閲嶈瘯銆?', 'error');
+                console.error('[SuitePractice] 启动失败:', error);
+                window.showMessage && window.showMessage('套题练习启动失败，请稍后重试。', 'error');
                 if (this.currentSuiteSession) {
                     await this._abortSuiteSession(this.currentSuiteSession, { reason: 'startup_failed' });
                 }
@@ -200,7 +200,7 @@
 
             const activeExamId = session.activeExamId ? String(session.activeExamId) : '';
             if (activeExamId && activeExamId !== String(examId)) {
-                console.warn('[SuitePractice] 蹇界暐闈炲綋鍓嶆椿鍔ㄧ瘒绔犵殑鎻愪氦锛岄槻姝㈤敊绡囩粨绠?', {
+                console.warn('[SuitePractice] 忽略非当前活动篇章的提交，防止错篇结算。', {
                     activeExamId,
                     submittedExamId: examId,
                     sessionId: session.id
@@ -262,7 +262,7 @@
                 try {
                     await this.cleanupExamSession(examId);
                 } catch (cleanupError) {
-                    console.warn('[SuitePractice] 娓呯悊涓婁竴绡囦細璇濆け璐?', cleanupError);
+                    console.warn('[SuitePractice] 清理上一篇会话失败:', cleanupError);
                 }
             }
 
@@ -445,7 +445,7 @@
                 resolvedWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, '*');
                 return true;
             } catch (error) {
-                console.warn('[SuitePractice] 鍙戦€佸棰樺洖鐪嬩笂涓嬫枃澶辫触:', error);
+                console.warn('[SuitePractice] 发送套题回看上下文失败:', error);
                 return false;
             }
         },
@@ -582,7 +582,7 @@
 
         async _advanceSuiteToNext(session, completedTitle, skipExamIdForAbort) {
             if (typeof this.openExam !== 'function') {
-                window.showMessage && window.showMessage('Unable to continue suite practice. Falling back to normal mode.', 'warning');
+                window.showMessage && window.showMessage('无法继续套题练习，已回退到普通模式。', 'warning');
                 await this._abortSuiteSession(session, { reason: 'missing_open_exam', skipExamId: skipExamIdForAbort || null });
                 return false;
             }
@@ -619,7 +619,7 @@
                     }
                 } catch (error) {
                     openError = error;
-                    console.warn('[SuitePractice] 濂楅涓嬩竴绡囨墦寮€澶辫触:', error);
+                    console.warn('[SuitePractice] 套题下一篇打开失败:', error);
                 }
 
                 return null;
@@ -641,9 +641,9 @@
 
             if (!nextWindow || nextWindow.closed) {
                 if (openError) {
-                    console.warn('[SuitePractice] 濂楅鏃犳硶鎵撳紑涓嬩竴绡?', openError);
+                    console.warn('[SuitePractice] 套题无法打开下一篇:', openError);
                 }
-                window.showMessage && window.showMessage('Unable to continue suite practice. Falling back to normal mode.', 'warning');
+                window.showMessage && window.showMessage('无法继续套题练习，已回退到普通模式。', 'warning');
                 await this._abortSuiteSession(session, { reason: 'open_next_failed', skipExamId: skipExamIdForAbort || null });
                 return false;
             }
@@ -653,7 +653,7 @@
             this._focusSuiteWindow(session.windowRef);
             this._mirrorSessionToStorage(session);
             this._sendSimulationContext(session, nextEntry.examId, session.windowRef);
-            window.showMessage && window.showMessage('Completed ' + (completedTitle || 'previous section') + ', continuing to ' + nextEntry.exam.title + '.', 'success');
+            window.showMessage && window.showMessage('已完成' + (completedTitle || '上一篇') + '，正在继续：' + nextEntry.exam.title + '。', 'success');
             return true;
         },
 
@@ -733,7 +733,7 @@
                 targetWindow.postMessage(payload, '*');
                 return true;
             } catch (e) {
-                console.warn('[SuitePractice] 鍙戦€佹ā鎷熶笂涓嬫枃澶辫触:', e);
+                console.warn('[SuitePractice] 发送模拟上下文失败:', e);
                 return false;
             }
         },
@@ -897,33 +897,33 @@
         },
 
         /**
-         * 澶勭悊澶氬棰樼粌涔犲畬鎴愶紙鐢ㄤ簬100 P1/P4绛夊寘鍚濂楅鐨凥TML椤甸潰锛?
-         * @param {string} examId - 鑰冭瘯ID锛堝彲鑳藉寘鍚棰樺悗缂€锛?
-         * @param {object} suiteData - 濂楅鏁版嵁
-         * @returns {boolean} 鏄惁鎴愬姛澶勭悊
+         * 处理多套题练习完成（用于100 P1/P4等包含多套题的HTML页面）
+         * @param {string} examId - 考试ID（可能包含套题后缀）
+         * @param {object} suiteData - 套题数据
+         * @returns {boolean} 是否成功处理
          */
         async handleMultiSuitePracticeComplete(examId, suiteData) {
             if (!suiteData || !suiteData.suiteId) {
-                console.warn('[MultiSuite] 缂哄皯suiteId锛屾棤娉曞鐞嗗濂楅瀹屾垚');
+                console.warn('[MultiSuite] 缺少suiteId，无法处理多套题完成');
                 return false;
             }
 
-            console.log('[MultiSuite] 澶勭悊濂楅瀹屾垚:', examId, '濂楅ID:', suiteData.suiteId);
+            console.log('[MultiSuite] 处理套题完成:', examId, '套题ID:', suiteData.suiteId);
 
-            // 鑾峰彇鎴栧垱寤哄濂楅浼氳瘽
+            // 获取或创建多套题会话
             const session = this.getOrCreateMultiSuiteSession(examId);
 
-            // 妫€鏌ユ槸鍚﹀凡缁忚褰曡繃杩欎釜濂楅
+            // 检查是否已经记录过这个套题
             const alreadyRecorded = session.suiteResults.some(
                 result => result.suiteId === suiteData.suiteId
             );
 
             if (alreadyRecorded) {
-                console.warn('[MultiSuite] 濂楅宸茶褰曪紝璺宠繃:', suiteData.suiteId);
+                console.warn('[MultiSuite] 套题已记录，跳过:', suiteData.suiteId);
                 return true;
             }
 
-            // 娣诲姞濂楅缁撴灉鍒颁細璇?
+            // 添加套题结果到会话
             const suiteResult = {
                 suiteId: suiteData.suiteId,
                 examId: examId,
@@ -953,20 +953,20 @@
 
             console.log('[MultiSuite] added suite result', suiteData.suiteId, 'current progress:', session.suiteResults.length + ' suite(s)');
 
-            // 濡傛灉杩欐槸绗竴涓棰橈紝灏濊瘯浠庢暟鎹腑纭畾棰勬湡濂楅鏁伴噺
+            // 如果这是第一个套题，尝试从数据中确定预期套题数量
             if (session.suiteResults.length === 1 && !session.expectedSuiteCount) {
                 session.expectedSuiteCount = this._detectExpectedSuiteCount(examId, suiteData);
-                console.log('[MultiSuite] 妫€娴嬪埌棰勬湡濂楅鏁伴噺:', session.expectedSuiteCount);
+                console.log('[MultiSuite] 检测到预期套题数量:', session.expectedSuiteCount);
             }
 
-            // 妫€鏌ユ槸鍚︽墍鏈夊棰橀兘宸插畬鎴?
+            // 检查是否所有套题都已完成
             if (this.isMultiSuiteComplete(session)) {
                 console.log('[MultiSuite] all suite entries completed, finalizing consolidated record.');
                 await this.finalizeMultiSuiteRecord(session);
                 return true;
             }
 
-            // 杩樻湁濂楅鏈畬鎴愶紝淇濆瓨褰撳墠杩涘害
+            // 还有套题未完成，保存当前进度
             console.log('[MultiSuite] waiting for more suite entries... completed ' + session.suiteResults.length + '/' + (session.expectedSuiteCount || '?'));
 
 
@@ -974,18 +974,18 @@
         },
 
         /**
-         * 妫€娴嬮鏈熺殑濂楅鏁伴噺
-         * @param {string} examId - 鑰冭瘯ID
-         * @param {object} suiteData - 濂楅鏁版嵁
-         * @returns {number} 棰勬湡濂楅鏁伴噺
+         * 检测预期的套题数量
+         * @param {string} examId - 考试ID
+         * @param {object} suiteData - 套题数据
+         * @returns {number} 预期套题数量
          */
         _detectExpectedSuiteCount(examId, suiteData) {
-            // 灏濊瘯浠巗uiteData涓幏鍙栨€诲棰樻暟
+            // 尝试从suiteData中获取总套题数
             if (suiteData.totalSuites && Number.isFinite(suiteData.totalSuites)) {
                 return suiteData.totalSuites;
             }
 
-            // 灏濊瘯浠巑etadata涓幏鍙?
+            // 尝试从metadata中获取
             if (suiteData.metadata && suiteData.metadata.totalSuites) {
                 const count = Number(suiteData.metadata.totalSuites);
                 if (Number.isFinite(count) && count > 0) {
@@ -993,58 +993,58 @@
                 }
             }
 
-            // 鏍规嵁examId鎺ㄦ柇锛?00 P1/P4 閫氬父鍖呭惈10濂楅锛?
+            // 根据examId推断：100 P1/P4 通常包含10套题
             const lowerExamId = (examId || '').toLowerCase();
             if (lowerExamId.includes('100') && (lowerExamId.includes('p1') || lowerExamId.includes('p4'))) {
-                return 10; // 榛樿10濂楅
+                return 10; // 默认10套题
             }
 
-            // 榛樿杩斿洖1锛堝崟濂楅锛?
+            // 默认返回1（单套题）
             return 1;
         },
 
         /**
-         * 瀹屾垚骞惰仛鍚堝濂楅璁板綍
-         * @param {object} session - 澶氬棰樹細璇?
+         * 完成并聚合多套题记录
+         * @param {object} session - 多套题会话
          */
         async finalizeMultiSuiteRecord(session) {
             if (!session || !Array.isArray(session.suiteResults) || session.suiteResults.length === 0) {
-                console.warn('[MultiSuite] 鏃犳晥鐨勪細璇濇垨鏃犵粨鏋滐紝璺宠繃鑱氬悎');
+                console.warn('[MultiSuite] 无效的会话或无结果，跳过聚合');
                 return;
             }
 
             session.status = 'finalizing';
-            console.log('[MultiSuite] 寮€濮嬭仛鍚堝濂楅璁板綍:', session.id);
+            console.log('[MultiSuite] 开始聚合多套题记录:', session.id);
 
             try {
                 const completionTime = Date.now();
                 const startTime = session.startTime || completionTime;
 
-                // 鑱氬悎鍒嗘暟
+                // 聚合分数
                 const aggregatedScores = this.aggregateScores(session.suiteResults);
 
-                // 鑱氬悎绛旀
+                // 聚合答案
                 const aggregatedAnswers = this.aggregateAnswers(session.suiteResults);
 
-                // 鑱氬悎绛旀姣旇緝
+                // 聚合答案比较
                 const aggregatedComparison = this.aggregateAnswerComparisons(session.suiteResults);
 
-                // 鑱氬悎鎷煎啓閿欒
+                // 聚合拼写错误
                 const aggregatedSpellingErrors = this.aggregateSpellingErrors(session.suiteResults);
 
-                // 璁＄畻鎬绘椂闀?
+                // 计算总时长
                 const totalDuration = session.suiteResults.reduce(
                     (sum, result) => sum + (result.duration || 0), 
                     0
                 );
 
-                // 鐢熸垚璁板綍鏍囬
+                // 生成记录标题
                 const dateLabel = this._formatSuiteDateLabel(startTime);
                 const source = session.metadata?.source || 'listening';
                 const sourceLabel = source.toUpperCase();
                 const displayTitle = dateLabel + ' ' + sourceLabel + ' multi-suite practice';
 
-                // 鏋勫缓鑱氬悎璁板綍
+                // 构建聚合记录
                 const record = {
                     id: session.id,
                     examId: session.baseExamId,
@@ -1056,7 +1056,7 @@
                     endTime: new Date(completionTime).toISOString(),
                     duration: totalDuration,
                     
-                    // 鑱氬悎鐨勫垎鏁颁俊鎭?
+                    // 聚合的分数信息
                     scoreInfo: aggregatedScores,
                     totalQuestions: aggregatedScores.total,
                     correctAnswers: aggregatedScores.correct,
@@ -1067,7 +1067,7 @@
                     answers: aggregatedAnswers,
                     answerComparison: aggregatedComparison,
                     
-                    // 濂楅璇︽儏
+                    // 套题详情
                     suiteEntries: session.suiteResults.map(result => ({
                         suiteId: result.suiteId,
                         examId: result.examId,
@@ -1080,10 +1080,10 @@
                         rawData: result.rawData || null
                     })),
                     
-                    // 鎷煎啓閿欒姹囨€?
+                    // 拼写错误汇总
                     spellingErrors: aggregatedSpellingErrors,
                     
-                    // 鍏冩暟鎹?
+                    // 元数据
                     metadata: {
                         examTitle: displayTitle,
                         category: sourceLabel,
@@ -1108,28 +1108,28 @@
                     }
                 };
 
-                // 淇濆瓨鑱氬悎璁板綍
+                // 保存聚合记录
                 await this._saveSuitePracticeRecord(record);
 
-                // 淇濆瓨鎷煎啓閿欒鍒拌瘝琛?
+                // 保存拼写错误到词表
                 if (aggregatedSpellingErrors.length > 0 && window.spellingErrorCollector) {
                     try {
                         await window.spellingErrorCollector.saveErrors(aggregatedSpellingErrors);
-                        console.log('[MultiSuite] 宸蹭繚瀛樻嫾鍐欓敊璇埌璇嶈〃:', aggregatedSpellingErrors.length);
+                        console.log('[MultiSuite] 已保存拼写错误到词表:', aggregatedSpellingErrors.length);
                     } catch (error) {
-                        console.warn('[MultiSuite] 淇濆瓨鎷煎啓閿欒澶辫触:', error);
+                        console.warn('[MultiSuite] 保存拼写错误失败:', error);
                     }
                 }
 
-                // 鏇存柊鐘舵€?
+                // 更新状态
                 await this._updatePracticeRecordsState();
                 this.refreshOverviewData && this.refreshOverviewData();
 
-                // 娓呯悊浼氳瘽
+                // 清理会话
                 this.multiSuiteSessionsMap.delete(session.baseExamId);
                 session.status = 'completed';
 
-                window.showMessage && window.showMessage('Multi-suite practice completed. Saved ' + session.suiteResults.length + ' suite records.', 'success');
+                window.showMessage && window.showMessage('多套题练习已完成，已保存 ' + session.suiteResults.length + ' 条套题记录。', 'success');
 
 
 
@@ -1137,16 +1137,16 @@
                 console.log('[MultiSuite] consolidated record saved:', record.id);
 
             } catch (error) {
-                console.error('[MultiSuite] 鑱氬悎璁板綍澶辫触:', error);
+                console.error('[MultiSuite] 聚合记录失败:', error);
                 session.status = 'error';
-                window.showMessage && window.showMessage('Failed to save multi-suite record. Please try again later.', 'error');
+                window.showMessage && window.showMessage('多套题记录保存失败，请稍后重试。', 'error');
             }
         },
 
         /**
-         * 鑱氬悎澶氬棰樼殑鍒嗘暟
-         * @param {Array} suiteResults - 濂楅缁撴灉鏁扮粍
-         * @returns {object} 鑱氬悎鐨勫垎鏁颁俊鎭?
+         * 聚合多套题的分数
+         * @param {Array} suiteResults - 套题结果数组
+         * @returns {object} 聚合的分数信息
          */
         aggregateScores(suiteResults) {
             if (!Array.isArray(suiteResults) || suiteResults.length === 0) {
@@ -1175,9 +1175,9 @@
         },
 
         /**
-         * 鑱氬悎澶氬棰樼殑绛旀
-         * @param {Array} suiteResults - 濂楅缁撴灉鏁扮粍
-         * @returns {object} 鑱氬悎鐨勭瓟妗堝璞?
+         * 聚合多套题的答案
+         * @param {Array} suiteResults - 套题结果数组
+         * @returns {object} 聚合的答案对象
          */
         aggregateAnswers(suiteResults) {
             const aggregated = {};
@@ -1208,9 +1208,9 @@
         },
 
         /**
-         * 鑱氬悎澶氬棰樼殑绛旀姣旇緝
-         * @param {Array} suiteResults - 濂楅缁撴灉鏁扮粍
-         * @returns {object} 鑱氬悎鐨勭瓟妗堟瘮杈冨璞?
+         * 聚合多套题的答案比较
+         * @param {Array} suiteResults - 套题结果数组
+         * @returns {object} 聚合的答案比较对象
          */
         aggregateAnswerComparisons(suiteResults) {
             const aggregated = {};
@@ -1240,13 +1240,13 @@
         },
 
         /**
-         * 鑱氬悎澶氬棰樼殑鎷煎啓閿欒
-         * @param {Array} suiteResults - 濂楅缁撴灉鏁扮粍
-         * @returns {Array} 鑱氬悎鐨勬嫾鍐欓敊璇暟缁?
+         * 聚合多套题的拼写错误
+         * @param {Array} suiteResults - 套题结果数组
+         * @returns {Array} 聚合的拼写错误数组
          */
         aggregateSpellingErrors(suiteResults) {
             const aggregated = [];
-            const errorMap = new Map(); // 鐢ㄤ簬鍘婚噸鍜屽悎骞剁浉鍚屽崟璇嶇殑閿欒
+            const errorMap = new Map(); // 用于去重和合并相同单词的错误
 
             if (!Array.isArray(suiteResults)) {
                 return aggregated;
@@ -1263,17 +1263,17 @@
                     const key = error.word.toLowerCase();
 
                     if (errorMap.has(key)) {
-                        // 鏇存柊宸插瓨鍦ㄧ殑閿欒璁板綍
+                        // 更新已存在的错误记录
                         const existing = errorMap.get(key);
                         existing.errorCount = (existing.errorCount || 1) + 1;
                         existing.timestamp = Math.max(existing.timestamp || 0, error.timestamp || 0);
                         
-                        // 淇濈暀鏈€鏂扮殑鐢ㄦ埛杈撳叆
+                        // 保留最新的用户输入
                         if (error.timestamp > (existing.timestamp || 0)) {
                             existing.userInput = error.userInput;
                         }
                     } else {
-                        // 娣诲姞鏂扮殑閿欒璁板綍
+                        // 添加新的错误记录
                         errorMap.set(key, {
                             word: error.word,
                             userInput: error.userInput,
@@ -1288,7 +1288,7 @@
                 });
             });
 
-            // 杞崲涓烘暟缁?
+            // 转换为数组
             errorMap.forEach(error => aggregated.push(error));
 
             return aggregated;
@@ -1358,7 +1358,7 @@
                 const endTimeIso = new Date(completionTime).toISOString();
                 const suiteSequence = await this._resolveSuiteSequenceNumber(startTime);
                 const dateLabel = this._formatSuiteDateLabel(startTime);
-                const displayTitle = dateLabel + ' suite practice ' + suiteSequence;
+                const displayTitle = dateLabel + '套题练习' + suiteSequence;
 
                 const record = {
                     id: session.id,
@@ -1381,7 +1381,7 @@
                     frequency: 'suite',
                     metadata: {
                         examTitle: displayTitle,
-                        category: '濂楅缁冧範',
+                        category: '套题练习',
                         frequency: 'suite',
                         suiteSequence,
                         suiteDisplayDate: dateLabel,
@@ -1406,11 +1406,11 @@
                 await this._saveSuitePracticeRecord(record);
                 await this._updatePracticeRecordsState();
                 this.refreshOverviewData && this.refreshOverviewData();
-                window.showMessage && window.showMessage('Suite practice completed. Record saved.', 'success');
+                window.showMessage && window.showMessage('套题练习已完成，记录已保存。', 'success');
                 session.status = 'completed';
             } catch (error) {
-                console.error('[SuitePractice] 淇濆瓨濂楅璁板綍澶辫触:', error);
-                window.showMessage && window.showMessage('Failed to save suite record. The system will try to restore normal mode.', 'error');
+                console.error('[SuitePractice] 保存套题记录失败:', error);
+                window.showMessage && window.showMessage('套题记录保存失败，系统将尝试恢复到普通模式。', 'error');
                 await this._savePartialSuiteAsIndividual(session);
                 session.status = 'error';
             } finally {
@@ -1536,7 +1536,7 @@
             for (const category of categories) {
                 const pool = normalizedIndex.filter(item => item.category === category);
                 if (!pool.length) {
-                    window.showMessage && window.showMessage('Current exam library is missing ' + category + ' reading questions. Unable to start custom selection.', 'warning');
+                    window.showMessage && window.showMessage('当前题库缺少 ' + category + ' 阅读题目，无法启动自选流程。', 'warning');
                     return false;
                 }
             }
@@ -1642,18 +1642,18 @@
             const frequencyScope = options.frequencyScope || 'all';
             const launchLabel = options.launchLabel || (
                 flowMode === 'stationary'
-                    ? '椹昏冻妯″紡'
-                    : (flowMode === 'simulation' ? '妯℃嫙妯″紡' : '缁忓吀妯″紡')
+                    ? '驻足模式'
+                    : (flowMode === 'simulation' ? '模拟模式' : '经典模式')
             );
 
             try {
                 if (this.currentSuiteSession && this.currentSuiteSession.status === 'active') {
-                    window.showMessage && window.showMessage('濂楅缁冧範姝ｅ湪杩涜涓紝璇峰厛瀹屾垚褰撳墠濂楅銆?', 'warning');
+                    window.showMessage && window.showMessage('套题练习正在进行中，请先完成当前套题。', 'warning');
                     return false;
                 }
 
                 if (typeof this.openExam !== 'function') {
-                    window.showMessage && window.showMessage('褰撳墠鐗堟湰鏆備笉鏀寔濂楅缁冧範鑷姩鎵撳紑棰樼洰銆?', 'error');
+                    window.showMessage && window.showMessage('当前版本暂不支持套题练习自动打开题目。', 'error');
                     return false;
                 }
 
@@ -1661,7 +1661,7 @@
                     ? sequence.filter(item => item && item.examId && item.exam)
                     : [];
                 if (!normalizedSequence.length) {
-                    window.showMessage && window.showMessage('鏈壘鍒板彲鐢ㄧ殑濂楅棰樼洰銆?', 'warning');
+                    window.showMessage && window.showMessage('未找到可用的套题题目。', 'warning');
                     return false;
                 }
 
@@ -1705,7 +1705,7 @@
                         sequenceTotal: normalizedSequence.length
                     });
                 } catch (openError) {
-                    console.error('[SuitePractice] 鎵撳紑棣栫瘒澶辫触:', openError);
+                    console.error('[SuitePractice] 打开首篇失败:', openError);
                     examWindow = null;
                 }
 
@@ -1720,8 +1720,8 @@
                 this._focusSuiteWindow(session.windowRef);
                 return true;
             } catch (error) {
-                console.error('[SuitePractice] 鍚姩澶辫触:', error);
-                window.showMessage && window.showMessage('濂楅缁冧範鍚姩澶辫触锛岃绋嶅悗閲嶈瘯銆?', 'error');
+                console.error('[SuitePractice] 启动失败:', error);
+                window.showMessage && window.showMessage('套题练习启动失败，请稍后重试。', 'error');
                 if (this.currentSuiteSession) {
                     await this._abortSuiteSession(this.currentSuiteSession, { reason: 'startup_failed' });
                 }
@@ -1824,11 +1824,11 @@
                 try {
                     await this.components.practiceRecorder.savePracticeRecord(record);
                     await this._cleanupSuiteEntryRecords(record).catch(error => {
-                        console.warn('[SuitePractice] 娓呯悊濂楅瀛愯褰曞け璐?', error);
+                        console.warn('[SuitePractice] 清理套题子记录失败:', error);
                     });
                     return;
                 } catch (error) {
-                    console.warn('[SuitePractice] PracticeRecorder 淇濆瓨濂楅璁板綍澶辫触锛屾敼鐢ㄩ檷绾у瓨鍌?', error);
+                    console.warn('[SuitePractice] PracticeRecorder 保存套题记录失败，改用降级存储:', error);
                 }
             }
 
@@ -1855,7 +1855,7 @@
                 await storage.set(practiceKey, practiceRecords);
             }
             await this._cleanupSuiteEntryRecords(record).catch(error => {
-                console.warn('[SuitePractice] 娓呯悊濂楅瀛愯褰曞け璐?', error);
+                console.warn('[SuitePractice] 清理套题子记录失败:', error);
             });
         },
 
@@ -1907,7 +1907,7 @@
                 const fallbackTs = new Date(record.endTime || record.date || record.createdAt || Date.now()).getTime();
                 return Number.isFinite(fallbackTs) ? fallbackTs : Date.now();
             })();
-            const tolerance = 10 * 60 * 1000; // 10鍒嗛挓
+            const tolerance = 10 * 60 * 1000; // 10分钟
 
             const isSuiteRecord = (rec) => {
                 if (!rec || typeof rec !== 'object') {
@@ -1927,7 +1927,7 @@
                     return true;
                 }
                 if (rec.sessionId === record.sessionId) {
-                    return true; // 淇濈暀鑱氬悎璁板綍
+                    return true; // 保留聚合记录
                 }
                 const sessionMatch = rec.sessionId && entrySessionIds.has(rec.sessionId);
                 if (sessionMatch) {
@@ -1972,7 +1972,7 @@
                     }
                 }
             } catch (error) {
-                console.warn('[SuitePractice] 鍚屾缁冧範璁板綍澶辫触:', error);
+                console.warn('[SuitePractice] 同步练习记录失败:', error);
             }
 
             try {
@@ -1980,7 +1980,7 @@
                     window.updatePracticeView();
                 }
             } catch (error) {
-                console.warn('[SuitePractice] 鍒锋柊缁冧範瑙嗗浘澶辫触:', error);
+                console.warn('[SuitePractice] 刷新练习视图失败:', error);
             }
         },
 
@@ -2009,7 +2009,7 @@
                         const records = await this.components.practiceRecorder.getPracticeRecords();
                         return normalizeList(records);
                     } catch (error) {
-                        console.warn('[SuitePractice] 璇诲彇PracticeRecorder璁板綍澶辫触锛屽皾璇曚娇鐢ㄥ瓨鍌ㄩ檷绾?', error);
+                        console.warn('[SuitePractice] 读取PracticeRecorder记录失败，尝试使用存储降级:', error);
                     }
                 }
 
@@ -2018,7 +2018,7 @@
                         const fallbackRecords = await storage.get('practice_records', []);
                         return normalizeList(fallbackRecords);
                     } catch (error) {
-                        console.warn('[SuitePractice] 璇诲彇practice_records澶辫触:', error);
+                        console.warn('[SuitePractice] 读取practice_records失败:', error);
                     }
                 }
 
@@ -2098,7 +2098,7 @@
                     await this.saveRealPracticeData(entry.examId, entry.rawData, { forceIndividualSave: true });
                     this.updateExamStatus && this.updateExamStatus(entry.examId, 'completed');
                 } catch (error) {
-                    console.error('[SuitePractice] 淇濆瓨鍗曠瘒璁板綍澶辫触:', error);
+                    console.error('[SuitePractice] 保存单篇记录失败:', error);
                 }
             }
 
@@ -2134,7 +2134,7 @@
             try {
                 targetWindow.close();
             } catch (error) {
-                console.warn('[SuitePractice] 鍏抽棴濂楅绐楀彛琚嫤鎴?', error);
+                console.warn('[SuitePractice] 关闭套题窗口被拦截:', error);
             }
         },
 
@@ -2154,7 +2154,7 @@
                         }
                     }, '*');
                 } catch (forceCloseError) {
-                    console.warn('[SuitePractice] 鏃犳硶閫氱煡濂楅绐楀彛鍏抽棴:', forceCloseError);
+                    console.warn('[SuitePractice] 无法通知套题窗口关闭:', forceCloseError);
                 }
             }
 
@@ -2200,7 +2200,7 @@
                         await this.saveRealPracticeData(entry.examId, entry.rawData, { forceIndividualSave: true });
                         this.updateExamStatus && this.updateExamStatus(entry.examId, 'completed');
                     } catch (error) {
-                        console.error('[SuitePractice] 濂楅涓柇鏃朵繚瀛樿褰曞け璐?', error);
+                        console.error('[SuitePractice] 套题中断时保存记录失败:', error);
                     }
                 }
                 await this._updatePracticeRecordsState();
@@ -2219,7 +2219,7 @@
             try {
                 reopened = window.open('about:blank', normalizedName);
             } catch (error) {
-                console.warn('[SuitePractice] 鏃犳硶閲嶅缓濂楅鏍囩:', error);
+                console.warn('[SuitePractice] 无法重建套题标签:', error);
                 reopened = null;
             }
 
@@ -2332,7 +2332,7 @@
 
                 targetWindow.__IELTS_SUITE_PARENT_GUARD__ = guardInfo;
             } catch (error) {
-                console.warn('[SuitePractice] 瀹夎濂楅绐楀彛闃叉姢澶辫触:', error);
+                console.warn('[SuitePractice] 安装套题窗口防护失败:', error);
             }
         },
 
@@ -2407,30 +2407,30 @@
         },
 
         /**
-         * 鑾峰彇鎴栧垱寤哄濂楅浼氳瘽
-         * @param {string} examId - 鑰冭瘯ID锛堝熀纭€ID锛屼笉鍚棰樺悗缂€锛?
-         * @returns {object} 澶氬棰樹細璇濆璞?
+         * 获取或创建多套题会话
+         * @param {string} examId - 考试ID（基础ID，不含套题后缀）
+         * @returns {object} 多套题会话对象
          */
         getOrCreateMultiSuiteSession(examId) {
             if (!this.multiSuiteSessionsMap) {
                 this.multiSuiteSessionsMap = new Map();
             }
 
-            // 鎻愬彇鍩虹examId锛堢Щ闄ゅ彲鑳界殑濂楅鍚庣紑濡?_set1, _suite1 绛夛級
+            // 提取基础examId（移除可能的套题后缀如 _set1, _suite1 等）
             const baseExamId = this._extractBaseExamId(examId);
 
             if (this.multiSuiteSessionsMap.has(baseExamId)) {
                 return this.multiSuiteSessionsMap.get(baseExamId);
             }
 
-            // 鍒涘缓鏂扮殑澶氬棰樹細璇?
+            // 创建新的多套题会话
             const session = {
                 id: this._generateMultiSuiteSessionId(baseExamId),
                 baseExamId: baseExamId,
                 status: 'active',
                 startTime: Date.now(),
                 suiteResults: [],
-                expectedSuiteCount: null, // 灏嗗湪绗竴娆℃彁浜ゆ椂纭畾
+                expectedSuiteCount: null, // 将在第一次提交时确定
                 metadata: {
                     source: this._detectMultiSuiteSource(baseExamId),
                     createdAt: new Date().toISOString()
@@ -2438,27 +2438,27 @@
             };
 
             this.multiSuiteSessionsMap.set(baseExamId, session);
-            console.log('[MultiSuite] 鍒涘缓鏂颁細璇?', session.id, '鍩虹ID:', baseExamId);
+            console.log('[MultiSuite] 创建新会话:', session.id, '基础ID:', baseExamId);
 
             return session;
         },
 
         /**
-         * 妫€鏌ュ濂楅鏄惁鍏ㄩ儴瀹屾垚
-         * @param {object} session - 澶氬棰樹細璇濆璞?
-         * @returns {boolean} 鏄惁鎵€鏈夊棰橀兘宸插畬鎴?
+         * 检查多套题是否全部完成
+         * @param {object} session - 多套题会话对象
+         * @returns {boolean} 是否所有套题都已完成
          */
         isMultiSuiteComplete(session) {
             if (!session || !Array.isArray(session.suiteResults)) {
                 return false;
             }
 
-            // 濡傛灉杩樻病鏈夌‘瀹氶鏈熷棰樻暟閲忥紝鍒欐湭瀹屾垚
+            // 如果还没有确定预期套题数量，则未完成
             if (!session.expectedSuiteCount || session.expectedSuiteCount <= 0) {
                 return false;
             }
 
-            // 妫€鏌ュ凡瀹屾垚鐨勫棰樻暟閲忔槸鍚﹁揪鍒伴鏈?
+            // 检查已完成的套题数量是否达到预期
             const completedCount = session.suiteResults.length;
             const isComplete = completedCount >= session.expectedSuiteCount;
 
@@ -2471,16 +2471,16 @@
         },
 
         /**
-         * 鎻愬彇鍩虹examId锛堢Щ闄ゅ棰樺悗缂€锛?
-         * @param {string} examId - 瀹屾暣鐨別xamId
-         * @returns {string} 鍩虹examId
+         * 提取基础examId（移除套题后缀）
+         * @param {string} examId - 完整的examId
+         * @returns {string} 基础examId
          */
         _extractBaseExamId(examId) {
             if (!examId || typeof examId !== 'string') {
                 return examId;
             }
 
-            // 绉婚櫎甯歌鐨勫棰樺悗缂€妯″紡锛歘set1, _suite1, _s1, ::set1 绛?
+            // 移除常见的套题后缀模式：_set1, _suite1, _s1, ::set1 等
             const patterns = [
                 /_set\d+$/i,
                 /_suite\d+$/i,
@@ -2500,9 +2500,9 @@
         },
 
         /**
-         * 鐢熸垚澶氬棰樹細璇滻D
-         * @param {string} baseExamId - 鍩虹examId
-         * @returns {string} 浼氳瘽ID
+         * 生成多套题会话ID
+         * @param {string} baseExamId - 基础examId
+         * @returns {string} 会话ID
          */
         _generateMultiSuiteSessionId(baseExamId) {
             const timestamp = Date.now().toString(36);
@@ -2512,9 +2512,9 @@
         },
 
         /**
-         * 妫€娴嬪濂楅鏉ユ簮锛圥1/P4绛夛級
-         * @param {string} examId - 鑰冭瘯ID
-         * @returns {string} 鏉ユ簮鏍囪瘑
+         * 检测多套题来源（P1/P4等）
+         * @param {string} examId - 考试ID
+         * @returns {string} 来源标识
          */
         _detectMultiSuiteSource(examId) {
             if (!examId || typeof examId !== 'string') {

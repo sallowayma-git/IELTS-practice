@@ -24,6 +24,8 @@
         'low': 1,
         '低频': 1
     };
+    const CUSTOM_SUITE_PANEL_MARGIN = 12;
+    let customSuitePortalPosition = null;
 
     function normalizeExamSignature(value) {
         return String(value || '')
@@ -171,6 +173,131 @@
         return portal;
     }
 
+    function clampCustomSuitePanelPosition(x, y, width, height) {
+        const viewportWidth = Math.max(
+            document.documentElement ? document.documentElement.clientWidth : 0,
+            global.innerWidth || 0
+        );
+        const viewportHeight = Math.max(
+            document.documentElement ? document.documentElement.clientHeight : 0,
+            global.innerHeight || 0
+        );
+        const maxX = Math.max(CUSTOM_SUITE_PANEL_MARGIN, viewportWidth - width - CUSTOM_SUITE_PANEL_MARGIN);
+        const maxY = Math.max(CUSTOM_SUITE_PANEL_MARGIN, viewportHeight - height - CUSTOM_SUITE_PANEL_MARGIN);
+        return {
+            x: Math.min(Math.max(CUSTOM_SUITE_PANEL_MARGIN, x), maxX),
+            y: Math.min(Math.max(CUSTOM_SUITE_PANEL_MARGIN, y), maxY)
+        };
+    }
+
+    function applyCustomSuitePanelFloatingState(portal) {
+        if (!portal || !customSuitePortalPosition) {
+            return;
+        }
+        const panel = portal.querySelector('.suite-custom-selection__panel');
+        if (!panel) {
+            return;
+        }
+        const rect = panel.getBoundingClientRect();
+        const width = rect.width || panel.offsetWidth || 380;
+        const height = rect.height || panel.offsetHeight || 420;
+        const clamped = clampCustomSuitePanelPosition(
+            customSuitePortalPosition.x,
+            customSuitePortalPosition.y,
+            width,
+            height
+        );
+        customSuitePortalPosition = clamped;
+        panel.classList.add('suite-custom-selection__panel--floating');
+        panel.style.left = clamped.x + 'px';
+        panel.style.top = clamped.y + 'px';
+        panel.style.right = 'auto';
+        panel.style.transform = 'none';
+    }
+
+    function setupCustomSuitePanelDrag(portal) {
+        if (!portal) {
+            return;
+        }
+        const panel = portal.querySelector('.suite-custom-selection__panel');
+        const header = panel ? panel.querySelector('.suite-custom-selection__header') : null;
+        if (!panel || !header || panel.dataset.dragEnabled === 'true') {
+            return;
+        }
+        panel.dataset.dragEnabled = 'true';
+
+        let dragging = false;
+        let pointerId = null;
+        let originX = 0;
+        let originY = 0;
+        let startX = 0;
+        let startY = 0;
+
+        const handlePointerMove = (event) => {
+            if (!dragging || pointerId !== event.pointerId) {
+                return;
+            }
+            const rect = panel.getBoundingClientRect();
+            const width = rect.width || panel.offsetWidth || 380;
+            const height = rect.height || panel.offsetHeight || 420;
+            const nextX = originX + (event.clientX - startX);
+            const nextY = originY + (event.clientY - startY);
+            const clamped = clampCustomSuitePanelPosition(nextX, nextY, width, height);
+            customSuitePortalPosition = clamped;
+            panel.style.left = clamped.x + 'px';
+            panel.style.top = clamped.y + 'px';
+            panel.style.right = 'auto';
+            panel.style.transform = 'none';
+        };
+
+        const stopDragging = (event) => {
+            if (!dragging || (event && pointerId !== event.pointerId)) {
+                return;
+            }
+            dragging = false;
+            pointerId = null;
+            panel.classList.remove('is-dragging');
+            try { header.releasePointerCapture(event.pointerId); } catch (_) {}
+            global.removeEventListener('pointermove', handlePointerMove);
+            global.removeEventListener('pointerup', stopDragging);
+            global.removeEventListener('pointercancel', stopDragging);
+        };
+
+        header.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0) {
+                return;
+            }
+            if (event.target && event.target.closest && event.target.closest('button,a,input,select,textarea,[data-action]')) {
+                return;
+            }
+            const rect = panel.getBoundingClientRect();
+            const width = rect.width || panel.offsetWidth || 380;
+            const height = rect.height || panel.offsetHeight || 420;
+            const initial = clampCustomSuitePanelPosition(rect.left, rect.top, width, height);
+
+            customSuitePortalPosition = initial;
+            panel.classList.add('suite-custom-selection__panel--floating');
+            panel.classList.add('is-dragging');
+            panel.style.left = initial.x + 'px';
+            panel.style.top = initial.y + 'px';
+            panel.style.right = 'auto';
+            panel.style.transform = 'none';
+
+            dragging = true;
+            pointerId = event.pointerId;
+            originX = initial.x;
+            originY = initial.y;
+            startX = event.clientX;
+            startY = event.clientY;
+
+            try { header.setPointerCapture(pointerId); } catch (_) {}
+            global.addEventListener('pointermove', handlePointerMove);
+            global.addEventListener('pointerup', stopDragging);
+            global.addEventListener('pointercancel', stopDragging);
+            event.preventDefault();
+        });
+    }
+
     function hideCustomSuiteSelectionPortal() {
         if (typeof document === 'undefined') {
             return;
@@ -179,6 +306,7 @@
         if (portal && portal.parentNode) {
             portal.parentNode.removeChild(portal);
         }
+        customSuitePortalPosition = null;
     }
 
     function renderCustomSuiteSelectionPortal() {
@@ -209,8 +337,8 @@
             }
             return {
                 category,
-                title: entry.title || 'Untitled item',
-                frequency: entry.frequency || 'Unknown frequency'
+                title: entry.title || '未命名题目',
+                frequency: entry.frequency || '未知频率'
             };
         }).filter(Boolean);
 
@@ -218,8 +346,8 @@
             .filter((category) => !pickedByCategory[category])
             .map((category) => ({
                 category,
-                title: category === currentCategory ? 'Select current category' : 'Pending selection',
-                frequency: 'Pending'
+                title: category === currentCategory ? '请选择当前题型' : '待选中',
+                frequency: '待选'
             }));
 
         const rowMarkup = (row, includeDelete) => {
@@ -257,14 +385,14 @@
             '<section class="suite-custom-selection__panel' + (isReady ? ' suite-custom-selection__panel--ready' : ' suite-custom-selection__panel--dock') + '" aria-live="polite">',
             '<header class="suite-custom-selection__header">',
             '<div>',
-            '<p class="suite-custom-selection__eyebrow">Suite selection</p>', 
-            '<h3 class="suite-custom-selection__title-main">' + (isReady ? 'Confirm or cancel' : 'Continue selecting the next section') + '</h3>', 
+            '<p class="suite-custom-selection__eyebrow">套题自选</p>', 
+            '<h3 class="suite-custom-selection__title-main">' + (isReady ? '确认开始或取消' : '继续选择下一题型') + '</h3>', 
             '</div>',
             '<div class="suite-custom-selection__progress">' + selectedCount + ' / ' + categories.length + '</div>',
             '</header>',
             '<div class="suite-custom-selection__body">',
             '<div class="suite-custom-selection__group">',
-            '<div class="suite-custom-selection__group-title">Selected</div>', 
+            '<div class="suite-custom-selection__group-title">已选</div>', 
             selectedMarkup,
             '</div>',
             '<div class="suite-custom-selection__group">',
@@ -277,6 +405,8 @@
             '</footer>',
             '</section>'
         ].join('');
+        setupCustomSuitePanelDrag(portal);
+        applyCustomSuitePanelFloatingState(portal);
     }
 
     function refreshCustomSuiteSelectionPortal() {
@@ -389,15 +519,15 @@
         return true;
     }
 
-   // 鏍稿績鍔熻兘锛氬姞杞戒笌娓叉煋
+   // 核心功能：加载与渲染
    
     /**
-     * 鍔犺浇骞舵覆鏌撻搴撳垪琛?
+     * 加载并渲染题库列表
      */
     function loadExamList() {
         console.log('[ExamActions] loadExamList called');
         
-        // 1. 棰戠巼妯″紡濮旀墭缁?BrowseController
+        // 1. 频率模式委托给 BrowseController
         if (global.__browseFilterMode && global.__browseFilterMode !== 'default' && global.browseController) {
             try {
                 if (!global.browseController.buttonContainer) {
@@ -411,11 +541,11 @@
                 }
                 return;
             } catch (error) {
-                console.warn('[Browse] 棰戠巼妯″紡鍒锋柊澶辫触锛屽洖閫€鍒伴粯璁ら€昏緫:', error);
+                console.warn('[Browse] 频率模式刷新失败，回退到默认逻辑:', error);
             }
         }
 
-        // 2. 鑾峰彇棰樺簱蹇収
+        // 2. 获取题库快照
         let examIndexSnapshot = [];
         if (global.appStateService) {
             examIndexSnapshot = global.appStateService.getExamIndex();
@@ -427,7 +557,7 @@
 
         let examsToShow = Array.from(examIndexSnapshot);
 
-        // 3. 鑾峰彇绛涢€夋潯浠?
+        // 3. 获取筛选条件
         let activeCategory = 'all';
         let activeExamType = 'all';
 
@@ -435,13 +565,13 @@
             activeCategory = global.browseController.getCurrentCategory();
             activeExamType = global.browseController.getCurrentExamType();
         } else {
-            // 闄嶇骇鏀寔
+            // 降级支持
             activeCategory = typeof global.getCurrentCategory === 'function' ? global.getCurrentCategory() : 'all';
             activeExamType = typeof global.getCurrentExamType === 'function' ? global.getCurrentExamType() : 'all';
         }
 
-        // 4. 鎵ц绛涢€?
-        // 浠呭湪棰戠巼妯″紡涓嬩娇鐢?basePath 杩囨护
+        // 4. 执行筛选
+        // 仅在频率模式下使用 basePath 过滤
         const isFrequencyMode = global.__browseFilterMode && global.__browseFilterMode !== 'default';
         const basePathFilter = isFrequencyMode && (typeof global.__browsePath === 'string' && global.__browsePath.trim())
             ? global.__browsePath.trim()
@@ -452,28 +582,28 @@
         }
         if (activeCategory !== 'all') {
             const filteredByCategory = examsToShow.filter(exam => exam.category === activeCategory);
-            // 鍙湁鍦ㄦ湁绛涢€夌粨鏋滄垨涓嶆槸棰戠巼妯″紡鏃舵墠搴旂敤鍒嗙被杩囨护
+            // 只有在有筛选结果或不是频率模式时才应用分类过滤
             if (filteredByCategory.length > 0 || !basePathFilter) {
                 examsToShow = filteredByCategory;
             }
         }
-        // 鍙湁鍦ㄩ鐜囨ā寮忎笅鎵嶅簲鐢ㄨ矾寰勮繃婊?
+        // 只有在频率模式下才应用路径过滤
         if (basePathFilter) {
             examsToShow = examsToShow.filter((exam) => {
                 return typeof exam?.path === 'string' && exam.path.includes(basePathFilter);
             });
         }
 
-        // 5. 鎵ц缃《閫昏緫
+        // 5. 执行置顶逻辑
         if (activeCategory !== 'all' && activeExamType !== 'all') {
             const key = `${activeCategory}_${activeExamType}`;
             const preferred = preferredFirstExamByCategory[key];
 
             if (preferred) {
-                // 浼樺厛閫氳繃 preferred.id 鍦ㄨ繃婊ゅ悗鐨?examsToShow 涓煡鎵?
+                // 优先通过 preferred.id 在过滤后的 examsToShow 中查找
                 let preferredIndex = examsToShow.findIndex(exam => exam.id === preferred.id);
 
-                // 濡傛灉澶辫触锛宖allback 鍒?preferred.title + currentCategory + currentExamType 鍖归厤
+                // 如果失败，fallback 到 preferred.title + currentCategory + currentExamType 匹配
                 if (preferredIndex === -1) {
                     preferredIndex = examsToShow.findIndex(exam =>
                         exam.title === preferred.title &&
@@ -493,7 +623,7 @@
         const customSuiteDraft = getCustomSuiteDraft();
         const selectionMode = isCustomSuiteSelectionActive() ? 'custom-suite' : '';
 
-        // 6. 鏇存柊鐘舵€佸苟娓叉煋
+        // 6. 更新状态并渲染
         if (global.appStateService) {
             global.appStateService.setFilteredExams(examsToShow);
         } else if (typeof global.setFilteredExamsState === 'function') {
@@ -506,7 +636,7 @@
         });
         refreshCustomSuiteSelectionPortal();
 
-        // 7. 瑙﹀彂娓叉煋鍚庨挬瀛?
+        // 7. 触发渲染后钩子
         if (typeof global.handlePostExamListRender === 'function') {
             global.handlePostExamListRender(examsToShow, { category: activeCategory, type: activeExamType });
         }
@@ -515,10 +645,10 @@
     }
 
     /**
-     * 閲嶇疆娴忚瑙嗗浘
+     * 重置浏览视图
      */
     function resetBrowseViewToAll() {
-        // 1. 娓呴櫎棰戠巼妯″紡鏍囪锛堝叧閿慨澶嶏級
+        // 1. 清除频率模式标记（关键修复）
         if (typeof global.__browseFilterMode !== 'undefined') {
             global.__browseFilterMode = 'default';
         }
@@ -526,15 +656,15 @@
             global.__browsePath = null;
         }
 
-        // 2. 閲嶇疆 browseController 鍒伴粯璁ゆā寮?
+        // 2. 重置 browseController 到默认模式
         if (global.browseController) {
             global.browseController.clearPendingBrowseAutoScroll();
 
-            // 鎭㈠榛樿妯″紡锛堟秷闄ら鐜囨ā寮忥級
+            // 恢复默认模式（消除频率模式）
             if (typeof global.browseController.resetToDefault === 'function') {
                 global.browseController.resetToDefault();
             } else {
-                // 闄嶇骇锛氭墜鍔ㄩ噸缃?
+                // 降级：手动重置
                 global.browseController.currentMode = 'default';
                 global.browseController.activeFilter = 'all';
             }
@@ -550,7 +680,7 @@
 
             global.browseController.setBrowseFilterState('all', 'all');
         } else {
-            // 闄嶇骇
+            // 降级
             if (typeof global.clearPendingBrowseAutoScroll === 'function') global.clearPendingBrowseAutoScroll();
             if (typeof global.setBrowseFilterState === 'function') global.setBrowseFilterState('all', 'all');
         }
@@ -560,14 +690,14 @@
     }
 
     /**
-     * 娓叉煋棰樺簱鍒楄〃 DOM
+     * 渲染题库列表 DOM
      */
     function displayExams(exams, options = {}) {
-        // 1. 灏濊瘯浣跨敤 BrowseController 绠＄悊鐨?examListViewInstance
+        // 1. 尝试使用 BrowseController 管理的 examListViewInstance
         let view = null;
         if (global.browseController && typeof global.browseController.getExamListView === 'function') {
             view = global.browseController.getExamListView();
-            // 纭繚 LegacyExamListView 鑳借鍒涘缓锛堝垵濮嬪€间负 null锛?
+            // 确保 LegacyExamListView 能被创建（初始值为 null）
             if (!view && typeof global.browseController.ensureExamListView === 'function') {
                 view = global.browseController.ensureExamListView();
             }
@@ -591,7 +721,7 @@
             return;
         }
 
-        // 2. 闄嶇骇锛氱洿鎺?DOM 鎿嶄綔 (浠?main.js 杩佺Щ)
+        // 2. 降级：直接 DOM 操作 (从 main.js 迁移)
         const container = document.getElementById('exam-list-container');
         if (!container) {
             return;
@@ -601,7 +731,7 @@
             container.removeChild(container.firstChild);
         }
 
-        // 娓呴櫎 loading 鎸囩ず鍣?
+        // 清除 loading 指示器
         const loadingEl = document.querySelector('#browse-view .loading');
         if (loadingEl) {
             loadingEl.style.display = 'none';
@@ -627,7 +757,7 @@
     }
 
     /**
-     * 娓叉煋绌虹姸鎬?
+     * 渲染空状态
      */
     function renderEmptyState(container) {
         const empty = document.createElement('div');
@@ -654,7 +784,7 @@
     }
 
     /**
-     * 鍒涘缓鍗曚釜棰樺簱鍗＄墖
+     * 创建单个题库卡片
      */
     function createExamCard(exam, options = {}) {
         const selectionMode = options.selectionMode || (isCustomSuiteSelectionActive() ? 'custom-suite' : '');
@@ -863,14 +993,14 @@
         try {
             await ensureBrowseGroupReady();
         } catch (error) {
-            console.warn('[ExamActions] 娴忚缁勯鍔犺浇澶辫触锛岀户缁皾璇曞鍑?', error);
+            console.warn('[ExamActions] 浏览组预加载失败，继续尝试导出:', error);
         }
 
         if (!global.dataIntegrityManager && global.DataIntegrityManager) {
             try {
                 global.dataIntegrityManager = new global.DataIntegrityManager();
             } catch (error) {
-                console.warn('[ExamActions] 鍒濆鍖?DataIntegrityManager 澶辫触:', error);
+                console.warn('[ExamActions] 初始化 DataIntegrityManager 失败:', error);
             }
         }
 
@@ -909,9 +1039,9 @@
                 return;
             }
         } catch (error) {
-            console.error('[ExamActions] 鏁版嵁瀵煎嚭澶辫触:', error);
+            console.error('[ExamActions] 数据导出失败:', error);
             if (typeof global.showMessage === 'function') {
-                global.showMessage('鏁版嵁瀵煎嚭澶辫触: ' + (error && error.message || error), 'error');
+                global.showMessage('数据导出失败: ' + (error && error.message || error), 'error');
             }
             return;
         }
@@ -947,12 +1077,6 @@
     global.exportAllData = exportAllData;
     global.exportPracticeData = exportPracticeData;
 
-    console.log('[ExamActions] 妯″潡宸插姞杞?(Phase 2)');
+    console.log('[ExamActions] 模块已加载 (Phase 2)');
 
 })(typeof window !== 'undefined' ? window : this);
-
-
-
-
-
-
