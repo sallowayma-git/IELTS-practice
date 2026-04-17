@@ -34,6 +34,7 @@ class ExamSystemApp {
                 browseFilter: { category: 'all', type: 'all' },
                 pendingBrowseFilter: null,
                 legacyBrowseType: 'all',
+                customSuiteDraft: null,
                 currentVirtualScroller: null,
                 loading: false,
                 loadingMessage: ''
