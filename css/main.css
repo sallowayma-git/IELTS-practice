@@ -2761,11 +2761,7 @@ body.no-scroll {
 }
 
 .suite-custom-selection__backdrop {
-    position: fixed;
-    inset: 0;
-    background: radial-gradient(circle at 100% 50%, rgba(102, 126, 234, 0.12), rgba(15, 23, 42, 0.16));
-    backdrop-filter: blur(8px);
-    pointer-events: none;
+    display: none;
 }
 
 .suite-custom-selection__panel {
@@ -2788,6 +2784,18 @@ body.no-scroll {
     transition: transform 420ms cubic-bezier(0.22, 1.15, 0.36, 1), right 420ms cubic-bezier(0.22, 1.15, 0.36, 1), width 420ms cubic-bezier(0.22, 1.15, 0.36, 1);
 }
 
+.suite-custom-selection__panel--floating {
+    right: auto;
+    left: 0;
+    top: 0;
+    transform: none !important;
+    transition: box-shadow 220ms ease;
+}
+
+.suite-custom-selection__panel.is-dragging {
+    box-shadow: 0 34px 78px rgba(15, 23, 42, 0.24), 0 14px 34px rgba(51, 65, 85, 0.2);
+}
+
 .suite-custom-selection__panel--ready {
     right: auto;
     left: 50%;
@@ -2801,6 +2809,14 @@ body.no-scroll {
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+
+.suite-custom-selection__panel.is-dragging .suite-custom-selection__header {
+    cursor: grabbing;
 }
 
 .suite-custom-selection__eyebrow {

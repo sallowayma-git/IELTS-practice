@@ -8,7 +8,8 @@ const DEFAULT_INTERACTION_TARGETS = Object.freeze({
         'create-backup-btn',
         'backup-list-btn',
         'export-data-btn',
-        'import-data-btn'
+        'import-data-btn',
+        'show-onboarding-btn'
     ]
 });
 
@@ -75,6 +76,11 @@ const SETTINGS_BUTTON_TESTS = {
         name: '设置 - 导入数据按钮',
         stubbed: ['importData'],
         stubImplementation: () => Promise.resolve('import-started')
+    },
+    'show-onboarding-btn': {
+        name: '设置 - 重新显示引导按钮',
+        requireHandler: false,
+        postClickDelay: 220
     }
 };
 
