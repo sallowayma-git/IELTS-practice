@@ -157,6 +157,17 @@
                     if (options.suiteFlowMode) {
                         sessionInfo.suiteFlowMode = options.suiteFlowMode;
                     }
+                    const timerContext = this._resolveSuiteTimerContext(options, sessionInfo);
+                    if (timerContext.suiteTimerAnchorMs != null) {
+                        sessionInfo.suiteTimerAnchorMs = timerContext.suiteTimerAnchorMs;
+                        sessionInfo.globalTimerAnchorMs = timerContext.globalTimerAnchorMs;
+                    }
+                    if (timerContext.suiteTimerMode) {
+                        sessionInfo.suiteTimerMode = timerContext.suiteTimerMode;
+                    }
+                    if (timerContext.suiteTimerLimitSeconds != null) {
+                        sessionInfo.suiteTimerLimitSeconds = timerContext.suiteTimerLimitSeconds;
+                    }
                     if (Number.isInteger(options.sequenceIndex)) {
                         sessionInfo.suiteSequenceIndex = options.sequenceIndex;
                     }
@@ -334,6 +345,9 @@
             }
             try {
                 const parsed = new URL(rawUrl, (window && window.location && window.location.href) ? window.location.href : undefined);
+                const timerContext = typeof this._resolveSuiteTimerContext === 'function'
+                    ? this._resolveSuiteTimerContext(options, null)
+                    : {};
                 const safeSet = (key, value) => {
                     if (value == null) {
                         return;
@@ -346,6 +360,10 @@
                 };
                 safeSet('suiteSessionId', options.suiteSessionId);
                 safeSet('suiteFlowMode', options.suiteFlowMode);
+                safeSet('suiteTimerAnchorMs', timerContext.suiteTimerAnchorMs);
+                safeSet('globalTimerAnchorMs', timerContext.globalTimerAnchorMs);
+                safeSet('suiteTimerMode', timerContext.suiteTimerMode);
+                safeSet('suiteTimerLimitSeconds', timerContext.suiteTimerLimitSeconds);
                 if (Number.isInteger(options.sequenceIndex)) {
                     parsed.searchParams.set('suiteSequenceIndex', String(options.sequenceIndex));
                 }
@@ -356,6 +374,106 @@
             } catch (_) {
                 return rawUrl;
             }
+        },
+
+        _normalizeSuiteTimerAnchor(value) {
+            if (value == null || value === '') {
+                return null;
+            }
+            const numeric = Number(value);
+            if (Number.isFinite(numeric) && numeric > 0) {
+                return Math.floor(numeric);
+            }
+            const parsed = Date.parse(value);
+            if (Number.isFinite(parsed) && parsed > 0) {
+                return parsed;
+            }
+            return null;
+        },
+
+        _normalizeSuiteTimerLimit(value) {
+            if (value == null || value === '') {
+                return null;
+            }
+            const numeric = Number(value);
+            if (Number.isFinite(numeric) && numeric >= 0) {
+                return Math.floor(numeric);
+            }
+            return null;
+        },
+
+        _normalizeSuiteTimerMode(value) {
+            const normalized = String(value || '').trim().toLowerCase();
+            if (normalized === 'countdown' || normalized === 'elapsed') {
+                return normalized;
+            }
+            return null;
+        },
+
+        _resolveSuiteTimerContext(options = {}, windowInfo = {}) {
+            const currentSession = this.currentSuiteSession && typeof this.currentSuiteSession === 'object'
+                ? this.currentSuiteSession
+                : null;
+            const pickFromSources = (sourcesList, keys, normalize) => {
+                for (const source of sourcesList) {
+                    for (const key of keys) {
+                        const candidate = normalize(source && source[key]);
+                        if (candidate != null) {
+                            return candidate;
+                        }
+                    }
+                }
+                return null;
+            };
+
+            let anchorMs = pickFromSources(
+                [options || {}, windowInfo || {}, currentSession || {}],
+                ['suiteTimerAnchorMs', 'globalTimerAnchorMs'],
+                (value) => this._normalizeSuiteTimerAnchor(value)
+            );
+            if (!anchorMs) {
+                anchorMs = pickFromSources(
+                    [currentSession || {}, options || {}, windowInfo || {}],
+                    ['startTime', 'startedAt', 'createdAt'],
+                    (value) => this._normalizeSuiteTimerAnchor(value)
+                );
+            }
+            if (!anchorMs && currentSession && (currentSession.id || currentSession.sessionId || currentSession.status === 'active')) {
+                anchorMs = Date.now();
+            }
+
+            const mode = pickFromSources(
+                [options || {}, windowInfo || {}, currentSession || {}],
+                ['suiteTimerMode', 'timerMode'],
+                (value) => this._normalizeSuiteTimerMode(value)
+            );
+            const limitSeconds = pickFromSources(
+                [options || {}, windowInfo || {}, currentSession || {}],
+                ['suiteTimerLimitSeconds', 'timerLimitSeconds'],
+                (value) => this._normalizeSuiteTimerLimit(value)
+            );
+
+            if (currentSession) {
+                if (anchorMs && !currentSession.suiteTimerAnchorMs) {
+                    currentSession.suiteTimerAnchorMs = anchorMs;
+                }
+                if (anchorMs && !currentSession.globalTimerAnchorMs) {
+                    currentSession.globalTimerAnchorMs = anchorMs;
+                }
+                if (mode && !currentSession.suiteTimerMode) {
+                    currentSession.suiteTimerMode = mode;
+                }
+                if (limitSeconds != null && !Number.isFinite(Number(currentSession.suiteTimerLimitSeconds))) {
+                    currentSession.suiteTimerLimitSeconds = limitSeconds;
+                }
+            }
+
+            return {
+                suiteTimerAnchorMs: anchorMs,
+                globalTimerAnchorMs: anchorMs,
+                suiteTimerMode: mode,
+                suiteTimerLimitSeconds: limitSeconds
+            };
         },
 
         _guardExamWindowContent(examWindow, exam = null, options = {}) {
@@ -508,6 +626,10 @@
 
             if (options && typeof options === 'object') {
                 safeSet('suiteSessionId', options.suiteSessionId);
+                safeSet('suiteTimerAnchorMs', options.suiteTimerAnchorMs);
+                safeSet('globalTimerAnchorMs', options.globalTimerAnchorMs);
+                safeSet('suiteTimerMode', options.suiteTimerMode);
+                safeSet('suiteTimerLimitSeconds', options.suiteTimerLimitSeconds);
                 if (options.sequenceIndex != null && Number.isFinite(options.sequenceIndex)) {
                     params.set('index', String(options.sequenceIndex));
                 }
@@ -1068,6 +1190,17 @@
                 const windowInfo = this.ensureExamWindowSession(examId, examWindow);
                 if (suiteSessionId && !windowInfo.suiteSessionId) {
                     windowInfo.suiteSessionId = suiteSessionId;
+                }
+                const timerContext = this._resolveSuiteTimerContext(options, windowInfo);
+                if (timerContext.suiteTimerAnchorMs != null) {
+                    windowInfo.suiteTimerAnchorMs = timerContext.suiteTimerAnchorMs;
+                    windowInfo.globalTimerAnchorMs = timerContext.globalTimerAnchorMs;
+                }
+                if (timerContext.suiteTimerMode) {
+                    windowInfo.suiteTimerMode = timerContext.suiteTimerMode;
+                }
+                if (timerContext.suiteTimerLimitSeconds != null) {
+                    windowInfo.suiteTimerLimitSeconds = timerContext.suiteTimerLimitSeconds;
                 }
                 const initPayload = this._buildExamInitPayload(examId, windowInfo, { timestamp: now });
 
@@ -2508,12 +2641,23 @@
             const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
                 ? this._resolveSuiteSessionId(examId, info)
                 : (info.suiteSessionId || null);
+            const timerContext = typeof this._resolveSuiteTimerContext === 'function'
+                ? this._resolveSuiteTimerContext({}, info)
+                : {
+                    suiteTimerAnchorMs: info.suiteTimerAnchorMs || info.globalTimerAnchorMs || null,
+                    suiteTimerMode: info.suiteTimerMode || null,
+                    suiteTimerLimitSeconds: info.suiteTimerLimitSeconds || null
+                };
             const payload = {
                 examId: examId,
                 parentOrigin: window.location.origin,
                 sessionId: info.expectedSessionId,
                 suiteSessionId: suiteSessionId || null,
                 suiteFlowMode: info.suiteFlowMode || null,
+                suiteTimerAnchorMs: timerContext.suiteTimerAnchorMs || null,
+                globalTimerAnchorMs: timerContext.globalTimerAnchorMs || null,
+                suiteTimerMode: timerContext.suiteTimerMode || null,
+                suiteTimerLimitSeconds: timerContext.suiteTimerLimitSeconds != null ? timerContext.suiteTimerLimitSeconds : null,
                 suiteSequenceIndex: Number.isInteger(info.suiteSequenceIndex) ? info.suiteSequenceIndex : null,
                 suiteSequenceTotal: Number.isInteger(info.suiteSequenceTotal) ? info.suiteSequenceTotal : null,
                 reviewMode: Boolean(info.reviewMode),
@@ -2541,6 +2685,10 @@
                     status: 'active',
                     expectedSessionId: this.generateSessionId(examId),
                     origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : '',
+                    suiteTimerAnchorMs: null,
+                    globalTimerAnchorMs: null,
+                    suiteTimerMode: null,
+                    suiteTimerLimitSeconds: null,
                     suiteFlowMode: null,
                     suiteSequenceIndex: null,
                     suiteSequenceTotal: null,

@@ -36,6 +36,8 @@
 body.hero-body {
     color: var(--shui-text-strong);
     position: relative;
+    z-index: 0;
+    isolation: isolate;
     background: transparent;
     animation: none;
 }
@@ -50,6 +52,11 @@ body.hero-body {
 }
 
 :root:not([data-theme="blue"]) body.hero-body.shui-bg-static {
+    animation: none;
+    background: linear-gradient(135deg, var(--shui-gradient-start) 0%, var(--shui-gradient-end) 100%);
+}
+
+:root:not([data-theme="blue"]) body.hero-body.shui-bg-fallback {
     animation: none;
     background: linear-gradient(135deg, var(--shui-gradient-start) 0%, var(--shui-gradient-end) 100%);
 }

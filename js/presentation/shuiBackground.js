@@ -118,46 +118,73 @@
         return program;
     }
 
-    function applyFallback() {
+    function applyFallback(reason) {
         try {
             const body = document.body;
             if (body) {
                 body.classList.remove('shui-bg-active');
                 body.classList.add('shui-bg-static');
+                body.classList.add('shui-bg-fallback');
             }
         } catch (_) {}
+        if (reason) {
+            console.warn('[SHUI Background] fallback applied:', reason);
+        }
     }
 
     function initCanvas() {
         const prefersReducedMotion = global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (!global.WebGLRenderingContext || prefersReducedMotion) {
-            applyFallback();
+            applyFallback('unsupported_environment');
             return;
         }
 
         const canvas = document.createElement('canvas');
         canvas.id = 'shui-bg-canvas';
-        document.body.prepend(canvas);
+        const body = document.body;
+        if (!body) {
+            applyFallback('missing_body');
+            return;
+        }
+        body.prepend(canvas);
 
-        const gl = canvas.getContext('webgl', {
+        const contextOptions = {
             alpha: true,
             antialias: true,
-            premultipliedAlpha: false
-        });
+            premultipliedAlpha: false,
+            preserveDrawingBuffer: false
+        };
+        const contextTypes = ['webgl', 'experimental-webgl'];
+        console.info('[SHUI Background] probing WebGL contexts', contextTypes);
+
+        let gl = null;
+        let contextType = '';
+        for (const type of contextTypes) {
+            try {
+                gl = canvas.getContext(type, contextOptions);
+                if (gl) {
+                    contextType = type;
+                    break;
+                }
+            } catch (error) {
+                console.warn('[SHUI Background] context probe failed', type, error);
+            }
+        }
 
         if (!gl) {
             canvas.remove();
-            applyFallback();
+            applyFallback('no_webgl_context');
             return;
         }
+        console.info('[SHUI Background] using WebGL context', contextType);
 
         let program;
         try {
             program = createProgram(gl, vertexSource, fragmentSource);
         } catch (error) {
-            console.warn('[SHUI Background] shader init failed', error);
+            console.warn('[SHUI Background] shader init failed, falling back', error);
             canvas.remove();
-            applyFallback();
+            applyFallback('shader_init_failed');
             return;
         }
 
@@ -182,6 +209,9 @@
         const startColorLocation = gl.getUniformLocation(program, 'u_colorStart');
         const endColorLocation = gl.getUniformLocation(program, 'u_colorEnd');
         const midColorLocation = gl.getUniformLocation(program, 'u_colorMid');
+        let rafId = 0;
+        let destroyed = false;
+        let contextLost = false;
 
         function applyPalette() {
             const palette = getPalette();
@@ -201,8 +231,10 @@
             canvas.height = height * ratio;
             canvas.style.width = width + 'px';
             canvas.style.height = height + 'px';
-            gl.viewport(0, 0, canvas.width, canvas.height);
-            gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
+            if (!destroyed && !contextLost) {
+                gl.viewport(0, 0, canvas.width, canvas.height);
+                gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
+            }
         }
 
         resize();
@@ -218,25 +250,63 @@
         };
         document.addEventListener('visibilitychange', handleVisibility);
 
+        const handleContextLost = (event) => {
+            event.preventDefault();
+            contextLost = true;
+            applyFallback('webgl_context_lost');
+            console.warn('[SHUI Background] WebGL context lost');
+            if (rafId) {
+                global.cancelAnimationFrame(rafId);
+                rafId = 0;
+            }
+        };
+
+        const handleContextRestored = () => {
+            console.info('[SHUI Background] WebGL context restored');
+            if (destroyed) {
+                return;
+            }
+            destroyed = true;
+            contextLost = false;
+            if (rafId) {
+                global.cancelAnimationFrame(rafId);
+                rafId = 0;
+            }
+            global.removeEventListener('resize', resize);
+            document.removeEventListener('visibilitychange', handleVisibility);
+            canvas.remove();
+            global.requestAnimationFrame(() => {
+                initCanvas();
+            });
+        };
+
+        canvas.addEventListener('webglcontextlost', handleContextLost, false);
+        canvas.addEventListener('webglcontextrestored', handleContextRestored, false);
+
         function render(now) {
+            if (destroyed || contextLost) {
+                return;
+            }
             if (isPaused) {
-                global.requestAnimationFrame(render);
+                rafId = global.requestAnimationFrame(render);
                 return;
             }
             if (now - lastFrameTime < frameInterval) {
-                global.requestAnimationFrame(render);
+                rafId = global.requestAnimationFrame(render);
                 return;
             }
             lastFrameTime = now;
             const elapsed = (now - startTime) / 1000;
             gl.uniform1f(timeLocation, elapsed);
             gl.drawArrays(gl.TRIANGLES, 0, 6);
-            global.requestAnimationFrame(render);
+            rafId = global.requestAnimationFrame(render);
         }
-        global.requestAnimationFrame(render);
+        rafId = global.requestAnimationFrame(render);
 
         try {
             document.body.classList.add('shui-bg-active');
+            document.body.classList.remove('shui-bg-static');
+            document.body.classList.remove('shui-bg-fallback');
         } catch (_) {}
 
         global.SHUIBackground = {
