@@ -3,6 +3,7 @@
 
     var browsePrefetched = false;
     var morePrefetched = false;
+    var indexInteractionsInitialized = false;
 
     function ensureBrowse() {
         if (browsePrefetched) {
@@ -42,7 +43,7 @@
 
         var selected = listeningExams[Math.floor(Math.random() * listeningExams.length)];
         if (typeof global.showMessage === 'function') {
-            global.showMessage('🎧 听力随机冲刺: ' + selected.title, 'info');
+            global.showMessage('听力随机冲刺: ' + selected.title, 'info');
         }
 
         if (typeof global.openExamWithFallback === 'function') {
@@ -64,7 +65,7 @@
         var selected = pool[Math.floor(Math.random() * pool.length)];
 
         if (typeof global.showMessage === 'function') {
-            global.showMessage('⚡ 即刻开局: ' + selected.title, 'info');
+            global.showMessage('即刻开局: ' + selected.title, 'info');
         }
 
         if (typeof global.openExamWithFallback === 'function') {
@@ -234,13 +235,222 @@
         }
     }
 
+    function getActiveHeroNavButton(nav) {
+        if (!nav) {
+            return null;
+        }
+        var active = nav.querySelector('.hero-nav__btn.active');
+        if (active) {
+            return active;
+        }
+        return nav.querySelector('.hero-nav__btn');
+    }
+
+    function getHeroNavIndicatorRect(nav, btn) {
+        if (!nav || !btn || !btn.getBoundingClientRect) {
+            return null;
+        }
+
+        var navRect = nav.getBoundingClientRect();
+        var btnRect = btn.getBoundingClientRect();
+        if (!btnRect || btnRect.width <= 0 || btnRect.height <= 0) {
+            return null;
+        }
+
+        var inset = 3;
+        return {
+            left: Math.max(0, btnRect.left - navRect.left + inset),
+            top: Math.max(0, btnRect.top - navRect.top + inset),
+            width: Math.max(16, btnRect.width - inset * 2),
+            height: Math.max(16, btnRect.height - inset * 2)
+        };
+    }
+
+    function applyHeroNavIndicatorRect(indicator, rect) {
+        if (!indicator || !rect) {
+            return;
+        }
+        indicator.style.left = rect.left + 'px';
+        indicator.style.top = rect.top + 'px';
+        indicator.style.width = rect.width + 'px';
+        indicator.style.height = rect.height + 'px';
+    }
+
+    function animateHeroNavIndicator(state, targetRect, immediate) {
+        if (!state || !state.indicator || !targetRect) {
+            return;
+        }
+
+        var indicator = state.indicator;
+        var from = state.lastRect || targetRect;
+        var shouldReduceMotion = global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var shouldAnimate = !immediate && state.ready && !shouldReduceMotion && typeof indicator.animate === 'function';
+
+        if (state.animation) {
+            state.animation.cancel();
+            state.animation = null;
+        }
+
+        if (!shouldAnimate) {
+            applyHeroNavIndicatorRect(indicator, targetRect);
+            state.lastRect = targetRect;
+            state.ready = true;
+            return;
+        }
+
+        applyHeroNavIndicatorRect(indicator, from);
+
+        var deltaX = targetRect.left - from.left;
+        var deltaY = targetRect.top - from.top;
+        var stretch = Math.min(24, Math.abs(deltaX) * 0.16 + Math.abs(deltaY) * 0.35);
+        var squeeze = Math.min(8, Math.abs(deltaX) * 0.05);
+        var midRect = {
+            left: from.left + deltaX * 0.62,
+            top: from.top + deltaY * 0.62,
+            width: from.width + (targetRect.width - from.width) * 0.7 + stretch,
+            height: Math.max(14, from.height + (targetRect.height - from.height) * 0.7 - squeeze)
+        };
+
+        state.animation = indicator.animate(
+            [
+                {
+                    left: from.left + 'px',
+                    top: from.top + 'px',
+                    width: from.width + 'px',
+                    height: from.height + 'px',
+                    transform: 'translateZ(0) scale(1, 1)'
+                },
+                {
+                    left: midRect.left + 'px',
+                    top: midRect.top + 'px',
+                    width: midRect.width + 'px',
+                    height: midRect.height + 'px',
+                    transform: 'translateZ(0) scale(1.05, 0.94)'
+                },
+                {
+                    left: targetRect.left + 'px',
+                    top: targetRect.top + 'px',
+                    width: targetRect.width + 'px',
+                    height: targetRect.height + 'px',
+                    transform: 'translateZ(0) scale(1, 1)'
+                }
+            ],
+            {
+                duration: 560,
+                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                fill: 'forwards'
+            }
+        );
+
+        state.animation.onfinish = function () {
+            applyHeroNavIndicatorRect(indicator, targetRect);
+            state.lastRect = targetRect;
+            state.ready = true;
+            state.animation = null;
+        };
+        state.animation.oncancel = function () {
+            state.animation = null;
+        };
+    }
+
+    function setupHeroNavLiquidIndicator() {
+        if (global.__heroNavLiquidInitialized) {
+            return;
+        }
+
+        var nav = document.querySelector('.hero-nav');
+        if (!nav) {
+            return;
+        }
+
+        var indicator = nav.querySelector('.hero-nav__liquid-indicator');
+        if (!indicator) {
+            indicator = document.createElement('span');
+            indicator.className = 'hero-nav__liquid-indicator';
+            nav.insertBefore(indicator, nav.firstChild);
+        }
+
+        var state = {
+            nav: nav,
+            indicator: indicator,
+            lastRect: null,
+            ready: false,
+            animation: null
+        };
+
+        var sync = function (immediate) {
+            var activeBtn = getActiveHeroNavButton(nav);
+            var targetRect = getHeroNavIndicatorRect(nav, activeBtn);
+            if (!targetRect) {
+                return;
+            }
+            animateHeroNavIndicator(state, targetRect, !!immediate);
+            nav.classList.add('hero-nav--liquid-ready');
+        };
+
+        var resizeToken = 0;
+        var scheduleSync = function (immediate) {
+            if (resizeToken) {
+                global.cancelAnimationFrame(resizeToken);
+            }
+            resizeToken = global.requestAnimationFrame(function () {
+                resizeToken = 0;
+                sync(immediate);
+            });
+        };
+
+        nav.addEventListener('click', function (event) {
+            if (!event.target || !event.target.closest('.hero-nav__btn')) {
+                return;
+            }
+            scheduleSync(false);
+        });
+
+        var observer = new MutationObserver(function (mutations) {
+            var shouldSync = false;
+            for (var i = 0; i < mutations.length; i += 1) {
+                var mutation = mutations[i];
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    shouldSync = true;
+                    break;
+                }
+            }
+            if (shouldSync) {
+                scheduleSync(false);
+            }
+        });
+        observer.observe(nav, {
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class']
+        });
+
+        global.addEventListener('resize', function () {
+            scheduleSync(true);
+        });
+
+        if (document.fonts && typeof document.fonts.ready === 'object' && typeof document.fonts.ready.then === 'function') {
+            document.fonts.ready.then(function () {
+                scheduleSync(true);
+            });
+        }
+
+        scheduleSync(true);
+        global.__heroNavLiquidInitialized = true;
+    }
+
     function initializeIndexInteractions() {
         setupIndexSettingsButtons();
         setupQuickLaneInteractions();
     }
 
     function init() {
+        if (indexInteractionsInitialized) {
+            return;
+        }
+        indexInteractionsInitialized = true;
         attachNavPrefetch();
+        setupHeroNavLiquidIndicator();
         initializeIndexInteractions();
     }
 
