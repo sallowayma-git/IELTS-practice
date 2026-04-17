@@ -129,7 +129,7 @@
                 flowMode = 'classic';
             }
             var frequencyScope = String(overrides && overrides.frequencyScope || '').trim().toLowerCase();
-            if (frequencyScope !== 'high' && frequencyScope !== 'high_medium' && frequencyScope !== 'all') {
+            if (frequencyScope !== 'high' && frequencyScope !== 'high_medium' && frequencyScope !== 'all' && frequencyScope !== 'custom') {
                 frequencyScope = 'all';
             }
             return {
@@ -217,6 +217,7 @@
                     '<option value="high_medium">高频 + 次高频</option>',
                     '<option value="high">仅高频</option>',
                     '<option value="all">全部频率（默认）</option>',
+                    '<option value="custom">自选套题（P1/P2/P3）</option>',
                     '</select>',
                     '<div style="position:absolute;right:14px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--color-gray-500, #64748b);">',
                     '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
