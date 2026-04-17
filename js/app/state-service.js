@@ -20,7 +20,9 @@
             return null;
         }
         return {
-            examId: typeof value.examId === 'string' ? value.examId : String(value.examId == null ? '' : value.examId),
+            examId: typeof value.examId === 'string'
+                ? value.examId
+                : String(value.examId != null ? value.examId : (value.id == null ? '' : value.id)),
             title: typeof value.title === 'string' ? value.title : '',
             category: typeof value.category === 'string' ? value.category : '',
             frequency: typeof value.frequency === 'string' ? value.frequency : '',

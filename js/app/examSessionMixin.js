@@ -1191,7 +1191,7 @@
                 if (suiteSessionId && !windowInfo.suiteSessionId) {
                     windowInfo.suiteSessionId = suiteSessionId;
                 }
-                const timerContext = this._resolveSuiteTimerContext(options, windowInfo);
+                const timerContext = this._resolveSuiteTimerContext({}, windowInfo);
                 if (timerContext.suiteTimerAnchorMs != null) {
                     windowInfo.suiteTimerAnchorMs = timerContext.suiteTimerAnchorMs;
                     windowInfo.globalTimerAnchorMs = timerContext.globalTimerAnchorMs;
