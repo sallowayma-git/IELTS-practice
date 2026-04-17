@@ -11,6 +11,15 @@
         let timerRunning = true;
         let seconds = 0;
         let timer;
+        const suiteTimerContext = {
+            active: false,
+            anchorMs: null,
+            mode: 'elapsed',
+            limitSeconds: null,
+            pausedAtMs: null,
+            pausedOffsetMs: 0,
+            source: ''
+        };
         let submissionLocked = false;
         let isResizing = false;
         const selbar = document.getElementById('selbar');
@@ -28,15 +37,162 @@
         const resetBtn = document.getElementById('reset-btn');
         const suiteFlowModeSection = document.getElementById('suite-flow-mode-section');
 
+        function toFiniteNumber(value) {
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : null;
+        }
+
+        function normalizeSuiteTimerMode(value) {
+            const normalized = String(value || '').trim().toLowerCase();
+            if (normalized === 'countdown') {
+                return 'countdown';
+            }
+            if (normalized === 'elapsed') {
+                return 'elapsed';
+            }
+            return null;
+        }
+
+        function formatTimerSeconds(totalSeconds) {
+            const safeSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+            const minutes = String(Math.floor(safeSeconds / 60)).padStart(2, '0');
+            const secs = String(safeSeconds % 60).padStart(2, '0');
+            return `${minutes}:${secs}`;
+        }
+
+        function readSuiteTimerContext(source = {}) {
+            if (!source || typeof source !== 'object') {
+                return null;
+            }
+            const anchorCandidate =
+                source.suiteTimerAnchorMs
+                ?? source.globalTimerAnchorMs
+                ?? source.anchorMs
+                ?? source.timerAnchorMs;
+            const anchorMs = toFiniteNumber(anchorCandidate);
+            if (!Number.isFinite(anchorMs) || anchorMs <= 0) {
+                return null;
+            }
+            const mode = normalizeSuiteTimerMode(source.suiteTimerMode ?? source.mode);
+            const limitCandidate =
+                source.suiteTimerLimitSeconds
+                ?? source.timerLimitSeconds
+                ?? source.limitSeconds;
+            const limitSeconds = toFiniteNumber(limitCandidate);
+            return {
+                anchorMs: Math.floor(anchorMs),
+                mode,
+                limitSeconds: Number.isFinite(limitSeconds) && limitSeconds >= 0 ? Math.floor(limitSeconds) : null
+            };
+        }
+
+        function getSuiteTimerElapsedSeconds() {
+            if (!suiteTimerContext.active || !Number.isFinite(suiteTimerContext.anchorMs)) {
+                return null;
+            }
+            const referenceNow = (!timerRunning && Number.isFinite(suiteTimerContext.pausedAtMs))
+                ? suiteTimerContext.pausedAtMs
+                : Date.now();
+            const effectiveNow = referenceNow - suiteTimerContext.pausedOffsetMs;
+            return Math.max(0, (effectiveNow - suiteTimerContext.anchorMs) / 1000);
+        }
+
+        function updateTimerVisualState() {
+            if (!timerEl) return;
+            timerEl.style.opacity = timerRunning ? '1' : '0.5';
+            timerEl.classList.toggle('paused', !timerRunning);
+        }
+
+        function renderTimerDisplay() {
+            if (!timerEl) return;
+            if (suiteTimerContext.active && Number.isFinite(suiteTimerContext.anchorMs)) {
+                const elapsedSeconds = getSuiteTimerElapsedSeconds();
+                if (elapsedSeconds == null) {
+                    timerEl.textContent = formatTimerSeconds(seconds);
+                    return;
+                }
+                let displaySeconds = Math.floor(elapsedSeconds);
+                if (suiteTimerContext.mode === 'countdown' && Number.isFinite(suiteTimerContext.limitSeconds)) {
+                    displaySeconds = Math.max(0, Math.ceil(suiteTimerContext.limitSeconds - elapsedSeconds));
+                }
+                timerEl.textContent = formatTimerSeconds(displaySeconds);
+                timerEl.dataset.timerMode = suiteTimerContext.mode || 'elapsed';
+                timerEl.dataset.timerState = timerRunning ? 'running' : 'paused';
+                timerEl.dataset.timerSource = suiteTimerContext.source || '';
+                if (suiteTimerContext.mode === 'countdown') {
+                    timerEl.classList.toggle('timer-expired', displaySeconds <= 0);
+                } else {
+                    timerEl.classList.remove('timer-expired');
+                }
+                return;
+            }
+            timerEl.dataset.timerState = timerRunning ? 'running' : 'paused';
+            timerEl.classList.remove('timer-expired');
+            timerEl.textContent = formatTimerSeconds(seconds);
+        }
+
         function startTimer() {
             if (!timerEl) return;
+            if (timer) {
+                clearInterval(timer);
+            }
+            renderTimerDisplay();
+            updateTimerVisualState();
             timer = setInterval(() => {
-                if (!timerRunning) return;
-                seconds += 1;
-                const minutes = String(Math.floor(seconds / 60)).padStart(2, '0');
-                const secs = String(seconds % 60).padStart(2, '0');
-                timerEl.textContent = `${minutes}:${secs}`;
+                if (!timerRunning) {
+                    if (suiteTimerContext.active) {
+                        renderTimerDisplay();
+                    }
+                    return;
+                }
+                if (!suiteTimerContext.active) {
+                    seconds += 1;
+                }
+                renderTimerDisplay();
             }, 1000);
+        }
+
+        function applySuiteTimerContext(source = {}, reason = 'query') {
+            const context = readSuiteTimerContext(source);
+            if (!context) {
+                return false;
+            }
+            const normalizedMode = context.mode || 'elapsed';
+            const contextChanged =
+                !suiteTimerContext.active
+                || suiteTimerContext.anchorMs !== context.anchorMs
+                || suiteTimerContext.mode !== normalizedMode
+                || suiteTimerContext.limitSeconds !== context.limitSeconds;
+            suiteTimerContext.active = true;
+            suiteTimerContext.anchorMs = context.anchorMs;
+            suiteTimerContext.mode = normalizedMode;
+            suiteTimerContext.limitSeconds = context.limitSeconds;
+            suiteTimerContext.source = reason;
+            if (contextChanged) {
+                suiteTimerContext.pausedAtMs = null;
+                suiteTimerContext.pausedOffsetMs = 0;
+            }
+            renderTimerDisplay();
+            updateTimerVisualState();
+            return true;
+        }
+
+        function setTimerRunning(nextRunning) {
+            const normalized = !!nextRunning;
+            if (suiteTimerContext.active && Number.isFinite(suiteTimerContext.anchorMs)) {
+                const now = Date.now();
+                if (!normalized) {
+                    if (!Number.isFinite(suiteTimerContext.pausedAtMs)) {
+                        suiteTimerContext.pausedAtMs = now;
+                    }
+                } else if (Number.isFinite(suiteTimerContext.pausedAtMs)) {
+                    suiteTimerContext.pausedOffsetMs += Math.max(0, now - suiteTimerContext.pausedAtMs);
+                    suiteTimerContext.pausedAtMs = null;
+                }
+            }
+            timerRunning = normalized;
+            updateTimerVisualState();
+            renderTimerDisplay();
         }
 
         function closeAllPanels() {
@@ -236,6 +392,22 @@
             if (selbar) selbar.style.display = 'none';
         }
 
+        const initialSuiteTimerContext = (() => {
+            try {
+                const params = new URLSearchParams(window.location.search || '');
+                return {
+                    suiteTimerAnchorMs: params.get('suiteTimerAnchorMs') || params.get('globalTimerAnchorMs'),
+                    suiteTimerMode: params.get('suiteTimerMode'),
+                    suiteTimerLimitSeconds: params.get('suiteTimerLimitSeconds')
+                };
+            } catch (_) {
+                return null;
+            }
+        })();
+        if (initialSuiteTimerContext) {
+            applySuiteTimerContext(initialSuiteTimerContext, 'query');
+        }
+
         // --- Header buttons ---
         if (timerEl) startTimer();
 
@@ -256,14 +428,7 @@
                 e.preventDefault();
                 e.stopPropagation();
                 if (submissionLocked) return;
-                timerRunning = !timerRunning;
-                if (!timerRunning) {
-                    timerEl.style.opacity = '0.5';
-                    timerEl.classList.add('paused');
-                } else {
-                    timerEl.style.opacity = '1';
-                    timerEl.classList.remove('paused');
-                }
+                setTimerRunning(!timerRunning);
             });
         }
 
@@ -795,7 +960,7 @@
                 clearInterval(timer);
                 timer = null;
             }
-            timerRunning = false;
+            setTimerRunning(false);
             const audio = document.getElementById('listening-audio');
             if (audio) {
                 try {
@@ -1117,12 +1282,13 @@
                 resultsContainer.style.display = '';
             }
 
-            // 重新开始计时器
-            timerRunning = true;
-            seconds = 0;
-            if (timerEl) {
-                timerEl.textContent = '00:00';
+            // Reset only the local timer when we are not in suite mode.
+            if (!suiteTimerContext.active) {
+                timerRunning = true;
+                seconds = 0;
             }
+            updateTimerVisualState();
+            renderTimerDisplay();
         }
 
         if (resetBtn) {
@@ -1190,6 +1356,24 @@
             revealTranscriptPane();
             lockPracticeAfterSubmit();
         });
+
+        // Keep suite timer state in sync with the host window and query params.
+        (function setupSuiteTimerContextListener() {
+            window.addEventListener('message', function (event) {
+                const msg = event && event.data;
+                if (!msg || typeof msg.type !== 'string') return;
+                const type = String(msg.type).trim().toUpperCase();
+                if (
+                    type === 'INIT_SESSION'
+                    || type === 'INIT_EXAM_SESSION'
+                    || type === 'SESSION_READY'
+                    || type === 'SIMULATION_CONTEXT'
+                ) {
+                    const payload = msg.data && typeof msg.data === 'object' ? msg.data : {};
+                    applySuiteTimerContext(payload, type);
+                }
+            });
+        })();
 
         // --- 无尽模式：监听来自父窗口的倒计时指令 ---
         (function setupEndlessCountdownListener() {

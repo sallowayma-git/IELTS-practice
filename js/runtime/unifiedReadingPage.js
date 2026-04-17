@@ -36,6 +36,9 @@
         startTime: Date.now(),
         pageStartTime: Date.now(),
         simulationGlobalAnchorMs: null,
+        suiteTimerAnchorMs: null,
+        suiteTimerMode: null,
+        suiteTimerLimitSeconds: null,
         ready: false,
         submitted: false,
         initTimer: null,
@@ -81,6 +84,20 @@
         const suiteSessionId = decodeParam(params.get('suiteSessionId')) || null;
         if (suiteSessionId) {
             state.suiteSessionId = suiteSessionId;
+        }
+        const suiteTimerAnchorMs = Number(params.get('suiteTimerAnchorMs') || params.get('globalTimerAnchorMs'));
+        if (Number.isFinite(suiteTimerAnchorMs) && suiteTimerAnchorMs > 0) {
+            state.suiteTimerAnchorMs = Math.floor(suiteTimerAnchorMs);
+            state.simulationGlobalAnchorMs = Math.floor(suiteTimerAnchorMs);
+            state.startTime = Math.floor(suiteTimerAnchorMs);
+        }
+        const suiteTimerMode = decodeParam(params.get('suiteTimerMode')).trim().toLowerCase();
+        if (suiteTimerMode === 'countdown' || suiteTimerMode === 'elapsed') {
+            state.suiteTimerMode = suiteTimerMode;
+        }
+        const suiteTimerLimitSeconds = Number(params.get('suiteTimerLimitSeconds'));
+        if (Number.isFinite(suiteTimerLimitSeconds) && suiteTimerLimitSeconds >= 0) {
+            state.suiteTimerLimitSeconds = Math.floor(suiteTimerLimitSeconds);
         }
         const queryFlowMode = decodeParam(params.get('suiteFlowMode')).trim().toLowerCase();
         if (queryFlowMode === 'simulation') {
@@ -1650,6 +1667,10 @@
                 examId: state.examId,
                 sessionId: state.sessionId,
                 suiteSessionId: state.suiteSessionId,
+                suiteTimerAnchorMs: state.suiteTimerAnchorMs,
+                globalTimerAnchorMs: state.suiteTimerAnchorMs,
+                suiteTimerMode: state.suiteTimerMode,
+                suiteTimerLimitSeconds: state.suiteTimerLimitSeconds,
                 source: MESSAGE_SOURCE
             }, payload || {}),
             source: MESSAGE_SOURCE
@@ -1691,7 +1712,11 @@
             reviewMode: state.reviewMode,
             readOnly: state.readOnly,
             reviewSessionId: state.reviewSessionId,
-            reviewEntryIndex: state.reviewEntryIndex
+            reviewEntryIndex: state.reviewEntryIndex,
+            suiteTimerAnchorMs: state.suiteTimerAnchorMs,
+            globalTimerAnchorMs: state.suiteTimerAnchorMs,
+            suiteTimerMode: state.suiteTimerMode,
+            suiteTimerLimitSeconds: state.suiteTimerLimitSeconds
         });
         state.sessionReadySent = true;
     }
@@ -1705,7 +1730,11 @@
             reviewEntryIndex: Number.isInteger(data && data.reviewEntryIndex) ? data.reviewEntryIndex : 0,
             reviewMode: Boolean(data && data.reviewMode),
             readOnly: data && Object.prototype.hasOwnProperty.call(data, 'readOnly') ? Boolean(data.readOnly) : null,
-            suiteFlowMode: data && typeof data.suiteFlowMode === 'string' ? data.suiteFlowMode.trim().toLowerCase() : ''
+            suiteFlowMode: data && typeof data.suiteFlowMode === 'string' ? data.suiteFlowMode.trim().toLowerCase() : '',
+            suiteTimerAnchorMs: Number.isFinite(Number(data && (data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs))) ? Number(data && (data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs)) : null,
+            suiteTimerMode: data && typeof data.suiteTimerMode === 'string' ? data.suiteTimerMode.trim().toLowerCase() : '',
+            suiteTimerLimitSeconds: Number.isFinite(Number(data && data.suiteTimerLimitSeconds)) ? Number(data.suiteTimerLimitSeconds) : null,
+            globalTimerAnchorMs: Number.isFinite(Number(data && data.globalTimerAnchorMs)) ? Number(data.globalTimerAnchorMs) : null
         });
     }
 
@@ -2312,6 +2341,21 @@
             if (data.suiteSessionId) {
                 state.suiteSessionId = data.suiteSessionId;
             }
+            const initTimerAnchorMs = Number(data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs);
+            if (Number.isFinite(initTimerAnchorMs) && initTimerAnchorMs > 0) {
+                state.suiteTimerAnchorMs = Math.floor(initTimerAnchorMs);
+                state.simulationGlobalAnchorMs = Math.floor(initTimerAnchorMs);
+                state.startTime = Math.floor(initTimerAnchorMs);
+            }
+            if (typeof data.suiteTimerMode === 'string') {
+                const normalizedTimerMode = data.suiteTimerMode.trim().toLowerCase();
+                if (normalizedTimerMode === 'countdown' || normalizedTimerMode === 'elapsed') {
+                    state.suiteTimerMode = normalizedTimerMode;
+                }
+            }
+            if (Number.isFinite(Number(data.suiteTimerLimitSeconds))) {
+                state.suiteTimerLimitSeconds = Number(data.suiteTimerLimitSeconds);
+            }
             if (data.reviewSessionId) {
                 state.reviewSessionId = data.reviewSessionId;
             }
@@ -2401,8 +2445,20 @@
             state.simulationMode = true;
             state.simulationContextReady = true;
             state.simulationCtx = data;
-            if (Number.isFinite(Number(data.globalTimerAnchorMs))) {
-                state.simulationGlobalAnchorMs = Number(data.globalTimerAnchorMs);
+            const simulationTimerAnchorMs = Number(data.globalTimerAnchorMs ?? data.suiteTimerAnchorMs);
+            if (Number.isFinite(simulationTimerAnchorMs)) {
+                state.simulationGlobalAnchorMs = simulationTimerAnchorMs;
+                state.suiteTimerAnchorMs = simulationTimerAnchorMs;
+                state.startTime = simulationTimerAnchorMs;
+            }
+            if (typeof data.suiteTimerMode === 'string') {
+                const normalizedTimerMode = data.suiteTimerMode.trim().toLowerCase();
+                if (normalizedTimerMode === 'countdown' || normalizedTimerMode === 'elapsed') {
+                    state.suiteTimerMode = normalizedTimerMode;
+                }
+            }
+            if (Number.isFinite(Number(data.suiteTimerLimitSeconds))) {
+                state.suiteTimerLimitSeconds = Number(data.suiteTimerLimitSeconds);
             }
             const elapsedSeconds = Number.isFinite(Number(data.elapsed)) ? Number(data.elapsed) : 0;
             state.pageStartTime = Date.now() - (elapsedSeconds * 1000);
