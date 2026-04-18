@@ -251,13 +251,13 @@
             session.pendingAdvance = null;
             this._mirrorSessionToStorage(session);
 
-            // Last passage 鈫?finalize the entire simulation
+            // Last passage -> finalize the entire simulation
             if (session.currentIndex >= session.sequence.length) {
                 await this.finalizeSuiteRecord(session);
                 return true;
             }
 
-            // Not last 鈫?advance to next passage
+            // Not last -> advance to next passage
             if (typeof this.cleanupExamSession === 'function') {
                 try {
                     await this.cleanupExamSession(examId);
@@ -270,7 +270,7 @@
         },
 
         async continueSuitePractice() {
-            // Legacy stub 鈥?simulation mode auto-advances, but kept for backward compat
+            // Legacy stub - simulation mode auto-advances, but kept for backward compat
             const session = this.currentSuiteSession;
             if (!session || session.status !== 'active') {
                 return false;
@@ -1063,7 +1063,7 @@
                     accuracy: aggregatedScores.accuracy,
                     percentage: aggregatedScores.percentage,
                     
-                    // 鑱氬悎鐨勭瓟妗堟暟鎹?
+                    // 聚合的答案数据
                     answers: aggregatedAnswers,
                     answerComparison: aggregatedComparison,
                     

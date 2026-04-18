@@ -1035,7 +1035,7 @@
             manager = await ensureDataIntegrityManagerReady();
             if (manager && typeof manager.exportData === 'function') {
                 await manager.exportData();
-                try { global.showMessage && global.showMessage('鏁版嵁瀵煎嚭鎴愬姛', 'success'); } catch (_) { }
+                try { global.showMessage && global.showMessage('数据导出成功', 'success'); } catch (_) { }
                 return;
             }
         } catch (error) {
@@ -1055,7 +1055,7 @@
     }
 
     // ============================================================================
-    // 瀵煎嚭鍒板叏灞€
+    // 导出到全局
     // ============================================================================
 
     global.ExamActions = {

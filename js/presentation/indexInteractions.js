@@ -282,75 +282,25 @@
         }
 
         var indicator = state.indicator;
-        var from = state.lastRect || targetRect;
+        
+        // 如果需要瞬间完成（例如窗口 Resize），则临时关闭过渡动画
         var shouldReduceMotion = global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        var shouldAnimate = !immediate && state.ready && !shouldReduceMotion && typeof indicator.animate === 'function';
-
-        if (state.animation) {
-            state.animation.cancel();
-            state.animation = null;
+        if (immediate || shouldReduceMotion) {
+            indicator.style.transition = 'none';
+        } else {
+            indicator.style.transition = ''; // 恢复 CSS 文件中定义的弹簧过渡动画
         }
 
-        if (!shouldAnimate) {
-            applyHeroNavIndicatorRect(indicator, targetRect);
-            state.lastRect = targetRect;
-            state.ready = true;
-            return;
+        applyHeroNavIndicatorRect(indicator, targetRect);
+        
+        // 强制浏览器重排以便 none 立即生效后再恢复
+        if (immediate || shouldReduceMotion) {
+            void indicator.offsetWidth;
+            indicator.style.transition = '';
         }
 
-        applyHeroNavIndicatorRect(indicator, from);
-
-        var deltaX = targetRect.left - from.left;
-        var deltaY = targetRect.top - from.top;
-        var stretch = Math.min(24, Math.abs(deltaX) * 0.16 + Math.abs(deltaY) * 0.35);
-        var squeeze = Math.min(8, Math.abs(deltaX) * 0.05);
-        var midRect = {
-            left: from.left + deltaX * 0.62,
-            top: from.top + deltaY * 0.62,
-            width: from.width + (targetRect.width - from.width) * 0.7 + stretch,
-            height: Math.max(14, from.height + (targetRect.height - from.height) * 0.7 - squeeze)
-        };
-
-        state.animation = indicator.animate(
-            [
-                {
-                    left: from.left + 'px',
-                    top: from.top + 'px',
-                    width: from.width + 'px',
-                    height: from.height + 'px',
-                    transform: 'translateZ(0) scale(1, 1)'
-                },
-                {
-                    left: midRect.left + 'px',
-                    top: midRect.top + 'px',
-                    width: midRect.width + 'px',
-                    height: midRect.height + 'px',
-                    transform: 'translateZ(0) scale(1.05, 0.94)'
-                },
-                {
-                    left: targetRect.left + 'px',
-                    top: targetRect.top + 'px',
-                    width: targetRect.width + 'px',
-                    height: targetRect.height + 'px',
-                    transform: 'translateZ(0) scale(1, 1)'
-                }
-            ],
-            {
-                duration: 560,
-                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-                fill: 'forwards'
-            }
-        );
-
-        state.animation.onfinish = function () {
-            applyHeroNavIndicatorRect(indicator, targetRect);
-            state.lastRect = targetRect;
-            state.ready = true;
-            state.animation = null;
-        };
-        state.animation.oncancel = function () {
-            state.animation = null;
-        };
+        state.lastRect = targetRect;
+        state.ready = true;
     }
 
     function setupHeroNavLiquidIndicator() {
