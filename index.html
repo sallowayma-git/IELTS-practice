@@ -170,7 +170,8 @@
                         <button class="btn btn-secondary hero-btn hero-btn--ghost"
                             onclick="window.AppActions && window.AppActions.exportPracticeMarkdown()">📄
                             导出Markdown</button>
-                        <button class="btn btn-info hero-btn" onclick="toggleBulkDelete()" id="bulk-delete-btn">📝
+                        <button class="btn btn-info hero-btn" onclick="toggleBulkDelete()" id="bulk-delete-btn">
+                            <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="ui-emoji-icon" aria-hidden="true"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
                             批量删除</button>
                         <button class="btn btn-warning hero-btn hero-btn--warn" onclick="clearPracticeData()">🗑️
                             清除记录</button>
@@ -196,7 +197,8 @@
                     <div class="hero-settings-actions">
                         <button class="btn btn-warning hero-btn hero-btn--warn" id="clear-cache-btn">🗑️ 清除缓存</button>
                         <button class="btn btn-warning hero-btn hero-btn--warn" id="load-library-btn">📂 加载题库</button>
-                        <button class="btn btn-warning hero-btn hero-btn--warn" id="library-config-btn">⚙️
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="library-config-btn">
+                            <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="ui-emoji-icon" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
                             题库配置切换</button>
                         <button class="btn btn-warning hero-btn hero-btn--warn" id="force-refresh-btn">🔄
                             强制刷新题库</button>
@@ -424,7 +426,8 @@
     </div>
 
     <!-- 启动与懒加载工具 -->
-    <script src="js/presentation/shuiBackground.js" defer></script>
+    <script src="assets/vendor/three.min.js"></script>
+    <script src="js/presentation/threeBackground.js"></script>
     <script src="js/runtime/bootScreen.js" defer></script>
     <script src="js/runtime/lazyLoader.js" defer></script>
     <script src="js/utils/suitePreference.js" defer></script>
