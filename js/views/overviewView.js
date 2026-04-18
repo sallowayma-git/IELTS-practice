@@ -239,6 +239,15 @@
             }, [browseButton, randomButton]);
         }
 
+        createSvgIcon(svgContent) {
+            const span = document.createElement('span');
+            span.className = 'ui-emoji-icon';
+            span.setAttribute('aria-hidden', 'true');
+            span.style.display = 'inline-flex';
+            span.innerHTML = `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${svgContent}</svg>`;
+            return span;
+        }
+
         createSuiteModeButton() {
             return this.dom.create('button', {
                 className: 'btn btn-primary',
@@ -261,7 +270,7 @@
                     gap: '6px'
                 }
             }, [
-                this.dom.create('span', { ariaHidden: 'true' }, '🚀'),
+                this.createSvgIcon('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6"></path><path d="M8 13h8M8 17h6"></path>'),
                 this.dom.create('span', {}, '套题模式')
             ]);
         }
@@ -289,7 +298,7 @@
                     gap: '6px'
                 }
             }, [
-                this.dom.create('span', { ariaHidden: 'true' }, '♾️'),
+                this.createSvgIcon('<path d="M20 6v5h-5"></path><path d="M4 18v-5h5"></path><path d="M6.2 11a6 6 0 0 1 10.6-2.4L20 11"></path><path d="M17.8 13a6 6 0 0 1-10.6 2.4L4 13"></path>'),
                 this.dom.create('span', {}, '无尽模式')
             ]);
         }
