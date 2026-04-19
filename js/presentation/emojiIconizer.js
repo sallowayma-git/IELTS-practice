@@ -129,7 +129,7 @@
         if (SKIP_TAGS[node.nodeName]) {
             return true;
         }
-        if (node.classList && node.classList.contains('ui-emoji-icon')) {
+        if (node.classList && (node.classList.contains('ui-emoji-icon') || node.classList.contains('achievement-icon'))) {
             return true;
         }
         return !!node.isContentEditable;
