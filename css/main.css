@@ -2959,9 +2959,13 @@ body.no-scroll {
 }
 
 .suite-custom-selection__button--primary {
-    color: #ffffff;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    box-shadow: 0 10px 22px rgba(102, 126, 234, 0.28);
+    color: #F2F2F2;
+    background: #BF755A;
+    box-shadow: 0 10px 22px rgba(191, 117, 90, 0.28);
+}
+
+.suite-custom-selection__button--primary:hover {
+    background: linear-gradient(135deg, #BF755A, #a0654a);
 }
 
 .suite-custom-selection__button--secondary {
