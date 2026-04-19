@@ -124,6 +124,7 @@
                 const frequencyFilteredIndex = normalizedIndex.filter(item => (
                     this._isSuiteFrequencyIncluded(item && item.frequency, frequencyScope)
                 ));
+                const practicedExamIds = await this._collectPracticedReadingExamIds();
 
                 const categories = ['P1', 'P2', 'P3'];
                 const sequence = [];
@@ -136,7 +137,18 @@
                         window.showMessage && window.showMessage('当前抽题范围（' + scopeLabel + '）缺少 ' + category + ' 阅读题目，无法开启套题练习。', 'warning');
                         return;
                     }
-                    const picked = pool[Math.floor(Math.random() * pool.length)];
+                    const unpracticedPool = pool.filter(item => !practicedExamIds.has(String(item.id)));
+                    const selectionPool = unpracticedPool.length ? unpracticedPool : pool;
+                    if (!unpracticedPool.length) {
+                        const scopeLabel = frequencyScope === 'high'
+                            ? '仅高频'
+                            : (frequencyScope === 'high_medium' ? '高频+次高频' : '全部频率');
+                        window.showMessage && window.showMessage(
+                            '当前抽题范围（' + scopeLabel + '）中的 ' + category + ' 已全部练习过，已自动放宽为允许重复抽题。',
+                            'warning'
+                        );
+                    }
+                    const picked = selectionPool[Math.floor(Math.random() * selectionPool.length)];
                     sequence.push({ examId: picked.id, exam: picked });
                 }
 
@@ -1434,6 +1446,87 @@
             }
 
             return Array.isArray(list) ? list.filter(Boolean) : [];
+        },
+
+        async _loadSuitePracticeRecordsForFiltering() {
+            const normalizeList = (list) => (Array.isArray(list) ? list : []);
+
+            if (
+                this.components
+                && this.components.practiceRecorder
+                && typeof this.components.practiceRecorder.getPracticeRecords === 'function'
+            ) {
+                try {
+                    const records = await this.components.practiceRecorder.getPracticeRecords();
+                    return normalizeList(records);
+                } catch (error) {
+                    console.warn('[SuitePractice] 读取 PracticeRecorder 记录失败，尝试存储回退:', error);
+                }
+            }
+
+            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function') {
+                try {
+                    const records = await window.PracticeCore.store.listPracticeRecords();
+                    return normalizeList(records);
+                } catch (error) {
+                    console.warn('[SuitePractice] 读取 PracticeCore 记录失败，尝试存储回退:', error);
+                }
+            }
+
+            if (typeof storage?.get === 'function') {
+                try {
+                    const records = await storage.get('practice_records', []);
+                    return normalizeList(records);
+                } catch (error) {
+                    console.warn('[SuitePractice] 读取 practice_records 失败:', error);
+                }
+            }
+
+            return [];
+        },
+
+        _collectExamIdsFromPracticeRecord(record, collector) {
+            if (!record || typeof record !== 'object' || !(collector instanceof Set)) {
+                return;
+            }
+
+            const pushExamId = (value) => {
+                const normalized = String(value == null ? '' : value).trim();
+                if (normalized) {
+                    collector.add(normalized);
+                }
+            };
+
+            pushExamId(record.examId);
+
+            const metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata : null;
+            if (metadata) {
+                pushExamId(metadata.examId);
+            }
+
+            const rawData = record.rawData && typeof record.rawData === 'object' ? record.rawData : null;
+            if (rawData) {
+                pushExamId(rawData.examId);
+            }
+
+            const suiteEntries = Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
+            suiteEntries.forEach((entry) => {
+                if (!entry || typeof entry !== 'object') {
+                    return;
+                }
+                pushExamId(entry.examId);
+                const entryRawData = entry.rawData && typeof entry.rawData === 'object' ? entry.rawData : null;
+                if (entryRawData) {
+                    pushExamId(entryRawData.examId);
+                }
+            });
+        },
+
+        async _collectPracticedReadingExamIds() {
+            const records = await this._loadSuitePracticeRecordsForFiltering();
+            const practicedExamIds = new Set();
+            records.forEach((record) => this._collectExamIdsFromPracticeRecord(record, practicedExamIds));
+            return practicedExamIds;
         },
 
         _getCustomSuiteDraftState() {
