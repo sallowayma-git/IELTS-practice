@@ -1,0 +1,114 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-medium-63", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-medium-63",
+  "meta": {
+    "title": "A Brief History of Humans and Food 人类食物的历史",
+    "category": "P1",
+    "frequency": "medium",
+    "pdfFilename": "155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】/",
+    "legacyFilename": "155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.html",
+    "questionIntroHtml": "<h3>Questions 1–5</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>A Brief History of Humans and Food</h3>\n            \n            <p>During the journey from our hunter-gatherer ancestors to the present day, there have been three seismic changes that have impacted the food we eat: the discovery of cooking, the emergence of agriculture, and the invention of methods of preserving food.</p>\n            <p>The 19th-century scientist Charles Darwin thought that cooking, after language, was the greatest discovery made by man. All of us eat some raw food, such as fruit and vegetables, but the great majority of food we consume is cooked. Cooking can turn plants that are inedible into edible food by destroying toxic chemicals that plants often manufacture to protect themselves against attack by insects or other herbivorous animals. These toxic chemicals are referred to as “plant secondary compounds” because they are not directly involved in the plant's normal growth, development, and reproduction, and are produced purely as chemical defenses. They give many of the plants we consume, such as coffee or Brussels sprouts, their bitter taste.</p>\n            <p>Cooked food is often more digestible because heat breaks down tough cellulose cell walls in plants or tough connective tissue in animals. Chewing raw turnip, a plate of uncooked rice, or a raw leg of lamb is much harder work than eating the cooked equivalent. The energy expended in chewing to break down the tough material is replaced by energy from the fuel used in cooking the food, so the ratio of energy gained to energy expended by the body is greater when food is cooked.</p>\n            <p>Until the development of agriculture, hunter-gatherers spent up to seven hours a day gathering food. This all began to change around 10,500 years ago with the advent of farming, which led to dramatic changes in human societies. People began to create a variety of new tools to aid survival, and in turn, populations increased in size. These changes led to the possibility of specialization of different tasks within society. Around this time, writing became more sophisticated and allowed people to maintain records of the harvest and taxes. Eventually, formalized structures of government were established as people settled in one area.</p>\n            <p>The arrival of agriculture meant that, for the first time, our ancestors had more food than they could eat immediately. This, combined with the seasonality of production, led them to discover methods of preserving food: smoking, drying, adding acid by fermentation, or adding salt. These four methods all share one feature in common—they make the food a more hostile environment for bacteria that can cause it to spoil. They also tend to slow down natural chemical reactions in the food that would cause decay.</p>\n            <p>Although foods today are still preserved in these ancient ways, two more recent methods of preserving food have become more common: canning and freezing. Canning was invented by a Frenchman, Nicolas Appert, in the early 19th century. He sealed food in bottles fabricated from glass and then heated them in boiling water to cook the contents. Appert's method had great advantages over older methods of food preservation: it could be applied to a wide range of foods, and the flavor and texture were similar to freshly cooked products. His idea was soon copied by an Englishman, Peter Durand. Until this point, containers had been too heavy to be widely used, but Durand produced the first ones which were lightweight and resistant to damage. Two years later, in 1812, two Englishmen, Bryan Donkin and John Hall, started the commercial canning of food, although the real rise in popularity of canning had to wait until the invention of the can opener in 1855. Until then, cans were opened with a chisel and hammer. Canning is an extremely effective way of preserving food: one can containing meat, dating back to 1824, was opened in 1939, and the contents were still in good condition.</p>\n            <p>In the 21st century, the dominance of canning as a method of food preservation has been overtaken by freezing. Chilling food to keep it fresh is an old idea. The earliest mentions of icehouses, thick-walled buildings, half underground, date back to 1700 BC in northwest Iran. In early 16th-century Italy, water was mixed with chemicals to lower its freezing point to -18 degrees Celsius. Several centuries later, frozen fish and other goods were transported by ship from Australia to England. However, the modern frozen food industry was started in the 1920s by an American, Clarence Birdseye. While on a fishing trip with the Inuit in the Canadian Arctic, Birdseye observed that rapid freezing creates smaller ice crystals and therefore causes less damage to food—a discovery he had not expected. Nevertheless, the major growth in demand for frozen food came with the arrival of freezers in ordinary people's homes. The advantages of frozen over canned food include the fact that the flavor and consistency are often identical to the fresh product, and freezing can be used to preserve a wide variety of foods.</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Do the following statements agree with the information given in Reading Passage 1?</h4>\n                <p>In boxes 1–5 on your answer sheet, write:</p>\n                <ul style=\"list-style-position: inside; padding-left: 0; margin-bottom: 1rem;\">\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information on this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>1</strong> According to Darwin, cooking was the most significant development in human history.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q1\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>2</strong> The process of cooking gets rid of some plant poisons.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q2\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>3</strong> Eating cooked food is more energy efficient than eating raw food.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q3\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>4</strong> Clarence Birdseye had previously worked in the Australian food industry.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q4\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>5</strong> Birdseye's trip with the Inuit confirmed what he already believed about rapid freezing.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q5\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions 1–5</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q6",
+        "q7",
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q6-7-8-9-10-11-12-13-anchor\">\n                <h4>Complete the notes below.</h4>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"notes-completion\">\n                    <h4>The Development of Agriculture and Food Preservation</h4>\n                    <p><strong>The changes agriculture brought about were:</strong></p>\n                    <ul>\n                        <li>the development of equipment and larger <strong>6</strong> <input type=\"text\" id=\"q6_input\" maxlength=\"20\" name=\"q6\"></li>\n                        <li>the ability to keep <strong>7</strong> <input type=\"text\" id=\"q7_input\" maxlength=\"20\" name=\"q7\"> as writing developed</li>\n                        <li>the setting up of organised government</li>\n                    </ul>\n                    <p><strong>Food preservation</strong></p>\n                    <ul>\n                         <li>early methods of food preservation included: smoking, drying and combining food with acid or <strong>8</strong> <input type=\"text\" id=\"q8_input\" maxlength=\"20\" name=\"q8\"></li>\n                         <li>canning\n                            <ul>\n                                <li>Nicolas Appert put food into containers made of <strong>9</strong> <input type=\"text\" id=\"q9_input\" maxlength=\"20\" name=\"q9\"></li>\n                                <li>Appert's method resulted in preserved food that had the same taste and <strong>10</strong> <input type=\"text\" id=\"q10_input\" maxlength=\"20\" name=\"q10\"> as fresh food</li>\n                                <li>Peter Durand introduced cans which had the advantage of being <strong>11</strong> <input type=\"text\" id=\"q11_input\" maxlength=\"20\" name=\"q11\"> and hard to break</li>\n                                <li>In 1855, the metal can opener replaced the <strong>12</strong> <input type=\"text\" id=\"q12_input\" maxlength=\"20\" name=\"q12\"> which had been used with a hammer to open cans</li>\n                                <li>some food was still found to be edible after more than a hundred years, e.g. an old can of <strong>13</strong> <input type=\"text\" id=\"q13_input\" maxlength=\"20\" name=\"q13\"></li>\n                            </ul>\n                         </li>\n                         <li>freezing</li>\n                    </ul>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "FALSE",
+    "q2": "TRUE",
+    "q3": "TRUE",
+    "q4": "NOT GIVEN",
+    "q5": "FALSE",
+    "q6": "populations",
+    "q7": "records",
+    "q8": "salt",
+    "q9": "glass",
+    "q10": "texture",
+    "q11": "lightweight",
+    "q12": "chisel",
+    "q13": "meat"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】/155. P1 - A Brief History of Humans and Food 人类食物的历史【次】.pdf",
+    "ieltsHtml": "IELTS/P1/A Brief History of Humans and Food.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.621Z",
+    "notes": "signature:radio,text,textarea,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

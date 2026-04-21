@@ -1,8 +1,8 @@
-(function(){
+(function () {
   var storage = window.storage;
   // Fallback for navigation
   if (typeof window.showView !== 'function') {
-    window.showView = function(viewName, resetCategory){
+    window.showView = function (viewName, resetCategory) {
       if (typeof document === 'undefined') {
         return;
       }
@@ -12,7 +12,7 @@
         console.warn('[Fallback] 未找到视图节点:', normalized);
         return;
       }
-      Array.prototype.forEach.call(document.querySelectorAll('.view.active'), function(v){
+      Array.prototype.forEach.call(document.querySelectorAll('.view.active'), function (v) {
         v.classList.remove('active');
       });
       target.classList.add('active');
@@ -34,7 +34,7 @@
       } else {
         var navContainer = document.querySelector('.main-nav');
         if (navContainer) {
-          Array.prototype.forEach.call(navContainer.querySelectorAll('.nav-btn'), function(btn){
+          Array.prototype.forEach.call(navContainer.querySelectorAll('.nav-btn'), function (btn) {
             btn.classList.remove('active');
           });
           var navButton = navContainer.querySelector('[data-view="' + normalized + '"]');
@@ -44,14 +44,23 @@
         }
       }
 
-      if (normalized==='browse' && (resetCategory===undefined || resetCategory===true)){
+      if (normalized === 'browse' && (resetCategory === undefined || resetCategory === true)) {
         window.currentCategory = 'all';
         window.currentExamType = 'all';
         if (typeof window.setBrowseTitle === 'function') { window.setBrowseTitle('题库浏览'); return; }
-        var t=document.getElementById('browse-title'); if (t) t.textContent='题库浏览';
+        var t = document.getElementById('browse-title'); if (t) t.textContent = '题库浏览';
       }
-      if (normalized==='browse' && typeof window.loadExamList==='function') window.loadExamList();
-      if (normalized==='practice' && typeof window.updatePracticeView==='function') window.updatePracticeView();
+      if (normalized === 'browse' && typeof window.loadExamList === 'function') window.loadExamList();
+      if (normalized === 'practice' && window.AppActions && typeof window.AppActions.ensurePracticeSuite === 'function') {
+        window.AppActions.ensurePracticeSuite();
+      }
+      if (normalized === 'practice' && typeof window.startPracticeRecordsSyncInBackground === 'function') {
+        window.startPracticeRecordsSyncInBackground('practice-view');
+      }
+      if (normalized === 'practice' && typeof window.ensurePracticeRecordsSync === 'function') {
+        window.ensurePracticeRecordsSync('practice-view').catch(function () { });
+      }
+      if (normalized === 'practice' && typeof window.updatePracticeView === 'function') window.updatePracticeView();
     };
   }
 
@@ -69,7 +78,7 @@
     } else {
       var navRoot = document.querySelector('.main-nav');
       if (navRoot && !navRoot._legacyNavHandler) {
-        var handler = function(event) {
+        var handler = function (event) {
           var button = event.target && event.target.closest ? event.target.closest('.nav-btn[data-view]') : null;
           if (!button || !navRoot.contains(button)) {
             return;
@@ -89,6 +98,11 @@
   }
 
   var _fallbackBackupDelegatesConfigured = false;
+  var _isLazyProxy = function (fn) {
+    if (typeof fn !== 'function') return false;
+    var src = Function.prototype.toString.call(fn);
+    return fn.name === 'lazyProxy' || src.indexOf('ensureLazyGroup') !== -1 || src.indexOf('AppLazyLoader') !== -1;
+  };
 
   function _ensureFallbackDataIntegrityManager() {
     if (!window.dataIntegrityManager && window.DataIntegrityManager) {
@@ -101,6 +115,44 @@
     return window.dataIntegrityManager || null;
   }
 
+  var _fallbackDataIntegrityLoadPromise = null;
+
+  function _ensureFallbackDataIntegrityManagerAsync() {
+    var manager = _ensureFallbackDataIntegrityManager();
+    if (manager) {
+      return Promise.resolve(manager);
+    }
+
+    if (!_fallbackDataIntegrityLoadPromise) {
+      if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+        _fallbackDataIntegrityLoadPromise = window.AppLazyLoader.ensureGroup('browse-runtime');
+      } else if (typeof document !== 'undefined' && !window.DataIntegrityManager) {
+        _fallbackDataIntegrityLoadPromise = new Promise(function (resolve, reject) {
+          var script = document.createElement('script');
+          script.src = 'js/components/DataIntegrityManager.js';
+          script.onload = resolve;
+          script.onerror = function (error) {
+            reject(error || new Error('failed to load DataIntegrityManager'));
+          };
+          document.head.appendChild(script);
+        });
+      } else {
+        _fallbackDataIntegrityLoadPromise = Promise.resolve();
+      }
+    }
+
+    return _fallbackDataIntegrityLoadPromise.then(function () {
+      var readyManager = _ensureFallbackDataIntegrityManager();
+      if (!readyManager) {
+        throw new Error('数据管理模块未初始化');
+      }
+      return readyManager;
+    }).catch(function (error) {
+      _fallbackDataIntegrityLoadPromise = null;
+      throw error;
+    });
+  }
+
   function _fallbackCreateElement(tag, attributes, children) {
     if (typeof document === 'undefined') {
       return null;
@@ -109,7 +161,7 @@
     var element = document.createElement(tag);
     var attrs = attributes || {};
 
-    Object.keys(attrs).forEach(function(key) {
+    Object.keys(attrs).forEach(function (key) {
       var value = attrs[key];
       if (value == null || value === false) {
         return;
@@ -121,7 +173,7 @@
       }
 
       if (key === 'dataset' && typeof value === 'object') {
-        Object.keys(value).forEach(function(dataKey) {
+        Object.keys(value).forEach(function (dataKey) {
           var dataValue = value[dataKey];
           if (dataValue == null) {
             return;
@@ -145,7 +197,7 @@
     });
 
     var normalizedChildren = Array.isArray(children) ? children : [children];
-    normalizedChildren.forEach(function(child) {
+    normalizedChildren.forEach(function (child) {
       if (child == null) {
         return;
       }
@@ -164,7 +216,7 @@
       return;
     }
 
-    document.addEventListener('click', function(event) {
+    document.addEventListener('click', function (event) {
       var target = event.target && event.target.closest ? event.target.closest('[data-backup-action]') : null;
       if (!target) {
         return;
@@ -186,6 +238,15 @@
         if (overlay) {
           overlay.remove();
         }
+        return;
+      }
+
+      if (action === 'dismiss-inline') {
+        event.preventDefault();
+        var inline = document.querySelector('.backup-list-container');
+        if (inline) {
+          inline.remove();
+        }
       }
     });
 
@@ -198,9 +259,11 @@
       return;
     }
 
-    var manager = _ensureFallbackDataIntegrityManager();
-    if (!manager) {
-      window.showMessage && window.showMessage('数据管理模块未初始化', 'error');
+    var manager = null;
+    try {
+      manager = await _ensureFallbackDataIntegrityManagerAsync();
+    } catch (error) {
+      window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
       return;
     }
 
@@ -212,7 +275,7 @@
       window.showMessage && window.showMessage('正在恢复备份...', 'info');
       await manager.restoreBackup(backupId);
       window.showMessage && window.showMessage('备份恢复成功', 'success');
-      setTimeout(function() {
+      setTimeout(function () {
         try {
           if (typeof window.showBackupList === 'function') {
             window.showBackupList();
@@ -229,19 +292,19 @@
 
   // Fallback for toast messages
   if (typeof window.showMessage !== 'function') {
-    window.showMessage = function(message, type, duration){
-      try{
+    window.showMessage = function (message, type, duration) {
+      try {
         var container = document.getElementById('message-container');
-        if(!container){
-          container=document.createElement('div');
-          container.id='message-container';
-          container.className='message-container';
+        if (!container) {
+          container = document.createElement('div');
+          container.id = 'message-container';
+          container.className = 'message-container';
           document.body.appendChild(container);
         }
 
-        var note=document.createElement('div');
-        note.className='message ' + (type||'info');
-        var icon=document.createElement('strong');
+        var note = document.createElement('div');
+        note.className = 'message ' + (type || 'info');
+        var icon = document.createElement('strong');
         var marks = { error: '✖', success: '✔', warning: '⚠️', info: 'ℹ️' };
         icon.textContent = marks[type] || marks.info;
         note.appendChild(icon);
@@ -253,98 +316,351 @@
         }
 
         var timeout = typeof duration === 'number' && duration > 0 ? duration : 4000;
-        setTimeout(function(){
+        setTimeout(function () {
           note.classList.add('message-leaving');
-          setTimeout(function(){
+          setTimeout(function () {
             if (note.parentNode) {
               note.parentNode.removeChild(note);
             }
           }, 320);
         }, timeout);
-      }catch(_){ console.log('[Toast]', type||'info', message); }
+      } catch (_) { console.log('[Toast]', type || 'info', message); }
     };
   }
 
-  // Fallbacks for data export/import buttons in Settings
-  if (typeof window.exportAllData !== 'function') {
-    window.exportAllData = function(){
-      if (!window.dataIntegrityManager && window.DataIntegrityManager) {
-        try{ window.dataIntegrityManager = new window.DataIntegrityManager(); } catch(_){}
+  var ensureDataBackupManager = (function () {
+    let loading = null;
+    return function ensureDataBackupManager() {
+      if (window.DataBackupManager) {
+        return Promise.resolve(new window.DataBackupManager());
       }
-      if (window.dataIntegrityManager && typeof window.dataIntegrityManager.exportData==='function') {
-        window.dataIntegrityManager.exportData();
-        window.showMessage && window.showMessage('数据导出成功','success');
-      } else {
-        window.showMessage && window.showMessage('数据管理模块未初始化','error');
+      if (loading) {
+        return loading.then(() => new window.DataBackupManager());
+      }
+      loading = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'js/utils/dataBackupManager.js';
+        script.onload = () => resolve();
+        script.onerror = (err) => reject(err || new Error('failed to load dataBackupManager'));
+        document.head.appendChild(script);
+      });
+      return loading.then(() => new window.DataBackupManager());
+    };
+  })();
+
+  function showImportModeModal(onSelect) {
+    const overlay = document.createElement('div');
+    overlay.className = 'import-mode-overlay-lite';
+    const modal = document.createElement('div');
+    modal.className = 'import-mode-modal-lite';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'close-btn-lite';
+    closeBtn.innerHTML = '&times;';
+    closeBtn.ariaLabel = '关闭';
+    closeBtn.addEventListener('click', () => document.body.removeChild(overlay));
+
+    const title = document.createElement('h4');
+    title.textContent = '选择导入模式';
+    const desc = document.createElement('p');
+    desc.textContent = '请选择适合当前场景的数据导入策略';
+
+    const options = document.createElement('div');
+    options.className = 'import-mode-options-lite';
+
+    const defs = [
+      { mode: 'merge', icon: '📥', title: '增量导入', text: '合并新数据，保留现有记录。适合日常更新。' },
+      { mode: 'replace', icon: '⚠️', title: '覆盖导入', text: '清空并替换所有记录。慎用，数据不可恢复。' }
+    ];
+
+    defs.forEach((def) => {
+      const card = document.createElement('div');
+      card.className = 'import-mode-option-lite';
+      card.role = 'button';
+      card.tabIndex = 0;
+
+      const icon = document.createElement('div');
+      icon.className = 'mode-icon-lite';
+      icon.textContent = def.icon;
+
+      const head = document.createElement('strong');
+      head.textContent = def.title;
+
+      const text = document.createElement('p');
+      text.textContent = def.text;
+
+      card.append(icon, head, text);
+
+      const selectAction = () => {
+        document.body.removeChild(overlay);
+        onSelect(def.mode);
+      };
+
+      card.addEventListener('click', selectAction);
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          selectAction();
+        }
+      });
+
+      options.appendChild(card);
+    });
+
+    modal.append(closeBtn, title, desc, options);
+    overlay.appendChild(modal);
+
+    // Close on backdrop click
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        document.body.removeChild(overlay);
+      }
+    });
+
+    if (!document.getElementById('import-mode-lite-style')) {
+      const style = document.createElement('style');
+      style.id = 'import-mode-lite-style';
+      style.textContent = `
+        @keyframes importFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes importScaleIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        
+        .import-mode-overlay-lite {
+          position: fixed; inset: 0; z-index: 10000;
+          background: rgba(0, 0, 0, 0.25);
+          backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+          display: flex; align-items: center; justify-content: center;
+          padding: 20px;
+          animation: importFadeIn 0.3s ease-out;
+        }
+        .import-mode-modal-lite {
+          position: relative; width: 440px; max-width: 90vw;
+          /* White transparent gradient for substantial glass feel */
+          background: linear-gradient(165deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%);
+          backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+          border-radius: 24px;
+          /* Highlight border */
+          border: 1px solid rgba(255, 255, 255, 0.8);
+          /* Rich shadow + Top highlight for 3D glass effect */
+          box-shadow: 
+            0 25px 50px -12px rgba(0, 0, 0, 0.15), 
+            inset 0 1px 0 rgba(255, 255, 255, 1),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+          padding: 40px 32px;
+          color: #1d1d1f;
+          font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+          animation: importScaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+          display: flex; flex-direction: column; align-items: center;
+        }
+        .import-mode-modal-lite h4 {
+          margin: 0 0 12px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; text-align: center;
+          color: #1d1d1f;
+        }
+        .import-mode-modal-lite > p {
+          margin: 0 0 32px; font-size: 15px; color: #86868b; text-align: center; line-height: 1.4;
+        }
+        .import-mode-options-lite {
+          display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 100%;
+        }
+        .import-mode-option-lite {
+          display: flex; flex-direction: column; align-items: center; text-align: center;
+          padding: 24px 16px;
+          /* Glassy cards */
+          background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.6));
+          border: 1px solid rgba(255, 255, 255, 0.6);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+          border-radius: 20px;
+          cursor: pointer;
+          transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+          user-select: none;
+        }
+        .import-mode-option-lite:hover {
+          background: linear-gradient(145deg, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0.9));
+          transform: translateY(-2px);
+          box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1);
+          border-color: rgba(255, 255, 255, 1);
+        }
+        .import-mode-option-lite:active {
+          transform: scale(0.98);
+          background: rgba(245, 245, 247, 0.9);
+        }
+        .mode-icon-lite {
+          font-size: 36px; margin-bottom: 14px;
+          filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+          transition: transform 0.3s ease;
+        }
+        .import-mode-option-lite:hover .mode-icon-lite {
+          transform: scale(1.1) rotate(-5deg);
+        }
+        .import-mode-option-lite strong {
+          display: block; font-size: 16px; font-weight: 600; margin-bottom: 6px; color: #1d1d1f;
+        }
+        .import-mode-option-lite p {
+          font-size: 13px; color: #86868b; line-height: 1.4; margin: 0;
+        }
+        .close-btn-lite {
+          position: absolute; top: 16px; right: 16px;
+          width: 28px; height: 28px;
+          border-radius: 50%; border: none;
+          background: rgba(0, 0, 0, 0.05);
+          color: #86868b; font-size: 18px; line-height: 1;
+          cursor: pointer; display: flex; align-items: center; justify-content: center;
+          transition: all 0.2s;
+        }
+        .close-btn-lite:hover {
+          background: rgba(0, 0, 0, 0.1); color: #1d1d1f;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    document.body.appendChild(overlay);
+  }
+
+  function processImportPayload(file, mode) {
+    const inputFile = file;
+    if (!inputFile) {
+      window.showMessage && window.showMessage('请选择要导入的文件', 'warning');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => window.showMessage && window.showMessage('文件读取失败', 'error');
+    reader.onload = async () => {
+      let data;
+      try {
+        data = JSON.parse(reader.result);
+      } catch (error) {
+        window.showMessage && window.showMessage('文件格式无效，需为 JSON', 'error');
+        return;
+      }
+      try {
+        const manager = await ensureDataBackupManager();
+        const result = await manager.importPracticeData(data, {
+          mergeMode: mode === 'replace' ? 'replace' : 'merge',
+          createBackup: true,
+          validateData: true
+        });
+        window.showMessage && window.showMessage(`导入成功：新增 ${result.importedCount || 0} 条，跳过 ${result.skippedCount || 0} 条。`, 'success');
+      } catch (error) {
+        console.error('[importData] failed', error);
+        window.showMessage && window.showMessage('导入失败：' + (error && error.message ? error.message : error), 'error');
+      }
+    };
+    reader.readAsText(inputFile, 'utf-8');
+  }
+
+  if (typeof window.exportAllData !== 'function') {
+    window.exportAllData = async function () {
+      var manager = null;
+      try {
+        manager = await _ensureFallbackDataIntegrityManagerAsync();
+      } catch (error) {
+        console.error('[Fallback] 数据导出模块加载失败:', error);
+        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
+        return;
+      }
+
+      try {
+        await manager.exportData();
+        window.showMessage && window.showMessage('数据导出成功', 'success');
+      } catch (error) {
+        console.error('[Fallback] 数据导出失败:', error);
+        window.showMessage && window.showMessage('数据导出失败: ' + (error && error.message ? error.message : error), 'error');
       }
     };
   }
 
   if (typeof window.importData !== 'function') {
-    window.importData = function(){
-      if (!window.dataIntegrityManager && window.DataIntegrityManager) {
-        try{ window.dataIntegrityManager = new window.DataIntegrityManager(); } catch(_){}
-      }
-      if (!(window.dataIntegrityManager && typeof window.dataIntegrityManager.importData==='function')) {
-        window.showMessage && window.showMessage('数据管理模块未初始化','error');
-        return;
-      }
-      var input=document.createElement('input'); input.type='file'; input.accept='.json';
-      input.onchange = function(e){ var f=e.target.files&&e.target.files[0]; if(!f) return; var ok=confirm('导入数据将覆盖当前数据，确定继续吗？'); if(!ok) return; (async function(){ try{ await window.dataIntegrityManager.importData(f); window.showMessage && window.showMessage('数据导入成功','success'); } catch(err){ window.showMessage && window.showMessage('数据导入失败: '+(err&&err.message||err),'error'); } })(); };
-      input.click();
+    window.importData = function () {
+      showImportModeModal((mode) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.onchange = (event) => {
+          const file = event.target.files && event.target.files[0];
+          processImportPayload(file, mode);
+        };
+        input.click();
+      });
     };
+  }
+
+  function _fallbackIsQuotaExceeded(error) {
+    return !!(error && (
+      error.name === 'QuotaExceededError' ||
+      (typeof error.message === 'string' && error.message.indexOf('exceeded the quota') !== -1) ||
+      error.code === 22 || error.code === 1014
+    ));
   }
 
   // Fallbacks for backup operations used by Settings
   if (typeof window.createManualBackup !== 'function') {
-    window.createManualBackup = function(){
-      if (!window.dataIntegrityManager && window.DataIntegrityManager) {
-        try{ window.dataIntegrityManager = new window.DataIntegrityManager(); } catch(_){}
-      }
-      if (!(window.dataIntegrityManager && typeof window.dataIntegrityManager.createBackup==='function')){
-        window.showMessage && window.showMessage('数据管理模块未初始化','error');
+    window.createManualBackup = async function () {
+      var manager = null;
+      try {
+        manager = await _ensureFallbackDataIntegrityManagerAsync();
+      } catch (error) {
+        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
         return;
       }
-      (async function(){
-        try{
-          var b = await window.dataIntegrityManager.createBackup(null,'manual');
-          if (b && b.external) {
-            window.showMessage && window.showMessage('本地存储空间不足，已将备份下载为文件','warning');
-          } else {
-            window.showMessage && window.showMessage('备份创建成功: '+(b&&b.id||''),'success');
-          }
-        }catch(e){
-          window.showMessage && window.showMessage('备份创建失败: '+(e&&e.message||e),'error');
+      try {
+        var backup = await manager.createBackup(null, 'manual');
+        if (backup && backup.external) {
+          window.showMessage && window.showMessage('本地存储不足，已将备份下载为文件', 'warning');
+        } else {
+          window.showMessage && window.showMessage('备份创建成功: ' + (backup && backup.id ? backup.id : ''), 'success');
         }
-      })();
+        try { if (typeof window.showBackupList === 'function') { window.showBackupList(); } } catch (_) { }
+      } catch (error) {
+        if (_fallbackIsQuotaExceeded(error)) {
+          try {
+            await manager.exportData();
+            window.showMessage && window.showMessage('存储不足：已将数据导出为文件', 'warning');
+          } catch (exportErr) {
+            window.showMessage && window.showMessage('备份失败且导出失败: ' + (exportErr && exportErr.message ? exportErr.message : exportErr), 'error');
+          }
+        } else {
+          window.showMessage && window.showMessage('备份创建失败: ' + (error && error.message ? error.message : error), 'error');
+        }
+      }
     };
   }
 
   if (typeof window.showBackupList !== 'function') {
-    window.showBackupList = async function(){
-      var manager = _ensureFallbackDataIntegrityManager();
-      if (!(manager && typeof manager.getBackupList === 'function')) {
-        window.showMessage && window.showMessage('数据管理模块未初始化','error');
+    window.showBackupList = async function () {
+      var manager = null;
+      try {
+        manager = await _ensureFallbackDataIntegrityManagerAsync();
+      } catch (error) {
+        window.showMessage && window.showMessage((error && error.message) || '数据管理模块未初始化', 'error');
         return;
       }
 
       _ensureFallbackBackupDelegates();
-
       var backups = [];
       try {
-        var list = await manager.getBackupList();
-        backups = Array.isArray(list) ? list : [];
+        backups = await manager.getBackupList();
       } catch (error) {
-        console.error('[Fallback] 获取备份列表失败:', error);
-        window.showMessage && window.showMessage('获取备份列表失败: ' + (error && error.message ? error.message : error),'error');
+        console.warn('[Fallback] 获取备份列表失败:', error);
+        window.showMessage && window.showMessage('无法获取备份列表', 'error');
         return;
       }
 
-      var domApi = (window.DOM && typeof window.DOM.create === 'function') ? window.DOM : null;
-      var create = domApi ? function(){ return window.DOM.create.apply(window.DOM, arguments); } : _fallbackCreateElement;
+      var container = document.getElementById('settings-view');
+      var create = _fallbackCreateElement;
 
-      function buildEntries() {
-        if (!backups.length) {
+      // 防止重复渲染多个列表/遮罩
+      var existingInline = (container && container.querySelector('.backup-list-container')) || document.querySelector('.backup-list-container');
+      if (existingInline) {
+        existingInline.remove();
+      }
+      var existingOverlay = document.querySelector('.backup-modal-overlay');
+      if (existingOverlay) {
+        existingOverlay.remove();
+      }
+
+      var buildEntries = function () {
+        if (!Array.isArray(backups) || backups.length === 0) {
           return [
             create('div', { className: 'backup-list-empty' }, [
               create('div', { className: 'backup-list-empty-icon', ariaHidden: 'true' }, '📂'),
@@ -354,23 +670,15 @@
           ];
         }
 
-        var nodes = backups.map(function(backup) {
-          if (!backup || !backup.id) {
-            return null;
-          }
-
-          var timestamp = backup.timestamp ? new Date(backup.timestamp).toLocaleString() : '未知时间';
-          var type = backup.type || 'unknown';
-          var version = backup.version || '—';
-
+        return backups.map(function (backup) {
           return create('div', {
             className: 'backup-entry',
             dataset: { backupId: backup.id }
           }, [
             create('div', { className: 'backup-entry-info' }, [
               create('strong', { className: 'backup-entry-id' }, backup.id),
-              create('div', { className: 'backup-entry-meta' }, timestamp),
-              create('div', { className: 'backup-entry-meta' }, '类型: ' + type + ' | 版本: ' + version)
+              create('div', { className: 'backup-entry-meta' }, new Date(backup.timestamp).toLocaleString()),
+              create('div', { className: 'backup-entry-meta' }, '类型: ' + backup.type + ' | 版本: ' + backup.version)
             ]),
             create('div', { className: 'backup-entry-actions' }, [
               create('button', {
@@ -380,53 +688,37 @@
               }, '恢复')
             ])
           ]);
-        }).filter(Boolean);
+        });
+      };
 
-        if (!nodes.length) {
-          return [
-            create('div', { className: 'backup-list-empty' }, [
-              create('div', { className: 'backup-list-empty-icon', ariaHidden: 'true' }, '📂'),
-              create('p', { className: 'backup-list-empty-text' }, '暂无可恢复的备份记录。'),
-              create('p', { className: 'backup-list-empty-hint' }, '创建手动备份后将显示在此列表中。')
-            ])
-          ];
-        }
-
-        return nodes;
-      }
-
-      var settingsView = document.getElementById('settings-view');
-      if (settingsView) {
-        var legacyList = settingsView.querySelector('.backup-list');
-        if (legacyList) { legacyList.remove(); }
-        var existingContainer = settingsView.querySelector('.backup-list-container');
-        if (existingContainer) { existingContainer.remove(); }
-      }
-
-      var existingOverlay = document.querySelector('.backup-modal-overlay');
-      if (existingOverlay) { existingOverlay.remove(); }
+      var existing = document.querySelector('.backup-modal-overlay');
+      if (existing) existing.remove();
 
       var card = create('div', { className: 'backup-list-card' }, [
         create('div', { className: 'backup-list-header' }, [
           create('h3', { className: 'backup-list-title' }, [
             create('span', { className: 'backup-list-title-icon', ariaHidden: 'true' }, '📋'),
             create('span', { className: 'backup-list-title-text' }, '备份列表')
-          ])
+          ]),
+          create('button', {
+            type: 'button',
+            className: 'btn btn-secondary backup-list-dismiss',
+            dataset: { backupAction: 'dismiss-inline' }
+          }, '收起')
         ]),
         create('div', { className: 'backup-list-scroll' }, buildEntries())
       ]);
 
-      if (settingsView) {
-        var container = create('div', { className: 'backup-list-container' }, card);
-        var mainCard = settingsView.querySelector(':scope > div');
-        if (mainCard) {
-          mainCard.appendChild(container);
+      if (container) {
+        var holder = create('div', { className: 'backup-list-container' }, card);
+        var settingsGroup = container.querySelector('.hero-settings-group');
+        if (settingsGroup && settingsGroup.parentElement === container) {
+          settingsGroup.insertAdjacentElement('afterend', holder);
         } else {
-          settingsView.appendChild(container);
+          container.appendChild(holder);
         }
-
-        if (!backups.length) {
-          window.showMessage && window.showMessage('暂无备份记录','info');
+        if (!Array.isArray(backups) || backups.length === 0) {
+          window.showMessage && window.showMessage('暂无备份记录', 'info');
         }
         return;
       }
@@ -457,30 +749,30 @@
       ]);
 
       document.body.appendChild(overlay);
-
-      if (!backups.length) {
-        window.showMessage && window.showMessage('暂无备份记录','info');
+      if (!Array.isArray(backups) || backups.length === 0) {
+        window.showMessage && window.showMessage('暂无备份记录', 'info');
       }
     };
 
     if (typeof window.restoreBackup !== 'function') {
-      window.restoreBackup = function(backupId) {
-        return _fallbackRestoreBackupById(backupId);
+      window.restoreBackup = function (id) {
+        _fallbackRestoreBackupById(id);
       };
     }
   }
-  async function ensureDefaultConfig(){
-    try{
+
+  async function ensureDefaultConfig() {
+    try {
       var configs = [];
       if (window.storage && storage.get) {
         var maybeConfigs = storage.get('exam_index_configurations', []);
         configs = (maybeConfigs && typeof maybeConfigs.then === 'function') ? await maybeConfigs : maybeConfigs;
       }
       if (!Array.isArray(configs)) configs = [];
-      var hasDefault = configs.some(function(c){ return c && c.key==='exam_index'; });
-      if (!hasDefault){
-        var count = Array.isArray(window.examIndex)? window.examIndex.length : 0;
-        configs.push({ name:'默认题库', key:'exam_index', examCount: count, timestamp: Date.now() });
+      var hasDefault = configs.some(function (c) { return c && c.key === 'exam_index'; });
+      if (!hasDefault) {
+        var count = Array.isArray(window.examIndex) ? window.examIndex.length : 0;
+        configs.push({ name: '默认题库', key: 'exam_index', examCount: count, timestamp: Date.now() });
         if (window.storage && storage.set) {
           try {
             var maybeSetConfigs = storage.set('exam_index_configurations', configs);
@@ -494,7 +786,7 @@
             var currentActive = storage.get('active_exam_index_key');
             currentActive = (currentActive && typeof currentActive.then === 'function') ? await currentActive : currentActive;
             if (!currentActive && window.storage && storage.set) {
-              var maybeSetActive = storage.set('active_exam_index_key','exam_index');
+              var maybeSetActive = storage.set('active_exam_index_key', 'exam_index');
               if (maybeSetActive && typeof maybeSetActive.then === 'function') await maybeSetActive;
             }
           } catch (activeErr) {
@@ -503,7 +795,7 @@
         }
       }
       return configs;
-    }catch(e){
+    } catch (e) {
       console.warn('[Fallback] ensureDefaultConfig 失败:', e);
       return [];
     }
@@ -511,7 +803,7 @@
 
   // Fallback for library config list
   if (typeof window.showLibraryConfigListV2 !== 'function') {
-    window.showLibraryConfigListV2 = async function(){
+    window.showLibraryConfigListV2 = async function () {
       var configs = [];
       try {
         configs = (window.storage && storage.get) ? await storage.get('exam_index_configurations', []) : [];
@@ -531,7 +823,7 @@
         if (window.storage && storage.get) {
           activeKey = await storage.get('active_exam_index_key', 'exam_index');
         }
-      } catch (e) {}
+      } catch (e) { }
 
       if (typeof window.renderLibraryConfigList === 'function') {
         window.renderLibraryConfigList({ configs: configs, activeKey: activeKey, allowDelete: true });
@@ -564,7 +856,7 @@
 
       var list = document.createElement('div');
       list.className = 'library-config-panel__list';
-      configs.forEach(function(cfg){
+      configs.forEach(function (cfg) {
         if (!cfg) return;
         var item = document.createElement('div');
         item.className = 'library-config-panel__item' + (cfg.key === activeKey ? ' library-config-panel__item--active' : '');
@@ -624,7 +916,7 @@
       panel.appendChild(footer);
 
       host.appendChild(panel);
-      host.onclick = function(event){
+      host.onclick = function (event) {
         var target = event.target && event.target.closest('[data-config-action]');
         if (!target || !host.contains(target)) return;
         var action = target.dataset.configAction;
@@ -639,9 +931,9 @@
     };
   }
 
-  // Fallback improved loader modal (only if missing)
-  if (typeof window.showLibraryLoaderModal !== 'function') {
-    window.showLibraryLoaderModal = function(){
+  // Fallback improved loader modal (only if missing or still lazy proxy)
+  if (typeof window.showLibraryLoaderModal !== 'function' || _isLazyProxy(window.showLibraryLoaderModal)) {
+    window.showLibraryLoaderModal = function () {
       if (typeof document === 'undefined') {
         return;
       }
@@ -652,11 +944,11 @@
       }
 
       var create = _fallbackCreateElement;
-      var ensureArray = function(value) {
+      var ensureArray = function (value) {
         return Array.isArray(value) ? value : [value];
       };
 
-      var createLoaderCard = function(type, title, description, hint) {
+      var createLoaderCard = function (type, title, description, hint) {
         var prefix = type === 'reading' ? 'reading' : 'listening';
         return create('div', {
           className: 'library-loader-card library-loader-card--' + type
@@ -734,7 +1026,7 @@
 
       var body = create('div', { className: 'modal-body library-loader-body' }, [
         create('div', { className: 'library-loader-grid' }, [
-          createLoaderCard('reading', '📖 阅读题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF的根文件夹。', '💡 建议路径：.../3. 所有文章(9.4)[134篇]/...'),
+          createLoaderCard('reading', '📖 阅读题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF的根文件夹。', '💡 推荐结构：任意根目录/分类目录/题目目录/HTML 或 PDF'),
           createLoaderCard('listening', '🎧 听力题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF/音频的根文件夹。', '💡 建议路径：ListeningPractice/P3 或 ListeningPractice/P4')
         ]),
         create('div', { className: 'library-loader-instructions' }, [
@@ -755,7 +1047,7 @@
         }, '关闭')
       ]);
 
-      ensureArray([header, body, footer]).forEach(function(section) {
+      ensureArray([header, body, footer]).forEach(function (section) {
         if (section) {
           modal.appendChild(section);
         }
@@ -766,7 +1058,7 @@
         document.body.appendChild(overlay);
       }
 
-      var clickHandler = function(event) {
+      var clickHandler = function (event) {
         var target = event.target && event.target.closest ? event.target.closest('[data-library-action]') : null;
         if (!target || !overlay.contains(target)) {
           return;
@@ -792,7 +1084,7 @@
         }
       };
 
-      var changeHandler = function(event) {
+      var changeHandler = function (event) {
         var input = event.target && event.target.closest ? event.target.closest('.library-loader-input') : null;
         if (!input || !overlay.contains(input)) {
           return;
@@ -824,9 +1116,9 @@
           console.error('[Fallback] 处理题库上传失败:', error);
         }
 
-        Promise.resolve(upload).then(function() {
+        Promise.resolve(upload).then(function () {
           cleanup();
-        }).catch(function(error) {
+        }).catch(function (error) {
           console.error('[Fallback] 题库上传流程出错:', error);
           cleanup();
         });
@@ -842,6 +1134,347 @@
 
       overlay.addEventListener('click', clickHandler);
       overlay.addEventListener('change', changeHandler);
+    };
+  }
+
+  if (typeof window.handleLibraryUpload !== 'function') {
+    var _cachedDefaultReading = null;
+    var _cachedDefaultListening = null;
+
+    async function _fallbackGetActiveLibraryKey() {
+      if (typeof window.getActiveLibraryConfigurationKey === 'function') {
+        try { return await window.getActiveLibraryConfigurationKey(); } catch (_) { }
+      }
+      if (storage && storage.get) {
+        try {
+          var maybeKey = storage.get('active_exam_index_key', 'exam_index');
+          var key = (maybeKey && typeof maybeKey.then === 'function') ? await maybeKey : maybeKey;
+          return key || 'exam_index';
+        } catch (_) { }
+      }
+      return 'exam_index';
+    }
+
+    async function _fallbackSetActiveLibraryKey(key) {
+      if (!key) return;
+      if (typeof window.setActiveLibraryConfiguration === 'function') {
+        try { await window.setActiveLibraryConfiguration(key); return; } catch (_) { }
+      }
+      if (storage && storage.set) {
+        try {
+          var maybe = storage.set('active_exam_index_key', key);
+          if (maybe && typeof maybe.then === 'function') await maybe;
+        } catch (err) {
+          console.warn('[Fallback] 无法写入 active_exam_index_key:', err);
+        }
+      }
+    }
+
+    async function _fallbackSaveLibraryConfiguration(name, key, count) {
+      var entry = { name: name, key: key, examCount: count, timestamp: Date.now() };
+      if (typeof window.saveLibraryConfiguration === 'function') {
+        try { await window.saveLibraryConfiguration(name, key, count); return; } catch (_) { }
+      }
+      if (storage && storage.get && storage.set) {
+        try {
+          var existing = storage.get('exam_index_configurations', []);
+          existing = (existing && typeof existing.then === 'function') ? await existing : existing;
+          if (!Array.isArray(existing)) existing = [];
+          var idx = existing.findIndex(function (c) { return c && c.key === key; });
+          if (idx >= 0) { existing[idx] = entry; } else { existing.push(entry); }
+          var maybeSave = storage.set('exam_index_configurations', existing);
+          if (maybeSave && typeof maybeSave.then === 'function') await maybeSave;
+        } catch (err) {
+          console.warn('[Fallback] 保存题库配置失败:', err);
+        }
+      }
+    }
+
+    async function _fallbackSaveIndexForKey(key, list) {
+      if (storage && storage.set) {
+        var maybe = storage.set(key, list);
+        if (maybe && typeof maybe.then === 'function') {
+          await maybe;
+        }
+      } else {
+        try { window[key] = list; } catch (_) { }
+      }
+    }
+
+    async function _fallbackApplyLibraryConfig(key, dataset, options) {
+      if (typeof window.applyLibraryConfiguration === 'function') {
+        try { return await window.applyLibraryConfiguration(key, dataset, options || {}); } catch (_) { }
+      }
+      // fallback:直接刷新内存状态与UI
+      if (typeof window.setExamIndexState === 'function') {
+        try { window.setExamIndexState(dataset); } catch (_) { }
+      } else {
+        try { window.examIndex = Array.isArray(dataset) ? dataset.slice() : []; } catch (_) { }
+      }
+      if (options && options.setActive) {
+        await _fallbackSetActiveLibraryKey(key);
+      }
+      try { if (typeof window.updateOverview === 'function') window.updateOverview(); } catch (_) { }
+      try {
+        if (typeof window.loadExamList === 'function') {
+          window.loadExamList();
+        }
+      } catch (_) { }
+      return true;
+    }
+
+    function _fallbackDetectFolderPlacement(files, type) {
+      var paths = files
+        .map(function (f) { return (f && (f.webkitRelativePath || f.name) || '').replace(/\\/g, '/'); })
+        .filter(Boolean);
+      if (!paths.length) {
+        return false;
+      }
+
+      var hasQuestionFile = files.some(function (file) {
+        var name = file && file.name ? String(file.name).toLowerCase() : '';
+        return /\.html?$/.test(name) || /\.pdf$/.test(name);
+      });
+      if (!hasQuestionFile) {
+        return false;
+      }
+
+      if (type === 'reading') {
+        // Reading 目录命名不应被硬编码限制，只要包含可识别题目文件即视为有效。
+        return true;
+      }
+
+      // Listening 推荐包含 P3/P4，但不再强依赖固定父目录名（例如 ListeningPractice）。
+      return paths.some(function (p) { return /(^|\/)(P3|P4)(\/|$)/i.test(p); }) || hasQuestionFile;
+    }
+
+    async function _fallbackBuildIndexFromFiles(files, type, label) {
+      var byDir = new Map();
+
+      function normalizeUploadDir(rawDir) {
+        return String(rawDir || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+      }
+
+      function normalizeListeningDir(rawDir) {
+        var normalized = normalizeUploadDir(rawDir);
+        if (!normalized) return '';
+
+        var segments = normalized.split('/').filter(Boolean);
+        if (!segments.length) return normalized;
+
+        // Prefer stable semantic anchors from the scanned folder tree.
+        var anchorPatterns = [
+          /^listeningpractice$/i,
+          /^p[1-4]$/i,
+          /^vip$/i
+        ];
+        var anchorIndex = -1;
+        for (var i = 0; i < segments.length; i++) {
+          if (anchorPatterns.some(function (re) { return re.test(segments[i]); })) {
+            anchorIndex = i;
+            break;
+          }
+        }
+        if (anchorIndex >= 0) {
+          return segments.slice(anchorIndex).join('/');
+        }
+        return normalized;
+      }
+
+      files.forEach(function (f) {
+        var rel = (f.webkitRelativePath || f.name || '').replace(/\\/g, '/');
+        var parts = rel.split('/');
+        if (parts.length < 2) return;
+        var dir = parts.slice(0, parts.length - 1).join('/');
+        if (!byDir.has(dir)) byDir.set(dir, []);
+        byDir.get(dir).push(f);
+      });
+
+      var entries = [];
+      var idx = 0;
+      byDir.forEach(function (fs, dir) {
+        var html = fs.find(function (x) { return x.name.toLowerCase().endsWith('.html'); });
+        var pdf = fs.find(function (x) { return x.name.toLowerCase().endsWith('.pdf'); });
+        if (!html && !pdf) return;
+        var dirName = dir.split('/').pop();
+        var title = dirName.replace(/^\d+\.\s*/, '');
+        var category = 'P1';
+        var m = dir.match(/\b(P1|P2|P3|P4)\b/);
+        if (m) category = m[1];
+        var normalizedDir = type === 'listening'
+          ? normalizeListeningDir(dir)
+          : normalizeUploadDir(dir);
+        if (!normalizedDir) return;
+        var basePath = normalizedDir + '/';
+        var id = 'custom_' + type + '_' + Date.now() + '_' + (idx++);
+        entries.push({
+          id: id,
+          title: label ? '[' + label + '] ' + title : title,
+          category: category,
+          type: type,
+          path: basePath,
+          filename: html ? html.name : undefined,
+          pdfFilename: pdf ? pdf.name : undefined,
+          hasHtml: !!html
+        });
+      });
+      return entries;
+    }
+
+    async function _fallbackResolveDefault(type) {
+      if (type === 'reading' && Array.isArray(_cachedDefaultReading)) {
+        return _cachedDefaultReading;
+      }
+      if (type === 'listening' && Array.isArray(_cachedDefaultListening)) {
+        return _cachedDefaultListening;
+      }
+      var data = [];
+      if (type === 'reading' && Array.isArray(window.completeExamIndex)) {
+        data = window.completeExamIndex.map(function (e) { return Object.assign({}, e, { type: 'reading' }); });
+        _cachedDefaultReading = data.slice();
+      }
+      if (type === 'listening' && Array.isArray(window.listeningExamIndex)) {
+        data = window.listeningExamIndex.map(function (e) { return Object.assign({}, e, { type: 'listening' }); });
+        _cachedDefaultListening = data.slice();
+      }
+      return data;
+    }
+
+    window.handleLibraryUpload = async function (options, files) {
+      var type = options && options.type;
+      var mode = options && options.mode === 'incremental' ? 'incremental' : 'full';
+      if (type !== 'reading' && type !== 'listening') {
+        window.showMessage && window.showMessage('未知的题库类型', 'error');
+        return;
+      }
+      if (!Array.isArray(files) || files.length === 0) {
+        window.showMessage && window.showMessage('请选择包含题目的文件夹', 'warning');
+        return;
+      }
+
+      var label = '';
+      if (mode === 'incremental') {
+        try {
+          label = prompt('为此次增量更新输入一个文件夹标签', '增量-' + new Date().toISOString().slice(0, 10)) || '';
+        } catch (_) { }
+        if (label) {
+          window.showMessage && window.showMessage('使用标签: ' + label, 'info');
+        }
+        if (!_fallbackDetectFolderPlacement(files, type)) {
+          var proceed = typeof confirm === 'function'
+            ? confirm('检测到文件夹结构与推荐示例不一致。\n阅读: 任意根目录/分类目录/题目目录\n听力: 任意根目录下包含 P3 或 P4 子目录\n是否继续?')
+            : true;
+          if (!proceed) return;
+        }
+      }
+
+      window.showMessage && window.showMessage('正在解析文件并构建索引...', 'info');
+      var additions = await _fallbackBuildIndexFromFiles(files, type, label);
+      if (!Array.isArray(additions) || additions.length === 0) {
+        window.showMessage && window.showMessage('从所选文件中未检测到任何题目', 'warning');
+        return;
+      }
+
+      var activeKey = await _fallbackGetActiveLibraryKey();
+      var currentIndex = (typeof window.getExamIndexState === 'function')
+        ? window.getExamIndexState()
+        : (Array.isArray(window.examIndex) ? window.examIndex : []);
+      if (storage && storage.get) {
+        try {
+          var maybeCurrent = storage.get(activeKey, currentIndex);
+          currentIndex = (maybeCurrent && typeof maybeCurrent.then === 'function') ? await maybeCurrent : maybeCurrent;
+        } catch (_) { }
+      }
+      if (!Array.isArray(currentIndex)) currentIndex = [];
+
+      var newIndex;
+      if (mode === 'full') {
+        var others = currentIndex.filter(function (e) { return e && e.type !== type; });
+        newIndex = others.concat(additions);
+        var otherType = type === 'reading' ? 'listening' : 'reading';
+        if (!newIndex.some(function (e) { return e && e.type === otherType; })) {
+          var fallbackOthers = await _fallbackResolveDefault(otherType);
+          newIndex = newIndex.concat(Array.isArray(fallbackOthers) ? fallbackOthers : []);
+        }
+      } else {
+        var existingKeys = new Set(currentIndex.map(function (e) { return (e.path || '') + '|' + (e.filename || '') + '|' + e.title; }));
+        var dedupAdd = additions.filter(function (e) { return !existingKeys.has((e.path || '') + '|' + (e.filename || '') + '|' + e.title); });
+        newIndex = currentIndex.concat(dedupAdd);
+      }
+      if (typeof window.assignExamSequenceNumbers === 'function') {
+        try { window.assignExamSequenceNumbers(newIndex); } catch (_) { }
+      }
+
+      if (mode === 'full') {
+        var targetKey = 'exam_index_' + Date.now();
+        var configName = (type === 'reading' ? '阅读' : '听力') + '全量-' + new Date().toLocaleString();
+        await _fallbackSaveIndexForKey(targetKey, newIndex);
+        var fullPathFallback = (typeof window.loadPathMapForConfiguration === 'function')
+          ? await window.loadPathMapForConfiguration(targetKey)
+          : null;
+        var fullDerivedMap = (typeof window.derivePathMapFromIndex === 'function')
+          ? window.derivePathMapFromIndex(newIndex, fullPathFallback)
+          : fullPathFallback;
+        if (typeof window.savePathMapForConfiguration === 'function') {
+          await window.savePathMapForConfiguration(targetKey, newIndex, { overrideMap: fullDerivedMap, setActive: true });
+        }
+        await _fallbackSaveLibraryConfiguration(configName, targetKey, newIndex.length);
+        await _fallbackSetActiveLibraryKey(targetKey);
+        try {
+          await _fallbackApplyLibraryConfig(targetKey, newIndex, { setActive: true, skipConfigRefresh: false });
+          window.showMessage && window.showMessage('新的题库配置已创建并激活', 'success');
+        } catch (applyErr) {
+          console.warn('[Fallback] 应用新题库失败，尝试刷新页面', applyErr);
+          window.showMessage && window.showMessage('新的题库已保存，正在刷新界面...', 'warning');
+          setTimeout(function () { try { location.reload(); } catch (_) { } }, 500);
+        }
+        return;
+      }
+
+      var isDefault = activeKey === 'exam_index';
+      var targetKeyInc = activeKey;
+      var configNameInc = '';
+      if (isDefault) {
+        targetKeyInc = 'exam_index_' + Date.now();
+        configNameInc = (type === 'reading' ? '阅读' : '听力') + '增量-' + new Date().toLocaleString();
+        await _fallbackSaveIndexForKey(targetKeyInc, newIndex);
+        var incFallback = (typeof window.loadPathMapForConfiguration === 'function')
+          ? await window.loadPathMapForConfiguration(targetKeyInc)
+          : null;
+        var derivedMap = (typeof window.derivePathMapFromIndex === 'function')
+          ? window.derivePathMapFromIndex(newIndex, incFallback)
+          : incFallback;
+        if (typeof window.savePathMapForConfiguration === 'function') {
+          await window.savePathMapForConfiguration(targetKeyInc, newIndex, { overrideMap: derivedMap, setActive: true });
+        }
+        await _fallbackSaveLibraryConfiguration(configNameInc, targetKeyInc, newIndex.length);
+        await _fallbackSetActiveLibraryKey(targetKeyInc);
+        window.showMessage && window.showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
+        setTimeout(function () { try { location.reload(); } catch (_) { } }, 800);
+        return;
+      }
+
+      await _fallbackSaveIndexForKey(targetKeyInc, newIndex);
+      var targetPathFallback = (typeof window.loadPathMapForConfiguration === 'function')
+        ? await window.loadPathMapForConfiguration(targetKeyInc)
+        : null;
+      var incrementalMap = (typeof window.derivePathMapFromIndex === 'function')
+        ? window.derivePathMapFromIndex(newIndex, targetPathFallback)
+        : targetPathFallback;
+      if (typeof window.savePathMapForConfiguration === 'function') {
+        await window.savePathMapForConfiguration(targetKeyInc, newIndex, { overrideMap: incrementalMap, setActive: true });
+      }
+      await _fallbackSaveLibraryConfiguration((type === 'reading' ? '阅读' : '听力') + '增量-' + new Date().toLocaleString(), targetKeyInc, newIndex.length);
+      if (typeof window.setExamIndexState === 'function') {
+        window.setExamIndexState(newIndex);
+      } else {
+        try { window.examIndex = Array.isArray(newIndex) ? newIndex.slice() : []; } catch (_) { }
+      }
+      try { if (typeof window.updateOverview === 'function') window.updateOverview(); } catch (_) { }
+      if (document.getElementById('browse-view') && document.getElementById('browse-view').classList.contains('active') && typeof window.loadExamList === 'function') {
+        try { window.loadExamList(); } catch (_) { }
+      }
+      window.showMessage && window.showMessage('索引已更新；正在刷新界面...', 'success');
     };
   }
 

@@ -8,6 +8,20 @@
         return Array.isArray(value) ? value : [];
     }
 
+    function normalizeTypeValue(value) {
+        if (!value) {
+            return '';
+        }
+        var normalized = String(value).toLowerCase();
+        if (normalized.indexOf('read') !== -1 || normalized.indexOf('阅读') !== -1) {
+            return 'reading';
+        }
+        if (normalized.indexOf('listen') !== -1 || normalized.indexOf('听力') !== -1) {
+            return 'listening';
+        }
+        return normalized;
+    }
+
     function toDateKey(value) {
         if (!value) {
             return null;
@@ -17,6 +31,99 @@
             return null;
         }
         return date.toISOString().slice(0, 10);
+    }
+
+    function getRecordTimestamp(record) {
+        if (!record || typeof record !== 'object') {
+            return 0;
+        }
+        var candidates = [
+            record.date, record.endTime, record.timestamp, record.createdAt, record.updatedAt,
+            record.completedAt
+        ];
+        var rd = record.realData || {};
+        candidates.push(rd.date, rd.endTime, rd.timestamp);
+
+        var maxTs = 0;
+        for (var i = 0; i < candidates.length; i += 1) {
+            var candidate = candidates[i];
+            if (candidate == null) {
+                continue;
+            }
+            var parsed = new Date(candidate).getTime();
+            if (!isNaN(parsed) && parsed > maxTs) {
+                maxTs = parsed;
+                continue;
+            }
+            if (typeof candidate === 'number' && isFinite(candidate) && candidate > maxTs) {
+                maxTs = candidate;
+            }
+        }
+        return maxTs;
+    }
+
+    function normalizePathValue(path) {
+        if (!path) {
+            return '';
+        }
+        var normalized = String(path).replace(/\\/g, '/').trim().toLowerCase();
+        normalized = normalized.replace(/^\.?\//, '');
+        return normalized;
+    }
+
+    function getPathTail(path) {
+        var normalized = normalizePathValue(path);
+        var parts = normalized.split('/').filter(Boolean);
+        if (!parts.length) {
+            return '';
+        }
+        if (parts.length === 1) {
+            return parts[0];
+        }
+        return parts.slice(-2).join('/');
+    }
+
+    function recordMatchesExam(exam, record) {
+        if (!exam || !record) {
+            return false;
+        }
+        if (exam.id && record.examId && exam.id === record.examId) {
+            return true;
+        }
+        var examTitle = exam.title || '';
+        var recordTitle = record.title || record.examTitle || '';
+        if (examTitle && recordTitle && examTitle === recordTitle) {
+            return true;
+        }
+        var examPath = normalizePathValue(exam.path || exam.resourcePath || exam.basePath);
+        var recordPath = normalizePathValue(
+            record.path ||
+            record.examPath ||
+            record.resourcePath ||
+            (record.realData && (record.realData.path || record.realData.examPath))
+        );
+        if (examPath && recordPath) {
+            if (examPath === recordPath) {
+                return true;
+            }
+            if (recordPath.endsWith('/' + examPath) || examPath.endsWith('/' + recordPath)) {
+                return true;
+            }
+            var examTail = getPathTail(examPath);
+            var recordTail = getPathTail(recordPath);
+            if (examTail && recordTail && (examTail === recordTail || examTail.endsWith(recordTail) || recordTail.endsWith(examTail))) {
+                return true;
+            }
+        }
+        var examFile = (exam.filename || exam.pdfFilename || '').toLowerCase();
+        var recordFile = (record.filename || record.examFile || record.examFilename || '').toLowerCase();
+        if (!recordFile && record.realData) {
+            recordFile = (record.realData.filename || record.realData.examFile || record.realData.pdfFilename || '').toLowerCase();
+        }
+        if (examFile && recordFile && examFile === recordFile) {
+            return true;
+        }
+        return false;
     }
 
     function calculateStreak(uniqueDateKeys) {
@@ -97,12 +204,30 @@
         if (!type || type === 'all') {
             return ensureArray(records);
         }
+        var targetType = normalizeTypeValue(type);
         var index = ensureArray(exams);
         return ensureArray(records).filter(function (record) {
+            if (!record) {
+                return false;
+            }
             var exam = index.find(function (item) {
                 return item && (item.id === record.examId || item.title === record.title);
             });
-            return exam ? exam.type === type : false;
+            var examType = exam ? normalizeTypeValue(exam.type) : '';
+            if (examType) {
+                return examType === targetType;
+            }
+            var recordType = normalizeTypeValue(
+                record.type ||
+                record.examType ||
+                (record.metadata && record.metadata.type) ||
+                (record.realData && record.realData.type)
+            );
+            if (recordType) {
+                return recordType === targetType;
+            }
+            // 无法确定类型时保持展示，避免题库切换导致历史记录被过滤掉
+            return true;
         });
     }
 
@@ -164,7 +289,7 @@
     // --- Practice history renderer ---
     var historyRenderer = { helpers: {} };
 
-    historyRenderer.helpers.getScoreColor = function(percentage) {
+    historyRenderer.helpers.getScoreColor = function (percentage) {
         var pct = Number(percentage) || 0;
         if (pct >= 90) return '#10b981';
         if (pct >= 75) return '#f59e0b';
@@ -172,7 +297,7 @@
         return '#ef4444';
     };
 
-    historyRenderer.helpers.formatDurationShort = function(seconds) {
+    historyRenderer.helpers.formatDurationShort = function (seconds) {
         var s = Math.max(0, Math.floor(Number(seconds) || 0));
         if (s < 60) return s + '秒';
         var m = Math.floor(s / 60);
@@ -182,7 +307,7 @@
         return h + '小时' + mm + '分钟';
     };
 
-    historyRenderer.helpers.getDurationColor = function(seconds) {
+    historyRenderer.helpers.getDurationColor = function (seconds) {
         var minutes = (Number(seconds) || 0) / 60;
         if (minutes < 20) return '#10b981';
         if (minutes < 23) return '#f59e0b';
@@ -191,13 +316,63 @@
         return '#dc2626';
     };
 
+    historyRenderer.helpers.createGridLayoutCalculator = function (options) {
+        options = options || {};
+        var baseHeight = Number(options.itemHeight) || 120;
+        var desktopGap = options.desktopGap != null ? Number(options.desktopGap) : 16;
+        var mobileGap = options.mobileGap != null ? Number(options.mobileGap) : 12;
+
+        return function (context) {
+            context = context || {};
+            var items = Array.isArray(context.items) ? context.items : [];
+            var container = context.container;
+            var containerWidth = container && container.clientWidth ? container.clientWidth : 0;
+            var isMobile = false;
+            if (typeof window !== 'undefined' && typeof window.innerWidth === 'number') {
+                isMobile = window.innerWidth <= 768;
+            }
+            if (!isMobile && containerWidth > 0) {
+                isMobile = containerWidth <= 768;
+            }
+
+            var itemsPerRow = isMobile ? 1 : 2;
+            var gap = isMobile ? mobileGap : desktopGap;
+            var rowStride = baseHeight + gap;
+            var totalRows = itemsPerRow > 0 ? Math.ceil(items.length / itemsPerRow) : 0;
+            var totalHeight = totalRows > 0 ? (totalRows * rowStride - gap) : 0;
+
+            return {
+                itemsPerRow: itemsPerRow,
+                rowHeight: rowStride,
+                gap: gap,
+                totalRows: totalRows,
+                totalHeight: totalHeight,
+                positionFor: function (index) {
+                    var row = Math.floor(index / itemsPerRow);
+                    var col = index % itemsPerRow;
+                    var top = row * rowStride;
+                    if (itemsPerRow === 1) {
+                        return { top: top, left: 0, width: '100%', height: baseHeight };
+                    }
+                    var halfGap = gap / 2;
+                    return {
+                        top: top,
+                        left: col === 0 ? 0 : 'calc(50% + ' + halfGap + 'px)',
+                        width: 'calc(50% - ' + halfGap + 'px)',
+                        height: baseHeight
+                    };
+                }
+            };
+        };
+    };
+
     function createNode(tag, attributes, children) {
         if (domAdapter && typeof domAdapter.create === 'function') {
             return domAdapter.create(tag, attributes, children);
         }
         var element = document.createElement(tag);
         var attrs = attributes || {};
-        Object.keys(attrs).forEach(function(key) {
+        Object.keys(attrs).forEach(function (key) {
             var value = attrs[key];
             if (value == null) return;
             if (key === 'className') {
@@ -205,7 +380,7 @@
                 return;
             }
             if (key === 'dataset' && typeof value === 'object') {
-                Object.keys(value).forEach(function(dataKey) {
+                Object.keys(value).forEach(function (dataKey) {
                     var dataValue = value[dataKey];
                     if (dataValue != null) {
                         element.dataset[dataKey] = String(dataValue);
@@ -221,7 +396,7 @@
         });
 
         var list = Array.isArray(children) ? children : [children];
-        list.forEach(function(child) {
+        list.forEach(function (child) {
             if (child == null) return;
             if (typeof child === 'string') {
                 element.appendChild(document.createTextNode(child));
@@ -242,7 +417,7 @@
             container.removeChild(container.firstChild);
         }
         var nodes = Array.isArray(content) ? content : [content];
-        nodes.forEach(function(node) {
+        nodes.forEach(function (node) {
             if (!node) return;
             if (typeof node === 'string') {
                 container.appendChild(document.createTextNode(node));
@@ -252,38 +427,63 @@
         });
     }
 
-    historyRenderer.createRecordNode = function(record, options) {
+    historyRenderer.createRecordNode = function (record, options) {
         options = options || {};
         var bulkDeleteMode = Boolean(options.bulkDeleteMode);
-        var selectedRecords = options.selectedRecords || new Set();
+        var selectedRecordsInput = options.selectedRecords;
+        var selectedRecords = new Set();
+        if (selectedRecordsInput && typeof selectedRecordsInput.forEach === 'function') {
+            selectedRecordsInput.forEach(function (value) {
+                if (value == null) return;
+                selectedRecords.add(String(value));
+            });
+        }
         var helpers = historyRenderer.helpers;
         var durationInSeconds = Number(record && record.duration) || 0;
         var percentage = typeof record.percentage === 'number'
             ? record.percentage
             : Math.round((record.accuracy || 0) * 100);
 
-        var recordId = record && record.id != null ? String(record.id) : '';
+        var recordId = '';
+        if (record && record.id != null) {
+            recordId = String(record.id);
+        } else if (record && record.sessionId != null) {
+            recordId = String(record.sessionId);
+        } else if (record && record.realData && record.realData.sessionId != null) {
+            recordId = String(record.realData.sessionId);
+        } else if (record && record.timestamp != null) {
+            recordId = String(record.timestamp);
+        } else if (record && record.realData && record.realData.timestamp != null) {
+            recordId = String(record.realData.timestamp);
+        }
 
         var item = createNode('div', {
             className: 'history-item history-record-item',
             dataset: { recordId: recordId }
         });
 
+        var isSelected = recordId && selectedRecords.has(recordId);
         var selection = createNode('div', {
             className: 'record-selection' + (bulkDeleteMode ? '' : ' record-selection-hidden')
         }, [
             createNode('input', {
                 type: 'checkbox',
-                checked: selectedRecords.has(recordId) ? '' : null,
+                checked: isSelected ? 'checked' : null,
                 dataset: { recordId: recordId },
                 tabindex: bulkDeleteMode ? '0' : '-1',
                 'aria-label': '选择练习记录'
             })
         ]);
+        var checkboxNode = selection && selection.querySelector ? selection.querySelector('input[type="checkbox"]') : null;
+        if (checkboxNode) {
+            checkboxNode.checked = !!isSelected;
+            checkboxNode.defaultChecked = !!isSelected;
+            checkboxNode.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+        }
 
         if (bulkDeleteMode) {
             item.classList.add('history-item-selectable');
-            if (recordId && selectedRecords.has(recordId)) {
+            if (isSelected) {
                 item.classList.add('history-item-selected');
             }
         }
@@ -337,7 +537,7 @@
         return item;
     };
 
-    historyRenderer.renderEmptyState = function(container) {
+    historyRenderer.renderEmptyState = function (container) {
         if (!container) return;
         replaceContent(container, createNode('div', { className: 'practice-history-empty' }, [
             createNode('div', { className: 'practice-history-empty-icon' }, '📂'),
@@ -345,7 +545,7 @@
         ]));
     };
 
-    historyRenderer.renderList = function(container, records, options) {
+    historyRenderer.renderList = function (container, records, options) {
         options = options || {};
         if (!container) return null;
         var list = Array.isArray(records) ? records : [];
@@ -356,15 +556,81 @@
 
         var itemFactory = typeof options.itemFactory === 'function'
             ? options.itemFactory
-            : function(record) {
+            : function (record) {
                 return historyRenderer.createRecordNode(record, options);
             };
 
-        if (global.VirtualScroller && options.scrollerOptions !== false) {
-            var scrollerOpts = Object.assign({ itemHeight: 100, containerHeight: 650 }, options.scrollerOptions || {});
-            replaceContent(container, []);
-            return new global.VirtualScroller(container, list, itemFactory, scrollerOpts);
+        function measureMaxItemHeight(list) {
+            if (!container || !itemFactory || !Array.isArray(list) || list.length === 0) return null;
+            var containerWidth = container.clientWidth || container.offsetWidth || 0;
+            var isMobile = false;
+            if (typeof window !== 'undefined' && typeof window.innerWidth === 'number') {
+                isMobile = window.innerWidth <= 768;
+            }
+            if (!isMobile && containerWidth > 0) {
+                isMobile = containerWidth <= 768;
+            }
+            var gapPx = isMobile ? 12 : 16;
+            var targetWidth = 0;
+            if (containerWidth > 0) {
+                targetWidth = isMobile ? containerWidth : Math.max(0, (containerWidth - gapPx) / 2);
+            }
+
+            var wrapper = document.createElement('div');
+            wrapper.style.position = 'absolute';
+            wrapper.style.visibility = 'hidden';
+            wrapper.style.pointerEvents = 'none';
+            wrapper.style.width = '100%';
+            container.appendChild(wrapper);
+
+            var maxHeight = 0;
+            var samples = Math.min(list.length, 30);
+            for (var i = 0; i < samples; i += 1) {
+                var node = itemFactory(list[i], i);
+                if (!node || !(node instanceof Node)) continue;
+                node.style.position = 'relative';
+                node.style.width = targetWidth > 0 ? (targetWidth + 'px') : '100%';
+                wrapper.appendChild(node);
+                var h = node.offsetHeight || node.clientHeight || 0;
+                if (h > maxHeight) {
+                    maxHeight = h;
+                }
+                node.remove();
+            }
+            wrapper.remove();
+            return maxHeight > 0 ? maxHeight : null;
         }
+
+        var useVirtualScroller = global.VirtualScroller && options.scrollerOptions !== false;
+        if (useVirtualScroller) {
+            var scrollerOpts = Object.assign(
+                { itemHeight: 120, containerHeight: 650, bufferSize: 4 },
+                options.scrollerOptions || {}
+            );
+            var measuredHeight = measureMaxItemHeight(list);
+            if (measuredHeight && measuredHeight > 0) {
+                scrollerOpts.itemHeight = measuredHeight + 8; // 留出安全空间避免文字溢出
+            }
+            scrollerOpts.layoutCalculator = historyRenderer.helpers.createGridLayoutCalculator(scrollerOpts);
+            var scrollerFactory = (global.performanceOptimizer && typeof global.performanceOptimizer.createVirtualScroller === 'function')
+                ? global.performanceOptimizer.createVirtualScroller.bind(global.performanceOptimizer)
+                : function (c, items, renderer, opts) {
+                    return new global.VirtualScroller(c, items, renderer, opts);
+                };
+
+            if (options.scroller && typeof options.scroller.updateItems === 'function') {
+                options.scroller.renderer = itemFactory;
+                options.scroller.layoutCalculator = scrollerOpts.layoutCalculator;
+                options.scroller.updateItems(list);
+                if (typeof options.scroller.recalculate === 'function') {
+                    options.scroller.recalculate();
+                }
+                return options.scroller;
+            }
+            return scrollerFactory(container, list, itemFactory, scrollerOpts);
+        }
+
+        historyRenderer.destroyScroller(options.scroller);
 
         if (domAdapter && typeof domAdapter.fragment === 'function') {
             domAdapter.replaceContent(container, domAdapter.fragment(list, itemFactory));
@@ -374,7 +640,101 @@
         return null;
     };
 
-    historyRenderer.destroyScroller = function(scroller) {
+    historyRenderer.helpers.getRecordTimestampSafe = function (record) {
+        if (!record || typeof record !== 'object') {
+            return 0;
+        }
+        var candidates = [
+            record.date, record.endTime, record.timestamp, record.createdAt, record.updatedAt, record.completedAt
+        ];
+        var rd = record.realData || {};
+        candidates.push(rd.date, rd.endTime, rd.timestamp);
+        var maxTs = 0;
+        for (var i = 0; i < candidates.length; i += 1) {
+            var candidate = candidates[i];
+            if (candidate == null) continue;
+            var parsed = new Date(candidate).getTime();
+            if (!isNaN(parsed) && parsed > maxTs) {
+                maxTs = parsed;
+                continue;
+            }
+            if (typeof candidate === 'number' && isFinite(candidate) && candidate > maxTs) {
+                maxTs = candidate;
+            }
+        }
+        return maxTs;
+    };
+
+    historyRenderer.helpers.computeRecordsSignature = function (records) {
+        var list = Array.isArray(records) ? records : [];
+        var tokens = list.map(function (record, index) {
+            var id = record && record.id != null ? record.id : ('idx' + index);
+            var ts = historyRenderer.helpers.getRecordTimestampSafe(record);
+            var pct = Number(record && record.percentage) || 0;
+            var dur = Number(record && record.duration) || 0;
+            return id + ':' + ts + ':' + pct + ':' + dur;
+        });
+        return list.length + '|' + tokens.join(';');
+    };
+
+    /**
+     * 渲染练习历史列表（简化版，不使用VirtualScroller以支持Grid布局）
+     */
+    historyRenderer.renderWithState = function (container, records, options) {
+        options = options || {};
+        if (!container) return null;
+
+        var list = Array.isArray(records) ? records : [];
+
+        if (list.length === 0) {
+            historyRenderer.destroyScroller(options.scroller);
+            historyRenderer.renderEmptyState(container);
+            return null;
+        }
+
+        var scrollerOptions = options.scrollerOptions;
+        if (scrollerOptions === undefined) {
+            scrollerOptions = { itemHeight: 120, containerHeight: 650 };
+        }
+
+        return historyRenderer.renderList(container, list, {
+            bulkDeleteMode: options.bulkDeleteMode,
+            selectedRecords: options.selectedRecords,
+            scrollerOptions: scrollerOptions,
+            itemFactory: options.itemFactory,
+            scroller: options.scroller
+        });
+    };
+
+    /**
+     * 高阶封装：渲染练习历史视图并返回最新 scroller。
+     */
+    historyRenderer.renderView = function (params) {
+        params = params || {};
+        var container = params.container;
+        if (!container) {
+            return { scroller: null };
+        }
+        var list = Array.isArray(params.records) ? params.records : [];
+        var itemFactory = typeof params.itemFactory === 'function'
+            ? params.itemFactory
+            : function (record) {
+                return historyRenderer.createRecordNode(record, {
+                    bulkDeleteMode: params.bulkDeleteMode,
+                    selectedRecords: params.selectedRecords
+                });
+            };
+        var scroller = historyRenderer.renderWithState(container, list, {
+            bulkDeleteMode: params.bulkDeleteMode,
+            selectedRecords: params.selectedRecords,
+            scrollerOptions: params.scrollerOptions,
+            itemFactory: itemFactory,
+            scroller: params.scroller
+        });
+        return { scroller: scroller };
+    };
+
+    historyRenderer.destroyScroller = function (scroller) {
         if (!scroller) return;
         if (typeof scroller.destroy === 'function') {
             try {
@@ -472,10 +832,30 @@
         }
 
         var status = this._getCompletionStatus(exam);
+        var selectionMode = options && options.selectionMode ? String(options.selectionMode) : '';
+        var draft = options && options.customSuiteDraft ? options.customSuiteDraft : null;
+        var categories = draft && Array.isArray(draft.categories) && draft.categories.length
+            ? draft.categories
+            : ['P1', 'P2', 'P3'];
+        var stageIndex = draft && Number.isInteger(draft.stageIndex) ? draft.stageIndex : 0;
+        var currentCategory = draft && draft.status !== 'ready' && stageIndex < categories.length
+            ? categories[stageIndex]
+            : null;
+        var examCategory = exam && typeof exam.category === 'string'
+            ? exam.category.trim().toUpperCase()
+            : '';
+        var isSelecting = selectionMode === 'custom-suite' && !!draft && draft.status !== 'ready';
+        var isSelected = !!draft && draft.pickedByCategory && examCategory && draft.pickedByCategory[examCategory]
+            && String(draft.pickedByCategory[examCategory].examId) === String(exam.id);
         var examItem = this._createElement('div', {
-            className: 'exam-item',
+            className: 'exam-item' + (isSelecting ? ' exam-item--suite-selecting' : '') + (isSelected ? ' exam-item--suite-selected' : ''),
             dataset: { examId: exam.id }
         });
+        if (isSelecting) {
+            examItem.dataset.action = 'suite-custom-select';
+            examItem.setAttribute('role', 'button');
+            examItem.setAttribute('tabindex', '0');
+        }
 
         var info = this._createElement('div', { className: 'exam-info' });
         var infoContent = this._createElement('div');
@@ -504,6 +884,20 @@
             if (exam && exam.type) {
                 fallbackParts.push(exam.type);
             }
+
+            // Add frequency text for reading materials
+            if (exam && exam.type === 'reading' && exam.frequency) {
+                var frequencyLabels = {
+                    'ultra-high': '超高',
+                    'high': '高',
+                    'medium': '次',
+                    'low': '低',
+                    'standard': '标准'
+                };
+                var label = frequencyLabels[exam.frequency] || exam.frequency;
+                fallbackParts.push(label);
+            }
+
             metaText = fallbackParts.join(' | ');
         }
         meta.textContent = metaText;
@@ -511,6 +905,9 @@
         infoContent.appendChild(title);
         infoContent.appendChild(meta);
         info.appendChild(infoContent);
+        if (isSelecting && currentCategory) {
+            info.appendChild(this._createElement('div', { className: 'suite-custom-selection-badge' }, currentCategory + ' Pending'));
+        }
 
         var actions = this._createElement('div', { className: 'exam-actions' });
         var actionConfig = this._resolveActionConfig(exam, options);
@@ -520,6 +917,10 @@
             dataset: { action: actionConfig.startAction, examId: exam.id },
             type: 'button'
         }, actionConfig.startLabel);
+        if (isSelecting) {
+            startBtn.disabled = true;
+            startBtn.setAttribute('aria-disabled', 'true');
+        }
         actions.appendChild(startBtn);
 
         if (actionConfig.includePdfButton) {
@@ -529,6 +930,10 @@
                 type: 'button',
                 title: '查看PDF版本'
             }, '查看PDF');
+            if (isSelecting) {
+                pdfBtn.disabled = true;
+                pdfBtn.setAttribute('aria-disabled', 'true');
+            }
             actions.appendChild(pdfBtn);
         }
 
@@ -539,6 +944,10 @@
                 type: 'button',
                 title: '为此题目生成HTML版本'
             }, '生成HTML');
+            if (isSelecting) {
+                generateBtn.disabled = true;
+                generateBtn.setAttribute('aria-disabled', 'true');
+            }
             actions.appendChild(generateBtn);
         }
 
@@ -682,12 +1091,12 @@
                                 event.preventDefault();
                             }
                             if (typeof global.loadLibrary === 'function') {
-                                try { global.loadLibrary(false); } catch (_) {}
+                                try { global.loadLibrary(false); } catch (_) { }
                             } else if (typeof global.showLibraryLoaderModal === 'function') {
                                 global.showLibraryLoaderModal();
                             }
                         });
-                    } catch (_) {}
+                    } catch (_) { }
                 }
 
                 actionContainer.appendChild(button);
@@ -745,14 +1154,14 @@
             if (key === 'className') {
                 element.className = value;
             } else if (key === 'dataset' && typeof value === 'object') {
-                Object.keys(value).forEach(function(dataKey) {
+                Object.keys(value).forEach(function (dataKey) {
                     var dataValue = value[dataKey];
                     if (dataValue != null) {
                         element.dataset[dataKey] = String(dataValue);
                     }
                 });
             } else if (key === 'style' && typeof value === 'object') {
-                Object.keys(value).forEach(function(styleKey) {
+                Object.keys(value).forEach(function (styleKey) {
                     element.style[styleKey] = value[styleKey];
                 });
             } else if (key === 'ariaHidden') {
@@ -811,18 +1220,22 @@
     };
 
     LegacyExamListView.prototype._getCompletionStatus = function _getCompletionStatus(exam) {
-        var records = ensureArray(global.practiceRecords).filter(function (record) {
-            return record && (record.examId === exam.id || record.title === exam.title);
+        var source = (typeof global.getPracticeRecordsState === 'function')
+            ? global.getPracticeRecordsState()
+            : global.practiceRecords;
+        var records = ensureArray(source).filter(function (record) {
+            return recordMatchesExam(exam, record);
         });
         if (records.length === 0) {
             return null;
         }
         records.sort(function (a, b) {
-            return new Date(b.date) - new Date(a.date);
+            return getRecordTimestamp(b) - getRecordTimestamp(a);
         });
+        var latest = records[0] || {};
         return {
-            percentage: records[0].percentage || 0,
-            date: records[0].date
+            percentage: typeof latest.percentage === 'number' ? latest.percentage : 0,
+            date: latest.date || latest.endTime || latest.timestamp || latest.createdAt || null
         };
     };
 
@@ -896,7 +1309,7 @@
         }
         try {
             this.container.removeEventListener('click', this._boundClickHandler);
-        } catch (_) {}
+        } catch (_) { }
         this.container = null;
         this._isMounted = false;
     };
@@ -1138,8 +1551,8 @@
             }
         }, '切换');
         if (typeof switchButton.addEventListener === 'function') {
-            (function(button, key) {
-                button.addEventListener('click', function(event) {
+            (function (button, key) {
+                button.addEventListener('click', function (event) {
                     if (event && typeof event.preventDefault === 'function') {
                         event.preventDefault();
                     }
@@ -1165,8 +1578,8 @@
                 }
             }, '删除');
             if (typeof deleteButton.addEventListener === 'function') {
-                (function(button, key) {
-                    button.addEventListener('click', function(event) {
+                (function (button, key) {
+                    button.addEventListener('click', function (event) {
                         if (event && typeof event.preventDefault === 'function') {
                             event.preventDefault();
                         }
@@ -1235,7 +1648,7 @@
         }
 
         var handlers = options && options.handlers ? options.handlers : {};
-        var findActionTarget = function(node) {
+        var findActionTarget = function (node) {
             var current = node;
             while (current && current !== host) {
                 if (current.dataset && current.dataset.configAction) {

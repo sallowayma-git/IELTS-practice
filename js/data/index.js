@@ -28,7 +28,7 @@
     }
 
     function bootstrap() {
-        if (!window.storage) {
+        if (!window.persistentStore) {
             console.warn('[data/index] StorageManager 未就绪，延迟初始化数据仓库');
             setTimeout(bootstrap, 100);
             return;
@@ -38,7 +38,7 @@
             return;
         }
 
-        const dataSource = new ExamData.StorageDataSource(window.storage);
+        const dataSource = new ExamData.StorageDataSource(window.persistentStore);
         const registry = new ExamData.DataRepositoryRegistry(dataSource);
 
         const practiceRepo = new ExamData.PracticeRepository(dataSource, { maxRecords: 1000 });
@@ -106,6 +106,13 @@
                 validators: [
                     (value) => Array.isArray(value) || 'vocab_review_queue 必须为数组'
                 ]
+            },
+            legacy_practice_records_migrated: {
+                defaultValue: () => false,
+                validators: [
+                    (value) => typeof value === 'boolean' || 'legacy_practice_records_migrated 必须为布尔值'
+                ],
+                cloneOnRead: false
             }
         });
 
@@ -131,7 +138,9 @@
         if (registryApi && typeof registryApi.registerStorageProviders === 'function') {
             registryApi.registerStorageProviders({
                 repositories: api,
-                storageManager: window.storage || null
+                storageManager: window.storage || null,
+                persistentStore: window.persistentStore || null,
+                preferenceStore: window.preferenceStore || null
             });
         } else {
             window.dataRepositories = api;
