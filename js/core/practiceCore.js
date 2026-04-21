@@ -901,19 +901,20 @@
             startTime: rawPayload.startTime,
             timestamp: rawPayload.timestamp
         });
-        const startTime = rawPayload.startTime && !Number.isNaN(new Date(rawPayload.startTime).getTime())
+        const duration = ensureNumber(
+            rawPayload.duration,
+            (rawPayload.endTime && rawPayload.startTime)
+                ? Math.round((new Date(rawPayload.endTime) - new Date(rawPayload.startTime)) / 1000)
+                : ensureNumber(sessionContext.duration, 0)
+        );
+        const startTime = rawPayload.startTime
             ? new Date(rawPayload.startTime).toISOString()
-            : (sessionContext.startTime && !Number.isNaN(new Date(sessionContext.startTime).getTime())
+            : (sessionContext.startTime
                 ? new Date(sessionContext.startTime).toISOString()
-                : null);
-        const endTime = rawPayload.endTime && !Number.isNaN(new Date(rawPayload.endTime).getTime())
+                : new Date(new Date(completedAt).getTime() - duration * 1000).toISOString());
+        const endTime = rawPayload.endTime
             ? new Date(rawPayload.endTime).toISOString()
-            : null;
-        const duration = (
-            startTime
-            && endTime
-            && new Date(endTime).getTime() >= new Date(startTime).getTime()
-        ) ? Math.round((new Date(endTime).getTime() - new Date(startTime).getTime()) / 1000) : 0;
+            : completedAt;
         const category = deriveCategory(rawPayload, examEntry, metadata);
         const frequency = deriveFrequency(rawPayload, examEntry, metadata);
         const title = rawPayload.title

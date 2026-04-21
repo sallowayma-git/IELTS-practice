@@ -41,7 +41,7 @@
         },
         {
           "questionNumber": 16,
-          "text": "（3）题目 16：\\___\\___（位于提升坡底部、驱动齿轮带动链条的装置）\n答案：motor（电机）\n解析：定位 Paragraph 2 中 “The gear at the bottom of the hill is turned by a motor”，明确提到底部齿轮由 “电机” 驱动，因此答案为 “motor”。",
+          "text": "（3）题目 16：\\___\\___（过山车从提升坡顶部释放后开始的动作）\n答案：descent（下滑）\n解析：定位 Paragraph 2 中 “At the summit, the train is released and starts its descent”，明确提到顶部释放后开始 “下滑”，因此答案为 “descent”。",
           "questionId": "q3"
         }
       ],
@@ -49,7 +49,7 @@
         "start": 14,
         "end": 16
       },
-      "text": "题目翻译：提升装置 - \\___\\___\n答案：chain（链条）\n解析：定位 Paragraph 2 中 “The traditional lifting mechanism is a long length of chain running up the hill under the track”，明确提到提升装置的核心是 “链条”，因此答案为 “chain”。\n题目翻译：\\___\\___（位于提升坡顶部和底部，带动链条运转）\n答案：gear（齿轮）\n解析：定位 Paragraph 2 中 “The chain is fastened in a loop, which is wound around a gear at the top of the hill and another one at the bottom”，明确提到 “齿轮” 带动链条，因此答案为 “gear”。\n答案：motor（电机）\n解析：定位 Paragraph 2 中 “The gear at the bottom of the hill is turned by a motor”，明确提到底部齿轮由 “电机” 驱动，因此答案为 “motor”。"
+      "text": "题目翻译：提升装置 - \\___\\___\n答案：chain（链条）\n解析：定位 Paragraph 2 中 “The traditional lifting mechanism is a long length of chain running up the hill under the track”，明确提到提升装置的核心是 “链条”，因此答案为 “chain”。\n题目翻译：\\___\\___（位于提升坡顶部和底部，带动链条运转）\n答案：gear（齿轮）\n解析：定位 Paragraph 2 中 “The chain is fastened in a loop, which is wound around a gear at the top of the hill and another one at the bottom”，明确提到 “齿轮” 带动链条，因此答案为 “gear”。\n答案：descent（下滑）\n解析：定位 Paragraph 2 中 “At the summit, the train is released and starts its descent”，明确提到顶部释放后开始 “下滑”，因此答案为 “descent”。"
     },
     {
       "sectionTitle": "2. 摘要填空（Questions 17–21：NO MORE THAN TWO WORDS）",
