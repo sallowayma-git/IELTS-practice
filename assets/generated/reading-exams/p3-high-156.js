@@ -1,0 +1,124 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p3-high-156", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p3-high-156",
+  "meta": {
+    "title": "Elephant Communication 大象交流",
+    "category": "P3",
+    "frequency": "high",
+    "pdfFilename": "66. P3 - Elephant Communication 大象交流【高】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/66. P3 - Elephant Communication 大象交流【高】/",
+    "legacyFilename": "66. P3 - Elephant Communication 大象交流【高】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 3</h2>\n            <p>You should spend about 20 minutes on Questions 27–40, which are based on Reading Passage 3 below.</p>\n            \n            <h3>Elephant Communication</h3>\n            \n            <p>O' Connell-Rodwell, a post-doctoral fellow at Stanford University, has traveled to Namibia's first-ever wildlife reserve to explore the mystical and complicated realm of elephant communication. She, along with her colleagues, is part of a scientific revolution that started almost 20 years ago. This revolution has made a stunning revelation: elephants are capable of communicating with one another over long distances by means of low-frequency sounds, also known as infrasound, which are too deep for humans to hear.</p>\n            <p>As might be expected, African elephants' ability to detect seismic sound may have something to do with their ears. The hammer bone in an elephant's inner ear is proportionally huge for a mammal, but it is normal for animals that use vibrational signals. Thus, it may be a sign that elephants can use seismic sounds to communicate.</p>\n            <p>Other aspects of elephant anatomy also support this ability. First, their massive bodies, which enable them to give out low-frequency sounds almost as powerful as the sound a jet makes during take-off, serve as ideal frames for receiving ground vibrations and transmitting them to the inner ear. Second, the elephant's toe bones are set in a fatty pad, which might help focus vibrations from the ground into the bone. Finally, the elephant has an enormous brain that sits in the cranial cavity behind the eyes, in line with the auditory canal. The front of the skull is riddled with sinus cavities, which might function as resonating chambers for ground vibrations.</p>\n            <p>It remains unclear how elephants detect such vibrations, but O' Connell-Rodwell suggests that the pachyderms are ‘listening' with their trunks and feet instead of (or in addition to) their ears. The elephant trunk may be the most versatile appendage in nature: it is used for drinking, bathing, smelling, feeding and scratching. Both trunk and feet contain two types of nerve endings that are sensitive to pressure—one detects infrasonic vibration and the other responds to vibrations of slightly higher frequencies. As O' Connell-Rodwell sees it, this research has a boundless and unpredictable future. ‘Our work is really at the interface of geophysics, neurophysiology and ecology,” she says. ‘We're raising questions that have never even been considered before.'</p>\n            <p>Scientists have long known that seismic communication is widespread among small animals such as spiders, scorpions, insects and many vertebrates, including white-lipped frogs, blind mole-rats, kangaroo rats and golden moles. Nevertheless, O' Connell-Rodwell was the first to argue that a giant land animal is also sending and receiving seismic signals. 'I used to lay a male planthopper on a stem and replay the calling sound of a female; the male would exhibit the same kind of behaviour that happens in elephants: he would freeze, press down on his legs, move forward a little, then stay still again. I found it fascinating, and it made me think that perhaps auditory communication is not the only thing going on.'</p>\n            <p>Scientists have confirmed that an elephant's capacity to communicate over long distances is essential for survival, especially in places like Etosha, where more than 2,400 savanna elephants range over an area larger than New Jersey. It is already difficult for an elephant to find a mate in such a vast wilderness, and elephant reproductive biology only complicates matters. Breeding herds also adopt low-frequency sounds to warn of predators. Even though adult elephants have no enemies other than human beings, calves are vulnerable and susceptible to attacks from lions and hyenas. At the sight of a predator, older herd members clump together to protect the young before running away.</p>\n            <p>We now know that elephants can respond to warning calls in the air, but can they detect signals transmitted solely through the ground? To investigate, the research team designed an experiment in 2002 that used electronic devices to send signals through the ground at Mushara. 'The outcomes of our 2002 study revealed that elephants could indeed sense warning signals through the ground,' O' Connell-Rodwell observes.</p>\n            <p>Last year, an experiment was set up to pursue the problem further. It used three different recordings: the 1994 warning call from Mushara, an anti-predator call recorded by scientist Joyce Poole in Kenya, and a made-up warble tone. ‘The data I've observed so far imply that the elephants responded exactly as I expected. However, the fascinating finding is that the anti-predator call from Kenya—unfamiliar to them—caused them to gather, tense up and rumble aggressively as well; but they didn't always flee. I didn't expect the results to be that clear-cut.'</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "diagram_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-anchor\">\n                <h4>Questions 28–31</h4>\n                <p>Label the diagram below.</p>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n                <div class=\"diagram-container diagram-container--elephant\">\n                    <img class=\"diagram-image--elephant\" loading=\"lazy\" src=\"https://i.postimg.cc/xC4bjVt3/82bf1c86-d66b-481c-bf14-ff788ad98017.png\" alt=\"Diagram of an elephant's head and features for seismic communication\">\n                </div>\n                 <div class=\"diagram-inputs\">\n                    <div class=\"diagram-input-item\"><label for=\"q28_input\">28</label><input type=\"text\" id=\"q28_input\" name=\"q1\"></div>\n                    <div class=\"diagram-input-item\"><label for=\"q29_input\">29</label><input type=\"text\" id=\"q29_input\" name=\"q2\"></div>\n                    <div class=\"diagram-input-item\"><label for=\"q30_input\">30</label><input type=\"text\" id=\"q30_input\" name=\"q3\"></div>\n                    <div class=\"diagram-input-item\"><label for=\"q31_input\">31</label><input type=\"text\" id=\"q31_input\" name=\"q4\"></div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "summary_completion",
+      "questionIds": [
+        "q5",
+        "q6",
+        "q7",
+        "q8",
+        "q9",
+        "q10",
+        "q11"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-9-10-11-anchor\">\n                <h4>Questions 32–38</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>NO MORE THAN THREE WORDS</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <p>\n                        How the elephants sense these sound vibrations is still unknown, but O'Connell-Rodwell, a post-doctoral researcher at Stanford University, proposes that elephants are ‘listening' with their <strong>32</strong> <input type=\"text\" id=\"q32_input\" name=\"q5\"> by two kinds of nerve endings that respond to vibrations with both <strong>33</strong> <input type=\"text\" id=\"q33_input\" name=\"q6\"> frequency and slightly higher frequencies. O'Connell-Rodwell's work is at the combination of geophysics, neurophysiology and <strong>34</strong> <input type=\"text\" id=\"q34_input\" name=\"q7\">.\n                    </p>\n                    <p>\n                        It was known that seismic communication existed extensively within small animals, but O'Connell-Rodwell was the first person to indicate that a large land animal would send and receive <strong>35</strong> <input type=\"text\" id=\"q35_input\" name=\"q8\"> too. Also, she noticed the freezing behaviour by putting a male planthopper on a stem and playing back a female call, which might prove the existence of other communicative approaches besides <strong>36</strong> <input type=\"text\" id=\"q36_input\" name=\"q9\">.\n                    </p>\n                    <p>\n                        Scientists have determined that an elephant's ability to communicate over long distances is essential, especially when elephant herds are finding a <strong>37</strong> <input type=\"text\" id=\"q37_input\" name=\"q10\"> or are warning of predators. Finally, the results of our 2002 study showed us that elephants could detect warning calls through the <strong>38</strong> <input type=\"text\" id=\"q38_input\" name=\"q11\">.\n                    </p>\n                </div>\n            </div>"
+    },
+    {
+      "groupId": "group-3",
+      "kind": "single_choice",
+      "questionIds": [
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q12-13-anchor\">\n                <h4>Questions 39–40</h4>\n                <p>Choose the correct letter, <strong>A, B, C</strong> or <strong>D</strong>.</p>\n                 <div class=\"question-item\">\n                    <p><strong>39</strong> According to the passage, it is determined that an elephant needs to communicate over long distances for its survival</p>\n                    <div class=\"mcq-options\">\n                        <label><input name=\"q12\" type=\"radio\" value=\"A\"> A when a threatening predator appears.</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"B\"> B when young elephants meet humans.</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"C\"> C when older members of the herd want to flee from the group.</label>\n                        <label><input name=\"q12\" type=\"radio\" value=\"D\"> D when a female elephant is in estrus.</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>40</strong> What is the author's attitude toward the experiment using three different recordings in the last paragraph?</p>\n                    <div class=\"mcq-options\">\n                        <label><input name=\"q13\" type=\"radio\" value=\"A\"> A The outcome is definitely out of the original expectation.</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"B\"> B The data cannot be very clearly obtained.</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"C\"> C The result can be somewhat undecided or inaccurate.</label>\n                        <label><input name=\"q13\" type=\"radio\" value=\"D\"> D The result can be unfamiliar to the public.</label>\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": [
+      "hammer",
+      "hammer bone"
+    ],
+    "q2": "body",
+    "q3": "pad",
+    "q4": "sinus cavities",
+    "q5": "trunks and feet",
+    "q6": "infrasonic",
+    "q7": "ecology",
+    "q8": "seismic signals",
+    "q9": "auditory communication",
+    "q10": "mate",
+    "q11": "ground",
+    "q12": "A",
+    "q13": "A"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/66. P3 - Elephant Communication 大象交流【高】/66. P3 - Elephant Communication 大象交流【高】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/66. P3 - Elephant Communication 大象交流【高】/66. P3 - Elephant Communication 大象交流【高】.pdf",
+    "ieltsHtml": "IELTS/P3/Elephant Communication.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.778Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "28",
+    "q2": "29",
+    "q3": "30",
+    "q4": "31",
+    "q5": "32",
+    "q6": "33",
+    "q7": "34",
+    "q8": "35",
+    "q9": "36",
+    "q10": "37",
+    "q11": "38",
+    "q12": "39",
+    "q13": "40"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

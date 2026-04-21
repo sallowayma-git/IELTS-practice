@@ -1,0 +1,118 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p3-medium-66", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p3-medium-66",
+  "meta": {
+    "title": "Mercator - The Map Maker 地理制图师",
+    "category": "P3",
+    "frequency": "medium",
+    "pdfFilename": "158. P3 - Mercator - The Map Maker 地理制图师【次】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/158. P3 - Mercator - The Map Maker 地理制图师【次】/",
+    "legacyFilename": "158. P3 - Mercator - The Map Maker 地理制图师【次】.html",
+    "questionIntroHtml": "<h3>Questions 27–34</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 3</h2>\n            <p>You should spend about 20 minutes on Questions 27-40, which are based on Reading Passage 3 below.</p>\n            \n            <h3>Mercator - The Map Maker</h3>\n            \n            <p>Maps codify the miracle of existence. And the man who wrote the codes for the maps we use today was Gerard Mercator, a cobbler's son born 500 years ago on a muddy floodplain in northern Europe.</p>\n            <p>Mercator was a humble man with a universal vision. In his own time he was ‘the prince of modern geographers', his depictions of the planet and its regions unsurpassed in accuracy, clarity and consistency. More recently, he was crowned by the American scholar Robert W. Karrow as 'the first modern, scientific cartographer'. Where his predecessors had adopted a piecemeal approach to cartography, Mercator sought to wrap the world in systematic overlapping maps. Along the way he erected a number of historic milestones. He participated in the naming and mapping of 'America', he constructed the two most important globes of the 16th century, and the title of his pioneering 'modern geography', the Atlas, became the standard term for a volume of maps. Mercator also devised a new method - 'a projection' - of converting the spherical world into a two-dimensional map.</p>\n            <p>Mercator was born in 1512 and died in 1594. His world was one of military conflict, social upheaval, religious revolution - and geographical discovery. He was ten years old when the survivors of the world's first circumnavigation returned to Spain in their leaking caravel. No better example is required of genius arising from turmoil. He knew poverty, plague, war and persecution. He was imprisoned for his ideas yet patronised by an emperor. His life was one of brilliant breakthroughs and abrupt reversals. In its telling, his is the story of the poor boy made good: the pauper who embraced the world, found fame, faced death, yet triumphed through fortitude. Variously described by his peers as honest, calm, candid, sincere and peaceable, Mercator wore an aura of calm in troubled times. His attitude to his geographical calling was described by his friend and neighbour, William Ghim, as 'indefatigable'. Some 40 or so of Mercator's letters have survived, together with examples of virtually all of his printed maps and globes.</p>\n            <p>Mercator's most significant work was a project of cosmic proportions. A multi-part cosmography, the work would include a section on astronomy, a chronology of world events and a modern geography, which would eventually contain over 100 maps.</p>\n            <p>Before he commenced the great work, Mercator produced in 1569 an enormous world map on a new projection. His method for converting the spherical globe into a two-dimensional map helped to solve the greatest cartographic riddle of the day: how could the course of a ship following a constant compass bearing be represented as a straight line on a map which had been constructed on a grid of latitude and longitude?</p>\n            <p>Mercator's solution was to progressively increase the space between his lines of latitude, away from the equator. The effect was to straighten the lines of constant compass bearing (also known as rhumbs or loxodromes). Unfortunately, straightening the rhumbs caused areal* distortion: at the map's northern and southern extremities, the polar regions occupied the full width of the map, while North America appeared to fill half the circumference of the world.</p>\n            <p>Few of Mercator's contemporaries understood what he was up to, despite the map's title explaining that it was intended ‘for use in navigation'. Mercator knew that his projection was unsuitable as an areal description of the world, but it would be several decades before the map's true navigational value would be recognised.</p>\n            <p>Meanwhile, Mercator was marshalling and editing all the geographical data he needed for his modern regional maps of the world. His sources were wide-ranging and multitudinous, including an imperial physician in Vienna and his competitor, the Viceroy of Holstein. He was still working on these maps when he died. The great cosmography that Mercator had already titled 'Atlas' would never be finished.</p>\n            <p>In the Atlas, Mercator had embodied the principles of future mapmaking: his italic lettering, his identical map overlaps, his complete coverage of regions at more than one scale, his consistent use of grids of latitude and longitude, his singular editorial control, were all adopted as cartographic standards. 'Atlas', the cosmography, became 'atlas', the (Oxford English Dictionary) term for ‘a collection of maps in a volume.'</p>\n            <p>The projection assumed a life of its own. So powerful a cartographic tool did it become that Mercator the man became subsumed by his own device. By the 20th century, Mercator's Projection had been adopted by state cartographers to map the land that he had named 'North America'. In 1938, Mercator's Projection was selected by the Ordnance Survey to map Britain anew. And in 1974, the American cartographer Alden P. Colvocoresses used the Space Oblique Mercator Projection for the first satellite map of the USA. When the Jet Propulsion Laboratory sent Mariner 8 and Mariner 9 to map Mars, they undertook their Martian cartography on a standard Mercator Projection. One by one, the mappable orbs of our solar system are appearing on the worldwide web, flattened for our screens according to Mercator's cartographic principles.</p>\n            <p>Mercator's Projection succeeded in reconciling the sphere and the plane, while his Atlas enveloped the world with an integrated system of maps.</p>\n            <p>*areal: of an area</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6",
+        "q7",
+        "q8"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-8-anchor\">\n                <h4>Do the following statements agree with the information given in Reading Passage 3?</h4>\n                <p>In boxes 27-34 on your answer sheet, write:</p>\n                <ul style=\"list-style-position: inside; padding-left: 0; margin-bottom: 1rem;\">\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information on this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>27</strong> Cartographers before Mercator had tended to produce separate, individual maps.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q1\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>28</strong> Mercator was critical of the work of his contemporaries.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q2\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>29</strong> During his life, Mercator experienced great changes of fortune.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q3\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>30</strong> Most of Mercator's published work remains intact today.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q4\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>31</strong> Mercator started work on his projection shortly after embarking on his cosmography.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q5\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>32</strong> Mercator's Projection was immediately seen as a major breakthrough.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q6\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>33</strong> Mercator produced an accurate areal description of the world.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q7\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>34</strong> Mercator consulted the work of various people when producing his maps.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q8\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions 27–34</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13",
+        "q14"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q9-10-11-12-13-14-anchor\">\n                <h4>Complete the notes below.</h4>\n                <p>Choose <strong>NO MORE THAN TWO WORDS</strong> from the passage for each answer.</p>\n                \n                <div class=\"notes-completion\">\n                    <h4>Mercator's Projection</h4>\n                    <ul>\n                        <li>His attempt to represent the globe as a <strong>35</strong> <input type=\"text\" id=\"q35_input\" maxlength=\"25\" name=\"q9\"> map</li>\n                    </ul>\n                    <p><strong>Problem:</strong></p>\n                    <ul>\n                        <li>When sailors used a map based on lines of latitude and longitude and kept to a constant compass bearing, the course of the ship could not be shown as a <strong>36</strong> <input type=\"text\" id=\"q36_input\" maxlength=\"25\" name=\"q10\"> on a map</li>\n                    </ul>\n                    <p><strong>Solution:</strong></p>\n                    <ul>\n                         <li>To increase the space separating the lines of latitude, the further they are from the equator</li>\n                    </ul>\n                    <p><strong>Result:</strong></p>\n                    <ul>\n                         <li>When Mercator straightened the ‘rhumbs’ as intended, this produced <strong>37</strong> <input type=\"text\" id=\"q37_input\" maxlength=\"25\" name=\"q11\"> at the northern and southern extremities, with the full width of the map being taken up by the <strong>38</strong> <input type=\"text\" id=\"q38_input\" maxlength=\"25\" name=\"q12\"></li>\n                    </ul>\n                     <p><strong>Original intention:</strong></p>\n                    <ul>\n                         <li>Mercator originally designed the map for <strong>39</strong> <input type=\"text\" id=\"q39_input\" maxlength=\"25\" name=\"q13\"> purposes</li>\n                    </ul>\n                     <p><strong>Uses of Mercator's Projection up to the present day:</strong></p>\n                    <ul>\n                         <li>Various uses including the mapping of <strong>40</strong> <input type=\"text\" id=\"q40_input\" maxlength=\"25\" name=\"q14\"> by state cartographers</li>\n                         <li>Also used to portray planets in our solar system on the web</li>\n                    </ul>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "TRUE",
+    "q2": "NOT GIVEN",
+    "q3": "TRUE",
+    "q4": "TRUE",
+    "q5": "FALSE",
+    "q6": "FALSE",
+    "q7": "FALSE",
+    "q8": "TRUE",
+    "q9": "two-dimensional",
+    "q10": "straight line",
+    "q11": "areal distortion",
+    "q12": "polar regions",
+    "q13": "navigation",
+    "q14": "North America"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/158. P3 - Mercator - The Map Maker 地理制图师【次】/158. P3 - Mercator - The Map Maker 地理制图师【次】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/158. P3 - Mercator - The Map Maker 地理制图师【次】/158. P3 - Mercator - The Map Maker 地理制图师【次】.pdf",
+    "ieltsHtml": "IELTS/P3/Mercator - The Map Maker.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.625Z",
+    "notes": "signature:radio,text,textarea,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13",
+    "q14"
+  ],
+  "questionDisplayMap": {
+    "q1": "27",
+    "q2": "28",
+    "q3": "29",
+    "q4": "30",
+    "q5": "31",
+    "q6": "32",
+    "q7": "33",
+    "q8": "34",
+    "q9": "35",
+    "q10": "36",
+    "q11": "37",
+    "q12": "38",
+    "q13": "39",
+    "q14": "40"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

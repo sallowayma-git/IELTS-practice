@@ -8,6 +8,7 @@ class VirtualScroller {
         this.items = items;
         this.renderer = renderer;
         this.itemHeight = options.itemHeight || 120;
+        this.baseItemHeight = this.itemHeight;
         this.bufferSize = options.bufferSize || 5;
         this.containerHeight = options.containerHeight || this.getContainerHeight();
         this.layoutCalculator = typeof options.layoutCalculator === 'function' ? options.layoutCalculator : null;
@@ -19,6 +20,7 @@ class VirtualScroller {
         this.totalHeight = 0;
         this.itemsPerRow = 1;
         this.layoutMetrics = null;
+        this.gap = 0;
 
         this.handleResize = this.recalculateLayout.bind(this);
 
@@ -51,6 +53,9 @@ class VirtualScroller {
         this.totalHeight = this.getTotalHeight();
 
         // 设置容器样式
+        this.container.style.display = 'block';
+        this.container.style.gridTemplateColumns = 'none';
+        this.container.style.gap = '0px';
         this.container.style.position = 'relative';
         this.container.style.overflowY = 'auto';
         this.container.style.overflowX = 'hidden';
@@ -92,6 +97,33 @@ class VirtualScroller {
      * 渲染可见元素
      */
     renderVisible() {
+        const applyPosition = (element, index) => {
+            const position = this.getItemPosition(index);
+            element.style.position = 'absolute';
+            const topValue = position.top != null ? position.top : (index * this.itemHeight);
+            if (typeof topValue === 'number') {
+                element.style.top = `${topValue}px`;
+            } else if (typeof topValue === 'string') {
+                element.style.top = topValue;
+            } else {
+                element.style.top = `${index * this.itemHeight}px`;
+            }
+            const leftValue = position.left != null ? position.left : 0;
+            if (typeof leftValue === 'number') {
+                element.style.left = `${leftValue}px`;
+            } else if (typeof leftValue === 'string') {
+                element.style.left = leftValue;
+            } else {
+                element.style.left = '0px';
+            }
+            const widthValue = position.width !== undefined ? position.width : '100%';
+            element.style.width = typeof widthValue === 'number' ? `${widthValue}px` : widthValue;
+            if (position.height) {
+                element.style.height = typeof position.height === 'number' ? `${position.height}px` : position.height;
+            }
+            element.style.boxSizing = 'border-box';
+        };
+
         // 清理不可见的元素
         this.renderedItems.forEach((element, index) => {
             if (index < this.visibleStart || index > this.visibleEnd) {
@@ -102,20 +134,14 @@ class VirtualScroller {
         
         // 渲染可见的元素
         for (let i = this.visibleStart; i <= this.visibleEnd; i++) {
-            if (!this.renderedItems.has(i)) {
-                const element = this.renderer(this.items[i], i);
-                const position = this.getItemPosition(i);
-                element.style.position = 'absolute';
-                element.style.top = `${position.top}px`;
-                element.style.left = `${position.left}px`;
-                element.style.width = typeof position.width === 'number' ? `${position.width}px` : position.width;
-                if (position.height) {
-                    element.style.height = typeof position.height === 'number' ? `${position.height}px` : position.height;
-                }
-                element.style.boxSizing = 'border-box';
-
-                this.viewport.appendChild(element);
+            let element = this.renderedItems.get(i);
+            if (!element) {
+                element = this.renderer(this.items[i], i);
                 this.renderedItems.set(i, element);
+            }
+            applyPosition(element, i);
+            if (!element.parentNode) {
+                this.viewport.appendChild(element);
             }
         }
     }
@@ -223,9 +249,15 @@ class VirtualScroller {
     getItemPosition(index) {
         if (this.layoutMetrics && typeof this.layoutMetrics.positionFor === 'function') {
             const position = this.layoutMetrics.positionFor(index) || {};
+            const normalizeAxis = (value) => {
+                if (value === undefined || value === null) return null;
+                if (typeof value === 'number' && !isNaN(value)) return value;
+                if (typeof value === 'string' && value.trim() !== '') return value;
+                return null;
+            };
             return {
-                top: Number(position.top) || 0,
-                left: Number(position.left) || 0,
+                top: normalizeAxis(position.top),
+                left: normalizeAxis(position.left),
                 width: position.width !== undefined ? position.width : '100%',
                 height: position.height !== undefined ? position.height : null
             };
@@ -255,6 +287,7 @@ class VirtualScroller {
                     this.itemHeight = metrics.rowHeight;
                 }
                 this.itemsPerRow = Math.max(1, Number(metrics.itemsPerRow) || 1);
+                this.gap = Math.max(0, Number(metrics.gap) || 0);
                 this.layoutMetrics = Object.assign({}, metrics, {
                     itemsPerRow: this.itemsPerRow,
                     rowHeight: metrics.rowHeight || this.itemHeight,

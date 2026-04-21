@@ -1,0 +1,124 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p2-low-41", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-low-41",
+  "meta": {
+    "title": "The Myth of the Eight-hour Sleep 八小时睡眠",
+    "category": "P2",
+    "frequency": "low",
+    "pdfFilename": "135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠/",
+    "legacyFilename": "135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 2</h2>\n            <p>You should spend about 20 minutes on Questions 14-26, which are based on Reading Passage 2 on the following pages.</p>\n\n            <h3>The Myth of the Eight-hour Sleep</h3>\n            \n            <div class=\"paragraph-wrapper\">\n                <div class=\"paragraph-dropzone dropzone match-dropzone\" data-section=\"A\" id=\"q1-dropzone\" data-question=\"q1\">\n                    <span class=\"paragraph-label\">Section A (Q14):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>A</strong> We often worry about lying awake in the middle of the night—but it could be good for you. Indications from both science and history suggest that the eight-hour sleep may not be a natural or inborn pattern for humans. In the early 1990s, psychiatrist Thomas Wehr conducted research which implies just that. Wehr kept a group of people in a darkened room for 14 hours a day for a month. It took some time for their sleep to regulate, but by the fourth week the subjects had settled into a very distinct sleeping pattern. First, they slept for four hours, then woke for one or two hours before falling into a second four-hour sleep. Though sleep scientists were impressed by the implications of the study, the idea that we must sleep for eight consecutive hours persists amongst the general public.</p>\n            </div>\n            <div class=\"paragraph-wrapper\">\n                <div class=\"paragraph-dropzone dropzone match-dropzone\" data-section=\"B\" id=\"q2-dropzone\" data-question=\"q2\">\n                    <span class=\"paragraph-label\">Section B (Q15):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>B</strong> In 2001, historian Roger Ekirch of Virginia Tech University in the US published a paper drawn from 16 years of research, revealing historical evidence that humans used to sleep in two distinct periods of time each night. Ekirch's research found more than 500 references to a segmented sleeping pattern—in diaries, court records, medical books and literature, from the ancient Greeks to tribes in Nigeria. Much like Wehr's findings, these references describe a first sleep which began not long following sunset. Then there was a waking period of one or two hours and after that a second sleep. During the waking period, people could be quite active. They sometimes got up and moved around the house, although most people stayed in bed, and perhaps read or wrote if they had enough money for candles. In many historic accounts, Ekirch found that people used the time that they were awake between periods of sleep to think about and attempt to analyse their dreams.</p>\n                <p>In his book, <em>Evening's Empire</em>, historian Craig Koslofsky suggests an explanation for this divided sleep pattern in Europe. ‘Associations with night before the 17th century were not good,' he writes. He goes on to explain that the streets of the cities and towns at night were often populated by thieves or worse. The streets at night consequently scared many people. Even the wealthy, who could afford to light their way, had better things to spend their nights on.</p>\n            </div>\n            <div class=\"paragraph-wrapper\">\n                <div class=\"paragraph-dropzone dropzone match-dropzone\" data-section=\"C\" id=\"q3-dropzone\" data-question=\"q3\">\n                    <span class=\"paragraph-label\">Section C (Q16):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>C</strong> Ekirch found that references to the first and second sleep started to disappear during the late 17th century. The pattern began to alter first among the upper classes in northern Europe and, over the course of the next 200 years, began changing amongst the rest of Western society. By the 1920s, the idea of a first and second sleep had receded entirely from our social consciousness. Ekirch attributes the initial shift to improvements in street and home lighting.</p>\n                <p>As the night became a time for all kinds of activity, the length of time people slept declined. In 1667, Paris became the first city in the world to light its streets, using wax candles in glass lamps. It was followed by another French city, Lille, in the same year and by Amsterdam in Holland two years later, where a much more efficient oil-powered lamp was developed. London didn't light its streets until 1684, but by the end of the 17th century, more than 50 of Europe's major towns and cities were lit at night. Coffee houses emerged as a fashionable phenomenon and many were open virtually around the clock. Going out at night became commonplace, and spending hours lying in bed was considered a waste of time. 'People were becoming increasingly time-conscious and sensitive to efficiency, certainly before the 19th century,' says Ekirch. ‘But the Industrial Revolution intensified that attitude considerably.' Strong evidence of this shifting attitude is contained in a medical journal from 1829 which urged parents to force their children out of the pattern of first and second sleep.</p>\n            </div>\n            <div class=\"paragraph-wrapper\">\n                <div class=\"paragraph-dropzone dropzone match-dropzone\" data-section=\"D\" id=\"q4-dropzone\" data-question=\"q4\">\n                    <span class=\"paragraph-label\">Section D (Q17):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>D</strong> Today, most people seem to have adapted quite well to the eight-hour sleep, but Ekirch believes many sleeping problems may have roots in the human body's natural preference for divided sleep, as well as in difficulties caused by extended exposure to artificial light in the modern world. This could be the cause of a condition called sleep maintenance insomnia, where people wake during the night and have trouble getting back to sleep. The condition first appears in literature at the end of the 19th century, at the same time as accounts of interrupted sleep disappear.</p>\n            </div>\n             <div class=\"paragraph-wrapper\">\n                <div class=\"paragraph-dropzone dropzone match-dropzone\" data-section=\"E\" id=\"q5-dropzone\" data-question=\"q5\">\n                    <span class=\"paragraph-label\">Section E (Q18):</span>\n                    <div class=\"dropped-items\"></div>\n                </div>\n                <p><strong>E</strong> Sleep psychologist Gregg Jacobs says that the idea that we must sleep for an extended period of time could be damaging if it makes people who wake up in the night anxious, as this anxiety can itself discourage sleep and is likely to affect waking life too. Jacobs suggests that the waking period between sleeps, when people simply rested and relaxed, could have played an important part in the human capacity to regulate stress naturally. Russell Foster, a professor of circadian (body clock) neuroscience at Oxford University in the UK, shares this point of view. ‘Over 30% of the medical problems that doctors are faced with stem directly or indirectly from sleep. But sleep has been ignored in medical training, and there are very few centres where sleep is studied,' Foster says. He feels this needs to change.</p>\n            </div>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "matching",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Questions 14–18</h4>\n                <p>Reading Passage 2 has five sections, <strong>A–E</strong>.</p>\n                <p>Choose the correct heading for each section from the list of headings below.</p>\n                <p><em>Drag a heading from this list and drop it onto the correct section's answer box on the left.</em></p>\n                <div class=\"headings-pool\" id=\"headings-pool-container\">\n                    <strong>List of Headings</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"i\">i Historical reasons why interrupted sleep became uncommon</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"ii\">ii Brain structures involved in sleep patterns</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iii\">iii Potential health issues related to sleep</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"iv\">iv Famous cases in literature of sleep problems</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"v\">v An analysis of old documents to discover sleep patterns</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vi\">vi Biological and environmental factors preventing people from falling asleep again</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-heading=\"vii\">vii Scientific evidence that divided sleep is a natural phenomenon</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false,
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "matching",
+      "questionIds": [
+        "q6",
+        "q7",
+        "q8",
+        "q9",
+        "q10"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q6-7-8-9-10-anchor\">\n                <h4>Questions 19–23</h4>\n                <p>Look at the following statements (Questions 19–23) and the list of researchers below.</p>\n                <p>Match each statement with the correct researcher, <strong>A–E</strong>.</p>\n                <p><em>NB You may use any letter more than once.</em></p>\n                \n                <div class=\"match-question-item\">\n                    <p><strong>19</strong> In certain historical periods, the threat of criminal danger led to segmented sleep.</p>\n                    <div class=\"match-dropzone\" data-question=\"q6\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>20</strong> Physicians should learn more about treating people with sleeping difficulties.</p>\n                    <div class=\"match-dropzone\" data-question=\"q7\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                     <p><strong>21</strong> Historically, when people experienced interrupted sleep, they used the waking periods at night for different activities.</p>\n                    <div class=\"match-dropzone\" data-question=\"q8\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>22</strong> Technological changes in Europe made people more likely to sleep through the night.</p>\n                    <div class=\"match-dropzone\" data-question=\"q9\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>23</strong> The belief that humans should have a long continuous sleep can be psychologically harmful.</p>\n                    <div class=\"match-dropzone\" data-question=\"q10\"></div>\n                </div>\n\n                <div class=\"options-pool\" id=\"researchers-options-pool\">\n                    <strong>List of Researchers</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"A\">A Thomas Wehr</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"B\">B Roger Ekirch</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"C\">C Craig Koslofsky</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"D\">D Gregg Jacobs</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"E\">E Russell Foster</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": true
+    },
+    {
+      "groupId": "group-3",
+      "kind": "summary_completion",
+      "questionIds": [
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q11-12-13-anchor\">\n                <h4>Questions 24–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h4>Historical patterns of interrupted sleep</h4>\n                    <p>\n                    Historical evidence seems to show that humans had common sleep patterns which were quite unlike today's eight hours of unbroken sleep each night. People habitually went to bed early, soon after <strong>24</strong> <input name=\"q11\" type=\"text\" id=\"q24_input\">, slept for a while, then woke up for a few hours of activity or perhaps to consider, for example, the meaning of their <strong>25</strong> <input name=\"q12\" type=\"text\" id=\"q25_input\">.\n                    </p>\n                    <p>\n                    There was little else to do at home in the dark, since what little means of lighting they had, such as using candles, was costly. In 16th-century Europe, people tended to stay at home at night because they feared <strong>26</strong> <input name=\"q13\" type=\"text\" id=\"q26_input\"> on largely unlit city streets. Once urban street lighting improved, nightlife in cities became popular, and recreational spots like coffee houses came to be considered fashionable. Consequently, sleeping patterns also began to change.\n                    </p>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "vii",
+    "q2": "v",
+    "q3": "i",
+    "q4": "vi",
+    "q5": "iii",
+    "q6": "C",
+    "q7": "E",
+    "q8": "B",
+    "q9": "B",
+    "q10": "D",
+    "q11": "sunset",
+    "q12": "dreams",
+    "q13": "thieves"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠/135. P2 - The Myth of the Eight-hour Sleep 八小时睡眠.pdf",
+    "ieltsHtml": "IELTS/P2/The Myth of the Eight-hour Sleep.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-11T14:43:22.065Z",
+    "notes": "signature:text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "14",
+    "q2": "15",
+    "q3": "16",
+    "q4": "17",
+    "q5": "18",
+    "q6": "19",
+    "q7": "20",
+    "q8": "21",
+    "q9": "22",
+    "q10": "23",
+    "q11": "24",
+    "q12": "25",
+    "q13": "26"
+  }
+}
+);
+})(typeof window !== "undefined" ? window : globalThis);
