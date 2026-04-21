@@ -5,8 +5,6 @@
     const INIT_RETRY_MS = 1500;
     const SIMULATION_DRAFT_SYNC_MS = 1200;
     const EXPLANATION_STYLE_ID = 'reading-explanation-style';
-    const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__';
-    const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange';
     const EXPLANATION_SPLIT_KINDS = new Set([
         'single_choice',
         'multi_choice',
@@ -35,13 +33,9 @@
         readOnly: false,
         reviewContext: null,
         suiteReviewMode: false,
+        startTime: Date.now(),
         pageStartTime: Date.now(),
-        pagePausedAtMs: null,
-        pagePausedOffsetMs: 0,
         simulationGlobalAnchorMs: null,
-        suiteTimerAnchorMs: null,
-        suiteTimerMode: null,
-        suiteTimerLimitSeconds: null,
         ready: false,
         submitted: false,
         initTimer: null,
@@ -71,48 +65,6 @@
         resetBtn: null
     };
 
-    function getPracticeTimerBridge() {
-        return global[PRACTICE_TIMER_BRIDGE_KEY];
-    }
-
-    function getPracticeTimerSnapshot() {
-        return getPracticeTimerBridge().getSnapshot();
-    }
-
-    function getPageElapsedSeconds() {
-        const referenceNow = Number.isFinite(state.pagePausedAtMs)
-            ? state.pagePausedAtMs
-            : Date.now();
-        return Math.max(
-            0,
-            Math.round((referenceNow - state.pageStartTime - state.pagePausedOffsetMs) / 1000)
-        );
-    }
-
-    function syncPagePauseState(isRunning) {
-        const running = isRunning !== false;
-        const now = Date.now();
-        if (!running) {
-            if (!Number.isFinite(state.pagePausedAtMs)) {
-                state.pagePausedAtMs = now;
-            }
-            return;
-        }
-        if (Number.isFinite(state.pagePausedAtMs)) {
-            state.pagePausedOffsetMs += Math.max(0, now - state.pagePausedAtMs);
-            state.pagePausedAtMs = null;
-        }
-    }
-
-    function resolvePracticeTiming(minDurationSeconds = 0) {
-        const snapshot = getPracticeTimerSnapshot();
-        return {
-            duration: Math.max(minDurationSeconds, Math.round(Number(snapshot.durationSeconds))),
-            startTimeMs: Math.floor(Number(snapshot.effectiveStartTimeMs)),
-            endTimeMs: Math.floor(Number(snapshot.effectiveEndTimeMs))
-        };
-    }
-
     function decodeParam(value) {
         if (!value) return '';
         try {
@@ -122,6 +74,65 @@
         }
     }
 
+    function normalizeFlowMode(value) { return typeof value === 'string' ? value.trim().toLowerCase() : ''; }
+
+    function resolveSimulationSequence(rawIndex, rawTotal) {
+        const currentIndex = Number.isFinite(rawIndex) ? Math.max(0, rawIndex) : 0;
+        const total = Number.isFinite(rawTotal) && rawTotal > 0 ? rawTotal : 3;
+        const isLast = currentIndex >= total - 1;
+        return { currentIndex, total, isLast, canPrev: currentIndex > 0, canNext: !isLast, flowMode: 'simulation' };
+    }
+
+    function applySimulationState(simulationCtx, ready) {
+        state.simulationMode = true;
+        state.simulationContextReady = !!ready;
+        state.simulationCtx = simulationCtx;
+    }
+
+    function clearSimulationState(clearDraftMirror = false) {
+        state.simulationMode = false;
+        state.simulationContextReady = false;
+        state.simulationCtx = null;
+        if (clearDraftMirror) {
+            stopSimulationDraftSync();
+            clearSimulationDraftMirror();
+            state.simulationDraftFingerprint = '';
+        }
+    }
+
+    function syncReviewCursor(data = {}, indexKey = 'reviewEntryIndex') {
+        if (data.reviewSessionId) state.reviewSessionId = data.reviewSessionId;
+        if (Number.isInteger(data[indexKey])) state.reviewEntryIndex = data[indexKey];
+    }
+
+    function applyReviewMode(enabled, payload = {}, viewMode = null) {
+        state.reviewMode = Boolean(enabled);
+        if (typeof viewMode === 'string') state.reviewViewMode = viewMode;
+        setReadOnlyMode(state.reviewMode ? payload.readOnly !== false : false);
+    }
+
+    function resolveReplayMarkedQuestions(payload = {}, entry = {}) {
+        const metadataMarks = entry && entry.metadata && entry.metadata.markedQuestions;
+        return Array.isArray(payload.markedQuestions)
+            ? payload.markedQuestions
+            : (Array.isArray(entry.markedQuestions) ? entry.markedQuestions : (Array.isArray(metadataMarks) ? metadataMarks : []));
+    }
+
+    function applyReplayMarkedQuestions(markedQuestions) {
+        if (typeof global.setPracticeMarkedQuestions === 'function') {
+            try { global.setPracticeMarkedQuestions(markedQuestions); } catch (_) {}
+        }
+    }
+
+    function buildSessionReadyPayload() {
+        return {
+            url: global.location.href, pageType: 'unified-reading', title: state.dataset?.meta?.title || document.title,
+            reviewMode: state.reviewMode, readOnly: state.readOnly, reviewSessionId: state.reviewSessionId, reviewEntryIndex: state.reviewEntryIndex
+        };
+    }
+
+    function buildRequestInitPayload() { return { derivedExamId: state.examId, url: global.location.href, title: document.title }; }
+
     function parseQuery() {
         const params = new URLSearchParams(global.location.search);
         state.examId = decodeParam(params.get('examId')) || null;
@@ -130,35 +141,12 @@
         if (suiteSessionId) {
             state.suiteSessionId = suiteSessionId;
         }
-        const suiteTimerAnchorMs = Number(params.get('suiteTimerAnchorMs') || params.get('globalTimerAnchorMs'));
-        if (Number.isFinite(suiteTimerAnchorMs) && suiteTimerAnchorMs > 0) {
-            state.suiteTimerAnchorMs = Math.floor(suiteTimerAnchorMs);
-            state.simulationGlobalAnchorMs = Math.floor(suiteTimerAnchorMs);
-        }
-        const suiteTimerMode = decodeParam(params.get('suiteTimerMode')).trim().toLowerCase();
-        if (suiteTimerMode === 'countdown' || suiteTimerMode === 'elapsed') {
-            state.suiteTimerMode = suiteTimerMode;
-        }
-        const suiteTimerLimitSeconds = Number(params.get('suiteTimerLimitSeconds'));
-        if (Number.isFinite(suiteTimerLimitSeconds) && suiteTimerLimitSeconds >= 0) {
-            state.suiteTimerLimitSeconds = Math.floor(suiteTimerLimitSeconds);
-        }
-        const queryFlowMode = decodeParam(params.get('suiteFlowMode')).trim().toLowerCase();
+        const queryFlowMode = normalizeFlowMode(decodeParam(params.get('suiteFlowMode')));
         if (queryFlowMode === 'simulation') {
-            const rawIndex = Number(params.get('suiteSequenceIndex'));
-            const rawTotal = Number(params.get('suiteSequenceTotal'));
-            const currentIndex = Number.isFinite(rawIndex) ? Math.max(0, rawIndex) : 0;
-            const total = Number.isFinite(rawTotal) && rawTotal > 0 ? rawTotal : 3;
-            const isLast = currentIndex >= total - 1;
-            state.simulationMode = true;
-            state.simulationCtx = {
-                currentIndex,
-                total,
-                isLast,
-                canPrev: currentIndex > 0,
-                canNext: !isLast,
-                flowMode: 'simulation'
-            };
+            applySimulationState(
+                resolveSimulationSequence(Number(params.get('suiteSequenceIndex')), Number(params.get('suiteSequenceTotal'))),
+                false
+            );
         }
     }
 
@@ -1224,6 +1212,14 @@
         return 1;
     }
 
+    function questionWeight(correctAnswer) {
+        const normalized = normalizeAnswerValue(correctAnswer);
+        if (Array.isArray(normalized) && normalized.length > 0) {
+            return normalized.length;
+        }
+        return 1;
+    }
+
     function hasAnswer(questionId) {
         const answers = collectAnswers();
         const value = answers[questionId];
@@ -1582,15 +1578,7 @@
                     && barNode.dataset
                     && barNode.dataset.finalizeOnNext === 'true'
                 );
-                postMessage('REVIEW_NAVIGATE', {
-                    direction,
-                    sessionId: null,
-                    reviewSessionId: state.reviewSessionId || state.reviewContext?.reviewSessionId || null,
-                    suiteSessionId: state.suiteSessionId || state.reviewContext?.suiteSessionId || null,
-                    suiteReviewMode: state.suiteReviewMode === true,
-                    currentIndex: Number.isInteger(state.reviewContext?.currentIndex) ? state.reviewContext.currentIndex : state.reviewEntryIndex,
-                    finalizeOnNext
-                });
+                postMessage('REVIEW_NAVIGATE', buildReviewNavigatePayload(direction, finalizeOnNext));
             });
         const header = document.querySelector('body > header') || document.querySelector('header');
         if (header) {
@@ -1627,21 +1615,14 @@
     }
 
     function applyReviewContext(data = {}) {
-        const contextExamId = data && data.examId != null ? String(data.examId).trim() : '';
-        const currentExamId = state.examId != null ? String(state.examId).trim() : '';
-        if (contextExamId && currentExamId && contextExamId !== currentExamId) {
+        if (isExamIdMismatched(data && data.examId)) {
             return;
         }
         state.reviewContext = data;
         state.suiteReviewMode = Boolean(data.suiteReviewMode);
         const viewMode = data.viewMode === 'answering' ? 'answering' : 'review';
         state.reviewViewMode = viewMode;
-        if (data.reviewSessionId) {
-            state.reviewSessionId = data.reviewSessionId;
-        }
-        if (Number.isInteger(data.currentIndex)) {
-            state.reviewEntryIndex = data.currentIndex;
-        }
+        syncReviewCursor(data, 'currentIndex');
         const bar = ensureReviewNavBar();
         const prevBtn = bar.querySelector('button[data-review-dir="prev"]');
         const nextBtn = bar.querySelector('button[data-review-dir="next"]');
@@ -1656,52 +1637,51 @@
         if (prevBtn) prevBtn.disabled = !data.canPrev;
         if (nextBtn) nextBtn.disabled = !data.canNext;
         if (viewMode === 'answering') {
-            state.reviewMode = false;
             resetToAnsweringPresentation();
-            setReadOnlyMode(false);
+            applyReviewMode(false, data, viewMode);
         } else {
-            state.reviewMode = true;
-            setReadOnlyMode(data.readOnly !== false);
+            applyReviewMode(true, data, viewMode);
         }
     }
 
     async function applyReplayRecord(data = {}) {
         const entry = data.entry && typeof data.entry === 'object' ? data.entry : data;
-        const entryExamId = entry && entry.examId != null ? String(entry.examId).trim() : '';
-        const currentExamId = state.examId != null ? String(state.examId).trim() : '';
-        if (entryExamId && currentExamId && entryExamId !== currentExamId) {
+        if (isExamIdMismatched(entry && entry.examId)) {
             return;
         }
         const replayResults = buildReplayResults(entry);
-        const replayMarks = Array.isArray(data.markedQuestions)
-            ? data.markedQuestions
-            : (Array.isArray(entry.markedQuestions)
-                ? entry.markedQuestions
-                : (Array.isArray(entry.metadata && entry.metadata.markedQuestions)
-                    ? entry.metadata.markedQuestions
-                    : []));
-        if (data.reviewSessionId) {
-            state.reviewSessionId = data.reviewSessionId;
-        }
-        if (Number.isInteger(data.reviewEntryIndex)) {
-            state.reviewEntryIndex = data.reviewEntryIndex;
-        }
-        state.reviewMode = true;
-        state.reviewViewMode = 'review';
+        const replayMarks = resolveReplayMarkedQuestions(data, entry);
+        syncReviewCursor(data, 'reviewEntryIndex');
+        applyReviewMode(true, data, 'review');
         applyReplayAnswersToDom(replayResults.answers || {});
         state.lastResults = replayResults;
         state.submitted = true;
         renderResults(replayResults);
         await renderExplanations();
         updateNavStatuses(replayResults);
-        setReadOnlyMode(data.readOnly !== false);
-        if (typeof global.setPracticeMarkedQuestions === 'function') {
-            try {
-                global.setPracticeMarkedQuestions(replayMarks);
-            } catch (_) {
-                // ignore mark replay failures
-            }
-        }
+        applyReplayMarkedQuestions(replayMarks);
+    }
+
+    function normalizeId(value) { return value != null ? String(value).trim() : ''; }
+
+    function isExamIdMismatched(incomingExamId) {
+        const normalizedIncoming = normalizeId(incomingExamId);
+        const normalizedCurrent = normalizeId(state.examId);
+        return Boolean(normalizedIncoming && normalizedCurrent && normalizedIncoming !== normalizedCurrent);
+    }
+
+    function safeJsonStringify(value, fallbackValue = '') { try { return JSON.stringify(value); } catch (_) { return fallbackValue; } }
+    function safeJsonParse(value, fallbackValue = null) { try { return JSON.parse(value); } catch (_) { return fallbackValue; } }
+    function getElapsedSeconds() { return Math.max(0, Math.round((Date.now() - state.pageStartTime) / 1000)); }
+
+    function buildReviewNavigatePayload(direction, finalizeOnNext) {
+        return {
+            direction,
+            sessionId: null,
+            reviewSessionId: state.reviewSessionId || state.reviewContext?.reviewSessionId || null, suiteSessionId: state.suiteSessionId || state.reviewContext?.suiteSessionId || null,
+            suiteReviewMode: state.suiteReviewMode === true, currentIndex: Number.isInteger(state.reviewContext?.currentIndex) ? state.reviewContext.currentIndex : state.reviewEntryIndex,
+            finalizeOnNext: Boolean(finalizeOnNext)
+        };
     }
 
     function buildEnvelope(type, payload) {
@@ -1711,10 +1691,6 @@
                 examId: state.examId,
                 sessionId: state.sessionId,
                 suiteSessionId: state.suiteSessionId,
-                suiteTimerAnchorMs: state.suiteTimerAnchorMs,
-                globalTimerAnchorMs: state.suiteTimerAnchorMs,
-                suiteTimerMode: state.suiteTimerMode,
-                suiteTimerLimitSeconds: state.suiteTimerLimitSeconds,
                 source: MESSAGE_SOURCE
             }, payload || {}),
             source: MESSAGE_SOURCE
@@ -1749,49 +1725,31 @@
     }
 
     function sendSessionReady() {
-        postMessage('SESSION_READY', {
-            url: global.location.href,
-            pageType: 'unified-reading',
-            title: state.dataset?.meta?.title || document.title,
-            reviewMode: state.reviewMode,
-            readOnly: state.readOnly,
-            reviewSessionId: state.reviewSessionId,
-            reviewEntryIndex: state.reviewEntryIndex,
-            suiteTimerAnchorMs: state.suiteTimerAnchorMs,
-            globalTimerAnchorMs: state.suiteTimerAnchorMs,
-            suiteTimerMode: state.suiteTimerMode,
-            suiteTimerLimitSeconds: state.suiteTimerLimitSeconds
-        });
+        postMessage('SESSION_READY', buildSessionReadyPayload());
         state.sessionReadySent = true;
     }
 
     function buildInitSignature(data = {}) {
-        return JSON.stringify({
-            examId: data && data.examId != null ? String(data.examId).trim() : '',
-            sessionId: data && data.sessionId != null ? String(data.sessionId).trim() : '',
-            suiteSessionId: data && data.suiteSessionId != null ? String(data.suiteSessionId).trim() : '',
-            reviewSessionId: data && data.reviewSessionId != null ? String(data.reviewSessionId).trim() : '',
-            reviewEntryIndex: Number.isInteger(data && data.reviewEntryIndex) ? data.reviewEntryIndex : 0,
-            reviewMode: Boolean(data && data.reviewMode),
-            readOnly: data && Object.prototype.hasOwnProperty.call(data, 'readOnly') ? Boolean(data.readOnly) : null,
-            suiteFlowMode: data && typeof data.suiteFlowMode === 'string' ? data.suiteFlowMode.trim().toLowerCase() : '',
-            suiteTimerAnchorMs: Number.isFinite(Number(data && (data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs))) ? Number(data && (data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs)) : null,
-            suiteTimerMode: data && typeof data.suiteTimerMode === 'string' ? data.suiteTimerMode.trim().toLowerCase() : '',
-            suiteTimerLimitSeconds: Number.isFinite(Number(data && data.suiteTimerLimitSeconds)) ? Number(data.suiteTimerLimitSeconds) : null,
-            globalTimerAnchorMs: Number.isFinite(Number(data && data.globalTimerAnchorMs)) ? Number(data.globalTimerAnchorMs) : null
-        });
+        return safeJsonStringify({
+            examId: data.examId != null ? String(data.examId).trim() : '',
+            sessionId: data.sessionId != null ? String(data.sessionId).trim() : '',
+            suiteSessionId: data.suiteSessionId != null ? String(data.suiteSessionId).trim() : '',
+            reviewSessionId: data.reviewSessionId != null ? String(data.reviewSessionId).trim() : '',
+            reviewEntryIndex: Number.isInteger(data.reviewEntryIndex) ? data.reviewEntryIndex : 0,
+            reviewMode: Boolean(data.reviewMode),
+            readOnly: Object.prototype.hasOwnProperty.call(data, 'readOnly') ? Boolean(data.readOnly) : null,
+            suiteFlowMode: typeof data.suiteFlowMode === 'string' ? data.suiteFlowMode.trim().toLowerCase() : ''
+        }, '');
     }
 
     function buildReplaySignature(data = {}) {
-        const entry = data && data.entry && typeof data.entry === 'object' ? data.entry : {};
-        const entryExamId = entry && entry.examId != null ? String(entry.examId).trim() : '';
-        const currentExamId = state.examId != null ? String(state.examId).trim() : '';
-        return JSON.stringify({
-            examId: entryExamId || currentExamId,
-            reviewSessionId: data && data.reviewSessionId != null ? String(data.reviewSessionId).trim() : '',
-            suiteSessionId: data && data.suiteSessionId != null ? String(data.suiteSessionId).trim() : '',
-            reviewEntryIndex: Number.isInteger(data && data.reviewEntryIndex) ? data.reviewEntryIndex : 0
-        });
+        const entry = data.entry && typeof data.entry === 'object' ? data.entry : {};
+        return safeJsonStringify({
+            examId: normalizeId(entry && entry.examId) || normalizeId(state.examId),
+            reviewSessionId: data.reviewSessionId != null ? String(data.reviewSessionId).trim() : '',
+            suiteSessionId: data.suiteSessionId != null ? String(data.suiteSessionId).trim() : '',
+            reviewEntryIndex: Number.isInteger(data.reviewEntryIndex) ? data.reviewEntryIndex : 0
+        }, '');
     }
 
     function startInitLoop() {
@@ -1801,8 +1759,8 @@
                 stopInitLoop();
                 return;
             }
-            dispatchReady();
-        }, 500);
+            postMessage('REQUEST_INIT', buildRequestInitPayload());
+        }, INIT_RETRY_MS);
     }
 
     function getSimulationDraftStorageKey() {
@@ -1818,73 +1776,60 @@
         if (!draft || typeof draft !== 'object') {
             return null;
         }
-        try {
-            return JSON.parse(JSON.stringify(draft));
-        } catch (_) {
-            return {
-                answers: draft.answers && typeof draft.answers === 'object' ? { ...draft.answers } : {},
-                highlights: Array.isArray(draft.highlights) ? draft.highlights.slice() : [],
-                scrollY: Number.isFinite(Number(draft.scrollY)) ? Number(draft.scrollY) : 0
-            };
+        const serialized = safeJsonStringify(draft, '');
+        if (serialized) {
+            const parsed = safeJsonParse(serialized, null);
+            if (parsed && typeof parsed === 'object') {
+                return parsed;
+            }
         }
+        return {
+            answers: draft.answers && typeof draft.answers === 'object' ? { ...draft.answers } : {},
+            highlights: Array.isArray(draft.highlights) ? draft.highlights.slice() : [],
+            scrollY: Number.isFinite(Number(draft.scrollY)) ? Number(draft.scrollY) : 0
+        };
     }
 
     function buildDraftFingerprint(draft) {
         if (!draft || typeof draft !== 'object') {
             return '';
         }
-        try {
-            return JSON.stringify(draft);
-        } catch (_) {
-            return '';
-        }
+        return safeJsonStringify(draft, '');
+    }
+
+    function withSimulationDraftStorage(accessor, fallbackValue = null) {
+        const key = getSimulationDraftStorageKey();
+        if (!key || !global.sessionStorage) return fallbackValue;
+        try { return accessor(global.sessionStorage, key); } catch (_) { return fallbackValue; }
     }
 
     function persistSimulationDraftMirror(draft) {
-        const key = getSimulationDraftStorageKey();
-        if (!key || !global.sessionStorage || !draft) {
-            return;
-        }
-        try {
-            global.sessionStorage.setItem(key, JSON.stringify({
+        if (!draft) return;
+        withSimulationDraftStorage((storage, key) => {
+            storage.setItem(key, safeJsonStringify({
                 draft,
                 updatedAt: Date.now()
-            }));
-        } catch (_) {
-            // ignore sessionStorage failures in restricted environments
-        }
+            }, ''));
+            return true;
+        }, false);
     }
 
     function restoreSimulationDraftMirror() {
-        const key = getSimulationDraftStorageKey();
-        if (!key || !global.sessionStorage) {
-            return null;
-        }
-        try {
-            const raw = global.sessionStorage.getItem(key);
+        return withSimulationDraftStorage((storage, key) => {
+            const raw = storage.getItem(key);
             if (!raw) return null;
-            const parsed = JSON.parse(raw);
+            const parsed = safeJsonParse(raw, null);
             if (!parsed || typeof parsed !== 'object') {
                 return null;
             }
             return parsed.draft && typeof parsed.draft === 'object'
                 ? parsed.draft
                 : null;
-        } catch (_) {
-            return null;
-        }
+        }, null);
     }
 
     function clearSimulationDraftMirror() {
-        const key = getSimulationDraftStorageKey();
-        if (!key || !global.sessionStorage) {
-            return;
-        }
-        try {
-            global.sessionStorage.removeItem(key);
-        } catch (_) {
-            // ignore sessionStorage failures in restricted environments
-        }
+        withSimulationDraftStorage((storage, key) => (storage.removeItem(key), true), false);
     }
 
     function stopSimulationDraftSync() {
@@ -1895,12 +1840,7 @@
     }
 
     function collectCurrentDraft() {
-        const answers = collectAnswers();
-        return {
-            answers,
-            highlights: collectHighlights(),
-            scrollY: global.scrollY || 0
-        };
+        return { answers: collectAnswers(), highlights: collectHighlights(), scrollY: global.scrollY || 0 };
     }
 
     function syncSimulationDraftSnapshot(reason = 'periodic') {
@@ -1920,7 +1860,7 @@
         persistSimulationDraftMirror(mirroredDraft);
         postMessage('SIMULATION_DRAFT_SYNC', {
             draft: mirroredDraft,
-            elapsed: getPageElapsedSeconds()
+            elapsed: getElapsedSeconds()
         });
     }
 
@@ -2260,9 +2200,10 @@
             direction: direction === 'prev' ? 'prev' : 'next',
             draft: collectCurrentDraft(),
             resultSnapshot: buildResults(),
-            elapsed: getPageElapsedSeconds()
+            elapsed: getElapsedSeconds()
         });
     }
+
     async function handleSubmit() {
         if (state.readOnly) {
             return;
@@ -2280,11 +2221,10 @@
         await renderExplanations();
         updateNavStatuses(results);
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
-        const timing = resolvePracticeTiming(1);
         postMessage(messageType, Object.assign({
-            duration: timing.duration,
-            startTime: new Date(timing.startTimeMs).toISOString(),
-            endTime: new Date(timing.endTimeMs).toISOString(),
+            duration: Math.max(1, Math.round((Date.now() - state.startTime) / 1000)),
+            startTime: new Date(state.startTime).toISOString(),
+            endTime: new Date().toISOString(),
             metadata: {
                 examId: state.examId,
                 examTitle: state.dataset?.meta?.title || '',
@@ -2372,9 +2312,9 @@
         if (type === 'INIT_SESSION' || type === 'INIT_EXAM_SESSION') {
             const initSignature = buildInitSignature(data);
             const isDuplicateInit = initSignature && initSignature === state.lastInitSignature;
-            const incomingExamId = data && data.examId != null ? String(data.examId).trim() : '';
-            const currentExamId = state.examId != null ? String(state.examId).trim() : '';
-            if (incomingExamId && currentExamId && incomingExamId !== currentExamId) {
+            const incomingExamId = normalizeId(data.examId);
+            const currentExamId = normalizeId(state.examId);
+            if (isExamIdMismatched(incomingExamId)) {
                 return;
             }
             if (incomingExamId && !currentExamId) {
@@ -2386,53 +2326,18 @@
             if (data.suiteSessionId) {
                 state.suiteSessionId = data.suiteSessionId;
             }
-            const initTimerAnchorMs = Number(data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs);
-            if (Number.isFinite(initTimerAnchorMs) && initTimerAnchorMs > 0) {
-                state.suiteTimerAnchorMs = Math.floor(initTimerAnchorMs);
-                state.simulationGlobalAnchorMs = Math.floor(initTimerAnchorMs);
-            }
-            if (typeof data.suiteTimerMode === 'string') {
-                const normalizedTimerMode = data.suiteTimerMode.trim().toLowerCase();
-                if (normalizedTimerMode === 'countdown' || normalizedTimerMode === 'elapsed') {
-                    state.suiteTimerMode = normalizedTimerMode;
-                }
-            }
-            if (Number.isFinite(Number(data.suiteTimerLimitSeconds))) {
-                state.suiteTimerLimitSeconds = Number(data.suiteTimerLimitSeconds);
-            }
-            if (data.reviewSessionId) {
-                state.reviewSessionId = data.reviewSessionId;
-            }
-            if (Number.isInteger(data.reviewEntryIndex)) {
-                state.reviewEntryIndex = data.reviewEntryIndex;
-            }
-            const initFlowMode = data && typeof data.suiteFlowMode === 'string'
-                ? data.suiteFlowMode.trim().toLowerCase()
-                : '';
+            syncReviewCursor(data, 'reviewEntryIndex');
+            const initFlowMode = normalizeFlowMode(data.suiteFlowMode);
             if (initFlowMode === 'simulation') {
-                const rawIndex = Number(data.suiteSequenceIndex);
-                const rawTotal = Number(data.suiteSequenceTotal);
-                const currentIndex = Number.isFinite(rawIndex) ? Math.max(0, rawIndex) : 0;
-                const total = Number.isFinite(rawTotal) && rawTotal > 0 ? rawTotal : 3;
-                const isLast = currentIndex >= total - 1;
-                state.simulationMode = true;
-                state.simulationContextReady = false;
-                state.simulationCtx = {
-                    currentIndex,
-                    total,
-                    isLast,
-                    canPrev: currentIndex > 0,
-                    canNext: !isLast,
-                    flowMode: 'simulation'
-                };
+                applySimulationState(
+                    resolveSimulationSequence(Number(data.suiteSequenceIndex), Number(data.suiteSequenceTotal)),
+                    false
+                );
             } else if (initFlowMode) {
-                state.simulationMode = false;
-                state.simulationContextReady = false;
-                state.simulationCtx = null;
+                clearSimulationState(false);
             }
             if (data.reviewMode) {
-                state.reviewMode = true;
-                setReadOnlyMode(data.readOnly !== false);
+                applyReviewMode(true, data);
             }
             syncPrimaryActionButtons();
             refreshSimulationDraftSyncLifecycle();
@@ -2459,8 +2364,8 @@
             return;
         }
         if (type === 'SUITE_NAVIGATE' && data.url) {
-            const targetSuiteSessionId = typeof data.suiteSessionId === 'string' ? data.suiteSessionId.trim() : '';
-            const currentSuiteSessionId = typeof state.suiteSessionId === 'string' ? state.suiteSessionId.trim() : '';
+            const targetSuiteSessionId = normalizeId(data.suiteSessionId);
+            const currentSuiteSessionId = normalizeId(state.suiteSessionId);
             if (targetSuiteSessionId && currentSuiteSessionId && targetSuiteSessionId !== currentSuiteSessionId) {
                 return;
             }
@@ -2468,45 +2373,24 @@
             return;
         }
         if (type === 'SIMULATION_CONTEXT') {
-            const contextExamId = data && data.examId != null ? String(data.examId).trim() : '';
-            const currentExamId = state.examId != null ? String(state.examId).trim() : '';
-            if (contextExamId && currentExamId && contextExamId !== currentExamId) {
+            if (isExamIdMismatched(data && data.examId)) {
                 return;
             }
-            const flowMode = data && typeof data.flowMode === 'string'
-                ? data.flowMode.trim().toLowerCase()
-                : 'simulation';
+            const flowMode = normalizeFlowMode(data && data.flowMode) || 'simulation';
             if (flowMode !== 'simulation') {
-                state.simulationMode = false;
-                state.simulationContextReady = false;
-                state.simulationCtx = null;
-                stopSimulationDraftSync();
-                clearSimulationDraftMirror();
-                state.simulationDraftFingerprint = '';
+                clearSimulationState(true);
                 syncPrimaryActionButtons();
                 return;
             }
-            state.simulationMode = true;
-            state.simulationContextReady = true;
-            state.simulationCtx = data;
-            const simulationTimerAnchorMs = Number(data.globalTimerAnchorMs ?? data.suiteTimerAnchorMs);
-            if (Number.isFinite(simulationTimerAnchorMs)) {
-                state.simulationGlobalAnchorMs = simulationTimerAnchorMs;
-                state.suiteTimerAnchorMs = simulationTimerAnchorMs;
-            }
-            if (typeof data.suiteTimerMode === 'string') {
-                const normalizedTimerMode = data.suiteTimerMode.trim().toLowerCase();
-                if (normalizedTimerMode === 'countdown' || normalizedTimerMode === 'elapsed') {
-                    state.suiteTimerMode = normalizedTimerMode;
-                }
-            }
-            if (Number.isFinite(Number(data.suiteTimerLimitSeconds))) {
-                state.suiteTimerLimitSeconds = Number(data.suiteTimerLimitSeconds);
+            applySimulationState(data, true);
+            if (Number.isFinite(Number(data.globalTimerAnchorMs))) {
+                state.simulationGlobalAnchorMs = Number(data.globalTimerAnchorMs);
             }
             const elapsedSeconds = Number.isFinite(Number(data.elapsed)) ? Number(data.elapsed) : 0;
             state.pageStartTime = Date.now() - (elapsedSeconds * 1000);
-            state.pagePausedAtMs = null;
-            state.pagePausedOffsetMs = 0;
+            state.startTime = Number.isFinite(state.simulationGlobalAnchorMs)
+                ? state.simulationGlobalAnchorMs
+                : state.pageStartTime;
             syncPrimaryActionButtons();
             const draftFromParent = data && data.draft && typeof data.draft === 'object'
                 ? data.draft
@@ -2522,10 +2406,7 @@
             return;
         }
         if (type === 'SUITE_FORCE_CLOSE') {
-            state.simulationContextReady = false;
-            stopSimulationDraftSync();
-            clearSimulationDraftMirror();
-            state.simulationDraftFingerprint = '';
+            clearSimulationState(true);
             try {
                 global.close();
             } catch (_) {
@@ -2536,18 +2417,6 @@
 
     function attachMessageBridge() {
         global.addEventListener('message', handleIncoming);
-    }
-
-    function attachPracticeTimerBridge() {
-        global.addEventListener(PRACTICE_TIMER_EVENT, (event) => {
-            const detail = event && event.detail && typeof event.detail === 'object'
-                ? event.detail
-                : null;
-            if (!detail || typeof detail.running !== 'boolean') {
-                return;
-            }
-            syncPagePauseState(detail.running);
-        });
     }
 
     async function bootstrap() {
@@ -2579,7 +2448,6 @@
 
         attachActionListeners();
         attachMessageBridge();
-        attachPracticeTimerBridge();
         syncSuiteModeState();
         updateNavStatuses();
         refreshSimulationDraftSyncLifecycle();

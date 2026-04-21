@@ -6,23 +6,11 @@
     const QUESTION_ID_SUFFIX_PATTERN = /[-_](anchor|nav|target)$/i;
 
     document.addEventListener('DOMContentLoaded', function () {
-        const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__';
-        const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange';
         let settingsOpen = false;
         let notesOpen = false;
         let timerRunning = true;
         let seconds = 0;
         let timer;
-        let localTimerAnchorMs = Date.now();
-        const suiteTimerContext = {
-            active: false,
-            anchorMs: null,
-            mode: 'elapsed',
-            limitSeconds: null,
-            pausedAtMs: null,
-            pausedOffsetMs: 0,
-            source: ''
-        };
         let submissionLocked = false;
         let isResizing = false;
         const selbar = document.getElementById('selbar');
@@ -38,217 +26,19 @@
         const timerEl = document.getElementById('timer');
         const submitBtn = document.getElementById('submit-btn');
         const resetBtn = document.getElementById('reset-btn');
+        const exitBtn = document.getElementById('exit-btn');
         const suiteFlowModeSection = document.getElementById('suite-flow-mode-section');
-
-        function toFiniteNumber(value) {
-            const numeric = Number(value);
-            return Number.isFinite(numeric) ? numeric : null;
-        }
-
-        function normalizeSuiteTimerMode(value) {
-            const normalized = String(value || '').trim().toLowerCase();
-            if (normalized === 'countdown') {
-                return 'countdown';
-            }
-            if (normalized === 'elapsed') {
-                return 'elapsed';
-            }
-            return null;
-        }
-
-        function formatTimerSeconds(totalSeconds) {
-            const safeSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
-            const minutes = String(Math.floor(safeSeconds / 60)).padStart(2, '0');
-            const secs = String(safeSeconds % 60).padStart(2, '0');
-            return `${minutes}:${secs}`;
-        }
-
-        function readSuiteTimerContext(source = {}) {
-            if (!source || typeof source !== 'object') {
-                return null;
-            }
-            const anchorCandidate =
-                source.suiteTimerAnchorMs
-                ?? source.globalTimerAnchorMs
-                ?? source.anchorMs
-                ?? source.timerAnchorMs;
-            const anchorMs = toFiniteNumber(anchorCandidate);
-            if (!Number.isFinite(anchorMs) || anchorMs <= 0) {
-                return null;
-            }
-            const mode = normalizeSuiteTimerMode(source.suiteTimerMode ?? source.mode);
-            const limitCandidate =
-                source.suiteTimerLimitSeconds
-                ?? source.timerLimitSeconds
-                ?? source.limitSeconds;
-            const limitSeconds = toFiniteNumber(limitCandidate);
-            return {
-                anchorMs: Math.floor(anchorMs),
-                mode,
-                limitSeconds: Number.isFinite(limitSeconds) && limitSeconds >= 0 ? Math.floor(limitSeconds) : null
-            };
-        }
-
-        function getSuiteTimerElapsedSeconds() {
-            if (!suiteTimerContext.active || !Number.isFinite(suiteTimerContext.anchorMs)) {
-                return null;
-            }
-            const referenceNow = (!timerRunning && Number.isFinite(suiteTimerContext.pausedAtMs))
-                ? suiteTimerContext.pausedAtMs
-                : Date.now();
-            const effectiveNow = referenceNow - suiteTimerContext.pausedOffsetMs;
-            return Math.max(0, (effectiveNow - suiteTimerContext.anchorMs) / 1000);
-        }
-
-        function getPracticeTimerSnapshot() {
-            const now = Date.now();
-            const suiteElapsedSeconds = getSuiteTimerElapsedSeconds();
-            const elapsedSeconds = suiteElapsedSeconds != null
-                ? Math.max(0, suiteElapsedSeconds)
-                : Math.max(0, Number(seconds) || 0);
-            const durationSeconds = Math.max(0, Math.round(elapsedSeconds));
-            const effectiveEndTimeMs = now;
-            const effectiveStartTimeMs = Math.max(0, effectiveEndTimeMs - (durationSeconds * 1000));
-            return {
-                running: timerRunning,
-                elapsedSeconds,
-                durationSeconds,
-                displaySeconds: suiteElapsedSeconds != null
-                    ? (
-                        suiteTimerContext.mode === 'countdown' && Number.isFinite(suiteTimerContext.limitSeconds)
-                            ? Math.max(0, Math.ceil(suiteTimerContext.limitSeconds - elapsedSeconds))
-                            : Math.floor(elapsedSeconds)
-                    )
-                    : Math.max(0, Math.floor(Number(seconds) || 0)),
-                effectiveStartTimeMs,
-                effectiveEndTimeMs,
-                anchorMs: suiteTimerContext.active && Number.isFinite(suiteTimerContext.anchorMs)
-                    ? suiteTimerContext.anchorMs
-                    : localTimerAnchorMs,
-                mode: suiteTimerContext.active ? (suiteTimerContext.mode || 'elapsed') : 'elapsed',
-                limitSeconds: suiteTimerContext.active ? suiteTimerContext.limitSeconds : null,
-                source: suiteTimerContext.active ? (suiteTimerContext.source || 'suite') : 'local',
-                pausedAtMs: suiteTimerContext.active && Number.isFinite(suiteTimerContext.pausedAtMs)
-                    ? suiteTimerContext.pausedAtMs
-                    : null,
-                pausedOffsetMs: suiteTimerContext.active
-                    ? Math.max(0, Number(suiteTimerContext.pausedOffsetMs) || 0)
-                    : 0
-            };
-        }
-
-        function emitPracticeTimerState(reason = 'state_change') {
-            const snapshot = getPracticeTimerSnapshot();
-            snapshot.reason = reason;
-            window.dispatchEvent(new CustomEvent(PRACTICE_TIMER_EVENT, {
-                detail: snapshot
-            }));
-            return snapshot;
-        }
-
-        window[PRACTICE_TIMER_BRIDGE_KEY] = {
-            eventName: PRACTICE_TIMER_EVENT,
-            getSnapshot: getPracticeTimerSnapshot
-        };
-
-        function updateTimerVisualState() {
-            if (!timerEl) return;
-            timerEl.style.opacity = timerRunning ? '1' : '0.5';
-            timerEl.classList.toggle('paused', !timerRunning);
-        }
-
-        function renderTimerDisplay() {
-            if (!timerEl) return;
-            if (suiteTimerContext.active && Number.isFinite(suiteTimerContext.anchorMs)) {
-                const elapsedSeconds = getSuiteTimerElapsedSeconds();
-                if (elapsedSeconds == null) {
-                    timerEl.textContent = formatTimerSeconds(seconds);
-                    return;
-                }
-                let displaySeconds = Math.floor(elapsedSeconds);
-                if (suiteTimerContext.mode === 'countdown' && Number.isFinite(suiteTimerContext.limitSeconds)) {
-                    displaySeconds = Math.max(0, Math.ceil(suiteTimerContext.limitSeconds - elapsedSeconds));
-                }
-                timerEl.textContent = formatTimerSeconds(displaySeconds);
-                timerEl.dataset.timerMode = suiteTimerContext.mode || 'elapsed';
-                timerEl.dataset.timerState = timerRunning ? 'running' : 'paused';
-                timerEl.dataset.timerSource = suiteTimerContext.source || '';
-                if (suiteTimerContext.mode === 'countdown') {
-                    timerEl.classList.toggle('timer-expired', displaySeconds <= 0);
-                } else {
-                    timerEl.classList.remove('timer-expired');
-                }
-                return;
-            }
-            timerEl.dataset.timerState = timerRunning ? 'running' : 'paused';
-            timerEl.classList.remove('timer-expired');
-            timerEl.textContent = formatTimerSeconds(seconds);
-        }
+        const defaultExitText = exitBtn ? (exitBtn.textContent || '') : '';
 
         function startTimer() {
             if (!timerEl) return;
-            if (timer) {
-                clearInterval(timer);
-            }
-            renderTimerDisplay();
-            updateTimerVisualState();
             timer = setInterval(() => {
-                if (!timerRunning) {
-                    if (suiteTimerContext.active) {
-                        renderTimerDisplay();
-                    }
-                    return;
-                }
-                if (!suiteTimerContext.active) {
-                    seconds += 1;
-                }
-                renderTimerDisplay();
+                if (!timerRunning) return;
+                seconds += 1;
+                const minutes = String(Math.floor(seconds / 60)).padStart(2, '0');
+                const secs = String(seconds % 60).padStart(2, '0');
+                timerEl.textContent = `${minutes}:${secs}`;
             }, 1000);
-        }
-
-        function applySuiteTimerContext(source = {}, reason = 'query') {
-            const context = readSuiteTimerContext(source);
-            if (!context) {
-                return false;
-            }
-            const normalizedMode = context.mode || 'elapsed';
-            const contextChanged =
-                !suiteTimerContext.active
-                || suiteTimerContext.anchorMs !== context.anchorMs
-                || suiteTimerContext.mode !== normalizedMode
-                || suiteTimerContext.limitSeconds !== context.limitSeconds;
-            suiteTimerContext.active = true;
-            suiteTimerContext.anchorMs = context.anchorMs;
-            suiteTimerContext.mode = normalizedMode;
-            suiteTimerContext.limitSeconds = context.limitSeconds;
-            suiteTimerContext.source = reason;
-            if (contextChanged) {
-                suiteTimerContext.pausedAtMs = null;
-                suiteTimerContext.pausedOffsetMs = 0;
-            }
-            renderTimerDisplay();
-            updateTimerVisualState();
-            emitPracticeTimerState(reason || 'suite_context');
-            return true;
-        }
-
-        function setTimerRunning(nextRunning) {
-            const normalized = !!nextRunning;
-            if (suiteTimerContext.active && Number.isFinite(suiteTimerContext.anchorMs)) {
-                const now = Date.now();
-                if (!normalized) {
-                    if (!Number.isFinite(suiteTimerContext.pausedAtMs)) {
-                        suiteTimerContext.pausedAtMs = now;
-                    }
-                } else if (Number.isFinite(suiteTimerContext.pausedAtMs)) {
-                    suiteTimerContext.pausedOffsetMs += Math.max(0, now - suiteTimerContext.pausedAtMs);
-                    suiteTimerContext.pausedAtMs = null;
-                }
-            }
-            timerRunning = normalized;
-            updateTimerVisualState();
-            renderTimerDisplay();
-            emitPracticeTimerState(normalized ? 'resume' : 'pause');
         }
 
         function closeAllPanels() {
@@ -309,6 +99,50 @@
                     source: 'practice_page'
                 }
             }, '*');
+        }
+
+        function isSimulationMode() { return window.__UNIFIED_READING_SIMULATION_MODE__ === true; }
+        function closePracticeWindow() { window.close(); }
+        function parseSessionJson(key, fallbackValue = null) {
+            let raw = null;
+            try { raw = window.sessionStorage.getItem(key); } catch (_) { return fallbackValue; }
+            if (!raw) return fallbackValue;
+            try { return JSON.parse(raw); } catch (_) { return fallbackValue; }
+        }
+        function writeSessionJson(key, value) { try { window.sessionStorage.setItem(key, JSON.stringify(value)); return true; } catch (_) { return false; } }
+        function setExitButtonVisible(visible) {
+            if (!exitBtn) return;
+            exitBtn.style.display = visible ? 'block' : 'none';
+        }
+        function setExitButtonAction(handler, text) {
+            if (!exitBtn) return;
+            if (typeof text === 'string') {
+                exitBtn.textContent = text;
+            }
+            exitBtn.onclick = typeof handler === 'function' ? handler : null;
+        }
+        function restoreDefaultExitAction() {
+            setExitButtonAction(null, defaultExitText);
+        }
+        function notifyEndlessUserExit() {
+            const opener = window.opener;
+            if (!opener || opener.closed) return;
+            try {
+                opener.postMessage({ type: 'ENDLESS_USER_EXIT' }, '*');
+                if (typeof opener.stopEndlessPractice === 'function') {
+                    opener.stopEndlessPractice();
+                } else if (opener.AppActions && typeof opener.AppActions.stopEndlessPractice === 'function') {
+                    opener.AppActions.stopEndlessPractice();
+                }
+            } catch (_) {
+                // ignore opener communication errors
+            }
+        }
+        function bindLiveModeClick(button, action) {
+            if (!button) return;
+            button.addEventListener('click', () => {
+                if (!isSimulationMode()) action();
+            });
         }
 
         function applySuiteModeVisibility(isSuiteMode) {
@@ -448,22 +282,6 @@
             if (selbar) selbar.style.display = 'none';
         }
 
-        const initialSuiteTimerContext = (() => {
-            try {
-                const params = new URLSearchParams(window.location.search || '');
-                return {
-                    suiteTimerAnchorMs: params.get('suiteTimerAnchorMs') || params.get('globalTimerAnchorMs'),
-                    suiteTimerMode: params.get('suiteTimerMode'),
-                    suiteTimerLimitSeconds: params.get('suiteTimerLimitSeconds')
-                };
-            } catch (_) {
-                return null;
-            }
-        })();
-        if (initialSuiteTimerContext) {
-            applySuiteTimerContext(initialSuiteTimerContext, 'query');
-        }
-
         // --- Header buttons ---
         if (timerEl) startTimer();
 
@@ -484,7 +302,14 @@
                 e.preventDefault();
                 e.stopPropagation();
                 if (submissionLocked) return;
-                setTimerRunning(!timerRunning);
+                timerRunning = !timerRunning;
+                if (!timerRunning) {
+                    timerEl.style.opacity = '0.5';
+                    timerEl.classList.add('paused');
+                } else {
+                    timerEl.style.opacity = '1';
+                    timerEl.classList.remove('paused');
+                }
             });
         }
 
@@ -672,7 +497,6 @@
         const POOL_OPTION_SELECTOR = '.pool-items .drag-item, .cardpool .drag-item, .cardpool .card, #word-options .draggable-word';
         const DROP_ZONE_SELECTOR = '.paragraph-dropzone .dropped-items, .match-dropzone, .dropzone, .drop-target-summary';
         const GENERIC_DROP_ZONE_SELECTOR = '.dropzone, .drop-target-summary';
-
         function getPoolContainers() {
             return document.querySelectorAll(POOL_CONTAINER_SELECTOR);
         }
@@ -759,6 +583,7 @@
                 pool.dataset.allowReuse = 'true';
                 return true;
             }
+
             pool.dataset.allowReuse = 'false';
             return false;
         }
@@ -844,6 +669,20 @@
         const navContainer = document.querySelector('.practice-nav');
         const markedQuestions = new Set();
         let markedStorageKey = null;
+        function applyMarkedQuestionValues(values, clearExisting = true) {
+            if (clearExisting) {
+                markedQuestions.clear();
+            }
+            if (!Array.isArray(values)) {
+                return;
+            }
+            values.forEach((value) => {
+                const normalized = normalizeQuestionId(value);
+                if (normalized) {
+                    markedQuestions.add(normalized);
+                }
+            });
+        }
 
         function resolveMarkedStorageKey() {
             if (markedStorageKey) {
@@ -865,32 +704,12 @@
         }
 
         function persistMarkedQuestions() {
-            try {
-                window.sessionStorage.setItem(resolveMarkedStorageKey(), JSON.stringify(Array.from(markedQuestions)));
-            } catch (_) {
-                // ignore storage failures under file://
-            }
+            writeSessionJson(resolveMarkedStorageKey(), Array.from(markedQuestions));
         }
 
         function restoreMarkedQuestions() {
-            try {
-                const raw = window.sessionStorage.getItem(resolveMarkedStorageKey());
-                if (!raw) {
-                    return;
-                }
-                const saved = JSON.parse(raw);
-                if (!Array.isArray(saved)) {
-                    return;
-                }
-                saved.forEach((value) => {
-                    const normalized = normalizeQuestionId(value);
-                    if (normalized) {
-                        markedQuestions.add(normalized);
-                    }
-                });
-            } catch (_) {
-                // ignore parse/storage errors
-            }
+            const saved = parseSessionJson(resolveMarkedStorageKey(), null);
+            applyMarkedQuestionValues(saved, false);
         }
 
         function applyMarkedClasses() {
@@ -930,15 +749,7 @@
         };
 
         window.setPracticeMarkedQuestions = function setPracticeMarkedQuestions(values) {
-            markedQuestions.clear();
-            if (Array.isArray(values)) {
-                values.forEach((value) => {
-                    const normalized = normalizeQuestionId(value);
-                    if (normalized) {
-                        markedQuestions.add(normalized);
-                    }
-                });
-            }
+            applyMarkedQuestionValues(values, true);
             persistMarkedQuestions();
             applyMarkedClasses();
         };
@@ -1016,7 +827,7 @@
                 clearInterval(timer);
                 timer = null;
             }
-            setTimerRunning(false);
+            timerRunning = false;
             const audio = document.getElementById('listening-audio');
             if (audio) {
                 try {
@@ -1033,10 +844,7 @@
             if (resetBtn) {
                 resetBtn.disabled = true;
             }
-            const exitBtn = document.getElementById('exit-btn');
-            if (exitBtn) {
-                exitBtn.style.display = 'block';
-            }
+            setExitButtonVisible(true);
             disableAnswerInputs();
         }
 
@@ -1091,6 +899,7 @@
             }
             clickSelectedItem = null;
         }
+
         function resetDragState() {
             if (dragState.item) {
                 dragState.item.classList.remove('dragging');
@@ -1279,26 +1088,25 @@
             if (submissionLocked) {
                 return;
             }
-            const exitBtn = document.getElementById('exit-btn');
-            if (exitBtn) {
-                exitBtn.style.display = 'none';
-            }
-            // 清空输入
-            document.querySelectorAll('input').forEach((input) => {
-                if (input.type === 'radio' || input.type === 'checkbox') {
-                    input.checked = false;
-                } else if (input.type !== 'button' && input.type !== 'submit' && input.type !== 'reset') {
-                    input.value = '';
+            setExitButtonVisible(false);
+            restoreDefaultExitAction();
+            document.querySelectorAll('input, textarea, select').forEach((field) => {
+                if (field.tagName === 'INPUT') {
+                    const type = (field.type || '').toLowerCase();
+                    if (type === 'radio' || type === 'checkbox') {
+                        field.checked = false;
+                    } else if (!['button', 'submit', 'reset'].includes(type)) {
+                        field.value = '';
+                    }
+                    return;
                 }
-            });
-            document.querySelectorAll('textarea').forEach((textarea) => {
-                textarea.value = '';
-            });
-            document.querySelectorAll('select').forEach((select) => {
-                select.selectedIndex = 0;
+                if (field.tagName === 'TEXTAREA') {
+                    field.value = '';
+                    return;
+                }
+                field.selectedIndex = 0;
             });
 
-            // 移除高亮
             document.querySelectorAll('.hl').forEach((highlight) => {
                 const parent = highlight.parentNode;
                 if (!parent) return;
@@ -1309,12 +1117,10 @@
                 parent.normalize();
             });
 
-            // 清空拖拽题结果
             document.querySelectorAll(DROP_ZONE_SELECTOR).forEach((zone) => {
                 clearDropzone(zone);
             });
 
-            // 将所有拖拽选项放回原池
             document.querySelectorAll(ACTIVE_DRAG_ITEM_SELECTOR).forEach((item) => {
                 const container = item.parentElement;
                 if (isDropTargetContainer(container)) {
@@ -1338,70 +1144,44 @@
                 resultsContainer.style.display = '';
             }
 
-            // Reset only the local timer when we are not in suite mode.
-            if (!suiteTimerContext.active) {
-                timerRunning = true;
-                seconds = 0;
-                localTimerAnchorMs = Date.now();
+            timerRunning = true;
+            seconds = 0;
+            if (timerEl) {
+                timerEl.textContent = '00:00';
             }
-            updateTimerVisualState();
-            renderTimerDisplay();
-            emitPracticeTimerState('reset');
         }
 
-        if (resetBtn) {
-            resetBtn.addEventListener('click', () => {
-                const simulationMode = window.__UNIFIED_READING_SIMULATION_MODE__ === true;
-                if (simulationMode) {
-                    return;
-                }
-                resetPracticePage();
-            });
-        }
+        bindLiveModeClick(resetBtn, resetPracticePage);
+        bindLiveModeClick(submitBtn, lockPracticeAfterSubmit);
 
-        if (submitBtn) {
-            submitBtn.addEventListener('click', () => {
-                const simulationMode = window.__UNIFIED_READING_SIMULATION_MODE__ === true;
-                if (simulationMode) {
-                    return;
-                }
-                lockPracticeAfterSubmit();
-            });
-        }
-
-        const exitBtn = document.getElementById('exit-btn');
+        restoreDefaultExitAction();
         if (exitBtn) {
             exitBtn.addEventListener('click', () => {
-                window.close();
+                if (typeof exitBtn.onclick !== 'function') {
+                    closePracticeWindow();
+                }
             });
         }
 
-        document.addEventListener('change', (event) => {
-            if (!(event.target instanceof HTMLElement)) {
-                return;
+        function shouldHandleAnswerTarget(eventType, target) {
+            if (eventType === 'change') return true;
+            if (eventType === 'input') {
+                return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
             }
-            handleAnswerInteraction(event.target);
-        }, true);
-
-        document.addEventListener('input', (event) => {
+            return target.matches('input[type="radio"], input[type="checkbox"]');
+        }
+        function handleAnswerInteractionEvent(event) {
             const target = event.target;
             if (!(target instanceof HTMLElement)) {
                 return;
             }
-            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+            if (shouldHandleAnswerTarget(event.type, target)) {
                 handleAnswerInteraction(target);
             }
-        }, true);
-
-        document.addEventListener('click', (event) => {
-            const target = event.target;
-            if (!(target instanceof HTMLElement)) {
-                return;
-            }
-            if (target.matches('input[type="radio"], input[type="checkbox"]')) {
-                handleAnswerInteraction(target);
-            }
-        }, true);
+        }
+        ['change', 'input', 'click'].forEach((eventType) => {
+            document.addEventListener(eventType, handleAnswerInteractionEvent, true);
+        });
 
         document.addEventListener('practiceResultsReady', (event) => {
             const detail = event && event.detail ? event.detail : {};
@@ -1413,40 +1193,6 @@
             handleResultsReady(detail);
             revealTranscriptPane();
             lockPracticeAfterSubmit();
-        });
-
-        // Keep suite timer state in sync with the host window and query params.
-        (function setupSuiteTimerContextListener() {
-            window.addEventListener('message', function (event) {
-                const msg = event && event.data;
-                if (!msg || typeof msg.type !== 'string') return;
-                const type = String(msg.type).trim().toUpperCase();
-                if (
-                    type === 'INIT_SESSION'
-                    || type === 'INIT_EXAM_SESSION'
-                    || type === 'SESSION_READY'
-                    || type === 'SIMULATION_CONTEXT'
-                ) {
-                    const payload = msg.data && typeof msg.data === 'object' ? msg.data : {};
-                    applySuiteTimerContext(payload, type);
-                }
-            });
-        })();
-
-        Object.assign(window[PRACTICE_TIMER_BRIDGE_KEY], {
-            applySuiteTimerContext,
-            setRunning: setTimerRunning,
-            resetLocalTimer: function resetLocalTimer() {
-                if (suiteTimerContext.active) {
-                    return getPracticeTimerSnapshot();
-                }
-                timerRunning = true;
-                seconds = 0;
-                localTimerAnchorMs = Date.now();
-                updateTimerVisualState();
-                renderTimerDisplay();
-                return emitPracticeTimerState('reset');
-            }
         });
 
         // --- 无尽模式：监听来自父窗口的倒计时指令 ---
@@ -1472,25 +1218,11 @@
                     endlessCountdownActive = true;
                     var secs = (msg.data && typeof msg.data.seconds === 'number') ? msg.data.seconds : 5;
                     applyEndlessTimer(secs);
-                    var exitBtn = document.getElementById('exit-btn');
-                    if (exitBtn) {
-                        exitBtn.style.display = 'block';
-                        exitBtn.textContent = '\u9000\u51fa\u65e0\u5c3d\u6a21\u5f0f';
-                        exitBtn.onclick = function () {
-                            var opener = window.opener;
-                            if (opener && !opener.closed) {
-                                try {
-                                    opener.postMessage({ type: 'ENDLESS_USER_EXIT' }, '*');
-                                    if (typeof opener.stopEndlessPractice === 'function') {
-                                        opener.stopEndlessPractice();
-                                    } else if (opener.AppActions && typeof opener.AppActions.stopEndlessPractice === 'function') {
-                                        opener.AppActions.stopEndlessPractice();
-                                    }
-                                } catch (_) {}
-                            }
-                            window.close();
-                        };
-                    }
+                    setExitButtonVisible(true);
+                    setExitButtonAction(function () {
+                        notifyEndlessUserExit();
+                        closePracticeWindow();
+                    }, '\u9000\u51fa\u65e0\u5c3d\u6a21\u5f0f');
                 } else if (msg.type === 'ENDLESS_COUNTDOWN_TICK') {
                     if (!endlessCountdownActive) return;
                     var remaining = (msg.data && typeof msg.data.seconds === 'number') ? msg.data.seconds : 0;
@@ -1846,6 +1578,42 @@
         return undefined;
     }
 
+    function resolveResultRow(results, key) {
+        const normalized = normalizeQuestionId(key) || key;
+        if (!normalized) {
+            return null;
+        }
+
+        const comparison = results.answerComparison || {};
+        const answers = results.answers || {};
+        const correctAnswers = results.correctAnswers || {};
+        const entry = comparison[normalized] || comparison[key] || {};
+        const userAnswerRaw = Object.prototype.hasOwnProperty.call(entry, 'userAnswer')
+            ? entry.userAnswer
+            : pickValueFromStore(answers, normalized, key);
+        const correctAnswerRaw = Object.prototype.hasOwnProperty.call(entry, 'correctAnswer')
+            ? entry.correctAnswer
+            : pickValueFromStore(correctAnswers, normalized, key);
+        const userAnswer = formatAnswerValue(userAnswerRaw);
+        const correctAnswer = formatAnswerValue(correctAnswerRaw);
+        const hasAnswer = userAnswer !== NO_ANSWER_PLACEHOLDER;
+
+        let isCorrect = null;
+        if (Object.prototype.hasOwnProperty.call(entry, 'isCorrect')) {
+            isCorrect = entry.isCorrect;
+        } else if (hasAnswer && correctAnswerRaw !== undefined && correctAnswerRaw !== null) {
+            isCorrect = compareAnswerValues(userAnswerRaw, correctAnswerRaw);
+        }
+
+        return {
+            questionId: normalized,
+            userAnswer,
+            correctAnswer,
+            hasAnswer,
+            isCorrect
+        };
+    }
+
     function resolveQuestionOrder(results) {
         const answers = results.answers || {};
         const correctAnswers = results.correctAnswers || {};
@@ -1888,6 +1656,12 @@
         return fallbackKeys;
     }
 
+    function collectResultRows(results) {
+        return resolveQuestionOrder(results)
+            .map((key) => resolveResultRow(results, key))
+            .filter(Boolean);
+    }
+
     function formatQuestionLabel(questionId) {
         if (!questionId) {
             return '';
@@ -1913,7 +1687,7 @@
         }, 3000);
     }
 
-    function renderResultsSummary(results) {
+    function renderResultsSummary(results, rows = null) {
         const container = document.getElementById('results');
         if (!container) return;
         container.style.display = 'block';
@@ -1923,13 +1697,10 @@
             clearTimeout(pendingResultsTimeout);
             pendingResultsTimeout = null;
         }
-        const comparison = results.answerComparison || {};
-        const answers = results.answers || {};
-        const correctAnswers = results.correctAnswers || {};
-        const orderedKeys = resolveQuestionOrder(results);
+        const resolvedRows = Array.isArray(rows) ? rows : collectResultRows(results);
 
         container.innerHTML = '';
-        if (!orderedKeys.length) {
+        if (!resolvedRows.length) {
             return;
         }
 
@@ -1952,41 +1723,22 @@
         table.appendChild(thead);
 
         const tbody = document.createElement('tbody');
-        orderedKeys.forEach((key) => {
-            const normalized = normalizeQuestionId(key) || key;
-            const entry = comparison[normalized] || comparison[key] || {};
-            const userAnswerRaw = entry.hasOwnProperty('userAnswer')
-                ? entry.userAnswer
-                : pickValueFromStore(answers, normalized, key);
-            const correctAnswerRaw = entry.hasOwnProperty('correctAnswer')
-                ? entry.correctAnswer
-                : pickValueFromStore(correctAnswers, normalized, key);
-            const userAnswer = formatAnswerValue(userAnswerRaw);
-            const correctAnswer = formatAnswerValue(correctAnswerRaw);
-            const hasUserAnswer = userAnswer !== NO_ANSWER_PLACEHOLDER;
-
-            let isCorrect = null;
-            if (entry.hasOwnProperty('isCorrect')) {
-                isCorrect = entry.isCorrect;
-            } else if (hasUserAnswer && correctAnswerRaw !== undefined && correctAnswerRaw !== null) {
-                isCorrect = compareAnswerValues(userAnswerRaw, correctAnswerRaw);
-            }
-
+        resolvedRows.forEach((rowData) => {
             const row = document.createElement('tr');
-            if (isCorrect === true) {
+            if (rowData.isCorrect === true) {
                 row.className = 'correct';
-            } else if (isCorrect === false) {
+            } else if (rowData.isCorrect === false) {
                 row.className = 'incorrect';
             }
 
-            const resultText = isCorrect === null
+            const resultText = rowData.isCorrect === null
                 ? '–'
-                : (isCorrect ? '✅' : '❌');
+                : (rowData.isCorrect ? '✅' : '❌');
 
             const columns = [
-                formatQuestionLabel(normalized),
-                userAnswer,
-                correctAnswer,
+                formatQuestionLabel(rowData.questionId),
+                rowData.userAnswer,
+                rowData.correctAnswer,
                 resultText
             ];
             columns.forEach((text) => {
@@ -2003,43 +1755,18 @@
     }
 
     function handleResultsReady(results) {
-        renderResultsSummary(results);
-        const comparison = results.answerComparison || {};
-        const answers = results.answers || {};
-        const correctAnswers = results.correctAnswers || {};
-        const orderedKeys = resolveQuestionOrder(results);
-
-        orderedKeys.forEach((key) => {
-            const normalized = normalizeQuestionId(key);
-            if (!normalized) return;
-            const entry = comparison[normalized] || comparison[key] || {};
-            const userAnswer = entry.hasOwnProperty('userAnswer')
-                ? entry.userAnswer
-                : pickValueFromStore(answers, normalized, key);
-            const hasAnswer =
-                userAnswer !== undefined &&
-                userAnswer !== null &&
-                String(userAnswer).trim() !== '' &&
-                !/^no answer$/i.test(String(userAnswer).trim());
-            const correctAnswer = entry.hasOwnProperty('correctAnswer')
-                ? entry.correctAnswer
-                : pickValueFromStore(correctAnswers, normalized, key);
-            let isCorrect = null;
-            if (entry.hasOwnProperty('isCorrect')) {
-                isCorrect = entry.isCorrect;
-            } else if (hasAnswer && correctAnswer !== undefined && correctAnswer !== null) {
-                isCorrect = compareAnswerValues(userAnswer, correctAnswer);
-            }
-
-            if (isCorrect === null) {
-                setNavStatus(normalized, hasAnswer ? 'answered' : null);
-                highlightAnswerFields(normalized, null);
-            } else if (isCorrect) {
-                setNavStatus(normalized, 'correct');
-                highlightAnswerFields(normalized, true);
+        const rows = collectResultRows(results);
+        renderResultsSummary(results, rows);
+        rows.forEach((rowData) => {
+            if (rowData.isCorrect === null) {
+                setNavStatus(rowData.questionId, rowData.hasAnswer ? 'answered' : null);
+                highlightAnswerFields(rowData.questionId, null);
+            } else if (rowData.isCorrect) {
+                setNavStatus(rowData.questionId, 'correct');
+                highlightAnswerFields(rowData.questionId, true);
             } else {
-                setNavStatus(normalized, 'incorrect');
-                highlightAnswerFields(normalized, false);
+                setNavStatus(rowData.questionId, 'incorrect');
+                highlightAnswerFields(rowData.questionId, false);
             }
         });
     }
