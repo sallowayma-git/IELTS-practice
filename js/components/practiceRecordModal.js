@@ -3,8 +3,12 @@ class PracticeRecordModal {
         this.modalId = 'practice-record-modal';
         this.isVisible = false;
         this.modalElement = null;
+        this.currentRecord = null;
         this.boundBackdropHandler = null;
         this.boundEscHandler = null;
+        this.replayTriggerElement = null;
+        this.boundReplayClickHandler = null;
+        this.boundReplayKeyHandler = null;
 
         window.practiceRecordModal = this;
     }
@@ -27,6 +31,7 @@ class PracticeRecordModal {
             document.body.insertAdjacentHTML('beforeend', modalHtml);
 
             this.modalElement = document.getElementById(this.modalId);
+            this.currentRecord = processedRecord;
             this.setupEventListeners(this.modalElement);
             this.isVisible = true;
 
@@ -51,6 +56,7 @@ class PracticeRecordModal {
         }
 
         this.modalElement = null;
+        this.currentRecord = null;
         this.isVisible = false;
     }
 
@@ -62,9 +68,18 @@ class PracticeRecordModal {
         if (this.boundEscHandler) {
             document.removeEventListener('keydown', this.boundEscHandler);
         }
+        if (this.replayTriggerElement && this.boundReplayClickHandler) {
+            this.replayTriggerElement.removeEventListener('click', this.boundReplayClickHandler);
+        }
+        if (this.replayTriggerElement && this.boundReplayKeyHandler) {
+            this.replayTriggerElement.removeEventListener('keydown', this.boundReplayKeyHandler);
+        }
 
         this.boundBackdropHandler = null;
         this.boundEscHandler = null;
+        this.replayTriggerElement = null;
+        this.boundReplayClickHandler = null;
+        this.boundReplayKeyHandler = null;
     }
 
     setupEventListeners(modal) {
@@ -92,6 +107,50 @@ class PracticeRecordModal {
             }
         };
         document.addEventListener('keydown', this.boundEscHandler);
+
+        const replayTrigger = modal.querySelector('.record-summary-replay-trigger');
+        if (replayTrigger) {
+            this.replayTriggerElement = replayTrigger;
+            const launchReplay = async () => {
+                const replayRecord = this.currentRecord;
+                if (!replayRecord) {
+                    if (typeof window.showMessage === 'function') {
+                        window.showMessage('未找到可回放记录', 'error');
+                    }
+                    return;
+                }
+                if (!window.app || typeof window.app.openPracticeRecordReplay !== 'function') {
+                    if (typeof window.showMessage === 'function') {
+                        window.showMessage('当前版本不支持记录回放', 'error');
+                    }
+                    return;
+                }
+
+                closeModal();
+                try {
+                    await window.app.openPracticeRecordReplay(replayRecord);
+                } catch (error) {
+                    console.error('[PracticeRecordModal] 启动回放失败:', error);
+                    if (typeof window.showMessage === 'function') {
+                        window.showMessage(`无法回放该记录：${error.message || '未知错误'}`, 'error');
+                    }
+                }
+            };
+
+            this.boundReplayClickHandler = (event) => {
+                event.preventDefault();
+                launchReplay();
+            };
+            this.boundReplayKeyHandler = (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    launchReplay();
+                }
+            };
+
+            replayTrigger.addEventListener('click', this.boundReplayClickHandler);
+            replayTrigger.addEventListener('keydown', this.boundReplayKeyHandler);
+        }
     }
 
     createModalHtml(record) {
@@ -110,6 +169,19 @@ class PracticeRecordModal {
         const incorrectCount = summaryCounts.incorrect || 0;
         const unansweredCount = summaryCounts.unanswered || 0;
 
+        // 多套题模式的额外信息
+        let multiSuiteInfo = '';
+        if (record.multiSuite === true && record.suiteEntries && record.suiteEntries.length > 0) {
+            const suiteCount = record.suiteEntries.length;
+            const expectedCount = record.metadata?.expectedSuiteCount || suiteCount;
+            multiSuiteInfo = `
+                <div class="meta-item">
+                    <span class="meta-label">\u5b8c\u6210\u5957\u9898\uff1a</span>
+                    <span class="meta-value">${suiteCount}/${expectedCount}</span>
+                </div>
+            `;
+        }
+
         const answerSection = this.generateAnswerTable(record);
 
         return `
@@ -123,7 +195,9 @@ class PracticeRecordModal {
                     </div>
                     <div class="modal-body">
                         <div class="record-summary">
-                            <h4>${this.escapeHtml(category)} - ${this.escapeHtml(frequencyLabel)} - ${this.escapeHtml(examTitle)}</h4>
+                            <h4 class="record-summary-replay-trigger" role="button" tabindex="0" aria-label="打开该练习记录回放">
+                                ${this.escapeHtml(category)} - ${this.escapeHtml(frequencyLabel)} - ${this.escapeHtml(examTitle)}
+                            </h4>
                             <div class="record-meta">
                                 <div class="meta-item">
                                     <span class="meta-label">\u7ec3\u4e60\u65f6\u95f4\uff1a</span>
@@ -149,6 +223,7 @@ class PracticeRecordModal {
                                     <span class="meta-label">\u672a\u4f5c\u7b54\uff1a</span>
                                     <span class="meta-value unanswered-count">${unansweredCount}</span>
                                 </div>
+                                ${multiSuiteInfo}
                             </div>
                         </div>
                         <div class="answer-details">
@@ -175,6 +250,13 @@ class PracticeRecordModal {
         const metadata = record.metadata || {};
         const frequency = record.frequency || metadata.frequency || 'unknown';
         const suiteEntries = this.getSuiteEntries(record);
+
+        // 检查是否为多套题模式
+        if (record.multiSuite === true) {
+            const source = metadata.source || 'listening';
+            const sourceLabel = source.toUpperCase();
+            return `${sourceLabel} 多套题练习`;
+        }
 
         if (suiteEntries.length > 0) {
             return '\u5957\u9898\u7ec3\u4e60';
@@ -268,6 +350,13 @@ class PracticeRecordModal {
         if (!entry) {
             return `\u5957\u9898\u7b2c${index + 1}\u7bc7`;
         }
+
+        // 优先使用 suiteId 作为标题（对于多套题模式）
+        if (entry.suiteId) {
+            const suiteId = String(entry.suiteId).replace(/^(set|suite)/i, '');
+            return `套题 ${suiteId}`;
+        }
+
         const metadata = entry.metadata || {};
         return metadata.examTitle || entry.title || entry.examTitle || `\u5957\u9898\u7b2c${index + 1}\u7bc7`;
     }
@@ -277,14 +366,20 @@ class PracticeRecordModal {
         if (normalized === 'suite') {
             return '\u5957\u9898\u7ec3\u4e60';
         }
-        if (normalized === 'high') {
+        if (normalized === 'high' || normalized === '\u9ad8\u9891') {
             return '\u9ad8\u9891';
         }
-        if (normalized === 'mid' || normalized === 'medium') {
+        if (normalized === 'mid' || normalized === 'medium' || normalized === '\u4e2d\u9891') {
             return '\u4e2d\u9891';
         }
-        if (normalized === 'low') {
+        if (normalized === 'low' || normalized === '\u4f4e\u9891') {
             return '\u4f4e\u9891';
+        }
+        if (normalized === '\u6b21\u9ad8\u9891') {
+            return '\u6b21\u9ad8\u9891';
+        }
+        if (normalized === '\u672a\u77e5\u9891\u7387') {
+            return '\u672a\u77e5\u9891\u7387';
         }
         return '\u672a\u77e5\u9891\u7387';
     }
@@ -298,6 +393,16 @@ class PracticeRecordModal {
                 .map((entry, index) => {
                     const entryRecord = this.prepareRecordForDisplay(entry);
                     const title = this.formatSuiteEntryTitle(entryRecord, index);
+
+                    // 为多套题模式添加套题得分信息
+                    let scoreInfo = '';
+                    if (record.multiSuite === true && entry.scoreInfo) {
+                        const correct = entry.scoreInfo.correct || 0;
+                        const total = entry.scoreInfo.total || 0;
+                        const percentage = entry.scoreInfo.percentage || 0;
+                        scoreInfo = `<div class="suite-score-info">得分: ${correct}/${total} (${percentage}%)</div>`;
+                    }
+
                     const normalizedEntries = this.getNormalizedEntries(entryRecord);
                     let content = '';
 
@@ -312,8 +417,9 @@ class PracticeRecordModal {
                     }
 
                     return `
-                        <section class="suite-entry">
+                        <section class="suite-entry ${record.multiSuite ? 'multi-suite-entry' : ''}">
                             <h5>${this.escapeHtml(title)}</h5>
+                            ${scoreInfo}
                             ${content}
                         </section>
                     `;
@@ -354,10 +460,16 @@ class PracticeRecordModal {
             return [];
         }
 
-        let entries = utils.getNormalizedEntries(record) || [];
         const suites = this.getSuiteEntries(record);
+        const hasSuites = Array.isArray(suites) && suites.length > 0;
+        let entries = [];
 
-        if (Array.isArray(suites) && suites.length > 0) {
+        // 套题详情优先使用分篇数据，避免顶层聚合数据导致错题数固定或重复统计。
+        if (!hasSuites) {
+            entries = utils.getNormalizedEntries(record) || [];
+        }
+
+        if (hasSuites) {
             suites.forEach((entry) => {
                 const subset = utils.getNormalizedEntries(entry) || [];
                 if (subset.length > 0) {
@@ -366,7 +478,21 @@ class PracticeRecordModal {
             });
         }
 
-        return entries;
+        if (!entries.length) {
+            return entries;
+        }
+
+        const seen = new Set();
+        return entries.filter((entry) => {
+            const questionKey = entry && (entry.questionId || entry.displayNumber || entry.key || '');
+            const examKey = entry && (entry.examId || '');
+            const dedupeKey = `${examKey}::${questionKey}::${entry && entry.correctAnswer ? String(entry.correctAnswer) : ''}`;
+            if (seen.has(dedupeKey)) {
+                return false;
+            }
+            seen.add(dedupeKey);
+            return true;
+        });
     }
 
     getEntriesSummary(entries) {
@@ -1008,8 +1134,15 @@ class PracticeRecordModal {
 
     async exportSingle(recordId) {
         try {
-            const practiceRecords = await window.storage.get('practice_records', []);
-            const record = practiceRecords.find(r => r.id === recordId);
+            let record = null;
+
+            // 1) 优先使用 PracticeRecorder / ScoreStorage
+            const practiceRecorder = window.app?.components?.practiceRecorder;
+            if (practiceRecorder && typeof practiceRecorder.getPracticeRecords === 'function') {
+                const maybe = practiceRecorder.getPracticeRecords();
+                const records = Array.isArray(maybe?.then ? await maybe : maybe) ? (maybe?.then ? await maybe : maybe) : [];
+                record = records.find(r => r.id === recordId || String(r.sessionId || '') === String(recordId));
+            }
 
             if (!record) {
                 throw new Error('\u8bb0\u5f55\u4e0d\u5b58\u5728');

@@ -1,0 +1,114 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-medium-117", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-medium-117",
+  "meta": {
+    "title": "What Lucy Taught Us 露西化石",
+    "category": "P1",
+    "frequency": "medium",
+    "pdfFilename": "30. P1 - What Lucy Taught Us 露西化石【次】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/30. P1 - What Lucy Taught Us 露西化石【次】/",
+    "legacyFilename": "30. P1 - What Lucy Taught Us 露西化石【次】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>What Lucy Taught Us</h3>\n            <h4>A scientific finding in east Africa has changed our understanding of how humans have developed</h4>\n            \n            <p>On a Sunday morning in late November 1974, a team of scientists were digging in an isolated spot in the Afar region of Ethiopia. Surveying the area, palaeoanthropologist Donald Johanson spotted a small piece of bone. Straight away, he recognised that it came from the elbow of a human ancestor. And there were plenty more. “As I looked up the slopes to my left, I saw bits of the skull, a chunk of jaw, a couple of vertebrae,” says Johanson.</p>\n            <p>It was immediately obvious that the skeleton was a significant find, because the sediments at the site were known to be 3.5 million years old. “I realised this was part of a skeleton that was older than three million years,” says Johanson. It was the most ancient early human ever found. Later it became apparent that it was also the most complete – 40% of the skeleton had been preserved.</p>\n            <p>At the group's campsite that night, Johanson played a Beatles song called “Lucy in the Sky with Diamonds\", and, as the feeling was that the skeleton was female due to its size, someone suggested calling it Lucy. The name stuck and Johanson says, “All of a sudden, she became a person. But the morning after the discovery, the discussion was dominated by questions. How old was Lucy when she died? Did she have children? And might she be our direct ancestor?” Nowadays, we're starting to get the answers to some of these questions.</p>\n            <p>According to Johanson, Lucy had an incredible combination of primitive and derived features, which had not been seen before. Her skull and jaws were more ape-like than those of other groups of early humans. Her braincase was also very small, no bigger than that of a chimpanzee.</p>\n            <p>For Johanson, it was immediately apparent that Lucy walked upright. That's because the shape and positioning of her pelvis reflected a fully upright gait. Lucy's knee and ankle were also preserved and seemed to reflect bipedal walking. Later studies of feet offer even more evidence. As an upright walker, Lucy strengthened the idea that walking was one of the selective pressures driving human evolution forwards. Early humans did not need bigger brains to take defining steps away from apes. Extra brainpower only came over a million years later with the arrival of the species Homo erectus, meaning upright man. Though big brains would clearly be important later, walking remains one of the traits that makes us uniquely human.</p>\n            <p>She may have walked like a human, but Lucy spent at least some of her time up in the trees, as chimpanzees and orangutans still do today. It may be that upright walking evolved in the trees, as a way to walk along branches that would otherwise be too flexible. It's not clear why Lucy left the safety of the trees. It is thought that savannahs were gradually opening up, so trees were spaced further apart. But hunting for food may have been the real reason for heading to the ground, says Chris Stringer of the Natural History Museum in London. In line with this idea, recent evidence suggests that the diet of early humans was changing at that time.</p>\n            <p>Studies of the remains of food trapped on preserved human teeth indicate that several species, including Lucy's, were expanding their diet around 3.5 million years ago. Instead of mostly eating fruit from trees, they began to include grasses and possibly meat. This change in diet may have allowed them to range more widely, and to travel around more efficiently in a changing environment. Fossilised crocodile and turtle eggs were found near her skeleton, suggesting that Lucy died while foraging for them in a nearby lake.</p>\n            <p>How did early humans process all these new foods? Later species, like Homo erectus, are known to have used simple stone tools, but no tools have ever been found from this far back. However, in 2010 archaeologists uncovered animal bones with scratches that seem to have been made by stone tools. This suggests that Lucy and her relatives used stone tools to eat meat. There have since been heated debates over whether or not the marks were really made by tools. But if they were, it is not surprising, says Fred Spoor of the Max Planck Institute for Evolutionary Anthropology in Leipzig, Germany.</p>\n            <p>It also seems that Lucy's childhood was much briefer than ours and that she had to fend for herself from a young age. We know that Lucy was a full-grown adult because she had wisdom teeth and her bones had fused. But unlike modern humans, she seems to have grown to full size very quickly, and the time of death was when she was around 12 years old. In line with that, a recent study of a 3-year-old early human suggested that their brains matured much earlier than ours do.</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-anchor\">\n                <h4>Questions 1–5</h4>\n                <p>Do the following statements agree with the information in Reading Passage 1?</p>\n                <p>In boxes 1–5 on your answer sheet, write:</p>\n                <ul>\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information about this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>1</strong> Donald Johanson was uncertain about the nature of the elbow bone he found in Afar.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q1\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>2</strong> Several bones were found by Donald Johanson at the same site in Afar.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q2\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>3</strong> The experts realised the importance of the discovery at Afar.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q3\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>4</strong> It was the upper part of the skeleton that had suffered the least damage.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q4\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>5</strong> The skeleton's measurements helped Johanson's team to decide if it was male or female.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q5\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q6",
+        "q7",
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q6-7-8-9-10-11-12-13-anchor\">\n                <h4>Questions 6–13</h4>\n                <p>Complete the notes below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"notes-completion\">\n                    <h4>Lucy</h4>\n                    <p><strong>Physical features</strong></p>\n                    <ul>\n                       <li>jaws and skull like those of an ape</li>\n                       <li>braincase similar in size to that of a chimp</li>\n                    </ul>\n                    <p><strong>Movement</strong></p>\n                     <ul>\n                        <li>the positioning and shape of her pelvis made it clear that she walked like a human</li>\n                        <li>upright movement possibly started among the <strong>6</strong> <input type=\"text\" id=\"q6_input\" name=\"q6\"> of trees</li>\n                        <li>probably moved to the <strong>7</strong> <input type=\"text\" id=\"q7_input\" name=\"q7\"> in search of food</li>\n                    </ul>\n                    <p><strong>Diet and eating habits</strong></p>\n                    <ul>\n                        <li>analysis of food in the <strong>8</strong> <input type=\"text\" id=\"q8_input\" name=\"q8\"> of the skeletons of early humans shows changes in their diet</li>\n                        <li>it is likely that meat and grasses were substituted for <strong>9</strong> <input type=\"text\" id=\"q9_input\" name=\"q9\"></li>\n                        <li><strong>10</strong> <input type=\"text\" id=\"q10_input\" name=\"q10\"> that were located close to Lucy suggest these were also part of her diet</li>\n                        <li><strong>11</strong> <input type=\"text\" id=\"q11_input\" name=\"q11\"> that were found had marks on them, possibly made by tools used for eating</li>\n                    </ul>\n                    <p><strong>Comparisons with modern-day humans</strong></p>\n                    <ul>\n                        <li>modern-day humans have a longer <strong>12</strong> <input type=\"text\" id=\"q12_input\" name=\"q12\"> than Lucy did</li>\n                        <li>the <strong>13</strong> <input type=\"text\" id=\"q13_input\" name=\"q13\"> of modern-day humans appear to develop later than Lucy's did</li>\n                    </ul>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "FALSE",
+    "q2": "TRUE",
+    "q3": "TRUE",
+    "q4": "NOT GIVEN",
+    "q5": "TRUE",
+    "q6": "branches",
+    "q7": "ground",
+    "q8": "teeth",
+    "q9": "fruit",
+    "q10": "eggs",
+    "q11": "bones",
+    "q12": "childhood",
+    "q13": "brains"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/30. P1 - What Lucy Taught Us 露西化石【次】/30. P1 - What Lucy Taught Us 露西化石【次】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/30. P1 - What Lucy Taught Us 露西化石【次】/30. P1 - What Lucy Taught Us 露西化石【次】.pdf",
+    "ieltsHtml": "IELTS/P1/What Lucy Taught Us.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.709Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

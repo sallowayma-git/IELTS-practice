@@ -33,7 +33,9 @@
             sidePanelManual: null,
             lastFocus: null,
             importing: false,
-            exporting: false
+            exporting: false,
+            listSwitcher: null,
+            listSwitcherListenerAttached: false
         },
         session: {
             stage: 'loading',
@@ -195,9 +197,16 @@
                         <div class="vocab-topbar__menu">
                             <button class="btn btn-ghost btn-icon" type="button" data-action="toggle-menu" aria-haspopup="true" aria-expanded="false">⋮</button>
                             <div class="vocab-menu" data-vocab-role="menu" hidden>
-                                <button type="button" data-action="menu-import">导入词表</button>
-                                <button type="button" data-action="menu-export">导出进度</button>
-                                <button type="button" data-action="menu-settings">学习设置</button>
+                                <div class="vocab-menu__panel" data-vocab-role="menu-panel-main">
+                                    <button type="button" data-action="menu-lists">切换词表</button>
+                                    <button type="button" data-action="menu-import">导入词表</button>
+                                    <button type="button" data-action="menu-export">导出进度</button>
+                                    <button type="button" data-action="menu-settings">学习设置</button>
+                                </div>
+                                <div class="vocab-menu__panel" data-vocab-role="menu-panel-lists" hidden>
+                                    <button type="button" data-action="menu-back-lists">← 返回菜单</button>
+                                    <div class="vocab-menu__list-switcher" data-vocab-role="list-switcher"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -297,6 +306,9 @@
             progressStats: layout.querySelector('[data-vocab-role=\"progress-stats\"]'),
             menuButton: layout.querySelector('[data-action=\"toggle-menu\"]'),
             menu: layout.querySelector('[data-vocab-role=\"menu\"]'),
+            menuPanelMain: layout.querySelector('[data-vocab-role=\"menu-panel-main\"]'),
+            menuPanelLists: layout.querySelector('[data-vocab-role=\"menu-panel-lists\"]'),
+            listSwitcher: layout.querySelector('[data-vocab-role=\"list-switcher\"]'),
             dueBanner: layout.querySelector('[data-vocab-role=\"due-banner\"]'),
             dueText: layout.querySelector('[data-vocab-role=\"due-text\"]'),
             sessionCard: layout.querySelector('[data-vocab-role=\"session-card\"]'),
@@ -320,6 +332,45 @@
         state.elements.sideBody = state.elements.sideSurface;
         setSidePanelExpanded(false);
     }
+
+    function handleListSwitch(event) {
+        if (!event || !event.detail) {
+            return;
+        }
+        closeMenu();
+        resetSessionState();
+        prepareSessionQueue();
+        showDueBanner(state.session.duePending);
+        if (state.session.stage === 'empty') {
+            render();
+            return;
+        }
+        startBatch(true);
+    }
+
+    function ensureListSwitcher() {
+        const container = state.elements.listSwitcher;
+        const Switcher = window.VocabListSwitcher;
+        if (!container || !Switcher || !state.store) {
+            return;
+        }
+
+        if (!state.ui.listSwitcher) {
+            try {
+                state.ui.listSwitcher = new Switcher(state.store);
+                state.ui.listSwitcher.render(container);
+            } catch (error) {
+                console.warn('[VocabSessionView] 词表切换器初始化失败:', error);
+                state.ui.listSwitcher = null;
+            }
+        }
+
+        if (!state.ui.listSwitcherListenerAttached) {
+            container.addEventListener('vocabListSwitch', handleListSwitch);
+            state.ui.listSwitcherListenerAttached = true;
+        }
+    }
+
     function navigateToMoreView() {
         const moreView = document.getElementById('more-view');
         const vocabView = document.getElementById('vocab-view');
@@ -341,11 +392,12 @@
     }
 
     function closeMenu() {
-        if (!state.menuOpen || !state.elements.menu) {
+        if (!state.elements.menu) {
             return;
         }
         state.menuOpen = false;
         state.elements.menu.setAttribute('hidden', 'hidden');
+        switchMenuPanel('main');
         if (state.elements.menuButton) {
             state.elements.menuButton.setAttribute('aria-expanded', 'false');
         }
@@ -362,6 +414,7 @@
         event.stopPropagation();
         state.menuOpen = !state.menuOpen;
         if (state.menuOpen) {
+            switchMenuPanel('main');
             state.elements.menu.removeAttribute('hidden');
             state.elements.menuButton.setAttribute('aria-expanded', 'true');
             state.outsideClickHandler = (evt) => {
@@ -375,11 +428,52 @@
         }
     }
 
+    function switchMenuPanel(panelName) {
+        const mainPanel = state.elements.menuPanelMain;
+        const listPanel = state.elements.menuPanelLists;
+        if (!mainPanel || !listPanel) {
+            return;
+        }
+        if (panelName === 'lists') {
+            mainPanel.setAttribute('hidden', 'hidden');
+            listPanel.removeAttribute('hidden');
+            return;
+        }
+        listPanel.setAttribute('hidden', 'hidden');
+        mainPanel.removeAttribute('hidden');
+    }
+
     function updateSidePanelMode() {
         if (!state.elements.sidePanel) {
             return;
         }
         state.elements.sidePanel.dataset.mobile = state.viewport.isMobile ? 'true' : 'false';
+    }
+
+    function triggerCardAction(action) {
+        if (!state.elements.sessionCard || !action) {
+            return false;
+        }
+        const trigger = state.elements.sessionCard.querySelector(`[data-action="${action}"]`);
+        if (!trigger || trigger.disabled) {
+            return false;
+        }
+        trigger.click();
+        return true;
+    }
+
+    function triggerPrimaryCardAction() {
+        const stage = state.session.stage;
+        if (stage === 'feedback') {
+            return triggerCardAction('next-word');
+        }
+        if (stage === 'batch-finished') {
+            return triggerCardAction('next-batch') || triggerCardAction('end-session');
+        }
+        if (stage === 'complete') {
+            return triggerCardAction('end-session');
+        }
+        return false;
     }
 
     function bindEvents() {
@@ -407,6 +501,14 @@
                 const trigger = event.target.closest('button[data-action]');
                 const action = trigger?.dataset?.action;
                 if (!action) {
+                    return;
+                }
+                if (action === 'menu-lists') {
+                    switchMenuPanel('lists');
+                    return;
+                }
+                if (action === 'menu-back-lists') {
+                    switchMenuPanel('main');
                     return;
                 }
                 closeMenu();
@@ -462,20 +564,36 @@
                     }
                     return;
                 }
-                if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName) && command !== 'submit' && command !== 'reveal') {
-                    return;
+                const activeTag = document.activeElement?.tagName;
+                const isFieldActive = ['INPUT', 'TEXTAREA'].includes(activeTag);
+                if (isFieldActive && !(command === 'submit' && state.session.stage === 'spelling')) {
+                    if (!(command === 'reveal' && state.session.stage === 'recognition')) {
+                        return;
+                    }
                 }
-                if (command === 'submit' && state.session.stage === 'spelling') {
-                    event.preventDefault();
-                    submitSpelling();
-                } else if (command === 'reveal' && state.session.stage === 'recognition') {
+                if (command === 'submit') {
+                    if (state.session.stage === 'spelling') {
+                        event.preventDefault();
+                        submitSpelling();
+                        return;
+                    }
+                    if (triggerPrimaryCardAction()) {
+                        event.preventDefault();
+                        return;
+                    }
+                }
+                if (command === 'reveal' && state.session.stage === 'recognition') {
                     event.preventDefault();
                     revealMeaning();
-                } else if (command === 'escape') {
+                    return;
+                }
+                if (command === 'escape') {
                     if (state.menuOpen) {
                         event.preventDefault();
                         closeMenu();
-                    } else if (state.viewport.isMobile && state.elements.sidePanel?.dataset.expanded === 'true') {
+                        return;
+                    }
+                    if (state.viewport.isMobile && state.elements.sidePanel?.dataset.expanded === 'true') {
                         event.preventDefault();
                         toggleSidePanel(false);
                     }
@@ -1886,6 +2004,7 @@
             }
             return;
         }
+        ensureListSwitcher();
         prepareSessionQueue();
         showDueBanner(state.session.duePending);
         if (state.session.stage === 'empty') {
