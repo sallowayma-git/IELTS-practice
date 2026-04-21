@@ -7,28 +7,55 @@
     <title>考试总览系统</title>
     <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
     <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/heroui-bridge.css">
+    <link rel="stylesheet" href="css/onboarding.css">
 </head>
 
-<body>
+<body class="hero-body boot-active" data-theme="heroui">
+    <div id="boot-overlay" role="status" aria-live="polite">
+        <div class="boot-panel">
+            <div class="boot-logo">SHUI · IELTS</div>
+            <p class="boot-status" id="boot-status-text">正在唤醒考试总览系统...</p>
+            <div class="boot-progress">
+                <span class="boot-progress__bar" id="boot-progress-bar"></span>
+            </div>
+            <span class="boot-progress__text" id="boot-progress-text">初始化资源...</span>
+        </div>
+    </div>
     <input type="file" id="folder-picker" webkitdirectory style="display: none;">
     <div class="message-container" id="message-container"></div>
 
-    <div class="container">
-        <div class="header">
-            <h1>📚 考试总览系统</h1>
-            <p>IELTS练习管理平台 - <a href="#" onclick="showDeveloperTeam(); return false;" style="color: rgba(102, 126, 234, 0.8); text-decoration: none; font-weight: 600; transition: color 0.3s ease;">睡着过呈现</a></p>
+    <div class="container hero-shell">
+        <div class="hero-header">
+            <h1>📚 考试总览系统
+                <button type="button" class="hero-badge hero-badge--cta" data-action="show-developer-team"
+                    aria-label="睡着过开发团队">
+                    SHUI
+                </button>
+                <a href="https://github.com/sallowayma-git/IELTS-practice" target="_blank" rel="noopener noreferrer"
+                    aria-label="GitHub Repository"
+                    style="margin-left: auto; margin-right: 20px; color: inherit; display: flex; align-items: center; transition: opacity 0.2s;"
+                    onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
+                    <svg viewBox="0 0 24 24" width="28" height="28" stroke="currentColor" stroke-width="2" fill="none"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path
+                            d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22">
+                        </path>
+                    </svg>
+                </a>
+            </h1>
         </div>
 
-        <nav class="main-nav" data-nav-controller="legacy">
-            <button class="nav-btn active" type="button" data-view="overview">📊 总览</button>
-            <button class="nav-btn" type="button" data-view="browse">📚 题库浏览</button>
-            <button class="nav-btn" type="button" data-view="practice">📝 练习记录</button>
-            <button class="nav-btn" type="button" data-view="more">✨ 更多</button>
-            <button class="nav-btn" type="button" data-view="settings">⚙️ 设置</button>    
+        <nav class="main-nav hero-nav" data-nav-controller="legacy">
+            <button class="nav-btn hero-nav__btn active" type="button" data-view="overview">📊 总览</button>
+            <button class="nav-btn hero-nav__btn" type="button" data-view="browse">📚 题库浏览</button>
+            <button class="nav-btn hero-nav__btn" type="button" data-view="practice">📝 练习记录</button>
+            <button class="nav-btn hero-nav__btn" type="button" data-view="more">✨ 更多</button>
+            <button class="nav-btn hero-nav__btn" type="button" data-view="settings">⚙️ 设置</button>
         </nav>
 
         <!-- 总览页面 -->
-        <div id="overview-view" class="view active">
+        <div id="overview-view" class="view active hero-panel hero-section">
             <h2>📊 学习总览</h2>
 
             <div class="category-grid" id="category-overview">
@@ -37,10 +64,11 @@
         </div>
 
         <!-- 题库浏览页面 -->
-        <div id="browse-view" class="view">
-
-            <div class="browse-title-bar">
-                <button class="browse-title-trigger" id="browse-title-trigger" type="button" aria-haspopup="true" aria-expanded="false" title="列表偏好">📚</button>
+        <div id="browse-view" class="view hero-panel hero-section">
+            <div class="browse-title-bar hero-panel__header">
+                <button class="browse-title-trigger" id="browse-title-trigger" type="button" aria-haspopup="true"
+                    aria-expanded="false" title="列表偏好">📚<span class="browse-title-dot"
+                        aria-hidden="true"></span></button>
                 <h2 id="browse-title">题库浏览</h2>
                 <div class="browse-preference-panel" id="browse-preference-panel" hidden>
                     <label class="browse-preference-option">
@@ -48,15 +76,36 @@
                         <span class="browse-preference-text">列表位置记录</span>
                     </label>
                 </div>
-                <div id="type-filter-buttons">
-                    <button class="btn btn-sm" onclick="filterByType('all')">全部</button>
-                    <button class="btn btn-sm" onclick="filterByType('reading')">阅读</button>
-                    <button class="btn btn-sm" onclick="filterByType('listening')">听力</button>
+                <div id="type-filter-buttons" class="hero-panel__actions shui-filter-group">
+                    <button class="btn btn-sm shui-filter-btn active" type="button" aria-pressed="true" data-filter-type="all" data-action="filter-exam-type">全部</button>
+                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="reading" data-action="filter-exam-type">阅读</button>
+                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="listening" data-action="filter-exam-type">听力</button>
                 </div>
             </div>
 
             <div class="search-box">
-                <input type="text" class="search-input" placeholder="搜索题目..." onkeyup="searchExams(this.value)">
+                <div class="search-row">
+                    <div class="search-input-wrap">
+                        <input type="text" class="search-input" id="exam-search-input" placeholder="搜索题目..." aria-label="搜索题目" data-input-action="search-exams" data-input-event="keyup">
+                        <button type="button" class="search-clear-btn" id="search-clear-btn" aria-label="清除搜索" hidden data-action="clear-exam-search">
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="browse-sort-wrapper">
+                        <select id="browse-sort-select" class="browse-sort-select" aria-label="题库排序">
+                            <option value="default">默认排序</option>
+                            <option value="frequency-desc">频率高→低</option>
+                        </select>
+                        <div class="browse-sort-icon">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M3.5 5.25L7 8.75L10.5 5.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="exam-list-container"></div>
@@ -67,135 +116,179 @@
         </div>
 
         <!-- 练习记录页面 -->
-    <div id="practice-view" class="view">
-        <h2>📝 练习记录</h2>
+        <div id="practice-view" class="view hero-panel hero-section">
+            <h2>📝 练习记录</h2>
 
-        <div class="practice-stats">
-            <div class="stat-card">
-                <div class="stat-number" id="total-practiced">0</div>
-                <div class="stat-label">已练习题目</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="avg-score">0%</div>
-                <div class="stat-label">平均正确率</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="study-time">0</div>
-                <div class="stat-label">学习时长(分钟)</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="streak-days">0</div>
-                <div class="stat-label">连续学习天数</div>
-            </div>
-        </div>
-
-        <div class="practice-history">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3>📈 练习历史</h3>
-                <div id="record-type-filter-buttons">
-                    <button class="btn btn-sm" onclick="filterRecordsByType('all')">全部</button>
-                    <button class="btn btn-sm" onclick="filterRecordsByType('reading')">阅读</button>
-                    <button class="btn btn-sm" onclick="filterRecordsByType('listening')">听力</button>
+            <div class="practice-stats hero-grid hero-grid--stats">
+                <div class="hero-card hero-card--stat">
+                    <div class="hero-card__label">已练习题目</div>
+                    <div class="hero-card__value" id="total-practiced">0</div>
+                    <div class="hero-card__meta">累计巩固练习</div>
                 </div>
-                <div>
-                    <button class="btn btn-secondary" onclick="(window.markdownExporter||(window.markdownExporter=new MarkdownExporter())).exportToMarkdown()" style="margin-right: 10px;">📄 导出Markdown</button>
-                    <button class="btn btn-info" onclick="toggleBulkDelete()" id="bulk-delete-btn"
-                        style="margin-right: 10px;">📝 批量删除</button>
-                    <button class="btn btn-warning" onclick="clearPracticeData()">🗑️ 清除记录</button>
+                <div class="hero-card hero-card--stat">
+                    <div class="hero-card__label">平均正确率</div>
+                    <div class="hero-card__value" id="avg-score">0%</div>
+                    <div class="hero-card__meta">近期待练表现</div>
+                </div>
+                <div class="hero-card hero-card--stat">
+                    <div class="hero-card__label">学习时长(分钟)</div>
+                    <div class="hero-card__value" id="study-time">0</div>
+                    <div class="hero-card__meta">聚焦沉浸时长</div>
+                </div>
+                <div class="hero-card hero-card--stat">
+                    <div class="hero-card__label">连续学习天数</div>
+                    <div class="hero-card__value" id="streak-days">0</div>
+                    <div class="hero-card__meta">坚持天数</div>
                 </div>
             </div>
 
-            <div id="history-list" class="practice-history-list">
-                <div style="text-align: center; padding: 40px; opacity: 0.7;">
-                    <div style="font-size: 3em; margin-bottom: 15px;">📋</div>
-                    <p>暂无练习记录</p>
-                    <p style="font-size: 0.9em; margin-top: 10px;">开始练习后，记录将自动保存在这里</p>
+            <div class="practice-history hero-panel hero-section">
+                <div class="hero-panel__header">
+                    <h3 class="hero-panel__title">📈 练习历史 <span class="hero-tag">SHUI Timeline</span></h3>
+                    <div id="record-type-filter-buttons" class="hero-panel__actions shui-filter-group">
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="true" data-filter-type="all" data-action="filter-record-type">全部</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="reading" data-action="filter-record-type">阅读</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="listening" data-action="filter-record-type">听力</button>
+                    </div>
+                    <div class="hero-panel__actions">
+                        <button class="btn btn-secondary hero-btn hero-btn--ghost" data-action="export-practice-markdown">📄
+                            导出Markdown</button>
+                        <button class="btn btn-info hero-btn" id="bulk-delete-btn" data-action="toggle-bulk-delete">📝
+                            批量删除</button>
+                        <button class="btn btn-warning hero-btn hero-btn--warn" data-action="clear-practice-data">🗑️
+                            清除记录</button>
+                    </div>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 设置页面 -->
-    <div id="settings-view" class="view">
-        <h2>⚙️ 系统设置</h2>
-        <div style="background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 10px;">
-            <div style="margin-bottom: 30px;">
-                <h3>🔧 系统管理</h3>
-                <p style="margin: 15px 0; opacity: 0.9;">系统工具和设置选项</p>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
-                    <button class="btn btn-warning" id="clear-cache-btn">🗑️ 清除缓存</button>
-                    <button class="btn" id="load-library-btn">📂 加载题库</button>
-                    <button class="btn btn-info" id="library-config-btn">⚙️ 题库配置切换</button>
-                    <button class="btn btn-warning" id="force-refresh-btn">🔄 强制刷新题库</button>
-                </div>
-            </div>
-
-            <div style="margin-bottom: 30px;">
-                <h3>💾 数据管理</h3>
-                <p style="margin: 15px 0; opacity: 0.9;">数据备份、导入导出和完整性检查</p>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button class="btn" id="create-backup-btn">💾 创建备份</button>
-                    <button class="btn btn-secondary" id="backup-list-btn">📋 备份列表</button>
-                    <button class="btn btn-info" id="export-data-btn">📤 导出数据</button>
-                    <button class="btn btn-warning" id="import-data-btn">📥 导入数据</button>
-                </div>
-            </div>
-
-            <div>
-                <h3>📊 系统信息</h3>
-                <div style="margin-top: 15px; line-height: 1.8; font-weight: bold;">
-                    <div style="color: #10b981;">题库状态: 已加载完整索引</div>
-                    <div>题目总数: <span id="total-exams">147</span></div>
-                    <div>HTML题目: <span id="html-exams">147</span></div>
-                    <div>PDF题目: <span id="pdf-exams">147</span></div>
-                    <div>最后更新: <span id="last-update">2025/9/16 14:47:09</span></div>
+                <div class="practice-history-search-row">
+                    <div class="search-input-wrap">
+                        <input type="text" class="search-input" id="history-search-input" placeholder="搜索练习记录（标题/分类/日期）..." aria-label="搜索练习记录" data-input-action="search-practice-history" data-input-event="input">
+                        <button type="button" class="search-clear-btn history-search-clear-btn" id="history-search-clear-btn" aria-label="清除练习记录搜索" hidden data-action="clear-history-search">
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
-                <!-- 主题切换按钮 -->
-                <div style="margin-top: 25px;">
-                    <button class="btn btn-secondary" onclick="showThemeSwitcherModal()">
-                        🎨 主题切换
-                    </button>
-                </div>
-
-                <!-- 开发团队链接 -->
-                <div
-                    style="margin-top: 30px; text-align: center; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.2);">
-                    <a href="#" onclick="showDeveloperTeam()"
-                        style="color: rgba(255, 255, 255, 0.7); text-decoration: none; font-size: 0.9em; transition: color 0.3s ease;">
-                        睡着过开发团队
-                    </a>
+                <div id="history-list" class="practice-history-list">
+                    <div style="text-align: center; padding: 40px; opacity: 0.7;">
+                        <div style="font-size: 3em; margin-bottom: 15px;">📋</div>
+                        <p>暂无练习记录</p>
+                        <p style="font-size: 0.9em; margin-top: 10px;">开始练习后，记录将自动保存在这里</p>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- 更多页面 -->
-    <div id="more-view" class="view">
-        <h2>✨ 更多工具</h2>
-        <p class="more-view-subtitle">探索额外的学习辅助功能，助你高效备考。</p>
-        <div class="more-tools-grid">
-            <button class="tool-card" type="button" data-action="open-clock">
-                <div class="tool-card-icon">🕒</div>
-                <div class="tool-card-content">
-                    <h3>全屏时钟</h3>
-                    <p>沉浸式模拟指针时钟，实时同步系统时间，陪伴你的专注时刻。</p>
+        <!-- 设置页面 -->
+        <div id="settings-view" class="view hero-panel hero-section">
+            <h2>⚙️ 系统设置</h2>
+            <div class="hero-settings-group">
+                <div class="hero-panel hero-section system-management-panel">
+                    <h3>🔧 系统管理</h3>
+                    <p class="hero-panel__muted">系统工具和设置选项</p>
+                    <div class="hero-settings-actions">
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="clear-cache-btn" data-action="clear-cache">🗑️ 清除缓存</button>
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="load-library-btn" data-action="load-library">📂 加载题库</button>
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="library-config-btn" data-action="library-config">⚙️
+                            题库配置切换</button>
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="force-refresh-btn" data-action="force-refresh">🔄
+                            强制刷新题库</button>
+                    </div>
                 </div>
-                <div class="tool-card-arrow">进入</div>
-            </button>
-            <button class="tool-card" type="button" data-action="open-vocab">
-                <div class="tool-card-icon">🧠</div>
-                <div class="tool-card-content">
-                    <h3>单词背诵</h3>
-                    <p>本地 Leitner 分箱 + 艾宾浩斯复习节奏，随时继续你的词汇任务。</p>
+
+                <div class="hero-panel hero-section data-management-panel">
+                    <h3>💾 数据管理</h3>
+                    <p class="hero-panel__muted">数据备份、导入导出和完整性检查</p>
+                    <div class="hero-settings-actions">
+                        <button class="btn hero-btn data-mgmt-btn" id="create-backup-btn" data-action="create-backup">💾 创建备份</button>
+                        <button class="btn hero-btn data-mgmt-btn" id="backup-list-btn" data-action="backup-list">📋 备份列表</button>
+                        <button class="btn hero-btn data-mgmt-btn" id="export-data-btn" data-action="export-data">📤 导出数据</button>
+                        <button class="btn hero-btn data-mgmt-btn" id="import-data-btn" data-action="import-data">📥 导入数据</button>
+                    </div>
                 </div>
-                <div class="tool-card-arrow">进入</div>
-            </button>
+
+                <div class="hero-panel hero-section">
+                    <h3>📊 系统信息</h3>
+                    <div class="hero-surface" style="margin-top: 15px; line-height: 1.8; font-weight: bold;">
+                        <div style="color: #10b981;">题库状态: 已加载完整索引</div>
+                        <div>题目总数: <span id="total-exams">192</span></div>
+                        <div>HTML题目: <span id="html-exams">191</span></div>
+                        <div>PDF题目: <span id="pdf-exams">190</span></div>
+                        <div>最后更新: <span id="last-update">2025/03/01 21:56:46</span></div>
+                    </div>
+
+                    <!-- 主题切换按钮 -->
+                    <div style="margin-top: 25px;">
+                        <button class="btn btn-secondary hero-btn hero-btn--ghost" data-action="show-theme-switcher">
+                            🎨 主题切换
+                        </button>
+                    </div> 
+
+                    <!-- 引导流程按钮 -->
+                    <div style="margin-top: 15px;">
+                        <button class="btn hero-btn" id="show-onboarding-btn" data-action="show-onboarding">
+                            🎯 重新显示引导
+                        </button>
+                    </div>
+
+                    <!-- 开发团队链接 -->
+                    <div
+                        style="margin-top: 30px; text-align: center; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.2);">
+                        <a href="#" data-action="show-developer-team"
+                            style="color: rgba(255, 255, 255, 0.7); text-decoration: none; font-size: 0.9em; transition: color 0.3s ease;">
+                            睡着过开发团队
+                        </a>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
-    <section id="vocab-view" class="view" data-view="vocab" hidden>
-        <div class="vocab-view-shell" data-vocab-role="root"></div>
-    </section>
+
+        <!-- 更多页面 -->
+        <div id="more-view" class="view hero-panel hero-section">
+            <div class="hero-panel__header">
+                <h2 class="hero-panel__title">✨ 更多工具</h2>
+            </div>
+            <p class="more-view-subtitle">探索额外的学习辅助功能，助你高效备考。</p>
+            <div class="more-tools-grid">
+                <!-- <button class="tool-card tool-card--featured" type="button" id="writing-entry-btn">
+                    <div class="tool-card-icon">✍️</div>
+                    <div class="tool-card-content">
+                        <h3>写作评分</h3>
+                        <p>AI驱动的雅思写作评分系统，获取专业四维度评分与详细反馈。</p>
+                    </div>
+                    <div class="tool-card-arrow">进入</div>
+                </button> -->
+                <button class="tool-card" type="button" data-action="open-clock">
+                    <div class="tool-card-icon">🕒</div>
+                    <div class="tool-card-content">
+                        <h3>全屏时钟</h3>
+                        <p>沉浸式模拟指针时钟，实时同步系统时间，陪伴你的专注时刻。</p>
+                    </div>
+                    <div class="tool-card-arrow">进入</div>
+                </button>
+                <button class="tool-card" type="button" data-action="open-vocab">
+                    <div class="tool-card-icon">🧠</div>
+                    <div class="tool-card-content">
+                        <h3>单词背诵</h3>
+                        <p>本地 Leitner 分箱 + 艾宾浩斯复习节奏，随时继续你的词汇任务。</p>
+                    </div>
+                    <div class="tool-card-arrow">进入</div>
+                </button>
+                <button class="tool-card" type="button" data-action="show-achievements">
+                    <div class="tool-card-icon">🏆</div>
+                    <div class="tool-card-content">
+                        <h3>成就</h3>
+                        <p>查看你解锁的徽章和荣誉。</p>
+                    </div>
+                    <div class="tool-card-arrow">查看</div>
+                </button>
+            </div>
+        </div>
+        <section id="vocab-view" class="view" data-view="vocab" hidden>
+            <div class="vocab-view-shell" data-vocab-role="root"></div>
+        </section>
     </div>
 
     <div id="fullscreen-clock-overlay" class="clock-overlay is-hidden" role="dialog" aria-modal="true"
@@ -241,7 +334,8 @@
                 </section>
             </div>
             <div class="clock-pagination" data-clock-role="pagination" aria-hidden="true">
-                <button class="clock-dot is-active" type="button" data-target-view="analog" aria-label="切换到模拟指针时钟"></button>
+                <button class="clock-dot is-active" type="button" data-target-view="analog"
+                    aria-label="切换到模拟指针时钟"></button>
                 <button class="clock-dot" type="button" data-target-view="flip" aria-label="切换到翻页时钟"></button>
                 <button class="clock-dot" type="button" data-target-view="digital" aria-label="切换到数字时钟"></button>
                 <button class="clock-dot" type="button" data-target-view="ambient" aria-label="切换到低对比度数字时钟"></button>
@@ -270,10 +364,11 @@
                 <div class="developer-card">
                     <div class="developer-name">呆呆军师</div>
                 </div>
-                <div class="developer-card">
+                <div class="developer-card" id="dev-poi">
                     <div class="developer-name">POI</div>
+                    <span class="heart-interaction">❤</span>
                 </div>
-                <div class="developer-card">
+                <div class="developer-card" id="dev-nana">
                     <div class="developer-name">Na.8.0</div>
                 </div>
                 <div class="developer-card">
@@ -315,9 +410,12 @@
                 <div class="developer-card">
                     <div class="developer-name">哈希海</div>
                 </div>
+                <div class="developer-card">
+                    <div class="developer-name">阿橙</div>
+                </div>
             </div>
 
-            <button class="modal-close-btn" onclick="hideDeveloperTeam()">
+            <button class="modal-close-btn" data-action="hide-developer-team">
                 关闭
             </button>
         </div>
@@ -328,7 +426,7 @@
         <div class="theme-modal-content">
             <div class="theme-modal-header">
                 <h3>🎨 主题切换</h3>
-                <button class="theme-modal-close" onclick="hideThemeSwitcherModal()">×</button>
+                <button class="theme-modal-close" data-action="hide-theme-switcher" aria-label="关闭">×</button>
             </div>
             <div class="theme-modal-body">
                 <div class="theme-options-viewport" role="presentation">
@@ -338,42 +436,50 @@
                                 <div class="theme-name">📚 Academic</div>
                                 <div class="theme-desc">专业 高效 可靠</div>
                             </div>
-                            <button class="btn btn-sm" onclick="navigateToThemePortal('.superdesign/design_iterations/ielts_academic_functional_2.html', { label: 'Academic' })">切换</button>
+                            <button class="btn btn-sm" aria-label="切换到 Academic 主题" data-action="navigate-theme-portal"
+                                data-theme-url=".superdesign/design_iterations/ielts_academic_functional_2.html" data-theme-label="Academic">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
                                 <div class="theme-name">🍂 Bloom</div>
                                 <div class="theme-desc">秋日 暖阳</div>
                             </div>
-                            <button id="bloom-theme-btn" class="btn btn-sm" onclick="toggleBloomDarkMode()">切换</button>
+                            <button id="bloom-theme-btn" class="btn btn-sm" aria-label="切换到 Bloom 主题" data-action="toggle-bloom-theme">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
                                 <div class="theme-name" style="color: #0554F2;">🔵 Blue</div>
                                 <div class="theme-desc" style="color: #0788D9;">冷静 清爽 专注</div>
                             </div>
-                            <button id="blue-theme-btn" class="btn btn-sm" style="background: #0554F2; border-color: #1154D9;" onclick="applyTheme('blue')">切换</button>
+                            <button id="blue-theme-btn" class="btn btn-sm" aria-label="切换到 Blue 主题"
+                                style="background: #0554F2; border-color: #1154D9;" data-action="apply-theme"
+                                data-theme="blue">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
                                 <div class="theme-name" style="color: #ec4899;">🎀 Melody</div>
                                 <div class="theme-desc" style="color: #ec4899;">美乐蒂</div>
                             </div>
-                            <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;" onclick="navigateToThemePortal('.superdesign/design_iterations/my_melody_ielts_1.html', { label: 'MyMelody', theme: 'mymelody' })">切换</button>
+                            <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;" aria-label="切换到 Melody 主题"
+                                data-action="navigate-theme-portal" data-theme-url=".superdesign/design_iterations/my_melody_ielts_1.html" data-theme-label="MyMelody" data-theme-name="mymelody">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
                                 <div class="theme-name" style="color: #6a2bbf;">🧙 HarryPotter</div>
                                 <div class="theme-desc" style="color: #6a2bbf;">哈利波特</div>
                             </div>
-                            <button class="btn btn-sm" style="background: #6a2bbf; border-color: #6a2bbf;" aria-label="哈利波特主题（冒险）" onclick="navigateToThemePortal('.superdesign/design_iterations/HarryPoter.html', { label: 'HarryPotter', theme: 'harry' })">切换</button>
+                            <button class="btn btn-sm" style="background: #6a2bbf; border-color: #6a2bbf;"
+                                aria-label="哈利波特主题（冒险）" data-action="navigate-theme-portal"
+                                data-theme-url=".superdesign/design_iterations/HarryPoter.html" data-theme-label="HarryPotter" data-theme-name="harry">切换</button>
                         </div>
                         <div class="theme-option">
                             <div class="theme-info">
                                 <div class="theme-name" style="color: #ffc83d;">🐷 小呆呆</div>
                                 <div class="theme-desc" style="color: #f59e0b;">小呆呆控制台</div>
                             </div>
-                            <button class="btn btn-sm" style="background: linear-gradient(120deg, #ffe08a, #ffc83d); border-color: #fbbf24; color: #3b2400;" onclick="navigateToThemePortal('.superdesign/design_iterations/xiaodaidai_dashboard_1.html', { label: 'XiaoDaiDai', theme: 'xiaodaidai' })">切换</button>
+                            <button class="btn btn-sm" aria-label="切换到 小呆呆 主题"
+                                style="background: linear-gradient(120deg, #ffe08a, #ffc83d); border-color: #fbbf24; color: #3b2400;"
+                                data-action="navigate-theme-portal" data-theme-url=".superdesign/design_iterations/xiaodaidai_dashboard_1.html" data-theme-label="XiaoDaiDai" data-theme-name="xiaodaidai">切换</button>
                         </div>
                     </div>
                 </div>
@@ -381,16 +487,17 @@
         </div>
     </div>
 
-    <!-- 环境探测 -->
-    <script src="js/utils/logger.js"></script>
+    <!-- 启动与懒加载工具 -->
+    <script src="js/presentation/shuiBackground.js" defer></script>
+    <script src="js/runtime/bootScreen.js" defer></script>
+    <script src="js/runtime/lazyLoader.js" defer></script>
+    <script src="js/utils/suitePreference.js" defer></script>
+    <script src="js/presentation/app-actions.js" defer></script>
+    <script src="js/presentation/developerTeamModal.js" defer></script>
+
+    <!-- 基础环境与日志 -->
     <script src="js/utils/environmentDetector.js"></script>
-
-    <!-- 加载完整题库数据 -->
-    <script src="assets/scripts/complete-exam-data.js"></script>
-    <script src="assets/scripts/listening-exam-data.js"></script>
-
-    <!-- 加载工具函数 -->
-    
+    <script src="js/utils/logger.js"></script>
     <script src="js/utils/storage.js"></script>
     <script src="js/core/storageProviderRegistry.js"></script>
     <script src="js/data/dataSources/storageDataSource.js"></script>
@@ -401,103 +508,238 @@
     <script src="js/data/repositories/backupRepository.js"></script>
     <script src="js/data/repositories/metaRepository.js"></script>
     <script src="js/data/index.js"></script>
+    <script src="js/core/practiceCore.js"></script>
+    <script src="js/core/resourceCore.js"></script>
+    <script src="assets/generated/reading-exams/manifest.js"></script>
     <script src="js/utils/stateSerializer.js"></script>
     <script src="js/utils/simpleStorageWrapper.js"></script>
-    <script src="js/utils/vocabDataIO.js"></script>
-    <script src="js/core/vocabScheduler.js"></script>
-    <script src="js/core/vocabStore.js"></script>
-    <script src="js/components/vocabDashboardCards.js"></script>
-    <script src="js/components/vocabSessionView.js"></script>
-    <script src="js/utils/dataBackupManager.js"></script>
-    <script src="js/components/dataManagementPanel.js"></script>
 
-    <!-- 设置共享命名空间 -->
-    <script>
-      // 确保存储初始化完成后设置命名空间
-      if (window.storage && typeof window.storage.setNamespace === 'function') {
-        window.storage.setNamespace('exam_system');
-        console.log('[System] 主页面已设置共享命名空间: exam_system');
-
-        // 验证命名空间设置是否生效
-        setTimeout(() => {
-          const testKey = 'namespace_test';
-          const testValue = 'test_value_' + Date.now();
-          window.storage.set(testKey, testValue).then(() => {
-            window.storage.get(testKey).then((retrievedValue) => {
-              if (retrievedValue === testValue) {
-                console.log('✅ 命名空间设置验证成功: 存储和读取正常');
-              } else {
-                console.warn('❌ 命名空间设置验证失败: 读取值不匹配');
-              }
-              // 清理测试数据
-              window.storage.remove(testKey);
-            }).catch((error) => {
-              console.error('❌ 命名空间设置验证失败: 读取错误', error);
-            });
-          }).catch((error) => {
-            console.error('❌ 命名空间设置验证失败: 存储错误', error);
-          });
-        }, 1000);
-      } else {
-        console.warn('存储管理器未加载或setNamespace方法不可用');
-      }
-    </script>
-
-    <!-- 加载核心组件 -->
-    <script src="js/core/scoreStorage.js"></script>
-    <script src="js/utils/answerSanitizer.js"></script>
-    <script src="js/core/practiceRecorder.js"></script>
-    <script src="js/core/legacyStateBridge.js"></script>
-    <script src="js/utils/legacyStateAdapter.js"></script>
-    <script src="js/components/PDFHandler.js"></script>
-
-    <!-- 系统诊断组件 (已合并) -->
-    <script src="js/components/SystemDiagnostics.js"></script>
-    <script src="js/components/PerformanceOptimizer.js"></script>
-    <script src="js/components/DataIntegrityManager.js"></script>
-    <script src="js/components/BrowseStateManager.js"></script>
-
-    <!-- Markdown 导出和记录详情功能 -->
-    <!--  -->
-    <script src="js/utils/dataConsistencyManager.js"></script>
-    <script src="js/utils/answerComparisonUtils.js"></script>
-    <script src="js/utils/markdownExporter.js"></script>
-    <script src="js/components/practiceRecordModal.js"></script>
-    <script src="js/components/practiceHistoryEnhancer.js"></script>
-    <script src="js/theme-switcher.js"></script>
-    <script src="js/utils/themeManager.js"></script>
-
-    <!-- 加载工具库 -->
+    <!-- 工具库与基础视图 -->
     <script src="js/utils/dom.js"></script>
-    <script src="js/views/legacyViewBundle.js"></script>
-    <script src="js/utils/performance.js"></script>
-    <script src="js/utils/typeChecker.js"></script>
-    <script src="js/utils/codeStandards.js"></script>
     <script src="js/services/overviewStats.js"></script>
     <script src="js/views/overviewView.js"></script>
-
-    <!-- 应用核心状态与展示模块 -->
-    <script src="js/app/state-service.js"></script>
-    <script src="js/presentation/message-center.js"></script>
     <script src="js/presentation/navigation-controller.js"></script>
-    <script src="js/runtime/legacy-state-adapter.js"></script>
 
-    <!-- 加载主脚本 -->
-    <script src="js/main.js"></script>
+    <!-- 入口与懒加载代理 -->
+    <script src="js/app/main-entry.js"></script>
+    <script src="js/presentation/indexInteractions.js"></script>
     <script src="js/boot-fallbacks.js"></script>
-    <!-- 运行时修复补丁（异步存储/恢复兼容、本地file环境增强） -->
     <script src="js/patches/runtime-fixes.js"></script>
-    
-    
-    <!-- 加载主应用（最后加载） -->
+
+    <!-- 应用核心 -->
     <script src="js/app/stateMixin.js"></script>
     <script src="js/app/bootstrapMixin.js"></script>
     <script src="js/app/lifecycleMixin.js"></script>
     <script src="js/app/navigationMixin.js"></script>
-    <script src="js/app/examSessionMixin.js"></script>
-    <script src="js/app/suitePracticeMixin.js"></script>
     <script src="js/app/fallbackMixin.js"></script>
     <script src="js/app.js"></script>
+
+    <!-- 引导流程组件 -->
+    <script src="js/components/onboardingTour.js"></script>
+
+    <!-- 成就系统模态框 -->
+    <div id="achievements-modal" class="theme-modal">
+        <div class="theme-modal-content" style="max-width: 600px;">
+            <div class="theme-modal-header">
+                <h3>🏆 我的成就</h3>
+                <button class="theme-modal-close" data-action="hide-achievements" aria-label="关闭">×</button>
+            </div>
+            <div class="theme-modal-body">
+                <div class="achievements-grid" id="achievements-list">
+                    <!-- JavaScript will populate this -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 首次开源许可弹窗 (Claude 暖色极简设计风格) -->
+    <style>
+        /* ── License Modal ── */
+        #license-modal {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(245, 244, 239, 0.88);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.35s ease;
+            z-index: 9999;
+        }
+
+        #license-modal.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #license-modal .lm-card {
+            max-width: 480px;
+            width: calc(100% - 48px);
+            background: #FFFEFB;
+            border: 1px solid rgba(0, 0, 0, 0.07);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow:
+                0 2px 4px rgba(0, 0, 0, 0.04),
+                0 8px 24px rgba(0, 0, 0, 0.07),
+                0 24px 48px rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            box-sizing: border-box;
+            transform: translateY(8px);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        #license-modal.show .lm-card {
+            transform: translateY(0);
+        }
+
+        #license-modal .lm-title {
+            color: #1A1614;
+            font-size: 22px;
+            line-height: 32px;
+            font-weight: 600;
+            margin: 0 0 24px 0;
+            letter-spacing: -0.01em;
+        }
+
+        #license-modal .lm-body {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            text-align: left;
+        }
+
+        #license-modal .lm-body p {
+            margin: 0;
+            color: #5A534E;
+            font-size: 15px;
+            line-height: 24px;
+        }
+
+        #license-modal .lm-body .lm-warning {
+            color: #C06025;
+            font-weight: 600;
+        }
+
+        #license-modal .lm-body strong {
+            color: #1A1614;
+            font-weight: 600;
+        }
+
+        #license-modal .lm-info-box {
+            padding: 14px 16px;
+            background: #F8F5F0;
+            border: 1px solid #EDE7DC;
+            border-radius: 10px;
+        }
+
+        #license-modal .lm-footer {
+            margin-top: 24px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
+        #license-modal .lm-btn {
+            background: #1A1614;
+            color: #FFFEFB;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 40px;
+            font-size: 15px;
+            line-height: 24px;
+            font-weight: 500;
+            cursor: pointer;
+            letter-spacing: 0.01em;
+            /* layered shadow for depth */
+            box-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.08) inset,
+                0 2px 4px rgba(0, 0, 0, 0.20),
+                0 4px 8px rgba(0, 0, 0, 0.10);
+            transition:
+                background 0.18s ease,
+                box-shadow 0.18s ease,
+                transform 0.12s ease;
+        }
+
+        #license-modal .lm-btn:hover {
+            background: #2E2521;
+            box-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.10) inset,
+                0 4px 10px rgba(0, 0, 0, 0.22),
+                0 8px 20px rgba(0, 0, 0, 0.12);
+            transform: translateY(-1px);
+        }
+
+        #license-modal .lm-btn:active {
+            background: #0F0C0B;
+            box-shadow:
+                0 1px 0 rgba(255, 255, 255, 0.05) inset,
+                0 1px 3px rgba(0, 0, 0, 0.20);
+            transform: translateY(0);
+        }
+    </style>
+    <div id="license-modal">
+        <div class="lm-card">
+            <h2 class="lm-title">开源项目使用须知</h2>
+            <div class="lm-body">
+                <p>
+                    感谢使用！本项目是自由开源软件，采用 <strong>GPL-3.0 License</strong> 发布。
+                </p>
+                <p class="lm-warning">
+                    我们明确反对任何形式的倒卖、改名后二次分发、牟利、使用该项目商业引流等行为。
+                </p>
+                <p>
+                    本项目的初衷是自由使用、学习与改进，而不是作为倒卖工具获取不正当收益。
+                </p>
+                <div class="lm-info-box">
+                    <p>
+                        任何分发、修改或再发布行为，都必须遵守 GPL-3.0 协议，包括<strong>公开源码、保留开源许可，并尊重用户的自由</strong>。
+                    </p>
+                </div>
+            </div>
+            <div class="lm-footer">
+                <button class="lm-btn" onclick="acceptGplLicense()">我已了解</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        window.acceptGplLicense = function () {
+            try {
+                localStorage.setItem('hasSeenGplLicense', 'true');
+            } catch (e) {
+                console.warn('LocalStorage error:', e);
+            }
+            var modal = document.getElementById('license-modal');
+            if (modal) {
+                // Use opacity/pointer-events only — never touch display
+                modal.classList.remove('show');
+            }
+        };
+
+        // Show only when not yet accepted
+        (function () {
+            try {
+                if (!localStorage.getItem('hasSeenGplLicense')) {
+                    var modal = document.getElementById('license-modal');
+                    if (modal) {
+                        // Use rAF so the CSS transition fires after initial render
+                        requestAnimationFrame(function () {
+                            requestAnimationFrame(function () { modal.classList.add('show'); });
+                        });
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        })();
+    </script>
 </body>
 
 </html>

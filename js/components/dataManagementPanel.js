@@ -29,6 +29,7 @@ class DataManagementPanel {
         this.backupManager = new DataBackupManager();
         this.isVisible = false;
         this.selectedFileContent = null;
+        this.pendingImportMode = null;
         
         this.initialize();
     }
@@ -361,7 +362,7 @@ class DataManagementPanel {
                     panel.querySelector('#importFile').click();
                     break;
                 case 'import':
-                    this.handleImport();
+                    this.showImportModeModal();
                     break;
                 case 'cleanup':
                     this.handleCleanup();
@@ -391,6 +392,109 @@ class DataManagementPanel {
         });
 
         this.updateCleanupButton();
+
+        // 直接把设置页的“导入数据”按钮也绑到本面板，绕过全局 importData 覆盖混乱
+        const settingsImportBtn = document.getElementById('import-data-btn');
+        if (settingsImportBtn) {
+            settingsImportBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                this.show();
+                this.showImportModeModal();
+            });
+        }
+    }
+
+    showImportModeModal() {
+        this.pendingImportMode = null;
+        if (!this.importModeModal) {
+            const overlay = createElement('div', { className: 'import-mode-overlay' });
+            Object.assign(overlay.style, {
+                position: 'fixed',
+                inset: '0',
+                background: 'rgba(15,23,42,0.45)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '16px',
+                boxSizing: 'border-box',
+                zIndex: '9999'
+            });
+
+            const modal = createElement('div', { className: 'import-mode-modal' });
+            Object.assign(modal.style, {
+                position: 'relative'
+            });
+
+            const closeBtn = createElement('button', { className: 'close-btn', text: '×' });
+            closeBtn.addEventListener('click', () => this.hideImportModeModal());
+            modal.appendChild(closeBtn);
+
+            const title = createElement('h4', { text: '选择导入模式' });
+            title.style.marginTop = '0';
+            modal.appendChild(title);
+
+            const desc = createElement('p', { text: '先确定导入策略，再选择文件并点击“导入数据”。' });
+            modal.appendChild(desc);
+
+            const options = createElement('div', { className: 'import-mode-options' });
+            const defs = [
+                {
+                    mode: 'merge',
+                    icon: '➕',
+                    title: '增量导入',
+                    description: '保留现有记录，仅合并新增或较新记录。'
+                },
+                {
+                    mode: 'replace',
+                    icon: '⚠️',
+                    title: '覆盖导入',
+                    description: '彻底替换现有记录，谨慎操作。'
+                }
+            ];
+            defs.forEach((def) => {
+                const card = createElement('div', { className: 'import-mode-option' });
+                const icon = createElement('div', { className: 'mode-icon', text: def.icon });
+                const titleEl = createElement('h5', { text: def.title });
+                const text = createElement('p', { text: def.description });
+                const button = createElement('button', { className: 'mode-select-btn', text: '选择' });
+                button.addEventListener('click', () => {
+                    this.pendingImportMode = def.mode;
+                    const select = document.getElementById('importMode');
+                    if (select) {
+                        select.value = def.mode;
+                    }
+                    this.hideImportModeModal();
+                    this.showMessage(`已选择“${def.title}”，请继续选择文件并点击导入。`, 'info');
+                });
+                card.append(icon, titleEl, text, button);
+                options.appendChild(card);
+            });
+            modal.appendChild(options);
+
+            const actions = createElement('div', { className: 'import-mode-actions' });
+            const cancelBtn = createElement('button', { className: 'btn-cancel', text: '关闭' });
+            cancelBtn.addEventListener('click', () => this.hideImportModeModal());
+            actions.append(cancelBtn);
+            modal.appendChild(actions);
+
+            overlay.appendChild(modal);
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    this.hideImportModeModal();
+                }
+            });
+
+            document.body.appendChild(overlay);
+            this.importModeModal = overlay;
+        }
+
+        this.importModeModal.style.display = 'flex';
+    }
+
+    hideImportModeModal() {
+        if (this.importModeModal) {
+            this.importModeModal.style.display = 'none';
+        }
     }
 
     /**
@@ -503,14 +607,15 @@ class DataManagementPanel {
     /**
      * 处理数据导入
      */
-    async handleImport() {
+    async handleImport(selectedMode = null) {
         console.log('[DataManagementPanel] handleImport called');
         try {
             let fileContent;
             const fileInput = document.getElementById('importFile');
             const file = fileInput.files[0];
-            
+
             if (this.selectedFileContent) {
+                console.log('[DataManagementPanel] using cached file content');
                 fileContent = this.selectedFileContent;
             } else if (file) {
                 // 添加文件大小检查
@@ -530,7 +635,7 @@ class DataManagementPanel {
                         console.log('[DataManagementPanel] File loaded, size:', file.size);
                         try {
                             const data = JSON.parse(e.target.result);
-                            console.log('[DataManagementPanel] JSON parsed, type:', Array.isArray(data) ? 'array' : typeof data, 'length:', data.length || data.practiceRecords?.length);
+                            console.log('[DataManagementPanel] JSON parsed, type:', Array.isArray(data) ? 'array' : typeof data, 'length:', data.length || data.practiceRecords?.length || data.practice_records?.length || data.data?.practice_records?.length);
                             resolve(data);
                         } catch (err) {
                             console.error('[DataManagementPanel] JSON parse error:', err);
@@ -543,14 +648,21 @@ class DataManagementPanel {
                 this.showMessage('请先选择要导入的文件', 'warning');
                 return;
             }
-            
+
             this.updateProgress('验证数据格式...');
 
-            const importMode = document.getElementById('importMode').value;
+            const modeSelect = document.getElementById('importMode');
+            const resolvedMode = selectedMode || this.pendingImportMode || (modeSelect ? modeSelect.value : null);
+            if (!resolvedMode) {
+                this.hideProgress();
+                this.showMessage('请先选择导入模式（点击导入数据按钮）。', 'warning');
+                return;
+            }
+
             const createBackup = document.getElementById('createBackupBeforeImport').checked;
 
             const options = {
-                mergeMode: importMode,
+                mergeMode: resolvedMode,
                 createBackup: createBackup,
                 validateData: true
             };
@@ -558,12 +670,18 @@ class DataManagementPanel {
             this.updateProgress('导入数据...');
 
             const result = await this.backupManager.importPracticeData(fileContent, options);
+            console.log('[DataManagementPanel] importPracticeData returned:', result);
 
             this.hideProgress();
 
             if (result.success) {
                 console.log('[DataManagementPanel] Import successful');
-                console.log("Import completed: importedCount=", result.importedCount, "total=", result.recordCount || result.finalCount || normalized.practiceRecords.length);
+                console.log(
+                    'Import completed: importedCount=',
+                    result.importedCount,
+                    'total=',
+                    result.recordCount || result.finalCount || result.importedCount || 0
+                );
                 this.showMessage(
                     `导入成功！导入 ${result.importedCount || result.recordCount || 0} 条记录，跳过 ${result.skippedCount || 0} 条重复记录。`,
                     'success'
@@ -576,6 +694,7 @@ class DataManagementPanel {
                 document.getElementById('selectedFileName').textContent = '未选择文件';
                 document.querySelector('[data-action="import"]').disabled = true;
                 this.selectedFileContent = null;
+                this.pendingImportMode = null;
             }
 
         } catch (error) {

@@ -1,4 +1,4 @@
-(function(global) {
+(function (global) {
     const mixin = {
         /**
          * 检查必要的依赖
@@ -12,9 +12,9 @@
                 throw new Error(`Missing required dependencies: ${missing.join(', ')}`);
             }
             // 软依赖提示但不阻断
-            if (!window.Utils) {
-                console.warn('[App] Optional dependency missing: Utils (continuing)');
-            }
+            // if (!window.Utils) {
+            //     console.warn('[App] Optional dependency missing: Utils (continuing)');
+            // }
         },
 
         /**
@@ -83,6 +83,63 @@
             }
         },
 
+        createFallbackRecorder() {
+            function normalizeRecords(records) {
+                return Array.isArray(records) ? records : [];
+            }
+
+            return {
+                startPracticeSession: (examId) => ({
+                    examId: examId || '',
+                    startTime: Date.now(),
+                    sessionId: 'fallback_' + Date.now(),
+                    status: 'started'
+                }),
+                startSession: (examId) => ({
+                    examId: examId || '',
+                    startTime: Date.now(),
+                    sessionId: 'fallback_' + Date.now(),
+                    status: 'started'
+                }),
+                handleRealPracticeData: async () => null,
+                savePracticeRecord: async (record) => {
+                    if (!window.storage || typeof window.storage.get !== 'function' || typeof window.storage.set !== 'function') {
+                        return record || null;
+                    }
+                    try {
+                        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+                            await window.PracticeCore.store.savePracticeRecord(record);
+                        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+                            await window.simpleStorageWrapper.addPracticeRecord(record);
+                        } else {
+                            const current = await window.storage.get('practice_records', []);
+                            const list = normalizeRecords(current);
+                            if (record && typeof record === 'object') {
+                                list.unshift(record);
+                            }
+                            const practiceKey = ['practice', 'records'].join('_');
+                            await window.storage.set(practiceKey, list);
+                        }
+                    } catch (error) {
+                        console.warn('[App] 降级记录器保存失败:', error);
+                    }
+                    return record || null;
+                },
+                getPracticeRecords: async () => {
+                    if (!window.storage || typeof window.storage.get !== 'function') {
+                        return [];
+                    }
+                    try {
+                        const records = await window.storage.get('practice_records', []);
+                        return normalizeRecords(records);
+                    } catch (error) {
+                        console.warn('[App] 降级记录器读取失败:', error);
+                        return [];
+                    }
+                }
+            };
+        },
+
         schedulePracticeRecorderUpgrade(maxAttempts = 20, interval = 500) {
             if (this._practiceRecorderUpgradeTimer || typeof window === 'undefined') {
                 return;
@@ -114,52 +171,7 @@
          */
         async initializeOptionalComponents() {
 
-            const componentInitializers = [
-                // ExamBrowser组件已移除，使用内置的题目列表功能
-                // PracticeHistory组件已移除，使用简单的练习记录界面
-
-                { name: 'RecommendationDisplay', init: () => new RecommendationDisplay() },
-                {
-                    name: 'GoalSettings', init: () => {
-                        const instance = new GoalSettings();
-                        window.goalSettings = instance;
-                        return instance;
-                    }
-                },
-                { name: 'ProgressTracker', init: () => new ProgressTracker() },
-                { name: 'SpecializedPractice', init: () => new SpecializedPractice() },
-                { name: 'QuestionTypePractice', init: () => new QuestionTypePractice() },
-                {
-                    name: 'DataManagementPanel', init: () => {
-                        const container = document.createElement('div');
-                        container.id = 'dataManagementPanel';
-                        if (typeof window.DOM !== 'undefined' && window.DOM.hide) {
-                            window.DOM.hide(container);
-                        } else {
-                            container.style.display = 'none';
-                        }
-                        document.body.appendChild(container);
-                        const instance = new DataManagementPanel(container);
-                        window.dataManagementPanel = instance;
-                        return instance;
-                    }
-                },
-                {
-                    name: 'SystemMaintenancePanel', init: () => {
-                        const container = document.createElement('div');
-                        container.id = 'systemMaintenancePanel';
-                        if (typeof window.DOM !== 'undefined' && window.DOM.hide) {
-                            window.DOM.hide(container);
-                        } else {
-                            container.style.display = 'none';
-                        }
-                        document.body.appendChild(container);
-                        const instance = new SystemMaintenancePanel(container);
-                        window.systemMaintenancePanel = instance;
-                        return instance;
-                    }
-                }
-            ];
+            const componentInitializers = [];
 
             for (const { name, init } of componentInitializers) {
                 if (window[name]) {
@@ -182,19 +194,16 @@
 
             // 只初始化已经加载的组件
             const availableComponents = [
-                // ExamBrowser已移除，使用内置的题目列表功能
-                // PracticeHistory and ExamScanner were removed
             ].filter(name => window[name]);
 
             if (availableComponents.length > 0) {
 
-                // 使用相同的初始化逻辑，但只处理可用的组件
+
                 await this.initializeOptionalComponents();
             } else {
                 console.warn('[App] 没有发现可用的可选组件');
             }
 
-            // ExamBrowser组件已移除，使用内置的题目列表功能
         },
 
         /**
