@@ -106,27 +106,27 @@
       "items": [
         {
           "questionNumber": 36,
-          "text": "（1）题目 36：Scott had greater _____.（司各特有更强的_____。）\n答案：F（technical control，技术掌控力）\n解析：定位 Paragraph 4 中 “in terms of craftsmanship, precision and the ability to minutely regulate language to create the desired effect, Scott takes the prize”，“工艺、精准度、语言调控能力” 对应 “technical control”，因此选 F。",
+          "text": "（1）题目 36：Scott had greater .（司各特有更强的。）\n答案：F（technical control，技术掌控力）\n解析：定位 Paragraph 4 中 “in terms of craftsmanship, precision and the ability to minutely regulate language to create the desired effect, Scott takes the prize”，“工艺、精准度、语言调控能力” 对应 “technical control”，因此选 F。",
           "questionId": "q10"
         },
         {
           "questionNumber": 37,
-          "text": "（2）题目 37：but Stevenson had more _____.（但史蒂文森有更强的_____。）\n答案：A（natural ability，天赋）\n解析：定位 Paragraph 4 中 “this is not the same thing at all as inherent talent; by way of comparison... the former had learned more precise skills of execution but the latter’s intrinsic genius was greater, and so it seems to be with Scott and Stevenson”，“司各特技巧更精，史蒂文森天赋更高”，“intrinsic genius” 对应 “natural ability”，因此选 A。",
+          "text": "（2）题目 37：but Stevenson had more .（但史蒂文森有更强的。）\n答案：A（natural ability，天赋）\n解析：定位 Paragraph 4 中 “this is not the same thing at all as inherent talent; by way of comparison... the former had learned more precise skills of execution but the latter’s intrinsic genius was greater, and so it seems to be with Scott and Stevenson”，“司各特技巧更精，史蒂文森天赋更高”，“intrinsic genius” 对应 “natural ability”，因此选 A。",
           "questionId": "q11"
         },
         {
           "questionNumber": 38,
-          "text": "（3）题目 38：It is true that Scott’s books showed more _____ when it came to tragedy.（诚然，司各特的作品在悲剧方面展现出更强的_____。）\n答案：H（depth，深度）\n解析：定位 Paragraph 4 中 “Scott’s detailed style does permit his stories to explore levels of tragedy that are beyond Stevenson’s reach”，“探索更深层次的悲剧” 对应 “more depth”，因此选 H。",
+          "text": "（3）题目 38：It is true that Scott’s books showed more \\___\\___ when it came to tragedy.（诚然，司各特的作品在悲剧方面展现出更强的_\\___\\__。）\n答案：H（depth，深度）\n解析：定位 Paragraph 4 中 “Scott’s detailed style does permit his stories to explore levels of tragedy that are beyond Stevenson’s reach”，“探索更深层次的悲剧” 对应 “more depth”，因此选 H。",
           "questionId": "q12"
         },
         {
           "questionNumber": 39,
-          "text": "（4）题目 39：while Stevenson’s books are still popular because of his _____.（而史蒂文森的作品因他的_____至今仍受欢迎。）\n答案：G（storytelling，叙事能力）\n解析：定位 Paragraph 4 中 “Stevenson’s skill with plotting and narrative gives his books a timeless quality, so that they still live today”，“情节与叙事技巧” 对应 “storytelling”，因此选 G。",
+          "text": "（4）题目 39：while Stevenson’s books are still popular because of his \\___\\___.（而史蒂文森的作品因他的_\\___\\__至今仍受欢迎。）\n答案：G（storytelling，叙事能力）\n解析：定位 Paragraph 4 中 “Stevenson’s skill with plotting and narrative gives his books a timeless quality, so that they still live today”，“情节与叙事技巧” 对应 “storytelling”，因此选 G。",
           "questionId": "q13"
         },
         {
           "questionNumber": 40,
-          "text": "（5）题目 40：And Stevenson’s understanding of _____ has resulted in the widespread use of an expression from one of his books.（史蒂文森对_____的理解，使其作品中的一个表达被广泛使用。）\n答案：I（human nature，人性）\n解析：定位 Paragraph 4 中 “Stevenson was also the shrewder judge of behaviour and psychology. For example, his compelling descriptions of a man with a split personality... ‘Jekyll and Hyde’ has entered common English usage”，“对行为与心理的洞察” 对应 “understanding of human nature”，因此选 I。",
+          "text": "（5）题目 40：And Stevenson’s understanding of \\___\\___ has resulted in the widespread use of an expression from one of his books.（史蒂文森对_\\___\\__的理解，使其作品中的一个表达被广泛使用。）\n答案：I（human nature，人性）\n解析：定位 Paragraph 4 中 “Stevenson was also the shrewder judge of behaviour and psychology. For example, his compelling descriptions of a man with a split personality... ‘Jekyll and Hyde’ has entered common English usage”，“对行为与心理的洞察” 对应 “understanding of human nature”，因此选 I。",
           "questionId": "q14"
         }
       ],
