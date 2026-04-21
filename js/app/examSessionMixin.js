@@ -411,9 +411,6 @@
         },
 
         _resolveSuiteTimerContext(options = {}, windowInfo = {}) {
-            const currentSession = this.currentSuiteSession && typeof this.currentSuiteSession === 'object'
-                ? this.currentSuiteSession
-                : null;
             const pickFromSources = (sourcesList, keys, normalize) => {
                 for (const source of sourcesList) {
                     for (const key of keys) {
@@ -426,14 +423,73 @@
                 return null;
             };
 
-            let anchorMs = pickFromSources(
-                [options || {}, windowInfo || {}, currentSession || {}],
-                ['suiteTimerAnchorMs', 'globalTimerAnchorMs'],
+            const extractSessionId = (value) => {
+                if (value == null) {
+                    return '';
+                }
+                const normalized = String(value).trim();
+                return normalized;
+            };
+
+            const explicitSuiteSessionId = extractSessionId(options && options.suiteSessionId)
+                || extractSessionId(windowInfo && windowInfo.suiteSessionId);
+            const hasExplicitSuiteSession = !!explicitSuiteSessionId;
+            const currentSessionCandidate = this.currentSuiteSession && typeof this.currentSuiteSession === 'object'
+                ? this.currentSuiteSession
+                : null;
+            const currentSessionId = currentSessionCandidate
+                ? (
+                    extractSessionId(currentSessionCandidate.id)
+                    || extractSessionId(currentSessionCandidate.sessionId)
+                )
+                : '';
+            const currentSession = (
+                hasExplicitSuiteSession
+                && currentSessionCandidate
+                && (!currentSessionId || currentSessionId === explicitSuiteSessionId)
+            ) ? currentSessionCandidate : null;
+
+            const explicitAnchorMs = pickFromSources(
+                [options || {}, windowInfo || {}],
+                ['suiteTimerAnchorMs', 'globalTimerAnchorMs', 'timerAnchorMs'],
                 (value) => this._normalizeSuiteTimerAnchor(value)
             );
-            if (!anchorMs) {
+            const explicitMode = pickFromSources(
+                [options || {}, windowInfo || {}],
+                ['suiteTimerMode', 'timerMode'],
+                (value) => this._normalizeSuiteTimerMode(value)
+            );
+            const explicitLimitSeconds = pickFromSources(
+                [options || {}, windowInfo || {}],
+                ['suiteTimerLimitSeconds', 'timerLimitSeconds'],
+                (value) => this._normalizeSuiteTimerLimit(value)
+            );
+
+            if (
+                !hasExplicitSuiteSession
+                && explicitAnchorMs == null
+                && explicitMode == null
+                && explicitLimitSeconds == null
+            ) {
+                return {
+                    suiteTimerAnchorMs: null,
+                    globalTimerAnchorMs: null,
+                    suiteTimerMode: null,
+                    suiteTimerLimitSeconds: null
+                };
+            }
+
+            const anchorSources = currentSession
+                ? [options || {}, windowInfo || {}, currentSession]
+                : [options || {}, windowInfo || {}];
+            let anchorMs = pickFromSources(
+                anchorSources,
+                ['suiteTimerAnchorMs', 'globalTimerAnchorMs', 'timerAnchorMs'],
+                (value) => this._normalizeSuiteTimerAnchor(value)
+            );
+            if (!anchorMs && currentSession) {
                 anchorMs = pickFromSources(
-                    [currentSession || {}, options || {}, windowInfo || {}],
+                    [currentSession, options || {}, windowInfo || {}],
                     ['startTime', 'startedAt', 'createdAt'],
                     (value) => this._normalizeSuiteTimerAnchor(value)
                 );
@@ -443,12 +499,16 @@
             }
 
             const mode = pickFromSources(
-                [options || {}, windowInfo || {}, currentSession || {}],
+                currentSession
+                    ? [options || {}, windowInfo || {}, currentSession]
+                    : [options || {}, windowInfo || {}],
                 ['suiteTimerMode', 'timerMode'],
                 (value) => this._normalizeSuiteTimerMode(value)
             );
             const limitSeconds = pickFromSources(
-                [options || {}, windowInfo || {}, currentSession || {}],
+                currentSession
+                    ? [options || {}, windowInfo || {}, currentSession]
+                    : [options || {}, windowInfo || {}],
                 ['suiteTimerLimitSeconds', 'timerLimitSeconds'],
                 (value) => this._normalizeSuiteTimerLimit(value)
             );
