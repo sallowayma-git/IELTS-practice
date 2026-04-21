@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('click', function(event) {
         const modal = document.getElementById('theme-switcher-modal');
         if (modal && modal.classList.contains('show')) {
-            if (!modal.contains(event.target) && !event.target.closest('button[onclick="showThemeSwitcherModal()"]')) {
+            if (!modal.contains(event.target) && !event.target.closest('[data-action="show-theme-switcher"], button[onclick="showThemeSwitcherModal()"]')) {
                 hideThemeSwitcherModal();
             }
         }

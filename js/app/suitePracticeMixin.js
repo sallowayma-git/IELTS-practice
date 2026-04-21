@@ -1,5 +1,6 @@
 (function(global) {
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
+    const DEFAULT_SUITE_WINDOW_NAME = 'ielts-suite-mode-tab';
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
 
     function getSuitePreferenceUtils() {
@@ -16,7 +17,7 @@
             flowMode = 'classic';
         }
         let frequencyScope = String(options && options.frequencyScope || '').trim().toLowerCase();
-        if (!['high', 'high_medium', 'all', 'custom'].includes(frequencyScope)) {
+        if (!['high', 'high_medium', 'all'].includes(frequencyScope)) {
             frequencyScope = 'all';
         }
         return {
@@ -31,16 +32,16 @@
         if (suitePreferenceUtils && typeof suitePreferenceUtils.isFrequencyIncluded === 'function') {
             return suitePreferenceUtils.isFrequencyIncluded(frequency, scope);
         }
-        const normalizedScope = ['high', 'high_medium', 'custom'].includes(scope) ? scope : 'all';
+        const normalizedScope = ['high', 'high_medium'].includes(scope) ? scope : 'all';
         const normalizedFrequency = String(frequency == null ? '' : frequency).trim().toLowerCase();
         if (!normalizedFrequency) {
             return true;
         }
         if (normalizedScope === 'high') {
-            return ['high', '高频', 'ultra-high', '超高频', 'high frequency'].includes(normalizedFrequency);
+            return ['high', '高频', 'ultra-high', '超高频'].includes(normalizedFrequency);
         }
         if (normalizedScope === 'high_medium') {
-            return ['high', 'medium', 'mid', '高频', '次高频', '中频', 'ultra-high', 'very-high', 'high frequency', 'medium frequency'].includes(normalizedFrequency);
+            return ['high', 'medium', 'mid', '高频', '次高频', '中频'].includes(normalizedFrequency);
         }
         return true;
     }
@@ -61,8 +62,6 @@
         },
 
         async startSuitePractice(options = {}) {
-            const suiteWindowName = 'ielts-suite-mode-tab';
-
             try {
                 if (!this._suiteModeReady) {
                     this.initializeSuiteMode();
@@ -72,32 +71,18 @@
                 const frequencyScope = suitePreference.frequencyScope;
 
                 if (this.currentSuiteSession && this.currentSuiteSession.status === 'active') {
-                    window.showMessage && window.showMessage('套题练习正在进行中，请先完成当前套题。', 'warning');
-                    return;
-                }
-
-                if (frequencyScope === 'custom') {
-                    const enteredCustomMode = await this._startCustomSuiteSelection({
-                        flowMode,
-                        frequencyScope,
-                        suiteWindowName
-                    });
-                    if (!enteredCustomMode && typeof global.loadExamList === 'function') {
-                        try {
-                            global.loadExamList();
-                        } catch (_) {}
-                    }
+                    this._notifySuiteMessage('套题练习正在进行中，请先完成当前套题。', 'warning');
                     return;
                 }
 
                 if (typeof this.openExam !== 'function') {
-                    window.showMessage && window.showMessage('当前版本暂不支持套题练习自动打开题目。', 'error');
+                    this._notifySuiteMessage('当前版本暂不支持套题练习自动打开题目。', 'error');
                     return;
                 }
 
                 const examIndex = await this._fetchSuiteExamIndex();
                 if (!examIndex.length) {
-                    window.showMessage && window.showMessage('题库为空，无法开启套题练习。', 'warning');
+                    this._notifySuiteMessage('题库为空，无法开启套题练习。', 'warning');
                     return;
                 }
 
@@ -124,7 +109,6 @@
                 const frequencyFilteredIndex = normalizedIndex.filter(item => (
                     this._isSuiteFrequencyIncluded(item && item.frequency, frequencyScope)
                 ));
-                const practicedExamIds = await this._collectPracticedReadingExamIds();
 
                 const categories = ['P1', 'P2', 'P3'];
                 const sequence = [];
@@ -134,45 +118,73 @@
                         const scopeLabel = frequencyScope === 'high'
                             ? '仅高频'
                             : (frequencyScope === 'high_medium' ? '高频+次高频' : '全部频率');
-                        window.showMessage && window.showMessage('当前抽题范围（' + scopeLabel + '）缺少 ' + category + ' 阅读题目，无法开启套题练习。', 'warning');
+                        this._notifySuiteMessage(`当前抽题范围（${scopeLabel}）缺少 ${category} 阅读题目，无法开启套题练习。`, 'warning');
                         return;
                     }
-                    const unpracticedPool = pool.filter(item => !practicedExamIds.has(String(item.id)));
-                    const selectionPool = unpracticedPool.length ? unpracticedPool : pool;
-                    if (!unpracticedPool.length) {
-                        const scopeLabel = frequencyScope === 'high'
-                            ? '仅高频'
-                            : (frequencyScope === 'high_medium' ? '高频+次高频' : '全部频率');
-                        window.showMessage && window.showMessage(
-                            '当前抽题范围（' + scopeLabel + '）中的 ' + category + ' 已全部练习过，已自动放宽为允许重复抽题。',
-                            'warning'
-                        );
-                    }
-                    const picked = selectionPool[Math.floor(Math.random() * selectionPool.length)];
+                    const picked = pool[Math.floor(Math.random() * pool.length)];
                     sequence.push({ examId: picked.id, exam: picked });
                 }
 
-                const started = await this._launchSuiteSessionFromSequence(sequence, {
+                this._clearSuiteHandshakes();
+
+                const suiteSessionId = this._generateSuiteSessionId();
+                const lockedAutoAdvance = flowMode === 'stationary'
+                    ? false
+                    : true;
+                const session = {
+                    id: suiteSessionId,
+                    status: 'initializing',
+                    startTime: Date.now(),
+                    sequence,
+                    currentIndex: 0,
+                    results: [],
+                    draftsByExam: {},
+                    elapsedByExam: {},
+                    globalTimerAnchorMs: Date.now(),
                     flowMode,
                     frequencyScope,
-                    suiteWindowName,
-                    launchLabel: flowMode === 'stationary'
-                        ? '驻足模式'
-                        : (flowMode === 'simulation' ? '模拟模式' : '经典模式')
-                });
-                if (!started && this.currentSuiteSession) {
-                    await this._abortSuiteSession(this.currentSuiteSession, { reason: 'startup_failed' });
+                    autoAdvanceAfterSubmit: lockedAutoAdvance,
+                    windowRef: null,
+                    windowName: DEFAULT_SUITE_WINDOW_NAME
+                };
+
+                this.currentSuiteSession = session;
+                this._registerSuiteSequence(session);
+
+                const firstEntry = sequence[0];
+                const launchLabel = flowMode === 'stationary'
+                    ? '驻足模式'
+                    : (flowMode === 'simulation' ? '模拟模式' : '经典模式');
+                this._notifySuiteMessage(`${launchLabel}已启动，正在打开第一篇。`, 'info');
+
+                let examWindow = null;
+                try {
+                    examWindow = await this.openExam(firstEntry.examId, this._buildSuiteOpenExamOptions(session, 0));
+                } catch (openError) {
+                    console.error('[SuitePractice] 打开首篇失败:', openError);
+                    examWindow = null;
                 }
+
+                if (!examWindow || examWindow.closed) {
+                    throw new Error('first_exam_window_unavailable');
+                }
+
+                session.windowRef = examWindow;
+                this._ensureSuiteWindowGuard(session, session.windowRef);
+                session.status = 'active';
+                session.activeExamId = firstEntry.examId;
+                this._focusSuiteWindow(session.windowRef);
             } catch (error) {
                 console.error('[SuitePractice] 启动失败:', error);
-                window.showMessage && window.showMessage('套题练习启动失败，请稍后重试。', 'error');
+                this._notifySuiteMessage('套题练习启动失败，请稍后重试。', 'error');
                 if (this.currentSuiteSession) {
                     await this._abortSuiteSession(this.currentSuiteSession, { reason: 'startup_failed' });
                 }
             }
         },
+
         async handleSuitePracticeComplete(examId, data, sourceWindow = null) {
-            // First check whether this is multi-suite mode (detected via suiteId).
+            // 首先检查是否为多套题模式（通过suiteId字段判断）
             if (data && data.suiteId) {
                 return await this.handleMultiSuitePracticeComplete(examId, data);
             }
@@ -212,7 +224,7 @@
 
             const activeExamId = session.activeExamId ? String(session.activeExamId) : '';
             if (activeExamId && activeExamId !== String(examId)) {
-                console.warn('[SuitePractice] 忽略非当前活动篇章的提交，防止错篇结算。', {
+                console.warn('[SuitePractice] 忽略非当前活动篇章的提交，防止错篇结算:', {
                     activeExamId,
                     submittedExamId: examId,
                     sessionId: session.id
@@ -250,9 +262,7 @@
                     updatedAt: Date.now()
                 };
                 this._mirrorSessionToStorage(session);
-                const replayWindow = sourceWindow && !sourceWindow.closed
-                    ? sourceWindow
-                    : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
+                const replayWindow = this._resolveSuiteWindow(session, sourceWindow);
                 if (replayWindow) {
                     await this._sendSuiteReviewState(session, examId, replayWindow);
                 }
@@ -263,13 +273,13 @@
             session.pendingAdvance = null;
             this._mirrorSessionToStorage(session);
 
-            // Last passage -> finalize the entire simulation
+            // Last passage → finalize the entire simulation
             if (session.currentIndex >= session.sequence.length) {
                 await this.finalizeSuiteRecord(session);
                 return true;
             }
 
-            // Not last -> advance to next passage
+            // Not last → advance to next passage
             if (typeof this.cleanupExamSession === 'function') {
                 try {
                     await this.cleanupExamSession(examId);
@@ -282,7 +292,7 @@
         },
 
         async continueSuitePractice() {
-            // Legacy stub - simulation mode auto-advances, but kept for backward compat
+            // Legacy stub — simulation mode auto-advances, but kept for backward compat
             const session = this.currentSuiteSession;
             if (!session || session.status !== 'active') {
                 return false;
@@ -290,7 +300,7 @@
             if (!(session.currentIndex < session.sequence.length)) {
                 return false;
             }
-            return this._advanceSuiteToNext(session, 'previous section', null);
+            return this._advanceSuiteToNext(session, '上一篇', null);
         },
 
         _resolveSuitePreference(options = {}) {
@@ -319,6 +329,44 @@
                 return activeSession.autoAdvanceAfterSubmit;
             }
             return this._readSuiteAutoAdvancePreference();
+        },
+
+        _notifySuiteMessage(message, type = 'info') {
+            if (window.showMessage) {
+                window.showMessage(message, type);
+            }
+        },
+
+        _getSuiteWindowName(session = null) {
+            if (session && typeof session.windowName === 'string' && session.windowName.trim()) {
+                return session.windowName;
+            }
+            return DEFAULT_SUITE_WINDOW_NAME;
+        },
+
+        _resolveSuiteWindow(session, preferredWindow = null) {
+            const candidate = preferredWindow && !preferredWindow.closed ? preferredWindow : null;
+            if (candidate) {
+                return candidate;
+            }
+            const sessionWindow = session && session.windowRef;
+            return sessionWindow && !sessionWindow.closed ? sessionWindow : null;
+        },
+
+        _buildSuiteOpenExamOptions(session, sequenceIndex, reuseWindow = null) {
+            const options = {
+                target: 'tab',
+                windowName: this._getSuiteWindowName(session),
+                suiteSessionId: session && session.id ? session.id : null,
+                suiteFlowMode: session && session.flowMode ? session.flowMode : 'simulation',
+                sequenceIndex: Number.isFinite(sequenceIndex) ? sequenceIndex : 0,
+                sequenceTotal: session && Array.isArray(session.sequence) ? session.sequence.length : 0
+            };
+            const reusable = reuseWindow && !reuseWindow.closed ? reuseWindow : null;
+            if (reusable) {
+                options.reuseWindow = reusable;
+            }
+            return options;
         },
 
         _hasMeaningfulSuiteAnswer(value) {
@@ -435,9 +483,7 @@
                 return false;
             }
             const replayEntry = this._buildSuiteReplayEntry(session, examId);
-            const resolvedWindow = targetWindow && !targetWindow.closed
-                ? targetWindow
-                : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
+            const resolvedWindow = this._resolveSuiteWindow(session, targetWindow);
             if (!resolvedWindow || resolvedWindow.closed) {
                 return false;
             }
@@ -488,9 +534,7 @@
                 return false;
             }
 
-            const resolvedWindow = targetWindow && !targetWindow.closed
-                ? targetWindow
-                : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
+            const resolvedWindow = this._resolveSuiteWindow(session, targetWindow);
             if (!resolvedWindow || resolvedWindow.closed) {
                 return false;
             }
@@ -567,18 +611,13 @@
                 return false;
             }
 
-            let targetWindow = sourceWindow && !sourceWindow.closed ? sourceWindow : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
+            let targetWindow = this._resolveSuiteWindow(session, sourceWindow);
 
             if (targetEntry.examId !== examId || !targetWindow) {
-                targetWindow = await this.openExam(targetEntry.examId, {
-                    target: 'tab',
-                    windowName: session.windowName || 'ielts-suite-mode-tab',
-                    suiteSessionId: session.id,
-                    suiteFlowMode: session.flowMode || 'simulation',
-                    sequenceIndex: targetIndex,
-                    sequenceTotal: session.sequence.length,
-                    reuseWindow: targetWindow || undefined
-                });
+                targetWindow = await this.openExam(
+                    targetEntry.examId,
+                    this._buildSuiteOpenExamOptions(session, targetIndex, targetWindow)
+                );
             }
 
             if (!targetWindow || targetWindow.closed) {
@@ -594,7 +633,7 @@
 
         async _advanceSuiteToNext(session, completedTitle, skipExamIdForAbort) {
             if (typeof this.openExam !== 'function') {
-                window.showMessage && window.showMessage('无法继续套题练习，已回退到普通模式。', 'warning');
+                this._notifySuiteMessage('无法继续套题练习，系统将恢复为普通模式。', 'warning');
                 await this._abortSuiteSession(session, { reason: 'missing_open_exam', skipExamId: skipExamIdForAbort || null });
                 return false;
             }
@@ -606,26 +645,16 @@
             }
 
             session.activeExamId = nextEntry.examId;
-            const windowName = session.windowName || 'ielts-suite-mode-tab';
-            const reuseWindow = session.windowRef && !session.windowRef.closed ? session.windowRef : null;
+            const windowName = this._getSuiteWindowName(session);
+            const reuseWindow = this._resolveSuiteWindow(session);
             let openError = null;
 
             const attemptOpen = async (candidateWindow = null) => {
-                const options = {
-                    target: 'tab',
-                    windowName,
-                    suiteSessionId: session.id,
-                    suiteFlowMode: session.flowMode || 'simulation',
-                    sequenceIndex: session.currentIndex,
-                    sequenceTotal: session.sequence.length
-                };
-
-                if (candidateWindow && !candidateWindow.closed) {
-                    options.reuseWindow = candidateWindow;
-                }
-
                 try {
-                    const opened = await this.openExam(nextEntry.examId, options);
+                    const opened = await this.openExam(
+                        nextEntry.examId,
+                        this._buildSuiteOpenExamOptions(session, session.currentIndex, candidateWindow)
+                    );
                     if (opened && !opened.closed) {
                         return opened;
                     }
@@ -655,7 +684,7 @@
                 if (openError) {
                     console.warn('[SuitePractice] 套题无法打开下一篇:', openError);
                 }
-                window.showMessage && window.showMessage('无法继续套题练习，已回退到普通模式。', 'warning');
+                this._notifySuiteMessage('无法继续套题练习，系统将恢复为普通模式。', 'warning');
                 await this._abortSuiteSession(session, { reason: 'open_next_failed', skipExamId: skipExamIdForAbort || null });
                 return false;
             }
@@ -665,7 +694,7 @@
             this._focusSuiteWindow(session.windowRef);
             this._mirrorSessionToStorage(session);
             this._sendSimulationContext(session, nextEntry.examId, session.windowRef);
-            window.showMessage && window.showMessage('已完成' + (completedTitle || '上一篇') + '，正在继续：' + nextEntry.exam.title + '。', 'success');
+            this._notifySuiteMessage(`已完成 ${completedTitle || '上一篇'}，继续下一篇 ${nextEntry.exam.title}。`, 'success');
             return true;
         },
 
@@ -760,9 +789,10 @@
             if (!normalizedExamId) return false;
             const currentIdx = session.sequence.findIndex(e => e && e.examId === normalizedExamId);
             if (currentIdx < 0) return false;
-            // Self-heal when activeExamId drifts but the index still points to the current page.
+            // 自愈：若 activeExamId 漂移，但 currentIndex 已指向当前页面，则回正后继续处理。
             if (activeExamId && normalizedExamId !== activeExamId) {
-                const allowSelfHeal = Number.isInteger(session.currentIndex) && session.currentIndex === currentIdx;
+                const allowSelfHeal = Number.isInteger(session.currentIndex)
+                    && session.currentIndex === currentIdx;
                 if (!allowSelfHeal) {
                     return false;
                 }
@@ -799,15 +829,10 @@
                 session.currentIndex = targetIdx;
                 session.activeExamId = targetEntry.examId;
 
-                const targetWindow = await this.openExam(targetEntry.examId, {
-                    target: 'tab',
-                    windowName: session.windowName || 'ielts-suite-mode-tab',
-                    suiteSessionId: session.id,
-                    suiteFlowMode: session.flowMode || 'simulation',
-                    sequenceIndex: targetIdx,
-                    sequenceTotal: session.sequence.length,
-                    reuseWindow: sourceWindow && !sourceWindow.closed ? sourceWindow : undefined
-                });
+                const targetWindow = await this.openExam(
+                    targetEntry.examId,
+                    this._buildSuiteOpenExamOptions(session, targetIdx, sourceWindow)
+                );
 
                 if (!targetWindow || targetWindow.closed) return false;
 
@@ -863,13 +888,8 @@
             if (!pageType.includes('unified-reading')) {
                 return false;
             }
-            let targetWindow = session.windowRef && !session.windowRef.closed ? session.windowRef : null;
-            if (windowInfo) {
-                const info = windowInfo;
-                if (info && info.window && !info.window.closed) {
-                    targetWindow = info.window;
-                }
-            }
+            const preferredWindow = windowInfo && windowInfo.window ? windowInfo.window : null;
+            let targetWindow = this._resolveSuiteWindow(session, preferredWindow);
             if (!targetWindow || targetWindow.closed) {
                 return false;
             }
@@ -893,7 +913,7 @@
             };
             const windowExamId = resolveWindowExamId(targetWindow);
             if (windowExamId && windowExamId !== String(examId)) {
-                // Ignore late SESSION_READY events from previously active pages.
+                // 迟到的 SESSION_READY（窗口已切到其他篇）必须丢弃，避免 activeExamId 被回写错乱。
                 return false;
             }
             const activeExamId = session.activeExamId ? String(session.activeExamId) : '';
@@ -962,8 +982,8 @@
             session.suiteResults.push(suiteResult);
             session.lastUpdate = Date.now();
 
-
-            console.log('[MultiSuite] added suite result', suiteData.suiteId, 'current progress:', session.suiteResults.length + ' suite(s)');
+            console.log('[MultiSuite] 已添加套题结果:', suiteData.suiteId, 
+                `当前进度: ${session.suiteResults.length} 套题`);
 
             // 如果这是第一个套题，尝试从数据中确定预期套题数量
             if (session.suiteResults.length === 1 && !session.expectedSuiteCount) {
@@ -973,14 +993,14 @@
 
             // 检查是否所有套题都已完成
             if (this.isMultiSuiteComplete(session)) {
-                console.log('[MultiSuite] all suite entries completed, finalizing consolidated record.');
+                console.log('[MultiSuite] 所有套题已完成，开始聚合记录');
                 await this.finalizeMultiSuiteRecord(session);
                 return true;
             }
 
             // 还有套题未完成，保存当前进度
-            console.log('[MultiSuite] waiting for more suite entries... completed ' + session.suiteResults.length + '/' + (session.expectedSuiteCount || '?'));
-
+            console.log('[MultiSuite] 等待更多套题完成...', 
+                `已完成: ${session.suiteResults.length}/${session.expectedSuiteCount || '?'}`);
 
             return true;
         },
@@ -1005,7 +1025,7 @@
                 }
             }
 
-            // 根据examId推断：100 P1/P4 通常包含10套题
+            // 根据examId推断（100 P1/P4 通常包含10套题）
             const lowerExamId = (examId || '').toLowerCase();
             if (lowerExamId.includes('100') && (lowerExamId.includes('p1') || lowerExamId.includes('p4'))) {
                 return 10; // 默认10套题
@@ -1054,7 +1074,7 @@
                 const dateLabel = this._formatSuiteDateLabel(startTime);
                 const source = session.metadata?.source || 'listening';
                 const sourceLabel = source.toUpperCase();
-                const displayTitle = dateLabel + ' ' + sourceLabel + ' multi-suite practice';
+                const displayTitle = `${dateLabel} ${sourceLabel} 多套题练习`;
 
                 // 构建聚合记录
                 const record = {
@@ -1141,17 +1161,17 @@
                 this.multiSuiteSessionsMap.delete(session.baseExamId);
                 session.status = 'completed';
 
-                window.showMessage && window.showMessage('多套题练习已完成，已保存 ' + session.suiteResults.length + ' 条套题记录。', 'success');
+                this._notifySuiteMessage(
+                    `多套题练习已完成！共完成 ${session.suiteResults.length} 套题，记录已保存。`,
+                    'success'
+                );
 
-
-
-
-                console.log('[MultiSuite] consolidated record saved:', record.id);
+                console.log('[MultiSuite] 聚合记录已保存:', record.id);
 
             } catch (error) {
                 console.error('[MultiSuite] 聚合记录失败:', error);
                 session.status = 'error';
-                window.showMessage && window.showMessage('多套题记录保存失败，请稍后重试。', 'error');
+                this._notifySuiteMessage('保存多套题记录失败，请稍后重试。', 'error');
             }
         },
 
@@ -1186,37 +1206,37 @@
             };
         },
 
-        /**
-         * 聚合多套题的答案
-         * @param {Array} suiteResults - 套题结果数组
-         * @returns {object} 聚合的答案对象
-         */
-        aggregateAnswers(suiteResults) {
+        _aggregateSuiteFieldMap(suiteResults, fieldName) {
             const aggregated = {};
-
             if (!Array.isArray(suiteResults)) {
                 return aggregated;
             }
 
             suiteResults.forEach(result => {
                 const suiteId = result.suiteId || 'unknown';
-                const answers = result.answers || {};
-
-                Object.entries(answers).forEach(([questionId, answer]) => {
+                const source = result && result[fieldName] ? result[fieldName] : {};
+                Object.entries(source).forEach(([questionId, value]) => {
                     const normalizedQuestionId = questionId == null ? '' : String(questionId);
                     if (!normalizedQuestionId) {
                         return;
                     }
-
-                    // Use "suiteId::questionId" format so prefixed child-page IDs still work.
-                    const key = normalizedQuestionId.indexOf(suiteId + '::') === 0
+                    const key = normalizedQuestionId.startsWith(`${suiteId}::`)
                         ? normalizedQuestionId
-                        : suiteId + '::' + normalizedQuestionId;
-                    aggregated[key] = answer;
+                        : `${suiteId}::${normalizedQuestionId}`;
+                    aggregated[key] = value;
                 });
             });
 
             return aggregated;
+        },
+
+        /**
+         * 聚合多套题的答案
+         * @param {Array} suiteResults - 套题结果数组
+         * @returns {object} 聚合的答案对象
+         */
+        aggregateAnswers(suiteResults) {
+            return this._aggregateSuiteFieldMap(suiteResults, 'answers');
         },
 
         /**
@@ -1225,30 +1245,7 @@
          * @returns {object} 聚合的答案比较对象
          */
         aggregateAnswerComparisons(suiteResults) {
-            const aggregated = {};
-
-            if (!Array.isArray(suiteResults)) {
-                return aggregated;
-            }
-
-            suiteResults.forEach(result => {
-                const suiteId = result.suiteId || 'unknown';
-                const comparison = result.answerComparison || {};
-
-                Object.entries(comparison).forEach(([questionId, comparisonData]) => {
-                    const normalizedQuestionId = questionId == null ? '' : String(questionId);
-                    if (!normalizedQuestionId) {
-                        return;
-                    }
-
-                    const key = normalizedQuestionId.indexOf(suiteId + '::') === 0
-                        ? normalizedQuestionId
-                        : suiteId + '::' + normalizedQuestionId;
-                    aggregated[key] = comparisonData;
-                });
-            });
-
-            return aggregated;
+            return this._aggregateSuiteFieldMap(suiteResults, 'answerComparison');
         },
 
         /**
@@ -1342,7 +1339,7 @@
                 const aggregatedAnswers = {};
                 const aggregatedComparison = {};
                 session.results.forEach(entry => {
-                    const prefix = entry.examId ? entry.examId + '::' : '';
+                    const prefix = entry.examId ? `${entry.examId}::` : '';
                     const answersSource = entry.answers && typeof entry.answers === 'object'
                         ? entry.answers
                         : Array.isArray(entry.answers)
@@ -1354,14 +1351,14 @@
                             }, {})
                             : {};
                     Object.keys(answersSource || {}).forEach(questionId => {
-                        aggregatedAnswers[prefix + questionId] = answersSource[questionId];
+                        aggregatedAnswers[`${prefix}${questionId}`] = answersSource[questionId];
                     });
 
                     const comparisonSource = entry.answerComparison && typeof entry.answerComparison === 'object'
                         ? entry.answerComparison
                         : {};
                     Object.keys(comparisonSource).forEach(questionId => {
-                        aggregatedComparison[prefix + questionId] = comparisonSource[questionId];
+                        aggregatedComparison[`${prefix}${questionId}`] = comparisonSource[questionId];
                     });
                 });
 
@@ -1370,11 +1367,11 @@
                 const endTimeIso = new Date(completionTime).toISOString();
                 const suiteSequence = await this._resolveSuiteSequenceNumber(startTime);
                 const dateLabel = this._formatSuiteDateLabel(startTime);
-                const displayTitle = dateLabel + '套题练习' + suiteSequence;
+                const displayTitle = `${dateLabel}套题练习${suiteSequence}`;
 
                 const record = {
                     id: session.id,
-                    examId: 'suite-' + session.id,
+                    examId: `suite-${session.id}`,
                     title: displayTitle,
                     type: 'reading',
                     suiteMode: true,
@@ -1418,11 +1415,11 @@
                 await this._saveSuitePracticeRecord(record);
                 await this._updatePracticeRecordsState();
                 this.refreshOverviewData && this.refreshOverviewData();
-                window.showMessage && window.showMessage('套题练习已完成，记录已保存。', 'success');
+                this._notifySuiteMessage('套题练习已完成，记录已保存。', 'success');
                 session.status = 'completed';
             } catch (error) {
                 console.error('[SuitePractice] 保存套题记录失败:', error);
-                window.showMessage && window.showMessage('套题记录保存失败，系统将尝试恢复到普通模式。', 'error');
+                this._notifySuiteMessage('保存套题记录失败，系统将尝试恢复为普通模式。', 'error');
                 await this._savePartialSuiteAsIndividual(session);
                 session.status = 'error';
             } finally {
@@ -1440,7 +1437,7 @@
                         list = await storage.get('exam_index', []);
                     }
                 } catch (error) {
-                    console.warn('[SuitePractice] Failed to load exam index, falling back to the default bank.', error);
+                    console.warn('[SuitePractice] 读取题库失败，使用默认题库。', error);
                     list = await storage.get('exam_index', []);
                 }
             }
@@ -1448,381 +1445,8 @@
             return Array.isArray(list) ? list.filter(Boolean) : [];
         },
 
-        async _loadSuitePracticeRecordsForFiltering() {
-            const normalizeList = (list) => (Array.isArray(list) ? list : []);
-
-            if (
-                this.components
-                && this.components.practiceRecorder
-                && typeof this.components.practiceRecorder.getPracticeRecords === 'function'
-            ) {
-                try {
-                    const records = await this.components.practiceRecorder.getPracticeRecords();
-                    return normalizeList(records);
-                } catch (error) {
-                    console.warn('[SuitePractice] 读取 PracticeRecorder 记录失败，尝试存储回退:', error);
-                }
-            }
-
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function') {
-                try {
-                    const records = await window.PracticeCore.store.listPracticeRecords();
-                    return normalizeList(records);
-                } catch (error) {
-                    console.warn('[SuitePractice] 读取 PracticeCore 记录失败，尝试存储回退:', error);
-                }
-            }
-
-            if (typeof storage?.get === 'function') {
-                try {
-                    const records = await storage.get('practice_records', []);
-                    return normalizeList(records);
-                } catch (error) {
-                    console.warn('[SuitePractice] 读取 practice_records 失败:', error);
-                }
-            }
-
-            return [];
-        },
-
-        _collectExamIdsFromPracticeRecord(record, collector) {
-            if (!record || typeof record !== 'object' || !(collector instanceof Set)) {
-                return;
-            }
-
-            const pushExamId = (value) => {
-                const normalized = String(value == null ? '' : value).trim();
-                if (normalized) {
-                    collector.add(normalized);
-                }
-            };
-
-            pushExamId(record.examId);
-
-            const metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata : null;
-            if (metadata) {
-                pushExamId(metadata.examId);
-            }
-
-            const rawData = record.rawData && typeof record.rawData === 'object' ? record.rawData : null;
-            if (rawData) {
-                pushExamId(rawData.examId);
-            }
-
-            const suiteEntries = Array.isArray(record.suiteEntries) ? record.suiteEntries : [];
-            suiteEntries.forEach((entry) => {
-                if (!entry || typeof entry !== 'object') {
-                    return;
-                }
-                pushExamId(entry.examId);
-                const entryRawData = entry.rawData && typeof entry.rawData === 'object' ? entry.rawData : null;
-                if (entryRawData) {
-                    pushExamId(entryRawData.examId);
-                }
-            });
-        },
-
-        async _collectPracticedReadingExamIds() {
-            const records = await this._loadSuitePracticeRecordsForFiltering();
-            const practicedExamIds = new Set();
-            records.forEach((record) => this._collectExamIdsFromPracticeRecord(record, practicedExamIds));
-            return practicedExamIds;
-        },
-
-        _getCustomSuiteDraftState() {
-            if (typeof global.getCustomSuiteDraftState === 'function') {
-                return global.getCustomSuiteDraftState();
-            }
-            if (global.appStateService && typeof global.appStateService.getCustomSuiteDraft === 'function') {
-                return global.appStateService.getCustomSuiteDraft();
-            }
-            if (global.app && global.app.state && global.app.state.ui) {
-                return global.app.state.ui.customSuiteDraft || null;
-            }
-            return global.customSuiteDraft || null;
-        },
-
-        _setCustomSuiteDraftState(draft) {
-            if (typeof global.setCustomSuiteDraftState === 'function') {
-                return global.setCustomSuiteDraftState(draft);
-            }
-            if (global.appStateService && typeof global.appStateService.setCustomSuiteDraft === 'function') {
-                return global.appStateService.setCustomSuiteDraft(draft);
-            }
-            if (global.app && global.app.state && global.app.state.ui) {
-                global.app.state.ui.customSuiteDraft = draft || null;
-            }
-            try {
-                global.customSuiteDraft = draft || null;
-            } catch (_) {}
-            return draft || null;
-        },
-
-        _clearCustomSuiteDraftState() {
-            return this._setCustomSuiteDraftState(null);
-        },
-
-        _getCustomSuiteCategories() {
-            return ['P1', 'P2', 'P3'];
-        },
-
-        _buildCustomSuiteExamEntry(exam) {
-            if (!exam || typeof exam !== 'object') {
-                return null;
-            }
-            return {
-                examId: String(exam.id == null ? '' : exam.id),
-                title: typeof exam.title === 'string' ? exam.title : '',
-                category: typeof exam.category === 'string' ? exam.category.trim().toUpperCase() : '',
-                frequency: typeof exam.frequency === 'string' ? exam.frequency : '',
-                type: typeof exam.type === 'string' ? exam.type : 'reading',
-                hasHtml: !!exam.hasHtml
-            };
-        },
-
-        _buildCustomSuiteSelectionDraft(flowMode, frequencyScope) {
-            const categories = this._getCustomSuiteCategories();
-            const now = Date.now();
-            return {
-                status: 'selecting',
-                stageIndex: 0,
-                categories,
-                pickedByCategory: {},
-                pickedOrder: [],
-                flowMode: flowMode || 'classic',
-                frequencyScope: frequencyScope || 'custom',
-                createdAt: now,
-                updatedAt: now
-            };
-        },
-
-        async _startCustomSuiteSelection(options = {}) {
-            const flowMode = options.flowMode || 'classic';
-            const frequencyScope = options.frequencyScope || 'custom';
-            const examIndex = await this._fetchSuiteExamIndex();
-            if (!examIndex.length) {
-                window.showMessage && window.showMessage('题库为空，无法启动自选流程。', 'warning');
-                return false;
-            }
-
-            const normalizedIndex = examIndex
-                .map(item => {
-                    if (!item || typeof item !== 'object') {
-                        return null;
-                    }
-                    const normalizedType = String(item.type || 'reading').toLowerCase();
-                    const normalizedCategory = typeof item.category === 'string'
-                        ? item.category.trim().toUpperCase()
-                        : '';
-                    if (normalizedType !== 'reading') {
-                        return null;
-                    }
-                    return {
-                        ...item,
-                        type: 'reading',
-                        category: normalizedCategory
-                    };
-                })
-                .filter(Boolean);
-
-            const categories = this._getCustomSuiteCategories();
-            for (const category of categories) {
-                const pool = normalizedIndex.filter(item => item.category === category);
-                if (!pool.length) {
-                    window.showMessage && window.showMessage('当前题库缺少 ' + category + ' 阅读题目，无法启动自选流程。', 'warning');
-                    return false;
-                }
-            }
-
-            this._setCustomSuiteDraftState(this._buildCustomSuiteSelectionDraft(flowMode, frequencyScope));
-
-            if (typeof global.setBrowseTitle === 'function') {
-                try {
-                    global.setBrowseTitle('套题自选');
-                } catch (_) {}
-            }
-
-            const firstCategory = categories[0];
-            if (typeof global.browseCategory === 'function') {
-                global.browseCategory(firstCategory, 'reading');
-            } else if (typeof global.showView === 'function') {
-                global.__pendingBrowseFilter = {
-                    category: firstCategory,
-                    type: 'reading',
-                    filterMode: null,
-                    path: null
-                };
-                global.showView('browse', false);
-            }
-
-            if (typeof global.loadExamList === 'function') {
-                try {
-                    global.loadExamList();
-                } catch (_) {}
-            }
-
-            return true;
-        },
-
-        async _buildCustomSuiteSequenceFromDraft(draft) {
-            const examIndex = await this._fetchSuiteExamIndex();
-            const examMap = new Map(
-                Array.isArray(examIndex)
-                    ? examIndex
-                        .filter(item => item && item.id != null)
-                        .map(item => [String(item.id), item])
-                    : []
-            );
-
-            const pickedOrder = draft && Array.isArray(draft.pickedOrder) ? draft.pickedOrder : [];
-            return pickedOrder
-                .map((entry) => {
-                    if (!entry || !entry.examId) {
-                        return null;
-                    }
-                    const exam = examMap.get(String(entry.examId));
-                    if (!exam) {
-                        return null;
-                    }
-                    return {
-                        examId: exam.id,
-                        exam
-                    };
-                })
-                .filter(Boolean);
-        },
-
-        async confirmCustomSuiteSelection() {
-            const draft = this._getCustomSuiteDraftState();
-            if (!draft || draft.status !== 'ready') {
-                window.showMessage && window.showMessage('当前尚未完成三篇自选，请继续选择后再确认。', 'warning');
-                return false;
-            }
-
-            const sequence = await this._buildCustomSuiteSequenceFromDraft(draft);
-            if (!sequence.length) {
-                window.showMessage && window.showMessage('自选题目无法启动，请重新选择。', 'warning');
-                return false;
-            }
-
-            const started = await this._launchSuiteSessionFromSequence(sequence, {
-                flowMode: draft.flowMode || 'classic',
-                frequencyScope: draft.frequencyScope || 'custom',
-                suiteWindowName: 'ielts-suite-mode-tab',
-                launchLabel: '自选套题'
-            });
-
-            if (started) {
-                this._clearCustomSuiteDraftState();
-            }
-
-            return started;
-        },
-
-        async cancelCustomSuiteSelection() {
-            this._clearCustomSuiteDraftState();
-            if (typeof global.resetBrowseViewToAll === 'function') {
-                try {
-                    global.resetBrowseViewToAll();
-                } catch (_) {}
-            }
-            return true;
-        },
-
-        async _launchSuiteSessionFromSequence(sequence, options = {}) {
-            const suiteWindowName = options.suiteWindowName || 'ielts-suite-mode-tab';
-            const flowMode = options.flowMode || 'simulation';
-            const frequencyScope = options.frequencyScope || 'all';
-            const launchLabel = options.launchLabel || (
-                flowMode === 'stationary'
-                    ? '驻足模式'
-                    : (flowMode === 'simulation' ? '模拟模式' : '经典模式')
-            );
-
-            try {
-                if (this.currentSuiteSession && this.currentSuiteSession.status === 'active') {
-                    window.showMessage && window.showMessage('套题练习正在进行中，请先完成当前套题。', 'warning');
-                    return false;
-                }
-
-                if (typeof this.openExam !== 'function') {
-                    window.showMessage && window.showMessage('当前版本暂不支持套题练习自动打开题目。', 'error');
-                    return false;
-                }
-
-                const normalizedSequence = Array.isArray(sequence)
-                    ? sequence.filter(item => item && item.examId && item.exam)
-                    : [];
-                if (!normalizedSequence.length) {
-                    window.showMessage && window.showMessage('未找到可用的套题题目。', 'warning');
-                    return false;
-                }
-
-                this._clearSuiteHandshakes();
-
-                const suiteSessionId = this._generateSuiteSessionId();
-                const lockedAutoAdvance = flowMode === 'stationary'
-                    ? false
-                    : true;
-                const session = {
-                    id: suiteSessionId,
-                    status: 'initializing',
-                    startTime: Date.now(),
-                    sequence: normalizedSequence,
-                    currentIndex: 0,
-                    results: [],
-                    draftsByExam: {},
-                    elapsedByExam: {},
-                    globalTimerAnchorMs: Date.now(),
-                    flowMode,
-                    frequencyScope,
-                    autoAdvanceAfterSubmit: lockedAutoAdvance,
-                    windowRef: null,
-                    windowName: suiteWindowName
-                };
-
-                this.currentSuiteSession = session;
-                this._registerSuiteSequence(session);
-
-                const firstEntry = normalizedSequence[0];
-                window.showMessage && window.showMessage(launchLabel + ' 已启动，正在打开第一篇。', 'info');
-
-                let examWindow = null;
-                try {
-                    examWindow = await this.openExam(firstEntry.examId, {
-                        target: 'tab',
-                        windowName: suiteWindowName,
-                        suiteSessionId,
-                        suiteFlowMode: flowMode,
-                        sequenceIndex: 0,
-                        sequenceTotal: normalizedSequence.length
-                    });
-                } catch (openError) {
-                    console.error('[SuitePractice] 打开首篇失败:', openError);
-                    examWindow = null;
-                }
-
-                if (!examWindow || examWindow.closed) {
-                    throw new Error('first_exam_window_unavailable');
-                }
-
-                session.windowRef = examWindow;
-                this._ensureSuiteWindowGuard(session, session.windowRef);
-                session.status = 'active';
-                session.activeExamId = firstEntry.examId;
-                this._focusSuiteWindow(session.windowRef);
-                return true;
-            } catch (error) {
-                console.error('[SuitePractice] 启动失败:', error);
-                window.showMessage && window.showMessage('套题练习启动失败，请稍后重试。', 'error');
-                if (this.currentSuiteSession) {
-                    await this._abortSuiteSession(this.currentSuiteSession, { reason: 'startup_failed' });
-                }
-                return false;
-            }
-        },
         _generateSuiteSessionId() {
-            return 'suite_' + Date.now().toString(36) + '_' + Math.random().toString(16).slice(2, 8);
+            return `suite_${Date.now().toString(36)}_${Math.random().toString(16).slice(2, 8)}`;
         },
 
         _registerSuiteSequence(session) {
@@ -2050,7 +1674,7 @@
                     const practiceKey = ['practice', 'records'].join('_');
                     await storage.set(practiceKey, practiceRecords);
                 }
-                console.log('[SuitePractice] cleared ' + (before - practiceRecords.length) + ' suite child records');
+                console.log(`[SuitePractice] 已清理 ${before - practiceRecords.length} 条套题子记录`);
             }
         },
 
@@ -2081,7 +1705,7 @@
             const date = new Date(timestamp);
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
-            return month + '月' + day + '日';
+            return `${month}月${day}日`;
         },
 
         async _resolveSuiteSequenceNumber(timestamp) {
@@ -2237,10 +1861,11 @@
             }
 
             this._clearSuiteHandshakes();
+            const suiteWindow = this._resolveSuiteWindow(session);
 
-            if (session.windowRef && !session.windowRef.closed && typeof session.windowRef.postMessage === 'function') {
+            if (suiteWindow && typeof suiteWindow.postMessage === 'function') {
                 try {
-                    session.windowRef.postMessage({
+                    suiteWindow.postMessage({
                         type: 'SUITE_FORCE_CLOSE',
                         data: {
                             suiteSessionId: session.id || null
@@ -2251,8 +1876,8 @@
                 }
             }
 
-            this._releaseSuiteWindowGuard(session.windowRef);
-            this._safelyCloseWindow(session.windowRef);
+            this._releaseSuiteWindowGuard(suiteWindow);
+            this._safelyCloseWindow(suiteWindow);
 
             if (session.sequence && session.sequence.length) {
                 const cleanupTasks = session.sequence.map(item => this.cleanupExamSession ? this.cleanupExamSession(item.examId) : Promise.resolve());
@@ -2306,7 +1931,7 @@
         _openNamedSuiteWindow(windowName, session = null) {
             const normalizedName = typeof windowName === 'string' && windowName.trim()
                 ? windowName.trim()
-                : 'ielts-suite-mode-tab';
+                : this._getSuiteWindowName(session);
 
             let reopened = null;
             try {
@@ -2440,9 +2065,9 @@
             } catch (error) {
                 const message = String(error && error.message ? error.message : error);
                 if (!message || !message.toLowerCase().includes('cross-origin')) {
-                    console.warn('[SuitePractice] Unable to read suite window guard data:', error);
+                    console.warn('[SuitePractice] 无法访问套题窗口守护信息:', error);
                 } else {
-                    console.debug('[SuitePractice] Suite window guard is cross-origin; skipping guard release.');
+                    console.debug('[SuitePractice] 套题窗口已跨域，跳过守护释放。');
                 }
                 guardInfo = null;
             }
@@ -2556,8 +2181,8 @@
             const isComplete = completedCount >= session.expectedSuiteCount;
 
             if (isComplete) {
-
-                console.log('[MultiSuite] session completed:', session.id, 'completed ' + completedCount + '/' + session.expectedSuiteCount + ' suite(s)');
+                console.log('[MultiSuite] 会话完成:', session.id, 
+                    `已完成 ${completedCount}/${session.expectedSuiteCount} 套题`);
             }
 
             return isComplete;
@@ -2600,8 +2225,8 @@
         _generateMultiSuiteSessionId(baseExamId) {
             const timestamp = Date.now().toString(36);
             const random = Math.random().toString(16).slice(2, 8);
-            const prefix = baseExamId ? baseExamId + '_' : '';
-            return 'multi_' + prefix + timestamp + '_' + random;
+            const prefix = baseExamId ? `${baseExamId}_` : '';
+            return `multi_${prefix}${timestamp}_${random}`;
         },
 
         /**
@@ -2636,9 +2261,3 @@
     global.ExamSystemAppMixins = global.ExamSystemAppMixins || {};
     global.ExamSystemAppMixins.suitePractice = mixin;
 })(typeof window !== 'undefined' ? window : globalThis);
-
-
-
-
-
-

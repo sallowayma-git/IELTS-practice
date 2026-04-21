@@ -27,16 +27,11 @@
 
     <div class="container hero-shell">
         <div class="hero-header">
-            <h1 style="width: 100%;">📚 考试总览系统
-                <span
-                    style="font-size: 0.35em; opacity: 0.6; font-weight: normal; margin-left: 12px; vertical-align: middle; display: inline-block;">项目仅授权ZYZ
-                    Reading Walks 提供分发，小红书号：276752989</span>
-                <a href="https://www.xiaohongshu.com/user/profile/5b4d76744eacab058489e72f?xsec_token=ABlVO2QUdaoyzC6LYAHxh1yuvCcdFmZCFy-npJva106mg=&xsec_source=pc_search"
-                    target="_blank" rel="noopener noreferrer" class="hero-badge hero-badge--cta"
-                    style="background: #ff1c1c; box-shadow: 0 12px 30px rgba(255, 77, 79, 0.35); text-decoration: none; display: inline-flex; align-items: center; justify-content: center;"
-                    aria-label="小红书主页">
-                    小红书
-                </a>
+            <h1>📚 考试总览系统
+                <button type="button" class="hero-badge hero-badge--cta" data-action="show-developer-team"
+                    aria-label="睡着过开发团队">
+                    SHUI
+                </button>
                 <a href="https://github.com/sallowayma-git/IELTS-practice" target="_blank" rel="noopener noreferrer"
                     aria-label="GitHub Repository"
                     style="margin-left: auto; margin-right: 20px; color: inherit; display: flex; align-items: center; transition: opacity 0.2s;"
@@ -82,24 +77,18 @@
                     </label>
                 </div>
                 <div id="type-filter-buttons" class="hero-panel__actions shui-filter-group">
-                    <button class="btn btn-sm shui-filter-btn active" type="button" aria-pressed="true"
-                        data-filter-type="all" onclick="filterByType('all')">全部</button>
-                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false"
-                        data-filter-type="reading" onclick="filterByType('reading')">阅读</button>
-                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false"
-                        data-filter-type="listening" onclick="filterByType('listening')">听力</button>
+                    <button class="btn btn-sm shui-filter-btn active" type="button" aria-pressed="true" data-filter-type="all" data-action="filter-exam-type">全部</button>
+                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="reading" data-action="filter-exam-type">阅读</button>
+                    <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="listening" data-action="filter-exam-type">听力</button>
                 </div>
             </div>
 
             <div class="search-box">
                 <div class="search-row">
                     <div class="search-input-wrap">
-                        <input type="text" class="search-input" id="exam-search-input" placeholder="搜索题目..."
-                            aria-label="搜索题目" onkeyup="searchExams(this.value)">
-                        <button type="button" class="search-clear-btn" id="search-clear-btn" aria-label="清除搜索" hidden
-                            onclick="clearSearch()">
-                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2"
-                                fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <input type="text" class="search-input" id="exam-search-input" placeholder="搜索题目..." aria-label="搜索题目" data-input-action="search-exams" data-input-event="keyup">
+                        <button type="button" class="search-clear-btn" id="search-clear-btn" aria-label="清除搜索" hidden data-action="clear-exam-search">
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="18" y1="6" x2="6" y2="18"></line>
                                 <line x1="6" y1="6" x2="18" y2="18"></line>
                             </svg>
@@ -111,10 +100,8 @@
                             <option value="frequency-desc">频率高→低</option>
                         </select>
                         <div class="browse-sort-icon">
-                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
-                                xmlns="http://www.w3.org/2000/svg">
-                                <path d="M3.5 5.25L7 8.75L10.5 5.25" stroke="currentColor" stroke-width="1.5"
-                                    stroke-linecap="round" stroke-linejoin="round" />
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M3.5 5.25L7 8.75L10.5 5.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                         </div>
                     </div>
@@ -159,24 +146,31 @@
                 <div class="hero-panel__header">
                     <h3 class="hero-panel__title">📈 练习历史 <span class="hero-tag">SHUI Timeline</span></h3>
                     <div id="record-type-filter-buttons" class="hero-panel__actions shui-filter-group">
-                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="true"
-                            data-filter-type="all" onclick="filterRecordsByType('all')">全部</button>
-                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false"
-                            data-filter-type="reading" onclick="filterRecordsByType('reading')">阅读</button>
-                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false"
-                            data-filter-type="listening" onclick="filterRecordsByType('listening')">听力</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="true" data-filter-type="all" data-action="filter-record-type">全部</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="reading" data-action="filter-record-type">阅读</button>
+                        <button class="btn btn-sm shui-filter-btn" type="button" aria-pressed="false" data-filter-type="listening" data-action="filter-record-type">听力</button>
                     </div>
                     <div class="hero-panel__actions">
-                        <button class="btn btn-secondary hero-btn hero-btn--ghost"
-                            onclick="window.AppActions && window.AppActions.exportPracticeMarkdown()">📄
+                        <button class="btn btn-secondary hero-btn hero-btn--ghost" data-action="export-practice-markdown">📄
                             导出Markdown</button>
-                        <button class="btn btn-info hero-btn" onclick="toggleBulkDelete()" id="bulk-delete-btn">
-                            <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="ui-emoji-icon" aria-hidden="true"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                        <button class="btn btn-info hero-btn" id="bulk-delete-btn" data-action="toggle-bulk-delete">📝
                             批量删除</button>
-                        <button class="btn btn-warning hero-btn hero-btn--warn" onclick="clearPracticeData()">🗑️
+                        <button class="btn btn-warning hero-btn hero-btn--warn" data-action="clear-practice-data">🗑️
                             清除记录</button>
                     </div>
                 </div>
+                <div class="practice-history-search-row">
+                    <div class="search-input-wrap">
+                        <input type="text" class="search-input" id="history-search-input" placeholder="搜索练习记录（标题/分类/日期）..." aria-label="搜索练习记录" data-input-action="search-practice-history" data-input-event="input">
+                        <button type="button" class="search-clear-btn history-search-clear-btn" id="history-search-clear-btn" aria-label="清除练习记录搜索" hidden data-action="clear-history-search">
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
                 <div id="history-list" class="practice-history-list">
                     <div style="text-align: center; padding: 40px; opacity: 0.7;">
                         <div style="font-size: 3em; margin-bottom: 15px;">📋</div>
@@ -195,18 +189,12 @@
                     <h3>🔧 系统管理</h3>
                     <p class="hero-panel__muted">系统工具和设置选项</p>
                     <div class="hero-settings-actions">
-                        <button class="btn btn-warning hero-btn hero-btn--warn" id="clear-cache-btn">🗑️ 清除缓存</button>
-                        <button class="btn btn-warning hero-btn hero-btn--warn" id="load-library-btn">📂 加载题库</button>
-                        <button class="btn btn-warning hero-btn hero-btn--warn" id="theme-switcher-btn-entry" onclick="showThemeSwitcherModal()">
-                            🎨 主题切换</button>
-                        <button class="btn btn-warning hero-btn hero-btn--warn" id="show-onboarding-btn" onclick="OnboardingTour.start(true)">
-                            🎯 显示引导</button>
-                        <button class="btn btn-warning hero-btn hero-btn--warn" id="library-config-btn">
-                            <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="ui-emoji-icon" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="clear-cache-btn" data-action="clear-cache">🗑️ 清除缓存</button>
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="load-library-btn" data-action="load-library">📂 加载题库</button>
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="library-config-btn" data-action="library-config">⚙️
                             题库配置切换</button>
-                        <button class="btn btn-warning hero-btn hero-btn--warn" id="force-refresh-btn">🔄
+                        <button class="btn btn-warning hero-btn hero-btn--warn" id="force-refresh-btn" data-action="force-refresh">🔄
                             强制刷新题库</button>
-
                     </div>
                 </div>
 
@@ -214,10 +202,10 @@
                     <h3>💾 数据管理</h3>
                     <p class="hero-panel__muted">数据备份、导入导出和完整性检查</p>
                     <div class="hero-settings-actions">
-                        <button class="btn hero-btn data-mgmt-btn" id="create-backup-btn">💾 创建备份</button>
-                        <button class="btn hero-btn data-mgmt-btn" id="backup-list-btn">📋 备份列表</button>
-                        <button class="btn hero-btn data-mgmt-btn" id="export-data-btn">📤 导出数据</button>
-                        <button class="btn hero-btn data-mgmt-btn" id="import-data-btn">📥 导入数据</button>
+                        <button class="btn hero-btn data-mgmt-btn" id="create-backup-btn" data-action="create-backup">💾 创建备份</button>
+                        <button class="btn hero-btn data-mgmt-btn" id="backup-list-btn" data-action="backup-list">📋 备份列表</button>
+                        <button class="btn hero-btn data-mgmt-btn" id="export-data-btn" data-action="export-data">📤 导出数据</button>
+                        <button class="btn hero-btn data-mgmt-btn" id="import-data-btn" data-action="import-data">📥 导入数据</button>
                     </div>
                 </div>
 
@@ -231,17 +219,26 @@
                         <div>最后更新: <span id="last-update">2025/03/01 21:56:46</span></div>
                     </div>
 
+                    <!-- 主题切换按钮 -->
+                    <div style="margin-top: 25px;">
+                        <button class="btn btn-secondary hero-btn hero-btn--ghost" data-action="show-theme-switcher">
+                            🎨 主题切换
+                        </button>
+                    </div> 
+
+                    <!-- 引导流程按钮 -->
+                    <div style="margin-top: 15px;">
+                        <button class="btn hero-btn" id="show-onboarding-btn" data-action="show-onboarding">
+                            🎯 重新显示引导
+                        </button>
+                    </div>
+
                     <!-- 开发团队链接 -->
                     <div
                         style="margin-top: 30px; text-align: center; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.2);">
-                        <a href="https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT" target="_blank" rel="noopener noreferrer"
-                            style="color: #ff1c1c; text-decoration: none; font-size: 0.9em; font-weight: bold; display: block; margin-bottom: 12px; transition: opacity 0.2s;"
-                            onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
-                            问题反馈
-                        </a>
-                        <a href="https://github.com/sallowayma-git" target="_blank" rel="noopener noreferrer"
-                            style="color: gray; text-decoration: none; font-size: 0.9em; transition: color 0.3s ease;">
-                            Salloway呈现
+                        <a href="#" data-action="show-developer-team"
+                            style="color: rgba(255, 255, 255, 0.7); text-decoration: none; font-size: 0.9em; transition: color 0.3s ease;">
+                            睡着过开发团队
                         </a>
                     </div>
                 </div>
@@ -275,11 +272,11 @@
                     <div class="tool-card-icon">🧠</div>
                     <div class="tool-card-content">
                         <h3>单词背诵</h3>
-                        <p>SM-2记忆算法，随时继续你的词汇任务。</p>
+                        <p>本地 Leitner 分箱 + 艾宾浩斯复习节奏，随时继续你的词汇任务。</p>
                     </div>
                     <div class="tool-card-arrow">进入</div>
                 </button>
-                <button class="tool-card" type="button" onclick="showAchievements()">
+                <button class="tool-card" type="button" data-action="show-achievements">
                     <div class="tool-card-icon">🏆</div>
                     <div class="tool-card-content">
                         <h3>成就</h3>
@@ -346,130 +343,143 @@
         </div>
     </div>
 
+    <!-- 开发团队弹窗 -->
+    <div id="developer-modal" class="developer-modal">
+        <div class="developer-modal-content">
+            <h2>🎉 睡着过开发团队</h2>
+            <p style="text-align: center; margin-bottom: 25px; opacity: 0.9; font-size: 0.95em;">
+                感谢以下开发者的贡献 (排名不分先后)
+            </p>
 
+            <div class="developer-grid">
+                <div class="developer-card">
+                    <div class="developer-name">🕊️</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">Sallowaymmm(🧐)</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">julie</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">呆呆军师</div>
+                </div>
+                <div class="developer-card" id="dev-poi">
+                    <div class="developer-name">POI</div>
+                    <span class="heart-interaction">❤</span>
+                </div>
+                <div class="developer-card" id="dev-nana">
+                    <div class="developer-name">Na.8.0</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">猪柳蛋</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">馒头不吃鱼</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">i</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">Aurelia 7.0</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">twoLin</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">yyyyy</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">鑫鑫</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">Gamiya_</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">zᙆ</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">zO_cssjjj👧</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">爱吃青花鱼罐头的罗罗酱</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">llalaland</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">哈希海</div>
+                </div>
+                <div class="developer-card">
+                    <div class="developer-name">阿橙</div>
+                </div>
+            </div>
+
+            <button class="modal-close-btn" data-action="hide-developer-team">
+                关闭
+            </button>
+        </div>
+    </div>
 
     <!-- 主题切换弹窗 -->
     <div id="theme-switcher-modal" class="theme-modal">
         <div class="theme-modal-content">
             <div class="theme-modal-header">
                 <h3>🎨 主题切换</h3>
-                <button class="theme-modal-close" onclick="hideThemeSwitcherModal()" aria-label="关闭">×</button>
+                <button class="theme-modal-close" data-action="hide-theme-switcher" aria-label="关闭">×</button>
             </div>
             <div class="theme-modal-body">
                 <div class="theme-options-viewport" role="presentation">
-                    <style>
-                        .theme-options-glass {
-                            display: flex; gap: 24px; padding: 20px; justify-content: flex-start; flex-wrap: nowrap;
-                            overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none;
-                            scroll-snap-type: x mandatory; padding-bottom: 30px; /* space for shadow */
-                        }
-                        .theme-options-glass::-webkit-scrollbar { display: none; }
-                        .theme-card {
-                            flex-shrink: 0; scroll-snap-align: center;
-                            position: relative; width: 250px; height: 350px; border-radius: 18px; 
-                            overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-                            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
-                            display: flex; flex-direction: column; justify-content: flex-end;
-                            text-align: left;
-                        }
-                        .theme-card:hover {
-                            transform: translateY(-4px); box-shadow: 0 16px 32px rgba(0,0,0,0.15);
-                        }
-                        .theme-card-bg { position: absolute; inset: 0; z-index: 1; }
-                        /* 晨雾群山色彩抽象 */
-                        .theme-bg-misty { background: linear-gradient(150deg, #f2eadf 0%, #dbccc0 35%, #76849c 70%, #2f3d59 100%); }
-                        .theme-bg-misty::after {
-                            content: ''; position: absolute; top: 15%; left: 25%; width: 90px; height: 90px;
-                            background: radial-gradient(circle, #f2906b 0%, rgba(242,144,107,0) 60%); opacity: 0.85;
-                        }
-                        /* 深海孤航色彩抽象 */
-                        .theme-bg-ocean { background: linear-gradient(180deg, #81959c 0%, #bac9d1 35%, #0e4c56 38%, #031c21 100%); }
-                        .theme-bg-ocean::after {
-                            content: ''; position: absolute; bottom: 35%; left: 30%; right: 0; width: 100px; height: 20px;
-                            background: radial-gradient(ellipse, rgba(0,0,0,0.4) 0%, transparent 60%); opacity: 0.6;
-                        }
-                        /* 落日雾花色彩抽象 */
-                        .theme-bg-floral { background: linear-gradient(150deg, #fce0cd 0%, #f7b9bc 40%, #8db2d8 80%, #4b8cd1 100%); }
-                        .theme-bg-floral::after {
-                            content: ''; position: absolute; top: 15%; left: 40%; width: 100px; height: 100px;
-                            background: radial-gradient(circle, #7d96f1 0%, rgba(125,150,241,0) 70%); opacity: 0.8; mix-blend-mode: multiply;
-                        }
-                        .theme-bg-floral::before {
-                            content: ''; position: absolute; top: 40%; left: 10%; width: 120px; height: 100px;
-                            background: radial-gradient(circle, #ff6b4a 0%, rgba(255,107,74,0) 65%); opacity: 0.8; filter: blur(5px);
-                        }
-                        /* 液态玻璃模糊层 */
-                        .theme-card-glass-layer {
-                            position: relative; z-index: 2; padding: 16px;
-                            padding-top: 36px;
-                            background: rgba(28, 28, 28, 0.45); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-                            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,1) 36%, rgba(0,0,0,1) 100%);
-                            mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,1) 36%, rgba(0,0,0,1) 100%);
-                            color: #fff;
-                        }
-                        .theme-card-header { margin-bottom: 20px; }
-                        .theme-card-title { font-size: 1.25rem; font-weight: 600; margin: 0 0 6px 0; letter-spacing: 0.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
-                        .theme-card-subtitle { font-size: 0.8rem; color: rgba(255,255,255,0.7); display: flex; align-items: center; gap: 6px; }
-                        .theme-card-footer { display: flex; align-items: center; justify-content: space-between; }
-                        .theme-card-tag {
-                            background: rgba(0, 0, 0, 0.5); color: #fff; padding: 8px 16px; border-radius: 20px;
-                            font-size: 0.85rem; font-weight: 600; border: 1px solid rgba(255,255,255,0.08); letter-spacing: 0.5px;
-                        }
-                        .theme-card-btn {
-                            background: #ffffff; color: #1a1a1a; border: none; padding: 8px 20px; border-radius: 20px;
-                            font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                        }
-                        .theme-card-btn:hover { background: #f0f0f0; transform: scale(1.04); }
-                        .theme-card-btn:active { transform: scale(0.98); }
-                    </style>
-                    <div class="theme-options-glass">
-                        <!-- 晨雾群山 -->
-                        <div class="theme-card">
-                            <div class="theme-card-bg theme-bg-misty"></div>
-                            <div class="theme-card-glass-layer">
-                                <div class="theme-card-header">
-                                    <h4 class="theme-card-title">晨雾群山</h4>
-                                    <div class="theme-card-subtitle">
-                                        <span style="opacity:0.6;">⛰️ Misty Mountain</span>
-                                    </div>
-                                </div>
-                                <div class="theme-card-footer">
-                                    <span class="theme-card-tag">动态</span>
-                                    <button class="theme-card-btn" onclick="window.switchBgTheme('misty-mountain')">应用</button>
-                                </div>
+                    <div class="theme-options">
+                        <div class="theme-option">
+                            <div class="theme-info">
+                                <div class="theme-name">📚 Academic</div>
+                                <div class="theme-desc">专业 高效 可靠</div>
                             </div>
+                            <button class="btn btn-sm" aria-label="切换到 Academic 主题" data-action="navigate-theme-portal"
+                                data-theme-url=".superdesign/design_iterations/ielts_academic_functional_2.html" data-theme-label="Academic">切换</button>
                         </div>
-                        <!-- 深海孤航 -->
-                        <div class="theme-card">
-                            <div class="theme-card-bg theme-bg-ocean"></div>
-                            <div class="theme-card-glass-layer">
-                                <div class="theme-card-header">
-                                    <h4 class="theme-card-title">深海孤航</h4>
-                                    <div class="theme-card-subtitle">
-                                        <span style="opacity:0.6;">⛵ Teal Ocean</span>
-                                    </div>
-                                </div>
-                                <div class="theme-card-footer">
-                                    <span class="theme-card-tag">动态</span>
-                                    <button class="theme-card-btn" onclick="window.switchBgTheme('teal-ocean')">应用</button>
-                                </div>
+                        <div class="theme-option">
+                            <div class="theme-info">
+                                <div class="theme-name">🍂 Bloom</div>
+                                <div class="theme-desc">秋日 暖阳</div>
                             </div>
+                            <button id="bloom-theme-btn" class="btn btn-sm" aria-label="切换到 Bloom 主题" data-action="toggle-bloom-theme">切换</button>
                         </div>
-                        <!-- 落日雾花 -->
-                        <div class="theme-card">
-                            <div class="theme-card-bg theme-bg-floral"></div>
-                            <div class="theme-card-glass-layer">
-                                <div class="theme-card-header">
-                                    <h4 class="theme-card-title">落日雾花</h4>
-                                    <div class="theme-card-subtitle">
-                                        <span style="opacity:0.6;">🌸 Floral Bloom</span>
-                                    </div>
-                                </div>
-                                <div class="theme-card-footer">
-                                    <span class="theme-card-tag">静态</span>
-                                    <button class="theme-card-btn" onclick="window.switchBgTheme('floral-bloom')">应用</button>
-                                </div>
+                        <div class="theme-option">
+                            <div class="theme-info">
+                                <div class="theme-name" style="color: #0554F2;">🔵 Blue</div>
+                                <div class="theme-desc" style="color: #0788D9;">冷静 清爽 专注</div>
                             </div>
+                            <button id="blue-theme-btn" class="btn btn-sm" aria-label="切换到 Blue 主题"
+                                style="background: #0554F2; border-color: #1154D9;" data-action="apply-theme"
+                                data-theme="blue">切换</button>
+                        </div>
+                        <div class="theme-option">
+                            <div class="theme-info">
+                                <div class="theme-name" style="color: #ec4899;">🎀 Melody</div>
+                                <div class="theme-desc" style="color: #ec4899;">美乐蒂</div>
+                            </div>
+                            <button class="btn btn-sm" style="background: #ec4899; border-color: #ec4899;" aria-label="切换到 Melody 主题"
+                                data-action="navigate-theme-portal" data-theme-url=".superdesign/design_iterations/my_melody_ielts_1.html" data-theme-label="MyMelody" data-theme-name="mymelody">切换</button>
+                        </div>
+                        <div class="theme-option">
+                            <div class="theme-info">
+                                <div class="theme-name" style="color: #6a2bbf;">🧙 HarryPotter</div>
+                                <div class="theme-desc" style="color: #6a2bbf;">哈利波特</div>
+                            </div>
+                            <button class="btn btn-sm" style="background: #6a2bbf; border-color: #6a2bbf;"
+                                aria-label="哈利波特主题（冒险）" data-action="navigate-theme-portal"
+                                data-theme-url=".superdesign/design_iterations/HarryPoter.html" data-theme-label="HarryPotter" data-theme-name="harry">切换</button>
+                        </div>
+                        <div class="theme-option">
+                            <div class="theme-info">
+                                <div class="theme-name" style="color: #ffc83d;">🐷 小呆呆</div>
+                                <div class="theme-desc" style="color: #f59e0b;">小呆呆控制台</div>
+                            </div>
+                            <button class="btn btn-sm" aria-label="切换到 小呆呆 主题"
+                                style="background: linear-gradient(120deg, #ffe08a, #ffc83d); border-color: #fbbf24; color: #3b2400;"
+                                data-action="navigate-theme-portal" data-theme-url=".superdesign/design_iterations/xiaodaidai_dashboard_1.html" data-theme-label="XiaoDaiDai" data-theme-name="xiaodaidai">切换</button>
                         </div>
                     </div>
                 </div>
@@ -478,13 +488,12 @@
     </div>
 
     <!-- 启动与懒加载工具 -->
-    <script src="assets/vendor/three.min.js"></script>
-    <script src="js/presentation/threeBackground.js"></script>
+    <script src="js/presentation/shuiBackground.js" defer></script>
     <script src="js/runtime/bootScreen.js" defer></script>
     <script src="js/runtime/lazyLoader.js" defer></script>
     <script src="js/utils/suitePreference.js" defer></script>
     <script src="js/presentation/app-actions.js" defer></script>
-
+    <script src="js/presentation/developerTeamModal.js" defer></script>
 
     <!-- 基础环境与日志 -->
     <script src="js/utils/environmentDetector.js"></script>
@@ -514,7 +523,6 @@
     <!-- 入口与懒加载代理 -->
     <script src="js/app/main-entry.js"></script>
     <script src="js/presentation/indexInteractions.js"></script>
-    <script src="js/presentation/emojiIconizer.js"></script>
     <script src="js/boot-fallbacks.js"></script>
     <script src="js/patches/runtime-fixes.js"></script>
 
@@ -534,7 +542,7 @@
         <div class="theme-modal-content" style="max-width: 600px;">
             <div class="theme-modal-header">
                 <h3>🏆 我的成就</h3>
-                <button class="theme-modal-close" onclick="hideAchievements()" aria-label="关闭">×</button>
+                <button class="theme-modal-close" data-action="hide-achievements" aria-label="关闭">×</button>
             </div>
             <div class="theme-modal-body">
                 <div class="achievements-grid" id="achievements-list">
@@ -684,17 +692,13 @@
             <h2 class="lm-title">开源项目使用须知</h2>
             <div class="lm-body">
                 <p>
-                    感谢使用！本项目是免费软件，采用 <strong>GPL-3.0 License</strong> 发布。
+                    感谢使用！本项目是自由开源软件，采用 <strong>GPL-3.0 License</strong> 发布。
                 </p>
                 <p class="lm-warning">
                     我们明确反对任何形式的倒卖、改名后二次分发、牟利、使用该项目商业引流等行为。
                 </p>
                 <p>
                     本项目的初衷是自由使用、学习与改进，而不是作为倒卖工具获取不正当收益。
-                </p>
-                <p>
-                    腾讯文档： <a href="https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT" target="_blank" rel="noopener noreferrer"
-                        class="lm-warning" style="text-decoration: underline;">问题反馈</a>
                 </p>
                 <div class="lm-info-box">
                     <p>
