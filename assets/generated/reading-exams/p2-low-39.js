@@ -1,0 +1,123 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p2-low-39", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p2-low-39",
+  "meta": {
+    "title": "How to be Happy 如何获得幸福",
+    "category": "P2",
+    "frequency": "low",
+    "pdfFilename": "133. P2 - How to be Happy 如何获得幸福.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/133. P2 - How to be Happy 如何获得幸福/",
+    "legacyFilename": "133. P2 - How to be Happy 如何获得幸福.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 2</h2>\n            <p>You should spend about 20 minutes on Questions 14–26, which are based on Reading Passage 2 below.</p>\n            \n            <h3>How to be Happy</h3>\n            <h4>Some recent developments in the science of happiness</h4>\n            \n            <p><strong>A</strong> A psychiatrist Tony Fernando was walking down the street when he saw a group of young homeless men sitting on the footpath. As Fernando handed out gifts of food, he tried to video the men's reactions in his mind, recording how their gratitude lifted him in return. 'I felt warm, content, meaningful,' he says. Fernando believes the brain can be trained to make us happy and that his ‘video method' is one way to achieve this. In fact, a growing body of scientific research internationally is showing how we can learn happiness in the same way we can learn to play the piano. In the soft tissue that forms the brain, there are approximately ten trillion synapses connecting roughly a hundred billion neurons. Active synapses become more sensitive; less active synapses die, but new ones grow quickly. This is relatively new thinking – just 30 years ago, neuroscientists believed that adult brain cells couldn't regenerate. One of the pioneers in this field is University of Wisconsin professor Richard Davidson. He studied Buddhist monks using brain scans in his research facility, and found that those trained in meditation had higher levels of activity in the left prefrontal cortex – the area associated with happiness. Davidson believes that the trained brain is physically different from the untrained one.</p>\n            <p><strong>B</strong> The idea that we can train our brains to find more happiness has been called 'mindfulness' by neuropsychologist Rick Hanson, author of Hardwiring Happiness. It was in college that Hanson, quite unintentionally, first recognised the importance of something that would become his life's work. As an unconfident teenager, he discovered he could turn a small event, ‘a young woman smiling at me', into a good feeling he could hold on to. To do this, Hanson employs exactly the same imaginary 'video method' as psychiatrist Tony Fernando. ‘The brain takes its shape from what the mind rests upon,' says Hanson. If you keep resting your mind on self-criticism and worries, he argues, your brain will be shaped by that. Hanson explains that resting it on pleasant feelings and the things you have accomplished means that over time your brain will take on a different shape, with strength and optimism hard-wired into it.</p>\n            <p><strong>C</strong> In New Zealand, the Mental Health Foundation runs mindfulness programmes in 14 schools. Foundation CEO Judi Clements says, 'It's a valuable approach because children are told to pay attention, but aren't told how to pay attention.' Preliminary results on the outcomes found that children had sustained increases in well-being. The Foundation recognises five pathways to happiness – being active, connecting with others, taking notice, learning and giving. And, says Clements, ‘We're detecting a hunger for it from different organisations and professions as well, so the Foundation is soon going to pilot an online “well-being game” in several workplaces.' The project leader is psychologist Carsten Grimm, who is interested in whether some pathways to happiness are more effective than others. In a study, Grimm recorded the activities and corresponding happiness scores of 173 people. What he found was that people who used several pathways to happiness achieved the best results, suggesting it's better to have a balance than concentrate on the single pathway you most identify with.</p>\n            <p><strong>D</strong> However, Associate Professor of Psychological Medicine Nathan Consedine greets our relentless search for the secrets to happiness with a tired sigh. ‘The more you chase it, the less you get it,' he says, quoting studies showing those who value contentment and well-being are, in fact, less happy. The big question, he says, is whether there's any benefit in actively seeking happiness. He cites a study, for example, which showed that people who were happier were less inclined to show sympathy. Consedine says that's probably because happy people are strongly motivated to stay happy, but engaging sympathetically with others typically involves engaging with their distress, and that's going to reduce their own happiness. Consedine's not disagreeing with the theory of mindfulness, but believes there's more work to be done.</p>\n            <p><strong>E</strong> Some of that work is being conducted at Auckland University's Centre for Brain Research. Associate Professor Johanna Montgomery has been studying Hanson's theory - that altering our brain activity at a synaptic level affects our behaviour. She accepts that it's a logical explanation based on studies from animals, but we haven't yet got the technology to prove it scientifically in humans. It's true that MRI scans certainly do indicate an increased flow of blood to different areas of the brain which are experiencing positive stimuli. However, she warns that this is a long way from confirming that the brain itself is developing or strengthening.</p>\n            <p><strong>F</strong> Nonetheless, Montgomery believes she is making progress. In the laboratory, when scientists want to experiment with synaptic connections, they stimulate the brain with electricity, as this copies the high-frequency firings that happen normally in the brain every second. Using this technique, Montgomery has made a number of findings. For example, the hormones that are released routinely in response to good or bad situations – such as adrenaline – act to regulate the brain, in the same way that weather has a regulating effect on human activity more generally. But scientists understand some of these stimuli better than others. More is known about the impact on brain activity of prolonged periods of fear than the effects of ‘happiness' hormones that are released by positive events in life. This is one potentially important area that she hopes to investigate further in future.</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "table_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-anchor\">\n                <h4>Questions 14–17</h4>\n                <p>Reading Passage 2 has six paragraphs, <strong>A–F</strong>.</p>\n                <p>Which paragraph contains the following information?</p>\n                <p><em>Write the correct letter, <strong>A–F</strong>, in boxes 14–17 on your answer sheet.</em></p>\n                <p><strong>NB</strong> You may use any letter more than once.</p>\n                <div style=\"overflow-x: auto;\">\n                    <table class=\"matching-table\">\n                        <thead>\n                            <tr>\n                                <th></th>\n                                <th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th>\n                            </tr>\n                        </thead>\n                        <tbody>\n                            <tr>\n                                <td><strong>14</strong> a reference to a fact that two scientists use the same technique to promote their own happiness</td>\n                                <td><input type=\"radio\" name=\"q1\" value=\"A\"></td><td><input type=\"radio\" name=\"q1\" value=\"B\"></td><td><input type=\"radio\" name=\"q1\" value=\"C\"></td><td><input type=\"radio\" name=\"q1\" value=\"D\"></td><td><input type=\"radio\" name=\"q1\" value=\"E\"></td><td><input type=\"radio\" name=\"q1\" value=\"F\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>15</strong> the suggestion that scientific opinion about an aspect of brain function has changed over a given time period</td>\n                                <td><input type=\"radio\" name=\"q2\" value=\"A\"></td><td><input type=\"radio\" name=\"q2\" value=\"B\"></td><td><input type=\"radio\" name=\"q2\" value=\"C\"></td><td><input type=\"radio\" name=\"q2\" value=\"D\"></td><td><input type=\"radio\" name=\"q2\" value=\"E\"></td><td><input type=\"radio\" name=\"q2\" value=\"F\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>16</strong> an estimate of how numerous some brain components are</td>\n                                <td><input type=\"radio\" name=\"q3\" value=\"A\"></td><td><input type=\"radio\" name=\"q3\" value=\"B\"></td><td><input type=\"radio\" name=\"q3\" value=\"C\"></td><td><input type=\"radio\" name=\"q3\" value=\"D\"></td><td><input type=\"radio\" name=\"q3\" value=\"E\"></td><td><input type=\"radio\" name=\"q3\" value=\"F\"></td>\n                            </tr>\n                            <tr>\n                                <td><strong>17</strong> the reason why some educational courses were set up</td>\n                                <td><input type=\"radio\" name=\"q4\" value=\"A\"></td><td><input type=\"radio\" name=\"q4\" value=\"B\"></td><td><input type=\"radio\" name=\"q4\" value=\"C\"></td><td><input type=\"radio\" name=\"q4\" value=\"D\"></td><td><input type=\"radio\" name=\"q4\" value=\"E\"></td><td><input type=\"radio\" name=\"q4\" value=\"F\"></td>\n                            </tr>\n                        </tbody>\n                    </table>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "matching",
+      "questionIds": [
+        "q5",
+        "q6",
+        "q7",
+        "q8"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q5-6-7-8-anchor\">\n                <h4>Questions 18–21</h4>\n                <p>Look at the following statements (Questions 18–21) and the list of people below.</p>\n                <p>Match each statement with the correct person, <strong>A–F</strong>.</p>\n                \n                <div class=\"match-question-item\">\n                    <p><strong>18</strong> It's better to look for a variety of ways to increase happiness than focus on just one.</p>\n                    <div class=\"match-dropzone\" data-question=\"q5\"></div>\n                </div>\n                <div class=\"match-question-item\">\n                    <p><strong>19</strong> Focusing on personal achievements rather than negative experiences will make people happier.</p>\n                    <div class=\"match-dropzone\" data-question=\"q6\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                    <p><strong>20</strong> Happy people might have a reason not to display one favourable characteristic.</p>\n                    <div class=\"match-dropzone\" data-question=\"q7\"></div>\n                </div>\n                 <div class=\"match-question-item\">\n                    <p><strong>21</strong> A range of groups are becoming more interested in learning techniques to improve happiness.</p>\n                    <div class=\"match-dropzone\" data-question=\"q8\"></div>\n                </div>\n\n                <div class=\"options-pool\" id=\"people-options-pool\">\n                    <strong>List of People</strong>\n                    <div class=\"pool-items\">\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"A\">A Tony Fernando</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"B\">B Richard Davidson</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"C\">C Rick Hanson</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"D\">D Judi Clements</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"E\">E Carsten Grimm</div>\n                        <div class=\"drag-item\" draggable=\"true\" data-option=\"F\">F Nathan Consedine</div>\n                    </div>\n                </div>\n            </div>",
+      "allowOptionReuse": false
+    },
+    {
+      "groupId": "group-3",
+      "kind": "summary_completion",
+      "questionIds": [
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q9-10-11-12-13-anchor\">\n                 <h4>Questions 22–26</h4>\n                <p>Complete the summary below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                <div class=\"summary-completion\">\n                    <h4>Auckland University's Centre for Brain Research</h4>\n                    <p>\n                    Associate Professor Johanna Montgomery says that current research into brain activity and behaviour only relates to <strong>22</strong> <input name=\"q9\" type=\"text\" id=\"q22_input\"> so Hanson's theories have not been proved correct. While scans do show that positive stimuli result in more <strong>23</strong> <input name=\"q10\" type=\"text\" id=\"q23_input\"> reaching parts of the brain, this isn't proof that the brain is getting stronger.\n                    </p>\n                    <p>\n                    But Montgomery is making progress. In laboratory experiments, scientists use <strong>24</strong> <input name=\"q11\" type=\"text\" id=\"q24_input\"> to initiate brain activity, because it's similar to natural processes. One finding is that hormones can be compared to the <strong>25</strong> <input name=\"q12\" type=\"text\" id=\"q25_input\"> because both can change human behaviour. But scientists understand some stimuli, such as <strong>26</strong> <input name=\"q13\" type=\"text\" id=\"q26_input\"> better than they understand more positive stimuli.\n                    </p>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "B",
+    "q2": "A",
+    "q3": "A",
+    "q4": "C",
+    "q5": "E",
+    "q6": "C",
+    "q7": "F",
+    "q8": "D",
+    "q9": "animals",
+    "q10": "blood",
+    "q11": "electricity",
+    "q12": "weather",
+    "q13": "fear"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/133. P2 - How to be Happy 如何获得幸福/133. P2 - How to be Happy 如何获得幸福.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/133. P2 - How to be Happy 如何获得幸福/133. P2 - How to be Happy 如何获得幸福.pdf",
+    "ieltsHtml": "IELTS/P2/How to be Happy.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-11T14:43:22.062Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "14",
+    "q2": "15",
+    "q3": "16",
+    "q4": "17",
+    "q5": "18",
+    "q6": "19",
+    "q7": "20",
+    "q8": "21",
+    "q9": "22",
+    "q10": "23",
+    "q11": "24",
+    "q12": "25",
+    "q13": "26"
+  }
+}
+);
+})(typeof window !== "undefined" ? window : globalThis);

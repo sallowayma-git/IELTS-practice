@@ -1,0 +1,114 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-low-40", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-low-40",
+  "meta": {
+    "title": "Dyes and fabric dyeing 染料的历史",
+    "category": "P1",
+    "frequency": "low",
+    "pdfFilename": "134. P1 - Dyes and fabric dyeing 染料的历史.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/134. P1 - Dyes and fabric dyeing 染料的历史/",
+    "legacyFilename": "134. P1 - Dyes and fabric dyeing 染料的历史.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>Dyes and fabric dyeing</h3>\n            \n            <p>When primitive people began using their hands to be creative, they began to add color to their lives. They used natural materials like ochre to stain animal hides, decorate shells and feathers, and paint on the walls of caves. Ochre is a naturally occurring brownish-yellow earth containing iron oxide. Scientists have been able to date the black, white, yellow and reddish pigments made from ochre, used in cave paintings, to over 15,000 BCE. With the development of fixed settlements and agriculture, around 7,000 to 2,000 BCE, people began to produce fabrics, and used natural substances such as ochre to color them.</p>\n            <p>Natural dyes, or dyes made from substances found in nature, can be broken down into two categories: substantive and adjective. Substantive, or direct dyes, become fixed to fibers without the aid of any other chemicals or additives. Adjective dyes require a mordant (usually a metal salt), which acts as a fixative and prevents the color from washing out or being bleached by sunlight. Most natural dyes are adjective dyes, and require the application of a mordant solution to the fibers at some point in the dyeing process.</p>\n            <p>Historically, three natural fibers were used in making fabrics: wool, silk and cotton. Wool fabric remains have been found in Europe dating back to 2,000 BCE. It was a common medieval fabric worn in both dyed and natural colors and was processed by both professional manufacturers and by people in their own homes. Silk was imported from China to Europe, and in the 14th to 16th centuries major silk manufacturing centers were set up in France, Spain and Italy. These silk production centers also became centers of dye technology, as most silk was dyed and required the highest quality dyes available. Cotton was considered a luxury fabric in Europe, as it was imported all the way from India and was dyed before it was shipped. Cotton was also valued because of the brightness and colorfastness of the dyes used to color it.</p>\n            <p>Dyes that gave fabrics a good bright color and were able to withstand washing and exposure to sunlight without losing their color were highly prized. The names of some of these valued and traded colors are still familiar today. The color known as Tyrian purple, for example, originated in the Mediterranean 2,000 years ago, and cochineal is the name given to the red dye from Latin America. Both of these colors came from animals; the mucus found in certain species of shellfish produced the deep, rich Tyrian purple and cochineal was extracted from insects. Two other natural sources of color were saffron and indigo. Saffron, the base of yellow dyes, comes from the flowers of a particular kind of crocus which is thought to have first been cultivated on Crete in the eastern Mediterranean. The leaves of a plant native to India were used to produce indigo, which was the main source of the color blue.</p>\n            <p>As societies developed over the centuries, the demand for dyes and dyed fabric grew, and by the 17th century a worldwide shipping and trading network was in place, allowing dyestuffs from all parts of the world to be brought to Europe. This meant that numerous dyestuffs could be blended to create a variety of colors for the rich and powerful. Fiber dyeing in the lower classes was a bit more restrictive. Without the money to buy exotic imported dyes, clothing in the countryside tended to be black, brown, grey and tan. Country people had some resources they could use to get a wider range of colors. They had always used local plants as food, and many of these plants were also used as medicines and in some cases as sources of dyes. Home dyers used any plants they could find that would give a good color. People who picked blackberries to make jam soon recognized this wild fruit as a source for a blue dye. Washing beehives in preparation for making mead (a popular drink containing honey) yielded a liquid that could be used as a yellow dye. The mosses which grow in many parts of Europe were used to produce green dye.</p>\n            <p>With the tremendous rise of interest in chemistry in the mid-19th century, several important innovations in dyeing came about. W. H. Perkin, a student of celebrated European scientist Wilhelm von Hofmann, accidentally discovered the first synthetic dye, later called mauve. The color was so popular that Perkin was able to open a factory of his own and went on to develop more synthetic dye colors. Synthetic dye production grew in Europe, and hardly a year passed until the end of the century without a new synthetic dye being patented.</p>\n            <p>Eventually, the old natural dyes lost popularity in favor of the newer synthetic ones, and now the use of natural dyes on a commercial scale only exists in a few remote areas where people have either little access to synthetic dyes or a vested interest in retaining their ancient dyeing customs.</p>\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6",
+        "q7",
+        "q8"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-8-anchor\">\n                <h4>Questions 1–8</h4>\n                <p>Do the following statements agree with the information in Reading Passage 1?</p>\n                <p>In boxes 1–8 on your answer sheet, write:</p>\n                <ul>\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information about this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>1</strong> Ochre was used in paintings before it was used in fabric dyes.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q1\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>2</strong> Natural dyes that need a mordant are rare.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q2\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>3</strong> In medieval times people sometimes wore fabric made of undyed wool.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q3\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>4</strong> Silk has always been more expensive than cotton and wool.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q4\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>5</strong> Cotton imported from India was dyed upon arrival in Europe.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q5\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>6</strong> Perkin became more famous than his teacher, von Hofmann.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q6\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>7</strong> Very few synthetic dyes were produced in Europe in the second half of the 19th century.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q7\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q7\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>8</strong> Today the commercial production of natural dyes is limited to a small number of isolated communities.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q8\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q8\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q9-10-11-12-13-anchor\">\n                <h4>Questions 9–13</h4>\n                <p>Complete the notes below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"notes-completion\">\n                    <h4>The history of some dyes</h4>\n                    <p><strong>Highly valued dyes</strong></p>\n                    <ul>\n                        <li>Tyrian purple\n                            <ul>\n                                <li>mucus from <strong>9</strong> <input type=\"text\" id=\"q9_input\" name=\"q9\"> found in the Mediterranean</li>\n                            </ul>\n                        </li>\n                        <li>cochineal (a red dye)\n                             <ul>\n                                <li>made from <strong>10</strong> <input type=\"text\" id=\"q10_input\" name=\"q10\"> found in Latin America</li>\n                            </ul>\n                        </li>\n                        <li>saffron (a yellow dye)\n                             <ul>\n                                <li>initially made from crocuses found on the island of Crete</li>\n                            </ul>\n                        </li>\n                         <li>indigo (a blue dye)\n                             <ul>\n                                <li>made from plant leaves from India</li>\n                            </ul>\n                        </li>\n                    </ul>\n\n                    <p><strong>17th-century Europe</strong></p>\n                    <p>dyes made by country people:</p>\n                    <ul>\n                        <li><strong>11</strong> <input type=\"text\" id=\"q11_input\" name=\"q11\"> had two uses\n                            <ul>\n                                <li>jam</li>\n                                <li>blue dye</li>\n                            </ul>\n                        </li>\n                         <li>liquid from cleaning <strong>12</strong> <input type=\"text\" id=\"q12_input\" name=\"q12\"> had two uses\n                            <ul>\n                                <li>making mead</li>\n                                <li>yellow dye</li>\n                            </ul>\n                        </li>\n                    </ul>\n\n                    <p><strong>19th-century Europe</strong></p>\n                     <ul>\n                         <li>progress in study of <strong>13</strong> <input type=\"text\" id=\"q13_input\" name=\"q13\"> led to synthetic dyes</li>\n                    </ul>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "TRUE",
+    "q2": "FALSE",
+    "q3": "TRUE",
+    "q4": "NOT GIVEN",
+    "q5": "FALSE",
+    "q6": "NOT GIVEN",
+    "q7": "FALSE",
+    "q8": "TRUE",
+    "q9": "shellfish",
+    "q10": "insects",
+    "q11": "blackberries",
+    "q12": "beehives",
+    "q13": "chemistry"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/134. P1 - Dyes and fabric dyeing 染料的历史/134. P1 - Dyes and fabric dyeing 染料的历史.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/134. P1 - Dyes and fabric dyeing 染料的历史/134. P1 - Dyes and fabric dyeing 染料的历史.pdf",
+    "ieltsHtml": "IELTS/P1/Dyes and fabric dyeing.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.579Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);
