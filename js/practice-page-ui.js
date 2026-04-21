@@ -6,11 +6,14 @@
     const QUESTION_ID_SUFFIX_PATTERN = /[-_](anchor|nav|target)$/i;
 
     document.addEventListener('DOMContentLoaded', function () {
+        const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__';
+        const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange';
         let settingsOpen = false;
         let notesOpen = false;
         let timerRunning = true;
         let seconds = 0;
         let timer;
+        let localTimerAnchorMs = Date.now();
         const suiteTimerContext = {
             active: false,
             anchorMs: null,
@@ -97,6 +100,57 @@
             return Math.max(0, (effectiveNow - suiteTimerContext.anchorMs) / 1000);
         }
 
+        function getPracticeTimerSnapshot() {
+            const now = Date.now();
+            const suiteElapsedSeconds = getSuiteTimerElapsedSeconds();
+            const elapsedSeconds = suiteElapsedSeconds != null
+                ? Math.max(0, suiteElapsedSeconds)
+                : Math.max(0, Number(seconds) || 0);
+            const durationSeconds = Math.max(0, Math.round(elapsedSeconds));
+            const effectiveEndTimeMs = now;
+            const effectiveStartTimeMs = Math.max(0, effectiveEndTimeMs - (durationSeconds * 1000));
+            return {
+                running: timerRunning,
+                elapsedSeconds,
+                durationSeconds,
+                displaySeconds: suiteElapsedSeconds != null
+                    ? (
+                        suiteTimerContext.mode === 'countdown' && Number.isFinite(suiteTimerContext.limitSeconds)
+                            ? Math.max(0, Math.ceil(suiteTimerContext.limitSeconds - elapsedSeconds))
+                            : Math.floor(elapsedSeconds)
+                    )
+                    : Math.max(0, Math.floor(Number(seconds) || 0)),
+                effectiveStartTimeMs,
+                effectiveEndTimeMs,
+                anchorMs: suiteTimerContext.active && Number.isFinite(suiteTimerContext.anchorMs)
+                    ? suiteTimerContext.anchorMs
+                    : localTimerAnchorMs,
+                mode: suiteTimerContext.active ? (suiteTimerContext.mode || 'elapsed') : 'elapsed',
+                limitSeconds: suiteTimerContext.active ? suiteTimerContext.limitSeconds : null,
+                source: suiteTimerContext.active ? (suiteTimerContext.source || 'suite') : 'local',
+                pausedAtMs: suiteTimerContext.active && Number.isFinite(suiteTimerContext.pausedAtMs)
+                    ? suiteTimerContext.pausedAtMs
+                    : null,
+                pausedOffsetMs: suiteTimerContext.active
+                    ? Math.max(0, Number(suiteTimerContext.pausedOffsetMs) || 0)
+                    : 0
+            };
+        }
+
+        function emitPracticeTimerState(reason = 'state_change') {
+            const snapshot = getPracticeTimerSnapshot();
+            snapshot.reason = reason;
+            window.dispatchEvent(new CustomEvent(PRACTICE_TIMER_EVENT, {
+                detail: snapshot
+            }));
+            return snapshot;
+        }
+
+        window[PRACTICE_TIMER_BRIDGE_KEY] = {
+            eventName: PRACTICE_TIMER_EVENT,
+            getSnapshot: getPracticeTimerSnapshot
+        };
+
         function updateTimerVisualState() {
             if (!timerEl) return;
             timerEl.style.opacity = timerRunning ? '1' : '0.5';
@@ -174,6 +228,7 @@
             }
             renderTimerDisplay();
             updateTimerVisualState();
+            emitPracticeTimerState(reason || 'suite_context');
             return true;
         }
 
@@ -193,6 +248,7 @@
             timerRunning = normalized;
             updateTimerVisualState();
             renderTimerDisplay();
+            emitPracticeTimerState(normalized ? 'resume' : 'pause');
         }
 
         function closeAllPanels() {
@@ -1286,9 +1342,11 @@
             if (!suiteTimerContext.active) {
                 timerRunning = true;
                 seconds = 0;
+                localTimerAnchorMs = Date.now();
             }
             updateTimerVisualState();
             renderTimerDisplay();
+            emitPracticeTimerState('reset');
         }
 
         if (resetBtn) {
@@ -1374,6 +1432,22 @@
                 }
             });
         })();
+
+        Object.assign(window[PRACTICE_TIMER_BRIDGE_KEY], {
+            applySuiteTimerContext,
+            setRunning: setTimerRunning,
+            resetLocalTimer: function resetLocalTimer() {
+                if (suiteTimerContext.active) {
+                    return getPracticeTimerSnapshot();
+                }
+                timerRunning = true;
+                seconds = 0;
+                localTimerAnchorMs = Date.now();
+                updateTimerVisualState();
+                renderTimerDisplay();
+                return emitPracticeTimerState('reset');
+            }
+        });
 
         // --- 无尽模式：监听来自父窗口的倒计时指令 ---
         (function setupEndlessCountdownListener() {

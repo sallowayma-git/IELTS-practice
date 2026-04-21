@@ -770,7 +770,6 @@
         correctAnswers: {},
         interactions: [],
         allQuestionIds: [],
-        startTime: Date.now(),
         isInitialized: false,
         initRequestTimer: null,
         initializationPromise: null,
@@ -817,6 +816,19 @@
                     console.warn(`[PracticeEnhancer] hook ${hookName} 执行失败:`, hookError);
                 }
             });
+        },
+
+        getPracticeTimerSnapshot: function () {
+            return window.__IELTS_PRACTICE_TIMER__.getSnapshot();
+        },
+
+        resolvePracticeTiming: function () {
+            const snapshot = this.getPracticeTimerSnapshot();
+            return {
+                startTime: Math.floor(Number(snapshot.effectiveStartTimeMs)),
+                endTime: Math.floor(Number(snapshot.effectiveEndTimeMs)),
+                duration: Math.max(0, Math.round(Number(snapshot.durationSeconds)))
+            };
         },
 
         activateMixins: function () {
@@ -3267,6 +3279,7 @@
 
             // 构建标准化消息格式
             // 符合Requirements 9.1-9.7
+            const timing = this.resolvePracticeTiming();
             const message = {
                 // Requirement 9.1: 必须包含的基本字段
                 examId: `${this.examId}_${suiteId}`,  // Requirement 9.2: examId包含套题标识
@@ -3291,9 +3304,9 @@
                 // 额外字段
                 suiteId: suiteId,
                 timestamp: Date.now(),
-                startTime: this.startTime,
-                endTime: Date.now(),
-                duration: this.startTime ? Math.round((Date.now() - this.startTime) / 1000) : 0,
+                startTime: timing.startTime,
+                endTime: timing.endTime,
+                duration: timing.duration,
                 pageType: this.detectPageType(),
                 url: window.location.href,
                 title: document.title
@@ -4031,6 +4044,7 @@
             metadataPayload.examTitle = normalizedTitle || resolvedTitleRaw;
             metadataPayload.title = metadataPayload.title || metadataPayload.examTitle;
             const resolvedTitle = metadataPayload.examTitle || metadataPayload.title || derivedTitle;
+            const timing = this.resolvePracticeTiming();
             const answerComparison = includeComparison
                 ? this.generateAnswerComparison()
                 : {};
@@ -4041,9 +4055,9 @@
                 examId: resolvedExamId,
                 derivedExamId: resolvedExamId,
                 originalExamId: this.examId,
-                startTime: this.startTime,
-                endTime: endTime,
-                duration: this.startTime ? Math.round((endTime - this.startTime) / 1000) : 0,
+                startTime: timing.startTime,
+                endTime: timing.endTime,
+                duration: timing.duration,
                 answers: Object.assign({}, this.answers),
                 correctAnswers: Object.assign({}, this.correctAnswers),
                 answerComparison: answerComparison,

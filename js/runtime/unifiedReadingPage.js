@@ -5,6 +5,8 @@
     const INIT_RETRY_MS = 1500;
     const SIMULATION_DRAFT_SYNC_MS = 1200;
     const EXPLANATION_STYLE_ID = 'reading-explanation-style';
+    const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__';
+    const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange';
     const EXPLANATION_SPLIT_KINDS = new Set([
         'single_choice',
         'multi_choice',
@@ -33,8 +35,9 @@
         readOnly: false,
         reviewContext: null,
         suiteReviewMode: false,
-        startTime: Date.now(),
         pageStartTime: Date.now(),
+        pagePausedAtMs: null,
+        pagePausedOffsetMs: 0,
         simulationGlobalAnchorMs: null,
         suiteTimerAnchorMs: null,
         suiteTimerMode: null,
@@ -68,6 +71,48 @@
         resetBtn: null
     };
 
+    function getPracticeTimerBridge() {
+        return global[PRACTICE_TIMER_BRIDGE_KEY];
+    }
+
+    function getPracticeTimerSnapshot() {
+        return getPracticeTimerBridge().getSnapshot();
+    }
+
+    function getPageElapsedSeconds() {
+        const referenceNow = Number.isFinite(state.pagePausedAtMs)
+            ? state.pagePausedAtMs
+            : Date.now();
+        return Math.max(
+            0,
+            Math.round((referenceNow - state.pageStartTime - state.pagePausedOffsetMs) / 1000)
+        );
+    }
+
+    function syncPagePauseState(isRunning) {
+        const running = isRunning !== false;
+        const now = Date.now();
+        if (!running) {
+            if (!Number.isFinite(state.pagePausedAtMs)) {
+                state.pagePausedAtMs = now;
+            }
+            return;
+        }
+        if (Number.isFinite(state.pagePausedAtMs)) {
+            state.pagePausedOffsetMs += Math.max(0, now - state.pagePausedAtMs);
+            state.pagePausedAtMs = null;
+        }
+    }
+
+    function resolvePracticeTiming(minDurationSeconds = 0) {
+        const snapshot = getPracticeTimerSnapshot();
+        return {
+            duration: Math.max(minDurationSeconds, Math.round(Number(snapshot.durationSeconds))),
+            startTimeMs: Math.floor(Number(snapshot.effectiveStartTimeMs)),
+            endTimeMs: Math.floor(Number(snapshot.effectiveEndTimeMs))
+        };
+    }
+
     function decodeParam(value) {
         if (!value) return '';
         try {
@@ -89,7 +134,6 @@
         if (Number.isFinite(suiteTimerAnchorMs) && suiteTimerAnchorMs > 0) {
             state.suiteTimerAnchorMs = Math.floor(suiteTimerAnchorMs);
             state.simulationGlobalAnchorMs = Math.floor(suiteTimerAnchorMs);
-            state.startTime = Math.floor(suiteTimerAnchorMs);
         }
         const suiteTimerMode = decodeParam(params.get('suiteTimerMode')).trim().toLowerCase();
         if (suiteTimerMode === 'countdown' || suiteTimerMode === 'elapsed') {
@@ -1876,7 +1920,7 @@
         persistSimulationDraftMirror(mirroredDraft);
         postMessage('SIMULATION_DRAFT_SYNC', {
             draft: mirroredDraft,
-            elapsed: Math.max(0, Math.round((Date.now() - state.pageStartTime) / 1000))
+            elapsed: getPageElapsedSeconds()
         });
     }
 
@@ -2216,7 +2260,7 @@
             direction: direction === 'prev' ? 'prev' : 'next',
             draft: collectCurrentDraft(),
             resultSnapshot: buildResults(),
-            elapsed: Math.max(0, Math.round((Date.now() - state.pageStartTime) / 1000))
+            elapsed: getPageElapsedSeconds()
         });
     }
     async function handleSubmit() {
@@ -2236,10 +2280,11 @@
         await renderExplanations();
         updateNavStatuses(results);
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
+        const timing = resolvePracticeTiming(1);
         postMessage(messageType, Object.assign({
-            duration: Math.max(1, Math.round((Date.now() - state.startTime) / 1000)),
-            startTime: new Date(state.startTime).toISOString(),
-            endTime: new Date().toISOString(),
+            duration: timing.duration,
+            startTime: new Date(timing.startTimeMs).toISOString(),
+            endTime: new Date(timing.endTimeMs).toISOString(),
             metadata: {
                 examId: state.examId,
                 examTitle: state.dataset?.meta?.title || '',
@@ -2345,7 +2390,6 @@
             if (Number.isFinite(initTimerAnchorMs) && initTimerAnchorMs > 0) {
                 state.suiteTimerAnchorMs = Math.floor(initTimerAnchorMs);
                 state.simulationGlobalAnchorMs = Math.floor(initTimerAnchorMs);
-                state.startTime = Math.floor(initTimerAnchorMs);
             }
             if (typeof data.suiteTimerMode === 'string') {
                 const normalizedTimerMode = data.suiteTimerMode.trim().toLowerCase();
@@ -2449,7 +2493,6 @@
             if (Number.isFinite(simulationTimerAnchorMs)) {
                 state.simulationGlobalAnchorMs = simulationTimerAnchorMs;
                 state.suiteTimerAnchorMs = simulationTimerAnchorMs;
-                state.startTime = simulationTimerAnchorMs;
             }
             if (typeof data.suiteTimerMode === 'string') {
                 const normalizedTimerMode = data.suiteTimerMode.trim().toLowerCase();
@@ -2462,9 +2505,8 @@
             }
             const elapsedSeconds = Number.isFinite(Number(data.elapsed)) ? Number(data.elapsed) : 0;
             state.pageStartTime = Date.now() - (elapsedSeconds * 1000);
-            state.startTime = Number.isFinite(state.simulationGlobalAnchorMs)
-                ? state.simulationGlobalAnchorMs
-                : state.pageStartTime;
+            state.pagePausedAtMs = null;
+            state.pagePausedOffsetMs = 0;
             syncPrimaryActionButtons();
             const draftFromParent = data && data.draft && typeof data.draft === 'object'
                 ? data.draft
@@ -2496,6 +2538,18 @@
         global.addEventListener('message', handleIncoming);
     }
 
+    function attachPracticeTimerBridge() {
+        global.addEventListener(PRACTICE_TIMER_EVENT, (event) => {
+            const detail = event && event.detail && typeof event.detail === 'object'
+                ? event.detail
+                : null;
+            if (!detail || typeof detail.running !== 'boolean') {
+                return;
+            }
+            syncPagePauseState(detail.running);
+        });
+    }
+
     async function bootstrap() {
         parseQuery();
         captureDom();
@@ -2525,6 +2579,7 @@
 
         attachActionListeners();
         attachMessageBridge();
+        attachPracticeTimerBridge();
         syncSuiteModeState();
         updateNavStatuses();
         refreshSimulationDraftSyncLifecycle();
