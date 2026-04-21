@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IELTS 阅读练习</title>
+    <style>
+        :root {
+            --line: #d7dde5;
+            --panel: #ffffff;
+            --panel-alt: #edf2f9;
+            --text: #1f2937;
+            --muted: #64748b;
+            --accent: #2563eb;
+            --success: #15803d;
+            --danger: #b91c1c;
+            --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            font-size: 16px;
+        }
+
+        body {
+            font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+            background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            padding-bottom: 72px;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 22px;
+            background: rgba(255, 255, 255, 0.94);
+            border-bottom: 1px solid var(--line);
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+
+        .header h1 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            line-height: 1.4;
+        }
+
+        .header p {
+            font-size: 0.92rem;
+            color: var(--muted);
+        }
+
+        .header-content {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        #timer,
+        .header-btn {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--panel);
+            padding: 8px 12px;
+            font-size: 0.92rem;
+            color: var(--text);
+        }
+
+        .header-btn {
+            cursor: pointer;
+        }
+
+        .shell {
+            display: flex;
+            height: calc(100vh - 67px - 72px);
+            width: 100%;
+        }
+
+        .pane {
+            overflow: auto;
+            background: var(--panel);
+            padding: 22px;
+        }
+
+        #left {
+            width: 50%;
+            min-width: 320px;
+        }
+
+        #divider {
+            flex: 0 0 8px;
+            background: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
+            border-left: 1px solid var(--line);
+            border-right: 1px solid var(--line);
+            cursor: ew-resize;
+        }
+
+        #right {
+            flex: 1;
+            min-width: 320px;
+            background: var(--panel-alt);
+            padding: 16px 20px;
+        }
+
+        #left p,
+        #right p {
+            line-height: 1.7;
+            margin: 0 0 14px;
+        }
+
+        .unified-group {
+            margin-bottom: 18px;
+        }
+
+        .group {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            padding: 24px 32px;
+            margin-bottom: 24px;
+        }
+
+        .question-item,
+        .match-question-item,
+        .choice-item {
+            margin-bottom: 12px;
+        }
+
+        .paragraph-dropzone,
+        .match-dropzone {
+            min-height: 40px;
+            border: 2px dashed #93c5fd;
+            border-radius: 10px;
+            background: #eff6ff;
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        .paragraph-dropzone.drag-over,
+        .match-dropzone.drag-over {
+            border-color: var(--accent);
+            background: #dbeafe;
+        }
+
+        .paragraph-dropzone.dropzone-filled,
+        .match-dropzone.dropzone-filled {
+            border-style: solid;
+        }
+
+        .paragraph-label {
+            font-size: 0.9rem;
+            color: var(--muted);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .pool-items,
+        .dropped-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .pool-items {
+            min-height: 40px;
+        }
+
+        .pool-items.drag-over {
+            border-color: var(--accent);
+            background: rgba(37, 99, 235, 0.08);
+        }
+
+        .dropped-items:empty::after {
+            content: "拖到这里";
+            font-size: 0.82rem;
+            color: #7b8a98;
+            letter-spacing: 0.02em;
+        }
+
+        .drag-item {
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            background: #eff6ff;
+            padding: 6px 10px;
+            cursor: grab;
+            font-size: 0.9rem;
+            user-select: none;
+        }
+
+        .drag-item.dragging {
+            opacity: 0.55;
+        }
+
+        .drag-item--assigned {
+            border-style: solid;
+        }
+
+        .drag-item[draggable="false"] {
+            cursor: pointer;
+            border-style: solid;
+        }
+
+        .practice-nav {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 18px;
+            background: rgba(255, 255, 255, 0.96);
+            border-top: 1px solid var(--line);
+            box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.06);
+            z-index: 2000;
+        }
+
+        .practice-nav .title {
+            font-weight: 700;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .practice-nav .questions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .q-item,
+        .practice-nav .controls button {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--panel);
+            padding: 6px 12px;
+            font-size: 0.9rem;
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        .q-item:hover,
+        .practice-nav .controls button:hover {
+            background: #f1f5f9;
+        }
+
+        .q-item.active {
+            border-color: var(--accent);
+            background: #eff6ff;
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .q-item.answered {
+            background: #dbeafe;
+            border-color: #93c5fd;
+        }
+
+        .q-item.correct {
+            border-color: var(--success);
+            background: #dcfce7;
+            color: var(--success);
+        }
+
+        .q-item.incorrect {
+            border-color: var(--danger);
+            background: #fee2e2;
+            color: var(--danger);
+        }
+
+        .practice-nav .controls {
+            margin-left: auto;
+            display: flex;
+            gap: 8px;
+        }
+
+        .submit-btn {
+            background: var(--accent) !important;
+            color: white !important;
+            border-color: var(--accent) !important;
+            font-weight: 600;
+        }
+
+        #results {
+            display: none;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            padding: 18px;
+            margin-top: 18px;
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            font-size: 0.92rem;
+        }
+
+        .results-table th,
+        .results-table td {
+            border: 1px solid var(--line);
+            padding: 8px 10px;
+            text-align: center;
+        }
+
+        .result-correct {
+            color: var(--success);
+            font-weight: 700;
+        }
+
+        .result-incorrect {
+            color: var(--danger);
+            font-weight: 700;
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.12);
+            z-index: 800;
+        }
+
+        #settings-panel,
+        #notes-panel,
+        #selbar {
+            display: none;
+        }
+
+        @media (max-width: 980px) {
+            body {
+                overflow: auto;
+                padding-bottom: 112px;
+            }
+
+            .shell {
+                display: block;
+                height: auto;
+            }
+
+            #left,
+            #right {
+                width: 100%;
+                min-width: 0;
+            }
+
+            #divider {
+                display: none;
+            }
+
+            .practice-nav {
+                flex-wrap: wrap;
+                align-items: flex-start;
+            }
+
+            .practice-nav .controls {
+                margin-left: 0;
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+
+        /* ---------------- Phase 2 Aesthetics ---------------- */
+        #timer {
+            cursor: pointer;
+            transition: opacity 0.2s ease, background 0.2s ease;
+        }
+
+        #timer:hover {
+            opacity: 0.85;
+        }
+
+        #timer.paused {
+            opacity: 0.5;
+        }
+
+        #settings-btn {
+            font-size: 1.1rem;
+            padding: 6px 12px;
+            font-weight: 700;
+        }
+
+        /* ---------------- IELTS Aesthetic Tweaks ---------------- */
+        /* Flattening corners */
+        .group,
+        .unified-group,
+        #results {
+            border-radius: 4px;
+        }
+
+        .paragraph-dropzone,
+        .match-dropzone {
+            border-radius: 4px;
+        }
+
+        .drag-item {
+            border-radius: 4px;
+        }
+
+        #timer,
+        .header-btn,
+        .q-item,
+        .practice-nav .controls button {
+            border-radius: 4px;
+        }
+
+        /* Font size utility classes */
+        html.font-normal {
+            font-size: 16px;
+        }
+
+        html.font-large {
+            font-size: 18px;
+        }
+
+        html.font-xlarge {
+            font-size: 20px;
+        }
+
+        /* Highlight visual */
+        .hl {
+            background-color: #72361c;
+            color: #fff;
+        }
+
+        /* Note highlight */
+        .hl[data-hl-type="note"] {
+            background-color: #0369d9;
+            color: #fff;
+        }
+
+        /* Dark Mode variables */
+        body.dark-mode {
+            --panel: #1e293b;
+            --panel-alt: #0f172a;
+            --text: #f8fafc;
+            --line: #334155;
+            background: #020617;
+        }
+
+        body.dark-mode .header {
+            background: rgba(30, 41, 59, 0.94);
+            border-bottom: 1px solid var(--line);
+        }
+
+        body.dark-mode .group,
+        body.dark-mode .unified-group {
+            background: var(--panel);
+        }
+
+        body.dark-mode .hl {
+            background-color: #72361c;
+            color: #fff;
+        }
+
+        body.dark-mode .hl[data-hl-type="note"] {
+            background-color: #0369d9;
+            color: #fff;
+        }
+
+        body.dark-mode .paragraph-dropzone,
+        body.dark-mode .match-dropzone {
+            background: #1e293b;
+            border-color: #475569;
+        }
+
+        body.dark-mode .drag-item {
+            background: #334155;
+            border-color: #64748b;
+            color: #f8fafc;
+        }
+
+        body.dark-mode #timer,
+        body.dark-mode .header-btn {
+            background: var(--panel);
+            color: #f8fafc;
+        }
+
+        /* Phase 3 Nav Dark Mode */
+        body.dark-mode .practice-nav {
+            background: var(--panel);
+            border-color: var(--line);
+        }
+
+        body.dark-mode .q-item,
+        body.dark-mode .practice-nav .controls button {
+            background: var(--panel-alt);
+            color: #f8fafc;
+            border-color: var(--line);
+        }
+
+        body.dark-mode .q-item:hover,
+        body.dark-mode .practice-nav .controls button:hover {
+            background: #334155;
+        }
+
+        body.dark-mode .q-item.active {
+            border-color: var(--accent);
+            background: #1e40af;
+            color: white;
+        }
+
+        body.dark-mode .q-item.answered {
+            background: #1e3a8a;
+            border-color: #3b82f6;
+            color: #ffffff;
+        }
+
+        body.dark-mode .q-item.correct {
+            background: #064e3b;
+            border-color: var(--success);
+            color: #dcfce7;
+        }
+
+        body.dark-mode .q-item.incorrect {
+            background: #7f1d1d;
+            border-color: var(--danger);
+            color: #fee2e2;
+        }
+
+        body.dark-mode .submit-btn {
+            background: var(--accent) !important;
+        }
+
+        /* Selection bar visual */
+        #selbar {
+            position: absolute;
+            z-index: 1000;
+            background: #1e293b;
+            color: white;
+            padding: 4px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+            display: none;
+            /* hidden by default */
+            gap: 4px;
+        }
+
+        #selbar button {
+            background: transparent;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+
+        #selbar button:hover {
+            background: #334155;
+        }
+
+        /* Settings Panel floating */
+        #settings-panel {
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            padding: 16px;
+            width: 260px;
+            z-index: 1000;
+            display: none;
+            /* toggled by JS */
+        }
+
+        #settings-panel .settings-section {
+            margin-bottom: 16px;
+        }
+
+        #settings-panel .settings-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .settings-title {
+            font-size: 0.9rem;
+            color: var(--muted);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .settings-options {
+            display: flex;
+            gap: 8px;
+        }
+
+        .settings-option {
+            flex: 1;
+            padding: 8px;
+            background: var(--panel-alt);
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            cursor: pointer;
+            color: var(--text);
+            text-align: center;
+        }
+
+        .settings-option.active {
+            border-color: var(--accent);
+            background: var(--accent);
+            color: white;
+        }
+
+        /* Notes panel basic styles */
+        #notes-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: 300px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            z-index: 1001;
+            display: none;
+            /* toggled by JS */
+            flex-direction: column;
+        }
+
+        #notes-panel header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--line);
+            font-weight: 600;
+        }
+
+        #notes-panel textarea {
+            flex: 1;
+            padding: 16px;
+            border: none;
+            resize: none;
+            background: transparent;
+            color: var(--text);
+            font-family: inherit;
+        }
+
+        #notes-panel textarea:focus {
+            outline: none;
+        }
+
+        /* ---------------- Exam Option Layouts ---------------- */
+        .choice-item label,
+        .checkbox-options label,
+        .options-list label,
+        .multiple-choice-options label,
+        .matching-options label,
+        .mcq-group label,
+        .radio-options label,
+        .radio-group label,
+        .multiple-choice label,
+        .true-false-ng label {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            line-height: 1.5;
+        }
+
+        .choice-item label input[type="checkbox"],
+        .checkbox-options label input[type="checkbox"],
+        .options-list label input[type="checkbox"],
+        .choice-item label input[type="radio"],
+        .multiple-choice-options label input[type="radio"],
+        .matching-options label input[type="radio"],
+        .mcq-group label input[type="radio"],
+        .radio-options label input[type="radio"],
+        .radio-group label input[type="radio"],
+        .multiple-choice label input[type="radio"],
+        .true-false-ng label input[type="radio"] {
+            margin-top: 4px;
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+
+        /* ---------------- Table Completion Layout ---------------- */
+        .table-section {
+            margin-top: 12px;
+            overflow-x: auto;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--bg);
+            padding: 10px 12px;
+        }
+
+        .table-section table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .table-section thead th {
+            border: 1px solid var(--line);
+            background: var(--panel-alt);
+            font-weight: 700;
+            text-align: center;
+            padding: 10px 8px;
+        }
+
+        .table-section tbody td {
+            border: 1px solid var(--line);
+            padding: 10px 10px;
+            vertical-align: top;
+            line-height: 1.45;
+        }
+
+        .table-section thead th:first-child,
+        .table-section tbody td:first-child {
+            width: 16%;
+        }
+
+        .table-section thead th:nth-child(2),
+        .table-section tbody td:nth-child(2) {
+            width: 20%;
+        }
+
+        .table-section thead th:nth-child(3),
+        .table-section tbody td:nth-child(3) {
+            width: 64%;
+        }
+
+        .table-section ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .table-section li + li {
+            margin-top: 6px;
+        }
+
+        .table-section input.blank {
+            display: inline-block;
+            min-width: 120px;
+            max-width: 180px;
+            width: 40%;
+            padding: 2px 6px;
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            background: var(--panel);
+            color: var(--text);
+            vertical-align: middle;
+        }
+
+        @media (max-width: 900px) {
+            .table-section input.blank {
+                width: 100%;
+                max-width: none;
+                margin-top: 4px;
+            }
+        }
+
+        /* ---------------- Drop Targets ---------------- */
+        .drop-target-summary {
+            display: inline-flex;
+            min-width: 80px;
+            min-height: 30px;
+            border-bottom: 2px solid var(--muted);
+            margin: 0 4px;
+            vertical-align: bottom;
+            align-items: center;
+            justify-content: center;
+            padding: 0 8px;
+            background: rgba(0, 0, 0, 0.02);
+            border-radius: 4px 4px 0 0;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .drop-target-summary.drag-over {
+            border-bottom-color: var(--accent);
+            background: #dbeafe;
+        }
+
+        .drop-target-summary.dropzone-filled {
+            border-bottom-color: var(--success);
+            background: #dcfce7;
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .drop-target-summary .drag-item {
+            border: none;
+            background: transparent;
+            padding: 0;
+            margin: 0;
+            cursor: grab;
+            color: inherit;
+            font-weight: inherit;
+        }
+    </style>
+</head>
+
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1 id="exam-title">IELTS 阅读练习</h1>
+            <p id="exam-subtitle">统一阅读页</p>
+        </div>
+        <div class="header-controls">
+            <div id="timer" title="点击启停">00:00</div>
+            <button class="header-btn" id="settings-btn" title="Settings" type="button">☰</button>
+            <button class="header-btn" id="note-btn" type="button">Note</button>
+        </div>
+    </header>
+
+    <div id="settings-panel">
+        <div class="settings-section">
+            <h3 class="settings-title">字号调整</h3>
+            <div class="settings-options">
+                <button class="settings-option active" data-size="normal">A</button>
+                <button class="settings-option" data-size="large" style="font-size: 1.1rem;">A</button>
+                <button class="settings-option" data-size="xlarge" style="font-size: 1.25rem;">A</button>
+            </div>
+        </div>
+        <div class="settings-section">
+            <h3 class="settings-title">背景颜色</h3>
+            <div class="settings-options">
+                <button class="settings-option active" data-mode="light">浅色</button>
+                <button class="settings-option" data-mode="dark">深色</button>
+            </div>
+        </div>
+        <div class="settings-section" id="suite-flow-mode-section" style="display: none;">
+            <h3 class="settings-title">套题流程模式</h3>
+            <div class="settings-options">
+                <button class="settings-option" data-suite-flow-mode="auto">自动跳转下一篇</button>
+                <button class="settings-option" data-suite-flow-mode="manual">提交后停留回看</button>
+            </div>
+        </div>
+    </div>
+    <div id="notes-panel">
+        <header>
+            <h3>Notes</h3><button id="close-note" type="button">Close</button>
+        </header><textarea></textarea>
+    </div>
+    <div class="overlay"></div>
+
+    <div class="shell">
+        <section class="pane" id="left"></section>
+        <div id="divider"></div>
+        <section class="pane" id="right">
+            <div id="question-groups"></div>
+            <div id="results"></div>
+        </section>
+    </div>
+
+    <div id="selbar">
+        <button type="button" id="btnHL" data-role="highlight">Highlight</button>
+        <button type="button" id="btnUH" data-role="remove-highlight">Remove</button>
+        <button type="button" id="btnNote" data-role="note">Note</button>
+    </div>
+
+    <div class="practice-nav">
+        <div class="title">题目导航</div>
+        <div class="questions" id="question-nav"></div>
+        <div class="controls">
+            <button id="exit-btn" type="button" title="退出" style="margin-right: 8px; display: none;">Exit</button>
+            <button id="reset-btn" type="button">Reset</button>
+            <button id="submit-btn" class="primary" type="button">Submit</button>
+        </div>
+    </div>
+
+    <script src="../../../js/runtime/readingExamRegistry.js"></script>
+    <script src="../../../js/runtime/readingExplanationRegistry.js"></script>
+    <script src="./manifest.js"></script>
+    <script src="../../../js/utils/answerMatchCore.js"></script>
+    <script src="../../../js/practice-page-ui.js"></script>
+    <script src="../../../js/runtime/unifiedReadingPage.js"></script>
+</body>
+
+</html>

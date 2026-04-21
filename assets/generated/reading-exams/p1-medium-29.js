@@ -1,0 +1,114 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-medium-29", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-medium-29",
+  "meta": {
+    "title": "The extinction of the cave bear 洞熊的灭绝",
+    "category": "P1",
+    "frequency": "medium",
+    "pdfFilename": "124. P1 - The extinction of the cave bear洞熊的灭绝【次】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】/",
+    "legacyFilename": "124. P1 - The extinction of the cave bear 洞熊的灭绝【次】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>The extinction of the cave bear</h3>\n            \n            <p>Hervé Bocherens, an evolutionary biologist at the University of Tübingen, Germany, says his colleagues find his research methods a little ‘crude'. He dissolves 30,000-year-old animal bones in hydrochloric acid, which is strong enough to burn through metal, soaks the bone solution in lye, cooks it at about 200 degrees Fahrenheit and freeze-dries it, until what's left is a speck of powder weighing less than one one-hundredth of an ounce. The method may be harsh, but the yield is precious – the biography of a cave bear as told through its chemical components. Bocherens is at the forefront of research on the bear, a European species that died out 25,000 years ago. People have been excavating cave bear remains for hundreds of years— in the Middle Ages, the massive skulls were attributed to dragons — but the past decade has seen a burst of discoveries about how the bears lived and why they became extinct. An abundance of bones has been found from Spain to Romania in caves where the animals once hibernated. ‘Caves are good places to preserve bones, and cave bears had the good sense to die there,' Bocherens says.</p>\n            <p>Along with mammoths, lions and woolly rhinos, cave bears (Ursus spelaeus) were once among Europe's most impressive creatures. Males weighed up to 1,500 pounds, 50 per cent more than the largest modern grizzly bears. Cave bears had wider heads than today's bears, and powerful shoulders and forelimbs. But the relationship between humans and cave bears has been mysterious. Were humans prey for the bears, or predators? Were bears the object of worship or fear?</p>\n            <p>Initially cave bears shared the continent of Europe, more than 100,000 years ago, with Neanderthals, a primitive species of humans. Modern humans arrived in Europe about 40,000 years ago, and were soon aware of the bears. They painted images of the animals on cave walls, and carved their likeness in fragments of mammoth tusk. The walls of France's Chauvet cave are painted with lions, hyenas and bears; dating back 32,000 years, these are perhaps the oldest paintings in the world. The painters weren't the cave's only occupants: the floor is covered with 150 cave bear skeletons, and its soft clay still holds paw prints. Most dramatically, a cave bear skull was perched on a stone slab in the center of one chamber, placed deliberately by some long-gone cave inhabitant. ‘There's no way to tell if it was just curiosity that made someone put a skull on the rock, or if it had religious significance,' says Bocherens.</p>\n            <p>Another discovery, hundreds of miles to the east of Chauvet, would shed light on the relationship between cave bears and humans. The Swabian Jura is a limestone plateau in southwestern Germany that is riddled with caves. A steel gate guards the Hohle Fels cave from vandals and curiosity-seekers. Floodlights in the cave's main chamber illuminate the ceiling, vaulted like a cathedral above 5,000 square feet of floor space. Long ago, as shown by the bones and tools that archaeologists have found, cave bears and human beings sought shelter here from winter weather.</p>\n            <p>In 2000, University of Tübingen paleobiologist Susanne Münzel unearthed a bear vertebra with a tiny triangular piece of flint embedded in it. The flint was likely a broken spear point, hard evidence of a successful bear hunt 29,000 years ago.</p>\n            <p>Münzel also found bear bones that had clearly been scraped by stone tools. Evidence for bears being a food source for early humans was shown by cut marks on skulls and leg bones where the flesh had been cut away. Many of the bones were from baby bears, perhaps caught while hibernating.</p>\n            <p>Cave bears disappeared not long after humans spread throughout Europe, and one theory is that hunting led to the bears' extinction. Hervé Bocherens' test tubes may hold the clues. Running his white powder through a mass spectrometer, he identifies different isotopes, or chemical forms, of elements such as carbon and nitrogen that reflect what the bears were eating and how quickly they grew. After studying hundreds of bones from dozens of sites in Europe, Bocherens has found that cave bears ate mainly plants.</p>\n            <p>This would have made bears particularly vulnerable to the last Ice Age, which began around 30,000 years ago. This Ice Age shortened or eliminated growing seasons, and altered the distributions of plant species across Europe. Cave bears began to move from their old territories, according to a DNA analysis of teeth found near the Danube River. The cave bear population there was relatively stable, with the same genetic patterns showing up generation after generation. But about 28,000 years ago, newcomers with different DNA patterns arrived — a possible sign of hungry bears suddenly on the move.</p>\n            <p>But changes in the climate can't be solely to blame for the bears' extinction. According to the latest study, by Erik Trinkaus and his colleagues at the Max Planck Institute, cave bear populations began a long, slow decline 50,000 years ago — well before the climate began to change. The new study supports a different explanation for the cave bears' demise. As Neanderthals, and then a growing population of modern humans moved into the caves of Europe, cave bears had fewer safe places to hibernate. An acute housing shortage may have been the final blow for these magnificent beasts.</p>\n\n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-anchor\">\n                <h4>Questions 1–6</h4>\n                <p>Do the following statements agree with the information in Reading Passage 1?</p>\n                <p>In boxes 1–6 on your answer sheet, write:</p>\n                <ul>\n                    <li><strong>TRUE</strong> if the statement agrees with the information</li>\n                    <li><strong>FALSE</strong> if the statement contradicts the information</li>\n                    <li><strong>NOT GIVEN</strong> if there is no information about this</li>\n                </ul>\n                \n                <div class=\"question-item\">\n                    <p><strong>1</strong> Bocherens' findings on cave bears involve measuring the length of complete bones.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q1\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q1\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>2</strong> Bocherens was the first person to conduct analytical research on cave bears in a laboratory.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q2\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q2\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>3</strong> Cave bears have been extinct for 25,000 years.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q3\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q3\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>4</strong> At one time, people thought the excavated remains of bears were those of dragons.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q4\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q4\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>5</strong> Modern grizzly bears are similar in size to cave bears.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q5\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q5\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>6</strong> Neanderthals understood cave bear behaviour better than modern humans did.</p>\n                    <div class=\"radio-options\">\n                        <label><input name=\"q6\" type=\"radio\" value=\"TRUE\"> TRUE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"FALSE\"> FALSE</label>\n                        <label><input name=\"q6\" type=\"radio\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q7",
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q7-8-9-10-11-12-13-anchor\">\n                <h4>Questions 7–13</h4>\n                <p>Complete the notes below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                \n                <div class=\"notes-completion\">\n                    <h4>Research into the existence and disappearance of cave bears</h4>\n                    <p><strong>Evidence from the Chauvet cave in France</strong></p>\n                    <ul>\n                        <li>Paintings on the walls include bears.</li>\n                        <li>Over a hundred <strong>7</strong> <input type=\"text\" id=\"q7_input\" name=\"q7\"> of cave bears, together with paw prints, were found on the floor of the cave.</li>\n                        <li>The <strong>8</strong> <input type=\"text\" id=\"q8_input\" name=\"q8\"> of a cave bear was found in a prominent position in the cave.</li>\n                    </ul>\n                    <p><strong>Evidence from the Hohle Fels cave in the Swabian Jura, Germany</strong></p>\n                    <ul>\n                         <li>Bones and tools found in the cave indicate it provided <strong>9</strong> <input type=\"text\" id=\"q9_input\" name=\"q9\"> for both bears and humans.</li>\n                    </ul>\n                    <p><strong>Susanne Münzel's findings</strong></p>\n                     <ul>\n                        <li>A spear point in the vertebra of a bear indicates that a hunt had taken place.</li>\n                        <li>Marks on the bones of bears indicate the removal of flesh.</li>\n                    </ul>\n                    <p><strong>Hervé Bocherens' findings</strong></p>\n                    <ul>\n                         <li>Isotopes from the bones indicate that <strong>10</strong> <input type=\"text\" id=\"q10_input\" name=\"q10\"> were the cave bears' preferred food.</li>\n                    </ul>\n                    <p><strong>Factors leading to the disappearance of the cave bear</strong></p>\n                    <ul>\n                        <li><strong>Climate change</strong>\n                            <ul>\n                                <li>The Ice Age changed vegetation growth in <strong>11</strong> <input type=\"text\" id=\"q11_input\" name=\"q11\">.</li>\n                                <li>Bears were forced to migrate.</li>\n                                <li>Support for the above explanation comes from a study of changes in the DNA in the <strong>12</strong> <input type=\"text\" id=\"q12_input\" name=\"q12\"> of the population of cave bears near the Danube River at this time.</li>\n                            </ul>\n                        </li>\n                        <li><strong>Human population expansion</strong>\n                            <ul>\n                                <li>Competition from Neanderthals and modern humans for caves may have reduced opportunities for cave bears to <strong>13</strong> <input type=\"text\" id=\"q13_input\" name=\"q13\">.</li>\n                            </ul>\n                        </li>\n                    </ul>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "FALSE",
+    "q2": "NOT GIVEN",
+    "q3": "TRUE",
+    "q4": "TRUE",
+    "q5": "FALSE",
+    "q6": "NOT GIVEN",
+    "q7": "skeletons",
+    "q8": "skull",
+    "q9": "shelter",
+    "q10": "plants",
+    "q11": "seasons",
+    "q12": "teeth",
+    "q13": "hibernate"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/124. P1 - The extinction of the cave bear 洞熊的灭绝【次】/124. P1 - The extinction of the cave bear洞熊的灭绝【次】.pdf",
+    "ieltsHtml": "IELTS/P1/The extinction of the cave bear.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.557Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+});
+})(typeof window !== "undefined" ? window : globalThis);

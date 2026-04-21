@@ -34,6 +34,7 @@ class ExamSystemApp {
                 browseFilter: { category: 'all', type: 'all' },
                 pendingBrowseFilter: null,
                 legacyBrowseType: 'all',
+                customSuiteDraft: null,
                 currentVirtualScroller: null,
                 loading: false,
                 loadingMessage: ''
@@ -69,6 +70,7 @@ class ExamSystemApp {
             mixins.bootstrap || {},
             mixins.lifecycle || {},
             mixins.navigation || {},
+            mixins.readingLaunch || {},
             mixins.examSession || {},
             mixins.suitePractice || {},
             mixins.fallback || {});
@@ -84,31 +86,69 @@ class ExamSystemApp {
 // 新增修复3E：在js/app.js的DOMContentLoaded初始化中去除顶层await
 // 应用启动
 document.addEventListener('DOMContentLoaded', () => {
-    try {
-        const mixinGlue = window.ExamSystemAppMixins && window.ExamSystemAppMixins.__applyToApp;
-        if (typeof mixinGlue === 'function') {
-            mixinGlue();
-        }
-        (function(){ try { window.app = new ExamSystemApp(); window.app.initialize(); } catch(e) { console.error('[App] 初始化失败:', e); } })();
-    } catch (error) {
-        console.error('Failed to start application:', error);
-        if (window.handleError) {
-            window.handleError(error, 'Application Startup');
-        } else {
-            // Fallback: non-blocking user message if error handler is unavailable
-            try {
-                const container = document.getElementById('message-container');
-                if (container) {
-                    const msg = document.createElement('div');
-                    msg.className = 'message error';
-                    msg.textContent = '系统启动失败，请检查控制台日志。';
-                    container.appendChild(msg);
-                }
-            } catch (_) {
-                // no-op
+    const existingPracticeConfig = (window.practiceConfig && typeof window.practiceConfig === 'object')
+        ? window.practiceConfig
+        : {};
+    const existingSuiteConfig = (existingPracticeConfig.suite && typeof existingPracticeConfig.suite === 'object')
+        ? existingPracticeConfig.suite
+        : {};
+    window.practiceConfig = Object.assign({}, existingPracticeConfig, {
+        suite: Object.assign({
+            autoAdvanceAfterSubmit: true,
+            flowMode: 'classic'
+        }, existingSuiteConfig)
+    });
+
+    const signalAppCoreReady = () => {
+        try {
+            window.dispatchEvent(new CustomEvent('appCoreReady'));
+        } catch (_) { }
+    };
+
+    const startApp = () => {
+        try {
+            const mixinGlue = window.ExamSystemAppMixins && window.ExamSystemAppMixins.__applyToApp;
+            if (typeof mixinGlue === 'function') {
+                mixinGlue();
             }
+            (function () {
+                try {
+                    window.app = new ExamSystemApp();
+                    Promise.resolve(window.app.initialize())
+                        .catch((error) => {
+                            console.error('[App] 初始化失败:', error);
+                        })
+                        .finally(() => {
+                            signalAppCoreReady();
+                        });
+                } catch (e) {
+                    console.error('[App] 初始化失败:', e);
+                    signalAppCoreReady();
+                }
+            })();
+        } catch (error) {
+            console.error('Failed to start application:', error);
+            if (window.handleError) {
+                window.handleError(error, 'Application Startup');
+            } else {
+                // Fallback: non-blocking user message if error handler is unavailable
+                try {
+                    const container = document.getElementById('message-container');
+                    if (container) {
+                        const msg = document.createElement('div');
+                        msg.className = 'message error';
+                        msg.textContent = '系统启动失败，请检查控制台日志。';
+                        container.appendChild(msg);
+                    }
+                } catch (_) {
+                    // no-op
+                }
+            }
+            signalAppCoreReady();
         }
-    }
+    };
+
+    startApp();
 });
 
 // 页面卸载时清理
@@ -117,4 +157,3 @@ window.addEventListener('beforeunload', () => {
         window.app.destroy();
     }
 });
-

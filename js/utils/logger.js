@@ -3,264 +3,277 @@
         return;
     }
 
+    // Prevent double initialization
     if (global.AppLogger) {
         return;
     }
 
-    const nativeConsole = global.console = global.console || {};
+    const STORAGE_KEY = 'exam_system_log_config_v2';
 
-    function bindConsoleMethod(method) {
-        if (typeof nativeConsole[method] === 'function') {
-            return nativeConsole[method].bind(nativeConsole);
+    // Default configuration
+    const DEFAULT_CONFIG = {
+        level: 'info',
+        categories: {
+            'Storage': 'error',
+            'DataConsistencyManager': 'warn', // Reduced noise
+            'PerformanceOptimizer': 'warn',
+            'System': 'info',
+            'PracticeRecorder': 'info',
+            'ScoreStorage': 'info'
         }
-        return function noop() {};
-    }
+    };
+
+    // Log levels with numeric values for comparison
+    const LOG_LEVELS = {
+        error: 0,
+        warn: 1,
+        info: 2,
+        debug: 3,
+        trace: 4
+    };
 
     class AppLogger {
-        constructor(externalConfig = {}) {
-            this.nativeMethods = {
-                log: bindConsoleMethod('log'),
-                info: bindConsoleMethod('info'),
-                warn: bindConsoleMethod('warn'),
-                error: bindConsoleMethod('error'),
-                debug: bindConsoleMethod('debug')
-            };
-            this.methodMap = {
-                error: 'error',
-                warn: 'warn',
-                info: 'log',
-                debug: 'log',
-                trace: 'log'
-            };
-            this.levelMap = {
-                error: 0,
-                warn: 1,
-                info: 2,
-                debug: 3,
-                trace: 4
-            };
-            this.storageKey = 'exam_system_log_config';
-            this.defaultLevel = 'info';
-            this.defaultCategories = {
-                Storage: 'warn',
-                DataConsistencyManager: 'warn',
-                PerformanceOptimizer: 'warn',
-                System: 'info',
-                PracticeRecorder: 'info',
-                ScoreStorage: 'info'
-            };
-            this.suppressionNotices = new Set();
-            const initialConfig = this.mergeConfig(externalConfig);
-            this.globalLevel = initialConfig.level;
-            this.categoryLevels = initialConfig.categories;
+        constructor(config = {}) {
+            this.nativeConsole = { ...global.console }; // Backup native methods
+            this.config = this.loadConfig(config);
+
+            // Bind methods to ensure 'this' context
+            this.log = this.log.bind(this);
+            this.info = this.info.bind(this);
+            this.warn = this.warn.bind(this);
+            this.error = this.error.bind(this);
+            this.debug = this.debug.bind(this);
+
             this.overrideConsole();
+
+            // Output initialization message
+            this.internalLog('info', 'Logger initialized', {
+                level: this.config.level,
+                categories: this.config.categories
+            });
         }
 
-        mergeConfig(externalConfig = {}) {
-            let persisted = {};
+        /**
+         * Load configuration from localStorage or use defaults
+         */
+        loadConfig(externalConfig) {
+            let storedConfig = {};
             try {
-                const stored = global.localStorage
-                    ? global.localStorage.getItem(this.storageKey)
-                    : null;
+                const stored = global.localStorage.getItem(STORAGE_KEY);
                 if (stored) {
-                    persisted = JSON.parse(stored);
+                    storedConfig = JSON.parse(stored);
                 }
-            } catch (_) {}
+            } catch (e) {
+                // Ignore storage errors
+            }
 
-            const result = {
-                level: this.validateLevel(externalConfig.level)
-                    || this.validateLevel(persisted.level)
-                    || this.defaultLevel,
-                categories: Object.assign(
-                    {},
-                    this.defaultCategories,
-                    persisted.categories || {},
-                    externalConfig.categories || {}
-                )
+            return {
+                level: externalConfig.level || storedConfig.level || DEFAULT_CONFIG.level,
+                categories: {
+                    ...DEFAULT_CONFIG.categories,
+                    ...(storedConfig.categories || {}),
+                    ...(externalConfig.categories || {})
+                }
             };
-            Object.keys(result.categories).forEach((key) => {
-                const level = result.categories[key];
-                result.categories[key] = this.validateLevel(level) || this.defaultLevel;
-            });
-            return result;
         }
 
-        persistConfig() {
+        /**
+         * Save current configuration to localStorage
+         */
+        saveConfig() {
             try {
-                if (global.localStorage) {
-                    global.localStorage.setItem(this.storageKey, JSON.stringify({
-                        level: this.globalLevel,
-                        categories: this.categoryLevels
-                    }));
-                }
-            } catch (_) {}
+                global.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                    level: this.config.level,
+                    categories: this.config.categories
+                }));
+            } catch (e) {
+                // Ignore storage errors
+            }
         }
 
+        /**
+         * Override global console methods to route through our logger
+         * This allows capturing logs from libraries or code using console.log directly
+         */
         overrideConsole() {
-            const levels = {
-                log: 'info',
-                info: 'info',
-                warn: 'warn',
-                error: 'error',
-                debug: 'debug'
-            };
-            Object.keys(levels).forEach((methodName) => {
-                const level = levels[methodName];
-                const nativeMethod = this.nativeMethods[methodName] || this.nativeMethods.log;
-                const self = this;
-                global.console[methodName] = function proxyConsoleMethod(...args) {
-                    if (!args.length) {
-                        nativeMethod();
-                        return;
-                    }
-                    const extracted = self.extractCategory(args);
-                    if (!extracted) {
-                        nativeMethod(...args);
-                        return;
-                    }
-                    self.output(extracted.category, level, extracted.args);
-                };
+            const methods = ['log', 'info', 'warn', 'error', 'debug'];
+
+            methods.forEach(method => {
+                // We only override if the native console has this method
+                if (this.nativeConsole[method]) {
+                    global.console[method] = (...args) => {
+                        // Try to extract category from "[Category] message" format
+                        const categoryInfo = this.extractCategory(args);
+
+                        if (categoryInfo) {
+                            const level = method === 'log' ? 'info' : method;
+                            this.output(categoryInfo.category, level, categoryInfo.args);
+                        } else {
+                            // It's a raw console log, pass through to native
+                            this.nativeConsole[method].apply(global.console, args);
+                        }
+                    };
+                }
             });
         }
 
+        /**
+         * Extract category from arguments if the first argument is "[Category]"
+         */
         extractCategory(args) {
-            const firstArg = args[0];
-            if (typeof firstArg !== 'string') {
-                return null;
+            if (args.length > 0 && typeof args[0] === 'string') {
+                const match = args[0].match(/^\[(.*?)\]\s*(.*)$/);
+
+                if (match) {
+                    const category = match[1];
+                    const restOfMessage = match[2];
+
+                    const newArgs = [...args];
+
+                    if (restOfMessage && restOfMessage.length > 0) {
+                        newArgs[0] = restOfMessage;
+                    } else {
+                        newArgs.shift();
+                    }
+
+                    return {
+                        category: category,
+                        args: newArgs
+                    };
+                }
             }
-            const trimmed = firstArg.trimStart();
-            if (!trimmed.startsWith('[')) {
-                return null;
-            }
-            const closingIndex = trimmed.indexOf(']');
-            if (closingIndex === -1) {
-                return null;
-            }
-            const category = trimmed.slice(1, closingIndex).trim();
-            const rest = trimmed.slice(closingIndex + 1).trim();
-            if (!category) {
-                return null;
-            }
-            const nextArgs = rest ? [rest, ...args.slice(1)] : [...args.slice(1)];
-            return { category, args: nextArgs };
+            return null;
         }
 
-        levelValue(level) {
-            return this.levelMap[level] ?? this.levelMap.info;
-        }
-
-        getCategoryLevel(category) {
-            return this.categoryLevels[category] || this.globalLevel;
-        }
-
+        /**
+         * Check if a log should be output based on levels
+         */
         shouldLog(category, level) {
-            return this.levelValue(level) <= this.levelValue(this.getCategoryLevel(category));
-        }
+            const msgLevelVal = LOG_LEVELS[level] !== undefined ? LOG_LEVELS[level] : LOG_LEVELS.info;
 
-        noteSuppression(category) {
-            if (this.suppressionNotices.has(category)) {
-                return;
+            let configLevel = this.config.categories[category];
+
+            if (!configLevel) {
+                configLevel = this.config.level;
             }
-            this.suppressionNotices.add(category);
-            const notifier = this.nativeMethods.log || function noop() {};
-            notifier(
-                `[Logger] ${category} 日志已折叠（当前级别: ${this.getCategoryLevel(category)}）。` +
-                ` 执行 window.AppLogger.setCategoryLevel('${category}','info') 以查看详细输出。`
-            );
+
+            const configLevelVal = LOG_LEVELS[configLevel] !== undefined ? LOG_LEVELS[configLevel] : LOG_LEVELS.info;
+
+            return msgLevelVal <= configLevelVal;
         }
 
+        /**
+         * Core output method
+         */
         output(category, level, args) {
             if (!this.shouldLog(category, level)) {
-                this.noteSuppression(category);
                 return;
             }
-            const method = this.methodMap[level] || 'log';
-            const target = this.nativeMethods[method] || this.nativeMethods.log;
-            target(`[${category}]`, ...args);
+
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = `[${timestamp}] [${category}]`;
+
+            // Map our levels to console methods
+            const consoleMethod = this.nativeConsole[level] || this.nativeConsole.log;
+
+            // Use native console to print, preserving object inspection capabilities
+            consoleMethod.call(global.console, prefix, ...args);
         }
 
-        validateLevel(level) {
-            if (!level) {
-                return null;
+        /**
+         * Internal helper to log without routing through the override logic again
+         */
+        internalLog(level, message, data) {
+            const consoleMethod = this.nativeConsole[level] || this.nativeConsole.log;
+            if (data) {
+                consoleMethod.call(global.console, `[Logger] ${message}`, data);
+            } else {
+                consoleMethod.call(global.console, `[Logger] ${message}`);
             }
-            return Object.prototype.hasOwnProperty.call(this.levelMap, level) ? level : null;
         }
+
+        // --- Public API ---
 
         log(category, level, ...args) {
             this.output(category, level, args);
         }
 
         info(category, ...args) {
-            this.log(category, 'info', ...args);
+            this.output(category, 'info', args);
         }
 
         warn(category, ...args) {
-            this.log(category, 'warn', ...args);
+            this.output(category, 'warn', args);
         }
 
         error(category, ...args) {
-            this.log(category, 'error', ...args);
+            this.output(category, 'error', args);
         }
 
         debug(category, ...args) {
-            this.log(category, 'debug', ...args);
+            this.output(category, 'debug', args);
         }
 
+        /**
+         * Create a scoped logger for a specific category
+         */
         createScope(category) {
             return {
                 info: (...args) => this.info(category, ...args),
                 warn: (...args) => this.warn(category, ...args),
                 error: (...args) => this.error(category, ...args),
-                debug: (...args) => this.debug(category, ...args)
+                debug: (...args) => this.debug(category, ...args),
+                log: (level, ...args) => this.log(category, level, ...args)
             };
         }
 
+        /**
+         * Update global log level
+         */
         setGlobalLevel(level) {
-            const validated = this.validateLevel(level);
-            if (!validated) {
-                return;
+            if (LOG_LEVELS[level] !== undefined) {
+                this.config.level = level;
+                this.saveConfig();
+                this.internalLog('info', `Global log level set to: ${level}`);
+            } else {
+                this.internalLog('warn', `Invalid log level: ${level}`);
             }
-            this.globalLevel = validated;
-            this.suppressionNotices.clear();
-            this.persistConfig();
         }
 
+        /**
+         * Update category specific log level
+         */
         setCategoryLevel(category, level) {
-            const validated = this.validateLevel(level);
-            if (!validated) {
-                return;
-            }
-            this.categoryLevels[category] = validated;
-            this.suppressionNotices.delete(category);
-            this.persistConfig();
-        }
-
-        configure(config = {}) {
-            if (config.level) {
-                this.setGlobalLevel(config.level);
-            }
-            if (config.categories && typeof config.categories === 'object') {
-                Object.entries(config.categories).forEach(([category, level]) => {
-                    this.setCategoryLevel(category, level);
-                });
+            if (LOG_LEVELS[level] !== undefined) {
+                this.config.categories[category] = level;
+                this.saveConfig();
+                this.internalLog('info', `Category '${category}' log level set to: ${level}`);
+            } else {
+                this.internalLog('warn', `Invalid log level: ${level}`);
             }
         }
 
-        resetConfig() {
-            this.globalLevel = this.defaultLevel;
-            this.categoryLevels = Object.assign({}, this.defaultCategories);
-            this.suppressionNotices.clear();
-            this.persistConfig();
-        }
-
+        /**
+         * Get current configuration
+         */
         getConfig() {
-            return {
-                level: this.globalLevel,
-                categories: Object.assign({}, this.categoryLevels)
+            return JSON.parse(JSON.stringify(this.config));
+        }
+
+        /**
+         * Reset configuration to defaults
+         */
+        resetConfig() {
+            this.config = {
+                level: DEFAULT_CONFIG.level,
+                categories: { ...DEFAULT_CONFIG.categories }
             };
+            this.saveConfig();
+            this.internalLog('info', 'Configuration reset to defaults');
         }
     }
 
-    const logger = new AppLogger(global.__APP_LOG_CONFIG || {});
-    global.AppLogger = logger;
-})(typeof window !== 'undefined' ? window : undefined);
+    // Initialize and expose
+    global.AppLogger = new AppLogger(global.__APP_LOG_CONFIG || {});
+
+})(typeof window !== 'undefined' ? window : (typeof global !== 'undefined' ? global : this));
