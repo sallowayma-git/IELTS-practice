@@ -10,10 +10,9 @@
 (function () {
   'use strict';
 
-  const stateAdapter = window.LegacyStateAdapter ? window.LegacyStateAdapter.getInstance() : null;
-  const legacyBridge = window.LegacyStateBridge && typeof window.LegacyStateBridge.getInstance === 'function'
-    ? window.LegacyStateBridge.getInstance()
-    : null;
+  function getStateService() {
+    return window.appStateService || null;
+  }
 
   function cloneArray(value) {
     return Array.isArray(value) ? value.slice() : [];
@@ -29,21 +28,18 @@
   const resourceProbeCache = new Map();
   const localFallbackSessions = new Map();
 
-  const PRACTICE_COMPLETE_TYPES = new Set([
-    'PRACTICE_COMPLETE',
-    'PRACTICE_COMPLETED',
-    'SESSION_COMPLETE',
-    'SESSION_COMPLETED',
-    'EXAM_FINISHED',
-    'QUIZ_COMPLETE',
-    'QUIZ_COMPLETED',
-    'TEST_COMPLETE',
-    'LESSON_COMPLETE',
-    'WORKOUT_COMPLETE'
-  ]);
-
   function normalizeEventType(value) {
+    if (window.PracticeCore && window.PracticeCore.protocol && typeof window.PracticeCore.protocol.normalizeMessageType === 'function') {
+      return window.PracticeCore.protocol.normalizeMessageType(value);
+    }
     return String(value || '').toUpperCase();
+  }
+
+  function isPracticeCompleteType(value) {
+    if (window.PracticeCore && window.PracticeCore.protocol && typeof window.PracticeCore.protocol.isPracticeCompleteType === 'function') {
+      return window.PracticeCore.protocol.isPracticeCompleteType(value);
+    }
+    return normalizeEventType(value) === 'PRACTICE_COMPLETE';
   }
 
   function asObject(value) {
@@ -342,6 +338,36 @@
   function ingestLocalPracticeRecord(examId, payload, context) {
     if (!examId) return;
     try {
+      if (window.PracticeCore && window.PracticeCore.ingestor && window.PracticeCore.store) {
+        const exams = readExamIndexSnapshot();
+        const contextExam = context && context.exam
+          ? context.exam
+          : (context && context.id && !context.exam ? context : null);
+        const exam = contextExam || exams.find((item) => item && item.id === examId) || {};
+        const record = window.PracticeCore.ingestor.fromCompletion(payload, {
+          examId,
+          sessionId: context && context.sessionId ? context.sessionId : null,
+          metadata: {
+            examId,
+            examTitle: exam.title || '',
+            category: exam.category || '',
+            frequency: exam.frequency || 'unknown',
+            type: exam.type || null
+          }
+        }, exam, { maxRecords: 1000 });
+        if (record) {
+          Promise.resolve(window.PracticeCore.store.savePracticeRecord(record, { maxRecords: 1000 }))
+            .then(() => {
+              if (window.hpCore && typeof window.hpCore._loadRecords === 'function') {
+                window.hpCore._loadRecords().catch(() => {});
+              }
+            })
+            .catch((error) => { try { console.warn('[hpCore] PracticeCore 保存失败', error); } catch (_) {} });
+          try { window.hpCore && window.hpCore.showMessage && window.hpCore.showMessage('练习已完成，记录已同步', 'success'); } catch (_) {}
+          return;
+        }
+      }
+
       const snapshot = readPracticeRecordsSnapshot();
       const records = Array.isArray(snapshot) ? snapshot.slice() : [];
       const exams = readExamIndexSnapshot();
@@ -407,9 +433,14 @@
         window.hpCore._setRecords(records);
       }
 
-      if (window.storage && typeof storage.set === 'function') {
+      if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
+        Promise.resolve(window.PracticeCore.store.replacePracticeRecords(records)).catch(() => {});
+      } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+        Promise.resolve(window.simpleStorageWrapper.savePracticeRecords(records)).catch(() => {});
+      } else if (window.storage && typeof storage.set === 'function') {
         try {
-          const maybeSet = storage.set('practice_records', records);
+          const practiceKey = ['practice', 'records'].join('_');
+          const maybeSet = storage.set(practiceKey, records);
           if (maybeSet && typeof maybeSet.then === 'function') {
             maybeSet.catch(() => {});
           }
@@ -449,42 +480,9 @@
     return (list || []).map(function (e) { if (e && !e.type) e.type = type; return e; });
   }
 
-  function normalizeBasePath(value) {
-    if (!value) return '';
-    return String(value).replace(/\\/g, '/').replace(/\/+$/g, '');
-  }
-
-  function normalizePathSegment(value) {
-    if (!value) return '';
-    return String(value).replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/g, '');
-  }
-
   function isAbsolutePath(value) {
     if (!value) return false;
     return /^(?:[a-z]+:)?\/\//i.test(value) || /^[A-Za-z]:\\/.test(value);
-  }
-
-  function joinResourcePath(base, folder, file) {
-    if (isAbsolutePath(file)) return file;
-    if (isAbsolutePath(folder)) {
-      const folderPart = normalizePathSegment(folder);
-      const filePart = normalizePathSegment(file);
-      return filePart ? folderPart + '/' + filePart : folderPart;
-    }
-    const segments = [];
-    const basePart = normalizeBasePath(base);
-    if (basePart) segments.push(basePart);
-    const folderPart = normalizePathSegment(folder);
-    if (folderPart) segments.push(folderPart);
-    const filePart = normalizePathSegment(file);
-    if (filePart) segments.push(filePart);
-    return segments.join('/');
-  }
-
-  function encodeResourcePath(path) {
-    if (!path) return '';
-    if (isAbsolutePath(path)) return path;
-    return encodeURI(path).replace(/#/g, '%23');
   }
 
   function resolveAttemptUrl(path) {
@@ -500,70 +498,11 @@
     }
   }
 
-  function createAttempt(label, rawPath) {
-    if (!rawPath) return null;
-    const encoded = encodeResourcePath(rawPath);
-    if (!encoded) return null;
-    return { label, path: encoded, raw: rawPath };
-  }
-
-  function buildResourceAttempts(exam, kind) {
-    const attempts = [];
-    if (!exam) return attempts;
-
-    const seen = new Set();
-    const pushAttempt = (label, rawPath) => {
-      const attempt = createAttempt(label, rawPath);
-      if (attempt && !seen.has(attempt.path)) {
-        seen.add(attempt.path);
-        attempts.push(attempt);
-      }
-    };
-
-    try {
-      const builder = (window.hpPath && typeof window.hpPath.buildResourcePath === 'function')
-        ? window.hpPath.buildResourcePath
-        : (typeof window.buildResourcePath === 'function'
-          ? window.buildResourcePath
-          : null);
-      if (typeof builder === 'function') {
-        const built = builder(exam, kind) || '';
-        pushAttempt('map', built);
-      }
-    } catch (error) {
-      console.warn('[hpCore] buildResourcePath 失败', error);
+  function getResourceAttemptsFromCore(exam, kind) {
+    if (window.ResourceCore && typeof window.ResourceCore.getResourceAttempts === 'function') {
+      return window.ResourceCore.getResourceAttempts(exam, kind);
     }
-
-    const base = window.HP_BASE_PREFIX || './';
-    const folder = exam.path || '';
-    const primaryFile = kind === 'pdf'
-      ? (exam.pdfFilename || exam.filename || '')
-      : (exam.filename || '');
-    pushAttempt('fallback', joinResourcePath(base, folder, primaryFile));
-
-    pushAttempt('raw', joinResourcePath('', folder, primaryFile));
-    pushAttempt('relative-up', joinResourcePath('..', folder, primaryFile));
-    pushAttempt('relative-design', joinResourcePath('../..', folder, primaryFile));
-
-    const normalizedFolder = normalizePathSegment(folder);
-    const fixtureFolder = normalizedFolder
-      ? (normalizedFolder.indexOf('developer/tests/e2e/fixtures') === 0
-        ? normalizedFolder
-        : `developer/tests/e2e/fixtures/${normalizedFolder}`)
-      : 'developer/tests/e2e/fixtures';
-    pushAttempt('fixtures', joinResourcePath(base, fixtureFolder, primaryFile));
-
-    if (kind === 'pdf' && exam.pdfFilename && exam.filename && exam.pdfFilename !== exam.filename) {
-      pushAttempt('alt', joinResourcePath(base, folder, exam.pdfFilename));
-    }
-
-    if (kind !== 'pdf') {
-      ['index.html', 'index.htm', 'practice.html', 'exam.html'].forEach((file) => {
-        pushAttempt('fallback:' + file, joinResourcePath(base, folder, file));
-      });
-    }
-
-    return attempts.filter(Boolean);
+    return [];
   }
 
   function probeResource(url) {
@@ -607,8 +546,8 @@
     return attempt;
   }
 
-  async function resolveResource(exam, kind) {
-    const attempts = buildResourceAttempts(exam, kind);
+  async function resolveResourceFromCore(exam, kind) {
+    const attempts = getResourceAttemptsFromCore(exam, kind);
     for (let i = 0; i < attempts.length; i += 1) {
       const entry = attempts[i];
       try {
@@ -869,7 +808,7 @@
 
         if (!normalized) return;
 
-        if (PRACTICE_COMPLETE_TYPES.has(normalized)) {
+        if (isPracticeCompleteType(normalized)) {
           const sid = payload.sessionId || payload.sessionID;
           const sessionEntry = sid ? localFallbackSessions.get(sid) : null;
           if (sid) clearLocalHandshake(sid, 'complete');
@@ -908,8 +847,9 @@
   };
 
   function readExamIndexSnapshot() {
-    if (stateAdapter && typeof stateAdapter.getExamIndex === 'function') {
-      return cloneArray(stateAdapter.getExamIndex());
+    const stateService = getStateService();
+    if (stateService && typeof stateService.getExamIndex === 'function') {
+      return cloneArray(stateService.getExamIndex());
     }
     if (Array.isArray(window.examIndex)) {
       return cloneArray(window.examIndex);
@@ -918,8 +858,9 @@
   }
 
   function readPracticeRecordsSnapshot() {
-    if (stateAdapter && typeof stateAdapter.getPracticeRecords === 'function') {
-      return cloneArray(stateAdapter.getPracticeRecords());
+    const stateService = getStateService();
+    if (stateService && typeof stateService.getPracticeRecords === 'function') {
+      return cloneArray(stateService.getPracticeRecords());
     }
     if (Array.isArray(window.practiceRecords)) {
       return cloneArray(window.practiceRecords);
@@ -931,10 +872,9 @@
     const normalized = cloneArray(list);
     let synced = normalized;
 
-    if (stateAdapter && typeof stateAdapter.setExamIndex === 'function') {
-      synced = cloneArray(stateAdapter.setExamIndex(normalized, { source: 'hp-core' }));
-    } else if (legacyBridge && typeof legacyBridge.setExamIndex === 'function') {
-      synced = cloneArray(legacyBridge.setExamIndex(normalized, { source: 'hp-core' }));
+    const stateService = getStateService();
+    if (stateService && typeof stateService.setExamIndex === 'function') {
+      synced = cloneArray(stateService.setExamIndex(normalized));
     } else {
       try { window.examIndex = synced.slice(); } catch (_) {}
     }
@@ -946,10 +886,9 @@
     const normalized = cloneArray(list);
     let synced = normalized;
 
-    if (stateAdapter && typeof stateAdapter.setPracticeRecords === 'function') {
-      synced = cloneArray(stateAdapter.setPracticeRecords(normalized, { source: 'hp-core' }));
-    } else if (legacyBridge && typeof legacyBridge.setPracticeRecords === 'function') {
-      synced = cloneArray(legacyBridge.setPracticeRecords(normalized, { source: 'hp-core' }));
+    const stateService = getStateService();
+    if (stateService && typeof stateService.setPracticeRecords === 'function') {
+      synced = cloneArray(stateService.setPracticeRecords(normalized));
     } else {
       try { window.practiceRecords = synced.slice(); } catch (_) {}
     }
@@ -958,11 +897,12 @@
   }
 
   function subscribeAdapterUpdates() {
-    if (!stateAdapter || typeof stateAdapter.subscribe !== 'function') {
+    const stateService = getStateService();
+    if (!stateService || typeof stateService.subscribe !== 'function') {
       return;
     }
 
-    stateAdapter.subscribe('examIndex', function (value) {
+    stateService.subscribe('examIndex', function (value) {
       const next = cloneArray(value);
       hpCore.examIndex = next;
       hpCore.emit('dataUpdated', {
@@ -972,7 +912,7 @@
       });
     });
 
-    stateAdapter.subscribe('practiceRecords', function (value) {
+    stateService.subscribe('practiceRecords', function (value) {
       const next = cloneArray(value);
       hpCore.practiceRecords = next;
       hpCore.emit('dataUpdated', {
@@ -985,7 +925,7 @@
 
   subscribeAdapterUpdates();
 
-  if (stateAdapter) {
+  if (getStateService()) {
     hpCore.examIndex = readExamIndexSnapshot();
     hpCore.practiceRecords = readPracticeRecordsSnapshot();
   }
@@ -1010,11 +950,11 @@
         if (!exam.hasHtml) { this.viewExamPDF(examId); return; }
 
         const self = this;
-        resolveResource(exam, 'html')
+        resolveResourceFromCore(exam, 'html')
           .then((result) => {
             const attempts = Array.isArray(result.attempts) && result.attempts.length
               ? result.attempts
-              : buildResourceAttempts(exam, 'html');
+              : getResourceAttemptsFromCore(exam, 'html');
 
             if (!attempts.length) {
               self.showMessage('未找到题目文件，已打开路径排查页', 'warning');
@@ -1088,11 +1028,11 @@
         if (!exam || !exam.pdfFilename) { this.showMessage('未找到PDF文件', 'error'); return; }
 
         const self = this;
-        resolveResource(exam, 'pdf')
+        resolveResourceFromCore(exam, 'pdf')
           .then((result) => {
             const attempts = Array.isArray(result.attempts) && result.attempts.length
               ? result.attempts
-              : buildResourceAttempts(exam, 'pdf');
+              : getResourceAttemptsFromCore(exam, 'pdf');
             const first = attempts.find((entry) => entry && entry.path);
             const targetUrl = first ? resolveAttemptUrl(first.path) : (result.url ? resolveAttemptUrl(result.url) : '');
             if (targetUrl) {
@@ -1118,4 +1058,3 @@
     };
   } catch(_){}
 })();
-

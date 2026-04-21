@@ -1,0 +1,115 @@
+(function registerReadingExamData(global) {
+  'use strict';
+  if (!global.__READING_EXAM_DATA__ || typeof global.__READING_EXAM_DATA__.register !== "function") {
+    throw new Error("reading_exam_registry_missing");
+  }
+  global.__READING_EXAM_DATA__.register("p1-high-79", {
+  "schemaVersion": "ReadingExamSourceV1",
+  "examId": "p1-high-79",
+  "meta": {
+    "title": "The Development of The Silk Industry 丝绸产业发展",
+    "category": "P1",
+    "frequency": "high",
+    "pdfFilename": "17. P1 - The Development of The Silk Industry 丝绸产业发展【高】.pdf",
+    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】/",
+    "legacyFilename": "17. P1 - The Development of The Silk Industry 丝绸产业发展【高】.html",
+    "questionIntroHtml": "<h3>Questions</h3>"
+  },
+  "passage": {
+    "blocks": [
+      {
+        "blockId": "passage-main",
+        "kind": "html",
+        "html": "<h2>READING PASSAGE 1</h2>\n            <p>You should spend about 20 minutes on Questions 1–13, which are based on Reading Passage 1 below.</p>\n            \n            <h3>The Development of The Silk Industry</h3>\n            <p><i>Silk, a natural fibre produced by a particular worm called a silkworm, has been used in clothing for many centuries.</i></p>\n            <p>When silk was first discovered in China over 4,500 years ago, it was reserved exclusively for the use of the emperor, his close relations and the very highest of his dignitaries. Within the palace, the emperor is believed to have worn a robe of white silk; outside, he, his principal wife, and the heir to the throne wore yellow, the colour of the earth.</p>\n            <p>Gradually silk came into more general use, and the various classes of Chinese society began wearing tunics of silk. As well as being used for clothing and decoration, silk was quite quickly put to industrial use, and rapidly became one of the principal elements of the Chinese economy. It was used in the production of musical instruments, as string for fishing, and even as the world's first luxury paper. Eventually even the common people were able to wear garments of silk.</p>\n            <p>During the Han dynasty (206 BC-220 AD), silk ceased to be a mere fabric and became a form of currency. Farmers paid their taxes in grain and silk, and silk was used to pay civil servants and to reward subjects for outstanding services. Values were calculated in lengths of silk as they had previously been calculated in weight of gold. Before long, silk became a currency used in trade with foreign countries, which continued into the Tang dynasty (616-907 AD). It is possible that this added importance was the result of a major increase in production. Silk also found its way so thoroughly into the Chinese language that 230 of the 5,000 most common characters of Mandarin have ‘silk' as their key component.</p>\n            <p>Silk became a precious commodity, highly sought after by other countries from an early date, and it is believed that the silk trade actually existed before the Silk Road was officially opened in the second century BC. An Egyptian mummy with a silk thread in her hair, dating from 1070 BC, has been discovered in the village of Deir el Medina near the Valley of the Kings, and is probably the earliest evidence of the silk trade. During the second century BC, the Chinese emperor Han Wu Di's ambassadors travelled as far west as Persia and Mesopotamia, bearing gifts including silks. A range of important finds of Chinese silks have also been made along the Silk Road. One of the most dramatic of these finds was some Tang silk discovered in 1900. It is believed that around 1015 AD Buddhist monks, possibly alarmed by the threat of invasion by Tibetan people, had sealed more than ten thousand manuscripts and silk paintings, silk banners and textiles in caves near Dunhuang, a trading station on the Silk Road in north-west China.</p>\n            <p>Some historians believe the first Europeans to set eyes upon the fabulous fabric were the Roman legions of Marcus Licinius Crassus, Governor of Syria. According to certain accounts of the period, at an important battle near the Euphrates River in 53 BC, the Roman soldiers were so startled by the bright silken banners of the enemy that they fled in panic. Yet, within decades Chinese silks were widely worn by the rich and noble families of Rome. The Roman Emperor Heliogabalus (218-222 AD) wore nothing but silk. By 380 AD, the Roman historian Ammianus Marcellinus reported that the use of silk, which was once confined to the nobility, had now spread to all classes without distinction—even to the lowest. The desire for silk continued to increase over the centuries. Despite this demand, the price of silk remained very high.</p>\n            <p>In spite of their secrecy about production methods, the Chinese eventually lost their monopoly on silk production. Knowledge of silk production methods reached Korea around 200 BC, when waves of Chinese immigrants arrived there. Shortly after 300 AD, it travelled westward, and the cultivation of the silkworm was established in India.</p>\n            <p>Around 550 AD silk production reached the Middle East. Records indicate that two monks from Constantinople (modern-day Istanbul), capital of the Byzantine Empire, appeared at their emperor's court with silkworm eggs which they had obtained secretly, and hidden in their hollow bamboo walking sticks. Under their supervision the eggs hatched into worms, and the worms spun silk threads. Byzantium was in the silk business at last. The Byzantine church and state created imperial workshops, monopolising production and keeping the secret to themselves. This allowed a silk industry to be established, undercutting the market for ordinary-grade Chinese silk. However, high quality silk textiles, woven in China especially for the Middle Eastern market, continued to achieve high prices in the West, and trade along the Silk Road continued as before. By the sixth century the Persians, too, had mastered the art of silk weaving, developing their own rich patterns and techniques. But it wasn't until the 13th century that Italy began silk production, with the introduction of 2,000 skilled silk weavers from Constantinople. Eventually, silk production became widespread throughout Europe.</p>\n            <p>World silk production has approximately doubled during the last 30 years in spite of manmade fibres replacing certain uses of silk. Before this period, China and Japan were the two main producers, together manufacturing more than 50 per cent of world production each year. After the late 1970s, however, China dramatically increased its silk production, and once again became the world's leading producer.</p>\n            \n            <div class=\"empty-space\"></div>\n        </section>\n        \n        <div id=\"divider\"></div>"
+      }
+    ]
+  },
+  "questionGroups": [
+    {
+      "groupId": "group-1",
+      "kind": "sentence_completion",
+      "questionIds": [
+        "q1",
+        "q2",
+        "q3",
+        "q4",
+        "q5",
+        "q6",
+        "q7"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q1-2-3-4-5-6-7-anchor\">\n                <h4>Questions 1–7</h4>\n                <p>Complete the notes below.</p>\n                <p>Choose <strong>ONE WORD ONLY</strong> from the passage for each answer.</p>\n                 <div class=\"notes-completion\">\n                    <h4>Chinese silk</h4>\n                    <ul>\n                        <li><strong>Early uses</strong>\n                            <ul>\n                                <li>Clothing\n                                    <ul>\n                                        <li>at first, silk only available to Chinese of high rank</li>\n                                        <li>emperor wore <strong>1</strong> <input name=\"q1\" type=\"text\" class=\"blank\" id=\"q1_input\"> silk indoors</li>\n                                    </ul>\n                                </li>\n                                <li>In industry\n                                    <ul>\n                                        <li>silk items included parts of musical instruments, fishing string and <strong>2</strong> <input name=\"q2\" type=\"text\" class=\"blank\" id=\"q2_input\"></li>\n                                    </ul>\n                                </li>\n                            </ul>\n                        </li>\n                        <li><strong>Currency</strong>\n                            <ul>\n                                <li>silk was used as payment of <strong>3</strong> <input name=\"q3\" type=\"text\" class=\"blank\" id=\"q3_input\"> as well as for wages and rewards</li>\n                                <li>silk replaced <strong>4</strong> <input name=\"q4\" type=\"text\" class=\"blank\" id=\"q4_input\"> as a unit of value</li>\n                                <li>silk soon used as payment in <strong>5</strong> <input name=\"q5\" type=\"text\" class=\"blank\" id=\"q5_input\"> trade</li>\n                            </ul>\n                        </li>\n                         <li><strong>Evidence of silk trade</strong>\n                            <ul>\n                                <li>1070 BC, Egypt:\n                                    <ul>\n                                        <li>hair of a <strong>6</strong> <input name=\"q6\" type=\"text\" class=\"blank\" id=\"q6_input\"> contained silk</li>\n                                    </ul>\n                                </li>\n                                 <li>2nd century BC, Persia and Mesopotamia:\n                                    <ul>\n                                        <li>gifts of silk were presented by Chinese ambassadors</li>\n                                    </ul>\n                                </li>\n                                <li>1015 AD, north-west China:\n                                    <ul>\n                                        <li>silk objects were hidden inside <strong>7</strong> <input name=\"q7\" type=\"text\" class=\"blank\" id=\"q7_input\"></li>\n                                    </ul>\n                                </li>\n                            </ul>\n                        </li>\n                    </ul>\n                </div>\n            </div>",
+      "leadHtml": "<h3>Questions</h3>"
+    },
+    {
+      "groupId": "group-2",
+      "kind": "true_false_not_given",
+      "questionIds": [
+        "q8",
+        "q9",
+        "q10",
+        "q11",
+        "q12",
+        "q13"
+      ],
+      "bodyHtml": "<div class=\"group\" id=\"q8-9-10-11-12-13-anchor\">\n                <h4>Questions 8–13</h4>\n                <p>Do the following statements agree with the information given in Reading Passage 1?</p>\n                <p>In boxes 8–13 on your answer sheet, write</p>\n                <p>\n                    <strong>TRUE</strong> if the statement agrees with the information<br>\n                    <strong>FALSE</strong> if the statement contradicts the information<br>\n                    <strong>NOT GIVEN</strong> if there is no information on this\n                </p>\n                <div class=\"question-item\">\n                    <p><strong>8</strong> Their first sight of silk created fear among Roman soldiers.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q8\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q8\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q8\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>9</strong> The quality of Chinese silk imported by the early Romans varied widely.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q9\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q9\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q9\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>10</strong> The Byzantine emperor first acquired silkworm eggs from the Chinese emperor.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q10\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q10\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q10\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                <div class=\"question-item\">\n                    <p><strong>11</strong> The price of high-grade Chinese silk fell due to competition from Middle-Eastern producers.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q11\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q11\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q11\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>12</strong> Silk was produced in the Middle East several centuries before it was produced in Europe.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q12\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q12\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q12\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n                 <div class=\"question-item\">\n                    <p><strong>13</strong> Global silk production has declined in recent years.</p>\n                    <div class=\"tfng-options\">\n                        <label><input type=\"radio\" name=\"q13\" value=\"TRUE\"> TRUE</label>\n                        <label><input type=\"radio\" name=\"q13\" value=\"FALSE\"> FALSE</label>\n                        <label><input type=\"radio\" name=\"q13\" value=\"NOT GIVEN\"> NOT GIVEN</label>\n                    </div>\n                </div>\n            </div>"
+    }
+  ],
+  "answerKey": {
+    "q1": "white",
+    "q2": "paper",
+    "q3": "taxes",
+    "q4": "gold",
+    "q5": "foreign",
+    "q6": "mummy",
+    "q7": "caves",
+    "q8": "TRUE",
+    "q9": "NOT GIVEN",
+    "q10": "FALSE",
+    "q11": "FALSE",
+    "q12": "TRUE",
+    "q13": "FALSE"
+  },
+  "sourceRefs": {
+    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】.html",
+    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】/17. P1 - The Development of The Silk Industry 丝绸产业发展【高】.pdf",
+    "ieltsHtml": "IELTS/P1/The Development of The Silk Industry.html"
+  },
+  "audit": {
+    "matchStatus": "matched",
+    "matchConfidence": 1,
+    "verifiedAt": "2026-03-08T16:24:30.647Z",
+    "notes": "signature:radio,text,textarea,dragdrop,table"
+  },
+  "questionOrder": [
+    "q1",
+    "q2",
+    "q3",
+    "q4",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9",
+    "q10",
+    "q11",
+    "q12",
+    "q13"
+  ],
+  "questionDisplayMap": {
+    "q1": "1",
+    "q2": "2",
+    "q3": "3",
+    "q4": "4",
+    "q5": "5",
+    "q6": "6",
+    "q7": "7",
+    "q8": "8",
+    "q9": "9",
+    "q10": "10",
+    "q11": "11",
+    "q12": "12",
+    "q13": "13"
+  }
+}
+);
+})(typeof window !== "undefined" ? window : globalThis);

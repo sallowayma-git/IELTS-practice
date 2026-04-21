@@ -25,17 +25,88 @@ class PracticeRecorder {
         this.practiceTypeCache = new Map();
 
         // 异步初始化
-        this.initialize().catch(error => {
+        this.ready = (async () => {
+            await this.scoreStorage.ready;
+            await this.initialize();
+        })();
+
+        this.ready.catch(error => {
             console.error('[PracticeRecorder] 初始化失败', error);
         });
     }
 
     normalizePracticeType(rawType) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.normalizePracticeType === 'function') {
+            return coreContracts.normalizePracticeType(rawType);
+        }
         if (!rawType) return null;
         const normalized = String(rawType).toLowerCase();
         if (normalized.includes('listen')) return 'listening';
         if (normalized.includes('read')) return 'reading';
         return null;
+    }
+
+    isInTestEnvironment() {
+        try {
+            if (window.EnvironmentDetector && typeof window.EnvironmentDetector.isInTestEnvironment === 'function') {
+                return window.EnvironmentDetector.isInTestEnvironment();
+            }
+        } catch (error) {
+            console.warn('[PracticeRecorder] 环境探测失败，默认按生产环境处理:', error);
+        }
+        return false;
+    }
+
+    isSyntheticSessionAllowed(payload = null) {
+        const explicitAllow = Boolean(
+            payload
+            && typeof payload === 'object'
+            && (
+                payload.allowSyntheticSession === true
+                || payload.allowSynthetic === true
+                || payload?.results?.allowSyntheticSession === true
+                || payload?.results?.allowSynthetic === true
+                || payload?.metadata?.allowSyntheticSession === true
+                || payload?.metadata?.allowSynthetic === true
+                || payload?.results?.metadata?.allowSyntheticSession === true
+                || payload?.results?.metadata?.allowSynthetic === true
+            )
+        );
+        if (explicitAllow) {
+            return true;
+        }
+        return this.isInTestEnvironment();
+    }
+
+    async recordRejectedCompletionPayload(payload, context = {}) {
+        try {
+            const existing = await this.metaRepo.get('rejected_completion_payloads', []);
+            const list = Array.isArray(existing) ? existing : [];
+            const snapshot = {
+                id: `rejected_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                createdAt: new Date().toISOString(),
+                context: Object.assign({}, context),
+                payload: payload && typeof payload === 'object'
+                    ? {
+                        examId: payload.examId || null,
+                        sessionId: payload.sessionId || null,
+                        originalExamId: payload.originalExamId || null,
+                        derivedExamId: payload.derivedExamId || null,
+                        rawExamId: payload.rawExamId || null,
+                        suiteSessionId: payload.suiteSessionId || null,
+                        metadata: payload.metadata || payload.results?.metadata || null
+                    }
+                    : null
+            };
+            list.unshift(snapshot);
+            if (list.length > 50) {
+                list.splice(50);
+            }
+            await this.metaRepo.set('rejected_completion_payloads', list);
+        } catch (error) {
+            console.warn('[PracticeRecorder] 记录拒绝的完成负载失败:', error);
+        }
     }
 
     lookupExamIndexEntry(examId) {
@@ -476,6 +547,10 @@ class PracticeRecorder {
     }
 
     normalizeAnswerValue(value) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.normalizeAnswerValue === 'function') {
+            return coreContracts.normalizeAnswerValue(value);
+        }
         if (AnswerSanitizer && typeof AnswerSanitizer.normalizeValue === 'function') {
             return AnswerSanitizer.normalizeValue(value);
         }
@@ -527,6 +602,10 @@ class PracticeRecorder {
     }
 
     normalizeAnswerMap(rawAnswers = {}) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.normalizeAnswerMap === 'function') {
+            return coreContracts.normalizeAnswerMap(rawAnswers);
+        }
         const map = {};
         if (Array.isArray(rawAnswers)) {
             rawAnswers.forEach((entry, index) => {
@@ -649,6 +728,10 @@ class PracticeRecorder {
     }
 
     normalizeAnswerComparison(comparison) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.normalizeAnswerComparison === 'function') {
+            return coreContracts.normalizeAnswerComparison(comparison);
+        }
         if (!comparison || typeof comparison !== 'object') {
             return {};
         }
@@ -682,6 +765,10 @@ class PracticeRecorder {
     }
 
     convertAnswerMapToArray(answerMap = {}, correctMap = {}) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.buildAnswerArray === 'function') {
+            return coreContracts.buildAnswerArray(answerMap, correctMap);
+        }
         const list = [];
         if (!answerMap || typeof answerMap !== 'object') {
             return list;
@@ -726,6 +813,10 @@ class PracticeRecorder {
     }
 
     buildAnswerDetails(answerMap = {}, correctMap = {}) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.buildAnswerDetails === 'function') {
+            return coreContracts.buildAnswerDetails(answerMap, correctMap);
+        }
         const details = {};
         const keys = new Set([
             ...Object.keys(answerMap || {}),
@@ -748,6 +839,10 @@ class PracticeRecorder {
     }
 
     deriveCorrectMapFromDetails(details) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.deriveCorrectMapFromDetails === 'function') {
+            return coreContracts.deriveCorrectMapFromDetails(details);
+        }
         if (!details || typeof details !== 'object') {
             return {};
         }
@@ -909,9 +1004,22 @@ class PracticeRecorder {
 
         let syntheticSession = false;
         if (!session) {
+            if (!this.isSyntheticSessionAllowed(payload)) {
+                console.error('[PracticeRecorder] 活动会话缺失，生产环境拒绝合成数据保存:', {
+                    resolvedExamId,
+                    sessionId: payload.sessionId || null,
+                    candidates: candidateExamIds
+                });
+                await this.recordRejectedCompletionPayload(payload, {
+                    reason: 'missing_active_session',
+                    resolvedExamId,
+                    candidateExamIds
+                });
+                return null;
+            }
             session = this.buildSyntheticCompletionSession(resolvedExamId, results, payload.sessionId);
             syntheticSession = true;
-            console.warn('[PracticeRecorder] 未找到匹配的活动会话，使用合成数据保存记录:', resolvedExamId);
+            console.warn('[PracticeRecorder] 未找到匹配的活动会话，测试环境启用合成数据保存:', resolvedExamId);
         }
 
         const resolvedEndTime = (() => {
@@ -1025,12 +1133,21 @@ class PracticeRecorder {
             practiceRecord.realData.answerComparison = normalizedComparison;
         }
 
-        if (suiteSessionId) {
+        const allowSuiteStandaloneSave = payload?.allowStandaloneSave
+            || results?.allowStandaloneSave
+            || metadata?.allowStandaloneSave;
+
+        if (suiteSessionId && !allowSuiteStandaloneSave) {
             console.log(`[PracticeRecorder] 套题模式条目 ${resolvedExamId} 属于 ${suiteSessionId}，跳过单篇记录保存。`);
             if (!syntheticSession && this.activeSessions.has(resolvedExamId)) {
                 this.endPracticeSession(resolvedExamId);
             }
             return practiceRecord;
+        }
+
+        if (suiteSessionId && allowSuiteStandaloneSave && metadata && !metadata.suiteFallback) {
+            metadata = Object.assign({}, metadata, { suiteFallback: true });
+            practiceRecord.metadata = metadata;
         }
 
         try {
@@ -1282,6 +1399,11 @@ class PracticeRecorder {
      */
     async saveActiveSessions() {
         const sessionsArray = Array.from(this.activeSessions.values());
+        const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+        if (practiceCoreStore && typeof practiceCoreStore.writeMeta === 'function') {
+            await practiceCoreStore.writeMeta('active_sessions', sessionsArray);
+            return;
+        }
         await this.metaRepo.set('active_sessions', sessionsArray);
     }
 
@@ -1344,6 +1466,15 @@ class PracticeRecorder {
             console.log('[PracticeRecorder] 使用降级保存方法');
 
             const standardizedRecord = this.standardizeRecordForFallback(record);
+            const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+            if (practiceCoreStore && typeof practiceCoreStore.savePracticeRecord === 'function') {
+                const savedRecord = await practiceCoreStore.savePracticeRecord(standardizedRecord, {
+                    currentVersion: this.scoreStorage && this.scoreStorage.currentVersion,
+                    maxRecords: this.scoreStorage && this.scoreStorage.maxRecords
+                });
+                await this.updateUserStatsManually(savedRecord);
+                return savedRecord;
+            }
 
             const existing = await this.practiceRepo.list();
             let records = Array.isArray(existing) ? [...existing] : [];
@@ -1392,19 +1523,20 @@ class PracticeRecorder {
      */
     standardizeRecordForFallback(recordData) {
         const now = new Date().toISOString();
+        const resolvedExamId = this.inferExamId(recordData);
         const endTime = recordData.endTime && !Number.isNaN(new Date(recordData.endTime).getTime())
             ? new Date(recordData.endTime).toISOString()
             : now;
-        const examEntry = this.lookupExamIndexEntry(recordData.examId);
+        const examEntry = this.lookupExamIndexEntry(resolvedExamId);
         const inferredType = this.normalizePracticeType(
             recordData.type
             || recordData.metadata?.type
             || examEntry?.type
-            || (recordData.examId && String(recordData.examId).toLowerCase().includes('listening') ? 'listening' : null)
+            || (resolvedExamId && String(resolvedExamId).toLowerCase().includes('listening') ? 'listening' : null)
         ) || 'reading';
         const metadata = this.buildRecordMetadata(
             {
-                examId: recordData.examId,
+                examId: resolvedExamId,
                 metadata: recordData.metadata
             },
             examEntry,
@@ -1413,7 +1545,7 @@ class PracticeRecorder {
         const recordDate = recordData.date
             || this.resolveRecordDate(
                 {
-                    examId: recordData.examId,
+                    examId: resolvedExamId,
                     startTime: recordData.startTime,
                     endTime,
                     metadata: recordData.metadata
@@ -1438,7 +1570,7 @@ class PracticeRecorder {
         return {
             // 基础信息
             id: recordData.id || this.generateRecordId(),
-            examId: recordData.examId,
+            examId: resolvedExamId,
             sessionId: recordData.sessionId,
             title: resolvedTitle,
 
@@ -1536,6 +1668,13 @@ class PracticeRecorder {
             return record;
         }
         const clone = Object.assign({}, record);
+        if (!clone.examId) {
+            const inferredExamId = this.inferExamId(record);
+            if (inferredExamId) {
+                clone.examId = inferredExamId;
+                clone.metadata = Object.assign({}, clone.metadata || {}, { examId: inferredExamId });
+            }
+        }
         // normalizeAnswerMap 已经自动过滤噪声键和无效值
         const answerMap = (record.answers && typeof record.answers === 'object' && !Array.isArray(record.answers))
             ? this.normalizeAnswerMap(record.answers)
@@ -1629,7 +1768,12 @@ class PracticeRecorder {
             // 更新时间戳
             stats.updatedAt = new Date().toISOString();
 
-            await this.metaRepo.set('user_stats', stats);
+            const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+            if (practiceCoreStore && typeof practiceCoreStore.writeMeta === 'function') {
+                await practiceCoreStore.writeMeta('user_stats', stats);
+            } else {
+                await this.metaRepo.set('user_stats', stats);
+            }
             console.log('[PracticeRecorder] 用户统计手动更新完成');
 
         } catch (error) {
@@ -1653,7 +1797,12 @@ class PracticeRecorder {
             // 限制临时记录数量
             const finalTempRecords = tempRecords.length > 50 ? tempRecords.slice(-50) : tempRecords;
 
-            await this.metaRepo.set('temp_practice_records', finalTempRecords);
+            const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+            if (practiceCoreStore && typeof practiceCoreStore.writeMeta === 'function') {
+                await practiceCoreStore.writeMeta('temp_practice_records', finalTempRecords);
+            } else {
+                await this.metaRepo.set('temp_practice_records', finalTempRecords);
+            }
             console.log('[PracticeRecorder] 记录已保存到临时存储:', record.id);
 
         } catch (error) {
@@ -1749,7 +1898,12 @@ class PracticeRecorder {
         // 更新连续学习天数
         this.updateStreakDays(stats, normalizedRecord);
 
-        await this.metaRepo.set('user_stats', stats);
+        const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+        if (practiceCoreStore && typeof practiceCoreStore.writeMeta === 'function') {
+            await practiceCoreStore.writeMeta('user_stats', stats);
+        } else {
+            await this.metaRepo.set('user_stats', stats);
+        }
         console.log('User stats updated');
     }
 
@@ -1886,11 +2040,35 @@ class PracticeRecorder {
         }
     }
 
+    generateRecordId() {
+        if (this.scoreStorage && typeof this.scoreStorage.generateRecordId === 'function') {
+            return this.scoreStorage.generateRecordId();
+        }
+        return `record_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
     /**
      * 生成会话ID
      */
     generateSessionId() {
         return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    extractExamIdFromRecordId(recordId) {
+        if (typeof recordId !== 'string') return null;
+        const match = recordId.match(/^record_([^_]+)_/);
+        return match && match[1] ? match[1] : null;
+    }
+
+    inferExamId(record = {}) {
+        if (!record || typeof record !== 'object') return null;
+        if (record.examId) return record.examId;
+        if (record.metadata?.examId) return record.metadata.examId;
+        if (Array.isArray(record.suiteEntries)) {
+            const suiteExam = record.suiteEntries.find(entry => entry && entry.examId);
+            if (suiteExam) return suiteExam.examId;
+        }
+        return this.extractExamIdFromRecordId(record.id);
     }
 
     /**
@@ -1914,8 +2092,12 @@ class PracticeRecorder {
             const validatedData = this.validateRealData(realData);
 
             if (!validatedData) {
-                console.warn('[PracticeRecorder] 数据验证失败，使用模拟数据');
-                return await this.handleFallbackData(examId);
+                if (this.isSyntheticSessionAllowed(realData)) {
+                    console.warn('[PracticeRecorder] 数据验证失败，测试环境使用模拟数据');
+                    return await this.handleFallbackData(examId);
+                }
+                console.error('[PracticeRecorder] 数据验证失败，生产环境拒绝模拟数据回退:', examId);
+                return null;
             }
 
             // 获取题目信息
@@ -1950,7 +2132,10 @@ class PracticeRecorder {
 
         } catch (error) {
             console.error('[PracticeRecorder] 真实数据处理失败:', error);
-            return await this.handleFallbackData(examId);
+            if (this.isSyntheticSessionAllowed(realData)) {
+                return await this.handleFallbackData(examId);
+            }
+            return null;
         }
     }
 
@@ -2277,12 +2462,17 @@ class PracticeRecorder {
                 try {
                     // 移除临时标识
                     const { tempSavedAt, needsRecovery, ...cleanRecord } = tempRecord;
+                    const sanitized = this.sanitizeRecoveredRecord(cleanRecord);
+                    if (!sanitized) {
+                        console.warn('[PracticeRecorder] 跳过无法修正的临时记录（缺少 examId 或字段无效）', cleanRecord?.id);
+                        continue;
+                    }
 
                     // 尝试正常保存
-                    await this.savePracticeRecord(cleanRecord);
+                    await this.savePracticeRecord(sanitized);
                     recoveredCount++;
 
-                    console.log(`[PracticeRecorder] 恢复记录成功: ${cleanRecord.id}`);
+                    console.log(`[PracticeRecorder] 恢复记录成功: ${sanitized.id}`);
 
                 } catch (error) {
                     console.error(`[PracticeRecorder] 恢复记录失败: ${tempRecord.id}`, error);
@@ -2292,16 +2482,51 @@ class PracticeRecorder {
 
             // 清理已恢复的临时记录
             if (failedRecords.length === 0) {
-                await this.metaRepo.remove('temp_practice_records');
+                const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+                if (practiceCoreStore && typeof practiceCoreStore.removeMeta === 'function') {
+                    await practiceCoreStore.removeMeta('temp_practice_records');
+                } else {
+                    await this.metaRepo.remove('temp_practice_records');
+                }
                 console.log(`[PracticeRecorder] 所有${recoveredCount} 条临时记录恢复成功`);
             } else {
-                await this.metaRepo.set('temp_practice_records', failedRecords);
+                const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
+                if (practiceCoreStore && typeof practiceCoreStore.writeMeta === 'function') {
+                    await practiceCoreStore.writeMeta('temp_practice_records', failedRecords);
+                } else {
+                    await this.metaRepo.set('temp_practice_records', failedRecords);
+                }
                 console.log(`[PracticeRecorder] 恢复了${recoveredCount} 条记录，${failedRecords.length} 条失败`);
             }
 
         } catch (error) {
             console.error('[PracticeRecorder] 恢复临时记录时出错', error);
         }
+    }
+
+    sanitizeRecoveredRecord(record) {
+        if (!record || typeof record !== 'object') return null;
+        const clone = Object.assign({}, record);
+        const inferredExamId = this.inferExamId(clone);
+        if (!inferredExamId) return null;
+        clone.examId = inferredExamId;
+        clone.metadata = Object.assign({}, clone.metadata || {}, { examId: inferredExamId });
+
+        const numericFields = ['score', 'totalQuestions', 'correctAnswers', 'accuracy', 'duration'];
+        numericFields.forEach((field) => {
+            if (clone[field] !== undefined && clone[field] !== null) {
+                const num = Number(clone[field]);
+                if (Number.isFinite(num)) {
+                    clone[field] = num;
+                } else {
+                    delete clone[field];
+                }
+            }
+        });
+        if (clone.accuracy > 1 && clone.accuracy <= 100) {
+            clone.accuracy = clone.accuracy / 100;
+        }
+        return clone;
     }
 
     /**

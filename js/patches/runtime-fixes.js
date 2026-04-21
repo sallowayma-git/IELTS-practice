@@ -29,11 +29,18 @@
           for (const tempRecord of tempRecords) {
             try {
               const { tempSavedAt, needsRecovery, ...cleanRecord } = tempRecord || {};
+              const sanitized = (this && typeof this.sanitizeRecoveredRecord === 'function')
+                ? this.sanitizeRecoveredRecord(cleanRecord)
+                : cleanRecord;
+              if (!sanitized || !sanitized.examId) {
+                console.warn('[PracticeRecorder] 跳过无法修正的临时记录（缺少 examId 或字段无效）', cleanRecord && cleanRecord.id);
+                continue;
+              }
               if (this && typeof this.savePracticeRecord === 'function') {
-                await this.savePracticeRecord(cleanRecord);
+                await this.savePracticeRecord(sanitized);
               }
               recoveredCount++;
-              console.log(`[PracticeRecorder] 恢复记录成功: ${cleanRecord && cleanRecord.id}`);
+              console.log(`[PracticeRecorder] 恢复记录成功: ${sanitized && sanitized.id}`);
             } catch (e) {
               console.error(`[PracticeRecorder] 恢复记录失败: ${tempRecord && tempRecord.id}`, e);
               failed.push(tempRecord);
