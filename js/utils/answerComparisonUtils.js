@@ -41,23 +41,13 @@
         'undefined',
         'no-answer'
     ]);
-    const BOOLEAN_SYNONYMS = new Map([
-        ['true', 'true'],
-        ['t', 'true'],
-        ['yes', 'true'],
-        ['y', 'true'],
-        ['1', 'true'],
-        ['false', 'false'],
-        ['f', 'false'],
-        ['no', 'false'],
-        ['n', 'false'],
-        ['0', 'false']
-    ]);
-    const NOT_GIVEN_SYNONYMS = new Map([
-        ['ng', 'not given'],
-        ['notgiven', 'not given'],
-        ['not-given', 'not given']
-    ]);
+    function getAnswerMatchCore() {
+        const core = global.AnswerMatchCore;
+        if (!core || typeof core !== 'object') {
+            return null;
+        }
+        return core;
+    }
 
     function toStringKey(value) {
         if (value == null) {
@@ -73,7 +63,35 @@
         }
 
         const lowered = original.toLowerCase();
-        const digitMatch = lowered.match(/(\d{1,4})/);
+
+        // 处理范围题号（如 q21-22 或 21-22），保留完整键用于展示
+        const rangeMatch = lowered.match(/^q?(\d+)\s*-\s*(\d+)$/);
+        if (rangeMatch) {
+            const start = parseInt(rangeMatch[1], 10);
+            const end = parseInt(rangeMatch[2], 10);
+            const canonicalKey = `q${start}-${end}`;
+            return {
+                canonicalKey,
+                questionNumber: Number.isFinite(start) ? start : null,
+                originalKey: original,
+                rangeLabel: `${start}-${end}`
+            };
+        }
+
+        let preferredDigits = null;
+        try {
+            const qDigitPattern = /(?:^|[^a-z0-9])q(\d{1,4})/g;
+            let match = null;
+            while ((match = qDigitPattern.exec(lowered)) !== null) {
+                preferredDigits = match[1];
+            }
+        } catch (_) {
+            preferredDigits = null;
+        }
+
+        const digitMatch = preferredDigits
+            ? [null, preferredDigits]
+            : lowered.match(/(\d{1,4})/);
         let questionNumber = null;
         let canonicalKey = lowered;
 
@@ -164,14 +182,25 @@
             return { display: null, normalized: null };
         }
 
-        if (BOOLEAN_SYNONYMS.has(lowered)) {
-            const mapped = BOOLEAN_SYNONYMS.get(lowered);
-            return { display: mapped === 'true' ? 'True' : 'False', normalized: mapped };
+        const core = getAnswerMatchCore();
+        if (core && typeof core.splitAnswerTokens === 'function') {
+            const tokens = core.splitAnswerTokens(collapsed);
+            if (!Array.isArray(tokens) || !tokens.length) {
+                return { display: null, normalized: null };
+            }
+            if (tokens.length === 1) {
+                const normalizedText = String(tokens[0]);
+                return { display: normalizedText, normalized: normalizedText };
+            }
+            return { display: tokens.join(', '), normalized: tokens.slice() };
         }
-
-        if (NOT_GIVEN_SYNONYMS.has(lowered)) {
-            const mapped = NOT_GIVEN_SYNONYMS.get(lowered);
-            return { display: mapped, normalized: mapped };
+        if (core && typeof core.normalizeToken === 'function') {
+            const normalized = core.normalizeToken(collapsed);
+            if (!normalized) {
+                return { display: null, normalized: null };
+            }
+            const normalizedText = String(normalized);
+            return { display: normalizedText, normalized: normalizedText };
         }
 
         return { display: collapsed, normalized: lowered };
@@ -194,7 +223,11 @@
             return false;
         }
 
-        return userInfo.normalized === correctInfo.normalized;
+        const core = getAnswerMatchCore();
+        if (core && typeof core.compareAnswers === 'function') {
+            return core.compareAnswers(userInfo.normalized, correctInfo.normalized) === true;
+        }
+        return String(userInfo.normalized) === String(correctInfo.normalized);
     }
 
     function mergeSourceMaps(sources) {
@@ -323,7 +356,9 @@
     }
 
     function finaliseEntry(entry) {
-        const displayNumber = entry.questionNumber != null
+        const displayNumber = entry.rangeLabel
+            ? entry.rangeLabel
+            : entry.questionNumber != null
             ? String(entry.questionNumber)
             : entry.canonicalKey ? entry.canonicalKey.replace(/^q/i, '').toUpperCase() : '';
 
@@ -397,6 +432,7 @@
                 entryMap[keyInfo.canonicalKey] = {
                     canonicalKey: keyInfo.canonicalKey,
                     questionNumber: keyInfo.questionNumber,
+                    rangeLabel: keyInfo.rangeLabel || null,
                     originalKeys: new Set(),
                     userAnswer: null,
                     correctAnswer: null,
@@ -412,6 +448,9 @@
 
             if (keyInfo.questionNumber != null && entry.questionNumber == null) {
                 entry.questionNumber = keyInfo.questionNumber;
+            }
+            if (keyInfo.rangeLabel && !entry.rangeLabel) {
+                entry.rangeLabel = keyInfo.rangeLabel;
             }
 
             const lookupKeys = [
