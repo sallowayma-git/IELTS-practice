@@ -14,6 +14,18 @@
         return global.AppLazyLoader.ensureGroup(name);
     }
 
+    function setGlobalFunctionIfAbsent(name, fn) {
+        if (typeof global[name] !== 'function') {
+            global[name] = fn;
+        }
+    }
+
+    function showNotReady(message, type) {
+        if (typeof global.showMessage === 'function') {
+            global.showMessage(message, type || 'warning');
+        }
+    }
+
     var browseGroupPromise = null;
     var stateCorePromise = null;
     var sessionSuitePromise = null;
@@ -77,12 +89,8 @@
     }
 
     // 向后兼容：提供 window.ensureBrowseGroup，避免 main.js 注入垃圾 shim 警告
-    if (typeof global.ensureBrowseGroup !== 'function') {
-        global.ensureBrowseGroup = ensureBrowseGroup;
-    }
-    if (typeof global.ensureSessionSuiteReady !== 'function') {
-        global.ensureSessionSuiteReady = ensureSessionSuiteReady;
-    }
+    setGlobalFunctionIfAbsent('ensureBrowseGroup', ensureBrowseGroup);
+    setGlobalFunctionIfAbsent('ensureSessionSuiteReady', ensureSessionSuiteReady);
 
     function ensureExamData() {
         if (typeof global.ensureExamDataScripts === 'function') {
@@ -147,7 +155,7 @@
             var args = Array.prototype.slice.call(arguments);
             return ensureLazyGroup(groupName).then(function invoke() {
                 var fn = getter();
-                if (typeof fn === 'function') {
+                if (typeof fn === 'function' && fn !== proxiedCall) {
                     return fn.apply(global, args);
                 }
                 if (typeof fallback === 'function') {
@@ -159,38 +167,30 @@
     }
 
     // 保持对外接口
-    if (typeof global.normalizeRecordId !== 'function') {
-        global.normalizeRecordId = function normalizeRecordId(id) {
-            return id == null ? '' : String(id);
-        };
-    }
+    setGlobalFunctionIfAbsent('normalizeRecordId', function normalizeRecordId(id) {
+        return id == null ? '' : String(id);
+    });
 
-    if (typeof global.reportBootStage !== 'function') {
-        global.reportBootStage = function reportBootStage(message, progress) {
-            if (global.AppBootScreen && typeof global.AppBootScreen.setStage === 'function') {
-                try {
-                    global.AppBootScreen.setStage(message, progress);
-                } catch (error) {
-                    console.warn('[BootStage] 更新失败:', error);
-                }
+    setGlobalFunctionIfAbsent('reportBootStage', function reportBootStage(message, progress) {
+        if (global.AppBootScreen && typeof global.AppBootScreen.setStage === 'function') {
+            try {
+                global.AppBootScreen.setStage(message, progress);
+            } catch (error) {
+                console.warn('[BootStage] 更新失败:', error);
             }
-        };
-    }
+        }
+    });
 
-    if (typeof global.ensureExamDataScripts !== 'function') {
-        global.ensureExamDataScripts = function ensureExamDataScripts() {
-            return ensureLazyGroup('exam-data');
-        };
-    }
+    setGlobalFunctionIfAbsent('ensureExamDataScripts', function ensureExamDataScripts() {
+        return ensureLazyGroup('exam-data');
+    });
 
-    if (typeof global.ensurePracticeSuiteReady !== 'function') {
-        global.ensurePracticeSuiteReady = function ensurePracticeSuiteReady() {
-            if (global.AppActions && typeof global.AppActions.ensurePracticeSuite === 'function') {
-                return global.AppActions.ensurePracticeSuite();
-            }
-            return ensurePracticeSuiteGroup();
-        };
-    }
+    setGlobalFunctionIfAbsent('ensurePracticeSuiteReady', function ensurePracticeSuiteReady() {
+        if (global.AppActions && typeof global.AppActions.ensurePracticeSuite === 'function') {
+            return global.AppActions.ensurePracticeSuite();
+        }
+        return ensurePracticeSuiteGroup();
+    });
 
     function ensureGlobalFunctionAfterGroup(name, group, fallback) {
         if (typeof global[name] === 'function') {
@@ -213,56 +213,44 @@
     }
 
     // 懒加载代理（browse 组）
-    if (typeof global.loadExamList !== 'function') {
-        global.loadExamList = proxyAfterGroup(BROWSE_GROUP, function () {
-            return global.__legacyLoadExamList || global.loadExamList;
+    setGlobalFunctionIfAbsent('loadExamList', proxyAfterGroup(BROWSE_GROUP, function () {
+        return global.__legacyLoadExamList || global.loadExamList;
+    }));
+
+    setGlobalFunctionIfAbsent('resetBrowseViewToAll', proxyAfterGroup(BROWSE_GROUP, function () {
+        return global.__legacyResetBrowseViewToAll || global.resetBrowseViewToAll;
+    }));
+
+    [
+        ['showLibraryLoaderModal', BROWSE_GROUP, '题库管理模块未就绪'],
+        ['showThemeSwitcherModal', 'theme-tools', '主题切换模块未就绪'],
+        ['filterByType', BROWSE_GROUP, '题库筛选模块未就绪'],
+        ['filterRecordsByType', BROWSE_GROUP, '练习筛选模块未就绪'],
+        ['toggleBulkDelete', BROWSE_GROUP, '批量删除模块未就绪'],
+        ['clearPracticeData', BROWSE_GROUP, '练习数据模块未就绪'],
+        ['showAchievements', 'more-tools', '成就模块未就绪'],
+        ['hideAchievements', 'more-tools', null]
+    ].forEach(function registerLazyContract(item) {
+        var name = item[0];
+        var group = item[1];
+        var message = item[2];
+        ensureGlobalFunctionAfterGroup(name, group, function () {
+            if (message) {
+                showNotReady(message);
+            }
         });
-    }
-
-    if (typeof global.resetBrowseViewToAll !== 'function') {
-        global.resetBrowseViewToAll = proxyAfterGroup(BROWSE_GROUP, function () {
-            return global.__legacyResetBrowseViewToAll || global.resetBrowseViewToAll;
-        });
-    }
-
-    ensureGlobalFunctionAfterGroup('showLibraryLoaderModal', BROWSE_GROUP, function () {
-        if (typeof global.showMessage === 'function') {
-            global.showMessage('题库管理模块未就绪', 'warning');
-        }
-    });
-
-    ensureGlobalFunctionAfterGroup('showThemeSwitcherModal', 'theme-tools', function () {
-        if (typeof global.showMessage === 'function') {
-            global.showMessage('主题切换模块未就绪', 'warning');
-        }
-    });
-
-    ensureGlobalFunctionAfterGroup('filterByType', BROWSE_GROUP, function () {
-        if (typeof global.showMessage === 'function') {
-            global.showMessage('题库筛选模块未就绪', 'warning');
-        }
-    });
-
-    ensureGlobalFunctionAfterGroup('filterRecordsByType', BROWSE_GROUP, function () {
-        if (typeof global.showMessage === 'function') {
-            global.showMessage('练习筛选模块未就绪', 'warning');
-        }
     });
 
     ensureGlobalFunctionAfterGroup('openExam', BROWSE_GROUP, function (examId, options) {
         if (global.app && typeof global.app.openExam === 'function') {
             return global.app.openExam(examId, options);
         }
-        if (typeof global.showMessage === 'function') {
-            global.showMessage('题目模块未就绪', 'warning');
-        }
+        showNotReady('题目模块未就绪');
         return undefined;
     });
 
     ensureGlobalFunctionAfterGroup('viewPDF', BROWSE_GROUP, function (examId) {
-        if (typeof global.showMessage === 'function') {
-            global.showMessage('PDF 模块未就绪', 'warning');
-        }
+        showNotReady('PDF 模块未就绪');
         return examId;
     });
 
@@ -289,26 +277,6 @@
         return undefined;
     });
 
-    ensureGlobalFunctionAfterGroup('toggleBulkDelete', BROWSE_GROUP, function () {
-        if (typeof global.showMessage === 'function') {
-            global.showMessage('批量删除模块未就绪', 'warning');
-        }
-    });
-
-    ensureGlobalFunctionAfterGroup('clearPracticeData', BROWSE_GROUP, function () {
-        if (typeof global.showMessage === 'function') {
-            global.showMessage('练习数据模块未就绪', 'warning');
-        }
-    });
-
-    ensureGlobalFunctionAfterGroup('showAchievements', 'more-tools', function () {
-        if (typeof global.showMessage === 'function') {
-            global.showMessage('成就模块未就绪', 'warning');
-        }
-    });
-
-    ensureGlobalFunctionAfterGroup('hideAchievements', 'more-tools', function () { });
-
     ensureGlobalFunctionAfterGroup('browseCategory', BROWSE_GROUP, function (category, type, filterMode, path) {
         if (global.app && typeof global.app.browseCategory === 'function') {
             return global.app.browseCategory(category, type, filterMode, path);
@@ -320,16 +288,12 @@
     });
 
     // 懒加载代理（more 组/小游戏）
-    if (typeof global.launchMiniGame !== 'function') {
-        global.launchMiniGame = proxyAfterGroup('more-tools', function () {
-            return global.__legacyLaunchMiniGame || global.launchMiniGame;
-        }, function fallback(gameId) {
-            if (typeof global.showMessage === 'function') {
-                global.showMessage('小游戏模块未就绪', 'info');
-            }
-            return gameId;
-        });
-    }
+    setGlobalFunctionIfAbsent('launchMiniGame', proxyAfterGroup('more-tools', function () {
+        return global.__legacyLaunchMiniGame || global.launchMiniGame;
+    }, function fallback(gameId) {
+        showNotReady('小游戏模块未就绪', 'info');
+        return gameId;
+    }));
 
     function getActiveViewName() {
         var active = document.querySelector('.view.active');
