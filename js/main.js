@@ -572,7 +572,7 @@ function extractCompletionPayload(envelope) {
     return null;
 }
 
-function extractAnalysisPatchPayload(envelope) {
+function extractCoachPatchPayload(envelope) {
     if (!envelope || typeof envelope !== 'object') {
         return null;
     }
@@ -581,6 +581,12 @@ function extractAnalysisPatchPayload(envelope) {
         const candidate = candidates[i];
         if (!candidate || typeof candidate !== 'object') {
             continue;
+        }
+        if (candidate.readingCoachSnapshot && typeof candidate.readingCoachSnapshot === 'object') {
+            return candidate;
+        }
+        if (candidate.realData && candidate.realData.readingCoachSnapshot && typeof candidate.realData.readingCoachSnapshot === 'object') {
+            return candidate;
         }
         if (candidate.singleAttemptAnalysisLlm && typeof candidate.singleAttemptAnalysisLlm === 'object') {
             return candidate;
@@ -606,7 +612,7 @@ function extractCompletionSessionId(envelope) {
     return null;
 }
 
-async function applySingleAttemptAnalysisPatch(payload) {
+async function applyReadingCoachPatch(payload) {
     if (!payload || typeof payload !== 'object') {
         return false;
     }
@@ -618,15 +624,19 @@ async function applySingleAttemptAnalysisPatch(payload) {
     if (!sessionId) {
         return false;
     }
+    const snapshotPatch = payload.readingCoachSnapshot || payload.realData?.readingCoachSnapshot;
+    const transcriptPatch = payload.readingCoachTranscript || payload.realData?.readingCoachTranscript;
     const llmPatch = payload.singleAttemptAnalysisLlm || payload.realData?.singleAttemptAnalysisLlm;
-    if (!llmPatch || typeof llmPatch !== 'object') {
+    const hasSnapshot = snapshotPatch && typeof snapshotPatch === 'object';
+    const hasLlmPatch = llmPatch && typeof llmPatch === 'object';
+    if (!hasSnapshot && !hasLlmPatch) {
         return false;
     }
 
     const patchBundle = {
-        singleAttemptAnalysisInput: payload.singleAttemptAnalysisInput || payload.realData?.singleAttemptAnalysisInput || null,
-        singleAttemptAnalysis: payload.singleAttemptAnalysis || payload.realData?.singleAttemptAnalysis || null,
-        singleAttemptAnalysisLlm: llmPatch
+        ...(hasSnapshot ? { readingCoachSnapshot: snapshotPatch } : {}),
+        ...(Array.isArray(transcriptPatch) ? { readingCoachTranscript: transcriptPatch } : {}),
+        ...(hasLlmPatch ? { singleAttemptAnalysisLlm: llmPatch } : {})
     };
 
     const practiceCore = window.PracticeCore;
@@ -664,7 +674,7 @@ async function applySingleAttemptAnalysisPatch(payload) {
         realData: Object.assign({}, target.realData || {}, patchBundle),
         updatedAt: new Date().toISOString()
     });
-    await persistPracticeRecordsAndRefresh(records, 'analysis-patch');
+    await persistPracticeRecordsAndRefresh(records, 'coach-patch');
     return true;
 }
 
@@ -849,10 +859,10 @@ async function consumePendingPracticeMessages() {
             ? entry.message
             : entry;
         const normalizedType = String(envelope?.type || '').toUpperCase();
-        if (normalizedType === 'PRACTICE_ANALYSIS_PATCH') {
-            const patchPayload = extractAnalysisPatchPayload(envelope) || {};
+        if (normalizedType === 'PRACTICE_COACH_PATCH') {
+            const patchPayload = extractCoachPatchPayload(envelope) || {};
             const sessionId = patchPayload.sessionId || patchPayload.realData?.sessionId || '';
-            const generatedAt = patchPayload.singleAttemptAnalysisLlm?.generatedAt || '';
+            const generatedAt = patchPayload.readingCoachSnapshot?.generatedAt || '';
             const dedupeKey = `${normalizedType}|${sessionId}|${generatedAt}`;
             if (seen.has(dedupeKey)) {
                 return false;
@@ -883,10 +893,10 @@ async function consumePendingPracticeMessages() {
             const payload = extractCompletionPayload(envelope) || {};
             await savePracticeRecordFallback(extractPendingExamId(entry), payload);
             hasProcessedEntry = true;
-        } else if (type === 'PRACTICE_ANALYSIS_PATCH') {
-            const patchPayload = extractAnalysisPatchPayload(envelope);
+        } else if (type === 'PRACTICE_COACH_PATCH') {
+            const patchPayload = extractCoachPatchPayload(envelope);
             if (patchPayload) {
-                await applySingleAttemptAnalysisPatch(patchPayload);
+                await applyReadingCoachPatch(patchPayload);
                 hasProcessedEntry = true;
             }
         }
@@ -943,12 +953,12 @@ function setupMessageListener() {
                 }
                 setTimeout(syncPracticeRecords, 300);
             }
-        } else if (type === 'PRACTICE_ANALYSIS_PATCH' || type === 'practice_analysis_patch') {
-            const patchPayload = extractAnalysisPatchPayload(data);
+        } else if (type === 'PRACTICE_COACH_PATCH' || type === 'practice_coach_patch') {
+            const patchPayload = extractCoachPatchPayload(data);
             if (!patchPayload) {
                 return;
             }
-            applySingleAttemptAnalysisPatch(patchPayload).then((updated) => {
+            applyReadingCoachPatch(patchPayload).then((updated) => {
                 if (updated) {
                     setTimeout(syncPracticeRecords, 300);
                 }

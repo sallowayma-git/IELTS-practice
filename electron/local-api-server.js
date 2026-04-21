@@ -41,7 +41,7 @@ class LocalApiServer {
         });
 
         this._registerEvaluateRoutes();
-        this._registerReadingAnalysisRoutes();
+        this._registerReadingCoachRoutes();
         this._registerConfigRoutes();
         this._registerPromptRoutes();
         this._registerEssayRoutes();
@@ -160,16 +160,52 @@ class LocalApiServer {
         });
     }
 
-    _registerReadingAnalysisRoutes() {
-        const { readingAnalysisService } = this.services;
-        if (!readingAnalysisService) {
+    _registerReadingCoachRoutes() {
+        const { readingCoachService } = this.services;
+        if (!readingCoachService) {
             return;
         }
 
-        this.app.post('/api/reading/single-attempt-analysis', async (req, res) => {
+        this.app.post('/api/reading/coach/query', async (req, res) => {
+            const wantsStream = req.query?.stream === '1' || req.query?.stream === 'true' || req.body?.stream === true;
+            if (wantsStream) {
+                res.setHeader('Content-Type', 'text/event-stream');
+                res.setHeader('Cache-Control', 'no-cache');
+                res.setHeader('Connection', 'keep-alive');
+                res.flushHeaders?.();
+
+                const writeEvent = (type, data = {}) => {
+                    res.write(`event: ${type}\n`);
+                    res.write(`data: ${JSON.stringify(data)}\n\n`);
+                };
+
+                try {
+                    writeEvent('start', { ts: Date.now() });
+                    const payload = Object.assign({}, req.body || {});
+                    delete payload.stream;
+                    const data = await readingCoachService.query(payload, {
+                        onEvent: (event) => {
+                            writeEvent(event?.type || 'progress', event || {});
+                        }
+                    });
+                    writeEvent('complete', { success: true, data });
+                } catch (error) {
+                    writeEvent('error', {
+                        success: false,
+                        error: {
+                            code: error?.code || 'reading_coach_failed',
+                            message: error?.message || 'reading_coach_failed'
+                        }
+                    });
+                } finally {
+                    res.end();
+                }
+                return;
+            }
+
             try {
                 const payload = req.body || {};
-                const data = await readingAnalysisService.generateSingleAttemptAnalysis(payload);
+                const data = await readingCoachService.query(payload);
                 res.json({ success: true, data });
             } catch (error) {
                 this._sendError(res, error);

@@ -8,87 +8,68 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const require = createRequire(import.meta.url);
-const ReadingAnalysisService = require(path.join(repoRoot, 'electron/services/reading-analysis.service.js'));
+const ReadingCoachService = require(path.join(repoRoot, 'electron/services/reading-coach.service.js'));
 
-function buildPayload() {
-    return {
-        singleAttemptAnalysisInput: {
-            dataQuality: { confidence: 0.8 },
-            analysisSignals: { unansweredCount: 1 }
-        },
-        singleAttemptAnalysis: {
-            summary: {
-                accuracy: 0.62,
-                durationSec: 900,
-                unansweredRate: 0.1,
-                changedAnswerRate: 0.2
-            },
-            radar: {
-                byQuestionKind: [
-                    { kind: 'matching', total: 10, correct: 6, accuracy: 0.6, confidence: 0.8 }
-                ],
-                byPassageCategory: []
-            },
-            diagnosis: [
-                {
-                    code: 'stage1_diag_1',
-                    reason: '结构化分析结论1',
-                    evidence: ['accuracy: 0.62']
-                }
-            ],
-            nextActions: [
-                {
-                    type: 'practice_kind',
-                    target: 'matching',
-                    instruction: '按题型补练',
-                    evidence: ['matching accuracy: 0.6']
-                }
-            ]
-        }
-    };
-}
-
-async function testParseErrorShouldDegradeInsteadOfThrow() {
-    const service = new ReadingAnalysisService({
-        getDefaultModelForTask() {
-            return null;
-        }
-    });
+async function testCoachQuerySuccessWithGroundedRetrieval() {
+    const service = new ReadingCoachService({});
     let capturedMessages = null;
     service.providerOrchestrator = {
         async streamCompletion(options = {}) {
             capturedMessages = options.messages;
             if (typeof options.onChunk === 'function') {
-                options.onChunk('{"diagnosis":[{"code":"d1","reason":"截断');
+                options.onChunk(JSON.stringify({
+                    answer: '先锁定题干关键词，再回原文找同义替换。',
+                    answerSections: [
+                        { type: 'direct_answer', text: '先锁定题干关键词，再回原文找同义替换。' },
+                        { type: 'evidence', text: '优先找题干名词在段落中的改写表达。' }
+                    ],
+                    followUps: ['这题证据在哪段', '我下一步练什么'],
+                    confidence: 'high',
+                    missingContext: []
+                }));
             }
             return {
                 usedConfig: { id: 1, provider: 'openai', default_model: 'gpt-test' },
-                providerPath: ['openai/gpt-test']
+                providerPath: [{ provider: 'openai', model: 'gpt-test', status: 'success' }]
             };
         }
     };
 
-    const result = await service.generateSingleAttemptAnalysis(buildPayload());
-    assert.strictEqual(result.model_trace.degraded, true, '解析失败应触发降级返回');
-    assert.strictEqual(result.model_trace.degraded_reason, 'parse_error', '解析失败应标记 parse_error');
-    assert.ok(Array.isArray(result.diagnosis) && result.diagnosis.length > 0, '降级结果应包含 diagnosis');
-    assert.ok(Array.isArray(result.nextActions) && result.nextActions.length > 0, '降级结果应包含 nextActions');
-    const combinedPrompt = Array.isArray(capturedMessages)
+    const result = await service.query({
+        examId: 'p1-high-01',
+        query: '这道题怎么定位证据？',
+        action: 'chat',
+        surface: 'chat_widget',
+        promptKind: 'freeform',
+        focusQuestionNumbers: ['1'],
+        attemptContext: { submitted: true }
+    });
+
+    assert.strictEqual(result.coachVersion, 'v2', '应返回 v2 版本');
+    assert.strictEqual(result.route, 'page_grounded', '题内提问应命中 page_grounded');
+    assert.strictEqual(result.intent.kind, 'grounded_question', '应识别为 grounded_question');
+    assert.ok(Array.isArray(result.citations) && result.citations.length > 0, '应返回检索引用');
+    assert.ok(Array.isArray(result.followUps) && result.followUps.length > 0, '应返回 followUps');
+    const promptJoined = Array.isArray(capturedMessages)
         ? capturedMessages.map((item) => String(item?.content || '')).join('\n')
         : '';
-    assert.ok(
-        combinedPrompt.includes('reason/instruction/evidence 必须使用简体中文')
-        || combinedPrompt.includes('reason/instruction/evidence 必须是自然中文'),
-        '构造消息时应包含中文输出约束'
-    );
+    assert.ok(promptJoined.includes('JSON 字段必须为：answer, answerSections, followUps, confidence, missingContext'), '提示词应包含结构化约束');
 }
 
-async function testProviderErrorShouldDegradeInsteadOfThrow() {
-    const service = new ReadingAnalysisService({
-        getDefaultModelForTask() {
-            return null;
-        }
-    });
+async function testCoachQueryInvalidPayloadThrows() {
+    const service = new ReadingCoachService({});
+    let thrown = null;
+    try {
+        await service.query({ query: 'test' });
+    } catch (error) {
+        thrown = error;
+    }
+    assert.ok(thrown, '缺少 examId 应抛错');
+    assert.strictEqual(thrown.code, 'invalid_payload', '错误码应为 invalid_payload');
+}
+
+async function testCoachProviderFailureShouldThrow() {
+    const service = new ReadingCoachService({});
     service.providerOrchestrator = {
         async streamCompletion() {
             const error = new Error('provider unavailable');
@@ -97,37 +78,90 @@ async function testProviderErrorShouldDegradeInsteadOfThrow() {
         }
     };
 
-    const result = await service.generateSingleAttemptAnalysis(buildPayload());
-    assert.strictEqual(result.model_trace.degraded, true, 'Provider 失败应触发降级返回');
-    assert.strictEqual(result.model_trace.degraded_reason, 'provider_unavailable', 'Provider 失败应写入降级原因');
-    assert.ok(Array.isArray(result.diagnosis) && result.diagnosis.length > 0, '降级结果应包含 diagnosis');
-    assert.ok(Array.isArray(result.nextActions) && result.nextActions.length > 0, '降级结果应包含 nextActions');
-}
-
-async function testInvalidPayloadShouldStillThrow() {
-    const service = new ReadingAnalysisService({
-        getDefaultModelForTask() {
-            return null;
-        }
-    });
     let thrown = null;
     try {
-        await service.generateSingleAttemptAnalysis({});
+        await service.query({
+            examId: 'p1-high-01',
+            query: '帮我解释这题',
+            action: 'chat',
+            attemptContext: { submitted: true }
+        });
     } catch (error) {
         thrown = error;
     }
-    assert.ok(thrown, '入参缺失时应抛错');
-    assert.strictEqual(thrown.code, 'invalid_payload', '入参缺失错误码应保持 invalid_payload');
+
+    assert.ok(thrown, 'provider 失败应抛错');
+    assert.strictEqual(thrown.code, 'provider_unavailable', '应透传 provider 错误码');
+}
+
+async function testCoachRouteUnrelatedChat() {
+    const service = new ReadingCoachService({});
+    service.providerOrchestrator = {
+        async streamCompletion(options = {}) {
+            if (typeof options.onChunk === 'function') {
+                options.onChunk(JSON.stringify({
+                    answer: '你好，我可以帮你做阅读题定位和复盘。',
+                    answerSections: [{ type: 'direct_answer', text: '你好，我可以帮你做阅读题定位和复盘。' }],
+                    followUps: ['现在开始做哪题'],
+                    confidence: 'high',
+                    missingContext: []
+                }));
+            }
+            return { usedConfig: null, providerPath: [] };
+        }
+    };
+
+    const result = await service.query({
+        examId: 'p1-high-01',
+        query: '你好',
+        action: 'chat',
+        attemptContext: { submitted: true }
+    });
+
+    assert.strictEqual(result.route, 'unrelated_chat', '问候语应命中 unrelated_chat');
+    assert.strictEqual(result.responseKind, 'social', '问候语响应类型应为 social');
+}
+
+async function testCoachLockedUntilSubmit() {
+    const service = new ReadingCoachService({});
+    let thrown = null;
+    try {
+        await service.query({
+            examId: 'p1-high-01',
+            query: '给我提示',
+            action: 'chat',
+            attemptContext: { submitted: false }
+        });
+    } catch (error) {
+        thrown = error;
+    }
+    assert.ok(thrown, '未提交状态应被拒绝');
+    assert.strictEqual(thrown.code, 'coach_locked_until_submit', '未提交状态错误码应为 coach_locked_until_submit');
+}
+
+async function testTableCompletionQuestionExtraction() {
+    const service = new ReadingCoachService({});
+    const bundle = await service._loadExamBundle('p2-low-06');
+    const q1Chunk = bundle.chunks.find((chunk) => chunk.chunkType === 'question_item' && Array.isArray(chunk.questionNumbers) && chunk.questionNumbers.includes('1'));
+    assert.ok(q1Chunk, '应构建 Q1 题干 chunk');
+    assert.ok(!String(q1Chunk.content || '').includes('题干未解析'), '表格题题干不应回退到“题干未解析”');
+    assert.ok(/natural process that appears simpler than it actually is/i.test(q1Chunk.content), '应提取表格题实际题干文案');
+    const passageG = bundle.chunks.find((chunk) => chunk.chunkType === 'passage_paragraph' && Array.isArray(chunk.paragraphLabels) && chunk.paragraphLabels.includes('G'));
+    assert.ok(passageG, '应抽取到 G 段原文 chunk');
+    assert.ok(/Photosynthesis/i.test(passageG.content), 'G 段内容应包含 Photosynthesis 证据');
 }
 
 async function main() {
     try {
-        await testParseErrorShouldDegradeInsteadOfThrow();
-        await testProviderErrorShouldDegradeInsteadOfThrow();
-        await testInvalidPayloadShouldStillThrow();
+        await testCoachQuerySuccessWithGroundedRetrieval();
+        await testCoachQueryInvalidPayloadThrows();
+        await testCoachProviderFailureShouldThrow();
+        await testCoachRouteUnrelatedChat();
+        await testCoachLockedUntilSubmit();
+        await testTableCompletionQuestionExtraction();
         console.log(JSON.stringify({
             status: 'pass',
-            detail: 'ReadingAnalysisService 已覆盖 parse/provider 失败降级与 invalid_payload 抛错契约'
+            detail: 'ReadingCoachService 已覆盖路由、检索、题干提取与提交态门禁'
         }, null, 2));
     } catch (error) {
         console.log(JSON.stringify({

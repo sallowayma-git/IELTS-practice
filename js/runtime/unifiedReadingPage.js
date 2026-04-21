@@ -7,40 +7,15 @@
     const PENDING_PRACTICE_MESSAGES_KEY = 'exam_system_pending_practice_messages_v1';
     const WINDOW_NAME_PENDING_PREFIX = '__exam_pending_practice_v1__';
     const LOCAL_API_INFO_STORAGE_KEY = 'exam_system_local_api_info_v1';
-    const READING_ANALYSIS_API_PATH = '/api/reading/single-attempt-analysis';
-    const PARENT_ANALYSIS_REQUEST_TIMEOUT_MS = 22000;
-    const PARENT_ANALYSIS_RETRY_TIMEOUT_MS = [22000, 32000];
-    const PARENT_ANALYSIS_RETRY_BACKOFF_MS = [450];
-    const BRIDGE_RETRYABLE_ERROR_CODES = new Set([
-        'analysis_bridge_timeout',
-        'analysis_bridge_post_failed',
-        'analysis_bridge_unavailable',
-        'analysis_bridge_failed',
-        'analysis_bridge_upstream_timeout',
-        'analysis_bridge_request_failed',
-        'reading_analysis_ipc_failed',
-        'reading_analysis_network_error',
-        'local_api_unavailable'
+    const READING_COACH_API_PATH = '/api/reading/coach/query';
+    const READING_COACH_STYLE_ID = 'reading-coach-style';
+    const COACH_REQUEST_TIMEOUT_MS = 30000;
+    const QUICK_ACTIONS = Object.freeze([
+        { id: 'hint', label: '给我提示' },
+        { id: 'explain', label: '解释这题' },
+        { id: 'review', label: '复盘错题' },
+        { id: 'similar', label: '推荐同类题' }
     ]);
-    const BRIDGE_RETRY_HINTS = [
-        'timeout',
-        'timed out',
-        'network',
-        'socket',
-        'econn',
-        'reset',
-        'temporarily',
-        'unavailable',
-        'busy',
-        '429',
-        '502',
-        '503',
-        '504',
-        '超时',
-        '网络',
-        '拥堵',
-        '暂时不可用'
-    ];
     const EXPLANATION_STYLE_ID = 'reading-explanation-style';
     const ANALYSIS_STYLE_ID = 'reading-single-attempt-analysis-style';
     const EXPLANATION_SPLIT_KINDS = new Set([
@@ -51,7 +26,7 @@
     ]);
     const navStatus = new Map();
     const scriptCache = new Map();
-    const pendingAnalysisBridgeRequests = new Map();
+    const pendingCoachBridgeRequests = new Map();
     const QUESTION_KIND_LABELS = {
         single_choice: '单选题',
         multi_choice: '多选题',
@@ -123,7 +98,16 @@
         parentWindow: global.opener || global.parent || null,
         llmAnalysisStatus: 'idle',
         llmAnalysisMessage: '',
-        llmAnalysisRequestId: 0
+        llmAnalysisRequestId: 0,
+        readingCoachStatus: 'idle',
+        readingCoachError: '',
+        readingCoachBusy: false,
+        readingCoachRequestId: 0,
+        readingCoachSnapshot: null,
+        readingCoachTranscript: [],
+        readingCoachUiReady: false,
+        readingCoachOpen: false,
+        readingCoachFabDragSuppressUntil: 0
     };
 
     const dom = {
@@ -492,10 +476,35 @@
                 display: grid;
                 gap: 8px;
             }
+            .reading-guidance-card__head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+            }
             .reading-guidance-card h5 {
                 margin: 0;
                 font-size: 14px;
                 color: #0f172a;
+            }
+            .reading-guidance-card__ai-review-btn {
+                border: 1px solid rgba(14, 116, 144, 0.35);
+                border-radius: 8px;
+                background: rgba(14, 165, 233, 0.12);
+                color: #075985;
+                font-size: 12px;
+                font-weight: 700;
+                padding: 6px 10px;
+                cursor: pointer;
+                transition: background-color 0.2s ease, border-color 0.2s ease;
+            }
+            .reading-guidance-card__ai-review-btn:hover {
+                background: rgba(14, 165, 233, 0.18);
+                border-color: rgba(14, 116, 144, 0.5);
+            }
+            .reading-guidance-card__ai-review-btn:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
             }
             .reading-guidance-card__row {
                 display: grid;
@@ -564,25 +573,6 @@
             }
             .reading-guidance-card__status--degraded {
                 color: #b45309;
-            }
-            .reading-guidance-card__retry {
-                border: 1px solid rgba(180, 83, 9, 0.35);
-                border-radius: 8px;
-                background: rgba(251, 191, 36, 0.14);
-                color: #92400e;
-                font-size: 12px;
-                font-weight: 600;
-                padding: 6px 10px;
-                cursor: pointer;
-                transition: background-color 0.2s ease, border-color 0.2s ease;
-            }
-            .reading-guidance-card__retry:hover {
-                background: rgba(251, 191, 36, 0.2);
-                border-color: rgba(180, 83, 9, 0.48);
-            }
-            .reading-guidance-card__retry:disabled {
-                opacity: 0.6;
-                cursor: not-allowed;
             }
             @keyframes reading-status-flow {
                 0% {
@@ -1782,8 +1772,12 @@
         results.realData = Object.assign({}, results.realData || {}, {
             singleAttemptAnalysisInput: analysisArtifacts.input,
             singleAttemptAnalysis: results.singleAttemptAnalysis,
-            singleAttemptAnalysisLlm: results.singleAttemptAnalysisLlm || null
+            singleAttemptAnalysisLlm: results.singleAttemptAnalysisLlm || null,
+            readingCoachSnapshot: state.readingCoachSnapshot || null,
+            readingCoachTranscript: Array.isArray(state.readingCoachTranscript) ? state.readingCoachTranscript.slice() : []
         });
+        results.readingCoachSnapshot = state.readingCoachSnapshot || null;
+        results.readingCoachTranscript = Array.isArray(state.readingCoachTranscript) ? state.readingCoachTranscript.slice() : [];
         return results;
     }
 
@@ -2308,6 +2302,934 @@
         return null;
     }
 
+    function ensureReadingCoachStyles() {
+        if (!document || !document.head || typeof document.head.appendChild !== 'function') {
+            return;
+        }
+        if (document.getElementById(READING_COACH_STYLE_ID)) {
+            return;
+        }
+        const style = document.createElement('style');
+        style.id = READING_COACH_STYLE_ID;
+        style.textContent = `
+            .reading-coach-fab {
+                position: fixed;
+                right: 16px;
+                bottom: 20px;
+                z-index: 9999;
+                border: 0;
+                border-radius: 999px;
+                padding: 10px 14px;
+                background: linear-gradient(135deg, #0f766e, #0e7490);
+                color: #fff;
+                font-size: 13px;
+                font-weight: 700;
+                box-shadow: 0 12px 24px rgba(15, 118, 110, 0.28);
+                cursor: pointer;
+                touch-action: none;
+                user-select: none;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .reading-coach-panel {
+                position: fixed;
+                right: 16px;
+                bottom: 70px;
+                width: min(380px, calc(100vw - 24px));
+                max-height: min(68vh, 560px);
+                z-index: 9999;
+                border-radius: 12px;
+                border: 1px solid rgba(15, 23, 42, 0.12);
+                background: rgba(255, 255, 255, 0.98);
+                box-shadow: 0 22px 40px rgba(15, 23, 42, 0.24);
+                display: none;
+                overflow: hidden;
+                touch-action: none;
+            }
+            .reading-coach-panel.is-open {
+                display: flex;
+                flex-direction: column;
+            }
+            .reading-coach-panel__header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 10px 12px;
+                border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+                background: #f8fafc;
+            }
+            .reading-coach-panel__title {
+                font-size: 13px;
+                font-weight: 700;
+                color: #0f172a;
+            }
+            .reading-coach-panel__close {
+                border: 0;
+                background: transparent;
+                font-size: 16px;
+                color: #334155;
+                cursor: pointer;
+            }
+            .reading-coach-panel__status {
+                padding: 8px 12px 0;
+                font-size: 12px;
+                color: #0f766e;
+                min-height: 22px;
+            }
+            .reading-coach-panel__status.is-error {
+                color: #b91c1c;
+            }
+            .reading-coach-panel__messages {
+                flex: 1;
+                overflow: auto;
+                padding: 10px 12px;
+                background: #f8fafc;
+                display: grid;
+                gap: 8px;
+            }
+            .reading-coach-msg {
+                border-radius: 10px;
+                padding: 8px 10px;
+                font-size: 12px;
+                line-height: 1.5;
+                white-space: pre-wrap;
+            }
+            .reading-coach-msg.user {
+                justify-self: end;
+                background: #dbeafe;
+                color: #1e3a8a;
+            }
+            .reading-coach-msg.assistant {
+                justify-self: start;
+                background: #fff;
+                border: 1px solid rgba(148, 163, 184, 0.26);
+                color: #0f172a;
+            }
+            .reading-coach-msg.error {
+                border-color: rgba(185, 28, 28, 0.35);
+                color: #991b1b;
+            }
+            .reading-coach-panel__actions,
+            .reading-coach-panel__followups {
+                display: flex;
+                gap: 6px;
+                flex-wrap: wrap;
+                padding: 8px 12px 0;
+            }
+            .reading-coach-chip {
+                border: 1px solid rgba(15, 118, 110, 0.28);
+                border-radius: 999px;
+                background: #fff;
+                color: #0f766e;
+                font-size: 11px;
+                font-weight: 600;
+                padding: 4px 8px;
+                cursor: pointer;
+            }
+            .reading-coach-chip:disabled {
+                opacity: 0.55;
+                cursor: not-allowed;
+            }
+            .reading-coach-panel__composer {
+                display: flex;
+                gap: 8px;
+                padding: 10px 12px 12px;
+                border-top: 1px solid rgba(148, 163, 184, 0.3);
+                background: #fff;
+            }
+            .reading-coach-panel__input {
+                flex: 1;
+                border: 1px solid rgba(148, 163, 184, 0.45);
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 12px;
+            }
+            .reading-coach-panel__send {
+                border: 0;
+                border-radius: 8px;
+                background: #0f766e;
+                color: #fff;
+                font-size: 12px;
+                font-weight: 700;
+                padding: 0 12px;
+                cursor: pointer;
+            }
+            @media (max-width: 640px) {
+                .reading-coach-panel {
+                    right: 8px;
+                    left: 8px;
+                    width: auto;
+                    max-height: 70vh;
+                }
+                .reading-coach-fab {
+                    right: 10px;
+                    bottom: 12px;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function normalizeFloatingPosition(node) {
+        if (!node || typeof node.getBoundingClientRect !== 'function') {
+            return;
+        }
+        const rect = node.getBoundingClientRect();
+        node.style.left = `${Math.max(0, rect.left)}px`;
+        node.style.top = `${Math.max(0, rect.top)}px`;
+        node.style.right = 'auto';
+        node.style.bottom = 'auto';
+    }
+
+    function attachFloatingDrag(node, handle, options = {}) {
+        if (!node || node.dataset.coachDragBound === '1') {
+            return;
+        }
+        const dragHandle = handle || node;
+        if (!dragHandle || typeof dragHandle.addEventListener !== 'function') {
+            return;
+        }
+        let isDragging = false;
+        let moved = false;
+        let originLeft = 0;
+        let originTop = 0;
+        let startX = 0;
+        let startY = 0;
+        let nodeWidth = 0;
+        let nodeHeight = 0;
+
+        const onPointerMove = (event) => {
+            if (!isDragging || !event) {
+                return;
+            }
+            const currentX = Number(event.clientX);
+            const currentY = Number(event.clientY);
+            if (!Number.isFinite(currentX) || !Number.isFinite(currentY)) {
+                return;
+            }
+            const deltaX = currentX - startX;
+            const deltaY = currentY - startY;
+            if (!moved && (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3)) {
+                moved = true;
+            }
+            const maxLeft = Math.max(0, global.innerWidth - nodeWidth);
+            const maxTop = Math.max(0, global.innerHeight - nodeHeight);
+            const nextLeft = Math.min(maxLeft, Math.max(0, originLeft + deltaX));
+            const nextTop = Math.min(maxTop, Math.max(0, originTop + deltaY));
+            node.style.left = `${nextLeft}px`;
+            node.style.top = `${nextTop}px`;
+            if (typeof options.onDragMove === 'function') {
+                options.onDragMove(nextLeft, nextTop, nodeWidth, nodeHeight);
+            }
+        };
+
+        const stopDragging = () => {
+            isDragging = false;
+            try {
+                global.removeEventListener('pointermove', onPointerMove);
+                global.removeEventListener('pointerup', stopDragging);
+                global.removeEventListener('pointercancel', stopDragging);
+            } catch (_) {
+                // ignore listener cleanup failures
+            }
+            if (moved && typeof options.onDragEnd === 'function') {
+                options.onDragEnd();
+            }
+        };
+
+        dragHandle.addEventListener('pointerdown', (event) => {
+            if (!event) return;
+            if (typeof event.button === 'number' && event.button !== 0) {
+                return;
+            }
+            if (options.ignoreSelector && event.target && typeof event.target.closest === 'function') {
+                const blocked = event.target.closest(options.ignoreSelector);
+                if (blocked) {
+                    return;
+                }
+            }
+            normalizeFloatingPosition(node);
+            const rect = node.getBoundingClientRect();
+            originLeft = rect.left;
+            originTop = rect.top;
+            nodeWidth = rect.width;
+            nodeHeight = rect.height;
+            startX = Number(event.clientX) || rect.left;
+            startY = Number(event.clientY) || rect.top;
+            moved = false;
+            isDragging = true;
+            try {
+                global.addEventListener('pointermove', onPointerMove);
+                global.addEventListener('pointerup', stopDragging);
+                global.addEventListener('pointercancel', stopDragging);
+            } catch (_) {
+                isDragging = false;
+            }
+            if (typeof event.preventDefault === 'function') {
+                event.preventDefault();
+            }
+        });
+
+        node.dataset.coachDragBound = '1';
+    }
+
+    function syncReadingCoachPanelWithFab() {
+        const fab = document.getElementById('reading-coach-fab');
+        const panel = document.getElementById('reading-coach-panel');
+        if (!fab || !panel || typeof fab.getBoundingClientRect !== 'function' || typeof panel.getBoundingClientRect !== 'function') {
+            return;
+        }
+        normalizeFloatingPosition(fab);
+        const fabRect = fab.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        const spacing = 10;
+        const maxLeft = Math.max(0, global.innerWidth - panelRect.width);
+        const maxTop = Math.max(0, global.innerHeight - panelRect.height);
+        const left = Math.min(maxLeft, Math.max(0, fabRect.left + fabRect.width - panelRect.width));
+        const preferredTop = fabRect.top - panelRect.height - spacing;
+        const fallbackTop = fabRect.top + fabRect.height + spacing;
+        const top = preferredTop >= 0
+            ? preferredTop
+            : Math.min(maxTop, Math.max(0, fallbackTop));
+        panel.style.left = `${left}px`;
+        panel.style.top = `${top}px`;
+        panel.style.right = 'auto';
+        panel.style.bottom = 'auto';
+    }
+
+    function setupReadingCoachDraggable() {
+        const fab = document.getElementById('reading-coach-fab');
+
+        attachFloatingDrag(fab, fab, {
+            onDragMove: () => {
+                syncReadingCoachPanelWithFab();
+            },
+            onDragEnd: () => {
+                state.readingCoachFabDragSuppressUntil = Date.now() + 180;
+            }
+        });
+        syncReadingCoachPanelWithFab();
+    }
+
+    function isReadingCoachAvailable() {
+        if (state.submitted) {
+            return true;
+        }
+        return Boolean(state.lastResults && state.lastResults.scoreInfo && Number.isFinite(Number(state.lastResults.scoreInfo.totalQuestions)));
+    }
+
+    function ensureReadingCoachUi() {
+        if (!document || !document.body || typeof document.body.appendChild !== 'function') {
+            return;
+        }
+        if (state.readingCoachUiReady) {
+            return;
+        }
+        ensureReadingCoachStyles();
+        if (!document.getElementById('reading-coach-fab')) {
+            const fab = document.createElement('button');
+            fab.id = 'reading-coach-fab';
+            fab.className = 'reading-coach-fab';
+            fab.type = 'button';
+            fab.textContent = 'AI 教练';
+            fab.addEventListener('click', () => {
+                if (!isReadingCoachAvailable()) {
+                    return;
+                }
+                if (state.readingCoachFabDragSuppressUntil > Date.now()) {
+                    return;
+                }
+                state.readingCoachOpen = !state.readingCoachOpen;
+                renderReadingCoachUi();
+            });
+            document.body.appendChild(fab);
+        }
+        if (!document.getElementById('reading-coach-panel')) {
+            const panel = document.createElement('section');
+            panel.id = 'reading-coach-panel';
+            panel.className = 'reading-coach-panel';
+            panel.innerHTML = `
+                <header class="reading-coach-panel__header">
+                    <span class="reading-coach-panel__title">Reading AI Coach V2</span>
+                    <button id="reading-coach-close" class="reading-coach-panel__close" type="button" aria-label="关闭">×</button>
+                </header>
+                <div id="reading-coach-status" class="reading-coach-panel__status"></div>
+                <div id="reading-coach-messages" class="reading-coach-panel__messages"></div>
+                <div id="reading-coach-actions" class="reading-coach-panel__actions"></div>
+                <div id="reading-coach-followups" class="reading-coach-panel__followups"></div>
+                <div class="reading-coach-panel__composer">
+                    <input id="reading-coach-input" class="reading-coach-panel__input" type="text" placeholder="问我：这题如何定位证据？" />
+                    <button id="reading-coach-send" class="reading-coach-panel__send" type="button">发送</button>
+                </div>
+            `;
+            document.body.appendChild(panel);
+
+            const closeBtn = panel.querySelector('#reading-coach-close');
+            closeBtn?.addEventListener('click', () => {
+                state.readingCoachOpen = false;
+                renderReadingCoachUi();
+            });
+            const sendBtn = panel.querySelector('#reading-coach-send');
+            sendBtn?.addEventListener('click', () => {
+                const input = panel.querySelector('#reading-coach-input');
+                const value = input && typeof input.value === 'string' ? input.value : '';
+                sendReadingCoachQuery(value, { action: 'chat', promptKind: 'freeform' });
+                if (input) {
+                    input.value = '';
+                }
+            });
+            const input = panel.querySelector('#reading-coach-input');
+            input?.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                const value = input.value || '';
+                sendReadingCoachQuery(value, { action: 'chat', promptKind: 'freeform' });
+                input.value = '';
+            });
+        }
+        setupReadingCoachDraggable();
+        if (!global.__readingCoachPanelSyncBound) {
+            try {
+                global.addEventListener('resize', () => {
+                    syncReadingCoachPanelWithFab();
+                });
+                global.__readingCoachPanelSyncBound = true;
+            } catch (_) {
+                // ignore listener bind failures
+            }
+        }
+        state.readingCoachUiReady = true;
+        renderReadingCoachUi();
+    }
+
+    function getReadingCoachHistory() {
+        return state.readingCoachTranscript
+            .slice(-8)
+            .map((entry) => ({
+                role: entry.role === 'assistant' ? 'assistant' : 'user',
+                content: String(entry.content || '')
+            }))
+            .filter((entry) => entry.content.trim());
+    }
+
+    function getSelectedContextForCoach() {
+        const selection = global.getSelection ? global.getSelection() : null;
+        const text = selection && typeof selection.toString === 'function'
+            ? String(selection.toString() || '').trim()
+            : '';
+        if (!text) {
+            return null;
+        }
+        let scope = 'passage';
+        try {
+            const anchorNode = selection.anchorNode;
+            const parentEl = anchorNode && anchorNode.nodeType === 3 ? anchorNode.parentElement : anchorNode;
+            if (parentEl && dom.groups && dom.groups.contains(parentEl)) {
+                scope = 'question';
+            }
+        } catch (_) {
+            // ignore selection scope fallback
+        }
+        return {
+            text: text.slice(0, 500),
+            scope
+        };
+    }
+
+    function resolveCoachFocusQuestionNumbers() {
+        const fromResults = state.lastResults && state.lastResults.answerComparison
+            ? Object.values(state.lastResults.answerComparison)
+                .filter((entry) => entry && entry.isCorrect === false)
+                .slice(0, 2)
+                .map((entry) => String(entry.questionId || '').replace(/^q/i, ''))
+                .filter(Boolean)
+            : [];
+        if (fromResults.length) {
+            return uniqueList(fromResults);
+        }
+        const active = document.activeElement;
+        const activeName = active && typeof active.getAttribute === 'function'
+            ? String(active.getAttribute('name') || active.id || '')
+            : '';
+        const match = activeName.match(/q(\\d+)/i);
+        if (match && match[1]) {
+            return [match[1]];
+        }
+        return [];
+    }
+
+    function uniqueList(values = []) {
+        const seen = new Set();
+        const output = [];
+        values.forEach((item) => {
+            const value = String(item || '').trim();
+            if (!value || seen.has(value)) {
+                return;
+            }
+            seen.add(value);
+            output.push(value);
+        });
+        return output;
+    }
+
+    function appendReadingCoachMessage(role, content, extras = {}) {
+        const entry = {
+            id: `coach_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            role: role === 'assistant' ? 'assistant' : 'user',
+            content: String(content || ''),
+            isError: Boolean(extras.isError),
+            followUps: Array.isArray(extras.followUps) ? extras.followUps.slice(0, 3) : [],
+            createdAt: Date.now()
+        };
+        state.readingCoachTranscript.push(entry);
+        if (state.readingCoachTranscript.length > 40) {
+            state.readingCoachTranscript = state.readingCoachTranscript.slice(-40);
+        }
+        return entry;
+    }
+
+    function resolveCoachPresetQuery(action, response = null) {
+        const focusNumbers = resolveCoachFocusQuestionNumbers();
+        const focusText = focusNumbers.length ? `（重点看 Q${focusNumbers.join(', Q')}）` : '';
+        if (action === 'hint') {
+            return `给我当前题目的提示，不要直接给答案${focusText}`.trim();
+        }
+        if (action === 'explain') {
+            return `解释当前题该如何定位证据并排除干扰项${focusText}`.trim();
+        }
+        if (action === 'review') {
+            return `请复盘我本次错题，按优先级给出训练建议${focusText}`.trim();
+        }
+        if (action === 'similar') {
+            return `推荐与我薄弱题型类似的训练方向${focusText}`.trim();
+        }
+        if (typeof response === 'string' && response.trim()) {
+            return response.trim();
+        }
+        return '';
+    }
+
+    function renderReadingCoachUi() {
+        if (!state.readingCoachUiReady) return;
+        const fab = document.getElementById('reading-coach-fab');
+        const panel = document.getElementById('reading-coach-panel');
+        const messagesEl = document.getElementById('reading-coach-messages');
+        const statusEl = document.getElementById('reading-coach-status');
+        const actionsEl = document.getElementById('reading-coach-actions');
+        const followUpsEl = document.getElementById('reading-coach-followups');
+        if (!panel || !messagesEl || !statusEl || !actionsEl || !followUpsEl) return;
+        const available = isReadingCoachAvailable();
+        if (fab) {
+            fab.style.display = available ? 'inline-flex' : 'none';
+        }
+        if (!available) {
+            state.readingCoachOpen = false;
+            panel.classList.remove('is-open');
+            return;
+        }
+
+        panel.classList.toggle('is-open', Boolean(state.readingCoachOpen));
+        syncReadingCoachPanelWithFab();
+        statusEl.textContent = state.readingCoachBusy
+            ? 'AI 教练正在思考...'
+            : (state.readingCoachError || '');
+        statusEl.classList.toggle('is-error', Boolean(state.readingCoachError));
+
+        if (!state.readingCoachTranscript.length) {
+            messagesEl.innerHTML = '<div class=\"reading-coach-msg assistant\">你可以先问：这题怎么定位证据？</div>';
+        } else {
+            messagesEl.innerHTML = state.readingCoachTranscript
+                .slice(-20)
+                .map((entry) => `<div class=\"reading-coach-msg ${entry.role}${entry.isError ? ' error' : ''}\">${escapeHtml(entry.content)}</div>`)
+                .join('');
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        actionsEl.innerHTML = QUICK_ACTIONS.map((item) => {
+            return `<button type=\"button\" class=\"reading-coach-chip\" data-coach-action=\"${item.id}\" ${state.readingCoachBusy ? 'disabled' : ''}>${escapeHtml(item.label)}</button>`;
+        }).join('');
+        actionsEl.querySelectorAll('[data-coach-action]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const action = String(button.getAttribute('data-coach-action') || '').trim();
+                if (action === 'review') {
+                    state.readingCoachOpen = false;
+                    renderReadingCoachUi();
+                    triggerSingleAttemptLlmAnalysis(state.lastResults || null);
+                    return;
+                }
+                const query = resolveCoachPresetQuery(action);
+                if (query) {
+                    sendReadingCoachQuery(query, {
+                        action: action === 'similar' ? 'recommend_drills' : 'chat',
+                        promptKind: 'preset'
+                    });
+                }
+            });
+        });
+
+        const latestAssistant = [...state.readingCoachTranscript].reverse().find((entry) => entry.role === 'assistant' && Array.isArray(entry.followUps) && entry.followUps.length);
+        const followUps = latestAssistant ? latestAssistant.followUps.slice(0, 3) : [];
+        followUpsEl.innerHTML = followUps.map((item) => {
+            return `<button type=\"button\" class=\"reading-coach-chip\" data-coach-followup=\"1\" ${state.readingCoachBusy ? 'disabled' : ''}>${escapeHtml(item)}</button>`;
+        }).join('');
+        followUpsEl.querySelectorAll('[data-coach-followup]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const text = String(button.textContent || '').trim();
+                if (text) {
+                    sendReadingCoachQuery(text, { action: 'chat', promptKind: 'followup' });
+                }
+            });
+        });
+    }
+
+    async function requestReadingCoachViaParentBridge(payload, options = {}) {
+        const timeoutMs = Number.isFinite(Number(options.timeoutMs))
+            ? Math.max(2000, Number(options.timeoutMs))
+            : COACH_REQUEST_TIMEOUT_MS;
+        const targets = resolveParentBridgeTargets();
+        if (!targets.length) {
+            const error = new Error('父页阅读教练桥不可用');
+            error.code = 'analysis_bridge_unavailable';
+            throw error;
+        }
+        const target = targets[0];
+        const requestId = `coach_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        return new Promise((resolve, reject) => {
+            const timeoutId = global.setTimeout(() => {
+                pendingCoachBridgeRequests.delete(requestId);
+                const error = new Error('父页阅读教练请求超时');
+                error.code = 'analysis_bridge_timeout';
+                reject(error);
+            }, timeoutMs);
+
+            pendingCoachBridgeRequests.set(requestId, { resolve, reject, timeoutId });
+            try {
+                target.postMessage({
+                    type: 'REQUEST_READING_COACH',
+                    source: MESSAGE_SOURCE,
+                    data: Object.assign({}, payload, { requestId })
+                }, '*');
+                state.parentWindow = target;
+            } catch (error) {
+                pendingCoachBridgeRequests.delete(requestId);
+                global.clearTimeout(timeoutId);
+                const wrapped = new Error('父页阅读教练消息发送失败');
+                wrapped.code = 'analysis_bridge_post_failed';
+                wrapped.cause = error;
+                reject(wrapped);
+            }
+        });
+    }
+
+    function settleReadingCoachBridgeRequest(requestId, data) {
+        const normalizedRequestId = requestId ? String(requestId).trim() : '';
+        let resolvedRequestId = normalizedRequestId;
+        if (!resolvedRequestId && pendingCoachBridgeRequests.size === 1) {
+            resolvedRequestId = pendingCoachBridgeRequests.keys().next().value || '';
+        }
+        if (!resolvedRequestId || !pendingCoachBridgeRequests.has(resolvedRequestId)) {
+            return false;
+        }
+        const pending = pendingCoachBridgeRequests.get(resolvedRequestId);
+        pendingCoachBridgeRequests.delete(resolvedRequestId);
+        try {
+            global.clearTimeout(pending.timeoutId);
+        } catch (_) {
+            // ignore clear timeout failure
+        }
+        const outcome = normalizeBridgeAnalysisOutcome(data);
+        if (!outcome.ok) {
+            const error = new Error(outcome.message || '父页阅读教练请求失败');
+            error.code = outcome.code || 'analysis_bridge_request_failed';
+            pending.reject(error);
+            return true;
+        }
+        pending.resolve(outcome.data);
+        return true;
+    }
+
+    async function requestReadingCoachFromLocalApi(payload) {
+        const baseUrl = await resolveLocalApiBaseUrl();
+        if (!baseUrl) {
+            const error = new Error('本地阅读教练服务不可用');
+            error.code = 'local_api_unavailable';
+            throw error;
+        }
+        const response = await fetch(`${baseUrl}${READING_COACH_API_PATH}?stream=1`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(Object.assign({}, payload, { stream: true }))
+        });
+
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        if (!response.ok) {
+            const payloadError = await response.json().catch(() => ({}));
+            const error = new Error(payloadError?.error?.message || payloadError?.message || `HTTP_${response.status}`);
+            error.code = payloadError?.error?.code || 'reading_coach_request_failed';
+            throw error;
+        }
+
+        if (!contentType.includes('text/event-stream') || !response.body) {
+            const payloadData = await response.json().catch(() => ({}));
+            if (!payloadData || payloadData.success === false || !payloadData.data) {
+                const error = new Error(payloadData?.error?.message || payloadData?.message || '阅读教练返回格式无效');
+                error.code = payloadData?.error?.code || 'invalid_response_format';
+                throw error;
+            }
+            return payloadData.data;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        let finalData = null;
+        let streamError = null;
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const blocks = buffer.split('\\n\\n');
+            buffer = blocks.pop() || '';
+            blocks.forEach((block) => {
+                const lines = block.split('\\n');
+                let eventName = '';
+                let dataLine = '';
+                lines.forEach((line) => {
+                    if (line.startsWith('event:')) {
+                        eventName = line.slice(6).trim();
+                    } else if (line.startsWith('data:')) {
+                        dataLine += line.slice(5).trim();
+                    }
+                });
+                let parsed = {};
+                try {
+                    parsed = dataLine ? JSON.parse(dataLine) : {};
+                } catch (_) {
+                    parsed = {};
+                }
+                if (eventName === 'error') {
+                    streamError = new Error(parsed?.error?.message || parsed?.message || '阅读教练流式请求失败');
+                    streamError.code = parsed?.error?.code || 'reading_coach_stream_failed';
+                }
+                if (eventName === 'complete') {
+                    finalData = parsed?.data || null;
+                }
+            });
+        }
+        if (streamError) {
+            throw streamError;
+        }
+        if (!finalData || typeof finalData !== 'object') {
+            const error = new Error('阅读教练流式返回缺少 complete 数据');
+            error.code = 'invalid_response_format';
+            throw error;
+        }
+        return finalData;
+    }
+
+    async function requestReadingCoach(payload) {
+        if (global.electronAPI && typeof global.electronAPI.queryReadingCoach === 'function') {
+            const response = await global.electronAPI.queryReadingCoach(payload);
+            if (!response || response.success === false || !response.data || typeof response.data !== 'object') {
+                const error = new Error(response?.error?.message || response?.message || '阅读教练请求失败');
+                error.code = response?.error?.code || 'reading_coach_ipc_failed';
+                throw error;
+            }
+            return response.data;
+        }
+        if (isElectronRuntimeContext()) {
+            return requestReadingCoachViaParentBridge(payload, { timeoutMs: COACH_REQUEST_TIMEOUT_MS });
+        }
+        return requestReadingCoachFromLocalApi(payload);
+    }
+
+    async function appendAssistantTypewriter(response) {
+        const fullText = String(response?.answer || '').trim();
+        const assistantEntry = appendReadingCoachMessage('assistant', '', {
+            followUps: Array.isArray(response?.followUps) ? response.followUps : []
+        });
+        if (!fullText) {
+            assistantEntry.content = '当前没有可用回复，请换个问法再试。';
+            renderReadingCoachUi();
+            return;
+        }
+        const step = Math.max(1, Math.floor(fullText.length / 80));
+        for (let index = 0; index < fullText.length; index += step) {
+            assistantEntry.content = fullText.slice(0, index + step);
+            renderReadingCoachUi();
+            await new Promise((resolve) => global.setTimeout(resolve, 12));
+        }
+        assistantEntry.content = fullText;
+        assistantEntry.followUps = Array.isArray(response?.followUps) ? response.followUps.slice(0, 3) : [];
+        renderReadingCoachUi();
+    }
+
+    function buildReadingCoachRequestPayload(query, options = {}) {
+        const normalizedQuery = String(query || '').trim();
+        const selectedContext = getSelectedContextForCoach();
+        const focusQuestionNumbers = resolveCoachFocusQuestionNumbers();
+        const submitted = Boolean(options.forceSubmitted || isReadingCoachAvailable());
+        return {
+            examId: state.examId,
+            query: normalizedQuery,
+            locale: 'zh',
+            surface: submitted ? 'review_workspace' : 'chat_widget',
+            action: String(options.action || 'chat').trim() || 'chat',
+            promptKind: String(options.promptKind || 'freeform').trim() || 'freeform',
+            selectedText: selectedContext ? selectedContext.text : '',
+            selectedContext,
+            focusQuestionNumbers,
+            history: getReadingCoachHistory(),
+            attemptContext: {
+                submitted,
+                score: state.lastResults?.scoreInfo?.percentage || null,
+                wrongQuestions: state.lastResults && state.lastResults.answerComparison
+                    ? Object.values(state.lastResults.answerComparison)
+                        .filter((entry) => entry && entry.isCorrect === false)
+                        .map((entry) => String(entry.questionId || '').replace(/^q/i, ''))
+                    : []
+            }
+        };
+    }
+
+    function normalizeCoachConfidenceToRate(value) {
+        const normalized = String(value || '').trim().toLowerCase();
+        if (normalized === 'high') return 0.86;
+        if (normalized === 'low') return 0.42;
+        return 0.66;
+    }
+
+    function buildSingleAttemptLlmFromCoachResponse(response) {
+        const sections = Array.isArray(response?.answerSections) ? response.answerSections : [];
+        const diagnosis = [];
+        const nextActions = [];
+        sections.forEach((entry, index) => {
+            if (!entry || typeof entry !== 'object') return;
+            const type = String(entry.type || '').trim().toLowerCase();
+            const text = String(entry.text || '').trim();
+            if (!text) return;
+            if (type === 'next_step') {
+                nextActions.push({
+                    type: 'coach_next_step',
+                    target: 'reading',
+                    instruction: text,
+                    evidence: []
+                });
+                return;
+            }
+            diagnosis.push({
+                code: `coach_diag_${index + 1}`,
+                reason: text,
+                evidence: type === 'evidence' ? [text] : []
+            });
+        });
+        if (!diagnosis.length) {
+            const fallback = String(response?.answer || '').trim();
+            if (fallback) {
+                diagnosis.push({
+                    code: 'coach_diag_fallback',
+                    reason: fallback,
+                    evidence: []
+                });
+            }
+        }
+        if (!nextActions.length && Array.isArray(response?.followUps)) {
+            response.followUps
+                .map((item) => String(item || '').trim())
+                .filter(Boolean)
+                .slice(0, 3)
+                .forEach((text) => {
+                    nextActions.push({
+                        type: 'coach_followup',
+                        target: 'reading',
+                        instruction: text,
+                        evidence: []
+                    });
+                });
+        }
+        return {
+            diagnosis,
+            nextActions,
+            confidence: normalizeCoachConfidenceToRate(response?.confidence),
+            model_trace: {
+                source: 'reading_coach_v2',
+                degraded: false
+            }
+        };
+    }
+
+    function applyCoachResponsePatch(response, extra = {}) {
+        if (!response || typeof response !== 'object') {
+            return;
+        }
+        state.readingCoachSnapshot = response;
+        const transcript = state.readingCoachTranscript.slice();
+        const lastResults = state.lastResults && typeof state.lastResults === 'object'
+            ? state.lastResults
+            : null;
+        if (lastResults) {
+            lastResults.readingCoachSnapshot = response;
+            lastResults.readingCoachTranscript = transcript;
+            if (extra.singleAttemptAnalysisLlm) {
+                lastResults.singleAttemptAnalysisLlm = extra.singleAttemptAnalysisLlm;
+            }
+            lastResults.realData = Object.assign({}, lastResults.realData || {}, {
+                readingCoachSnapshot: response,
+                readingCoachTranscript: transcript,
+                ...(extra.singleAttemptAnalysisLlm ? { singleAttemptAnalysisLlm: extra.singleAttemptAnalysisLlm } : {})
+            });
+        }
+        postMessage('PRACTICE_COACH_PATCH', {
+            examId: state.examId,
+            sessionId: state.sessionId,
+            readingCoachSnapshot: response,
+            readingCoachTranscript: transcript,
+            ...(extra.singleAttemptAnalysisLlm ? { singleAttemptAnalysisLlm: extra.singleAttemptAnalysisLlm } : {}),
+            realData: {
+                readingCoachSnapshot: response,
+                readingCoachTranscript: transcript,
+                ...(extra.singleAttemptAnalysisLlm ? { singleAttemptAnalysisLlm: extra.singleAttemptAnalysisLlm } : {})
+            }
+        });
+    }
+
+    async function sendReadingCoachQuery(query, options = {}) {
+        const normalizedQuery = String(query || '').trim();
+        if (!normalizedQuery || state.readingCoachBusy || !isReadingCoachAvailable()) {
+            return null;
+        }
+        state.readingCoachBusy = true;
+        state.readingCoachError = '';
+        state.readingCoachStatus = 'running';
+        state.readingCoachOpen = true;
+        appendReadingCoachMessage('user', normalizedQuery);
+        renderReadingCoachUi();
+
+        const requestPayload = buildReadingCoachRequestPayload(normalizedQuery, options);
+
+        try {
+            const response = await requestReadingCoach(requestPayload);
+            await appendAssistantTypewriter(response);
+            applyCoachResponsePatch(response);
+            state.readingCoachStatus = 'success';
+            renderResults(state.lastResults || {});
+            return response;
+        } catch (error) {
+            const message = String(error?.message || '阅读教练请求失败').trim() || '阅读教练请求失败';
+            state.readingCoachError = message;
+            state.readingCoachStatus = 'failed';
+            appendReadingCoachMessage('assistant', `请求失败：${message}`, { isError: true });
+            if (options && options.rethrowError) {
+                throw error;
+            }
+            return null;
+        } finally {
+            state.readingCoachBusy = false;
+            renderReadingCoachUi();
+        }
+    }
+
     function setLlmAnalysisStatus(status, message, options = {}) {
         state.llmAnalysisStatus = status || 'idle';
         state.llmAnalysisMessage = String(message || '').trim();
@@ -2317,92 +3239,31 @@
     }
 
     async function requestSingleAttemptLlmAnalysis(results, onLog = null) {
-        if (typeof onLog === 'function') {
-            onLog('模型正在联通...');
-            onLog('数据正在上传...');
-            onLog('消息已发送！AI 正在思考中...');
-        }
-        if (global.electronAPI && typeof global.electronAPI.analyzeReadingSingleAttempt === 'function') {
-            const payload = await global.electronAPI.analyzeReadingSingleAttempt({
-                singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
-                singleAttemptAnalysis: results.singleAttemptAnalysis
-            });
-            if (!payload || payload.success === false) {
-                const message = payload?.error?.message || payload?.message || '二阶段分析请求失败';
-                const error = new Error(message);
-                error.code = payload?.error?.code || 'reading_analysis_ipc_failed';
-                throw error;
-            }
-            if (!payload.data || typeof payload.data !== 'object') {
-                const error = new Error('二阶段分析返回格式无效');
-                error.code = 'invalid_response_format';
-                throw error;
-            }
-            return payload.data;
-        }
-        if (isElectronRuntimeContext()) {
-            return requestSingleAttemptLlmAnalysisViaParentBridge(results, onLog);
-        }
-        const baseUrl = await resolveLocalApiBaseUrl();
-        if (!baseUrl) {
-            const error = new Error('本地分析服务不可用');
-            error.code = 'local_api_unavailable';
+        if (!results || typeof results !== 'object') {
+            const error = new Error('分析请求参数不完整');
+            error.code = 'invalid_request_payload';
             throw error;
         }
-        let response;
-        let networkError = null;
-        try {
-            response = await fetch(`${baseUrl}${READING_ANALYSIS_API_PATH}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
-                    singleAttemptAnalysis: results.singleAttemptAnalysis
-                })
-            });
-        } catch (error) {
-            networkError = error;
-            clearLocalApiInfoCache();
-            const refreshedBaseUrl = await resolveLocalApiBaseUrl({ skipCache: true });
-            if (refreshedBaseUrl && refreshedBaseUrl !== baseUrl) {
-                try {
-                    response = await fetch(`${refreshedBaseUrl}${READING_ANALYSIS_API_PATH}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
-                            singleAttemptAnalysis: results.singleAttemptAnalysis
-                        })
-                    });
-                } catch (_) {
-                    // keep original error semantics below
-                }
-            }
-        }
-
-        if (!response) {
-            const wrapped = new Error('本地分析服务连接失败');
-            wrapped.code = 'reading_analysis_network_error';
-            wrapped.cause = networkError;
-            throw wrapped;
+        const query = resolveCoachPresetQuery('review');
+        if (!query) {
+            const error = new Error('缺少复盘问题，无法发起 AI 分析');
+            error.code = 'invalid_request_payload';
+            throw error;
         }
         if (typeof onLog === 'function') {
-            onLog('模型回复已收到，正在整理结果...');
+            onLog('AI 正在复盘错题...');
         }
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok || payload?.success === false) {
-            const message = payload?.message || payload?.error?.message || payload?.error_code || `HTTP_${response.status}`;
-            const error = new Error(message || '二阶段分析请求失败');
-            error.code = payload?.error_code || 'reading_analysis_request_failed';
-            throw error;
-        }
-        const llm = payload?.data;
-        if (!llm || typeof llm !== 'object') {
-            const error = new Error('二阶段分析返回格式无效');
-            error.code = 'invalid_response_format';
-            throw error;
-        }
-        return llm;
+        const coachResponse = await requestReadingCoach(
+            buildReadingCoachRequestPayload(query, {
+                action: 'review_set',
+                promptKind: 'preset',
+                forceSubmitted: true
+            })
+        );
+        return {
+            llm: buildSingleAttemptLlmFromCoachResponse(coachResponse),
+            coachResponse
+        };
     }
 
     function isLikelyBridgeAnalysisPayload(value) {
@@ -2423,19 +3284,6 @@
             Object.assign(normalizedMeta, fallback);
         }
         return Object.keys(normalizedMeta).length ? normalizedMeta : null;
-    }
-
-    function createBridgeFailureError(code, message, meta = null, cause = null) {
-        const error = new Error(message || '父页分析桥请求失败');
-        error.code = code || 'analysis_bridge_request_failed';
-        const normalizedMeta = normalizeBridgeFailureMeta(meta);
-        if (normalizedMeta) {
-            error.meta = normalizedMeta;
-        }
-        if (cause !== undefined && cause !== null) {
-            error.cause = cause;
-        }
-        return error;
     }
 
     function isSafeBridgeDiagnosticMessage(message) {
@@ -2505,42 +3353,6 @@
         };
     }
 
-    function resolvePendingAnalysisBridgeRequestId(requestId) {
-        const normalizedRequestId = requestId ? String(requestId).trim() : '';
-        if (normalizedRequestId && pendingAnalysisBridgeRequests.has(normalizedRequestId)) {
-            return normalizedRequestId;
-        }
-        if (!normalizedRequestId && pendingAnalysisBridgeRequests.size === 1) {
-            return pendingAnalysisBridgeRequests.keys().next().value || '';
-        }
-        return '';
-    }
-
-    function settleAnalysisBridgeRequest(requestId, data) {
-        const resolvedRequestId = resolvePendingAnalysisBridgeRequestId(requestId);
-        if (!resolvedRequestId) {
-            return false;
-        }
-        const pending = pendingAnalysisBridgeRequests.get(resolvedRequestId);
-        pendingAnalysisBridgeRequests.delete(resolvedRequestId);
-        try {
-            if (pending.timeoutId) {
-                global.clearTimeout(pending.timeoutId);
-            }
-        } catch (_) {
-            // ignore clearTimeout errors
-        }
-
-        const outcome = normalizeBridgeAnalysisOutcome(data);
-        if (!outcome.ok) {
-            const error = createBridgeFailureError(outcome.code, outcome.message, outcome.meta);
-            pending.reject(error);
-            return true;
-        }
-        pending.resolve(outcome.data);
-        return true;
-    }
-
     function isWindowMessagingAvailable(target) {
         if (!target || typeof target.postMessage !== 'function') {
             return false;
@@ -2573,265 +3385,64 @@
         return unique;
     }
 
-    function waitForBridgeRetry(ms) {
-        const duration = Number.isFinite(Number(ms)) ? Math.max(0, Number(ms)) : 0;
-        if (!duration) {
-            return Promise.resolve();
-        }
-        return new Promise((resolve) => {
-            global.setTimeout(resolve, duration);
-        });
-    }
-
-    function isRetryableBridgeError(error) {
-        const code = String(error?.code || '').trim().toLowerCase();
-        const message = String(error?.message || '').trim().toLowerCase();
-        if (!code && !message) {
-            return false;
-        }
-        if (BRIDGE_RETRYABLE_ERROR_CODES.has(code)) {
-            return true;
-        }
-        for (let i = 0; i < BRIDGE_RETRY_HINTS.length; i += 1) {
-            if (message.includes(BRIDGE_RETRY_HINTS[i])) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    function formatBridgeFailureMessage(error, attempts) {
-        const totalAttempts = Math.max(1, Number(attempts) || 1);
-        const code = String(error?.code || '').trim().toLowerCase();
-        const upstreamMessage = String(error?.message || '').trim();
-        const timeoutMs = Number(error?.meta?.timeoutMs) || 0;
-        const attemptNote = totalAttempts > 1 ? `（已自动重试 ${totalAttempts} 次）` : '';
-        if (code === 'analysis_bridge_unavailable') {
-            return '证据化诊断暂不可用，已回退结构化分析：当前与主应用连接中断。请返回套题页重新进入后再点“重试 AI 分析”。';
-        }
-        if (code === 'analysis_bridge_post_failed') {
-            return '证据化诊断暂不可用，已回退结构化分析：分析请求发送失败。请关闭当前题页后重新进入，再点“重试 AI 分析”。';
-        }
-        if (code === 'analysis_bridge_timeout') {
-            const timeoutLabel = timeoutMs > 0 ? `，等待 ${Math.ceil(timeoutMs / 1000)} 秒仍未收到主应用回复` : '，等待主应用回复超时';
-            return `证据化诊断暂不可用，已回退结构化分析：父页分析桥请求超时${timeoutLabel}${attemptNote}。建议重新进入题页后再点“重试 AI 分析”。`;
-        }
-        if (code === 'analysis_bridge_upstream_timeout') {
-            return `证据化诊断暂不可用，已回退结构化分析：上游分析服务响应超时${attemptNote}。建议检查网络后重试。`;
-        }
-        if (code === 'analysis_bridge_invalid_response') {
-            return '证据化诊断暂不可用，已回退结构化分析：主应用返回的数据结构异常。建议稍后重试。';
-        }
-        if (upstreamMessage && isSafeBridgeDiagnosticMessage(upstreamMessage)) {
-            return `证据化诊断暂不可用，已回退结构化分析：${upstreamMessage}。可稍后点击“重试 AI 分析”。`;
-        }
-        return `证据化诊断暂不可用，已回退结构化分析：服务暂时不稳定${attemptNote}。`;
-    }
-
-    function requestSingleAttemptLlmAnalysisViaParentBridgeOnce(results, options = {}) {
-        const target = options.target;
-        const timeoutMs = Number.isFinite(Number(options.timeoutMs))
-            ? Math.max(1500, Number(options.timeoutMs))
-            : PARENT_ANALYSIS_REQUEST_TIMEOUT_MS;
-        if (!target || typeof target.postMessage !== 'function') {
-            throw createBridgeFailureError('analysis_bridge_unavailable', '父页分析桥不可用', {
-                stage: 'resolve_parent_bridge',
-                attempt: Number.isFinite(Number(options.attempt)) ? Number(options.attempt) : 1,
-                totalAttempts: Number.isFinite(Number(options.totalAttempts)) ? Number(options.totalAttempts) : 1
-            });
-        }
-        const requestId = `analysis_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-        return new Promise((resolve, reject) => {
-            const timeoutId = global.setTimeout(() => {
-                pendingAnalysisBridgeRequests.delete(requestId);
-                reject(createBridgeFailureError('analysis_bridge_timeout', '父页分析桥请求超时', {
-                    stage: 'await_parent_response',
-                    requestId,
-                    timeoutMs,
-                    attempt: Number.isFinite(Number(options.attempt)) ? Number(options.attempt) : 1,
-                    totalAttempts: Number.isFinite(Number(options.totalAttempts)) ? Number(options.totalAttempts) : 1
-                }));
-            }, timeoutMs);
-
-            pendingAnalysisBridgeRequests.set(requestId, { resolve, reject, timeoutId });
-            try {
-                target.postMessage({
-                    type: 'REQUEST_READING_ANALYSIS',
-                    source: MESSAGE_SOURCE,
-                    data: {
-                        requestId,
-                        examId: state.examId,
-                        sessionId: state.sessionId,
-                        suiteSessionId: state.suiteSessionId,
-                        bridgeMeta: {
-                            attempt: Number.isFinite(Number(options.attempt)) ? Number(options.attempt) : 1,
-                            totalAttempts: Number.isFinite(Number(options.totalAttempts)) ? Number(options.totalAttempts) : 1,
-                            timeoutMs
-                        },
-                        singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
-                        singleAttemptAnalysis: results.singleAttemptAnalysis
-                    }
-                }, '*');
-                state.parentWindow = target;
-            } catch (error) {
-                pendingAnalysisBridgeRequests.delete(requestId);
-                try {
-                    global.clearTimeout(timeoutId);
-                } catch (_) {
-                    // ignore clearTimeout errors
-                }
-                reject(createBridgeFailureError('analysis_bridge_post_failed', '父页分析桥消息发送失败', {
-                    stage: 'post_parent_request',
-                    requestId,
-                    timeoutMs,
-                    attempt: Number.isFinite(Number(options.attempt)) ? Number(options.attempt) : 1,
-                    totalAttempts: Number.isFinite(Number(options.totalAttempts)) ? Number(options.totalAttempts) : 1
-                }, error));
-            }
-        });
-    }
-
-    async function requestSingleAttemptLlmAnalysisViaParentBridge(results, onLog = null) {
-        const attemptTimeouts = Array.isArray(PARENT_ANALYSIS_RETRY_TIMEOUT_MS) && PARENT_ANALYSIS_RETRY_TIMEOUT_MS.length
-            ? PARENT_ANALYSIS_RETRY_TIMEOUT_MS
-            : [PARENT_ANALYSIS_REQUEST_TIMEOUT_MS];
-        const totalAttempts = attemptTimeouts.length;
-        let lastError = null;
-
-        for (let attemptIndex = 0; attemptIndex < totalAttempts; attemptIndex += 1) {
-            const targets = resolveParentBridgeTargets();
-            if (!targets.length) {
-                const unavailableError = new Error('父页分析桥不可用');
-                unavailableError.code = 'analysis_bridge_unavailable';
-                unavailableError.userMessage = formatBridgeFailureMessage(unavailableError, attemptIndex + 1);
-                throw unavailableError;
-            }
-            if (typeof onLog === 'function' && attemptIndex > 0) {
-                onLog(`连接波动，正在进行第 ${attemptIndex + 1}/${totalAttempts} 次重试...`);
-            }
-            const rotatedTargets = targets.slice(attemptIndex).concat(targets.slice(0, attemptIndex));
-            for (let targetIndex = 0; targetIndex < rotatedTargets.length; targetIndex += 1) {
-                const target = rotatedTargets[targetIndex];
-                try {
-                    const data = await requestSingleAttemptLlmAnalysisViaParentBridgeOnce(results, {
-                        target,
-                        timeoutMs: attemptTimeouts[attemptIndex],
-                        attempt: attemptIndex + 1,
-                        totalAttempts
-                    });
-                    return data;
-                } catch (error) {
-                    lastError = error;
-                    if (targetIndex < rotatedTargets.length - 1 && typeof onLog === 'function') {
-                        onLog('主通道异常，正在切换备用通信链路...');
-                    }
-                    if (!isRetryableBridgeError(error)) {
-                        error.userMessage = formatBridgeFailureMessage(error, attemptIndex + 1);
-                        throw error;
-                    }
-                }
-            }
-            if (attemptIndex < totalAttempts - 1) {
-                const backoff = PARENT_ANALYSIS_RETRY_BACKOFF_MS[Math.min(attemptIndex, PARENT_ANALYSIS_RETRY_BACKOFF_MS.length - 1)] || 0;
-                await waitForBridgeRetry(backoff);
-            }
-        }
-
-        const finalError = lastError || new Error('父页分析桥请求失败');
-        finalError.code = finalError.code || 'analysis_bridge_request_failed';
-        finalError.userMessage = formatBridgeFailureMessage(finalError, totalAttempts);
-        throw finalError;
-    }
-
     function formatLlmFailureStatusMessage(error) {
         if (error && typeof error.userMessage === 'string' && error.userMessage.trim()) {
             return error.userMessage.trim();
         }
         const code = String(error?.code || '').trim().toLowerCase();
         const rawMessage = String(error?.message || '').trim();
-        if (code === 'local_api_unavailable') {
-            return '证据化诊断暂不可用，已回退结构化分析：未发现本地分析服务。请确认客户端已完整启动后重试。';
+        if (code === 'coach_locked_until_submit') {
+            return 'AI 复盘暂不可用：请先完成并提交本轮作答。';
         }
-        if (code === 'reading_analysis_network_error') {
-            return '证据化诊断暂不可用，已回退结构化分析：本地分析服务连接失败（网络连接异常）。请检查网络后点击“重试 AI 分析”。';
+        if (code === 'local_api_unavailable') {
+            return 'AI 复盘暂不可用：未发现本地服务，请确认客户端已完整启动后重试。';
+        }
+        if (code === 'reading_coach_ipc_failed' || code === 'reading_coach_request_failed' || code === 'reading_coach_stream_failed') {
+            return 'AI 复盘暂不可用：教练服务请求失败，请稍后重试。';
         }
         if (code === 'invalid_response_format' || code === 'analysis_bridge_invalid_response') {
-            return '证据化诊断暂不可用，已回退结构化分析：服务返回格式异常。建议稍后重试。';
+            return 'AI 复盘暂不可用：服务返回格式异常。';
         }
         if (code === 'analysis_bridge_invalid_request' || code === 'analysis_bridge_invalid_payload') {
-            return '证据化诊断暂不可用，已回退结构化分析：分析请求参数不完整。请完成本轮作答后再重试。';
+            return 'AI 复盘暂不可用：请求参数不完整。';
         }
         if (code === 'analysis_bridge_timeout') {
-            return '证据化诊断暂不可用，已回退结构化分析：主应用长时间未响应。请重新进入题页后再重试。';
+            return 'AI 复盘暂不可用：主应用长时间未响应。';
         }
         if (code === 'analysis_bridge_unavailable') {
-            return '证据化诊断暂不可用，已回退结构化分析：当前与主应用连接中断。请返回题页后重试。';
+            return 'AI 复盘暂不可用：当前与主应用连接中断。';
         }
         if (rawMessage && isSafeBridgeDiagnosticMessage(rawMessage)) {
-            return `证据化诊断暂不可用，已回退结构化分析：${rawMessage}`;
+            return `AI 复盘暂不可用：${rawMessage}`;
         }
-        return '证据化诊断暂不可用，已回退结构化分析：服务暂时不可用，请稍后重试。';
+        return 'AI 复盘暂不可用，请稍后重试。';
     }
 
     async function triggerSingleAttemptLlmAnalysis(results) {
-        if (!results || typeof results !== 'object') {
-            return;
-        }
-        if (!results.singleAttemptAnalysisInput || !results.singleAttemptAnalysis) {
-            return;
-        }
-        const requestId = state.llmAnalysisRequestId + 1;
-        state.llmAnalysisRequestId = requestId;
-        setLlmAnalysisStatus('running', '模型正在联通...');
-        renderResults(results);
-
+        if (!results || typeof results !== 'object') return;
+        if (state.llmAnalysisStatus === 'running') return;
+        setLlmAnalysisStatus('running', 'AI 正在复盘错题...', { render: true });
         try {
-            const llm = await requestSingleAttemptLlmAnalysis(results, (message) => {
-                if (requestId !== state.llmAnalysisRequestId) {
-                    return;
-                }
+            const analysisResult = await requestSingleAttemptLlmAnalysis(results, (message) => {
                 setLlmAnalysisStatus('running', message, { render: true });
             });
-            if (requestId !== state.llmAnalysisRequestId) {
-                return;
-            }
-            results.singleAttemptAnalysisLlm = llm;
+            const llmPatch = analysisResult && typeof analysisResult.llm === 'object'
+                ? analysisResult.llm
+                : {};
+            const coachResponse = analysisResult && analysisResult.coachResponse && typeof analysisResult.coachResponse === 'object'
+                ? analysisResult.coachResponse
+                : null;
+            results.singleAttemptAnalysisLlm = llmPatch;
             results.realData = Object.assign({}, results.realData || {}, {
-                singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
-                singleAttemptAnalysis: results.singleAttemptAnalysis,
-                singleAttemptAnalysisLlm: llm
+                singleAttemptAnalysisLlm: llmPatch
             });
-            const degraded = Boolean(llm?.model_trace?.degraded);
-            const provider = String(llm?.model_trace?.provider || '').trim();
-            const model = String(llm?.model_trace?.model || '').trim();
-            const modelId = provider && model
-                ? `${provider}/${model}`
-                : (model || provider || 'unknown-model');
-            setLlmAnalysisStatus(
-                degraded ? 'degraded' : 'success',
-                degraded
-                    ? 'AI 分析失败，已回退结构化分析，请点击重试。'
-                    : `数据分析完毕！本次由「${modelId}」分析`
-            );
-            renderResults(results);
-            postMessage('PRACTICE_ANALYSIS_PATCH', {
-                examId: state.examId,
-                sessionId: state.sessionId,
-                singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
-                singleAttemptAnalysis: results.singleAttemptAnalysis,
-                singleAttemptAnalysisLlm: llm,
-                realData: Object.assign({}, results.realData || {}, {
-                    singleAttemptAnalysisInput: results.singleAttemptAnalysisInput,
-                    singleAttemptAnalysis: results.singleAttemptAnalysis,
-                    singleAttemptAnalysisLlm: llm
-                })
-            });
-        } catch (error) {
-            if (requestId !== state.llmAnalysisRequestId) {
-                return;
+            if (coachResponse) {
+                applyCoachResponsePatch(coachResponse, { singleAttemptAnalysisLlm: llmPatch });
             }
-            setLlmAnalysisStatus('failed', formatLlmFailureStatusMessage(error));
+            setLlmAnalysisStatus('success', 'AI 复盘已更新', { render: false });
             renderResults(results);
+        } catch (error) {
+            setLlmAnalysisStatus('failed', formatLlmFailureStatusMessage(error), { render: true });
         }
     }
 
@@ -2851,7 +3462,10 @@
         if (!diagnosisList.length && !actionsList.length) {
             return `
                 <section class="reading-guidance-card">
-                    <h5>本次分析指导</h5>
+                    <div class="reading-guidance-card__head">
+                        <h5>本次分析指导</h5>
+                        <button type="button" class="reading-guidance-card__ai-review-btn" data-action="coach-review-analysis" ${llmStatus?.status === 'running' ? 'disabled' : ''}>AI复盘错题</button>
+                    </div>
                     <p class="reading-guidance-card__empty">暂无可用指导内容，请先完成一轮完整作答。</p>
                 </section>
             `;
@@ -2873,15 +3487,13 @@
             const flowClass = llmStatus?.status === 'running' ? ' reading-guidance-card__status-line--flow' : '';
             statusHtml = `<p class="reading-guidance-card__status${extraClass}"><span class="reading-guidance-card__status-line${flowClass}">${escapeHtml(llmStatus.message || '模型正在联通...')}</span></p>`;
         }
-        const showRetry = llmStatus?.status === 'failed' || llmStatus?.status === 'degraded';
-        const retryHtml = showRetry
-            ? '<button type="button" class="reading-guidance-card__retry" data-action="retry-llm-analysis">重试 AI 分析</button>'
-            : '';
         return `
             <section class="reading-guidance-card">
-                <h5>本次分析指导</h5>
+                <div class="reading-guidance-card__head">
+                    <h5>本次分析指导</h5>
+                    <button type="button" class="reading-guidance-card__ai-review-btn" data-action="coach-review-analysis" ${llmStatus?.status === 'running' ? 'disabled' : ''}>AI复盘错题</button>
+                </div>
                 ${statusHtml}
-                ${retryHtml}
                 <div class="reading-guidance-card__row">
                     <div class="reading-guidance-card__label">诊断结论</div>
                     ${diagnosisHtml}
@@ -2896,7 +3508,10 @@
 
     function renderResults(results) {
         if (!dom.results) return;
+        state.submitted = true;
+        state.lastResults = results || state.lastResults;
         ensureAnalysisStyles();
+        ensureReadingCoachUi();
         const hasCanonicalInput = results
             && results.singleAttemptAnalysisInput
             && typeof results.singleAttemptAnalysisInput === 'object'
@@ -2922,6 +3537,12 @@
             status: state.llmAnalysisStatus,
             message: state.llmAnalysisMessage
         });
+        if (results.readingCoachSnapshot && typeof results.readingCoachSnapshot === 'object') {
+            state.readingCoachSnapshot = results.readingCoachSnapshot;
+        }
+        if (Array.isArray(results.readingCoachTranscript) && results.readingCoachTranscript.length) {
+            state.readingCoachTranscript = results.readingCoachTranscript.slice(-40);
+        }
         results.questionTypePerformance = analysisBundle.questionTypePerformance || results.questionTypePerformance;
         results.singleAttemptAnalysisInput = analysisBundle.input;
         results.singleAttemptAnalysis = analysisBundle.analysis;
@@ -2963,15 +3584,16 @@
             </table>
         `;
         dom.results.style.display = 'block';
-        const retryButton = dom.results.querySelector('[data-action="retry-llm-analysis"]');
-        if (retryButton) {
-            retryButton.addEventListener('click', () => {
+        const aiReviewButton = dom.results.querySelector('[data-action="coach-review-analysis"]');
+        if (aiReviewButton) {
+            aiReviewButton.addEventListener('click', () => {
                 if (state.llmAnalysisStatus === 'running') {
                     return;
                 }
                 triggerSingleAttemptLlmAnalysis(results);
             }, { once: true });
         }
+        renderReadingCoachUi();
     }
 
     function escapeSelector(value) {
@@ -3064,7 +3686,9 @@
             answers: normalizedAnswers,
             correctAnswers: normalizedCorrectAnswers,
             answerComparison: normalizedComparison,
-            scoreInfo
+            scoreInfo,
+            readingCoachSnapshot: entry.readingCoachSnapshot || entry.realData?.readingCoachSnapshot || null,
+            readingCoachTranscript: entry.readingCoachTranscript || entry.realData?.readingCoachTranscript || []
         };
     }
 
@@ -3278,6 +3902,8 @@
         state.llmAnalysisStatus = 'idle';
         state.llmAnalysisMessage = '';
         state.llmAnalysisRequestId += 1;
+        state.readingCoachOpen = false;
+        renderReadingCoachUi();
         clearExplanations();
         updateNavStatuses();
     }
@@ -3623,7 +4249,7 @@
             }
         }
         const normalizedType = String(type || '').toUpperCase();
-        if (normalizedType === 'PRACTICE_COMPLETE' || normalizedType === 'PRACTICE_ANALYSIS_PATCH') {
+        if (normalizedType === 'PRACTICE_COMPLETE' || normalizedType === 'PRACTICE_COACH_PATCH') {
             appendPendingPracticeMessage(envelope);
         }
         return false;
@@ -4135,6 +4761,10 @@
         const normalizedAnalysis = results.singleAttemptAnalysis;
         state.llmAnalysisStatus = 'idle';
         state.llmAnalysisMessage = '';
+        results.readingCoachSnapshot = state.readingCoachSnapshot || results.readingCoachSnapshot || null;
+        results.readingCoachTranscript = Array.isArray(state.readingCoachTranscript)
+            ? state.readingCoachTranscript.slice()
+            : (Array.isArray(results.readingCoachTranscript) ? results.readingCoachTranscript.slice() : []);
         state.lastResults = results;
         renderResults(results);
         await renderExplanations();
@@ -4158,17 +4788,14 @@
                 markedQuestions: (typeof global.getPracticeMarkedQuestions === 'function')
                     ? global.getPracticeMarkedQuestions()
                     : [],
-                singleAttemptAnalysisInput: normalizedInput,
-                singleAttemptAnalysis: normalizedAnalysis,
-                singleAttemptAnalysisLlm: results.singleAttemptAnalysisLlm || null
+                readingCoachSnapshot: results.readingCoachSnapshot || null,
+                readingCoachTranscript: results.readingCoachTranscript || []
             },
-            singleAttemptAnalysisInput: normalizedInput,
-            singleAttemptAnalysis: normalizedAnalysis,
-            singleAttemptAnalysisLlm: results.singleAttemptAnalysisLlm || null,
+            readingCoachSnapshot: results.readingCoachSnapshot || null,
+            readingCoachTranscript: results.readingCoachTranscript || [],
             realData: Object.assign({}, results.realData || {}, {
-                singleAttemptAnalysisInput: normalizedInput,
-                singleAttemptAnalysis: normalizedAnalysis,
-                singleAttemptAnalysisLlm: results.singleAttemptAnalysisLlm || null
+                readingCoachSnapshot: results.readingCoachSnapshot || null,
+                readingCoachTranscript: results.readingCoachTranscript || []
             })
         }, results));
         try {
@@ -4182,7 +4809,6 @@
         } catch (_) {
             // ignore event dispatch failures
         }
-        triggerSingleAttemptLlmAnalysis(results);
         if (state.simulationMode && state.simulationCtx && state.simulationCtx.isLast) {
             stopSimulationDraftSync();
             clearSimulationDraftMirror();
@@ -4335,9 +4961,9 @@
             return;
         }
         const { payload, type, data } = envelope;
-        if (type === 'READING_ANALYSIS_RESULT') {
+        if (type === 'READING_COACH_RESULT') {
             const { requestId, mergedData } = buildAnalysisBridgeResponsePayload(payload, data);
-            settleAnalysisBridgeRequest(requestId, mergedData);
+            settleReadingCoachBridgeRequest(requestId, mergedData);
             return;
         }
         if (type === 'INIT_SESSION' || type === 'INIT_EXAM_SESSION') {

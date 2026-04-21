@@ -36,7 +36,7 @@ const TopicService = require('./services/topic.service');
 const EssayService = require('./services/essay.service');
 const SettingsService = require('./services/settings.service');
 const UploadService = require('./services/upload.service');
-const ReadingAnalysisService = require('./services/reading-analysis.service');
+const ReadingCoachService = require('./services/reading-coach.service');
 
 // Mock webContents
 const mockWebContents = {
@@ -60,7 +60,7 @@ async function run() {
         essayService: new EssayService(db),
         settingsService: new SettingsService(db),
         uploadService: new UploadService(mockUserDataPath),
-        readingAnalysisService: new ReadingAnalysisService(configService)
+        readingCoachService: new ReadingCoachService(configService)
     };
 
     const server = new LocalApiServer(services);

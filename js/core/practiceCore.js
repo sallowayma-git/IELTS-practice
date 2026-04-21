@@ -1288,6 +1288,8 @@
             singleAttemptAnalysisInput: analysisArtifacts.singleAttemptAnalysisInput,
             singleAttemptAnalysis: analysisArtifacts.singleAttemptAnalysis,
             singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm,
+            readingCoachSnapshot: recordData.readingCoachSnapshot || (recordData.realData && recordData.realData.readingCoachSnapshot) || null,
+            readingCoachTranscript: recordData.readingCoachTranscript || (recordData.realData && recordData.realData.readingCoachTranscript) || [],
             analysisSignals: analysisArtifacts.singleAttemptAnalysisInput.analysisSignals || null,
             questionTimelineLite: analysisArtifacts.singleAttemptAnalysisInput.questionTimelineLite || [],
             metadata,
@@ -1320,17 +1322,29 @@
                     singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm
                         ? clonePlainObject(analysisArtifacts.singleAttemptAnalysisLlm)
                         : null,
+                    readingCoachSnapshot: (recordData.realData && recordData.realData.readingCoachSnapshot)
+                        ? clonePlainObject(recordData.realData.readingCoachSnapshot)
+                        : (recordData.readingCoachSnapshot ? clonePlainObject(recordData.readingCoachSnapshot) : null),
+                    readingCoachTranscript: (recordData.realData && Array.isArray(recordData.realData.readingCoachTranscript))
+                        ? clonePlainObject(recordData.realData.readingCoachTranscript)
+                        : (Array.isArray(recordData.readingCoachTranscript) ? clonePlainObject(recordData.readingCoachTranscript) : []),
                     answerComparison: (recordData.realData && recordData.realData.answerComparison)
                         ? clonePlainObject(recordData.realData.answerComparison)
                         : (normalizedComparison || null)
                 })
                 : (
-                    normalizedComparison || analysisArtifacts.singleAttemptAnalysisLlm
+                    normalizedComparison || analysisArtifacts.singleAttemptAnalysisLlm || recordData.readingCoachSnapshot || recordData.readingCoachTranscript
                         ? Object.assign(
                             {},
                             normalizedComparison ? { answerComparison: normalizedComparison } : {},
                             analysisArtifacts.singleAttemptAnalysisLlm
                                 ? { singleAttemptAnalysisLlm: clonePlainObject(analysisArtifacts.singleAttemptAnalysisLlm) }
+                                : {},
+                            recordData.readingCoachSnapshot
+                                ? { readingCoachSnapshot: clonePlainObject(recordData.readingCoachSnapshot) }
+                                : {},
+                            Array.isArray(recordData.readingCoachTranscript)
+                                ? { readingCoachTranscript: clonePlainObject(recordData.readingCoachTranscript) }
                                 : {}
                         )
                         : null
@@ -1577,6 +1591,12 @@
             singleAttemptAnalysisLlm: rawPayload.singleAttemptAnalysisLlm
                 || (rawPayload.realData && rawPayload.realData.singleAttemptAnalysisLlm)
                 || null,
+            readingCoachSnapshot: rawPayload.readingCoachSnapshot
+                || (rawPayload.realData && rawPayload.realData.readingCoachSnapshot)
+                || null,
+            readingCoachTranscript: rawPayload.readingCoachTranscript
+                || (rawPayload.realData && rawPayload.realData.readingCoachTranscript)
+                || [],
             metadata: Object.assign({}, metadata, {
                 examId: resolvedExamId,
                 examTitle: title,
@@ -1613,6 +1633,12 @@
                 singleAttemptAnalysisLlm: rawPayload.singleAttemptAnalysisLlm
                     || (rawPayload.realData && rawPayload.realData.singleAttemptAnalysisLlm)
                     || null,
+                readingCoachSnapshot: rawPayload.readingCoachSnapshot
+                    || (rawPayload.realData && rawPayload.realData.readingCoachSnapshot)
+                    || null,
+                readingCoachTranscript: rawPayload.readingCoachTranscript
+                    || (rawPayload.realData && rawPayload.realData.readingCoachTranscript)
+                    || [],
                 isRealData: true,
                 source: scoreInfo.source || rawPayload.pageType || rawPayload.source || 'practice_page',
                 sessionId: rawPayload.sessionId || sessionContext.sessionId || null

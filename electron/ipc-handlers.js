@@ -9,13 +9,13 @@ const TopicService = require('./services/topic.service');
 const EssayService = require('./services/essay.service');
 const SettingsService = require('./services/settings.service');
 const UploadService = require('./services/upload.service');
-const ReadingAnalysisService = require('./services/reading-analysis.service');
+const ReadingCoachService = require('./services/reading-coach.service');
 const logger = require('./utils/logger');
 
 const IPC_HANDLE_CHANNELS = [
     'app:getUserDataPath',
     'app:getLocalApiInfo',
-    'reading:analyze-single-attempt',
+    'reading:coach-query',
     'configs:list',
     'configs:create',
     'configs:update',
@@ -77,7 +77,7 @@ class IPCHandlers {
         this.essayService = null;
         this.settingsService = null;
         this.uploadService = null;
-        this.readingAnalysisService = null;
+        this.readingCoachService = null;
         this.localApiInfo = null;
 
         // 允许调用 writing API 的页面白名单
@@ -138,7 +138,7 @@ class IPCHandlers {
             this.essayService = new EssayService(this.db);
             this.settingsService = new SettingsService(this.db);
             this.uploadService = new UploadService(app);
-            this.readingAnalysisService = new ReadingAnalysisService(this.configService);
+            this.readingCoachService = new ReadingCoachService(this.configService);
 
             logger.info('Services initialized successfully');
 
@@ -188,17 +188,17 @@ class IPCHandlers {
             return { success: true, data: this.localApiInfo };
         });
 
-        ipcMain.handle('reading:analyze-single-attempt', async (_event, payload) => {
+        ipcMain.handle('reading:coach-query', async (_event, payload) => {
             try {
-                const data = await this.readingAnalysisService.generateSingleAttemptAnalysis(payload || {});
+                const data = await this.readingCoachService.query(payload || {});
                 return { success: true, data };
             } catch (error) {
-                logger.error('Reading analysis IPC error', error);
+                logger.error('Reading coach IPC error', error);
                 return {
                     success: false,
                     error: {
-                        code: error.code || 'reading_analysis_failed',
-                        message: error.message || 'reading_analysis_failed'
+                        code: error.code || 'reading_coach_failed',
+                        message: error.message || 'reading_coach_failed'
                     }
                 };
             }
@@ -475,7 +475,7 @@ class IPCHandlers {
             essayService: this.essayService,
             settingsService: this.settingsService,
             uploadService: this.uploadService,
-            readingAnalysisService: this.readingAnalysisService
+            readingCoachService: this.readingCoachService
         };
     }
 }

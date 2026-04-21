@@ -850,6 +850,8 @@ class PracticeRecorder {
                 singleAttemptAnalysisInput: payload.singleAttemptAnalysisInput || null,
                 singleAttemptAnalysis: payload.singleAttemptAnalysis || null,
                 singleAttemptAnalysisLlm: payload.singleAttemptAnalysisLlm || payload.realData?.singleAttemptAnalysisLlm || null,
+                readingCoachSnapshot: payload.readingCoachSnapshot || payload.realData?.readingCoachSnapshot || null,
+                readingCoachTranscript: payload.readingCoachTranscript || payload.realData?.readingCoachTranscript || [],
                 interactions: payload.interactions || [],
                 startTime: payload.startTime || null,
                 endTime: payload.endTime || null,
@@ -1510,6 +1512,8 @@ class PracticeRecorder {
             singleAttemptAnalysisInput: analysisArtifacts.singleAttemptAnalysisInput,
             singleAttemptAnalysis: analysisArtifacts.singleAttemptAnalysis,
             singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null,
+            readingCoachSnapshot: results?.readingCoachSnapshot || results?.realData?.readingCoachSnapshot || null,
+            readingCoachTranscript: results?.readingCoachTranscript || results?.realData?.readingCoachTranscript || [],
             metadata,
             suiteSessionId,
             createdAt: resolvedEndTime,
@@ -1519,6 +1523,8 @@ class PracticeRecorder {
                 scoreInfo,
                 interactions: results?.interactions || [],
                 singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null,
+                readingCoachSnapshot: results?.readingCoachSnapshot || results?.realData?.readingCoachSnapshot || null,
+                readingCoachTranscript: results?.readingCoachTranscript || results?.realData?.readingCoachTranscript || [],
                 isRealData: true,
                 source: results?.source || 'practice_page'
             })
@@ -2021,11 +2027,15 @@ class PracticeRecorder {
             singleAttemptAnalysisInput: analysisArtifacts.singleAttemptAnalysisInput,
             singleAttemptAnalysis: analysisArtifacts.singleAttemptAnalysis,
             singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null,
+            readingCoachSnapshot: recordData.readingCoachSnapshot || recordData.realData?.readingCoachSnapshot || null,
+            readingCoachTranscript: recordData.readingCoachTranscript || recordData.realData?.readingCoachTranscript || [],
             realData: Object.assign({}, recordData.realData || {}, {
                 answers: answerMap,
                 correctAnswers: correctAnswerMap,
                 scoreInfo: Object.assign({}, recordData.realData?.scoreInfo || {}, { details: answerDetails }),
-                singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null
+                singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null,
+                readingCoachSnapshot: recordData.readingCoachSnapshot || recordData.realData?.readingCoachSnapshot || null,
+                readingCoachTranscript: recordData.readingCoachTranscript || recordData.realData?.readingCoachTranscript || []
             }),
 
             // 元数据
@@ -2630,6 +2640,8 @@ class PracticeRecorder {
             singleAttemptAnalysisInput: analysisArtifacts.singleAttemptAnalysisInput,
             singleAttemptAnalysis: analysisArtifacts.singleAttemptAnalysis,
             singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null,
+            readingCoachSnapshot: realData.readingCoachSnapshot || null,
+            readingCoachTranscript: realData.readingCoachTranscript || [],
 
             // 元数据 - 与ScoreStorage兼容
             metadata: {
@@ -2647,6 +2659,8 @@ class PracticeRecorder {
                 answers: realData.answers || {},
                 answerHistory: realData.answerHistory || {},
                 singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null,
+                readingCoachSnapshot: realData.readingCoachSnapshot || null,
+                readingCoachTranscript: realData.readingCoachTranscript || [],
                 interactions: realData.interactions || [],
                 scoreInfo: scoreInfo,
                 pageType: realData.pageType,

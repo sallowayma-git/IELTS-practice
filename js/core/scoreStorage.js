@@ -1324,6 +1324,8 @@ class ScoreStorage {
             singleAttemptAnalysisInput: analysisArtifacts.singleAttemptAnalysisInput,
             singleAttemptAnalysis: analysisArtifacts.singleAttemptAnalysis,
             singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null,
+            readingCoachSnapshot: recordData.readingCoachSnapshot || recordData.realData?.readingCoachSnapshot || null,
+            readingCoachTranscript: recordData.readingCoachTranscript || recordData.realData?.readingCoachTranscript || [],
 
             // 元数据
             metadata,
@@ -1347,9 +1349,20 @@ class ScoreStorage {
                     answerComparison: recordData.realData.answerComparison
                         ? this.clonePlainObject(recordData.realData.answerComparison)
                         : (normalizedComparison || null),
-                    singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null
+                    singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null,
+                    readingCoachSnapshot: recordData.readingCoachSnapshot || recordData.realData?.readingCoachSnapshot || null,
+                    readingCoachTranscript: recordData.readingCoachTranscript || recordData.realData?.readingCoachTranscript || []
                 })
-                : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
+                : (
+                    normalizedComparison || recordData.readingCoachSnapshot || recordData.readingCoachTranscript
+                        ? Object.assign(
+                            {},
+                            normalizedComparison ? { answerComparison: normalizedComparison } : {},
+                            recordData.readingCoachSnapshot ? { readingCoachSnapshot: recordData.readingCoachSnapshot } : {},
+                            recordData.readingCoachTranscript ? { readingCoachTranscript: recordData.readingCoachTranscript } : {}
+                        )
+                        : null
+                ),
             answerComparison: normalizedComparison,
 
             // 系统信息
@@ -1985,6 +1998,8 @@ class ScoreStorage {
             r.singleAttemptAnalysisInput = analysisArtifacts.singleAttemptAnalysisInput;
             r.singleAttemptAnalysis = analysisArtifacts.singleAttemptAnalysis;
             r.singleAttemptAnalysisLlm = analysisArtifacts.singleAttemptAnalysisLlm || r.singleAttemptAnalysisLlm || r.realData?.singleAttemptAnalysisLlm || null;
+            r.readingCoachSnapshot = r.readingCoachSnapshot || r.realData?.readingCoachSnapshot || null;
+            r.readingCoachTranscript = r.readingCoachTranscript || r.realData?.readingCoachTranscript || [];
 
             // 状态兜底
             if (!r.status) r.status = 'completed';
