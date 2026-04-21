@@ -10,7 +10,7 @@
     "examId": "p3-low-151",
     "title": "Book Review The Discovery of Slowness 富兰克林(慢的发现)",
     "category": "P3",
-    "sourceDoc": "61. P3 - Book Review The Discovery of Slowness 富兰克林(慢的发现).pdf",
+    "sourceDoc": "P3 解析+1202高频_副本.md",
     "noteType": "总结",
     "matchedTitle": "Book Review The Discovery of Slowness 富兰克林 (慢的发现)"
   },
@@ -91,22 +91,22 @@
       "items": [
         {
           "questionNumber": 32,
-          "text": "（1）题目 32：Little is known from Franklin’s correspondence and published writings about his \\___\\___.\n题目翻译：从富兰克林的书信和出版作品中，人们对他的_\\___\\__知之甚少。\n答案：personality\n解析：定位 Paragraph C 中 “Franklin comes across as a man dedicated to the external duties... who kept introspection and self-analysis to a minimum. His blandness”，明确提到书信和回忆录 “极少提及内省，无法体现个性”，因此答案为 personality。",
+          "text": "（1）题目 32：Little is known from Franklin’s correspondence and published writings about his \\___\\___.\n题目翻译：从富兰克林的书信和出版作品中，人们对他的_\\___\\__知之甚少。\n答案：G（personality，个性）\n解析：定位 Paragraph C 中 “Franklin comes across as a man dedicated to the external duties... who kept introspection and self-analysis to a minimum. His blandness”，明确提到书信和回忆录 “极少提及内省，无法体现个性”，因此选 G。",
           "questionId": "q6"
         },
         {
           "questionNumber": 33,
-          "text": "（2）题目 33：The author, Nadolny, suggests that Franklin’s whole life can be explained by the quality of ‘slowness’. He begins the book by showing how this affects the young Franklin’s \\___\\___ activities.\n题目翻译：作者 Nadolny 认为，“缓慢” 这一特质可解释富兰克林的一生。他在书中开篇描写这一特质如何影响少年富兰克林的_\\___\\__活动。\n答案：sporting\n解析：定位 Paragraph D 中 “The opening scene... depicts Franklin as a young boy, failing to catch a ball because his reaction time is too slow”，“接球” 属于体育活动，因此答案为 sporting。",
+          "text": "（2）题目 33：The author, Nadolny, suggests that Franklin’s whole life can be explained by the quality of ‘slowness’. He begins the book by showing how this affects the young Franklin’s \\___\\___ activities.\n题目翻译：作者 Nadolny 认为，“缓慢” 这一特质可解释富兰克林的一生。他在书中开篇描写这一特质如何影响少年富兰克林的_\\___\\__活动。\n答案：K（sporting，体育）\n解析：定位 Paragraph D 中 “The opening scene... depicts Franklin as a young boy, failing to catch a ball because his reaction time is too slow”，“接球” 属于体育活动，因此选 K。",
           "questionId": "q7"
         },
         {
           "questionNumber": 34,
-          "text": "（3）题目 34：and makes him become \\___\\___.\n题目翻译：并使他成为_\\___\\__。\n答案：an outsider\n解析：定位 Paragraph D 中 “despite the bullying of his peers, Franklin resolves not to fall into step with ‘their way of doing things’”，“拒绝跟风” 意味着成为 “局外人”，因此答案为 an outsider。",
+          "text": "（3）题目 34：and makes him become \\___\\___.\n题目翻译：并使他成为_\\___\\__。\n答案：F（an outsider，局外人）\n解析：定位 Paragraph D 中 “despite the bullying of his peers, Franklin resolves not to fall into step with ‘their way of doing things’”，“拒绝跟风” 意味着成为 “局外人”，因此选 F。",
           "questionId": "q8"
         },
         {
           "questionNumber": 35,
-          "text": "（4）题目 35：As a child, it is the quality of \\___\\___ that attracts Franklin to the Arctic.\n题目翻译：童年时，是_\\___\\__这一特质吸引富兰克林向往北极。\n答案：timelessness\n解析：定位 Paragraph D 中 “Franklin as a boy dreaming of the ‘time without hours and days’ which exists in the far north”，“没有时辰与昼夜” 对应 “timelessness（无时间性）”，因此答案为 timelessness。",
+          "text": "（4）题目 35：As a child, it is the quality of \\___\\___ that attracts Franklin to the Arctic.\n题目翻译：童年时，是_\\___\\__这一特质吸引富兰克林向往北极。\n答案：L（timelessness，无时间性）\n解析：定位 Paragraph D 中 “Franklin as a boy dreaming of the ‘time without hours and days’ which exists in the far north”，“没有时辰与昼夜” 对应 “timelessness（无时间性）”，因此选 L。",
           "questionId": "q9"
         }
       ],
@@ -122,27 +122,27 @@
       "items": [
         {
           "questionNumber": 36,
-          "text": "（1）题目 36：In paragraph E, the writer describes different types of ice in order to illustrate（E 段中，作者描述不同类型的冰是为了说明什么？）\n答案：D（the personal qualities required of an explorer in Arctic conditions. 北极环境下探险者所需的个人品质）\n解析：定位 Paragraph E 中 “Ice demands a corresponding patience from those who venture onto it. The explorers who have thrived at high latitudes... have tended instead to demonstrate unusual self-possession, a considerable capacity for boredom, and a talent for the uncomplaining endurance of suffering”，描述冰的 “缓慢” 是为了引出 “探险者需具备耐心、镇定等品质”，因此选 D。",
+          "text": "（1）题目 36：In paragraph E, the writer describes different types of ice in order to illustrate（E 段中，作者描述不同类型的冰是为了说明什么？）\n答案：D（the personal qualities required of an explorer in Arctic conditions. 北极环境下探险者所需的个人品质）\n解析：定位 Paragraph E 中 "Ice demands a corresponding patience from those who venture onto it. The explorers who have thrived at high latitudes... have tended instead to demonstrate unusual self-possession, a considerable capacity for boredom, and a talent for the uncomplaining endurance of suffering"，描述冰的 "缓慢" 是为了引出 "探险者需具备耐心、镇定等品质"，因此选 D。",
           "questionId": "q10"
         },
         {
           "questionNumber": 37,
-          "text": "（2）题目 37：What is said about the way Franklin communicates?（关于富兰克林的沟通方式，文中提到什么？）\n答案：C（He uses words and phrases that he has previously memorised. 他使用之前背诵过的词句）\n解析：定位 Paragraph F 中 “Franklin's slowness of thought means that he is unable to speak fluently, so he learns by heart 'entire fleets of words and batteries of responses', and speaks a languid, bric-à-brac language”，明确提到 “因思维慢无法流利表达，便背诵词句回应”，因此选 C。",
+          "text": "（2）题目 37：What is said about the way Franklin communicates?（关于富兰克林的沟通方式，文中提到什么？）\n答案：C（He uses words and phrases that he has previously memorised. 他使用之前背诵过的词句）\n解析：定位 Paragraph F 中 "Franklin's slowness of thought means that he is unable to speak fluently, so he learns by heart 'entire fleets of words and batteries of responses', and speaks a languid, bric-à-brac language"，明确提到 "因思维慢无法流利表达，便背诵词句回应"，因此选 C。",
           "questionId": "q11"
         },
         {
           "questionNumber": 38,
-          "text": "（3）题目 38：How does the attitude of the other sailors change towards Franklin?（其他水手对富兰克林的态度如何变化？）\n答案：D（They eventually appreciate his good qualities. 他们最终欣赏他的优点）\n解析：定位 Paragraph F 中 “his method of thinking first and acting later initially provokes mockery... Franklin persists in doing things his way, and gradually earns the respect of those around him... A lieutenant says approvingly of him: 'Because Franklin is so slow, he never loses time'”，明确提到 “从嘲笑到尊重欣赏”，因此选 D。",
+          "text": "（3）题目 38：How does the attitude of the other sailors change towards Franklin?（其他水手对富兰克林的态度如何变化？）\n答案：D（They eventually appreciate his good qualities. 他们最终欣赏他的优点）\n解析：定位 Paragraph F 中 "his method of thinking first and acting later initially provokes mockery... Franklin persists in doing things his way, and gradually earns the respect of those around him... A lieutenant says approvingly of him: 'Because Franklin is so slow, he never loses time'"，明确提到 "从嘲笑到尊重欣赏"，因此选 D。",
           "questionId": "q12"
         },
         {
           "questionNumber": 39,
-          "text": "（4）题目 39：The chapters of The Discovery of Slowness which describe Franklin's early years contain（《慢的发现》中描写富兰克林早年的章节包含什么？）\n答案：B（short, disconnected pieces of text. 简短、不连贯的文本片段）\n解析：定位 Paragraph G 中 “The chapters describing Franklin's early years are a medley of separate fragments, rhetorical questions, associative jumps and exclamation marks”，“零散片段、联想跳跃” 对应 “简短不连贯的文本”，因此选 B。",
+          "text": "（4）题目 39：The chapters of The Discovery of Slowness which describe Franklin's early years contain（《慢的发现》中描写富兰克林早年的章节包含什么？）\n答案：B（short, disconnected pieces of text. 简短、不连贯的文本片段）\n解析：定位 Paragraph G 中 "The chapters describing Franklin's early years are a medley of separate fragments, rhetorical questions, associative jumps and exclamation marks"，"零散片段、联想跳跃" 对应 "简短不连贯的文本"，因此选 B。",
           "questionId": "q13"
         },
         {
           "questionNumber": 40,
-          "text": "（5）题目 40：The Discovery of Slowness has achieved widespread popularity because（《慢的发现》广受欢迎的原因是什么？）\n答案：A（it reflects many people's concern about one aspect of modern life. 它反映了许多人对现代生活某一方面的担忧）\n解析：定位 Paragraph H 中 “The various groups that have taken the novel up have one thing in common: a dislike of the high-speed culture of Postmodernity. Nadolny's Franklin appeals to them because he is immune to 'the compulsion to be constantly occupied', and to the idea that 'someone was better if he could do the same thing fast'”，明确提到 “小说反对高速文化，反映了人们对现代高速生活的担忧”，因此选 A。",
+          "text": "（5）题目 40：The Discovery of Slowness has achieved widespread popularity because（《慢的发现》广受欢迎的原因是什么？）\n答案：A（it reflects many people's concern about one aspect of modern life. 它反映了许多人对现代生活某一方面的担忧）\n解析：定位 Paragraph H 中 "The various groups that have taken the novel up have one thing in common: a dislike of the high-speed culture of Postmodernity. Nadolny's Franklin appeals to them because he is immune to 'the compulsion to be constantly occupied', and to the idea that 'someone was better if he could do the same thing fast'"，明确提到 "小说反对高速文化，反映了人们对现代高速生活的担忧"，因此选 A。",
           "questionId": "q14"
         }
       ],
