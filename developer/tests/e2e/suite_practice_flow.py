@@ -17,7 +17,13 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import io
 from typing import Dict, List, Optional
+
+# 强制设置控制台输出为 UTF-8，解决 Windows 环境下的编码问题
+if sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INDEX_PATH = REPO_ROOT / "index.html"
@@ -35,7 +41,12 @@ try:
     )
 except ModuleNotFoundError:
     venv_dir = (REPO_ROOT / ".venv").resolve()
-    venv_python = REPO_ROOT / ".venv" / "bin" / "python"
+    # 适配 Windows 和 Unix 系统的虚拟环境路径
+    if sys.platform == "win32":
+        venv_python = REPO_ROOT / ".venv" / "Scripts" / "python.exe"
+    else:
+        venv_python = REPO_ROOT / ".venv" / "bin" / "python"
+
     current_prefix = Path(sys.prefix).resolve()
     if venv_python.exists() and current_prefix != venv_dir:
         completed = subprocess.run([
