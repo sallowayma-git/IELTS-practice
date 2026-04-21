@@ -100,7 +100,8 @@
           position: 'right',
           nextText: '下一步',
           lockScroll: true,
-          waitForClick: true
+          waitForClick: true,
+          hideNext: true        // 隐藏下一步按钮，强制点击目标
         },
         {
           id: 'modal-opened',
@@ -109,7 +110,9 @@
           target: '#practice-record-modal .modal-container',
           position: 'right',
           nextText: '下一步',
-          waitForElement: '#practice-record-modal'
+          waitForElement: '#practice-record-modal',
+          lockScroll: true,
+          lockPointer: true     // 禁止点击详情内的入口
         },
         {
           id: 'click-review-mode',
@@ -118,7 +121,9 @@
           target: '#practice-record-modal .record-summary-replay-trigger',
           position: 'bottom',
           nextText: '下一步',
-          waitForClick: true
+          waitForClick: true,
+          hideNext: true,       // 隐藏下一步按钮，强制点击触发器
+          lockScroll: true
         },
         {
           id: 'review-mode-active',
@@ -126,7 +131,8 @@
           content: '该练习记录缺少数据哦，等待您的数据后即可使用回顾模式。',
           target: null,
           position: 'center',
-          nextText: '我知道了'
+          nextText: '我知道了',
+          lockScroll: true
         }
       ]
     },
@@ -147,10 +153,75 @@
       title: '⚙️ 系统设置',
       content: '管理主题切换、数据备份导入导出、题库配置等系统选项。个性化您的学习体验！',
       position: 'right',
+      showSkip: true,
+      showPrev: true,
+      nextText: '下一步',
+      activateView: 'settings'
+    },
+    {
+      id: 'data-management',
+      title: '💾 数据迁移与管理',
+      content: '这里是数据安全的核心。当系统发布新版本时，您可以通过导出和导入功能轻松搬家。',
+      position: 'right',
+      showSkip: true,
+      showPrev: true,
+      nextText: '下一步',
+      activateView: 'settings',
+      subSteps: [
+        {
+          id: 'data-mgmt-intro',
+          target: '.data-management-panel',
+          title: '📂 数据管理面板',
+          content: '集中管理您的练习资产。在转移到新版本前，请务必先备份或导出。',
+          position: 'right',
+          nextText: '下一步',
+          lockScroll: true
+        },
+        {
+          id: 'export-data',
+          target: '#export-data-btn',
+          title: '📤 导出数据',
+          content: '点击“导出数据”，系统会生成包含所有练习历史的 JSON 文件。请妥善保存此文件，它是您迁移到新版本的通行证。',
+          position: 'top',
+          nextText: '下一步',
+          lockScroll: true,
+          disableHighlightPointer: true,
+          offsetY: 10
+        },
+        {
+          id: 'import-data',
+          target: '#import-data-btn',
+          title: '📥 导入数据',
+          content: '在下载并运行新版本后，点击“导入数据”并选择之前导出的 JSON 文件，即可一键找回所有练习历史。',
+          position: 'top',
+          nextText: '下一步',
+          lockScroll: true,
+          disableHighlightPointer: true
+        }
+      ]
+    },
+    {
+      id: 'theme-switcher-guide',
+      target: '#theme-switcher-btn-entry',
+      title: '🎨 主题切换',
+      content: '当您使用动态背景遇到卡顿时可切换为静态主题',
+      position: 'top',
+      showSkip: true,
+      showPrev: true,
+      nextText: '下一步',
+      activateView: 'settings',
+      disableHighlightPointer: true
+    },
+    {
+      id: 'completion',
+      target: null,
+      title: '🎉 恭喜完成！',
+      content: '您已了解系统的所有核心功能。现在开始您的雅思备考之旅吧！祝您取得理想的成绩。',
+      position: 'center',
       showSkip: false,
       showPrev: true,
-      nextText: '完成引导 🎉',
-      activateView: 'settings'
+      nextText: '开始练习',
+      activateView: 'overview'
     }
   ];
 
@@ -242,7 +313,7 @@
       return this._tooltip;
     }
 
-    highlightElement(el) {
+    highlightElement(el, options = {}) {
       this.clearHighlight();
       if (!el) return;
 
@@ -279,7 +350,7 @@
       // 强制设置目标元素样式使其在遮罩层之上
       el.style.position = 'relative';
       el.style.zIndex = '100006';
-      el.style.pointerEvents = 'auto';
+      el.style.pointerEvents = options.disablePointer ? 'none' : 'auto';
 
       el.classList.add('onboarding-highlight');
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -315,7 +386,7 @@
       }
     }
 
-    positionTooltip(target, position) {
+    positionTooltip(target, position, offsetY = 0) {
       if (!this._tooltip) return;
 
       // 清除旧箭头
@@ -339,24 +410,24 @@
 
       switch (position) {
         case 'top':
-          top = rect.top - tooltipRect.height - gap;
+          top = rect.top - tooltipRect.height - gap - offsetY;
           left = rect.left + (rect.width - tooltipRect.width) / 2;
           this._addArrow('bottom');
           break;
         case 'bottom':
-          top = rect.bottom + gap;
+          top = rect.bottom + gap + offsetY;
           left = rect.left + (rect.width - tooltipRect.width) / 2;
           this._addArrow('top');
           break;
         case 'left':
           top = rect.top + (rect.height - tooltipRect.height) / 2;
-          left = rect.left - tooltipRect.width - gap;
+          left = rect.left - tooltipRect.width - gap - offsetY;
           this._addArrow('right');
           break;
         case 'right':
         default:
           top = rect.top + (rect.height - tooltipRect.height) / 2;
-          left = rect.right + gap;
+          left = rect.right + gap + offsetY;
           this._addArrow('left');
           break;
       }
@@ -395,7 +466,7 @@
           ${step.showPrev ? '<button class="onboarding-tooltip__btn onboarding-tooltip__btn--secondary" data-action="prev">上一步</button>' : '<div></div>'}
           <div>
             ${step.showSkip ? '<button class="onboarding-tooltip__btn onboarding-tooltip__btn--skip" data-action="skip">跳过</button>' : ''}
-            <button class="onboarding-tooltip__btn onboarding-tooltip__btn--primary" data-action="next">${step.nextText}</button>
+            ${step.hideNext ? '' : `<button class="onboarding-tooltip__btn onboarding-tooltip__btn--primary" data-action="next">${step.nextText}</button>`}
           </div>
         </div>
       `;
@@ -655,6 +726,19 @@
         return;
       }
 
+      // 应用滚动锁与指针锁
+      if (step.lockScroll) {
+        this._lockScroll();
+      } else {
+        this._unlockScroll();
+      }
+
+      if (step.lockPointer && !step.waitForClick) {
+        this._lockPointer();
+      } else {
+        this._unlockPointer();
+      }
+
       this._showStepContent(step);
     }
 
@@ -697,15 +781,15 @@
         }
 
         // 应用指针锁（不是 waitForClick 步骤才锁，防止误操作）
-        if (subStep.lockPointer && !subStep.waitForClick) {
+        if (subStep.lockPointer) {
           this._lockPointer();
         } else {
           this._unlockPointer();
         }
 
         const targetEl = subStep.target ? document.querySelector(subStep.target) : null;
-        this._renderer.highlightElement(targetEl);
-        this._renderer.positionTooltip(targetEl, subStep.position);
+        this._renderer.highlightElement(targetEl, { disablePointer: subStep.disableHighlightPointer });
+        this._renderer.positionTooltip(targetEl, subStep.position, subStep.offsetY);
 
         const totalSteps = parentStep.subSteps.length;
         this._renderer.renderTooltipContent(subStep, this._currentSubStep, totalSteps);
@@ -838,10 +922,10 @@
 
         // 高亮目标元素
         const targetEl = step.target ? document.querySelector(step.target) : null;
-        this._renderer.highlightElement(targetEl);
+        this._renderer.highlightElement(targetEl, { disablePointer: step.disableHighlightPointer });
 
         // 定位提示框
-        this._renderer.positionTooltip(targetEl, step.position);
+        this._renderer.positionTooltip(targetEl, step.position, step.offsetY);
 
         // 渲染内容
         if (step.id === 'welcome') {
