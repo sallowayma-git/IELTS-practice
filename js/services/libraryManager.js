@@ -104,7 +104,9 @@
         }
 
         resolveScriptPathRoot(type) {
-            // 1. 尝试从脚本数据的 pathRoot 元数据读取
+            const defaultRoot = type === 'reading'
+                ? '睡着过项目组/2. 所有文章(11.20)[192篇]/'
+                : 'ListeningPractice/';
             try {
                 if (type === 'reading') {
                     const rootMeta = global.completeExamIndex && global.completeExamIndex.pathRoot;
@@ -126,25 +128,7 @@
                     }
                 }
             } catch (_) { }
-
-            // 2. 从 exam 条目的 folder/path 字段动态推算公共根路径
-            try {
-                const source = type === 'reading' ? global.completeExamIndex : global.listeningExamIndex;
-                if (Array.isArray(source) && source.length) {
-                    const folders = source
-                        .filter(function (e) { return e && (e.folder || e.path); })
-                        .map(function (e) { return String(e.folder || e.path).replace(/\\/g, '/'); });
-                    if (folders.length) {
-                        const derived = computeCommonRoot(folders);
-                        if (derived) {
-                            return derived;
-                        }
-                    }
-                }
-            } catch (_) { }
-
-            // 3. 最终 fallback（空字符串表示无固定前缀）
-            return type === 'listening' ? 'ListeningPractice/' : '';
+            return defaultRoot;
         }
 
         finishLibraryLoading(startTime) {

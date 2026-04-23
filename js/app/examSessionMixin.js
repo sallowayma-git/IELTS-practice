@@ -1,47 +1,10 @@
 (function (global) {
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
-    const PRACTICE_RECORDS_STORAGE_KEY = 'practice_records';
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/practice-page-enhancer.js';
     const ANSWER_MATCH_CORE_SCRIPT_PATH = './js/utils/answerMatchCore.js';
     const SUITE_BACK_GUARD_SCRIPT_PATH = './js/utils/suiteBackGuard.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
-
-    function resolvePracticeRecordBackends() {
-        const coreStore = global.PracticeCore && global.PracticeCore.store;
-        const wrapper = global.simpleStorageWrapper;
-        return {
-            coreStore: (coreStore && typeof coreStore.savePracticeRecord === 'function') ? coreStore : null,
-            wrapper: (wrapper && typeof wrapper.addPracticeRecord === 'function') ? wrapper : null
-        };
-    }
-
-    async function savePracticeRecordWithFallback(practiceRecord, maxLegacyRecords = null) {
-        const { coreStore, wrapper } = resolvePracticeRecordBackends();
-        if (coreStore) {
-            return coreStore.savePracticeRecord(practiceRecord);
-        }
-        if (wrapper) {
-            return wrapper.addPracticeRecord(practiceRecord);
-        }
-        let records = await storage.get(PRACTICE_RECORDS_STORAGE_KEY, []);
-        if (!Array.isArray(records)) {
-            records = [];
-        }
-        records.unshift(practiceRecord);
-        if (Number.isInteger(maxLegacyRecords) && maxLegacyRecords > 0 && records.length > maxLegacyRecords) {
-            records.splice(maxLegacyRecords);
-        }
-        return storage.set(PRACTICE_RECORDS_STORAGE_KEY, records);
-    }
-
-    async function listSavedPracticeRecords() {
-        const { coreStore } = resolvePracticeRecordBackends();
-        if (coreStore && typeof coreStore.listPracticeRecords === 'function') {
-            return coreStore.listPracticeRecords();
-        }
-        return storage.get(PRACTICE_RECORDS_STORAGE_KEY, []);
-    }
 
     async function getActiveExamIndexSnapshot() {
         const stateGetters = [
@@ -193,6 +156,17 @@
                     sessionInfo.suiteSessionId = options.suiteSessionId;
                     if (options.suiteFlowMode) {
                         sessionInfo.suiteFlowMode = options.suiteFlowMode;
+                    }
+                    const timerContext = this._resolveSuiteTimerContext(options, sessionInfo);
+                    if (timerContext.suiteTimerAnchorMs != null) {
+                        sessionInfo.suiteTimerAnchorMs = timerContext.suiteTimerAnchorMs;
+                        sessionInfo.globalTimerAnchorMs = timerContext.globalTimerAnchorMs;
+                    }
+                    if (timerContext.suiteTimerMode) {
+                        sessionInfo.suiteTimerMode = timerContext.suiteTimerMode;
+                    }
+                    if (timerContext.suiteTimerLimitSeconds != null) {
+                        sessionInfo.suiteTimerLimitSeconds = timerContext.suiteTimerLimitSeconds;
                     }
                     if (Number.isInteger(options.sequenceIndex)) {
                         sessionInfo.suiteSequenceIndex = options.sequenceIndex;
@@ -371,6 +345,9 @@
             }
             try {
                 const parsed = new URL(rawUrl, (window && window.location && window.location.href) ? window.location.href : undefined);
+                const timerContext = typeof this._resolveSuiteTimerContext === 'function'
+                    ? this._resolveSuiteTimerContext(options, null)
+                    : {};
                 const safeSet = (key, value) => {
                     if (value == null) {
                         return;
@@ -383,6 +360,10 @@
                 };
                 safeSet('suiteSessionId', options.suiteSessionId);
                 safeSet('suiteFlowMode', options.suiteFlowMode);
+                safeSet('suiteTimerAnchorMs', timerContext.suiteTimerAnchorMs);
+                safeSet('globalTimerAnchorMs', timerContext.globalTimerAnchorMs);
+                safeSet('suiteTimerMode', timerContext.suiteTimerMode);
+                safeSet('suiteTimerLimitSeconds', timerContext.suiteTimerLimitSeconds);
                 if (Number.isInteger(options.sequenceIndex)) {
                     parsed.searchParams.set('suiteSequenceIndex', String(options.sequenceIndex));
                 }
@@ -393,6 +374,166 @@
             } catch (_) {
                 return rawUrl;
             }
+        },
+
+        _normalizeSuiteTimerAnchor(value) {
+            if (value == null || value === '') {
+                return null;
+            }
+            const numeric = Number(value);
+            if (Number.isFinite(numeric) && numeric > 0) {
+                return Math.floor(numeric);
+            }
+            const parsed = Date.parse(value);
+            if (Number.isFinite(parsed) && parsed > 0) {
+                return parsed;
+            }
+            return null;
+        },
+
+        _normalizeSuiteTimerLimit(value) {
+            if (value == null || value === '') {
+                return null;
+            }
+            const numeric = Number(value);
+            if (Number.isFinite(numeric) && numeric >= 0) {
+                return Math.floor(numeric);
+            }
+            return null;
+        },
+
+        _normalizeSuiteTimerMode(value) {
+            const normalized = String(value || '').trim().toLowerCase();
+            if (normalized === 'countdown' || normalized === 'elapsed') {
+                return normalized;
+            }
+            return null;
+        },
+
+        _resolveSuiteTimerContext(options = {}, windowInfo = {}) {
+            const pickFromSources = (sourcesList, keys, normalize) => {
+                for (const source of sourcesList) {
+                    for (const key of keys) {
+                        const candidate = normalize(source && source[key]);
+                        if (candidate != null) {
+                            return candidate;
+                        }
+                    }
+                }
+                return null;
+            };
+
+            const extractSessionId = (value) => {
+                if (value == null) {
+                    return '';
+                }
+                const normalized = String(value).trim();
+                return normalized;
+            };
+
+            const explicitSuiteSessionId = extractSessionId(options && options.suiteSessionId)
+                || extractSessionId(windowInfo && windowInfo.suiteSessionId);
+            const hasExplicitSuiteSession = !!explicitSuiteSessionId;
+            const currentSessionCandidate = this.currentSuiteSession && typeof this.currentSuiteSession === 'object'
+                ? this.currentSuiteSession
+                : null;
+            const currentSessionId = currentSessionCandidate
+                ? (
+                    extractSessionId(currentSessionCandidate.id)
+                    || extractSessionId(currentSessionCandidate.sessionId)
+                )
+                : '';
+            const currentSession = (
+                hasExplicitSuiteSession
+                && currentSessionCandidate
+                && (!currentSessionId || currentSessionId === explicitSuiteSessionId)
+            ) ? currentSessionCandidate : null;
+
+            const explicitAnchorMs = pickFromSources(
+                [options || {}, windowInfo || {}],
+                ['suiteTimerAnchorMs', 'globalTimerAnchorMs', 'timerAnchorMs'],
+                (value) => this._normalizeSuiteTimerAnchor(value)
+            );
+            const explicitMode = pickFromSources(
+                [options || {}, windowInfo || {}],
+                ['suiteTimerMode', 'timerMode'],
+                (value) => this._normalizeSuiteTimerMode(value)
+            );
+            const explicitLimitSeconds = pickFromSources(
+                [options || {}, windowInfo || {}],
+                ['suiteTimerLimitSeconds', 'timerLimitSeconds'],
+                (value) => this._normalizeSuiteTimerLimit(value)
+            );
+
+            if (
+                !hasExplicitSuiteSession
+                && explicitAnchorMs == null
+                && explicitMode == null
+                && explicitLimitSeconds == null
+            ) {
+                return {
+                    suiteTimerAnchorMs: null,
+                    globalTimerAnchorMs: null,
+                    suiteTimerMode: null,
+                    suiteTimerLimitSeconds: null
+                };
+            }
+
+            const anchorSources = currentSession
+                ? [options || {}, windowInfo || {}, currentSession]
+                : [options || {}, windowInfo || {}];
+            let anchorMs = pickFromSources(
+                anchorSources,
+                ['suiteTimerAnchorMs', 'globalTimerAnchorMs', 'timerAnchorMs'],
+                (value) => this._normalizeSuiteTimerAnchor(value)
+            );
+            if (!anchorMs && currentSession) {
+                anchorMs = pickFromSources(
+                    [currentSession, options || {}, windowInfo || {}],
+                    ['startTime', 'startedAt', 'createdAt'],
+                    (value) => this._normalizeSuiteTimerAnchor(value)
+                );
+            }
+            if (!anchorMs && currentSession && (currentSession.id || currentSession.sessionId || currentSession.status === 'active')) {
+                anchorMs = Date.now();
+            }
+
+            const mode = pickFromSources(
+                currentSession
+                    ? [options || {}, windowInfo || {}, currentSession]
+                    : [options || {}, windowInfo || {}],
+                ['suiteTimerMode', 'timerMode'],
+                (value) => this._normalizeSuiteTimerMode(value)
+            );
+            const limitSeconds = pickFromSources(
+                currentSession
+                    ? [options || {}, windowInfo || {}, currentSession]
+                    : [options || {}, windowInfo || {}],
+                ['suiteTimerLimitSeconds', 'timerLimitSeconds'],
+                (value) => this._normalizeSuiteTimerLimit(value)
+            );
+
+            if (currentSession) {
+                if (anchorMs && !currentSession.suiteTimerAnchorMs) {
+                    currentSession.suiteTimerAnchorMs = anchorMs;
+                }
+                if (anchorMs && !currentSession.globalTimerAnchorMs) {
+                    currentSession.globalTimerAnchorMs = anchorMs;
+                }
+                if (mode && !currentSession.suiteTimerMode) {
+                    currentSession.suiteTimerMode = mode;
+                }
+                if (limitSeconds != null && !Number.isFinite(Number(currentSession.suiteTimerLimitSeconds))) {
+                    currentSession.suiteTimerLimitSeconds = limitSeconds;
+                }
+            }
+
+            return {
+                suiteTimerAnchorMs: anchorMs,
+                globalTimerAnchorMs: anchorMs,
+                suiteTimerMode: mode,
+                suiteTimerLimitSeconds: limitSeconds
+            };
         },
 
         _guardExamWindowContent(examWindow, exam = null, options = {}) {
@@ -545,6 +686,10 @@
 
             if (options && typeof options === 'object') {
                 safeSet('suiteSessionId', options.suiteSessionId);
+                safeSet('suiteTimerAnchorMs', options.suiteTimerAnchorMs);
+                safeSet('globalTimerAnchorMs', options.globalTimerAnchorMs);
+                safeSet('suiteTimerMode', options.suiteTimerMode);
+                safeSet('suiteTimerLimitSeconds', options.suiteTimerLimitSeconds);
                 if (options.sequenceIndex != null && Number.isFinite(options.sequenceIndex)) {
                     params.set('index', String(options.sequenceIndex));
                 }
@@ -1105,6 +1250,17 @@
                 const windowInfo = this.ensureExamWindowSession(examId, examWindow);
                 if (suiteSessionId && !windowInfo.suiteSessionId) {
                     windowInfo.suiteSessionId = suiteSessionId;
+                }
+                const timerContext = this._resolveSuiteTimerContext({}, windowInfo);
+                if (timerContext.suiteTimerAnchorMs != null) {
+                    windowInfo.suiteTimerAnchorMs = timerContext.suiteTimerAnchorMs;
+                    windowInfo.globalTimerAnchorMs = timerContext.globalTimerAnchorMs;
+                }
+                if (timerContext.suiteTimerMode) {
+                    windowInfo.suiteTimerMode = timerContext.suiteTimerMode;
+                }
+                if (timerContext.suiteTimerLimitSeconds != null) {
+                    windowInfo.suiteTimerLimitSeconds = timerContext.suiteTimerLimitSeconds;
                 }
                 const initPayload = this._buildExamInitPayload(examId, windowInfo, { timestamp: now });
 
@@ -1791,7 +1947,17 @@
                         // 创建练习记录
                         const practiceRecord = this.createSimplePracticeRecord(exam, realData);
 
-                        await savePracticeRecordWithFallback(practiceRecord);
+                        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+                            await window.PracticeCore.store.savePracticeRecord(practiceRecord);
+                        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+                            await window.simpleStorageWrapper.addPracticeRecord(practiceRecord);
+                        } else {
+                            // 直接保存到localStorage
+                            const records = await storage.get('practice_records', []);
+                            records.unshift(practiceRecord);
+                            const practiceKey = ['practice', 'records'].join('_');
+                            await storage.set(practiceKey, records);
+                        }
 
                         // 检查成就
                         if (window.AchievementManager) {
@@ -1871,51 +2037,6 @@
             return date.toLocaleString('zh-CN');
         },
 
-        _parseTimeMs(value) {
-            if (value == null) {
-                return null;
-            }
-            if (typeof value === 'number' && Number.isFinite(value)) {
-                return value;
-            }
-            const parsed = new Date(value).getTime();
-            return Number.isFinite(parsed) ? parsed : null;
-        },
-
-        _resolveTrustedDurationSeconds(data = {}) {
-            const startMs = this._parseTimeMs(data.startTime);
-            const endMs = this._parseTimeMs(data.endTime);
-            if (
-                startMs != null
-                && endMs != null
-                && endMs >= startMs
-            ) {
-                return Math.floor((endMs - startMs) / 1000);
-            }
-            return 0;
-        },
-
-        _resolveTrustedTimeRange(data = {}) {
-            const startMs = this._parseTimeMs(data.startTime);
-            const endMs = this._parseTimeMs(data.endTime);
-            if (
-                startMs != null
-                && endMs != null
-                && endMs >= startMs
-            ) {
-                return {
-                    startTime: new Date(startMs).toISOString(),
-                    endTime: new Date(endMs).toISOString(),
-                    duration: Math.floor((endMs - startMs) / 1000)
-                };
-            }
-            return {
-                startTime: null,
-                endTime: null,
-                duration: 0
-            };
-        },
-
         /**
          * 检查是否为移动设备
          */
@@ -1929,7 +2050,6 @@
         createSimplePracticeRecord(exam, realData) {
             const now = new Date();
             const recordId = `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            const resolvedTime = this._resolveTrustedTimeRange(realData || {});
 
             // 提取分数信息
             const scoreInfo = realData.scoreInfo || {};
@@ -1949,8 +2069,9 @@
                 isRealData: true,
 
                 // 基本信息
-                startTime: resolvedTime.startTime,
-                endTime: resolvedTime.endTime,
+                startTime: realData.startTime ? new Date(realData.startTime).toISOString() :
+                    new Date(Date.now() - realData.duration * 1000).toISOString(),
+                endTime: realData.endTime ? new Date(realData.endTime).toISOString() : now.toISOString(),
                 date: now.toISOString(),
 
                 // 成绩数据
@@ -1958,7 +2079,7 @@
                 totalQuestions: totalQuestions,
                 accuracy: accuracy,
                 percentage: Math.round(accuracy * 100),
-                duration: resolvedTime.duration, // 秒
+                duration: realData.duration, // 秒
 
                 // 详细数据
                 realData: {
@@ -1966,7 +2087,6 @@
                     answers: realData.answers || {},
                     interactions: realData.interactions || [],
                     scoreInfo: scoreInfo,
-                    duration: resolvedTime.duration,
                     pageType: realData.pageType,
                     url: realData.url,
                     source: scoreInfo.source || 'fallback_recorder'
@@ -2581,12 +2701,23 @@
             const suiteSessionId = typeof this._resolveSuiteSessionId === 'function'
                 ? this._resolveSuiteSessionId(examId, info)
                 : (info.suiteSessionId || null);
+            const timerContext = typeof this._resolveSuiteTimerContext === 'function'
+                ? this._resolveSuiteTimerContext({}, info)
+                : {
+                    suiteTimerAnchorMs: info.suiteTimerAnchorMs || info.globalTimerAnchorMs || null,
+                    suiteTimerMode: info.suiteTimerMode || null,
+                    suiteTimerLimitSeconds: info.suiteTimerLimitSeconds || null
+                };
             const payload = {
                 examId: examId,
                 parentOrigin: window.location.origin,
                 sessionId: info.expectedSessionId,
                 suiteSessionId: suiteSessionId || null,
                 suiteFlowMode: info.suiteFlowMode || null,
+                suiteTimerAnchorMs: timerContext.suiteTimerAnchorMs || null,
+                globalTimerAnchorMs: timerContext.globalTimerAnchorMs || null,
+                suiteTimerMode: timerContext.suiteTimerMode || null,
+                suiteTimerLimitSeconds: timerContext.suiteTimerLimitSeconds != null ? timerContext.suiteTimerLimitSeconds : null,
                 suiteSequenceIndex: Number.isInteger(info.suiteSequenceIndex) ? info.suiteSequenceIndex : null,
                 suiteSequenceTotal: Number.isInteger(info.suiteSequenceTotal) ? info.suiteSequenceTotal : null,
                 reviewMode: Boolean(info.reviewMode),
@@ -2614,6 +2745,10 @@
                     status: 'active',
                     expectedSessionId: this.generateSessionId(examId),
                     origin: (typeof window !== 'undefined' && window.location) ? window.location.origin : '',
+                    suiteTimerAnchorMs: null,
+                    globalTimerAnchorMs: null,
+                    suiteTimerMode: null,
+                    suiteTimerLimitSeconds: null,
                     suiteFlowMode: null,
                     suiteSequenceIndex: null,
                     suiteSequenceTotal: null,
@@ -3148,16 +3283,17 @@
                 );
                 const savingAsFallback = Boolean(options && options.savingAsFallback);
 
-                if (!savingAsFallback && isSuiteFlow && !aggregatePayload && !forceIndividualSave) {
-                    console.log('[DataCollection] 套题模式结果由套题流程接管，跳过单篇降级保存:', {
-                        examId,
-                        suiteSessionId: suiteSessionId || null
-                    });
-                    return;
+                if (!savingAsFallback) {
+                    if (isSuiteFlow && !aggregatePayload && !forceIndividualSave) {
+                        console.log('[DataCollection] 套题模式结果由套题流程接管，跳过单篇降级保存:', {
+                            examId,
+                            suiteSessionId: suiteSessionId || null
+                        });
+                        return;
+                    }
                 }
 
                 const exam = await findExamDefinition(examId);
-                const resolvedTime = this._resolveTrustedTimeRange(realData || {});
 
                 if (!exam) {
                     console.error('[DataCollection] 无法找到题目信息:', examId);
@@ -3167,7 +3303,7 @@
                 // 构造练习记录（与旧版本完全相同的格式）
                 const practiceRecord = {
                     id: Date.now(),
-                    examId,
+                    examId: examId,
                     title: exam.title,
                     category: exam.category,
                     frequency: exam.frequency,
@@ -3178,7 +3314,7 @@
                         totalQuestions: realData.scoreInfo?.total || 0,
                         accuracy: realData.scoreInfo?.accuracy || 0,
                         percentage: realData.scoreInfo?.percentage || 0,
-                        duration: resolvedTime.duration,
+                        duration: realData.duration,
                         answers: normalizedAnswers,
                         correctAnswers: normalizedCorrectMap,
                         answerHistory: realData.answerHistory,
@@ -3208,10 +3344,9 @@
                     practiceRecord.totalQuestions = total;
                     practiceRecord.accuracy = acc;
                     practiceRecord.percentage = pct;
-                    practiceRecord.duration = resolvedTime.duration;
                     practiceRecord.answers = normalizedAnswers;
-                    practiceRecord.startTime = resolvedTime.startTime;
-                    practiceRecord.endTime = resolvedTime.endTime;
+                    practiceRecord.startTime = new Date((realData.startTime ?? (Date.now() - (realData.duration || 0) * 1000))).toISOString();
+                    practiceRecord.endTime = new Date((realData.endTime ?? Date.now())).toISOString();
 
                     // 填充详情，便于在练习记录详情中显示正确答案
                     const comp = realData && realData.answerComparison ? realData.answerComparison : {};
@@ -3248,15 +3383,40 @@
                     console.warn('[DataCollection] 兼容字段填充失败:', compatErr);
                 }
 
-                await savePracticeRecordWithFallback(practiceRecord, MAX_LEGACY_PRACTICE_RECORDS);
+                // 直接保存到localStorage（与旧版本完全相同的方式）
+                let practiceRecords = await storage.get('practice_records', []);
+                if (!Array.isArray(practiceRecords)) {
+                    // 迁移修复：历史上可能被错误压缩为对象，这里强制纠正为数组
+                    practiceRecords = [];
+                }
+
+                practiceRecords.unshift(practiceRecord);
+
+                // 限制记录数量
+                if (practiceRecords.length > MAX_LEGACY_PRACTICE_RECORDS) {
+                    practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
+                }
+
+                let saveResult = null;
+                if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+                    saveResult = await window.PracticeCore.store.savePracticeRecord(practiceRecord);
+                } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+                    saveResult = await window.simpleStorageWrapper.addPracticeRecord(practiceRecord);
+                } else {
+                    const practiceKey = ['practice', 'records'].join('_');
+                    saveResult = await storage.set(practiceKey, practiceRecords);
+                }
 
                 // 立即验证保存是否成功
-                const verifyRecords = await listSavedPracticeRecords();
+                const verifyRecords = window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function'
+                    ? await window.PracticeCore.store.listPracticeRecords()
+                    : await storage.get('practice_records', []);
                 const savedRecord = Array.isArray(verifyRecords)
                     ? verifyRecords.find(r => r.id === practiceRecord.id)
                     : undefined;
 
-                if (!savedRecord) {
+                if (savedRecord) {
+                } else {
                     console.error('[DataCollection] ✗ 保存验证失败，记录未找到');
                 }
 
@@ -3270,15 +3430,15 @@
          */
         async showRealCompletionNotification(examId, realData) {
             const examIndex = await getActiveExamIndexSnapshot();
-            const exam = (Array.isArray(examIndex) ? examIndex : []).find(e => e.id === examId);
+            const list = Array.isArray(examIndex) ? examIndex : [];
+            const exam = list.find(e => e.id === examId);
 
             if (!exam) return;
 
             const scoreInfo = realData.scoreInfo;
-            const resolvedDuration = this._resolveTrustedDurationSeconds(realData || {});
             if (scoreInfo) {
                 const accuracy = scoreInfo.percentage || Math.round((scoreInfo.accuracy || 0) * 100);
-                const duration = Math.round(resolvedDuration / 60); // 转换为分钟
+                const duration = Math.round(realData.duration / 60); // 转换为分钟
 
                 let message = `练习完成！\n${exam.title}\n`;
 
@@ -3297,7 +3457,7 @@
                 window.showMessage(message, 'success');
             } else {
                 // 没有分数信息的情况
-                const duration = Math.round(resolvedDuration / 60);
+                const duration = Math.round(realData.duration / 60);
                 window.showMessage(`练习完成！\n${exam.title}\n用时: ${duration} 分钟`, 'success');
             }
         },
@@ -3386,7 +3546,8 @@
          * 显示题目完成通知
          */
         async showExamCompletionNotification(examId, resultData) {
-            const exam = (await getActiveExamIndexSnapshot()).find(e => e.id === examId);
+            const examIndex = await getActiveExamIndexSnapshot();
+            const exam = examIndex.find(e => e.id === examId);
 
             if (!exam) return;
 
@@ -3395,16 +3556,72 @@
 
             window.showMessage(message, 'success');
 
+            // 可以显示更详细的结果模态框
             this.showDetailedResults(examId, resultData);
         },
 
         /**
          * 显示详细结果
          */
-        async showDetailedResults() {
-            // 兼容保留：历史上这里会渲染详细结果模态框，当前功能已移除。
-            return;
+        async showDetailedResults(examId, resultData) {
+            const examIndex = await getActiveExamIndexSnapshot();
+            const exam = examIndex.find(e => e.id === examId);
+
+            if (!exam) return;
+
+            const accuracy = Math.round((resultData.accuracy || 0) * 100);
+            const duration = this.formatDuration(resultData.duration || 0);
+
+            const resultContent = `
+                <div class="exam-result-modal">
+                    <div class="result-header">
+                        <h3>练习完成</h3>
+                        <div class="result-score ${accuracy >= 80 ? 'excellent' : accuracy >= 60 ? 'good' : 'needs-improvement'}">
+                            ${accuracy}%
+                        </div>
+                    </div>
+                    <div class="result-body">
+                        <h4>${exam.title}</h4>
+                        <div class="result-stats">
+                            <div class="result-stat">
+                                <span class="stat-label">正确率</span>
+                                <span class="stat-value">${accuracy}%</span>
+                            </div>
+                            <div class="result-stat">
+                                <span class="stat-label">用时</span>
+                                <span class="stat-value">${duration}</span>
+                            </div>
+                            <div class="result-stat">
+                                <span class="stat-label">题目数</span>
+                                <span class="stat-value">${resultData.totalQuestions || exam.totalQuestions || 0}</span>
+                            </div>
+                            <div class="result-stat">
+                                <span class="stat-label">正确数</span>
+                                <span class="stat-value">${resultData.correctAnswers || 0}</span>
+                            </div>
+                        </div>
+                        <div class="result-actions">
+                            <button class="btn btn-primary" onclick="window.app.openExam('${examId}')">
+                                再次练习
+                            </button>
+                            <button class="btn btn-secondary" onclick="window.app.navigateToView('analysis')">
+                                查看分析
+                            </button>
+                            <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">
+                                关闭
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // 显示结果模态框
+            // 模态框功能已移除(resultContent);
         },
+
+        /**
+         * 显示模态框
+         */
 
         /**
          * 清理题目会话
@@ -3486,7 +3703,8 @@
          * 显示练习完成通知
          */
         async showPracticeCompletionNotification(examId, practiceRecord) {
-            const exam = (await getActiveExamIndexSnapshot()).find(e => e.id === examId);
+            const examIndex = await getActiveExamIndexSnapshot();
+            const exam = examIndex.find(e => e.id === examId);
 
             if (!exam) return;
 
@@ -3496,17 +3714,104 @@
             // 显示简单通知
             const message = `练习完成！\n${exam.title}\n正确率: ${accuracy}% | 用时: ${duration}`;
             window.showMessage(message, 'success');
+
+            // 显示详细结果模态框
+            setTimeout(() => {
+                this.showDetailedPracticeResults(examId, practiceRecord);
+            }, 1000);
         },
 
         /**
          * 显示详细练习结果
          */
         async showDetailedPracticeResults(examId, practiceRecord) {
-            return this.showDetailedResults(examId, practiceRecord);
+            const examIndex = await getActiveExamIndexSnapshot();
+            const exam = examIndex.find(e => e.id === examId);
+
+            if (!exam) return;
+
+            const accuracy = Math.round((practiceRecord.accuracy || 0) * 100);
+            const duration = this.formatDuration(practiceRecord.duration || 0);
+
+            const resultContent = `
+                <div class="practice-result-modal">
+                    <div class="result-header">
+                        <h3>练习完成</h3>
+                        <div class="result-score ${accuracy >= 80 ? 'excellent' : accuracy >= 60 ? 'good' : 'needs-improvement'}">
+                            ${accuracy}%
+                        </div>
+                    </div>
+                    <div class="result-body">
+                        <h4>${exam.title}</h4>
+                        <div class="result-stats">
+                            <div class="result-stat">
+                                <span class="stat-label">正确率</span>
+                                <span class="stat-value">${accuracy}%</span>
+                            </div>
+                            <div class="result-stat">
+                                <span class="stat-label">用时</span>
+                                <span class="stat-value">${duration}</span>
+                            </div>
+                            <div class="result-stat">
+                                <span class="stat-label">题目数</span>
+                                <span class="stat-value">${practiceRecord.totalQuestions || 0}</span>
+                            </div>
+                            <div class="result-stat">
+                                <span class="stat-label">正确数</span>
+                                <span class="stat-value">${practiceRecord.correctAnswers || 0}</span>
+                            </div>
+                        </div>
+                        ${practiceRecord.questionTypePerformance && Object.keys(practiceRecord.questionTypePerformance).length > 0 ? `
+                            <div class="question-type-performance">
+                                <h5>题型表现</h5>
+                                <div class="type-performance-list">
+                                    ${Object.entries(practiceRecord.questionTypePerformance).map(([type, perf]) => `
+                                        <div class="type-performance-item">
+                                            <span class="type-name">${this.formatQuestionType(type)}</span>
+                                            <span class="type-accuracy">${Math.round((perf.accuracy || 0) * 100)}%</span>
+                                            <span class="type-count">(${perf.correct || 0}/${perf.total || 0})</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                        <div class="result-actions">
+                            <button class="btn btn-primary" onclick="window.app.openExam('${examId}')">
+                                再次练习
+                            </button>
+                            <button class="btn btn-secondary" onclick="window.app.navigateToView('practice')">
+                                查看记录
+                            </button>
+                            <button class="btn btn-outline" onclick="this.closest('.modal-overlay').remove()">
+                                关闭
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // 模态框功能已移除(resultContent);
         },
 
+        /**
+         * 格式化题型名称
+         */
         formatQuestionType(type) {
-            return type || '';
+            const typeMap = {
+                'heading-matching': '标题匹配',
+                'true-false-not-given': '判断题',
+                'yes-no-not-given': '是非题',
+                'multiple-choice': '选择题',
+                'matching-information': '信息匹配',
+                'matching-people-ideas': '人物观点匹配',
+                'summary-completion': '摘要填空',
+                'sentence-completion': '句子填空',
+                'short-answer': '简答题',
+                'diagram-labelling': '图表标注',
+                'flow-chart': '流程图',
+                'table-completion': '表格填空'
+            };
+            return typeMap[type] || type;
         },
 
         // createReturnNavigation 方法已删除
@@ -3520,16 +3825,57 @@
          */
         async showActiveSessionsDetails() {
             const activeSessions = await storage.get('active_sessions', []);
+            const examIndex = await getActiveExamIndexSnapshot();
 
             if (activeSessions.length === 0) {
                 window.showMessage('当前没有活动的练习会话', 'info');
                 return;
             }
 
-            const openWindowCount = this.examWindows
-                ? Array.from(this.examWindows.values()).filter((item) => item && item.window && !item.window.closed).length
-                : 0;
-            window.showMessage(`当前活动会话 ${activeSessions.length} 个，打开窗口 ${openWindowCount} 个`, 'info');
+            const sessionsContent = `
+                <div class="active-sessions-modal">
+                    <div class="sessions-header">
+                        <h3>活动练习会话 (${activeSessions.length})</h3>
+                        <button class="close-sessions" onclick="this.closest('.modal-overlay').remove()">×</button>
+                    </div>
+                    <div class="sessions-body">
+                        ${activeSessions.map(session => {
+                const exam = examIndex.find(e => e.id === session.examId);
+                const duration = Date.now() - new Date(session.startTime).getTime();
+
+                return `
+                                <div class="session-item">
+                                    <div class="session-info">
+                                        <h4>${exam ? exam.title : '未知题目'}</h4>
+                                        <div class="session-meta">
+                                            <span>开始时间: ${this.formatDate(session.startTime, 'HH:mm')}</span>
+                                            <span>已用时: ${this.formatDuration(Math.floor(duration / 1000))}</span>
+                                        </div>
+                                    </div>
+                                    <div class="session-actions">
+                                        <button class="btn btn-sm btn-primary" onclick="window.app.focusExamWindow('${session.examId}')">
+                                            切换到窗口
+                                        </button>
+                                        <button class="btn btn-sm btn-secondary" onclick="window.app.closeExamSession('${session.examId}')">
+                                            结束会话
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+            }).join('')}
+                    </div>
+                    <div class="sessions-footer">
+                        <button class="btn btn-outline" onclick="window.app.closeAllExamSessions()">
+                            结束所有会话
+                        </button>
+                        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">
+                            关闭
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            // 模态框功能已移除(sessionsContent);
         },
 
         /**
@@ -3570,7 +3916,10 @@
          */
         async closeAllExamSessions() {
             const activeSessions = await storage.get('active_sessions', []);
-            activeSessions.forEach((session) => this.closeExamSession(session.examId));
+
+            activeSessions.forEach(session => {
+                this.closeExamSession(session.examId);
+            });
 
             // 关闭模态框
             const modal = document.querySelector('.modal-overlay');

@@ -15,6 +15,78 @@
         return new Set();
     }
 
+    function cloneCustomSuiteExam(value) {
+        if (!value || typeof value !== 'object') {
+            return null;
+        }
+        return {
+            examId: typeof value.examId === 'string'
+                ? value.examId
+                : String(value.examId != null ? value.examId : (value.id == null ? '' : value.id)),
+            title: typeof value.title === 'string' ? value.title : '',
+            category: typeof value.category === 'string' ? value.category : '',
+            frequency: typeof value.frequency === 'string' ? value.frequency : '',
+            type: typeof value.type === 'string' ? value.type : '',
+            hasHtml: value.hasHtml === true
+        };
+    }
+
+    function getCustomSuiteCategories(value) {
+        const categories = value && Array.isArray(value.categories) && value.categories.length
+            ? value.categories.slice()
+            : ['P1', 'P2', 'P3'];
+        return categories.map((item) => String(item || '').trim().toUpperCase()).filter(Boolean);
+    }
+
+    function normalizeCustomSuiteDraft(value) {
+        if (!value || typeof value !== 'object') {
+            return null;
+        }
+
+        const categories = getCustomSuiteCategories(value);
+        const rawPickedByCategory = value.pickedByCategory && typeof value.pickedByCategory === 'object'
+            ? value.pickedByCategory
+            : {};
+        const pickedByCategory = {};
+        const pickedOrder = [];
+
+        categories.forEach((category) => {
+            const exam = cloneCustomSuiteExam(rawPickedByCategory[category]);
+            if (exam && exam.examId) {
+                exam.category = category;
+                pickedByCategory[category] = exam;
+            }
+        });
+
+        let stageIndex = 0;
+        for (let i = 0; i < categories.length; i += 1) {
+            const category = categories[i];
+            const exam = pickedByCategory[category];
+            if (!exam) {
+                break;
+            }
+            pickedOrder.push(exam);
+            stageIndex = i + 1;
+        }
+
+        const rawStatus = typeof value.status === 'string' ? value.status.trim().toLowerCase() : 'selecting';
+        const status = stageIndex >= categories.length
+            ? 'ready'
+            : (rawStatus && rawStatus !== 'ready' ? rawStatus : 'selecting');
+
+        return {
+            status,
+            stageIndex,
+            categories,
+            pickedByCategory,
+            pickedOrder,
+            flowMode: typeof value.flowMode === 'string' && value.flowMode ? value.flowMode : 'classic',
+            frequencyScope: typeof value.frequencyScope === 'string' && value.frequencyScope ? value.frequencyScope : 'custom',
+            createdAt: typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
+            updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : Date.now()
+        };
+    }
+
     function normalizeFilter(value) {
         if (!value || typeof value !== 'object') {
             return { category: 'all', type: 'all' };
@@ -94,6 +166,7 @@
                 browseFilter: normalizeFilter(global.__browseFilter),
                 bulkDeleteMode: !!global.bulkDeleteMode,
                 selectedRecords: cloneSet(global.selectedRecords),
+                customSuiteDraft: normalizeCustomSuiteDraft(global.customSuiteDraft),
                 processedSessions: global.processedSessions instanceof Set ? global.processedSessions : new Set(),
                 fallbackExamSessions: global.fallbackExamSessions instanceof Map ? global.fallbackExamSessions : new Map()
             };
@@ -105,6 +178,7 @@
                 browseFilter: new Set(),
                 bulkDeleteMode: new Set(),
                 selectedRecords: new Set(),
+                customSuiteDraft: new Set(),
                 processedSessions: new Set(),
                 fallbackExamSessions: new Set()
             };
@@ -168,6 +242,7 @@
                 if (app.state.ui) {
                     app.state.ui.browseFilter = this.state.browseFilter;
                     app.state.ui.legacyBrowseType = this.state.browseFilter.type;
+                    app.state.ui.customSuiteDraft = this.state.customSuiteDraft;
                 }
                 if (app.state.system) {
                     app.state.system.processedSessions = this.state.processedSessions;
@@ -204,6 +279,9 @@
                         category: this.state.browseFilter.category,
                         type: typeof value === 'string' ? value : this.state.browseFilter.type
                     }, { syncApp: false });
+                    break;
+                case 'ui.customSuiteDraft':
+                    this.setCustomSuiteDraft(value, { syncApp: false });
                     break;
                 case 'practice.bulkDeleteMode':
                     this.setBulkDeleteMode(value, { syncApp: false });
@@ -352,6 +430,109 @@
             return this.state.selectedRecords;
         }
 
+        getCustomSuiteDraft() {
+            return this.state.customSuiteDraft;
+        }
+
+        setCustomSuiteDraft(draft, options = {}) {
+            this.state.customSuiteDraft = normalizeCustomSuiteDraft(draft);
+            if (options.syncApp !== false) {
+                this.applyToApp();
+            }
+            emit(this.listeners, 'customSuiteDraft', this.state.customSuiteDraft);
+            return this.state.customSuiteDraft;
+        }
+
+        updateCustomSuiteDraft(updater, options = {}) {
+            const current = this.state.customSuiteDraft
+                ? normalizeCustomSuiteDraft(this.state.customSuiteDraft)
+                : null;
+            const next = typeof updater === 'function'
+                ? updater(current)
+                : current;
+            return this.setCustomSuiteDraft(next, options);
+        }
+
+        clearCustomSuiteDraft(options = {}) {
+            this.state.customSuiteDraft = null;
+            if (options.syncApp !== false) {
+                this.applyToApp();
+            }
+            emit(this.listeners, 'customSuiteDraft', this.state.customSuiteDraft);
+            return this.state.customSuiteDraft;
+        }
+
+        selectCustomSuiteExam(exam, options = {}) {
+            if (!exam || typeof exam !== 'object') {
+                return this.state.customSuiteDraft;
+            }
+
+            const normalizedExam = cloneCustomSuiteExam(exam);
+            if (!normalizedExam || !normalizedExam.examId) {
+                return this.state.customSuiteDraft;
+            }
+
+            return this.updateCustomSuiteDraft((current) => {
+                const next = current ? normalizeCustomSuiteDraft(current) : normalizeCustomSuiteDraft({
+                    status: 'selecting',
+                    stageIndex: 0,
+                    pickedByCategory: {},
+                    pickedOrder: [],
+                    flowMode: options.flowMode || 'classic',
+                    frequencyScope: options.frequencyScope || 'custom'
+                });
+
+                if (!next) {
+                    return null;
+                }
+
+                const categories = getCustomSuiteCategories(next);
+                const expectedCategory = categories[Math.min(next.stageIndex, categories.length - 1)];
+                const examCategory = typeof normalizedExam.category === 'string' ? normalizedExam.category.trim().toUpperCase() : '';
+                if (expectedCategory && examCategory && expectedCategory !== examCategory) {
+                    return next;
+                }
+
+                normalizedExam.category = expectedCategory || examCategory || normalizedExam.category;
+                next.pickedByCategory = Object.assign({}, next.pickedByCategory, {
+                    [normalizedExam.category]: normalizedExam
+                });
+                next.pickedOrder = categories
+                    .map((category) => next.pickedByCategory[category])
+                    .filter(Boolean);
+                next.stageIndex = Math.min(next.pickedOrder.length, categories.length);
+                next.status = next.stageIndex >= categories.length ? 'ready' : 'selecting';
+                next.flowMode = options.flowMode || next.flowMode || 'classic';
+                next.frequencyScope = options.frequencyScope || next.frequencyScope || 'custom';
+                next.updatedAt = Date.now();
+                return next;
+            }, options);
+        }
+
+        removeCustomSuiteSelection(category, options = {}) {
+            const normalizedCategory = typeof category === 'string' ? category.trim().toUpperCase() : '';
+            if (!normalizedCategory || !this.state.customSuiteDraft) {
+                return this.state.customSuiteDraft;
+            }
+
+            return this.updateCustomSuiteDraft((current) => {
+                const next = current ? normalizeCustomSuiteDraft(current) : null;
+                if (!next) {
+                    return null;
+                }
+                if (next.pickedByCategory && Object.prototype.hasOwnProperty.call(next.pickedByCategory, normalizedCategory)) {
+                    delete next.pickedByCategory[normalizedCategory];
+                }
+                next.pickedOrder = next.categories
+                    .map((entryCategory) => next.pickedByCategory[entryCategory])
+                    .filter(Boolean);
+                next.stageIndex = Math.min(next.pickedOrder.length, next.categories.length);
+                next.status = next.stageIndex >= next.categories.length ? 'ready' : 'selecting';
+                next.updatedAt = Date.now();
+                return next;
+            }, options);
+        }
+
         getProcessedSessions() {
             return this.state.processedSessions;
         }
@@ -459,6 +640,24 @@
             globalRef.clearSelectedRecordsState = function clearSelectedRecordsState() {
                 return service.clearSelectedRecords();
             };
+            globalRef.getCustomSuiteDraftState = function getCustomSuiteDraftState() {
+                return service.getCustomSuiteDraft();
+            };
+            globalRef.setCustomSuiteDraftState = function setCustomSuiteDraftState(value) {
+                return service.setCustomSuiteDraft(value);
+            };
+            globalRef.updateCustomSuiteDraftState = function updateCustomSuiteDraftState(updater) {
+                return service.updateCustomSuiteDraft(updater);
+            };
+            globalRef.clearCustomSuiteDraftState = function clearCustomSuiteDraftState() {
+                return service.clearCustomSuiteDraft();
+            };
+            globalRef.selectCustomSuiteExamState = function selectCustomSuiteExamState(exam, options) {
+                return service.selectCustomSuiteExam(exam, options);
+            };
+            globalRef.removeCustomSuiteSelectionState = function removeCustomSuiteSelectionState(category, options) {
+                return service.removeCustomSuiteSelection(category, options);
+            };
             globalRef.assignExamSequenceNumbers = assignExamSequenceNumbers;
 
             defineGlobalProperty(globalRef, 'examIndex', {
@@ -480,6 +679,10 @@
             defineGlobalProperty(globalRef, 'selectedRecords', {
                 get: () => service.getSelectedRecords(),
                 set: (value) => service.setSelectedRecords(value)
+            });
+            defineGlobalProperty(globalRef, 'customSuiteDraft', {
+                get: () => service.getCustomSuiteDraft(),
+                set: (value) => service.setCustomSuiteDraft(value)
             });
             defineGlobalProperty(globalRef, '__browseFilter', {
                 get: () => service.getBrowseFilter(),
