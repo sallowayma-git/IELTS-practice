@@ -19,7 +19,7 @@
   }
 
   if (window.hpCore && window.hpCore.__stable) {
-    try { console.log('[HP Core] Already initialized'); } catch (_) { }
+    try { console.log('[HP Core] Already initialized'); } catch (_) {}
     return;
   }
 
@@ -96,7 +96,7 @@
             correct += 1;
           }
           return;
-        } catch (_) { }
+        } catch (_) {}
       }
       if (typeof value === 'object' && value) {
         if (value.isCorrect === true || value.correct === true || value.result === true) {
@@ -232,7 +232,7 @@
     try {
       const origin = window.location && window.location.origin;
       if (origin && origin !== 'null') return origin;
-    } catch (_) { }
+    } catch (_) {}
     return 'null';
   }
 
@@ -243,10 +243,10 @@
     localFallbackSessions.delete(sessionId);
     try {
       if (record.timer) clearInterval(record.timer);
-    } catch (_) { }
+    } catch (_) {}
     record.status = reason;
     if (reason === 'timeout') {
-      try { console.warn('[hpCore] 握手超时，练习页可能未加载增强器', { sessionId, examId: record.examId }); } catch (_) { }
+      try { console.warn('[hpCore] 握手超时，练习页可能未加载增强器', { sessionId, examId: record.examId }); } catch (_) {}
     }
     try {
       if (typeof record.onStatus === 'function') {
@@ -260,7 +260,7 @@
         record.onClosed(record);
       }
     } catch (callbackError) {
-      try { console.warn('[hpCore] handshake callback error', callbackError); } catch (_) { }
+      try { console.warn('[hpCore] handshake callback error', callbackError); } catch (_) {}
     }
   }
 
@@ -283,7 +283,7 @@
         }
         examWindow.postMessage({ type: 'INIT_SESSION', data: payload }, '*');
         examWindow.postMessage({ type: 'init_exam_session', data: payload }, '*');
-      } catch (_) { }
+      } catch (_) {}
       attempts += 1;
       if (attempts >= maxAttempts) {
         clearLocalHandshake(sessionId, 'timeout');
@@ -308,7 +308,7 @@
     const timer = setInterval(tick, 300);
     record.timer = timer;
     localFallbackSessions.set(sessionId, record);
-    try { console.log('[hpCore] 启动本地握手', payload); } catch (_) { }
+    try { console.log('[hpCore] 启动本地握手', payload); } catch (_) {}
     tick();
 
     if (window.hpCore) {
@@ -316,12 +316,12 @@
         window.hpCore.lastOpenedExamId = examId;
         window.hpCore.lastOpenedExam = exam || null;
         window.hpCore.lastOpenedSessionId = sessionId;
-      } catch (_) { }
+      } catch (_) {}
     }
     try {
       window._lastOpenedExamId = examId;
       if (exam) window._lastOpenedExam = exam;
-    } catch (_) { }
+    } catch (_) {}
   }
 
   function ensureHandshake(examWindow, exam, fallbackExamId, options) {
@@ -330,7 +330,7 @@
       try {
         const examId = (exam && exam.id) || fallbackExamId;
         window.startHandshakeFallback(examWindow, examId);
-      } catch (_) { }
+      } catch (_) {}
     }
     startLocalHandshake(examWindow, exam, fallbackExamId, options || null);
   }
@@ -442,14 +442,14 @@
           const practiceKey = ['practice', 'records'].join('_');
           const maybeSet = storage.set(practiceKey, records);
           if (maybeSet && typeof maybeSet.then === 'function') {
-            maybeSet.catch(() => { });
+            maybeSet.catch(() => {});
           }
-        } catch (_) { }
+        } catch (_) {}
       }
 
-      try { window.hpCore && window.hpCore.showMessage && window.hpCore.showMessage('练习已完成，记录已同步', 'success'); } catch (_) { }
+      try { window.hpCore && window.hpCore.showMessage && window.hpCore.showMessage('练习已完成，记录已同步', 'success'); } catch (_) {}
     } catch (error) {
-      try { console.warn('[hpCore] 本地保存练习记录失败', error); } catch (_) { }
+      try { console.warn('[hpCore] 本地保存练习记录失败', error); } catch (_) {}
     }
   }
 
@@ -649,7 +649,7 @@
 
     // utils
     throttle(func, delay) {
-      if (typeof func !== 'function') return function () { };
+      if (typeof func !== 'function') return function () {};
       const key = (func.name || 'fn') + '_' + (delay || 300);
       return function () {
         const now = Date.now();
@@ -675,7 +675,7 @@
     // ui
     showMessage(message, type, duration) {
       if (typeof window.showMessage === 'function') return window.showMessage(message, type, duration);
-      try { alert((type ? '[' + type + '] ' : '') + (message || '')); } catch (_) { }
+      try { alert((type ? '[' + type + '] ' : '') + (message || '')); } catch (_) {}
     },
     showNotification(message, type, duration) { this.showMessage(message, type, duration); },
 
@@ -793,8 +793,8 @@
         if (e && (e.key === 'practice_records' || e.key === 'exam_index')) {
           try {
             this._loadRecords();
-            this._loadExamIndex().catch(() => { });
-          } catch (_) { }
+            this._loadExamIndex().catch(() => {});
+          } catch (_) {}
         }
       });
       window.addEventListener('message', (ev) => {
@@ -823,7 +823,7 @@
             if (derivedExamId) {
               if (typeof window.savePracticeRecordFallback === 'function') {
                 Promise.resolve(window.savePracticeRecordFallback(derivedExamId, payload))
-                  .catch((error) => { try { console.warn('[hpCore] 保存练习记录失败', error); } catch (_) { } })
+                  .catch((error) => { try { console.warn('[hpCore] 保存练习记录失败', error); } catch (_) {} })
                   .finally(() => { setTimeout(() => this._loadRecords(), 400); });
               } else {
                 const recordContext = sessionEntry || { exam: this.lastOpenedExam || null };
@@ -839,7 +839,7 @@
         }
       });
       document.addEventListener('DOMContentLoaded', () => {
-        this._loadExamIndex().catch(() => { });
+        this._loadExamIndex().catch(() => {});
         this._loadRecords();
         this._markReady();
       });
@@ -876,7 +876,7 @@
     if (stateService && typeof stateService.setExamIndex === 'function') {
       synced = cloneArray(stateService.setExamIndex(normalized));
     } else {
-      try { window.examIndex = synced.slice(); } catch (_) { }
+      try { window.examIndex = synced.slice(); } catch (_) {}
     }
     hpCore.examIndex = synced;
     return synced;
@@ -890,7 +890,7 @@
     if (stateService && typeof stateService.setPracticeRecords === 'function') {
       synced = cloneArray(stateService.setPracticeRecords(normalized));
     } else {
-      try { window.practiceRecords = synced.slice(); } catch (_) { }
+      try { window.practiceRecords = synced.slice(); } catch (_) {}
     }
     hpCore.practiceRecords = synced;
     return synced;
@@ -933,16 +933,16 @@
   window.hpCore = hpCore;
   hpCore._installListeners();
   try {
-    hpCore._loadExamIndex().catch(() => { });
+    hpCore._loadExamIndex().catch(() => {});
     hpCore._loadRecords();
     hpCore._markReady();
-  } catch (_) { }
-  try { console.log('[HP Core] Initialized', hpCore.getStatus()); } catch (_) { }
+  } catch (_) {}
+  try { console.log('[HP Core] Initialized', hpCore.getStatus()); } catch (_) {}
   // Override actions with safe fallbacks that do not depend on main.js globals being populated
   try {
     hpCore.startExam = function startExam(examId) {
-      try { if (typeof window.openExam === 'function') return window.openExam(examId); } catch (_) { }
-      try { if (window.app && typeof window.app.openExam === 'function') return window.app.openExam(examId); } catch (_) { }
+      try { if (typeof window.openExam === 'function') return window.openExam(examId); } catch (_) {}
+      try { if (window.app && typeof window.app.openExam === 'function') return window.app.openExam(examId); } catch (_) {}
       try {
         const list = readExamIndexSnapshot();
         const exam = list.find(function (x) { return x && x.id === examId; });
@@ -982,7 +982,7 @@
               let win = null;
               try {
                 win = window.open(resolvedUrl, 'exam_' + examId, 'width=1200,height=800,scrollbars=yes,resizable=yes');
-              } catch (_) { }
+              } catch (_) {}
 
               if (!win) {
                 self.showMessage('无法打开窗口，请检查弹窗设置', 'error');
@@ -1001,7 +1001,7 @@
                     if (win && !win.closed) {
                       win.close();
                     }
-                  } catch (_) { }
+                  } catch (_) {}
                   tryOpen(index + 1);
                 }
               };
@@ -1012,16 +1012,16 @@
             tryOpen(0);
           })
           .catch((error) => {
-            try { console.error('[hpCore.startExam] 资源解析失败', error); } catch (_) { }
+            try { console.error('[hpCore.startExam] 资源解析失败', error); } catch (_) {}
             self.showMessage('无法启动练习', 'error');
           });
       } catch (e) {
-        try { console.error('[hpCore.startExam fallback] failed', e); } catch (_) { }
+        try { console.error('[hpCore.startExam fallback] failed', e); } catch (_) {}
         this.showMessage('无法启动练习', 'error');
       }
     };
     hpCore.viewExamPDF = function viewExamPDF(examId) {
-      try { if (typeof window.viewPDF === 'function') return window.viewPDF(examId); } catch (_) { }
+      try { if (typeof window.viewPDF === 'function') return window.viewPDF(examId); } catch (_) {}
       try {
         const list = readExamIndexSnapshot();
         const exam = list.find(function (x) { return x && x.id === examId; });
@@ -1048,13 +1048,13 @@
             }
           })
           .catch((error) => {
-            try { console.error('[hpCore.viewExamPDF] 资源解析失败', error); } catch (_) { }
+            try { console.error('[hpCore.viewExamPDF] 资源解析失败', error); } catch (_) {}
             self.showMessage('无法打开PDF', 'error');
           });
       } catch (e) {
-        try { console.error('[hpCore.viewExamPDF fallback] failed', e); } catch (_) { }
+        try { console.error('[hpCore.viewExamPDF fallback] failed', e); } catch (_) {}
         this.showMessage('无法打开PDF', 'error');
       }
     };
-  } catch (_) { }
+  } catch(_){}
 })();
