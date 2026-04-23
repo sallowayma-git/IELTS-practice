@@ -44,6 +44,7 @@
     },
     "files": [
       "electron/**/*",
+      "server/**/*",
       "dist/writing/**/*",
       "index.html",
       "css/**/*",
@@ -187,11 +188,16 @@
     }
   },
   "dependencies": {
+    "@types/node": "^25.6.0",
     "adm-zip": "^0.5.16",
     "better-sqlite3": "^12.6.2",
     "electron-updater": "^6.3.9",
     "express": "^4.21.2",
-    "semver": "^7.6.3"
+    "fastify": "^5.8.5",
+    "semver": "^7.6.3",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@electron/notarize": "^2.2.1",

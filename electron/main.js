@@ -3,8 +3,8 @@ const path = require('node:path');
 const { app, BrowserWindow, dialog, ipcMain, protocol, shell } = require('electron');
 const { registerAppProtocol } = require('./protocol');
 const { UpdateService } = require('./update/updateService');
+const ServiceBundle = require('./service-bundle');
 
-let IPCHandlers = null;
 let LocalApiServer = null;
 
 protocol.registerSchemesAsPrivileged([
@@ -23,7 +23,7 @@ protocol.registerSchemesAsPrivileged([
 let mainWindow = null;
 let mainWindowCreation = null;
 let updateService = null;
-let ipcHandlers = null;
+let serviceBundle = null;
 let localApiServer = null;
 let navigationHandlersRegistered = false;
 let rollbackAttempted = false;
@@ -217,16 +217,16 @@ function focusMainWindow() {
 }
 
 function cleanupWindowServices() {
-    if (ipcHandlers) {
-        ipcHandlers.cleanup();
-        ipcHandlers = null;
-    }
-
     if (localApiServer) {
         localApiServer.stop().catch((error) => {
             console.error('[LocalApi] stop failed:', error);
         });
         localApiServer = null;
+    }
+
+    if (serviceBundle) {
+        serviceBundle.cleanup();
+        serviceBundle = null;
     }
 }
 
@@ -258,16 +258,15 @@ async function createMainWindow() {
             }
         });
 
-        IPCHandlers = require('./ipc-handlers');
         LocalApiServer = require('./local-api-server');
 
-        ipcHandlers = new IPCHandlers(mainWindow);
-        await ipcHandlers.initialize();
-        ipcHandlers.register();
+        serviceBundle = new ServiceBundle(mainWindow);
+        const services = await serviceBundle.initialize();
 
-        localApiServer = new LocalApiServer(ipcHandlers.getServiceBundle());
+        localApiServer = new LocalApiServer(services);
         const apiInfo = await localApiServer.start();
-        ipcHandlers.setLocalApiInfo(apiInfo);
+        ipcMain.removeHandler('app:getLocalApiInfo');
+        ipcMain.handle('app:getLocalApiInfo', async () => ({ success: true, data: apiInfo }));
 
         mainWindow.once('ready-to-show', () => {
             mainWindow.show();
@@ -365,6 +364,8 @@ async function createApp() {
         updateService.quitAndInstall();
         return true;
     });
+    ipcMain.removeHandler('app:getUserDataPath');
+    ipcMain.handle('app:getUserDataPath', async () => ({ success: true, data: app.getPath('userData') }));
     ipcMain.on('update:renderer-ready', (event) => {
         if (!isMainWindowSender(event.sender)) {
             return;

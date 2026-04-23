@@ -246,33 +246,54 @@ function createHarness(options = {}) {
     };
 }
 
-async function testCoachQueryViaElectronIpc() {
-    let callCount = 0;
+async function testCoachQueryViaElectronLocalApi() {
+    let fetchCount = 0;
     const harness = createHarness({
         electronAPI: {
-            async queryReadingCoach(payload) {
-                callCount += 1;
-                assert.strictEqual(payload.examId, 'p1-high-01', '应透传 examId');
+            async getLocalApiInfo() {
                 return {
                     success: true,
-                    data: {
-                        answer: '先定位题干关键词，再回原文找同义替换。',
-                        answerSections: [
-                            { type: 'direct_answer', text: '先定位题干关键词，再回原文找同义替换。' }
-                        ],
-                        followUps: ['这题证据在哪段', '我下一步练什么'],
-                        confidence: 'high',
-                        missingContext: [],
-                        generatedAt: new Date().toISOString()
-                    }
+                    data: { baseUrl: 'http://127.0.0.1:3905' }
                 };
+            }
+        },
+        fetchImpl: async (url, init) => {
+            fetchCount += 1;
+            assert.ok(String(url).includes('/api/reading/assistant/query/stream'), '应请求新的阅读教练 assistant stream 接口');
+            const payload = JSON.parse(init.body);
+            assert.strictEqual(payload.examId, 'p1-high-01', '应透传 examId');
+            assert.strictEqual(payload.attemptContext?.selectedAnswers?.['1'], 'A', '应把用户答案传给教练服务');
+            assert.ok(Array.isArray(payload.attemptContext?.wrongQuestions), '应传递错题题号数组');
+            assert.strictEqual(payload.attemptContext.wrongQuestions[0], '1', '应把错题题号传给教练服务');
+            return {
+                ok: true,
+                headers: {
+                    get(name) {
+                        return String(name || '').toLowerCase() === 'content-type' ? 'application/json' : '';
+                    }
+                },
+                async json() {
+                    return {
+                        success: true,
+                        data: {
+                            answer: '先定位题干关键词，再回原文找同义替换。',
+                            answerSections: [
+                                { type: 'direct_answer', text: '先定位题干关键词，再回原文找同义替换。' }
+                            ],
+                            followUps: ['这题证据在哪段', '我下一步练什么'],
+                            confidence: 'high',
+                            missingContext: [],
+                            generatedAt: new Date().toISOString()
+                        }
+                    };
+                }
             }
         }
     });
 
     await harness.hooks.sendReadingCoachQuery('这题怎么做？', { action: 'chat', promptKind: 'freeform' });
 
-    assert.strictEqual(callCount, 1, '应调用一次 reading:coach-query IPC');
+    assert.strictEqual(fetchCount, 1, '应调用一次本地 assistant HTTP 接口');
     assert.ok(harness.hooks.state.readingCoachSnapshot, '应写入 readingCoachSnapshot');
     assert.ok(Array.isArray(harness.hooks.state.readingCoachTranscript) && harness.hooks.state.readingCoachTranscript.length >= 2, '应累计对话转录');
     const patchMsg = harness.postedMessages.find((entry) => entry?.message?.type === 'PRACTICE_COACH_PATCH');
@@ -315,17 +336,17 @@ async function testCoachQueryViaLocalApiSse() {
 
     await harness.hooks.sendReadingCoachQuery('给我提示', { action: 'chat', promptKind: 'freeform' });
 
-    assert.ok(fetchCalls[0].includes('/api/reading/coach/query?stream=1'), '应请求新的教练 SSE 接口');
+    assert.ok(fetchCalls[0].includes('/api/reading/assistant/query/stream'), '应请求新的教练 SSE 接口');
     assert.ok(harness.hooks.state.readingCoachSnapshot && harness.hooks.state.readingCoachSnapshot.answer, 'SSE 完成后应回填 snapshot');
 }
 
 async function main() {
     try {
-        await testCoachQueryViaElectronIpc();
+        await testCoachQueryViaElectronLocalApi();
         await testCoachQueryViaLocalApiSse();
         console.log(JSON.stringify({
             status: 'pass',
-            detail: 'UnifiedReadingPage 已覆盖 Reading Coach V2 的 IPC 与 SSE 查询主链路'
+            detail: 'UnifiedReadingPage 已覆盖 local API + SSE 的阅读教练查询主链路'
         }, null, 2));
     } catch (error) {
         console.log(JSON.stringify({

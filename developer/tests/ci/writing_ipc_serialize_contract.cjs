@@ -103,9 +103,10 @@ async function run() {
         'client.js'
     );
     const clientSource = fs.readFileSync(clientPath, 'utf-8');
-    assert.ok(clientSource.includes('function callBridge(method, ...args)'), 'client.js 缺少 callBridge 包装层');
-    assert.ok(clientSource.includes('callBridge(window.writingAPI.topics.list'), 'topics.list 未经过 renderer 序列化边界');
-    assert.ok(clientSource.includes('callBridge(window.writingAPI.essays.list'), 'essays.list 未经过 renderer 序列化边界');
+    assert.ok(clientSource.includes('window.electronAPI.getLocalApiInfo'), 'client.js 未通过最小 shell IPC 解析本地 API 地址');
+    assert.ok(clientSource.includes('fetch(`${baseUrl}${path}${buildQuery(query)}`'), 'client.js 未改为 fetch 调用本地 Fastify API');
+    assert.ok(clientSource.includes('new EventSource('), 'client.js 未使用 SSE 订阅写作评测流');
+    assert.ok(clientSource.includes('/api/writing/evaluations'), 'client.js 未指向新的写作评测 HTTP 路径');
 
     const { toIpcSerializable: toRendererIpcSerializable } = await loadRendererSerializer();
 
@@ -114,7 +115,7 @@ async function run() {
 
     return {
         status: 'pass',
-        detail: 'IPC 参数序列化可展开 Vue/普通 Proxy，且保留二进制载荷'
+        detail: '写作客户端已切换到 local API + SSE，序列化工具仍可安全展开 Proxy 与二进制载荷'
     };
 }
 

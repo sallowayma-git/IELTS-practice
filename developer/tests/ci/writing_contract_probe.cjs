@@ -6,8 +6,13 @@ const path = require('path');
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const EvaluateService = require(path.join(repoRoot, 'electron', 'services', 'evaluate.service.js'));
+const ReadingCoachService = require(path.join(repoRoot, 'electron', 'services', 'reading-coach.service.js'));
 const providerOrchestratorPath = path.join(repoRoot, 'electron', 'services', 'provider-orchestrator.service.js');
 const llmProviderPath = path.join(repoRoot, 'electron', 'services', 'llm-provider.js');
+const serverWritingEvaluatePath = path.join(repoRoot, 'server', 'src', 'lib', 'writing', 'evaluate-service.ts');
+const serverReadingCoachPath = path.join(repoRoot, 'server', 'src', 'lib', 'reading', 'coach-service.ts');
+const serverWritingContractsPath = path.join(repoRoot, 'server', 'src', 'lib', 'writing', 'contracts.ts');
+const serverProviderOrchestratorPath = path.join(repoRoot, 'server', 'src', 'lib', 'shared', 'provider-orchestrator.ts');
 const {
   decorateEvaluationForStorage,
   mergeStageResults,
@@ -89,9 +94,11 @@ async function runExecutionProbe({ scoringEvaluation, reviewStageResult, reviewS
 
 async function runProviderOrchestratorProbes() {
   const orchestratorResolvedPath = require.resolve(providerOrchestratorPath);
+  const serverOrchestratorResolvedPath = require.resolve(serverProviderOrchestratorPath);
   const llmProviderResolvedPath = require.resolve(llmProviderPath);
   const originalLlmCacheEntry = require.cache[llmProviderResolvedPath];
   const originalOrchestratorCacheEntry = require.cache[orchestratorResolvedPath];
+  const originalServerOrchestratorCacheEntry = require.cache[serverOrchestratorResolvedPath];
 
   const providerCalls = [];
   const providerBehaviors = new Map();
@@ -119,6 +126,7 @@ async function runProviderOrchestratorProbes() {
     exports: FakeLLMProvider
   };
   delete require.cache[orchestratorResolvedPath];
+  delete require.cache[serverOrchestratorResolvedPath];
 
   try {
     const ProviderOrchestratorService = require(orchestratorResolvedPath);
@@ -220,10 +228,52 @@ async function runProviderOrchestratorProbes() {
     } else {
       delete require.cache[orchestratorResolvedPath];
     }
+    if (originalServerOrchestratorCacheEntry) {
+      require.cache[serverOrchestratorResolvedPath] = originalServerOrchestratorCacheEntry;
+    } else {
+      delete require.cache[serverOrchestratorResolvedPath];
+    }
   }
 }
 
+function runServerCoreBridgeProbe() {
+  const ServerEvaluateService = require(serverWritingEvaluatePath);
+  const ServerReadingCoachService = require(serverReadingCoachPath);
+  const electronContracts = require(path.join(repoRoot, 'electron', 'services', 'evaluation-contract.js'));
+  const serverContracts = require(serverWritingContractsPath);
+  const ElectronProviderOrchestrator = require(providerOrchestratorPath);
+  const ServerProviderOrchestrator = require(serverProviderOrchestratorPath).ProviderOrchestratorService;
+
+  assert.strictEqual(
+    EvaluateService,
+    ServerEvaluateService,
+    'electron EvaluateService 包装器应直接暴露 server EvaluateService'
+  );
+  assert.strictEqual(
+    ReadingCoachService,
+    ServerReadingCoachService,
+    'electron ReadingCoachService 包装器应直接暴露 server ReadingCoachService'
+  );
+  assert.strictEqual(
+    electronContracts.EVALUATION_CONTRACT_VERSION,
+    serverContracts.EVALUATION_CONTRACT_VERSION,
+    'electron contract wrapper 应透传 server contract 常量'
+  );
+  assert.strictEqual(
+    typeof electronContracts.mergeStageResults,
+    typeof serverContracts.mergeStageResults,
+    'electron contract wrapper 应透传 server contract 方法'
+  );
+  assert.strictEqual(
+    ElectronProviderOrchestrator,
+    ServerProviderOrchestrator,
+    'electron provider wrapper 应直接暴露 server ProviderOrchestratorService'
+  );
+}
+
 async function main() {
+  runServerCoreBridgeProbe();
+
   const scoringEvaluation = {
     total_score: 6.5,
     task_achievement: 6.0,

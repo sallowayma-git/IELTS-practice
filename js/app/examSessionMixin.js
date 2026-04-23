@@ -3350,8 +3350,8 @@
                     });
             });
 
-            if (!window.electronAPI || typeof window.electronAPI.queryReadingCoach !== 'function') {
-                respondError('analysis_bridge_unavailable', '父页阅读教练桥不可用，请从主应用入口重新打开练习页', {
+            if (!window.electronAPI || typeof window.electronAPI.getLocalApiInfo !== 'function') {
+                respondError('analysis_bridge_unavailable', '父页无法获取本地阅读教练服务地址，请从主应用入口重新打开练习页', {
                     stage: 'bridge_unavailable'
                 });
                 return;
@@ -3361,20 +3361,50 @@
             for (let attemptIndex = 0; attemptIndex < READING_COACH_ATTEMPT_PLAN.length; attemptIndex += 1) {
                 const currentAttempt = READING_COACH_ATTEMPT_PLAN[attemptIndex];
                 try {
-                    const payload = await runWithTimeout(() => window.electronAPI.queryReadingCoach({
-                        examId: normalizedRequest.examId || examId,
-                        query: normalizedRequest.query,
-                        locale: normalizedRequest.locale,
-                        surface: normalizedRequest.surface || 'chat_widget',
-                        action: normalizedRequest.action || 'chat',
-                        promptKind: normalizedRequest.promptKind || 'freeform',
-                        selectedText: normalizedRequest.selectedText || '',
-                        selectedContext: normalizedRequest.selectedContext || null,
-                        focusQuestionNumbers: normalizedRequest.focusQuestionNumbers || [],
-                        history: normalizedRequest.history || [],
-                        attemptContext: normalizedRequest.attemptContext || {}
+                    const localApiInfo = await runWithTimeout(() => window.electronAPI.getLocalApiInfo(), currentAttempt.timeoutMs);
+                    const baseUrl = localApiInfo && localApiInfo.data && typeof localApiInfo.data.baseUrl === 'string'
+                        ? localApiInfo.data.baseUrl.trim()
+                        : '';
+
+                    if (!baseUrl) {
+                        throw createReadingAnalysisBridgeError({
+                            code: 'analysis_bridge_unavailable',
+                            message: '本地阅读教练服务地址不可用'
+                        }, 'analysis_bridge_unavailable', '本地阅读教练服务地址不可用', {
+                            stage: 'resolve_base_url'
+                        });
+                    }
+
+                    const response = await runWithTimeout(() => fetch(`${baseUrl}/api/reading/assistant/query`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            examId: normalizedRequest.examId || examId,
+                            query: normalizedRequest.query,
+                            locale: normalizedRequest.locale,
+                            surface: normalizedRequest.surface || 'chat_widget',
+                            action: normalizedRequest.action || 'chat',
+                            promptKind: normalizedRequest.promptKind || 'freeform',
+                            selectedText: normalizedRequest.selectedText || '',
+                            selectedContext: normalizedRequest.selectedContext || null,
+                            focusQuestionNumbers: normalizedRequest.focusQuestionNumbers || [],
+                            history: normalizedRequest.history || [],
+                            attemptContext: normalizedRequest.attemptContext || {}
+                        })
+                    }).then(async (fetchResponse) => {
+                        const responsePayload = await fetchResponse.json().catch(() => ({}));
+                        if (!fetchResponse.ok) {
+                            throw createReadingAnalysisBridgeError({
+                                code: responsePayload?.error || responsePayload?.error?.code || 'analysis_bridge_failed',
+                                message: responsePayload?.message || responsePayload?.error?.message || `HTTP_${fetchResponse.status}`
+                            }, 'analysis_bridge_failed', '阅读教练本地服务调用失败', {
+                                stage: 'http_response',
+                                statusCode: fetchResponse.status
+                            });
+                        }
+                        return responsePayload;
                     }), currentAttempt.timeoutMs);
-                    const responseData = normalizeReadingCoachBridgeResultPayload(payload);
+                    const responseData = normalizeReadingCoachBridgeResultPayload(response);
                     respondSuccess(responseData, {
                         attempt: attemptIndex + 1,
                         attempts: READING_COACH_ATTEMPT_PLAN.length,
@@ -3382,7 +3412,7 @@
                     });
                     return;
                 } catch (error) {
-                    lastError = createReadingAnalysisBridgeError(error, 'analysis_bridge_failed', '阅读教练桥调用失败', {
+                    lastError = createReadingAnalysisBridgeError(error, 'analysis_bridge_failed', '阅读教练本地服务调用失败', {
                         stage: 'attempt',
                         attempt: attemptIndex + 1,
                         attempts: READING_COACH_ATTEMPT_PLAN.length

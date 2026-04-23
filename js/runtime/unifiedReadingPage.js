@@ -7,7 +7,7 @@
     const PENDING_PRACTICE_MESSAGES_KEY = 'exam_system_pending_practice_messages_v1';
     const WINDOW_NAME_PENDING_PREFIX = '__exam_pending_practice_v1__';
     const LOCAL_API_INFO_STORAGE_KEY = 'exam_system_local_api_info_v1';
-    const READING_COACH_API_PATH = '/api/reading/coach/query';
+    const READING_COACH_API_PATH = '/api/reading/assistant/query/stream';
     const READING_COACH_STYLE_ID = 'reading-coach-style';
     const COACH_REQUEST_TIMEOUT_MS = 30000;
     const QUICK_ACTIONS = Object.freeze([
@@ -2956,10 +2956,10 @@
             error.code = 'local_api_unavailable';
             throw error;
         }
-        const response = await fetch(`${baseUrl}${READING_COACH_API_PATH}?stream=1`, {
+        const response = await fetch(`${baseUrl}${READING_COACH_API_PATH}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(Object.assign({}, payload, { stream: true }))
+            body: JSON.stringify(payload)
         });
 
         const contentType = String(response.headers.get('content-type') || '').toLowerCase();
@@ -3029,19 +3029,14 @@
     }
 
     async function requestReadingCoach(payload) {
-        if (global.electronAPI && typeof global.electronAPI.queryReadingCoach === 'function') {
-            const response = await global.electronAPI.queryReadingCoach(payload);
-            if (!response || response.success === false || !response.data || typeof response.data !== 'object') {
-                const error = new Error(response?.error?.message || response?.message || '阅读教练请求失败');
-                error.code = response?.error?.code || 'reading_coach_ipc_failed';
+        try {
+            return await requestReadingCoachFromLocalApi(payload);
+        } catch (error) {
+            if (!isElectronRuntimeContext()) {
                 throw error;
             }
-            return response.data;
-        }
-        if (isElectronRuntimeContext()) {
             return requestReadingCoachViaParentBridge(payload, { timeoutMs: COACH_REQUEST_TIMEOUT_MS });
         }
-        return requestReadingCoachFromLocalApi(payload);
     }
 
     async function appendAssistantTypewriter(response) {
@@ -3070,6 +3065,32 @@
         const selectedContext = getSelectedContextForCoach();
         const focusQuestionNumbers = resolveCoachFocusQuestionNumbers();
         const submitted = Boolean(options.forceSubmitted || isReadingCoachAvailable());
+        const answerComparison = state.lastResults && state.lastResults.answerComparison
+            ? state.lastResults.answerComparison
+            : {};
+        const wrongQuestions = [];
+        const selectedAnswers = {};
+
+        Object.values(answerComparison).forEach((entry) => {
+            if (!entry || typeof entry !== 'object') {
+                return;
+            }
+            const questionNumber = String(entry.questionId || '').replace(/^q/i, '').trim();
+            if (!questionNumber) {
+                return;
+            }
+            const normalizedAnswer = normalizeAnswerValue(entry.userAnswer);
+            const answerText = Array.isArray(normalizedAnswer)
+                ? normalizedAnswer.filter(Boolean).join(' / ')
+                : String(normalizedAnswer || '').trim();
+            if (answerText) {
+                selectedAnswers[questionNumber] = answerText;
+            }
+            if (entry.isCorrect === false) {
+                wrongQuestions.push(questionNumber);
+            }
+        });
+
         return {
             examId: state.examId,
             query: normalizedQuery,
@@ -3084,11 +3105,8 @@
             attemptContext: {
                 submitted,
                 score: state.lastResults?.scoreInfo?.percentage || null,
-                wrongQuestions: state.lastResults && state.lastResults.answerComparison
-                    ? Object.values(state.lastResults.answerComparison)
-                        .filter((entry) => entry && entry.isCorrect === false)
-                        .map((entry) => String(entry.questionId || '').replace(/^q/i, ''))
-                    : []
+                wrongQuestions,
+                selectedAnswers
             }
         };
     }

@@ -56,6 +56,52 @@ async function testCoachQuerySuccessWithGroundedRetrieval() {
     assert.ok(promptJoined.includes('JSON 字段必须为：answer, answerSections, followUps, confidence, missingContext'), '提示词应包含结构化约束');
 }
 
+async function testCoachReviewPromptCarriesMistakeContext() {
+    const service = new ReadingCoachService({});
+    let capturedMessages = null;
+    service.providerOrchestrator = {
+        async streamCompletion(options = {}) {
+            capturedMessages = options.messages;
+            if (typeof options.onChunk === 'function') {
+                options.onChunk(JSON.stringify({
+                    answer: '你把题干条件看窄了，导致选项判断偏了。',
+                    answerSections: [
+                        { type: 'direct_answer', text: '你把题干条件看窄了，导致选项判断偏了。' },
+                        { type: 'reasoning', text: '先对照题干和你自己的答案，再回原文看限制条件。' }
+                    ],
+                    followUps: ['这题证据在哪段', '我下次怎么排除'],
+                    confidence: 'high',
+                    missingContext: []
+                }));
+            }
+            return {
+                usedConfig: { id: 1, provider: 'openai', default_model: 'gpt-test' },
+                providerPath: [{ provider: 'openai', model: 'gpt-test', status: 'success' }]
+            };
+        }
+    };
+
+    const result = await service.query({
+        examId: 'p1-high-01',
+        query: '请复盘我的错题',
+        action: 'review_set',
+        promptKind: 'preset',
+        attemptContext: {
+            submitted: true,
+            wrongQuestions: ['1'],
+            selectedAnswers: { 1: 'A' }
+        }
+    });
+
+    const promptJoined = Array.isArray(capturedMessages)
+        ? capturedMessages.map((item) => String(item?.content || '')).join('\n')
+        : '';
+    assert.ok(promptJoined.includes('selectedAnswers: Q1=A'), '复盘提示词应包含用户作答');
+    assert.ok(promptJoined.includes('[Review 1]'), '复盘提示词应包含结构化错题块');
+    assert.ok(promptJoined.includes('correctAnswer:'), '复盘提示词应包含标准答案');
+    assert.deepStrictEqual(result.contextDiagnostics.focusQuestionNumbers, ['1'], '复盘检索应优先聚焦错题题号');
+}
+
 async function testCoachQueryInvalidPayloadThrows() {
     const service = new ReadingCoachService({});
     let thrown = null;
@@ -154,6 +200,7 @@ async function testTableCompletionQuestionExtraction() {
 async function main() {
     try {
         await testCoachQuerySuccessWithGroundedRetrieval();
+        await testCoachReviewPromptCarriesMistakeContext();
         await testCoachQueryInvalidPayloadThrows();
         await testCoachProviderFailureShouldThrow();
         await testCoachRouteUnrelatedChat();

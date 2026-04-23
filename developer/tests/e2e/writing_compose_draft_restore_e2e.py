@@ -72,7 +72,6 @@ async def install_api_stub(page) -> None:
     await page.add_init_script(
         """
         (() => {
-          const listeners = [];
           const topicFixtures = [
             {
               id: 2001,
@@ -108,64 +107,143 @@ async def install_api_stub(page) -> None:
               }
             }
           ];
+          const LOCAL_API_BASE_URL = 'http://127.0.0.1:3905';
+
+          const createHeaders = (contentType = 'application/json') => ({
+            get(name) {
+              return String(name || '').toLowerCase() === 'content-type' ? contentType : '';
+            }
+          });
+
+          const createJsonResponse = (payload, ok = true, status = 200) => ({
+            ok,
+            status,
+            headers: createHeaders('application/json'),
+            async json() {
+              return payload;
+            },
+            async text() {
+              return JSON.stringify(payload);
+            }
+          });
+
+          class StubEventSource {
+            constructor(url) {
+              this.url = url;
+              this.readyState = 1;
+              this.listeners = new Map();
+              this.onerror = null;
+            }
+
+            addEventListener(type, callback) {
+              if (!this.listeners.has(type)) {
+                this.listeners.set(type, []);
+              }
+              this.listeners.get(type).push(callback);
+            }
+
+            removeEventListener(type, callback) {
+              const list = this.listeners.get(type) || [];
+              this.listeners.set(type, list.filter((item) => item !== callback));
+            }
+
+            close() {
+              this.readyState = 2;
+            }
+          }
+
           window.__writingStartCalls = [];
           window.__writingStartMode = 'success';
           window.__topicListDelayConfig = {};
           window.__topicListRequests = [];
-          window.__writingStubState = { listeners };
-          window.writingAPI = {
-            evaluate: {
-              start: async (payload) => {
-                window.__writingStartCalls.push(payload);
-                if (window.__writingStartMode === 'fail') {
-                  return { success: false, error: { code: 'network_error', message: 'simulated failure' } };
-                }
-                return { success: true, data: { sessionId: '11111111-1111-4111-8111-111111111111' } };
-              },
-              cancel: async () => ({ success: true, data: { ok: true } }),
-              onEvent: (callback) => { if (typeof callback === 'function') listeners.push(callback); },
-              removeEventListener: () => { listeners.length = 0; }
-            },
-            topics: {
-              list: async (filters = {}) => {
-                const type = typeof filters.type === 'string' ? filters.type : '';
-                const category = typeof filters.category === 'string' ? filters.category : '';
-                const delayConfig = window.__topicListDelayConfig || {};
-                const delay = Number(
-                  delayConfig[`${type}:${category}`]
-                  || delayConfig[type]
-                  || delayConfig[category]
-                  || 0
-                );
-                if (delay > 0) {
-                  await new Promise((resolve) => setTimeout(resolve, delay));
-                }
-                window.__topicListRequests.push({ type, category, delay });
-                const list = topicFixtures.filter((topic) => {
-                  if (type && topic.type !== type) return false;
-                  if (category && topic.category !== category) return false;
-                  return true;
-                });
-                return { success: true, data: { data: list, total: list.length } };
-              },
-              getById: async (id) => {
-                const topic = topicFixtures.find((item) => item.id === Number(id));
-                if (!topic) {
-                  return { success: false, error: { message: 'topic not found' } };
-                }
-                return { success: true, data: topic };
-              },
-              create: async () => ({ success: false, error: { message: 'not used in draft regression' } }),
-              update: async () => ({ success: false, error: { message: 'not used in draft regression' } }),
-              delete: async () => ({ success: false, error: { message: 'not used in draft regression' } })
-            },
-            essays: {
-              list: async () => ({ success: true, data: [], total: 0 }),
-              getById: async () => ({ success: false, error: { message: 'not used in draft regression' } })
-            },
-            configs: {},
-            prompts: {},
-            settings: {}
+          window.__writingStubState = { localApiBaseUrl: LOCAL_API_BASE_URL };
+          window.electronAPI = {
+            getLocalApiInfo: async () => ({
+              success: true,
+              data: { baseUrl: LOCAL_API_BASE_URL }
+            })
+          };
+          window.EventSource = StubEventSource;
+          window.fetch = async (input, init = {}) => {
+            const url = typeof input === 'string' ? input : String(input && input.url ? input.url : '');
+            if (!url.startsWith(LOCAL_API_BASE_URL)) {
+              throw new Error(`unexpected_fetch_url:${url}`);
+            }
+
+            const parsed = new URL(url);
+            const pathname = parsed.pathname;
+            const method = String(init.method || 'GET').toUpperCase();
+            const body = init.body ? JSON.parse(init.body) : null;
+
+            if (pathname === '/api/writing/evaluations' && method === 'POST') {
+              window.__writingStartCalls.push(body);
+              if (window.__writingStartMode === 'fail') {
+                return createJsonResponse({
+                  error: 'network_error',
+                  message: 'simulated failure'
+                }, false, 503);
+              }
+              return createJsonResponse({
+                success: true,
+                data: { sessionId: '11111111-1111-4111-8111-111111111111' }
+              });
+            }
+
+            if (pathname === '/api/writing/evaluations/11111111-1111-4111-8111-111111111111' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: { sessionId: '11111111-1111-4111-8111-111111111111', events: [] }
+              });
+            }
+
+            if (pathname === '/api/writing/evaluations/11111111-1111-4111-8111-111111111111' && method === 'DELETE') {
+              return createJsonResponse({
+                success: true,
+                data: { ok: true }
+              });
+            }
+
+            if (pathname === '/api/topics' && method === 'GET') {
+              const type = parsed.searchParams.get('type') || '';
+              const category = parsed.searchParams.get('category') || '';
+              const delayConfig = window.__topicListDelayConfig || {};
+              const delay = Number(
+                delayConfig[`${type}:${category}`]
+                || delayConfig[type]
+                || delayConfig[category]
+                || 0
+              );
+              if (delay > 0) {
+                await new Promise((resolve) => setTimeout(resolve, delay));
+              }
+              window.__topicListRequests.push({ type, category, delay });
+              const list = topicFixtures.filter((topic) => {
+                if (type && topic.type !== type) return false;
+                if (category && topic.category !== category) return false;
+                return true;
+              });
+              return createJsonResponse({
+                success: true,
+                data: { data: list, total: list.length }
+              });
+            }
+
+            if (pathname.startsWith('/api/topics/') && method === 'GET') {
+              const id = Number(pathname.split('/').pop());
+              const topic = topicFixtures.find((item) => item.id === id);
+              if (!topic) {
+                return createJsonResponse({
+                  error: 'not_found',
+                  message: 'topic not found'
+                }, false, 404);
+              }
+              return createJsonResponse({
+                success: true,
+                data: topic
+              });
+            }
+
+            throw new Error(`unhandled_local_api_request:${method}:${pathname}`);
           };
         })();
         """
