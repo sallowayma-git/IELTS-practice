@@ -24,6 +24,8 @@
         'low': 1,
         '低频': 1
     };
+    const CUSTOM_SUITE_PANEL_MARGIN = 12;
+    let customSuitePortalPosition = null;
 
     function normalizeExamSignature(value) {
         return String(value || '')
@@ -89,13 +91,441 @@
         return applyExamSort(deduplicated);
     }
 
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function getCustomSuiteDraft() {
+        if (global.appStateService && typeof global.appStateService.getCustomSuiteDraft === 'function') {
+            return global.appStateService.getCustomSuiteDraft();
+        }
+        if (typeof global.getCustomSuiteDraftState === 'function') {
+            return global.getCustomSuiteDraftState();
+        }
+        return global.customSuiteDraft || null;
+    }
+
+    function isCustomSuiteSelectionActive() {
+        const draft = getCustomSuiteDraft();
+        return !!draft && draft.status && draft.status !== 'idle';
+    }
+
+    function getCustomSuiteCategories() {
+        return ['P1', 'P2', 'P3'];
+    }
+
+    function normalizeExamCategory(exam) {
+        return String(exam && exam.category || '').trim().toUpperCase();
+    }
+
+    function buildCustomSuiteEntry(exam) {
+        if (!exam || typeof exam !== 'object') {
+            return null;
+        }
+        return {
+            examId: String(exam.id == null ? '' : exam.id),
+            title: exam.title || '',
+            category: normalizeExamCategory(exam),
+            frequency: exam.frequency || '',
+            type: exam.type || 'reading'
+        };
+    }
+
+    function getCustomSuiteCurrentCategory(draft) {
+        const categories = Array.isArray(draft && draft.categories) && draft.categories.length
+            ? draft.categories
+            : getCustomSuiteCategories();
+        const stageIndex = Number.isInteger(draft && draft.stageIndex) ? draft.stageIndex : 0;
+        if (!draft || draft.status === 'ready' || stageIndex >= categories.length) {
+            return null;
+        }
+        return categories[Math.max(0, stageIndex)] || null;
+    }
+
+    function findExamById(examId) {
+        const list = Array.isArray(global.examIndex)
+            ? global.examIndex
+            : (global.appStateService && typeof global.appStateService.getExamIndex === 'function'
+                ? global.appStateService.getExamIndex()
+                : []);
+        return Array.isArray(list)
+            ? list.find((item) => item && String(item.id) === String(examId))
+            : null;
+    }
+
+    function ensureCustomSuiteSelectionPortal() {
+        if (typeof document === 'undefined' || !document.body) {
+            return null;
+        }
+        let portal = document.getElementById('custom-suite-selection-portal');
+        if (portal) {
+            return portal;
+        }
+        portal = document.createElement('div');
+        portal.id = 'custom-suite-selection-portal';
+        portal.className = 'suite-custom-selection-portal';
+        document.body.appendChild(portal);
+        return portal;
+    }
+
+    function clampCustomSuitePanelPosition(x, y, width, height) {
+        const viewportWidth = Math.max(
+            document.documentElement ? document.documentElement.clientWidth : 0,
+            global.innerWidth || 0
+        );
+        const viewportHeight = Math.max(
+            document.documentElement ? document.documentElement.clientHeight : 0,
+            global.innerHeight || 0
+        );
+        const maxX = Math.max(CUSTOM_SUITE_PANEL_MARGIN, viewportWidth - width - CUSTOM_SUITE_PANEL_MARGIN);
+        const maxY = Math.max(CUSTOM_SUITE_PANEL_MARGIN, viewportHeight - height - CUSTOM_SUITE_PANEL_MARGIN);
+        return {
+            x: Math.min(Math.max(CUSTOM_SUITE_PANEL_MARGIN, x), maxX),
+            y: Math.min(Math.max(CUSTOM_SUITE_PANEL_MARGIN, y), maxY)
+        };
+    }
+
+    function applyCustomSuitePanelFloatingState(portal) {
+        if (!portal || !customSuitePortalPosition) {
+            return;
+        }
+        const panel = portal.querySelector('.suite-custom-selection__panel');
+        if (!panel) {
+            return;
+        }
+        const rect = panel.getBoundingClientRect();
+        const width = rect.width || panel.offsetWidth || 380;
+        const height = rect.height || panel.offsetHeight || 420;
+        const clamped = clampCustomSuitePanelPosition(
+            customSuitePortalPosition.x,
+            customSuitePortalPosition.y,
+            width,
+            height
+        );
+        customSuitePortalPosition = clamped;
+        panel.classList.add('suite-custom-selection__panel--floating');
+        panel.style.left = clamped.x + 'px';
+        panel.style.top = clamped.y + 'px';
+        panel.style.right = 'auto';
+        panel.style.transform = 'none';
+    }
+
+    function setupCustomSuitePanelDrag(portal) {
+        if (!portal) {
+            return;
+        }
+        const panel = portal.querySelector('.suite-custom-selection__panel');
+        const header = panel ? panel.querySelector('.suite-custom-selection__header') : null;
+        if (!panel || !header || panel.dataset.dragEnabled === 'true') {
+            return;
+        }
+        panel.dataset.dragEnabled = 'true';
+
+        let dragging = false;
+        let pointerId = null;
+        let originX = 0;
+        let originY = 0;
+        let startX = 0;
+        let startY = 0;
+
+        const handlePointerMove = (event) => {
+            if (!dragging || pointerId !== event.pointerId) {
+                return;
+            }
+            const rect = panel.getBoundingClientRect();
+            const width = rect.width || panel.offsetWidth || 380;
+            const height = rect.height || panel.offsetHeight || 420;
+            const nextX = originX + (event.clientX - startX);
+            const nextY = originY + (event.clientY - startY);
+            const clamped = clampCustomSuitePanelPosition(nextX, nextY, width, height);
+            customSuitePortalPosition = clamped;
+            panel.style.left = clamped.x + 'px';
+            panel.style.top = clamped.y + 'px';
+            panel.style.right = 'auto';
+            panel.style.transform = 'none';
+        };
+
+        const stopDragging = (event) => {
+            if (!dragging || (event && pointerId !== event.pointerId)) {
+                return;
+            }
+            dragging = false;
+            pointerId = null;
+            panel.classList.remove('is-dragging');
+            try { header.releasePointerCapture(event.pointerId); } catch (_) {}
+            global.removeEventListener('pointermove', handlePointerMove);
+            global.removeEventListener('pointerup', stopDragging);
+            global.removeEventListener('pointercancel', stopDragging);
+        };
+
+        header.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0) {
+                return;
+            }
+            if (event.target && event.target.closest && event.target.closest('button,a,input,select,textarea,[data-action]')) {
+                return;
+            }
+            const rect = panel.getBoundingClientRect();
+            const width = rect.width || panel.offsetWidth || 380;
+            const height = rect.height || panel.offsetHeight || 420;
+            const initial = clampCustomSuitePanelPosition(rect.left, rect.top, width, height);
+
+            customSuitePortalPosition = initial;
+            panel.classList.add('suite-custom-selection__panel--floating');
+            panel.classList.add('is-dragging');
+            panel.style.left = initial.x + 'px';
+            panel.style.top = initial.y + 'px';
+            panel.style.right = 'auto';
+            panel.style.transform = 'none';
+
+            dragging = true;
+            pointerId = event.pointerId;
+            originX = initial.x;
+            originY = initial.y;
+            startX = event.clientX;
+            startY = event.clientY;
+
+            try { header.setPointerCapture(pointerId); } catch (_) {}
+            global.addEventListener('pointermove', handlePointerMove);
+            global.addEventListener('pointerup', stopDragging);
+            global.addEventListener('pointercancel', stopDragging);
+            event.preventDefault();
+        });
+    }
+
+    function hideCustomSuiteSelectionPortal() {
+        if (typeof document === 'undefined') {
+            return;
+        }
+        const portal = document.getElementById('custom-suite-selection-portal');
+        if (portal && portal.parentNode) {
+            portal.parentNode.removeChild(portal);
+        }
+        customSuitePortalPosition = null;
+    }
+
+    function renderCustomSuiteSelectionPortal() {
+        const draft = getCustomSuiteDraft();
+        if (!draft || draft.status === 'idle') {
+            hideCustomSuiteSelectionPortal();
+            return;
+        }
+
+        const portal = ensureCustomSuiteSelectionPortal();
+        if (!portal) {
+            return;
+        }
+
+        const categories = Array.isArray(draft.categories) && draft.categories.length
+            ? draft.categories
+            : getCustomSuiteCategories();
+        const pickedByCategory = draft.pickedByCategory && typeof draft.pickedByCategory === 'object'
+            ? draft.pickedByCategory
+            : {};
+        const selectedCount = Array.isArray(draft.pickedOrder) ? draft.pickedOrder.length : 0;
+        const isReady = draft.status === 'ready' || selectedCount >= categories.length;
+        const currentCategory = getCustomSuiteCurrentCategory(draft);
+        const selectedRows = categories.map((category) => {
+            const entry = pickedByCategory[category];
+            if (!entry) {
+                return null;
+            }
+            return {
+                category,
+                title: entry.title || '未命名题目',
+                frequency: entry.frequency || '未知频率'
+            };
+        }).filter(Boolean);
+
+        const pendingRows = categories
+            .filter((category) => !pickedByCategory[category])
+            .map((category) => ({
+                category,
+                title: category === currentCategory ? '请选择当前题型' : '待选中',
+                frequency: '待选'
+            }));
+
+        const rowMarkup = (row, includeDelete) => {
+            const deleteMarkup = includeDelete
+                ? '<button type="button" class="suite-custom-selection__delete" data-action="suite-custom-delete" data-category="' + escapeHtml(row.category) + '" aria-label="删除 ' + escapeHtml(row.category) + '">删除</button>'
+                : '';
+            return [
+                '<div class="suite-custom-selection__row' + (includeDelete ? ' suite-custom-selection__row--selected' : ' suite-custom-selection__row--pending') + '">',
+                '<div class="suite-custom-selection__row-main">',
+                '<span class="suite-custom-selection__title">' + escapeHtml(row.title) + '</span>',
+                '<span class="suite-custom-selection__meta">' + escapeHtml(row.category) + '</span>',
+                '<span class="suite-custom-selection__meta">' + escapeHtml(row.frequency) + '</span>',
+                '</div>',
+                deleteMarkup,
+                '</div>'
+            ].join('');
+        };
+
+        const footerButtons = isReady
+            ? [
+                '<button type="button" class="suite-custom-selection__button suite-custom-selection__button--primary" data-action="suite-custom-confirm">确认开始</button>',
+                '<button type="button" class="suite-custom-selection__button suite-custom-selection__button--secondary" data-action="suite-custom-cancel">取消</button>'
+            ].join('')
+            : '<button type="button" class="suite-custom-selection__button suite-custom-selection__button--secondary" data-action="suite-custom-cancel">取消</button>';
+
+        const selectedMarkup = selectedRows.length
+            ? selectedRows.map((row) => rowMarkup(row, true)).join('')
+            : '<div class="suite-custom-selection__empty">尚未选择题目</div>';
+        const pendingMarkup = pendingRows.length
+            ? pendingRows.map((row) => rowMarkup(row, false)).join('')
+            : '';
+
+        portal.innerHTML = [
+            '<div class="suite-custom-selection__backdrop" aria-hidden="true"></div>',
+            '<section class="suite-custom-selection__panel' + (isReady ? ' suite-custom-selection__panel--ready' : ' suite-custom-selection__panel--dock') + '" aria-live="polite">',
+            '<header class="suite-custom-selection__header">',
+            '<div>',
+            '<p class="suite-custom-selection__eyebrow">套题自选</p>', 
+            '<h3 class="suite-custom-selection__title-main">' + (isReady ? '确认开始或取消' : '继续选择下一题型') + '</h3>', 
+            '</div>',
+            '<div class="suite-custom-selection__progress">' + selectedCount + ' / ' + categories.length + '</div>',
+            '</header>',
+            '<div class="suite-custom-selection__body">',
+            '<div class="suite-custom-selection__group">',
+            '<div class="suite-custom-selection__group-title">已选</div>', 
+            selectedMarkup,
+            '</div>',
+            '<div class="suite-custom-selection__group">',
+            '<div class="suite-custom-selection__group-title">待选</div>',
+            pendingMarkup || '<div class="suite-custom-selection__empty">暂无待选项</div>',
+            '</div>',
+            '</div>',
+            '<footer class="suite-custom-selection__footer">',
+            footerButtons,
+            '</footer>',
+            '</section>'
+        ].join('');
+        setupCustomSuitePanelDrag(portal);
+        applyCustomSuitePanelFloatingState(portal);
+    }
+
+    function refreshCustomSuiteSelectionPortal() {
+        if (isCustomSuiteSelectionActive()) {
+            renderCustomSuiteSelectionPortal();
+        } else {
+            hideCustomSuiteSelectionPortal();
+        }
+    }
+
+    function handleCustomSuiteSelect(examId) {
+        const draft = getCustomSuiteDraft();
+        if (!draft || draft.status === 'ready') {
+            return false;
+        }
+
+        const exam = findExamById(examId);
+        if (!exam) {
+            return false;
+        }
+
+        const currentCategory = getCustomSuiteCurrentCategory(draft);
+        const examCategory = normalizeExamCategory(exam);
+        if (currentCategory && examCategory && currentCategory !== examCategory) {
+            return false;
+        }
+
+        const service = global.appStateService;
+        let updatedDraft = null;
+        if (service && typeof service.selectCustomSuiteExam === 'function') {
+            updatedDraft = service.selectCustomSuiteExam(exam, {
+                flowMode: draft.flowMode || 'classic',
+                frequencyScope: draft.frequencyScope || 'custom'
+            });
+        } else if (typeof global.selectCustomSuiteExamState === 'function') {
+            updatedDraft = global.selectCustomSuiteExamState(exam, {
+                flowMode: draft.flowMode || 'classic',
+                frequencyScope: draft.frequencyScope || 'custom'
+            });
+        }
+
+        if (!updatedDraft) {
+            return false;
+        }
+
+        if (updatedDraft.status === 'ready') {
+            renderCustomSuiteSelectionPortal();
+            return true;
+        }
+
+        const nextCategory = getCustomSuiteCurrentCategory(updatedDraft);
+        if (nextCategory && typeof global.browseCategory === 'function') {
+            global.browseCategory(nextCategory, 'reading');
+        } else {
+            renderCustomSuiteSelectionPortal();
+        }
+
+        return true;
+    }
+
+    function handleCustomSuiteDelete(category) {
+        const normalizedCategory = String(category || '').trim().toUpperCase();
+        if (!normalizedCategory) {
+            return false;
+        }
+
+        const service = global.appStateService;
+        let updatedDraft = null;
+        if (service && typeof service.removeCustomSuiteSelection === 'function') {
+            updatedDraft = service.removeCustomSuiteSelection(normalizedCategory);
+        } else if (typeof global.removeCustomSuiteSelectionState === 'function') {
+            updatedDraft = global.removeCustomSuiteSelectionState(normalizedCategory);
+        }
+
+        if (!updatedDraft) {
+            return false;
+        }
+
+        const nextCategory = getCustomSuiteCurrentCategory(updatedDraft);
+        if (nextCategory && typeof global.browseCategory === 'function') {
+            global.browseCategory(nextCategory, 'reading');
+        } else {
+            refreshCustomSuiteSelectionPortal();
+        }
+
+        return true;
+    }
+
+    function handleCustomSuiteConfirm() {
+        if (global.app && typeof global.app.confirmCustomSuiteSelection === 'function') {
+            return global.app.confirmCustomSuiteSelection();
+        }
+        if (typeof global.confirmCustomSuiteSelectionState === 'function') {
+            return global.confirmCustomSuiteSelectionState();
+        }
+        return false;
+    }
+
+    function handleCustomSuiteCancel() {
+        if (global.app && typeof global.app.cancelCustomSuiteSelection === 'function') {
+            return global.app.cancelCustomSuiteSelection();
+        }
+        if (typeof global.clearCustomSuiteDraftState === 'function') {
+            global.clearCustomSuiteDraftState();
+        }
+        refreshCustomSuiteSelectionPortal();
+        if (typeof global.resetBrowseViewToAll === 'function') {
+            global.resetBrowseViewToAll();
+        }
+        return true;
+    }
+
    // 核心功能：加载与渲染
    
     /**
      * 加载并渲染题库列表
      */
     function loadExamList() {
-        console.log('[ExamActions] loadExamList 被调用');
+        console.log('[ExamActions] loadExamList called');
         
         // 1. 频率模式委托给 BrowseController
         if (global.__browseFilterMode && global.__browseFilterMode !== 'default' && global.browseController) {
@@ -190,6 +620,8 @@
         }
 
         examsToShow = applyBrowsePostFilters(examsToShow);
+        const customSuiteDraft = getCustomSuiteDraft();
+        const selectionMode = isCustomSuiteSelectionActive() ? 'custom-suite' : '';
 
         // 6. 更新状态并渲染
         if (global.appStateService) {
@@ -198,7 +630,11 @@
             global.setFilteredExamsState(examsToShow);
         }
 
-        displayExams(examsToShow);
+        displayExams(examsToShow, {
+            selectionMode,
+            customSuiteDraft
+        });
+        refreshCustomSuiteSelectionPortal();
 
         // 7. 触发渲染后钩子
         if (typeof global.handlePostExamListRender === 'function') {
@@ -256,7 +692,7 @@
     /**
      * 渲染题库列表 DOM
      */
-    function displayExams(exams) {
+    function displayExams(exams, options = {}) {
         // 1. 尝试使用 BrowseController 管理的 examListViewInstance
         let view = null;
         if (global.browseController && typeof global.browseController.getExamListView === 'function') {
@@ -276,7 +712,11 @@
         }
 
         if (view) {
-            view.render(exams, { loadingSelector: '#browse-view .loading' });
+            view.render(exams, {
+                loadingSelector: '#browse-view .loading',
+                selectionMode: options.selectionMode || '',
+                customSuiteDraft: options.customSuiteDraft || null
+            });
             setupExamActionHandlers();
             return;
         }
@@ -308,7 +748,7 @@
 
         normalizedExams.forEach((exam) => {
             if (!exam) return;
-            const item = createExamCard(exam);
+            const item = createExamCard(exam, options);
             list.appendChild(item);
         });
 
@@ -346,11 +786,25 @@
     /**
      * 创建单个题库卡片
      */
-    function createExamCard(exam) {
+    function createExamCard(exam, options = {}) {
+        const selectionMode = options.selectionMode || (isCustomSuiteSelectionActive() ? 'custom-suite' : '');
+        const draft = options.customSuiteDraft || getCustomSuiteDraft();
+        const currentCategory = getCustomSuiteCurrentCategory(draft);
+        const examCategory = normalizeExamCategory(exam);
+        const isSelecting = selectionMode === 'custom-suite' && !!draft && draft.status !== 'ready';
+        const isSelected = !!draft && draft.pickedByCategory && draft.pickedByCategory[examCategory]
+            && String(draft.pickedByCategory[examCategory].examId) === String(exam.id);
         const item = document.createElement('div');
-        item.className = 'exam-item';
+        item.className = 'exam-item'
+            + (isSelecting ? ' exam-item--suite-selecting' : '')
+            + (isSelected ? ' exam-item--suite-selected' : '');
         if (exam.id) {
             item.dataset.examId = exam.id;
+        }
+        if (isSelecting) {
+            item.dataset.action = 'suite-custom-select';
+            item.setAttribute('role', 'button');
+            item.setAttribute('tabindex', '0');
         }
 
         const info = document.createElement('div');
@@ -361,7 +815,6 @@
         const meta = document.createElement('div');
         meta.className = 'exam-meta';
 
-        // 格式化元数据
         let metaText = '';
         if (typeof global.formatExamMetaText === 'function') {
             metaText = global.formatExamMetaText(exam);
@@ -374,6 +827,13 @@
         infoContent.appendChild(meta);
         info.appendChild(infoContent);
 
+        if (isSelecting && currentCategory) {
+            const selectBadge = document.createElement('div');
+            selectBadge.className = 'suite-custom-selection-badge';
+            selectBadge.textContent = `${currentCategory} 待选`;
+            info.appendChild(selectBadge);
+        }
+
         const actions = document.createElement('div');
         actions.className = 'exam-actions';
 
@@ -385,9 +845,12 @@
             startBtn.dataset.examId = exam.id;
         }
         startBtn.textContent = '开始练习';
+        if (isSelecting) {
+            startBtn.disabled = true;
+            startBtn.setAttribute('aria-disabled', 'true');
+        }
         actions.appendChild(startBtn);
 
-        // PDF 按钮
         const pdfBtn = document.createElement('button');
         pdfBtn.className = 'btn btn-outline exam-item-action-btn';
         pdfBtn.type = 'button';
@@ -396,6 +859,10 @@
             pdfBtn.dataset.examId = exam.id;
         }
         pdfBtn.textContent = 'PDF';
+        if (isSelecting) {
+            pdfBtn.disabled = true;
+            pdfBtn.setAttribute('aria-disabled', 'true');
+        }
         actions.appendChild(pdfBtn);
 
         item.appendChild(info);
@@ -417,11 +884,37 @@
         var invoke = function (target, event) {
             var action = target.dataset.action;
             var examId = target.dataset.examId;
-            if (!action || !examId) {
+            var category = target.dataset.category || target.dataset.examCategory || '';
+
+            if (!action) {
                 return;
             }
 
             event.preventDefault();
+
+            if (action === 'suite-custom-select') {
+                handleCustomSuiteSelect(examId);
+                return;
+            }
+
+            if (action === 'suite-custom-delete') {
+                handleCustomSuiteDelete(category);
+                return;
+            }
+
+            if (action === 'suite-custom-confirm') {
+                handleCustomSuiteConfirm();
+                return;
+            }
+
+            if (action === 'suite-custom-cancel') {
+                handleCustomSuiteCancel();
+                return;
+            }
+
+            if (!examId) {
+                return;
+            }
 
             if (action === 'start' && typeof global.openExam === 'function') {
                 global.openExam(examId);
@@ -452,6 +945,18 @@
             global.DOM.delegate('click', '[data-action="generate"]', function (event) {
                 invoke(this, event);
             });
+            global.DOM.delegate('click', '[data-action="suite-custom-select"]', function (event) {
+                invoke(this, event);
+            });
+            global.DOM.delegate('click', '[data-action="suite-custom-delete"]', function (event) {
+                invoke(this, event);
+            });
+            global.DOM.delegate('click', '[data-action="suite-custom-confirm"]', function (event) {
+                invoke(this, event);
+            });
+            global.DOM.delegate('click', '[data-action="suite-custom-cancel"]', function (event) {
+                invoke(this, event);
+            });
         } else if (typeof document !== 'undefined') {
             document.addEventListener('click', function (event) {
                 var target = event.target.closest('[data-action]');
@@ -460,7 +965,7 @@
                 }
 
                 var container = document.getElementById('exam-list-container');
-                if (container && !container.contains(target)) {
+                if (container && !container.contains(target) && !document.getElementById('custom-suite-selection-portal')?.contains(target)) {
                     return;
                 }
 
@@ -471,7 +976,6 @@
         examActionHandlersConfigured = true;
         try { console.log('[ExamActions] 考试操作按钮事件委托已设置'); } catch (_) { }
     }
-
     function ensureBrowseGroupReady() {
         if (typeof global.ensureBrowseGroup === 'function') {
             return global.ensureBrowseGroup();
@@ -546,7 +1050,7 @@
             return global.exportPracticeData();
         }
         if (typeof global.showMessage === 'function') {
-            global.showMessage('数据管理模块未就绪', 'warning');
+            global.showMessage('Data manager module is unavailable.', 'warning');
         }
     }
 

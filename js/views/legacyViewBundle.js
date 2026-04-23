@@ -62,18 +62,6 @@
         return maxTs;
     }
 
-    function resolveRecordDurationSeconds(record) {
-        if (!record || typeof record !== 'object') {
-            return 0;
-        }
-        var startMs = Number(new Date(record.startTime).getTime());
-        var endMs = Number(new Date(record.endTime).getTime());
-        if (Number.isFinite(startMs) && Number.isFinite(endMs) && endMs >= startMs) {
-            return Math.floor((endMs - startMs) / 1000);
-        }
-        return 0;
-    }
-
     function normalizePathValue(path) {
         if (!path) {
             return '';
@@ -184,7 +172,7 @@
         for (var i = 0; i < normalized.length; i += 1) {
             var record = normalized[i];
             var percentage = typeof record.percentage === 'number' ? record.percentage : 0;
-            var duration = resolveRecordDurationSeconds(record);
+            var duration = typeof record.duration === 'number' ? record.duration : 0;
             totalScore += percentage;
             totalMinutes += duration;
 
@@ -451,7 +439,7 @@
             });
         }
         var helpers = historyRenderer.helpers;
-        var durationInSeconds = resolveRecordDurationSeconds(record);
+        var durationInSeconds = Number(record && record.duration) || 0;
         var percentage = typeof record.percentage === 'number'
             ? record.percentage
             : Math.round((record.accuracy || 0) * 100);
@@ -683,7 +671,7 @@
             var id = record && record.id != null ? record.id : ('idx' + index);
             var ts = historyRenderer.helpers.getRecordTimestampSafe(record);
             var pct = Number(record && record.percentage) || 0;
-            var dur = resolveRecordDurationSeconds(record);
+            var dur = Number(record && record.duration) || 0;
             return id + ':' + ts + ':' + pct + ':' + dur;
         });
         return list.length + '|' + tokens.join(';');
@@ -844,10 +832,30 @@
         }
 
         var status = this._getCompletionStatus(exam);
+        var selectionMode = options && options.selectionMode ? String(options.selectionMode) : '';
+        var draft = options && options.customSuiteDraft ? options.customSuiteDraft : null;
+        var categories = draft && Array.isArray(draft.categories) && draft.categories.length
+            ? draft.categories
+            : ['P1', 'P2', 'P3'];
+        var stageIndex = draft && Number.isInteger(draft.stageIndex) ? draft.stageIndex : 0;
+        var currentCategory = draft && draft.status !== 'ready' && stageIndex < categories.length
+            ? categories[stageIndex]
+            : null;
+        var examCategory = exam && typeof exam.category === 'string'
+            ? exam.category.trim().toUpperCase()
+            : '';
+        var isSelecting = selectionMode === 'custom-suite' && !!draft && draft.status !== 'ready';
+        var isSelected = !!draft && draft.pickedByCategory && examCategory && draft.pickedByCategory[examCategory]
+            && String(draft.pickedByCategory[examCategory].examId) === String(exam.id);
         var examItem = this._createElement('div', {
-            className: 'exam-item',
+            className: 'exam-item' + (isSelecting ? ' exam-item--suite-selecting' : '') + (isSelected ? ' exam-item--suite-selected' : ''),
             dataset: { examId: exam.id }
         });
+        if (isSelecting) {
+            examItem.dataset.action = 'suite-custom-select';
+            examItem.setAttribute('role', 'button');
+            examItem.setAttribute('tabindex', '0');
+        }
 
         var info = this._createElement('div', { className: 'exam-info' });
         var infoContent = this._createElement('div');
@@ -897,6 +905,9 @@
         infoContent.appendChild(title);
         infoContent.appendChild(meta);
         info.appendChild(infoContent);
+        if (isSelecting && currentCategory) {
+            info.appendChild(this._createElement('div', { className: 'suite-custom-selection-badge' }, currentCategory + ' Pending'));
+        }
 
         var actions = this._createElement('div', { className: 'exam-actions' });
         var actionConfig = this._resolveActionConfig(exam, options);
@@ -906,6 +917,10 @@
             dataset: { action: actionConfig.startAction, examId: exam.id },
             type: 'button'
         }, actionConfig.startLabel);
+        if (isSelecting) {
+            startBtn.disabled = true;
+            startBtn.setAttribute('aria-disabled', 'true');
+        }
         actions.appendChild(startBtn);
 
         if (actionConfig.includePdfButton) {
@@ -915,6 +930,10 @@
                 type: 'button',
                 title: '查看PDF版本'
             }, '查看PDF');
+            if (isSelecting) {
+                pdfBtn.disabled = true;
+                pdfBtn.setAttribute('aria-disabled', 'true');
+            }
             actions.appendChild(pdfBtn);
         }
 
@@ -925,6 +944,10 @@
                 type: 'button',
                 title: '为此题目生成HTML版本'
             }, '生成HTML');
+            if (isSelecting) {
+                generateBtn.disabled = true;
+                generateBtn.setAttribute('aria-disabled', 'true');
+            }
             actions.appendChild(generateBtn);
         }
 
