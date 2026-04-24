@@ -3065,9 +3065,7 @@
         const selectedContext = getSelectedContextForCoach();
         const focusQuestionNumbers = resolveCoachFocusQuestionNumbers();
         const submitted = Boolean(options.forceSubmitted || isReadingCoachAvailable());
-        const answerComparison = state.lastResults && state.lastResults.answerComparison
-            ? state.lastResults.answerComparison
-            : {};
+        const answerComparison = resolveAnswerComparisonForCoach(state.lastResults);
         const wrongQuestions = [];
         const selectedAnswers = {};
 
@@ -3075,7 +3073,7 @@
             if (!entry || typeof entry !== 'object') {
                 return;
             }
-            const questionNumber = String(entry.questionId || '').replace(/^q/i, '').trim();
+            const questionNumber = displayLabel(entry.questionId);
             if (!questionNumber) {
                 return;
             }
@@ -3109,6 +3107,48 @@
                 selectedAnswers
             }
         };
+    }
+
+    function resolveAnswerComparisonForCoach(results) {
+        if (!results || typeof results !== 'object') {
+            return {};
+        }
+        if (results.answerComparison && typeof results.answerComparison === 'object') {
+            return results.answerComparison;
+        }
+
+        const details = results.scoreInfo && results.scoreInfo.details && typeof results.scoreInfo.details === 'object'
+            ? results.scoreInfo.details
+            : null;
+        if (details) {
+            return details;
+        }
+
+        const answers = results.answers && typeof results.answers === 'object' ? results.answers : {};
+        const correctAnswers = (
+            results.correctAnswers && typeof results.correctAnswers === 'object'
+                ? results.correctAnswers
+                : (state.dataset && state.dataset.answerKey && typeof state.dataset.answerKey === 'object' ? state.dataset.answerKey : {})
+        );
+        const questionIds = uniqueList([
+            ...Object.keys(correctAnswers || {}),
+            ...Object.keys(answers || {})
+        ]);
+        return questionIds.reduce((accumulator, questionId) => {
+            const normalizedQuestionId = String(questionId || '').trim();
+            if (!normalizedQuestionId) {
+                return accumulator;
+            }
+            const userAnswer = answers[normalizedQuestionId] || '';
+            const correctAnswer = correctAnswers[normalizedQuestionId];
+            accumulator[normalizedQuestionId] = {
+                questionId: normalizedQuestionId,
+                userAnswer,
+                correctAnswer,
+                isCorrect: compareAnswers(userAnswer, correctAnswer)
+            };
+            return accumulator;
+        }, {});
     }
 
     function normalizeCoachConfidenceToRate(value) {
