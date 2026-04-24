@@ -43,11 +43,29 @@ def not_contains(path: Path, token: str) -> bool:
         return False
     return token not in path.read_text(encoding="utf-8")
 
+
+def build_server_bundle() -> tuple[bool, str]:
+    try:
+        completed = subprocess.run(
+            ["npm", "run", "build:server"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        output_text = exc.stdout or exc.stderr or str(exc)
+        return False, f"执行失败: {output_text.strip()}"
+    return True, completed.stdout.strip() or completed.stderr.strip() or "已执行"
+
+
+build_ok, build_detail = build_server_bundle()
+add_check("server 预编译构建", build_ok, build_detail)
+
 # File existence
 required_files = [
     ROOT / "electron" / "local-api-server.js",
     ROOT / "electron" / "service-bundle.js",
-    ROOT / "electron" / "tsx-register.js",
     ROOT / "electron" / "services" / "evaluate.service.js",
     ROOT / "electron" / "services" / "reading-coach.service.js",
     ROOT / "electron" / "services" / "evaluation-contract.js",
@@ -56,6 +74,11 @@ required_files = [
     ROOT / "server" / "src" / "lib" / "reading" / "coach-service.ts",
     ROOT / "server" / "src" / "lib" / "writing" / "contracts.ts",
     ROOT / "server" / "src" / "lib" / "shared" / "provider-orchestrator.ts",
+    ROOT / "server" / "dist" / "app.js",
+    ROOT / "server" / "dist" / "lib" / "writing" / "evaluate-service.js",
+    ROOT / "server" / "dist" / "lib" / "reading" / "coach-service.js",
+    ROOT / "server" / "dist" / "lib" / "writing" / "contracts.js",
+    ROOT / "server" / "dist" / "lib" / "shared" / "provider-orchestrator.js",
     ROOT / "electron" / "db" / "migrations" / "20260209_phase06_schema.sql",
     ROOT / "electron" / "resources" / "prompt-template.v2.json",
 ]
@@ -82,12 +105,12 @@ add_check(
 add_check(
     "EvaluateService 使用独立 contract 模块包装器",
     (
-        contains(ROOT / "electron/services/evaluate.service.js", "server', 'src', 'lib', 'writing', 'evaluate-service.ts")
-        and contains(ROOT / "server/src/lib/writing/evaluate-service.ts", "require('./contracts.ts')")
+        contains(ROOT / "electron/services/evaluate.service.js", "server', 'dist', 'lib', 'writing', 'evaluate-service.js")
+        and contains(ROOT / "server/src/lib/writing/evaluate-service.ts", "require('./contracts.js')")
     ),
     "已检测" if (
-        contains(ROOT / "electron/services/evaluate.service.js", "server', 'src', 'lib', 'writing', 'evaluate-service.ts")
-        and contains(ROOT / "server/src/lib/writing/evaluate-service.ts", "require('./contracts.ts')")
+        contains(ROOT / "electron/services/evaluate.service.js", "server', 'dist', 'lib', 'writing', 'evaluate-service.js")
+        and contains(ROOT / "server/src/lib/writing/evaluate-service.ts", "require('./contracts.js')")
     ) else "未检测",
 )
 add_check(
@@ -217,22 +240,44 @@ add_check(
 add_check(
     "electron 包装器指向 server core",
     (
-        contains(ROOT / "electron/services/evaluate.service.js", "server', 'src', 'lib', 'writing', 'evaluate-service.ts")
-        and contains(ROOT / "electron/services/reading-coach.service.js", "server', 'src', 'lib', 'reading', 'coach-service.ts")
-        and contains(ROOT / "electron/services/evaluation-contract.js", "server', 'src', 'lib', 'writing', 'contracts.ts")
-        and contains(ROOT / "electron/services/provider-orchestrator.service.js", "server', 'src', 'lib', 'shared', 'provider-orchestrator.ts")
+        contains(ROOT / "electron/services/evaluate.service.js", "server', 'dist', 'lib', 'writing', 'evaluate-service.js")
+        and contains(ROOT / "electron/services/reading-coach.service.js", "server', 'dist', 'lib', 'reading', 'coach-service.js")
+        and contains(ROOT / "electron/services/evaluation-contract.js", "server', 'dist', 'lib', 'writing', 'contracts.js")
+        and contains(ROOT / "electron/services/provider-orchestrator.service.js", "server', 'dist', 'lib', 'shared', 'provider-orchestrator.js")
     ),
     "已检测" if (
-        contains(ROOT / "electron/services/evaluate.service.js", "server', 'src', 'lib', 'writing', 'evaluate-service.ts")
-        and contains(ROOT / "electron/services/reading-coach.service.js", "server', 'src', 'lib', 'reading', 'coach-service.ts")
-        and contains(ROOT / "electron/services/evaluation-contract.js", "server', 'src', 'lib', 'writing', 'contracts.ts")
-        and contains(ROOT / "electron/services/provider-orchestrator.service.js", "server', 'src', 'lib', 'shared', 'provider-orchestrator.ts")
+        contains(ROOT / "electron/services/evaluate.service.js", "server', 'dist', 'lib', 'writing', 'evaluate-service.js")
+        and contains(ROOT / "electron/services/reading-coach.service.js", "server', 'dist', 'lib', 'reading', 'coach-service.js")
+        and contains(ROOT / "electron/services/evaluation-contract.js", "server', 'dist', 'lib', 'writing', 'contracts.js")
+        and contains(ROOT / "electron/services/provider-orchestrator.service.js", "server', 'dist', 'lib', 'shared', 'provider-orchestrator.js")
     ) else "未检测",
 )
 add_check(
-    "tsx runtime 注册器存在",
-    contains(ROOT / "electron/tsx-register.js", "ensureTsRuntime"),
-    "已检测" if contains(ROOT / "electron/tsx-register.js", "ensureTsRuntime") else "未检测",
+    "package 构建脚本包含 build:server",
+    contains(ROOT / "package.json", "\"build:server\""),
+    "已检测" if contains(ROOT / "package.json", "\"build:server\"") else "未检测",
+)
+add_check(
+    "start 启动前先构建 server",
+    contains_all(
+        ROOT / "package.json",
+        ["\"start\": \"npm run build:server && npm run build:writing && electron .\"", "\"start:electron\": \"npm run build:server && electron .\""],
+    ),
+    "已检测" if contains_all(
+        ROOT / "package.json",
+        ["\"start\": \"npm run build:server && npm run build:writing && electron .\"", "\"start:electron\": \"npm run build:server && electron .\""],
+    ) else "未检测",
+)
+add_check(
+    "打包仅收录 server/dist",
+    (
+        contains(ROOT / "package.json", "\"server/dist/**/*\"")
+        and "server/**/*" not in (ROOT / "package.json").read_text(encoding="utf-8")
+    ),
+    "已检测" if (
+        contains(ROOT / "package.json", "\"server/dist/**/*\"")
+        and "server/**/*" not in (ROOT / "package.json").read_text(encoding="utf-8")
+    ) else "未检测",
 )
 add_check(
     "main 进程固化 userData 到 ielts-practice 目录",

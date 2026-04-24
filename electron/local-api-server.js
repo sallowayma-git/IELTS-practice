@@ -1,6 +1,5 @@
 const path = require('node:path');
 const logger = require('./utils/logger');
-const { ensureTsRuntime } = require('./tsx-register');
 
 class LocalApiServer {
     constructor(services) {
@@ -10,7 +9,6 @@ class LocalApiServer {
         this.host = '127.0.0.1';
         this.preferredPort = this._resolvePreferredPort();
         this.app = null;
-        this._tsxUnregister = null;
     }
 
     _resolvePreferredPort() {
@@ -29,12 +27,8 @@ class LocalApiServer {
     }
 
     async _loadServerAppFactory() {
-        const { require: tsxRequire } = require('tsx/cjs/api');
-        if (!this._tsxUnregister) {
-            this._tsxUnregister = ensureTsRuntime();
-        }
-        const appModulePath = path.join(__dirname, '..', 'server', 'src', 'app.ts');
-        const loaded = tsxRequire(appModulePath, __filename);
+        const appModulePath = path.join(__dirname, '..', 'server', 'dist', 'app.js');
+        const loaded = require(appModulePath);
         return loaded.createServerApp;
     }
 
@@ -69,14 +63,6 @@ class LocalApiServer {
         this.server = null;
         this.port = null;
         this.app = null;
-        if (this._tsxUnregister) {
-            if (typeof this._tsxUnregister === 'function') {
-                this._tsxUnregister();
-            } else if (typeof this._tsxUnregister.unregister === 'function') {
-                this._tsxUnregister.unregister();
-            }
-            this._tsxUnregister = null;
-        }
     }
 
     getInfo() {

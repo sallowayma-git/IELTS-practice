@@ -8,6 +8,7 @@
 /developer/node_modules/
 /node_modules/
 /dist/
+/server/dist/
 /out/
 /build/
 /apps/dist/

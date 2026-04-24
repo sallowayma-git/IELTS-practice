@@ -1,13 +1,25 @@
 #!/usr/bin/env node
 import assert from 'assert';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+import { execFileSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 const require = createRequire(import.meta.url);
+
+function ensureServerBundle() {
+    execFileSync('npm', ['run', 'build:server'], {
+        cwd: repoRoot,
+        stdio: 'inherit'
+    });
+}
+
+ensureServerBundle();
+
 const ReadingCoachService = require(path.join(repoRoot, 'electron/services/reading-coach.service.js'));
 
 async function testCoachQuerySuccessWithGroundedRetrieval() {
@@ -188,13 +200,86 @@ async function testCoachLockedUntilSubmit() {
 async function testTableCompletionQuestionExtraction() {
     const service = new ReadingCoachService({});
     const bundle = await service._loadExamBundle('p2-low-06');
-    const q1Chunk = bundle.chunks.find((chunk) => chunk.chunkType === 'question_item' && Array.isArray(chunk.questionNumbers) && chunk.questionNumbers.includes('1'));
-    assert.ok(q1Chunk, '应构建 Q1 题干 chunk');
-    assert.ok(!String(q1Chunk.content || '').includes('题干未解析'), '表格题题干不应回退到“题干未解析”');
-    assert.ok(/natural process that appears simpler than it actually is/i.test(q1Chunk.content), '应提取表格题实际题干文案');
+    const q14Chunk = bundle.chunks.find((chunk) => chunk.chunkType === 'question_item' && Array.isArray(chunk.questionNumbers) && chunk.questionNumbers.includes('14'));
+    assert.ok(q14Chunk, '应构建显示题号 Q14 的题干 chunk');
+    assert.ok(!String(q14Chunk.content || '').includes('题干未解析'), '表格题题干不应回退到“题干未解析”');
+    assert.ok(/natural process that appears simpler than it actually is/i.test(q14Chunk.content), '应提取表格题实际题干文案');
     const passageG = bundle.chunks.find((chunk) => chunk.chunkType === 'passage_paragraph' && Array.isArray(chunk.paragraphLabels) && chunk.paragraphLabels.includes('G'));
     assert.ok(passageG, '应抽取到 G 段原文 chunk');
     assert.ok(/Photosynthesis/i.test(passageG.content), 'G 段内容应包含 Photosynthesis 证据');
+}
+
+async function testDisplayQuestionNumbersStayAlignedWithReviewRetrieval() {
+    const service = new ReadingCoachService({});
+    const bundle = await service._loadExamBundle('p3-high-32');
+    const q27Chunk = bundle.chunks.find((chunk) => chunk.chunkType === 'question_item' && Array.isArray(chunk.questionNumbers) && chunk.questionNumbers.includes('27'));
+    const q27AnswerKey = bundle.chunks.find((chunk) => chunk.chunkType === 'answer_key' && Array.isArray(chunk.questionNumbers) && chunk.questionNumbers.includes('27'));
+    assert.ok(q27Chunk, 'question chunk 应使用显示题号 27，而不是内部 q1');
+    assert.ok(q27AnswerKey, 'answer key chunk 应使用显示题号 27，而不是内部 q1');
+    assert.ok(String(q27Chunk.content || '').includes('Q27'), 'question chunk 文案应与显示题号对齐');
+}
+
+async function testGroupedQuestionExtractionDoesNotLeakNeighborQuestions() {
+    const service = new ReadingCoachService({});
+
+    const p3Bundle = await service._loadExamBundle('p3-high-32');
+    const q28Chunk = p3Bundle.chunks.find((chunk) => chunk.chunkType === 'question_item' && Array.isArray(chunk.questionNumbers) && chunk.questionNumbers.includes('28'));
+    assert.ok(q28Chunk, '应构建 Q28 题干 chunk');
+    assert.ok(/When describing the way computer-generated imagery changes actors' appearance/i.test(q28Chunk.content), 'Q28 应包含自己的题干');
+    assert.ok(!/main point in the first paragraph/i.test(q28Chunk.content), 'Q28 不应泄漏 Q27 首题题干');
+
+    const p1Bundle = await service._loadExamBundle('p1-high-05');
+    const q2Chunk = p1Bundle.chunks.find((chunk) => chunk.chunkType === 'question_item' && Array.isArray(chunk.questionNumbers) && chunk.questionNumbers.includes('2'));
+    assert.ok(q2Chunk, '应构建 Q2 题干 chunk');
+    assert.ok(/Mansfield won a prize for a story/i.test(q2Chunk.content), 'Q2 应包含自己的判断题题干');
+    assert.ok(!/exactly the same as her original name/i.test(q2Chunk.content), 'Q2 不应泄漏 Q1 首题题干');
+    assert.ok(!/How Pearl Button Was Kidnapped/i.test(q2Chunk.content), 'Q2 不应泄漏 Q3 邻题题干');
+}
+
+async function testReviewRetrievalInjectsOriginalPassageChunks() {
+    const service = new ReadingCoachService({});
+    let capturedMessages = null;
+    service.providerOrchestrator = {
+        async streamCompletion(options = {}) {
+            capturedMessages = options.messages;
+            if (typeof options.onChunk === 'function') {
+                options.onChunk(JSON.stringify({
+                    answer: '你先看第一段主旨，再对照原文里的 Oscar 和 CGI 转折。',
+                    answerSections: [
+                        { type: 'direct_answer', text: '你先看第一段主旨，再对照原文里的 Oscar 和 CGI 转折。' },
+                        { type: 'evidence', text: '原文段落已经注入，不要只盯解析。' }
+                    ],
+                    followUps: ['这题证据在哪段', '我下次怎么排除'],
+                    confidence: 'high',
+                    missingContext: []
+                }));
+            }
+            return {
+                usedConfig: { id: 1, provider: 'openai', default_model: 'gpt-test' },
+                providerPath: [{ provider: 'openai', model: 'gpt-test', status: 'success' }]
+            };
+        }
+    };
+
+    const result = await service.query({
+        examId: 'p3-high-32',
+        query: '请复盘我的错题',
+        action: 'review_set',
+        promptKind: 'preset',
+        attemptContext: {
+            submitted: true,
+            wrongQuestions: ['27', '28', '29', '30'],
+            selectedAnswers: { 27: 'A', 28: 'B', 29: 'C', 30: 'D' }
+        }
+    });
+
+    const promptJoined = Array.isArray(capturedMessages)
+        ? capturedMessages.map((item) => String(item?.content || '')).join('\n')
+        : '';
+    assert.ok(promptJoined.includes('source: original_reading_passage_text'), 'review prompt 必须显式标记原文 passage chunk');
+    assert.ok(/chunkType: passage_paragraph/.test(promptJoined), 'review prompt 必须带 passage_paragraph');
+    assert.ok(/Q27/.test(promptJoined), 'review prompt 必须围绕显示题号 27 构造');
+    assert.ok(Array.isArray(result.citations) && result.citations.some((item) => item.chunkType === 'passage_paragraph'), 'review 响应引用里必须保留原文 chunk');
 }
 
 async function main() {
@@ -206,6 +291,9 @@ async function main() {
         await testCoachRouteUnrelatedChat();
         await testCoachLockedUntilSubmit();
         await testTableCompletionQuestionExtraction();
+        await testDisplayQuestionNumbersStayAlignedWithReviewRetrieval();
+        await testGroupedQuestionExtractionDoesNotLeakNeighborQuestions();
+        await testReviewRetrievalInjectsOriginalPassageChunks();
         console.log(JSON.stringify({
             status: 'pass',
             detail: 'ReadingCoachService 已覆盖路由、检索、题干提取与提交态门禁'

@@ -558,8 +558,15 @@ def _run_json_subprocess(
         return False, f"执行失败: {output_text.strip()}"
 
     if parse_mode == "last-line":
-        output_lines = [line.strip() for line in (completed.stdout or "").splitlines() if line.strip()]
-        parse_target = output_lines[-1] if output_lines else ""
+        combined_output = "\n".join(part for part in [completed.stdout or "", completed.stderr or ""] if part)
+        trimmed_output = combined_output.strip()
+        start = trimmed_output.find("{")
+        end = trimmed_output.rfind("}")
+        if start >= 0 and end > start:
+            parse_target = trimmed_output[start:end + 1]
+        else:
+            output_lines = [line.strip() for line in combined_output.splitlines() if line.strip()]
+            parse_target = output_lines[-1] if output_lines else ""
     else:
         parse_target = completed.stdout.strip() or completed.stderr.strip()
 
@@ -570,11 +577,33 @@ def _run_json_subprocess(
     return True, payload
 
 
+def _run_command(command: List[str], timeout: int) -> Tuple[bool, str]:
+    try:
+        completed = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=REPO_ROOT,
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"执行超时（{timeout}秒）"
+    except subprocess.CalledProcessError as exc:
+        output_text = exc.stdout or exc.stderr or str(exc)
+        return False, f"执行失败: {output_text.strip()}"
+    return True, completed.stdout.strip() or completed.stderr.strip() or "已执行"
+
+
 def run_checks() -> Tuple[List[dict], bool]:
     results: List[dict] = []
     all_passed = True
 
     main_entry = REPO_ROOT / "js" / "app" / "main-entry.js"
+
+    build_server_passed, build_server_detail = _run_command(["npm", "run", "build:server"], 240)
+    results.append(_format_result("server 预编译构建", build_server_passed, build_server_detail))
+    all_passed &= build_server_passed
 
     # Core entry point presence
     index_file = REPO_ROOT / "index.html"
@@ -1270,27 +1299,12 @@ def run_checks() -> Tuple[List[dict], bool]:
 
     writing_contract_probe = REPO_ROOT / "developer" / "tests" / "ci" / "writing_contract_probe.cjs"
     if writing_contract_probe.exists():
-        try:
-            completed_writing_contract_probe = subprocess.run(
-                ["node", str(writing_contract_probe)],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-        except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
-            writing_contract_probe_passed = False
-            writing_contract_probe_detail = f"执行失败: {output_text.strip()}"
-        else:
-            raw_writing_contract_probe = completed_writing_contract_probe.stdout.strip() or completed_writing_contract_probe.stderr.strip()
-            try:
-                writing_contract_probe_payload = json.loads(raw_writing_contract_probe or "{}")
-            except json.JSONDecodeError as parse_error:
-                writing_contract_probe_passed = False
-                writing_contract_probe_detail = f"输出解析失败: {parse_error}"
-            else:
-                writing_contract_probe_passed = writing_contract_probe_payload.get("status") == "pass"
-                writing_contract_probe_detail = writing_contract_probe_payload
+        writing_contract_probe_passed, writing_contract_probe_payload = _run_json_subprocess(
+            ["node", str(writing_contract_probe)],
+            240,
+            parse_mode="last-line",
+        )
+        writing_contract_probe_detail = writing_contract_probe_payload
         results.append(_format_result("写作评测链路契约测试", writing_contract_probe_passed, writing_contract_probe_detail))
         all_passed &= writing_contract_probe_passed
     else:
@@ -1653,27 +1667,12 @@ def run_checks() -> Tuple[List[dict], bool]:
 
     unified_reading_page_test = REPO_ROOT / "developer" / "tests" / "js" / "unifiedReadingPage.test.js"
     if unified_reading_page_test.exists():
-        try:
-            completed_unified_reading_page = subprocess.run(
-                ["node", str(unified_reading_page_test)],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-        except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
-            unified_reading_page_passed = False
-            unified_reading_page_detail = f"执行失败: {output_text.strip()}"
-        else:
-            raw_unified_reading_page_output = completed_unified_reading_page.stdout.strip() or completed_unified_reading_page.stderr.strip()
-            try:
-                unified_reading_page_payload = json.loads(raw_unified_reading_page_output or "{}")
-            except json.JSONDecodeError as parse_error:
-                unified_reading_page_passed = False
-                unified_reading_page_detail = f"输出解析失败: {parse_error}"
-            else:
-                unified_reading_page_passed = unified_reading_page_payload.get("status") == "pass"
-                unified_reading_page_detail = unified_reading_page_payload.get("detail", unified_reading_page_payload)
+        unified_reading_page_passed, unified_reading_page_payload = _run_json_subprocess(
+            ["node", str(unified_reading_page_test)],
+            240,
+            parse_mode="last-line",
+        )
+        unified_reading_page_detail = unified_reading_page_payload
         results.append(_format_result("统一阅读页协议回归测试", unified_reading_page_passed, unified_reading_page_detail))
         all_passed &= unified_reading_page_passed
     else:
@@ -1682,27 +1681,12 @@ def run_checks() -> Tuple[List[dict], bool]:
 
     reading_analysis_service_test = REPO_ROOT / "developer" / "tests" / "js" / "readingAnalysisService.test.js"
     if reading_analysis_service_test.exists():
-        try:
-            completed_reading_analysis_service = subprocess.run(
-                ["node", str(reading_analysis_service_test)],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-        except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
-            reading_analysis_service_passed = False
-            reading_analysis_service_detail = f"执行失败: {output_text.strip()}"
-        else:
-            raw_reading_analysis_service_output = completed_reading_analysis_service.stdout.strip() or completed_reading_analysis_service.stderr.strip()
-            try:
-                reading_analysis_service_payload = json.loads(raw_reading_analysis_service_output or "{}")
-            except json.JSONDecodeError as parse_error:
-                reading_analysis_service_passed = False
-                reading_analysis_service_detail = f"输出解析失败: {parse_error}"
-            else:
-                reading_analysis_service_passed = reading_analysis_service_payload.get("status") == "pass"
-                reading_analysis_service_detail = reading_analysis_service_payload.get("detail", reading_analysis_service_payload)
+        reading_analysis_service_passed, reading_analysis_service_payload = _run_json_subprocess(
+            ["node", str(reading_analysis_service_test)],
+            240,
+            parse_mode="last-line",
+        )
+        reading_analysis_service_detail = reading_analysis_service_payload
         results.append(_format_result("阅读二阶段分析服务回归测试", reading_analysis_service_passed, reading_analysis_service_detail))
         all_passed &= reading_analysis_service_passed
     else:

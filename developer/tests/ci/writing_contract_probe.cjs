@@ -3,16 +3,28 @@
 
 const assert = require('assert');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
+const serverDistRoot = path.join(repoRoot, 'server', 'dist');
+
+function ensureServerBundle() {
+  execFileSync('npm', ['run', 'build:server'], {
+    cwd: repoRoot,
+    stdio: 'inherit'
+  });
+}
+
+ensureServerBundle();
+
 const EvaluateService = require(path.join(repoRoot, 'electron', 'services', 'evaluate.service.js'));
 const ReadingCoachService = require(path.join(repoRoot, 'electron', 'services', 'reading-coach.service.js'));
 const providerOrchestratorPath = path.join(repoRoot, 'electron', 'services', 'provider-orchestrator.service.js');
 const llmProviderPath = path.join(repoRoot, 'electron', 'services', 'llm-provider.js');
-const serverWritingEvaluatePath = path.join(repoRoot, 'server', 'src', 'lib', 'writing', 'evaluate-service.ts');
-const serverReadingCoachPath = path.join(repoRoot, 'server', 'src', 'lib', 'reading', 'coach-service.ts');
-const serverWritingContractsPath = path.join(repoRoot, 'server', 'src', 'lib', 'writing', 'contracts.ts');
-const serverProviderOrchestratorPath = path.join(repoRoot, 'server', 'src', 'lib', 'shared', 'provider-orchestrator.ts');
+const serverWritingEvaluatePath = path.join(serverDistRoot, 'lib', 'writing', 'evaluate-service.js');
+const serverReadingCoachPath = path.join(serverDistRoot, 'lib', 'reading', 'coach-service.js');
+const serverWritingContractsPath = path.join(serverDistRoot, 'lib', 'writing', 'contracts.js');
+const serverProviderOrchestratorPath = path.join(serverDistRoot, 'lib', 'shared', 'provider-orchestrator.js');
 const {
   decorateEvaluationForStorage,
   mergeStageResults,

@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const { ProviderOrchestratorService } = require('../shared/provider-orchestrator.ts');
+const { ProviderOrchestratorService } = require('../shared/provider-orchestrator.js');
 const logger = require('../../../../electron/utils/logger.js');
 
 const QUERY_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -84,6 +84,7 @@ const QUICK_ACTIONS = Object.freeze([
     { id: 'review', label: '复盘错题' },
     { id: 'similar', label: '推荐同类题' }
 ]);
+const PASSAGE_CONTEXT_FALLBACK_LIMIT = 3;
 
 function isObject(value) {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -613,12 +614,16 @@ class ReadingCoachService {
 
         const bundle = await this._loadExamBundle(payload.examId);
         const allChunks = bundle.chunks;
-        const queryTokens = tokenize(`${payload.query || ''} ${payload.selectedText || ''}`);
         const focusQuestionNumbers = uniqueList([
             ...(intent.questionNumbers || []),
             ...(contextRoute === CONTEXT_ROUTES.REVIEW ? payload.attemptContext.wrongQuestions : [])
         ]);
         const focusParagraphLabels = uniqueList(intent.paragraphLabels || []);
+        const queryTokens = this._buildRetrievalTokens({
+            bundle,
+            payload,
+            focusQuestionNumbers
+        });
 
         const chunkScores = allChunks.map((chunk) => {
             const score = this._scoreChunk(chunk, {
@@ -634,6 +639,16 @@ class ReadingCoachService {
 
         chunkScores.sort((a, b) => b.score - a.score);
         const sortedChunks = chunkScores.map((item) => item.chunk);
+        const focusQuestionChunks = sortedChunks.filter((chunk) => (
+            chunk.chunkType === CHUNK_TYPE.QUESTION
+            && Array.isArray(chunk.questionNumbers)
+            && chunk.questionNumbers.some((qNum) => focusQuestionNumbers.includes(qNum))
+        ));
+        const supplementalPassageChunks = this._pickSupplementalPassageChunks(
+            allChunks.filter((chunk) => chunk.chunkType === CHUNK_TYPE.PASSAGE),
+            payload,
+            focusQuestionChunks
+        );
 
         const deterministic = [];
         const seen = new Set();
@@ -659,6 +674,7 @@ class ReadingCoachService {
                 }
             });
         }
+        supplementalPassageChunks.forEach(pushChunk);
 
         sortedChunks.slice(0, 24).forEach(pushChunk);
 
@@ -699,6 +715,53 @@ class ReadingCoachService {
             usedParagraphLabels,
             reviewTargets: this._buildReviewTargets(bundle, payload, focusQuestionNumbers)
         };
+    }
+
+    _pickSupplementalPassageChunks(passageChunks, payload, focusQuestionChunks = []) {
+        if (!Array.isArray(passageChunks) || passageChunks.length === 0) {
+            return [];
+        }
+        const searchTerms = tokenize([
+            payload?.query || '',
+            payload?.selectedText || '',
+            ...focusQuestionChunks.map((chunk) => String(chunk?.content || ''))
+        ].join(' '));
+        if (searchTerms.length === 0) {
+            return passageChunks.slice(0, PASSAGE_CONTEXT_FALLBACK_LIMIT);
+        }
+        return passageChunks
+            .map((chunk, index) => ({
+                chunk,
+                score: this._scorePassageChunkRelevance(chunk, searchTerms, index)
+            }))
+            .sort((left, right) => right.score - left.score)
+            .slice(0, PASSAGE_CONTEXT_FALLBACK_LIMIT)
+            .map((entry) => entry.chunk);
+    }
+
+    _scorePassageChunkRelevance(chunk, searchTerms = [], index = 0) {
+        const tokenSet = new Set(tokenize(chunk?.content || ''));
+        const overlap = searchTerms.reduce((score, term) => score + (tokenSet.has(term) ? 1 : 0), 0);
+        return overlap * 4 - Math.min(index, 12) * 0.15;
+    }
+
+    _buildRetrievalTokens({ bundle, payload, focusQuestionNumbers = [] }) {
+        const mergedText = [
+            payload?.query || '',
+            payload?.selectedText || ''
+        ];
+
+        if (focusQuestionNumbers.length > 0) {
+            const focusedChunks = (Array.isArray(bundle?.chunks) ? bundle.chunks : [])
+                .filter((chunk) => Array.isArray(chunk?.questionNumbers) && chunk.questionNumbers.some((qNum) => focusQuestionNumbers.includes(qNum)))
+                .filter((chunk) => chunk.chunkType === CHUNK_TYPE.QUESTION || chunk.chunkType === CHUNK_TYPE.EXPLANATION)
+                .slice(0, 12);
+            focusedChunks.forEach((chunk) => {
+                mergedText.push(String(chunk?.content || '').slice(0, 360));
+            });
+        }
+
+        return tokenize(mergedText.join(' '));
     }
 
     _buildReviewTargets(bundle, payload, focusQuestionNumbers = []) {
@@ -908,7 +971,7 @@ class ReadingCoachService {
 
         const answerKey = isObject(examDataset.answerKey) ? examDataset.answerKey : {};
         Object.entries(answerKey).forEach(([questionId, answer]) => {
-            const normalizedQuestion = String(questionId || '').trim().replace(/^q/i, '');
+            const normalizedQuestion = this._resolveQuestionNumber(questionId, questionDisplayMap);
             if (!normalizedQuestion) {
                 return;
             }
@@ -993,7 +1056,10 @@ class ReadingCoachService {
         if (!normalizedQuestionId) {
             return null;
         }
-        const normalizedQuestion = normalizedQuestionId.replace(/^q/i, '');
+        const normalizedQuestion = this._resolveQuestionNumber(normalizedQuestionId, questionDisplayMap);
+        if (!normalizedQuestion) {
+            return null;
+        }
         let content = '';
         let questionKind = '';
 
@@ -1038,6 +1104,19 @@ class ReadingCoachService {
         };
     }
 
+    _resolveQuestionNumber(questionId, questionDisplayMap = {}) {
+        const normalizedQuestionId = String(questionId || '').trim();
+        if (!normalizedQuestionId) {
+            return '';
+        }
+        const displayValue = questionDisplayMap[normalizedQuestionId];
+        const normalizedDisplay = String(displayValue == null ? '' : displayValue).trim().replace(/^q/i, '');
+        if (normalizedDisplay) {
+            return normalizedDisplay;
+        }
+        return normalizedQuestionId.replace(/^q/i, '');
+    }
+
     _extractGroupInstructionText(html) {
         const normalizedHtml = String(html || '');
         if (!normalizedHtml) {
@@ -1054,7 +1133,17 @@ class ReadingCoachService {
         const paragraphPattern = /<p\b[^>]*>([\s\S]*?)<\/p>/gi;
         let match = paragraphPattern.exec(normalizedHtml);
         while (match && lines.length < 4) {
+            const rawParagraph = String(match[0] || '');
+            if (/<(?:input|select|textarea|span)\b[^>]*(?:name|data-question|id)=["']q\d+/i.test(rawParagraph)
+                || /<strong>\s*\d{1,3}\s*<\/strong>/i.test(rawParagraph)) {
+                match = paragraphPattern.exec(normalizedHtml);
+                continue;
+            }
             const text = cleanText(match[1] || '');
+            if (/^\d{1,3}\s*[.)]\s+\S/.test(text)) {
+                match = paragraphPattern.exec(normalizedHtml);
+                continue;
+            }
             if (text) {
                 lines.push(text);
             }
@@ -1085,6 +1174,144 @@ class ReadingCoachService {
             return '';
         }
         return source.slice(start, end);
+    }
+
+    _sliceBalancedHtmlElementAt(html, openIndex, tagName, maxLength = 4200) {
+        const source = String(html || '');
+        const normalizedTag = String(tagName || '').trim().toLowerCase();
+        if (!source || !normalizedTag || !Number.isFinite(openIndex) || openIndex < 0) {
+            return '';
+        }
+        const lower = source.toLowerCase();
+        if (!lower.startsWith(`<${normalizedTag}`, openIndex)) {
+            return '';
+        }
+        const tagPattern = new RegExp(`<\\/?${normalizedTag}\\b[^>]*>`, 'ig');
+        tagPattern.lastIndex = openIndex;
+        let depth = 0;
+        let match = tagPattern.exec(source);
+        while (match) {
+            const tag = match[0];
+            if (/^<\//.test(tag)) {
+                depth -= 1;
+                if (depth === 0) {
+                    const end = match.index + tag.length;
+                    if (end <= openIndex || end - openIndex > maxLength) {
+                        return '';
+                    }
+                    return source.slice(openIndex, end);
+                }
+            } else if (!/\/>$/.test(tag)) {
+                depth += 1;
+            }
+            match = tagPattern.exec(source);
+        }
+        return '';
+    }
+
+    _findNearestBalancedElementByClass(html, markerIndex, classNames = [], maxLength = 4200) {
+        const source = String(html || '');
+        if (!source || !Number.isFinite(markerIndex) || markerIndex < 0 || !classNames.length) {
+            return '';
+        }
+        const classPattern = classNames.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+        const openPattern = new RegExp(`<div\\b[^>]*class=["'][^"']*(?:${classPattern})[^"']*["'][^>]*>`, 'ig');
+        let candidate = null;
+        let match = openPattern.exec(source);
+        while (match && match.index <= markerIndex) {
+            candidate = match;
+            match = openPattern.exec(source);
+        }
+        if (!candidate) {
+            return '';
+        }
+        const segment = this._sliceBalancedHtmlElementAt(source, candidate.index, 'div', maxLength);
+        return segment && segment.length ? segment : '';
+    }
+
+    _extractQuestionSnippetAroundMarker(html, markerIndex, { questionId, displayLabel } = {}) {
+        const source = String(html || '');
+        if (!source || !Number.isFinite(markerIndex) || markerIndex < 0) {
+            return '';
+        }
+
+        const row = this._sliceHtmlContainerAroundIndex(source, markerIndex, 'tr', 2600);
+        if (row) {
+            return row;
+        }
+
+        const questionItem = this._findNearestBalancedElementByClass(
+            source,
+            markerIndex,
+            ['question-item', 'match-question-item'],
+            3600
+        );
+        if (questionItem) {
+            return questionItem;
+        }
+
+        const paragraph = this._sliceHtmlContainerAroundIndex(source, markerIndex, 'p', 2600);
+        if (paragraph) {
+            return this._trimQuestionParagraphSnippet(paragraph, { questionId, displayLabel });
+        }
+
+        return '';
+    }
+
+    _trimQuestionParagraphSnippet(html, { questionId, displayLabel } = {}) {
+        const raw = String(html || '');
+        if (!raw) {
+            return '';
+        }
+        const questionMarkers = uniqueList(
+            Array.from(raw.matchAll(/(?:name|data-question|id)=["'](q\d+)/ig))
+                .map((item) => String(item[1] || '').trim().toLowerCase())
+                .filter(Boolean)
+        );
+        if (questionMarkers.length <= 1) {
+            return raw;
+        }
+        const markerPatterns = [];
+        const displayNumber = String(displayLabel || '').trim().replace(/[^0-9]/g, '');
+        if (displayNumber) {
+            markerPatterns.push(new RegExp(`<strong>\\s*${displayNumber}\\s*<\\/strong>`, 'i'));
+        }
+        const normalizedQuestionId = String(questionId || '').trim();
+        if (normalizedQuestionId) {
+            const escapedQuestionId = normalizedQuestionId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            markerPatterns.push(new RegExp(`(?:name|data-question|id)=["']${escapedQuestionId}(?:[-_][^"']*)?["']`, 'i'));
+        }
+
+        let markerIndex = -1;
+        for (const pattern of markerPatterns) {
+            const match = raw.match(pattern);
+            if (match && typeof match.index === 'number') {
+                markerIndex = match.index;
+                break;
+            }
+        }
+        if (markerIndex < 0) {
+            return raw;
+        }
+
+        const before = raw.slice(0, markerIndex);
+        const after = raw.slice(markerIndex);
+        const previousBreak = Math.max(
+            before.lastIndexOf('.'),
+            before.lastIndexOf(';'),
+            before.lastIndexOf(':'),
+            before.lastIndexOf('?'),
+            before.lastIndexOf('!')
+        );
+        const nextCandidates = ['.', ';', '?', '!']
+            .map((char) => {
+                const index = after.indexOf(char);
+                return index >= 0 ? index : Infinity;
+            });
+        const nextBreak = Math.min(...nextCandidates);
+        const start = previousBreak >= 0 ? previousBreak + 1 : 0;
+        const end = Number.isFinite(nextBreak) ? markerIndex + nextBreak + 1 : raw.length;
+        return raw.slice(start, end);
     }
 
     _extractQuestionOptions(html, questionId) {
@@ -1150,27 +1377,37 @@ class ReadingCoachService {
             new RegExp(`data-question=["']${escapedQuestionId}["']`, 'ig'),
             new RegExp(`id=["']${escapedQuestionId}-anchor["']`, 'ig')
         ];
-        const containerTags = ['tr', 'li', 'p', 'div'];
+        const containerTags = ['tr', 'li', 'p'];
         markerPatterns.forEach((marker) => {
             let markerMatch = marker.exec(normalizedHtml);
             while (markerMatch) {
                 const markerIndex = Number(markerMatch.index);
-                containerTags.forEach((tagName) => {
-                    const segment = this._sliceHtmlContainerAroundIndex(normalizedHtml, markerIndex, tagName);
-                    if (segment) {
-                        pushSnippet(segment);
-                    }
+                const primarySnippet = this._extractQuestionSnippetAroundMarker(normalizedHtml, markerIndex, {
+                    questionId: normalizedQuestionId,
+                    displayLabel: questionDisplayLabel
                 });
+                pushSnippet(primarySnippet);
+                if (!primarySnippet) {
+                    containerTags.forEach((tagName) => {
+                        const segment = this._sliceHtmlContainerAroundIndex(normalizedHtml, markerIndex, tagName);
+                        if (segment) {
+                            pushSnippet(segment);
+                        }
+                    });
+                }
                 markerMatch = marker.exec(normalizedHtml);
             }
         });
 
         const displayLabel = String(questionDisplayLabel || '').trim().replace(/[^0-9]/g, '');
         if (displayLabel) {
-            const displayPattern = new RegExp(`<strong>\\s*${displayLabel}\\s*<\\/strong>[\\s\\S]{0,420}?<\\/p>`, 'ig');
+            const displayPattern = new RegExp(`<strong>\\s*${displayLabel}\\s*<\\/strong>`, 'ig');
             let displayMatch = displayPattern.exec(normalizedHtml);
             while (displayMatch) {
-                pushSnippet(displayMatch[0]);
+                pushSnippet(this._extractQuestionSnippetAroundMarker(normalizedHtml, displayMatch.index, {
+                    questionId: normalizedQuestionId,
+                    displayLabel
+                }));
                 displayMatch = displayPattern.exec(normalizedHtml);
             }
         }
@@ -1184,8 +1421,20 @@ class ReadingCoachService {
             if (displayLabel && new RegExp(`\\b${displayLabel}\\b`).test(text)) {
                 score += 3;
             }
+            if (displayLabel && new RegExp(`^\\s*${displayLabel}\\s*[.)]\\s+`).test(text)) {
+                score += 8;
+            }
             if (normalizedQuestionNumber && new RegExp(`\\b${normalizedQuestionNumber}\\b`).test(text)) {
                 score += 2;
+            }
+            if (displayLabel && new RegExp(`^\\s*(?!${displayLabel}\\b)\\d{1,3}\\s*[.)]\\s+`).test(text)) {
+                score -= 8;
+            }
+            const displayNumbers = uniqueList(Array.from(text.matchAll(/\b(?:[1-9]|[1-3][0-9]|40)\b/g)).map((item) => item[0]));
+            const otherDisplayNumbers = displayNumbers.filter((value) => value !== displayLabel && value !== normalizedQuestionNumber);
+            score -= Math.min(12, otherDisplayNumbers.length * 2);
+            if (text.length > 700) {
+                score -= 4;
             }
             if (/which|what|how|why|是否|哪|完成|匹配|包含|同义|正确|错误/i.test(text)) {
                 score += 2;
@@ -1260,6 +1509,7 @@ class ReadingCoachService {
             return [
                 `[Context ${index + 1}]`,
                 `chunkType: ${chunk.chunkType}`,
+                `source: ${chunk.chunkType === CHUNK_TYPE.PASSAGE ? 'original_reading_passage_text' : 'derived_question_context'}`,
                 `questionNumbers: ${questionNumbers}`,
                 `paragraphLabels: ${paragraphLabels}`,
                 chunk.content

@@ -16,6 +16,7 @@ python3 developer/tests/e2e/suite_practice_flow.py
 
 写作主链路现在应验证：
 
+- `npm run build:server`
 - `npm run build:writing`
 - `node developer/tests/ci/writing_contract_probe.cjs`
 - `node developer/tests/ci/writing_ipc_serialize_contract.cjs`
@@ -26,12 +27,13 @@ python3 developer/tests/e2e/suite_practice_flow.py
 
 - Compose / Evaluating / Result 全链路通过本地 HTTP API 工作
 - 评测事件通过 SSE 推送，不再依赖 preload 暴露业务事件 API
-- `electron/services/*.js` 中的包装器正确指向 `server/src/lib/**` 内核
+- `electron/services/*.js` 中的包装器正确指向 `server/dist/**` 运行时产物
 
 ## 阅读专项
 
 阅读主链路现在应验证：
 
+- `npm run build:server`
 - `node developer/tests/js/readingAnalysisService.test.js`
 - `node developer/tests/js/unifiedReadingPage.test.js`
 

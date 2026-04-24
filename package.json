@@ -5,13 +5,14 @@
   "private": true,
   "main": "electron/main.js",
   "scripts": {
+    "build:server": "rm -rf server/dist && tsc -p server/tsconfig.json",
     "prepare:writing": "npm --prefix apps/writing-vue install --no-fund --no-audit",
     "build:writing": "npm run prepare:writing && npm --prefix apps/writing-vue run build",
-    "start": "npm run build:writing && electron .",
-    "start:electron": "electron .",
+    "start": "npm run build:server && npm run build:writing && electron .",
+    "start:electron": "npm run build:server && electron .",
     "postinstall": "electron-builder install-app-deps",
-    "release:build": "node scripts/release-shell-build.mjs",
-    "release:publish": "node scripts/release-shell-build.mjs --publish-on-tag",
+    "release:build": "npm run build:server && node scripts/release-shell-build.mjs",
+    "release:publish": "npm run build:server && node scripts/release-shell-build.mjs --publish-on-tag",
     "build:resource-release": "node scripts/build-resource-release.mjs",
     "check:update-syntax": "node scripts/check-update-syntax.mjs",
     "verify:release-client-smoke": "node developer/tests/update/release-client-smoke.cjs",
@@ -44,7 +45,7 @@
     },
     "files": [
       "electron/**/*",
-      "server/**/*",
+      "server/dist/**/*",
       "dist/writing/**/*",
       "index.html",
       "css/**/*",
@@ -188,20 +189,19 @@
     }
   },
   "dependencies": {
-    "@types/node": "^25.6.0",
     "adm-zip": "^0.5.16",
     "better-sqlite3": "^12.6.2",
     "electron-updater": "^6.3.9",
-    "express": "^4.21.2",
     "fastify": "^5.8.5",
     "semver": "^7.6.3",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/node": "^25.6.0",
     "@electron/notarize": "^2.2.1",
     "electron": "^31.7.7",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "express": "^4.21.2",
+    "typescript": "^6.0.3"
   }
 }

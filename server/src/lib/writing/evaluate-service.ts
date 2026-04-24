@@ -6,7 +6,7 @@ const PromptService = require('../../../../electron/services/prompt.service.js')
 const EssayService = require('../../../../electron/services/essay.service.js');
 const TopicService = require('../../../../electron/services/topic.service.js');
 const SettingsService = require('../../../../electron/services/settings.service.js');
-const { ProviderOrchestratorService } = require('../shared/provider-orchestrator.ts');
+const { ProviderOrchestratorService } = require('../shared/provider-orchestrator.js');
 const {
     buildFallbackReviewEvaluation,
     buildReviewResponseFormat,
@@ -18,7 +18,7 @@ const {
     validateEvaluation,
     validateReviewStage,
     validateScoringStage
-} = require('./contracts.ts');
+} = require('./contracts.js');
 const logger = require('../../../../electron/utils/logger.js');
 
 /**
