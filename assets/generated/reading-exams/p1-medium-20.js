@@ -10,9 +10,9 @@
     "title": "The Development of Plastics 塑料的发展史",
     "category": "P1",
     "frequency": "medium",
-    "pdfFilename": "116. P1 - The Development of Plastics 塑料的发展史【次】.pdf",
-    "legacyPath": "睡着过项目组/2. 所有文章(11.20)[192篇]/116. P1 - The Development of Plastics 塑料的发展史【次】/",
-    "legacyFilename": "116. P1 - The Development of Plastics 塑料的发展史【次】.html",
+    "pdfFilename": "116. P1 - The Development of Plastics 塑料的发展史.pdf",
+    "legacyPath": "ReadingPractice/PDF/",
+    "legacyFilename": "116. P1 - The Development of Plastics 塑料的发展史.pdf",
     "questionIntroHtml": "<h3>Questions</h3>"
   },
   "passage": {
@@ -70,15 +70,17 @@
     "q13": "TRUE"
   },
   "sourceRefs": {
-    "shuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/116. P1 - The Development of Plastics 塑料的发展史【次】/116. P1 - The Development of Plastics 塑料的发展史【次】.html",
-    "shuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/116. P1 - The Development of Plastics 塑料的发展史【次】/116. P1 - The Development of Plastics 塑料的发展史【次】.pdf",
+    "sourcePdf": "ReadingPractice/PDF/116. P1 - The Development of Plastics 塑料的发展史.pdf",
+    "shuiPdf": "ReadingPractice/PDF/116. P1 - The Development of Plastics 塑料的发展史.pdf",
+    "previousShuiHtml": "睡着过项目组/2. 所有文章(11.20)[192篇]/116. P1 - The Development of Plastics 塑料的发展史【次】/116. P1 - The Development of Plastics 塑料的发展史【次】.html",
+    "previousShuiPdf": "睡着过项目组/2. 所有文章(11.20)[192篇]/116. P1 - The Development of Plastics 塑料的发展史【次】/116. P1 - The Development of Plastics 塑料的发展史【次】.pdf",
     "ieltsHtml": "IELTS/P1/The Development of Plastics.html"
   },
   "audit": {
-    "matchStatus": "matched",
+    "matchStatus": "pdf_resynced",
     "matchConfidence": 1,
-    "verifiedAt": "2026-03-08T16:24:30.545Z",
-    "notes": "signature:radio,text,textarea,dragdrop,table"
+    "verifiedAt": "2026-04-30T15:35:00.000Z",
+    "notes": "Resynced from ReadingPractice/PDF/116. P1 - The Development of Plastics 塑料的发展史.pdf using pypdf-backed pdftotext extraction and visual first-page thumbnail check."
   },
   "questionOrder": [
     "q1",
