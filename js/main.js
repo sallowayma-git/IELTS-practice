@@ -461,7 +461,6 @@ function startPracticeRecordsSyncInBackground(trigger = 'default') {
 }
 
 async function listCanonicalPracticeRecords() {
-    const practiceKey = ['practice', 'records'].join('_');
     const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
     if (practiceCoreStore && typeof practiceCoreStore.listPracticeRecords === 'function') {
         return await practiceCoreStore.listPracticeRecords();
@@ -472,17 +471,11 @@ async function listCanonicalPracticeRecords() {
         return Array.isArray(records) ? records : [];
     }
 
-    if (window.storage && typeof window.storage.get === 'function') {
-        const records = await window.storage.get(practiceKey, []);
-        return Array.isArray(records) ? records : [];
-    }
-
     return [];
 }
 
 async function replaceCanonicalPracticeRecords(records) {
     const finalRecords = Array.isArray(records) ? records : [];
-    const practiceKey = ['practice', 'records'].join('_');
     const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
 
     if (practiceCoreStore && typeof practiceCoreStore.replacePracticeRecords === 'function') {
@@ -495,17 +488,7 @@ async function replaceCanonicalPracticeRecords(records) {
         return true;
     }
 
-    if (window.storage && typeof window.storage.writePersistentValue === 'function') {
-        await window.storage.writePersistentValue(practiceKey, finalRecords);
-        return true;
-    }
-
-    if (window.storage && typeof window.storage.set === 'function') {
-        await window.storage.set(practiceKey, finalRecords);
-        return true;
-    }
-
-    throw new Error('练习记录存储未就绪');
+    throw new Error('PracticeCore.store.replacePracticeRecords is required');
 }
 
 function syncLegacyPracticeRecordArtifacts(records) {
@@ -1285,11 +1268,7 @@ async function savePracticeRecordFallback(examId, realData) {
         } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
             await window.simpleStorageWrapper.addPracticeRecord(record);
         } else {
-            const records = await storage.get('practice_records', []);
-            const arr = Array.isArray(records) ? records : [];
-            arr.push(record);
-            const practiceKey = ['practice', 'records'].join('_');
-            await storage.set(practiceKey, arr);
+            throw new Error('PracticeCore.store.savePracticeRecord is required');
         }
         console.log('[Fallback] 真实数据已保存到 practice_records');
     } catch (e) {
@@ -2861,9 +2840,8 @@ async function clearCache() {
             await window.PracticeCore.store.replacePracticeRecords([]);
         } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
             await window.simpleStorageWrapper.savePracticeRecords([]);
-        } else if (window.storage && typeof storage.set === 'function') {
-            const practiceKey = ['practice', 'records'].join('_');
-            await storage.set(practiceKey, []);
+        } else {
+            throw new Error('PracticeCore.store.replacePracticeRecords is required');
         }
     } catch (error) {
         console.warn('[clearCache] failed to clear managed storage:', error);

@@ -386,6 +386,73 @@ async function testStoreWritePath(PracticeCore, practiceState, metaState) {
     });
 }
 
+async function testCanonicalRecordShape(PracticeCore) {
+    const standardized = PracticeCore.contracts.standardizeRecord({
+        id: 'record-canonical-shape',
+        examId: 'reading-shape',
+        sessionId: 'session-shape',
+        title: 'Canonical Shape',
+        type: 'reading',
+        score: 1,
+        totalQuestions: 2,
+        correctAnswers: 1,
+        accuracy: 0.5,
+        answers: { q1: 'A', q2: 'B' },
+        correctAnswerMap: { q1: 'A', q2: 'C' },
+        metadata: {
+            category: 'P2',
+            frequency: 'high',
+            markedQuestions: ['q2']
+        },
+        realData: {
+            readingCoachSnapshot: { answer: 'coach snapshot' },
+            readingCoachTranscript: [{ role: 'assistant', text: 'coach turn' }]
+        },
+        resultSnapshot: {
+            metadata: {
+                highlights: [{ scope: 'passage', text: 'anchor clue' }]
+            }
+        }
+    });
+
+    assert.deepStrictEqual(standardized.markedQuestions, ['q2'], '顶层 markedQuestions 应被标准化');
+    assert.strictEqual(standardized.highlights.length, 1, '顶层 highlights 应从 resultSnapshot.metadata 回填');
+    assert.strictEqual(standardized.readingCoachSnapshot.answer, 'coach snapshot', 'readingCoachSnapshot 应提升到顶层');
+    assert.strictEqual(standardized.resultSnapshot.metadata.highlights.length, 1, 'resultSnapshot.metadata.highlights 应与顶层同步');
+    assert.deepStrictEqual(standardized.resultSnapshot.metadata.markedQuestions, ['q2'], 'resultSnapshot.metadata.markedQuestions 应与顶层同步');
+    assert.strictEqual(standardized.resultSnapshot.readingCoachSnapshot.answer, 'coach snapshot', 'resultSnapshot 应携带教练快照');
+}
+
+async function testReadPracticeRecordsSelfHeal(PracticeCore, practiceState) {
+    practiceState.splice(0, practiceState.length, {
+        id: 'legacy-self-heal',
+        examId: 'reading-self-heal',
+        title: 'Legacy Self Heal',
+        type: 'reading',
+        score: 1,
+        totalQuestions: 2,
+        correctAnswers: 1,
+        accuracy: 0.5,
+        answers: { q1: 'A', q2: 'B' },
+        correctAnswerMap: { q1: 'A', q2: 'C' },
+        metadata: {
+            category: 'P1',
+            frequency: 'high',
+            markedQuestions: ['q2'],
+            highlights: [{ scope: 'questions', text: 'legacy clue' }]
+        },
+        realData: {
+            readingCoachSnapshot: { answer: 'legacy snapshot' }
+        }
+    });
+
+    const records = await PracticeCore.store.listPracticeRecords();
+    assert.strictEqual(records.length, 1, 'self-heal 后仍应保留一条记录');
+    assert.strictEqual(records[0].resultSnapshot.metadata.highlights.length, 1, '读取时应补齐 canonical resultSnapshot');
+    assert.strictEqual(practiceState[0].resultSnapshot.metadata.highlights.length, 1, 'self-heal 应写回仓库');
+    assert.deepStrictEqual(practiceState[0].markedQuestions, ['q2'], 'self-heal 应写回顶层 markedQuestions');
+}
+
 async function main() {
     const { repositories, practiceState, metaState } = createRepositoryHarness();
 
@@ -422,6 +489,8 @@ async function main() {
         await testChangedAnswerCountUsesChangedQuestionCount(PracticeCore);
         await testInteractionDensityUsesPerMinuteScale(PracticeCore);
         await testStoreWritePath(PracticeCore, practiceState, metaState);
+        await testCanonicalRecordShape(PracticeCore);
+        await testReadPracticeRecordsSelfHeal(PracticeCore, practiceState);
 
         const summary = {
             status: 'pass',

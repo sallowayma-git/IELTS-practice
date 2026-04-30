@@ -134,10 +134,11 @@ function buildRouteInstruction({ routeDecision, contextRoute, routes, contextRou
 
     if (contextRoute === contextRoutes.REVIEW) {
         return [
-            '你是 IELTS 阅读复盘教练，必须优先基于给定上下文回答。',
-            '你必须先核对题干、用户答案、标准答案、官方解析/证据，再解释错因。',
-            '先指出错在什么，再说明证据在哪里，最后给下次更稳的判断规则。',
-            '如果证据不够，明确写入 missingContext，不要硬编诊断。'
+            '你是 IELTS 阅读错因洞察教练，目标不是讲题，而是帮助用户看见自己为什么会那样想。',
+            '必须先核对题干、用户答案、标准答案、官方解析/原文片段，但这些只作为诊断依据，不作为主要展示内容。',
+            '优先分析用户的思考偏差：他可能抓住了哪个词、忽略了哪个限制、被哪个干扰项诱导、在哪一步停止了核对。',
+            '不要机械复述原文、不要搬运官方解析、不要逐题输出“原文说/正确答案是”的讲解稿。',
+            '如果证据不够，明确写入 missingContext；但仍可基于题型、用户答案和正确答案给出低置信度的思维路径假设。'
         ].join('\n');
     }
 
@@ -162,14 +163,20 @@ function buildResponseInstruction({ contextRoute, contextRoutes } = {}) {
         return [
             '输出必须是 JSON 对象，禁止 markdown 代码块。',
             'JSON 字段必须为：answer, answerSections, followUps, confidence, missingContext, reviewOverall, reviewQuestionAnalyses。',
-            'answerSections.type 只允许：direct_answer, reasoning, evidence, next_step。',
-            'reviewOverall 必须给整组诊断：primaryWeakness, patternSummary, teachingPlan。',
+            'answerSections.type 只允许：direct_answer, reasoning, next_step；review 场景禁止使用 evidence 类型当主输出。',
+            'answer 必须是 2-4 句总评：先说整组易错模式，再说用户可能的思维漏洞，最后给一个思考方向；不要列答案讲解。',
+            'answerSections 只写错因洞察和思考引导，不写原文翻译、段落复述、官方解析复述。',
+            'reviewOverall 必须给整组诊断：primaryWeakness 是一句核心易错点，patternSummary 是错题之间的共同思维模式，teachingPlan 是下一次做题的思考流程。',
             'reviewQuestionAnalyses 必须逐题说明：questionNumber, likelyMistake, whyUserChoseWrong, whyCorrectAnswerWorks, whyWrongAnswerFails, nextRule。',
-            '先诊断后教学；整组易错模式归纳优先于逐题流水账。',
-            '不要求每题都引用原文证据；但如果某题同时缺少 original_reading_passage_text 和 officialExplanation，必须在 missingContext 里说明该题证据不足。',
+            'whyUserChoseWrong 要重点推测用户为什么会被错误答案吸引，例如只看前半句、只匹配关键词、忽略限定词、把未提及当否定、被干扰选项的局部真实信息误导。',
+            'whyCorrectAnswerWorks 和 whyWrongAnswerFails 只用于解释认知差距，不要写成完整题目讲解；每项不超过 2 句。',
+            '先诊断后教学；整组易错模式归纳优先于逐题流水账；逐题分析只服务于归纳用户的长期易错点。',
+            '不要求每题引用原文证据；如需引用，最多引用一个很短的关键短语用于说明“用户漏看/误读的差距”。',
+            '如果某题同时缺少 original_reading_passage_text 和 officialExplanation，必须在 missingContext 里说明该题证据不足。',
             '易错点先用一句自然语言总结；如果能落到常见阅读错误体系，就在表述中自然带出，例如审题、定位、同义替换、过度推断、TFNG/YNNG 判定混淆。',
             'confidence 只能是 high / medium / low。',
-            '只能使用提供的 context chunks、reviewTargets、selected context 和 attempt context；禁止虚构证据。'
+            '只能使用提供的 context chunks、reviewTargets、selected context 和 attempt context；禁止虚构证据。',
+            'Context Chunks 和 officialExplanation 是诊断材料，不是最终答案模板；不得大段复制。'
         ].join('\n');
     }
     return [
@@ -327,6 +334,9 @@ function buildReadingCoachPrompt({ payload, routeDecision, intent, contextRoute,
 
 function buildCoachResponseFormat({ contextRoute, contextRoutes } = {}) {
     const isReview = contextRoute === contextRoutes?.REVIEW;
+    const sectionTypes = isReview
+        ? ['direct_answer', 'reasoning', 'next_step']
+        : ['direct_answer', 'reasoning', 'evidence', 'next_step'];
     const baseProperties = {
         answer: { type: 'string' },
         answerSections: {
@@ -339,7 +349,7 @@ function buildCoachResponseFormat({ contextRoute, contextRoutes } = {}) {
                 properties: {
                     type: {
                         type: 'string',
-                        enum: ['direct_answer', 'reasoning', 'evidence', 'next_step']
+                        enum: sectionTypes
                     },
                     text: { type: 'string' }
                 },

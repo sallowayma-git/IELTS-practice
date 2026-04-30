@@ -652,8 +652,7 @@ class DataBackupManager {
             } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
                 await window.simpleStorageWrapper.savePracticeRecords(newRecords);
             } else {
-                const practiceKey = ['practice', 'records'].join('_');
-                await storage.set(practiceKey, newRecords);
+                throw new Error('PracticeCore.store.replacePracticeRecords is required');
             }
             return {
                 importedCount: newRecords.length,
@@ -716,8 +715,7 @@ class DataBackupManager {
         } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
             await window.simpleStorageWrapper.savePracticeRecords(mergedRecords);
         } else {
-            const practiceKey = ['practice', 'records'].join('_');
-            await storage.set(practiceKey, mergedRecords);
+            throw new Error('PracticeCore.store.replacePracticeRecords is required');
         }
 
         return {
@@ -1225,8 +1223,7 @@ class DataBackupManager {
             } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
                 await window.simpleStorageWrapper.savePracticeRecords([]);
             } else {
-                const practiceKey = ['practice', 'records'].join('_');
-                await storage.set(practiceKey, []);
+                throw new Error('PracticeCore.store.replacePracticeRecords is required');
             }
             clearedItems.push('practice_records');
         }

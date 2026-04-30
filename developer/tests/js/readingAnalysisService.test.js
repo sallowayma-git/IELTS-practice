@@ -311,7 +311,7 @@ async function testReadingKernelModulesKeepContracts() {
         wholeSetPatterns: ROUTER_FIXTURES.wholeSetPatterns,
         questionRefPatternGlobal: ROUTER_FIXTURES.questionRefPatternGlobal
     });
-    assert.strictEqual(intent.kind, INTENTS.WHOLE_SET_OR_REVIEW, 'submitted wrongQuestions 应识别为整组复盘');
+    assert.strictEqual(intent.kind, INTENTS.WHOLE_SET_OR_REVIEW, '显式复盘文案应识别为整组复盘');
     assert.strictEqual(resolveReadingContextRoute(routePayload, intent, {
         contextRoutes: CONTEXT_ROUTES,
         intents: INTENTS
@@ -359,6 +359,8 @@ async function testReadingKernelModulesKeepContracts() {
     assert.ok(joined.includes('整组易错模式归纳优先于逐题流水账'), 'review prompt 必须优先要求整组易错模式归纳');
     assert.ok(joined.includes('reviewOverall'), 'review prompt 必须要求总评模块');
     assert.ok(joined.includes('reviewQuestionAnalyses'), 'review prompt 必须要求逐题错因推理');
+    assert.ok(joined.includes('目标不是讲题，而是帮助用户看见自己为什么会那样想'), 'review prompt 必须定位为错因洞察而不是题目讲解');
+    assert.ok(joined.includes('不得大段复制'), 'review prompt 必须禁止搬运原文或官方解析');
 
     const reviewFormat = buildCoachResponseFormat({
         contextRoute: CONTEXT_ROUTES.REVIEW,
@@ -367,6 +369,8 @@ async function testReadingKernelModulesKeepContracts() {
     const required = reviewFormat.json_schema.schema.required;
     assert.ok(required.includes('reviewOverall'), 'review schema 必须强制总评模块');
     assert.ok(required.includes('reviewQuestionAnalyses'), 'review schema 必须强制逐题分析模块');
+    const sectionTypeEnum = reviewFormat.json_schema.schema.properties.answerSections.items.properties.type.enum;
+    assert.ok(!sectionTypeEnum.includes('evidence'), 'review schema 不应允许 evidence 段作为主输出');
 
     const parsed = normalizeReadingCoachModelResponse('```json\n{"answer":"ok","answerSections":[{"type":"direct_answer","text":"ok"}],"followUps":[],"confidence":"high","missingContext":[]}\n```');
     assert.strictEqual(parsed.confidence, 'high', 'response normalizer 应解析 fenced JSON');
@@ -397,6 +401,78 @@ async function testReadingKernelModulesKeepContracts() {
     assert.ok(parsedReview.missingContext[0].includes('缺少原文证据与官方解析'), 'normalizer 应保留证据不足披露');
 }
 
+async function testSubmittedSingleQuestionQuestionStaysGrounded() {
+    const routePayload = {
+        query: '第 27 题为什么我选 A 错了？证据在哪一段？',
+        action: 'chat',
+        promptKind: 'freeform',
+        selectedText: '',
+        focusQuestionNumbers: ['27'],
+        attemptContext: {
+            submitted: true,
+            wrongQuestions: ['27'],
+            selectedAnswers: { 27: 'A' }
+        }
+    };
+    const route = classifyReadingRoute(routePayload, {
+        routes: ROUTES,
+        socialPatterns: ROUTER_FIXTURES.socialPatterns,
+        weatherTimePatterns: ROUTER_FIXTURES.weatherTimePatterns,
+        ieltsGeneralPatterns: ROUTER_FIXTURES.ieltsGeneralPatterns,
+        pageGroundedHints: ROUTER_FIXTURES.pageGroundedHints
+    });
+    const intent = classifyReadingIntent(routePayload, route.route, {
+        routes: ROUTES,
+        intents: INTENTS,
+        socialPatterns: ROUTER_FIXTURES.socialPatterns,
+        wholeSetPatterns: ROUTER_FIXTURES.wholeSetPatterns,
+        questionRefPatternGlobal: ROUTER_FIXTURES.questionRefPatternGlobal
+    });
+    const contextRoute = resolveReadingContextRoute(routePayload, intent, {
+        contextRoutes: CONTEXT_ROUTES,
+        intents: INTENTS
+    });
+
+    assert.strictEqual(route.route, ROUTES.PAGE_GROUNDED, '单题错因问题必须进入页面上下文路由');
+    assert.strictEqual(intent.kind, INTENTS.GROUNDED_QUESTION, '单题错因问题不应被打到整组复盘');
+    assert.strictEqual(contextRoute, CONTEXT_ROUTES.TUTOR, '单题错因问题必须走 grounded tutor');
+}
+
+async function testAnalyzeMistakeActionWithSpecificQuestionStaysGrounded() {
+    const routePayload = {
+        query: '帮我分析第 5 题为什么错了',
+        action: 'analyze_mistake',
+        promptKind: 'preset',
+        selectedText: '',
+        focusQuestionNumbers: ['5'],
+        attemptContext: {
+            submitted: true,
+            wrongQuestions: ['5'],
+            selectedAnswers: { 5: 'C' }
+        }
+    };
+    const route = classifyReadingRoute(routePayload, {
+        routes: ROUTES,
+        socialPatterns: ROUTER_FIXTURES.socialPatterns,
+        weatherTimePatterns: ROUTER_FIXTURES.weatherTimePatterns,
+        ieltsGeneralPatterns: ROUTER_FIXTURES.ieltsGeneralPatterns,
+        pageGroundedHints: ROUTER_FIXTURES.pageGroundedHints
+    });
+    const intent = classifyReadingIntent(routePayload, route.route, {
+        routes: ROUTES,
+        intents: INTENTS,
+        socialPatterns: ROUTER_FIXTURES.socialPatterns,
+        wholeSetPatterns: ROUTER_FIXTURES.wholeSetPatterns,
+        questionRefPatternGlobal: ROUTER_FIXTURES.questionRefPatternGlobal
+    });
+
+    assert.strictEqual(intent.kind, INTENTS.GROUNDED_QUESTION, '特定题号的 analyze_mistake 不应落入整组 review');
+    assert.strictEqual(resolveReadingContextRoute(routePayload, intent, {
+        contextRoutes: CONTEXT_ROUTES,
+        intents: INTENTS
+    }), CONTEXT_ROUTES.TUTOR, '特定题号的 analyze_mistake 必须走 tutor');
+}
+
 async function testReviewRetrievalInjectsOriginalPassageChunks() {
     const service = new ReadingCoachService({});
     let capturedMessages = null;
@@ -408,7 +484,7 @@ async function testReviewRetrievalInjectsOriginalPassageChunks() {
                     answer: '你先看第一段主旨，再对照原文里的 Oscar 和 CGI 转折。',
                     answerSections: [
                         { type: 'direct_answer', text: '你先看第一段主旨，再对照原文里的 Oscar 和 CGI 转折。' },
-                        { type: 'evidence', text: '原文段落已经注入，不要只盯解析。' }
+                        { type: 'reasoning', text: '原文段落已经注入，不要只盯解析。' }
                     ],
                     followUps: ['这题证据在哪段', '我下次怎么排除'],
                     confidence: 'high',
@@ -606,6 +682,8 @@ async function main() {
         await testDisplayQuestionNumbersStayAlignedWithReviewRetrieval();
         await testGroupedQuestionExtractionDoesNotLeakNeighborQuestions();
         await testReadingKernelModulesKeepContracts();
+        await testSubmittedSingleQuestionQuestionStaysGrounded();
+        await testAnalyzeMistakeActionWithSpecificQuestionStaysGrounded();
         await testReviewRetrievalInjectsOriginalPassageChunks();
         await testReviewFallsBackToWholePassageWhenAttemptContextIsThin();
         await testReviewMapsInternalQuestionIdsToDisplayQuestionNumbers();

@@ -126,6 +126,7 @@ async function main() {
 
     const context = vm.createContext(sandbox);
 
+    loadScript('js/core/practiceCore.js', context);
     loadScript('js/app/examSessionMixin.js', context);
     loadScript('js/app/suitePracticeMixin.js', context);
 
@@ -322,7 +323,7 @@ async function main() {
     assert.strictEqual(handledP3, true, 'P3 完成后应顺利收尾');
     assert.strictEqual(app.currentSuiteSession, null, '套题会话应在完成后被清理');
 
-    const practiceRecords = await storage.get('practice_records', []);
+    const practiceRecords = await windowStub.PracticeCore.store.listPracticeRecords();
     assert.strictEqual(practiceRecords.length, 1, '应只生成一条套题练习记录');
     assert.strictEqual(practiceRecords[0].suiteEntries.length, 3, '套题记录应包含三篇文章');
 

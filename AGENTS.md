@@ -1,7 +1,7 @@
 # IELTS Practice Repository Guide
 
 ## Component map
-- **`index.html`** – main entry point for the browser-only IELTS practice app.
+- **`index.html`** – main renderer entry for the packaged Electron IELTS client.
 - **`js/`** – application logic (state management, recommendation engine, UI controllers).  Module naming follows feature-based folders.
 - **`css/`** – theme and layout styles for all public pages.
 - **`templates/`** – HTML shells for alternative themes and experimental layouts.
@@ -86,4 +86,4 @@ Before starting any task, carefully examine the following five layers of questio
 
 Adhere to this playbook for every directory under the repository root.
 
-The operation/debugging must be compatible with the `file://` protocol.
+The product target is the packaged Electron desktop client. Prefer solutions that align with Electron renderer/main/server architecture rather than preserving legacy `file://` compatibility hacks.

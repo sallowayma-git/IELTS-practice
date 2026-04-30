@@ -218,15 +218,7 @@
         if (wrapper) {
             return wrapper.addPracticeRecord(practiceRecord);
         }
-        let records = await storage.get(PRACTICE_RECORDS_STORAGE_KEY, []);
-        if (!Array.isArray(records)) {
-            records = [];
-        }
-        records.unshift(practiceRecord);
-        if (Number.isInteger(maxLegacyRecords) && maxLegacyRecords > 0 && records.length > maxLegacyRecords) {
-            records.splice(maxLegacyRecords);
-        }
-        return storage.set(PRACTICE_RECORDS_STORAGE_KEY, records);
+        throw new Error('PracticeCore.store.savePracticeRecord is required');
     }
 
     async function listSavedPracticeRecords() {
@@ -2711,6 +2703,15 @@
                 const mergedMetadata = Object.assign({}, recordMetadata, entryMetadata, {
                     examId: entryExamId
                 });
+                const resolvedHighlights = Array.isArray(entry.highlights)
+                    ? entry.highlights.slice()
+                    : (Array.isArray(entryMetadata.highlights)
+                        ? entryMetadata.highlights.slice()
+                        : (Array.isArray(entry.realData?.highlights)
+                            ? entry.realData.highlights.slice()
+                            : (Array.isArray(record.highlights)
+                                ? record.highlights.slice()
+                                : (Array.isArray(recordMetadata.highlights) ? recordMetadata.highlights.slice() : []))));
                 const built = {
                     examId: String(entryExamId),
                     title: entry.title
@@ -2732,7 +2733,10 @@
                         : (Array.isArray(entryMetadata.markedQuestions)
                             ? entryMetadata.markedQuestions.slice()
                             : (Array.isArray(recordMetadata.markedQuestions) ? recordMetadata.markedQuestions.slice() : [])),
-                    metadata: mergedMetadata
+                    highlights: resolvedHighlights,
+                    metadata: Object.assign({}, mergedMetadata, {
+                        highlights: resolvedHighlights
+                    })
                 };
                 built.allQuestionIds = this._collectReplayQuestionIds(built);
                 builtEntries.push(built);

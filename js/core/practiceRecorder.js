@@ -842,6 +842,12 @@ class PracticeRecorder {
                 percentage,
                 duration,
                 answers: answerList,
+                highlights: this.normalizeHighlightRecords(
+                    payload.highlights
+                    || payload.metadata?.highlights
+                    || payload.realData?.highlights
+                    || []
+                ),
                 answerMap,
                 correctAnswerMap,
                 answerDetails,
@@ -858,6 +864,12 @@ class PracticeRecorder {
                 metadata: payload.metadata || {},
                 source: scoreInfo.source || payload.pageType || 'practice_page',
                 realData: Object.assign({}, payload.realData || {}, {
+                    highlights: this.normalizeHighlightRecords(
+                        payload.highlights
+                        || payload.metadata?.highlights
+                        || payload.realData?.highlights
+                        || []
+                    ),
                     answers: answerMap,
                     correctAnswers: correctAnswerMap,
                     answerComparison: normalizedComparison,
@@ -996,6 +1008,25 @@ class PracticeRecorder {
             });
         }
         return map;
+    }
+
+    normalizeHighlightRecords(records = []) {
+        if (!Array.isArray(records)) {
+            return [];
+        }
+        return records
+            .map((entry) => {
+                if (!entry || typeof entry !== 'object') {
+                    return null;
+                }
+                try {
+                    const cloned = JSON.parse(JSON.stringify(entry));
+                    return cloned && String(cloned.text || '').trim() ? cloned : null;
+                } catch (_) {
+                    return null;
+                }
+            })
+            .filter(Boolean);
     }
 
     isNoiseKey(key) {
@@ -1456,6 +1487,12 @@ class PracticeRecorder {
         const normalizedComparison = this.normalizeAnswerComparison(
             results?.answerComparison || results?.realData?.answerComparison || null
         );
+        const normalizedHighlights = this.normalizeHighlightRecords(
+            results?.highlights
+            || results?.metadata?.highlights
+            || results?.realData?.highlights
+            || []
+        );
 
         const durationMs = (
             resolvedStartTime
@@ -1507,6 +1544,7 @@ class PracticeRecorder {
             answerList,
             answerDetails,
             correctAnswerMap,
+            highlights: normalizedHighlights,
             scoreInfo,
             questionTypePerformance: analysisArtifacts.questionTypePerformance,
             singleAttemptAnalysisInput: analysisArtifacts.singleAttemptAnalysisInput,
@@ -1518,6 +1556,7 @@ class PracticeRecorder {
             suiteSessionId,
             createdAt: resolvedEndTime,
             realData: Object.assign({}, results?.realData || {}, {
+                highlights: normalizedHighlights,
                 answers: answerMap,
                 correctAnswers: correctAnswerMap,
                 scoreInfo,
@@ -1815,15 +1854,19 @@ class PracticeRecorder {
     async savePracticeRecord(record) {
         const maxRetries = 3;
         const storageReadyRecord = this.prepareRecordForStorage(record);
+        const practiceCoreStore = this.getPracticeCoreStore();
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 console.log(`[PracticeRecorder] 开始保存练习记录(尝试 ${attempt}/${maxRetries}):`, record.id);
 
-                if (this.scoreStorage && typeof this.scoreStorage.savePracticeRecord === 'function') {
-                    const savedRawRecord = await this.scoreStorage.savePracticeRecord(storageReadyRecord);
+                if (practiceCoreStore && typeof practiceCoreStore.savePracticeRecord === 'function') {
+                    const savedRawRecord = await practiceCoreStore.savePracticeRecord(storageReadyRecord, {
+                        currentVersion: this.scoreStorage && this.scoreStorage.currentVersion,
+                        maxRecords: this.scoreStorage && this.scoreStorage.maxRecords
+                    });
                     const savedRecord = this.restoreRecordAnswerState(savedRawRecord, record);
-                    console.log(`[PracticeRecorder] ScoreStorage保存成功: ${savedRecord.id}`);
+                    console.log(`[PracticeRecorder] PracticeCore保存成功: ${savedRecord.id}`);
 
                     const verified = await this.verifyRecordSaved(savedRecord.id);
                     if (!verified) {
@@ -1834,8 +1877,15 @@ class PracticeRecorder {
                     return savedRecord;
                 }
 
-                console.warn('[PracticeRecorder] ScoreStorage不可用，使用降级保存');
-                throw new Error('ScoreStorage not available');
+                if (this.scoreStorage && typeof this.scoreStorage.savePracticeRecord === 'function') {
+                    const savedRawRecord = await this.scoreStorage.savePracticeRecord(storageReadyRecord);
+                    const savedRecord = this.restoreRecordAnswerState(savedRawRecord, record);
+                    console.log(`[PracticeRecorder] ScoreStorage兼容保存成功: ${savedRecord.id}`);
+                    return savedRecord;
+                }
+
+                console.warn('[PracticeRecorder] PracticeCore不可用，使用降级保存');
+                throw new Error('PracticeCore not available');
             } catch (error) {
                 console.error(
                     `[PracticeRecorder] ScoreStorage保存失败 (尝试 ${attempt}):`,
@@ -2022,6 +2072,12 @@ class PracticeRecorder {
             answerList: recordData.answerList || this.convertAnswerMapToArray(answerMap, correctAnswerMap),
             answerDetails,
             correctAnswerMap,
+            highlights: this.normalizeHighlightRecords(
+                recordData.highlights
+                || recordData.metadata?.highlights
+                || recordData.realData?.highlights
+                || []
+            ),
             scoreInfo: Object.assign({}, recordData.scoreInfo || {}, { details: answerDetails }),
             questionTypePerformance: analysisArtifacts.questionTypePerformance,
             singleAttemptAnalysisInput: analysisArtifacts.singleAttemptAnalysisInput,
@@ -2032,6 +2088,12 @@ class PracticeRecorder {
             realData: Object.assign({}, recordData.realData || {}, {
                 answers: answerMap,
                 correctAnswers: correctAnswerMap,
+                highlights: this.normalizeHighlightRecords(
+                    recordData.highlights
+                    || recordData.metadata?.highlights
+                    || recordData.realData?.highlights
+                    || []
+                ),
                 scoreInfo: Object.assign({}, recordData.realData?.scoreInfo || {}, { details: answerDetails }),
                 singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm || null,
                 readingCoachSnapshot: recordData.readingCoachSnapshot || recordData.realData?.readingCoachSnapshot || null,

@@ -437,14 +437,8 @@
         Promise.resolve(window.PracticeCore.store.replacePracticeRecords(records)).catch(() => {});
       } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
         Promise.resolve(window.simpleStorageWrapper.savePracticeRecords(records)).catch(() => {});
-      } else if (window.storage && typeof storage.set === 'function') {
-        try {
-          const practiceKey = ['practice', 'records'].join('_');
-          const maybeSet = storage.set(practiceKey, records);
-          if (maybeSet && typeof maybeSet.then === 'function') {
-            maybeSet.catch(() => {});
-          }
-        } catch (_) {}
+      } else {
+        try { console.warn('[hpCore] PracticeCore.store.replacePracticeRecords is required'); } catch (_) {}
       }
 
       try { window.hpCore && window.hpCore.showMessage && window.hpCore.showMessage('练习已完成，记录已同步', 'success'); } catch (_) {}

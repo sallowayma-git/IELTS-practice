@@ -946,20 +946,14 @@ class ScoreStorage {
     }
 
     /**
-     * 保存练习记录
+     * 兼容 facade: 真实写入统一转发到 PracticeCore.store.savePracticeRecord
      */
     async savePracticeRecord(recordData) {
         try {
             await this.ensureReady();
-            // 标准化记录格式
-            const standardizedRecord = this.standardizeRecord(recordData);
-            
-            // 验证记录数据
-            this.validateRecord(standardizedRecord);
-
             const practiceCoreStore = this.getPracticeCoreStore();
             if (practiceCoreStore && typeof practiceCoreStore.savePracticeRecord === 'function') {
-                const savedRecord = await practiceCoreStore.savePracticeRecord(standardizedRecord, {
+                const savedRecord = await practiceCoreStore.savePracticeRecord(recordData, {
                     currentVersion: this.currentVersion,
                     maxRecords: this.maxRecords
                 });
@@ -967,107 +961,7 @@ class ScoreStorage {
                 console.log('Practice record saved:', savedRecord.id);
                 return savedRecord;
             }
-            
-            // 获取现有记录
-            let records = await this.storage.get(this.storageKeys.practiceRecords, []);
-            records = Array.isArray(records) ? records.slice() : [];
-
-            const extractSessionId = (record) => {
-                if (!record || typeof record !== 'object') {
-                    return null;
-                }
-                const rawId =
-                    record.sessionId ||
-                    record.realData?.sessionId ||
-                    record.metadata?.sessionId ||
-                    null;
-                if (!rawId) {
-                    return null;
-                }
-                return String(rawId).trim() || null;
-            };
-
-            const dedupeBySession = (list, contextLabel) => {
-                const seen = new Set();
-                const cleaned = [];
-                list.forEach((item) => {
-                    const sessionId = extractSessionId(item);
-                    if (!sessionId) {
-                        cleaned.push(item);
-                        return;
-                    }
-                    if (seen.has(sessionId)) {
-                        try {
-                            console.warn(`[ScoreStorage] 移除了重复的练习记录 (sessionId=${sessionId}, id=${item?.id || 'unknown'})${contextLabel ? ' during ' + contextLabel : ''}`);
-                        } catch (_) {}
-                        return;
-                    }
-                    seen.add(sessionId);
-                    cleaned.push(item);
-                });
-                return cleaned;
-            };
-
-            let legacyPatched = false;
-            records = records.map(record => {
-                if (!this.needsRecordSanitization(record)) {
-                    return record;
-                }
-                legacyPatched = true;
-                return this.normalizeLegacyRecord(record);
-            });
-
-            if (legacyPatched) {
-                console.log('[ScoreStorage] 已自动修复历史练习记录字段缺失问题');
-            }
-
-            records = dedupeBySession(records, 'initial-pass');
-
-            // 检查是否已存在相同ID的记录
-            const existingIndex = records.findIndex(r => r.id === standardizedRecord.id);
-            if (existingIndex !== -1) {
-                console.log('更新现有记录:', standardizedRecord.id);
-                records[existingIndex] = standardizedRecord;
-            } else {
-                // 添加新记录到开头（保持最新记录在前）
-                records.unshift(standardizedRecord);
-            }
-
-            const newSessionId = extractSessionId(standardizedRecord);
-            if (newSessionId) {
-                records = records.filter((record, index) => {
-                    if (index === 0) {
-                        return true;
-                    }
-                    const sessionId = extractSessionId(record);
-                    if (sessionId && sessionId === newSessionId && record.id !== standardizedRecord.id) {
-                        try {
-                            console.warn(`[ScoreStorage] 移除了旧的 session 记录 (sessionId=${sessionId}, id=${record?.id || 'unknown'}) 以保留最新结果`);
-                        } catch (_) {}
-                        return false;
-                    }
-                    return true;
-                });
-            }
-
-            records = dedupeBySession(records, 'post-insert');
-
-            // 维护记录数量限制
-            if (records.length > this.maxRecords) {
-                records.splice(this.maxRecords);
-            }
-
-            // 保存记录
-            const saveResult = await this.storage.set(this.storageKeys.practiceRecords, records);
-            if (!saveResult) {
-                throw new Error('Failed to save records to storage');
-            }
-
-            // 更新用户统计
-            await this.updateUserStats(standardizedRecord);
-            
-            console.log('Practice record saved:', standardizedRecord.id);
-            return standardizedRecord;
+            throw new Error('PracticeCore.store.savePracticeRecord is required');
             
         } catch (error) {
             console.error('Failed to save practice record:', error);
@@ -1287,6 +1181,12 @@ class ScoreStorage {
         const normalizedComparison = comparisonSource && typeof comparisonSource === 'object'
             ? this.clonePlainObject(comparisonSource)
             : null;
+        const normalizedHighlights = this.normalizeHighlightRecords(
+            recordData.highlights
+            || recordData.metadata?.highlights
+            || recordData.realData?.highlights
+            || []
+        );
         const analysisArtifacts = this.buildSingleAttemptAnalysisArtifacts(recordData, {
             now,
             totalQuestions,
@@ -1320,6 +1220,7 @@ class ScoreStorage {
             answers: normalizedAnswers,
             answerDetails: detailSource || null,
             correctAnswerMap: normalizedCorrectMap || {},
+            highlights: normalizedHighlights,
             questionTypePerformance: analysisArtifacts.questionTypePerformance,
             singleAttemptAnalysisInput: analysisArtifacts.singleAttemptAnalysisInput,
             singleAttemptAnalysis: analysisArtifacts.singleAttemptAnalysis,
@@ -1346,6 +1247,9 @@ class ScoreStorage {
                     scoreInfo: Object.assign({}, recordData.realData.scoreInfo || {}, {
                         details: recordData.realData.scoreInfo?.details || detailSource || null
                     }),
+                    highlights: Array.isArray(recordData.realData.highlights)
+                        ? this.normalizeHighlightRecords(recordData.realData.highlights)
+                        : normalizedHighlights,
                     answerComparison: recordData.realData.answerComparison
                         ? this.clonePlainObject(recordData.realData.answerComparison)
                         : (normalizedComparison || null),
@@ -1358,6 +1262,7 @@ class ScoreStorage {
                         ? Object.assign(
                             {},
                             normalizedComparison ? { answerComparison: normalizedComparison } : {},
+                            normalizedHighlights.length ? { highlights: normalizedHighlights } : {},
                             recordData.readingCoachSnapshot ? { readingCoachSnapshot: recordData.readingCoachSnapshot } : {},
                             recordData.readingCoachTranscript ? { readingCoachTranscript: recordData.readingCoachTranscript } : {}
                         )
@@ -1416,6 +1321,15 @@ class ScoreStorage {
                 : entry;
         });
         return clone;
+    }
+
+    normalizeHighlightRecords(records = []) {
+        if (!Array.isArray(records)) {
+            return [];
+        }
+        return records
+            .map((entry) => this.clonePlainObject(entry))
+            .filter((entry) => entry && typeof entry === 'object' && String(entry.text || '').trim());
     }
 
     convertComparisonToMap(comparison, key = 'correctAnswer') {

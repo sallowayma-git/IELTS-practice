@@ -75,6 +75,27 @@ function extractQuestionRefs(query, questionRefPatternGlobal) {
     };
 }
 
+function hasWholeSetReviewSignal(query, wholeSetPatterns) {
+    const normalized = String(query || '').trim();
+    if (!normalized) {
+        return false;
+    }
+    return wholeSetPatterns.some((pattern) => pattern.test(normalized));
+}
+
+function hasQuestionLevelDiagnosticSignal(query) {
+    const normalized = String(query || '').trim();
+    if (!normalized) {
+        return false;
+    }
+    return [
+        /这道题|这题|当前题|当前这题|this\s+question|current\s+question/i,
+        /证据|定位|原文|依据|哪段|哪里|where|evidence|locat|support|paragraph/i,
+        /为什么.*(错|选)|错因|误选|为什么我|why.*wrong|why\s+did\s+i\s+choose|mistake/i,
+        /正确答案|correct\s+answer/i
+    ].some((pattern) => pattern.test(normalized));
+}
+
 function classifyReadingIntent(payload, route, {
     routes,
     intents,
@@ -83,6 +104,12 @@ function classifyReadingIntent(payload, route, {
     questionRefPatternGlobal
 }) {
     const query = payload.query;
+    const extracted = extractQuestionRefs(query, questionRefPatternGlobal);
+    const questionNumbers = uniqueList([...payload.focusQuestionNumbers, ...extracted.questionNumbers]);
+    const paragraphLabels = extracted.paragraphLabels;
+    const hasSpecificTargets = questionNumbers.length > 0 || paragraphLabels.length > 0;
+    const explicitWholeSetReview = hasWholeSetReviewSignal(query, wholeSetPatterns) && !hasSpecificTargets;
+    const questionLevelDiagnostic = hasQuestionLevelDiagnosticSignal(query);
 
     if (payload.action && ['translate', 'explain_selection', 'find_paraphrases', 'find_antonyms', 'extract_keywords', 'locate_evidence'].includes(payload.action) && payload.selectedText) {
         return {
@@ -93,12 +120,29 @@ function classifyReadingIntent(payload, route, {
         };
     }
 
-    if (payload.action && ['analyze_mistake', 'review_set', 'recommend_drills'].includes(payload.action)) {
+    if (payload.action === 'review_set' || payload.action === 'recommend_drills') {
         return {
             kind: intents.REVIEW_COACH_REQUEST,
             confidence: 0.92,
             questionNumbers: payload.focusQuestionNumbers.slice(),
             paragraphLabels: []
+        };
+    }
+
+    if (payload.action === 'analyze_mistake') {
+        if (hasSpecificTargets || questionLevelDiagnostic) {
+            return {
+                kind: intents.GROUNDED_QUESTION,
+                confidence: 0.9,
+                questionNumbers,
+                paragraphLabels
+            };
+        }
+        return {
+            kind: intents.REVIEW_COACH_REQUEST,
+            confidence: 0.88,
+            questionNumbers,
+            paragraphLabels
         };
     }
 
@@ -121,16 +165,8 @@ function classifyReadingIntent(payload, route, {
         };
     }
 
-    const extracted = extractQuestionRefs(query, questionRefPatternGlobal);
-    const questionNumbers = uniqueList([...payload.focusQuestionNumbers, ...extracted.questionNumbers]);
-    const paragraphLabels = extracted.paragraphLabels;
-
-    if (wholeSetPatterns.some((pattern) => pattern.test(query))) {
+    if (explicitWholeSetReview) {
         return { kind: intents.WHOLE_SET_OR_REVIEW, confidence: 0.88, questionNumbers, paragraphLabels };
-    }
-
-    if (payload.attemptContext.submitted && (payload.attemptContext.wrongQuestions.length > 0 || /错题|复盘|review|mistake/i.test(query))) {
-        return { kind: intents.WHOLE_SET_OR_REVIEW, confidence: 0.82, questionNumbers, paragraphLabels };
     }
 
     if (questionNumbers.length || paragraphLabels.length) {

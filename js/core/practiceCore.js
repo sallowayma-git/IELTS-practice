@@ -86,6 +86,126 @@
         return clone;
     }
 
+    function normalizeHighlightRecords(records) {
+        if (!Array.isArray(records)) {
+            return [];
+        }
+        return records
+            .map((entry) => clonePlainObject(entry))
+            .filter((entry) => entry && typeof entry === 'object' && String(entry.text || '').trim());
+    }
+
+    function normalizeStringList(values) {
+        if (!Array.isArray(values)) {
+            return [];
+        }
+        return values
+            .map((value) => String(value == null ? '' : value).trim())
+            .filter(Boolean);
+    }
+
+    function normalizeCoachTranscript(entries) {
+        if (!Array.isArray(entries)) {
+            return [];
+        }
+        return clonePlainObject(entries).filter((entry) => entry && typeof entry === 'object');
+    }
+
+    function normalizeRecordMetadataSnapshot(metadata = {}, canonical = {}) {
+        const normalized = clonePlainObject(metadata) || {};
+        normalized.examId = canonical.examId || normalized.examId || null;
+        normalized.examTitle = canonical.title || normalized.examTitle || normalized.title || '';
+        normalized.title = normalized.title || normalized.examTitle || canonical.title || '';
+        normalized.category = normalized.category || canonical.category || 'Unknown';
+        normalized.frequency = normalized.frequency || canonical.frequency || 'unknown';
+        normalized.type = normalized.type || canonical.type || null;
+        normalized.examType = normalized.examType || normalized.type || canonical.type || null;
+        normalized.markedQuestions = normalizeStringList(
+            canonical.markedQuestions
+            || normalized.markedQuestions
+        );
+        normalized.highlights = normalizeHighlightRecords(
+            canonical.highlights
+            || normalized.highlights
+        );
+        return normalized;
+    }
+
+    function resolveMarkedQuestions(recordData = {}) {
+        return normalizeStringList(
+            recordData.markedQuestions
+            || (recordData.metadata && recordData.metadata.markedQuestions)
+            || (recordData.realData && recordData.realData.markedQuestions)
+            || (recordData.resultSnapshot && recordData.resultSnapshot.metadata && recordData.resultSnapshot.metadata.markedQuestions)
+            || []
+        );
+    }
+
+    function resolveReadingCoachSnapshot(recordData = {}) {
+        return clonePlainObject(
+            recordData.readingCoachSnapshot
+            || (recordData.realData && recordData.realData.readingCoachSnapshot)
+            || (recordData.resultSnapshot && recordData.resultSnapshot.readingCoachSnapshot)
+            || (recordData.resultSnapshot && recordData.resultSnapshot.realData && recordData.resultSnapshot.realData.readingCoachSnapshot)
+            || null
+        );
+    }
+
+    function resolveReadingCoachTranscript(recordData = {}) {
+        return normalizeCoachTranscript(
+            recordData.readingCoachTranscript
+            || (recordData.realData && recordData.realData.readingCoachTranscript)
+            || (recordData.resultSnapshot && recordData.resultSnapshot.readingCoachTranscript)
+            || (recordData.resultSnapshot && recordData.resultSnapshot.realData && recordData.resultSnapshot.realData.readingCoachTranscript)
+            || []
+        );
+    }
+
+    function buildCanonicalResultSnapshot(snapshotLike = {}, canonical = {}) {
+        const base = clonePlainObject(snapshotLike) || {};
+        const metadata = normalizeRecordMetadataSnapshot(base.metadata || {}, canonical);
+        return Object.assign({}, base, {
+            sessionId: canonical.sessionId || base.sessionId || null,
+            examId: canonical.examId || base.examId || metadata.examId || null,
+            title: canonical.title || base.title || metadata.examTitle || '',
+            type: canonical.type || base.type || metadata.type || null,
+            duration: ensureNumber(canonical.duration, ensureNumber(base.duration, 0)),
+            scoreInfo: clonePlainObject(canonical.scoreInfo || base.scoreInfo || null),
+            answers: clonePlainObject(canonical.answers || base.answers || []),
+            correctAnswerMap: clonePlainObject(canonical.correctAnswerMap || base.correctAnswerMap || {}),
+            answerComparison: clonePlainObject(canonical.answerComparison || base.answerComparison || null),
+            highlights: normalizeHighlightRecords(canonical.highlights || base.highlights || metadata.highlights || []),
+            markedQuestions: normalizeStringList(canonical.markedQuestions || base.markedQuestions || metadata.markedQuestions || []),
+            readingCoachSnapshot: clonePlainObject(canonical.readingCoachSnapshot || base.readingCoachSnapshot || null),
+            readingCoachTranscript: normalizeCoachTranscript(canonical.readingCoachTranscript || base.readingCoachTranscript || []),
+            metadata,
+            realData: Object.assign({}, clonePlainObject(base.realData || {}), {
+                highlights: normalizeHighlightRecords(
+                    canonical.highlights
+                    || (base.realData && base.realData.highlights)
+                    || metadata.highlights
+                    || []
+                ),
+                markedQuestions: normalizeStringList(
+                    canonical.markedQuestions
+                    || (base.realData && base.realData.markedQuestions)
+                    || metadata.markedQuestions
+                    || []
+                ),
+                readingCoachSnapshot: clonePlainObject(
+                    canonical.readingCoachSnapshot
+                    || (base.realData && base.realData.readingCoachSnapshot)
+                    || null
+                ),
+                readingCoachTranscript: normalizeCoachTranscript(
+                    canonical.readingCoachTranscript
+                    || (base.realData && base.realData.readingCoachTranscript)
+                    || []
+                )
+            })
+        });
+    }
+
     function ensureNumber(value, fallback = 0) {
         const numeric = Number(value);
         return Number.isFinite(numeric) ? numeric : fallback;
@@ -563,6 +683,29 @@
                 scoreInfo: entry.scoreInfo ? clonePlainObject(entry.scoreInfo) : null,
                 answers: answerMap,
                 answerComparison: clonePlainObject(answerComparisonSource) || null,
+                highlights: normalizeHighlightRecords(
+                    entry.highlights
+                    || (entry.metadata && entry.metadata.highlights)
+                    || (entry.rawData && entry.rawData.highlights)
+                    || []
+                ),
+                markedQuestions: normalizeStringList(
+                    entry.markedQuestions
+                    || (entry.metadata && entry.metadata.markedQuestions)
+                    || (entry.rawData && entry.rawData.markedQuestions)
+                    || []
+                ),
+                readingCoachSnapshot: clonePlainObject(
+                    entry.readingCoachSnapshot
+                    || (entry.rawData && entry.rawData.readingCoachSnapshot)
+                    || null
+                ),
+                readingCoachTranscript: normalizeCoachTranscript(
+                    entry.readingCoachTranscript
+                    || (entry.rawData && entry.rawData.readingCoachTranscript)
+                    || []
+                ),
+                resultSnapshot: entry.resultSnapshot ? clonePlainObject(entry.resultSnapshot) : null,
                 metadata: entry.metadata ? Object.assign({}, entry.metadata) : {},
                 rawData: entry.rawData ? clonePlainObject(entry.rawData) : null
             };
@@ -1183,10 +1326,29 @@
         const type = inferPracticeType(recordData);
         const recordDate = resolveRecordDate(recordData, now);
         const resolvedExamId = inferExamId(recordData);
-        const metadata = buildMetadata(
+        const resolvedHighlights = normalizeHighlightRecords(
+            recordData.highlights
+            || (recordData.metadata && recordData.metadata.highlights)
+            || (recordData.realData && recordData.realData.highlights)
+            || (recordData.resultSnapshot && recordData.resultSnapshot.metadata && recordData.resultSnapshot.metadata.highlights)
+            || []
+        );
+        const resolvedMarkedQuestions = resolveMarkedQuestions(recordData);
+        const resolvedReadingCoachSnapshot = resolveReadingCoachSnapshot(recordData);
+        const resolvedReadingCoachTranscript = resolveReadingCoachTranscript(recordData);
+        const metadataBase = buildMetadata(
             Object.assign({}, recordData, { examId: resolvedExamId }),
             type
         );
+        const metadata = normalizeRecordMetadataSnapshot(metadataBase, {
+            examId: resolvedExamId,
+            title: recordData.title || recordData.examTitle || metadataBase.examTitle || metadataBase.title || '',
+            type,
+            category: metadataBase.category,
+            frequency: recordData.frequency || metadataBase.frequency || 'unknown',
+            highlights: resolvedHighlights,
+            markedQuestions: resolvedMarkedQuestions
+        });
         const comparisonSource = recordData.answerComparison
             || (recordData.realData && recordData.realData.answerComparison)
             || null;
@@ -1266,7 +1428,7 @@
             ? options.generateRecordId
             : defaultGenerateRecordId;
 
-        return {
+        const canonicalRecord = {
             id: recordData.id || generateRecordId(),
             examId: resolvedExamId,
             sessionId: recordData.sessionId || null,
@@ -1288,8 +1450,10 @@
             singleAttemptAnalysisInput: analysisArtifacts.singleAttemptAnalysisInput,
             singleAttemptAnalysis: analysisArtifacts.singleAttemptAnalysis,
             singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm,
-            readingCoachSnapshot: recordData.readingCoachSnapshot || (recordData.realData && recordData.realData.readingCoachSnapshot) || null,
-            readingCoachTranscript: recordData.readingCoachTranscript || (recordData.realData && recordData.realData.readingCoachTranscript) || [],
+            highlights: resolvedHighlights,
+            markedQuestions: resolvedMarkedQuestions,
+            readingCoachSnapshot: resolvedReadingCoachSnapshot,
+            readingCoachTranscript: resolvedReadingCoachTranscript,
             analysisSignals: analysisArtifacts.singleAttemptAnalysisInput.analysisSignals || null,
             questionTimelineLite: analysisArtifacts.singleAttemptAnalysisInput.questionTimelineLite || [],
             metadata,
@@ -1322,29 +1486,39 @@
                     singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm
                         ? clonePlainObject(analysisArtifacts.singleAttemptAnalysisLlm)
                         : null,
+                    highlights: (recordData.realData && Array.isArray(recordData.realData.highlights))
+                        ? normalizeHighlightRecords(recordData.realData.highlights)
+                        : resolvedHighlights,
+                    markedQuestions: resolvedMarkedQuestions,
                     readingCoachSnapshot: (recordData.realData && recordData.realData.readingCoachSnapshot)
                         ? clonePlainObject(recordData.realData.readingCoachSnapshot)
-                        : (recordData.readingCoachSnapshot ? clonePlainObject(recordData.readingCoachSnapshot) : null),
+                        : resolvedReadingCoachSnapshot,
                     readingCoachTranscript: (recordData.realData && Array.isArray(recordData.realData.readingCoachTranscript))
                         ? clonePlainObject(recordData.realData.readingCoachTranscript)
-                        : (Array.isArray(recordData.readingCoachTranscript) ? clonePlainObject(recordData.readingCoachTranscript) : []),
+                        : resolvedReadingCoachTranscript,
                     answerComparison: (recordData.realData && recordData.realData.answerComparison)
                         ? clonePlainObject(recordData.realData.answerComparison)
                         : (normalizedComparison || null)
                 })
                 : (
-                    normalizedComparison || analysisArtifacts.singleAttemptAnalysisLlm || recordData.readingCoachSnapshot || recordData.readingCoachTranscript
+                    normalizedComparison || analysisArtifacts.singleAttemptAnalysisLlm || resolvedReadingCoachSnapshot || resolvedReadingCoachTranscript.length || resolvedHighlights.length || resolvedMarkedQuestions.length
                         ? Object.assign(
                             {},
                             normalizedComparison ? { answerComparison: normalizedComparison } : {},
                             analysisArtifacts.singleAttemptAnalysisLlm
                                 ? { singleAttemptAnalysisLlm: clonePlainObject(analysisArtifacts.singleAttemptAnalysisLlm) }
                                 : {},
-                            recordData.readingCoachSnapshot
-                                ? { readingCoachSnapshot: clonePlainObject(recordData.readingCoachSnapshot) }
+                            resolvedHighlights.length
+                                ? { highlights: resolvedHighlights }
                                 : {},
-                            Array.isArray(recordData.readingCoachTranscript)
-                                ? { readingCoachTranscript: clonePlainObject(recordData.readingCoachTranscript) }
+                            resolvedMarkedQuestions.length
+                                ? { markedQuestions: resolvedMarkedQuestions }
+                                : {},
+                            resolvedReadingCoachSnapshot
+                                ? { readingCoachSnapshot: resolvedReadingCoachSnapshot }
+                                : {},
+                            resolvedReadingCoachTranscript.length
+                                ? { readingCoachTranscript: resolvedReadingCoachTranscript }
                                 : {}
                         )
                         : null
@@ -1354,6 +1528,8 @@
             createdAt: recordData.createdAt || now,
             updatedAt: now
         };
+        canonicalRecord.resultSnapshot = buildCanonicalResultSnapshot(recordData.resultSnapshot || {}, canonicalRecord);
+        return canonicalRecord;
     }
 
     function extractEnvelopeData(envelope) {
@@ -1563,6 +1739,12 @@
             || '未命名练习';
         const suiteEntries = rawPayload.suiteEntries || metadata.suiteEntries || [];
         const suiteSessionId = rawPayload.suiteSessionId || metadata.suiteSessionId || sessionContext.suiteSessionId || null;
+        const normalizedHighlights = normalizeHighlightRecords(
+            rawPayload.highlights
+            || metadata.highlights
+            || (rawPayload.realData && rawPayload.realData.highlights)
+            || []
+        );
 
         return standardizeRecord({
             id: rawPayload.id,
@@ -1591,6 +1773,7 @@
             singleAttemptAnalysisLlm: rawPayload.singleAttemptAnalysisLlm
                 || (rawPayload.realData && rawPayload.realData.singleAttemptAnalysisLlm)
                 || null,
+            highlights: normalizedHighlights,
             readingCoachSnapshot: rawPayload.readingCoachSnapshot
                 || (rawPayload.realData && rawPayload.realData.readingCoachSnapshot)
                 || null,
@@ -1616,6 +1799,7 @@
                 source: scoreInfo.source || rawPayload.pageType || rawPayload.source || 'practice_page'
             }),
             realData: Object.assign({}, rawPayload.realData || {}, {
+                highlights: normalizedHighlights,
                 answers: answerMap,
                 correctAnswers: correctAnswerMap,
                 answerComparison,
@@ -1654,6 +1838,37 @@
         return storageManager || global.storage || null;
     }
 
+    function safeJsonStringify(value) {
+        try {
+            return JSON.stringify(value);
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function normalizePracticeRecordList(records, options = {}) {
+        const issues = [];
+        const normalized = [];
+        (Array.isArray(records) ? records : []).forEach((record, index) => {
+            if (!record || typeof record !== 'object') {
+                issues.push({ index, reason: 'non_object_record' });
+                return;
+            }
+            try {
+                normalized.push(standardizeRecord(record, options));
+            } catch (error) {
+                issues.push({
+                    index,
+                    recordId: record.id != null ? String(record.id) : null,
+                    reason: error && error.message ? error.message : 'standardize_failed'
+                });
+            }
+        });
+        const deduped = dedupePracticeRecords(normalized);
+        const changed = safeJsonStringify(deduped) !== safeJsonStringify(Array.isArray(records) ? records : []);
+        return { records: deduped, issues, changed };
+    }
+
     function syncPracticeRecordState(records) {
         const syncAppState = (nextRecords) => {
             try {
@@ -1681,14 +1896,41 @@
         } catch (_) {}
     }
 
-    async function readPracticeRecords(storageManager) {
+    async function readPracticeRecords(storageManager, options = {}) {
         const repos = getRepositories();
+        const normalizeOptions = Object.assign({}, options);
         if (repos && repos.practice && typeof repos.practice.list === 'function') {
-            return await repos.practice.list();
+            const rawRecords = await repos.practice.list();
+            const normalized = normalizePracticeRecordList(rawRecords, normalizeOptions);
+            if (normalized.issues.length > 0) {
+                try {
+                    console.warn('[PracticeCore] 读取 practice records 时丢弃/修复了异常记录:', normalized.issues);
+                } catch (_) {}
+            }
+            if (normalized.changed && !normalizeOptions.skipSelfHeal && typeof repos.practice.overwrite === 'function') {
+                await repos.practice.overwrite(normalized.records);
+            }
+            syncPracticeRecordState(normalized.records);
+            return normalized.records;
         }
         const storage = getStorageManager(storageManager);
         if (storage && typeof storage.get === 'function') {
-            return await storage.get(STORAGE_KEYS.practiceRecords, [], { skipPracticeCoreRedirect: true });
+            const rawRecords = await storage.get(STORAGE_KEYS.practiceRecords, [], { skipPracticeCoreRedirect: true });
+            const normalized = normalizePracticeRecordList(rawRecords, normalizeOptions);
+            if (normalized.issues.length > 0) {
+                try {
+                    console.warn('[PracticeCore] storage practice_records 存在异常记录，已跳过或修复:', normalized.issues);
+                } catch (_) {}
+            }
+            if (normalized.changed && !normalizeOptions.skipSelfHeal) {
+                if (typeof storage.writePersistentValue === 'function') {
+                    await storage.writePersistentValue(STORAGE_KEYS.practiceRecords, normalized.records);
+                } else if (typeof storage.set === 'function') {
+                    await storage.set(STORAGE_KEYS.practiceRecords, normalized.records);
+                }
+            }
+            syncPracticeRecordState(normalized.records);
+            return normalized.records;
         }
         return [];
     }
@@ -1702,10 +1944,17 @@
             return true;
         }
         const storage = getStorageManager(storageManager);
-        if (storage && typeof storage.writePersistentValue === 'function') {
-            const result = await storage.writePersistentValue(STORAGE_KEYS.practiceRecords, finalRecords);
-            syncPracticeRecordState(finalRecords);
-            return result;
+        if (storage) {
+            if (typeof storage.writePersistentValue === 'function') {
+                const result = await storage.writePersistentValue(STORAGE_KEYS.practiceRecords, finalRecords);
+                syncPracticeRecordState(finalRecords);
+                return result;
+            }
+            if (typeof storage.set === 'function') {
+                const result = await storage.set(STORAGE_KEYS.practiceRecords, finalRecords);
+                syncPracticeRecordState(finalRecords);
+                return result;
+            }
         }
         return false;
     }
@@ -1717,8 +1966,13 @@
             return true;
         }
         const storage = getStorageManager(storageManager);
-        if (storage && typeof storage.writePersistentValue === 'function') {
-            return await storage.writePersistentValue(key, value);
+        if (storage) {
+            if (typeof storage.writePersistentValue === 'function') {
+                return await storage.writePersistentValue(key, value);
+            }
+            if (typeof storage.set === 'function') {
+                return await storage.set(key, value);
+            }
         }
         return false;
     }
@@ -1730,8 +1984,13 @@
             return true;
         }
         const storage = getStorageManager(storageManager);
-        if (storage && typeof storage.removePersistentValue === 'function') {
-            return await storage.removePersistentValue(key);
+        if (storage) {
+            if (typeof storage.removePersistentValue === 'function') {
+                return await storage.removePersistentValue(key);
+            }
+            if (typeof storage.set === 'function') {
+                return await storage.set(key, null);
+            }
         }
         return false;
     }
@@ -1783,9 +2042,7 @@
     }
 
     async function replacePracticeRecords(records, options = {}) {
-        const canonical = dedupePracticeRecords(
-            (Array.isArray(records) ? records : []).map((record) => standardizeRecord(record, options))
-        );
+        const canonical = normalizePracticeRecordList(records, options).records;
         if (Number.isFinite(options.maxRecords) && options.maxRecords > 0 && canonical.length > options.maxRecords) {
             canonical.splice(options.maxRecords);
         }

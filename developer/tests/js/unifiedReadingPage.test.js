@@ -97,8 +97,8 @@ function createHarness(options = {}) {
     const appNodes = new Map();
     appNodes.set('exam-title', { textContent: '' });
     appNodes.set('exam-subtitle', { textContent: '' });
-    appNodes.set('left', { innerHTML: '', contains: () => false });
-    appNodes.set('question-groups', { innerHTML: '', contains: () => false });
+    appNodes.set('left', { innerHTML: '', textContent: '', contains: () => false, querySelectorAll() { return []; }, ownerDocument: null });
+    appNodes.set('question-groups', { innerHTML: '', textContent: '', contains: () => false, querySelectorAll() { return []; }, ownerDocument: null });
     appNodes.set('results', resultsContainer);
     appNodes.set('question-nav', { innerHTML: '' });
     appNodes.set('submit-btn', submitBtn);
@@ -141,6 +141,8 @@ function createHarness(options = {}) {
             };
         }
     };
+    appNodes.get('left').ownerDocument = documentStub;
+    appNodes.get('question-groups').ownerDocument = documentStub;
 
     const openerStub = {
         postMessage(message, origin) {
@@ -225,7 +227,7 @@ function createHarness(options = {}) {
     let source = fs.readFileSync(fullPath, 'utf8');
     source = source.replace(
         /\}\)\(typeof window !== 'undefined' \? window : globalThis\);\s*$/,
-        "global.__UNIFIED_READING_TEST_HOOKS__ = { state, captureDom, stopInitLoop, renderResults, sendReadingCoachQuery, ensureReadingCoachUi }; })(typeof window !== 'undefined' ? window : globalThis);"
+        "global.__UNIFIED_READING_TEST_HOOKS__ = { state, captureDom, stopInitLoop, renderResults, sendReadingCoachQuery, ensureReadingCoachUi, buildReadingCoachRequestPayload, buildResults, buildReplayResults, compareNodePaths, buildHighlightId, normalizeHighlightRecord, normalizeHighlightRecords }; })(typeof window !== 'undefined' ? window : globalThis);"
     );
     const context = vm.createContext(sandbox);
     vm.runInContext(source, context, { filename: 'js/runtime/unifiedReadingPage.js' });
@@ -262,6 +264,7 @@ async function testCoachQueryViaElectronLocalApi() {
             assert.ok(String(url).includes('/api/reading/assistant/query/stream'), '应请求新的阅读教练 assistant stream 接口');
             const payload = JSON.parse(init.body);
             assert.strictEqual(payload.examId, 'p1-high-01', '应透传 examId');
+            assert.strictEqual(payload.surface, 'chat_widget', '浮动面板自由提问不应默认伪装成 review_workspace');
             assert.strictEqual(payload.attemptContext?.selectedAnswers?.['1'], 'A', '应把用户答案传给教练服务');
             assert.ok(Array.isArray(payload.attemptContext?.wrongQuestions), '应传递错题题号数组');
             assert.strictEqual(payload.attemptContext.wrongQuestions[0], '1', '应把错题题号传给教练服务');
@@ -340,13 +343,74 @@ async function testCoachQueryViaLocalApiSse() {
     assert.ok(harness.hooks.state.readingCoachSnapshot && harness.hooks.state.readingCoachSnapshot.answer, 'SSE 完成后应回填 snapshot');
 }
 
+async function testReviewPayloadUsesExplicitReviewWorkspaceOnly() {
+    const harness = createHarness({ runtime: 'web' });
+    const freeformPayload = harness.hooks.buildReadingCoachRequestPayload('第 1 题证据在哪', {
+        action: 'chat',
+        promptKind: 'freeform'
+    });
+    const reviewPayload = harness.hooks.buildReadingCoachRequestPayload('请复盘我的错题', {
+        action: 'review_set',
+        promptKind: 'preset',
+        forceSubmitted: true
+    });
+
+    assert.strictEqual(freeformPayload.surface, 'chat_widget', '提交后自由提问仍应走 chat_widget');
+    assert.strictEqual(reviewPayload.surface, 'review_workspace', '显式 review_set 才应走 review_workspace');
+}
+
+function testHighlightHelpers() {
+    const harness = createHarness({ runtime: 'web' });
+    assert.ok(harness.hooks.compareNodePaths('1.2', '1.10') < 0, '节点路径比较应按数值顺序排序');
+    assert.ok(harness.hooks.compareNodePaths('2.0', '1.9') > 0, '更靠后的路径应被判定为更大');
+
+    const normalized = harness.hooks.normalizeHighlightRecord({
+        scope: 'left',
+        text: '  repeated   phrase ',
+        kind: 'note',
+        startPath: '1.10',
+        startOffset: 3,
+        endPath: '1.2',
+        endOffset: 7
+    });
+    assert.strictEqual(normalized.scope, 'passage', '旧 scope 应归一为 passage');
+    assert.strictEqual(normalized.kind, 'note', 'note 类型不应丢失');
+    assert.strictEqual(normalized.text, 'repeated phrase', '文本应被压缩空白');
+    assert.strictEqual(normalized.startPath, '1.2', '反向路径应被归一为正向顺序');
+    assert.strictEqual(normalized.endPath, '1.10', '反向路径应被归一为正向顺序');
+    assert.ok(typeof normalized.id === 'string' && normalized.id.includes('passage'), '应生成稳定 id');
+
+    const replayResults = harness.hooks.buildReplayResults({
+        answers: { q1: 'A' },
+        correctAnswers: { q1: 'B' },
+        metadata: {
+            highlights: [{
+                scope: 'groups',
+                text: 'keyword clue',
+                startPath: '0.1',
+                startOffset: 0,
+                endPath: '0.1',
+                endOffset: 7
+            }]
+        }
+    });
+    assert.strictEqual(replayResults.highlights.length, 1, '回放结果应携带高亮');
+    assert.strictEqual(replayResults.highlights[0].scope, 'questions', '回放高亮 scope 应完成归一化');
+
+    const builtResults = harness.hooks.buildResults({ durationSec: 42 });
+    assert.ok(Array.isArray(builtResults.highlights), '构建结果时应始终输出 highlights 数组');
+    assert.ok(Array.isArray(builtResults.realData.highlights), 'realData 中也应同步输出 highlights');
+}
+
 async function main() {
     try {
         await testCoachQueryViaElectronLocalApi();
         await testCoachQueryViaLocalApiSse();
+        await testReviewPayloadUsesExplicitReviewWorkspaceOnly();
+        testHighlightHelpers();
         console.log(JSON.stringify({
             status: 'pass',
-            detail: 'UnifiedReadingPage 已覆盖 local API + SSE 的阅读教练查询主链路'
+            detail: 'UnifiedReadingPage 已覆盖阅读教练查询与高亮回放数据结构主链路'
         }, null, 2));
     } catch (error) {
         console.log(JSON.stringify({

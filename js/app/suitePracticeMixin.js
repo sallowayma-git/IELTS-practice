@@ -1558,18 +1558,7 @@
             } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
                 await window.simpleStorageWrapper.addPracticeRecord(record);
             } else {
-                let practiceRecords = await storage.get('practice_records', []);
-                if (!Array.isArray(practiceRecords)) {
-                    practiceRecords = [];
-                }
-
-                practiceRecords.unshift(record);
-                if (practiceRecords.length > MAX_LEGACY_PRACTICE_RECORDS) {
-                    practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
-                }
-
-                const practiceKey = ['practice', 'records'].join('_');
-                await storage.set(practiceKey, practiceRecords);
+                throw new Error('PracticeCore.store.savePracticeRecord is required');
             }
             await this._cleanupSuiteEntryRecords(record).catch(error => {
                 console.warn('[SuitePractice] 清理套题子记录失败:', error);
@@ -1671,8 +1660,7 @@
                 } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
                     await window.simpleStorageWrapper.savePracticeRecords(practiceRecords);
                 } else {
-                    const practiceKey = ['practice', 'records'].join('_');
-                    await storage.set(practiceKey, practiceRecords);
+                    throw new Error('PracticeCore.store.replacePracticeRecords is required');
                 }
                 console.log(`[SuitePractice] 已清理 ${before - practiceRecords.length} 条套题子记录`);
             }

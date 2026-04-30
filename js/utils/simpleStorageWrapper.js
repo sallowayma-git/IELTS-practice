@@ -15,20 +15,19 @@
             }
             return await this.practiceRepo.list();
         }
+        // Deprecated facade: canonical practice record writes must go through PracticeCore.store.
         async savePracticeRecords(records) {
             if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
                 return await window.PracticeCore.store.replacePracticeRecords(records, { maxRecords: this.practiceRepo.maxRecords || 1000 });
             }
-            await this.practiceRepo.overwrite(records);
-            return true;
+            throw new Error('PracticeCore.store.replacePracticeRecords is required');
         }
         async addPracticeRecord(record) {
             if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
                 await window.PracticeCore.store.savePracticeRecord(record, { maxRecords: this.practiceRepo.maxRecords || 1000 });
                 return true;
             }
-            await this.practiceRepo.upsert(record);
-            return true;
+            throw new Error('PracticeCore.store.savePracticeRecord is required');
         }
         async getById(id) { return await this.practiceRepo.getById(id); }
         async update(id, updates) { return await this.practiceRepo.update(id, updates); }

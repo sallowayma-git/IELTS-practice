@@ -18,6 +18,11 @@
     ]);
     const EXPLANATION_STYLE_ID = 'reading-explanation-style';
     const ANALYSIS_STYLE_ID = 'reading-single-attempt-analysis-style';
+    const HIGHLIGHT_SCHEMA_VERSION = 2;
+    const HIGHLIGHT_TEXT_CONTEXT_WINDOW = 20;
+    const TEXT_NODE_FILTER = (global.NodeFilter && Number.isFinite(global.NodeFilter.SHOW_TEXT))
+        ? global.NodeFilter.SHOW_TEXT
+        : 4;
     const EXPLANATION_SPLIT_KINDS = new Set([
         'single_choice',
         'multi_choice',
@@ -1707,6 +1712,7 @@
 
     function buildResults(options = {}) {
         const answers = collectAnswers();
+        const highlights = collectHighlights();
         const answerKey = state.dataset?.answerKey || {};
         const questionOrder = getQuestionOrder(answers);
         const answerComparison = {};
@@ -1747,6 +1753,7 @@
         );
         const results = {
             answers,
+            highlights,
             answerComparison,
             correctAnswers: answerKey,
             analysisSignals,
@@ -1770,6 +1777,7 @@
         results.singleAttemptAnalysisInput = analysisArtifacts.input;
         results.singleAttemptAnalysis = analysisArtifacts.analysis;
         results.realData = Object.assign({}, results.realData || {}, {
+            highlights,
             singleAttemptAnalysisInput: analysisArtifacts.input,
             singleAttemptAnalysis: results.singleAttemptAnalysis,
             singleAttemptAnalysisLlm: results.singleAttemptAnalysisLlm || null,
@@ -3065,6 +3073,16 @@
         const selectedContext = getSelectedContextForCoach();
         const focusQuestionNumbers = resolveCoachFocusQuestionNumbers();
         const submitted = Boolean(options.forceSubmitted || isReadingCoachAvailable());
+        const action = String(options.action || 'chat').trim() || 'chat';
+        const explicitSurface = String(options.surface || '').trim();
+        const isSelectionAction = [
+            'translate',
+            'explain_selection',
+            'find_paraphrases',
+            'find_antonyms',
+            'extract_keywords',
+            'locate_evidence'
+        ].includes(action) && selectedContext && selectedContext.text;
         const answerComparison = resolveAnswerComparisonForCoach(state.lastResults);
         const wrongQuestions = [];
         const selectedAnswers = {};
@@ -3093,8 +3111,10 @@
             examId: state.examId,
             query: normalizedQuery,
             locale: 'zh',
-            surface: submitted ? 'review_workspace' : 'chat_widget',
-            action: String(options.action || 'chat').trim() || 'chat',
+            surface: explicitSurface || (action === 'review_set'
+                ? 'review_workspace'
+                : (isSelectionAction ? 'selection_popover' : 'chat_widget')),
+            action,
             promptKind: String(options.promptKind || 'freeform').trim() || 'freeform',
             selectedText: selectedContext ? selectedContext.text : '',
             selectedContext,
@@ -3159,9 +3179,68 @@
     }
 
     function buildSingleAttemptLlmFromCoachResponse(response) {
+        const reviewOverall = response && typeof response.reviewOverall === 'object'
+            ? response.reviewOverall
+            : null;
+        const reviewQuestionAnalyses = Array.isArray(response?.reviewQuestionAnalyses)
+            ? response.reviewQuestionAnalyses
+            : [];
         const sections = Array.isArray(response?.answerSections) ? response.answerSections : [];
         const diagnosis = [];
         const nextActions = [];
+
+        if (reviewOverall) {
+            const primaryWeakness = String(reviewOverall.primaryWeakness || '').trim();
+            const patternSummary = String(reviewOverall.patternSummary || '').trim();
+            const teachingPlan = String(reviewOverall.teachingPlan || '').trim();
+            if (primaryWeakness) {
+                diagnosis.push({
+                    code: 'coach_review_primary_weakness',
+                    reason: primaryWeakness,
+                    evidence: []
+                });
+            }
+            if (patternSummary) {
+                diagnosis.push({
+                    code: 'coach_review_pattern',
+                    reason: patternSummary,
+                    evidence: []
+                });
+            }
+            if (teachingPlan) {
+                nextActions.push({
+                    type: 'coach_review_thinking_plan',
+                    target: 'reading',
+                    instruction: teachingPlan,
+                    evidence: []
+                });
+            }
+        }
+
+        reviewQuestionAnalyses.slice(0, 3).forEach((item) => {
+            if (!item || typeof item !== 'object') return;
+            const questionNumber = String(item.questionNumber || '').replace(/^q/i, '').trim();
+            const likelyMistake = String(item.likelyMistake || '').trim();
+            const whyUserChoseWrong = String(item.whyUserChoseWrong || '').trim();
+            const nextRule = String(item.nextRule || '').trim();
+            const reasonParts = [likelyMistake, whyUserChoseWrong].filter(Boolean);
+            if (reasonParts.length) {
+                diagnosis.push({
+                    code: `coach_review_q${questionNumber || diagnosis.length + 1}`,
+                    reason: `${questionNumber ? `Q${questionNumber}：` : ''}${reasonParts.join('；')}`,
+                    evidence: []
+                });
+            }
+            if (nextRule) {
+                nextActions.push({
+                    type: 'coach_review_next_rule',
+                    target: questionNumber ? `Q${questionNumber}` : 'reading',
+                    instruction: nextRule,
+                    evidence: []
+                });
+            }
+        });
+
         sections.forEach((entry, index) => {
             if (!entry || typeof entry !== 'object') return;
             const type = String(entry.type || '').trim().toLowerCase();
@@ -3176,11 +3255,13 @@
                 });
                 return;
             }
-            diagnosis.push({
-                code: `coach_diag_${index + 1}`,
-                reason: text,
-                evidence: type === 'evidence' ? [text] : []
-            });
+            if (diagnosis.length < 4 && type !== 'evidence') {
+                diagnosis.push({
+                    code: `coach_diag_${index + 1}`,
+                    reason: text,
+                    evidence: []
+                });
+            }
         });
         if (!diagnosis.length) {
             const fallback = String(response?.answer || '').trim();
@@ -3207,8 +3288,8 @@
                 });
         }
         return {
-            diagnosis,
-            nextActions,
+            diagnosis: diagnosis.slice(0, 4),
+            nextActions: nextActions.slice(0, 3),
             confidence: normalizeCoachConfidenceToRate(response?.confidence),
             model_trace: {
                 source: 'reading_coach_v2',
@@ -3553,11 +3634,11 @@
                 </div>
                 ${statusHtml}
                 <div class="reading-guidance-card__row">
-                    <div class="reading-guidance-card__label">诊断结论</div>
+                    <div class="reading-guidance-card__label">易错洞察</div>
                     ${diagnosisHtml}
                 </div>
                 <div class="reading-guidance-card__row">
-                    <div class="reading-guidance-card__label">下一步动作</div>
+                    <div class="reading-guidance-card__label">思考训练</div>
                     ${actionsHtml}
                 </div>
             </section>
@@ -3693,6 +3774,13 @@
     function buildReplayResults(entry = {}) {
         const normalizedAnswers = normalizeReplayMap(entry.answers || {});
         const normalizedCorrectAnswers = normalizeReplayMap(entry.correctAnswers || {});
+        const normalizedHighlights = normalizeHighlightRecords(
+            entry.highlights
+            || entry.metadata?.highlights
+            || entry.realData?.highlights
+            || entry.resultSnapshot?.metadata?.highlights
+            || []
+        );
         const normalizedComparison = {};
         const rawComparison = normalizeReplayMap(entry.answerComparison || {});
         const questionIds = new Set([
@@ -3742,6 +3830,7 @@
 
         return {
             answers: normalizedAnswers,
+            highlights: normalizedHighlights,
             correctAnswers: normalizedCorrectAnswers,
             answerComparison: normalizedComparison,
             scoreInfo,
@@ -4010,6 +4099,7 @@
         state.submitted = true;
         renderResults(replayResults);
         await renderExplanations();
+        applyHighlights(replayResults.highlights || []);
         updateNavStatuses(replayResults);
         applyReplayMarkedQuestions(replayMarks);
     }
@@ -4381,7 +4471,7 @@
         }
         return {
             answers: draft.answers && typeof draft.answers === 'object' ? { ...draft.answers } : {},
-            highlights: Array.isArray(draft.highlights) ? draft.highlights.slice() : [],
+            highlights: normalizeHighlightRecords(draft.highlights),
             scrollY: Number.isFinite(Number(draft.scrollY)) ? Number(draft.scrollY) : 0
         };
     }
@@ -4633,51 +4723,328 @@
     }
 
     function resolveHighlightRoot(scope) {
-        if (scope === 'left') return dom.left;
+        const normalizedScope = normalizeHighlightScope(scope);
+        if (normalizedScope === 'passage') return dom.left;
         return dom.groups;
+    }
+
+    function normalizeHighlightScope(scope) {
+        const rawScope = String(scope || '').trim().toLowerCase();
+        if (rawScope === 'left' || rawScope === 'passage') {
+            return 'passage';
+        }
+        if (rawScope === 'groups' || rawScope === 'questions') {
+            return 'questions';
+        }
+        return rawScope || 'questions';
+    }
+
+    function normalizeHighlightText(text) {
+        return String(text || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function buildHighlightId(record = {}) {
+        const scope = normalizeHighlightScope(record.scope);
+        const kind = record.kind === 'note' ? 'note' : 'highlight';
+        const startPath = String(record.startPath || '').trim();
+        const endPath = String(record.endPath || '').trim();
+        const startOffset = Number.isFinite(Number(record.startOffset)) ? Number(record.startOffset) : -1;
+        const endOffset = Number.isFinite(Number(record.endOffset)) ? Number(record.endOffset) : -1;
+        const text = normalizeHighlightText(record.text);
+        return [scope, kind, startPath, startOffset, endPath, endOffset, text].join('::');
+    }
+
+    function parseHighlightPath(path) {
+        return String(path || '')
+            .split('.')
+            .map((part) => Number.parseInt(part, 10))
+            .filter((part) => Number.isFinite(part));
+    }
+
+    function compareNodePaths(leftPath, rightPath) {
+        const leftParts = parseHighlightPath(leftPath);
+        const rightParts = parseHighlightPath(rightPath);
+        const length = Math.max(leftParts.length, rightParts.length);
+        for (let index = 0; index < length; index += 1) {
+            const leftValue = Number.isFinite(leftParts[index]) ? leftParts[index] : -1;
+            const rightValue = Number.isFinite(rightParts[index]) ? rightParts[index] : -1;
+            if (leftValue !== rightValue) {
+                return leftValue - rightValue;
+            }
+        }
+        return 0;
+    }
+
+    function createTextWalker(root) {
+        if (!root || !root.ownerDocument || typeof root.ownerDocument.createTreeWalker !== 'function') {
+            return null;
+        }
+        return root.ownerDocument.createTreeWalker(root, TEXT_NODE_FILTER, null);
+    }
+
+    function getTextNodePath(root, textNode) {
+        if (!root || !textNode) {
+            return '';
+        }
+        const segments = [];
+        let cursor = textNode;
+        while (cursor && cursor !== root) {
+            const parent = cursor.parentNode;
+            if (!parent) {
+                return '';
+            }
+            const siblings = Array.from(parent.childNodes || []);
+            const siblingIndex = siblings.indexOf(cursor);
+            if (siblingIndex < 0) {
+                return '';
+            }
+            segments.push(String(siblingIndex));
+            cursor = parent;
+        }
+        return segments.reverse().join('.');
+    }
+
+    function resolveTextNodeByPath(root, path) {
+        const parts = parseHighlightPath(path);
+        if (!root || !parts.length) {
+            return null;
+        }
+        let cursor = root;
+        for (let index = 0; index < parts.length; index += 1) {
+            const nextNode = cursor && cursor.childNodes ? cursor.childNodes[parts[index]] : null;
+            if (!nextNode) {
+                return null;
+            }
+            cursor = nextNode;
+        }
+        return cursor && cursor.nodeType === 3 ? cursor : null;
+    }
+
+    function getTextNodesInOrder(root) {
+        const walker = createTextWalker(root);
+        if (!walker) {
+            return [];
+        }
+        const nodes = [];
+        let node = walker.nextNode();
+        while (node) {
+            nodes.push(node);
+            node = walker.nextNode();
+        }
+        return nodes;
+    }
+
+    function findBoundaryTextNode(node, preferEnd = false) {
+        if (!node) {
+            return null;
+        }
+        if (node.nodeType === 3) {
+            return node;
+        }
+        const childNodes = Array.from(node.childNodes || []);
+        if (!childNodes.length) {
+            return null;
+        }
+        const orderedChildren = preferEnd ? childNodes.slice().reverse() : childNodes;
+        for (let index = 0; index < orderedChildren.length; index += 1) {
+            const candidate = findBoundaryTextNode(orderedChildren[index], preferEnd);
+            if (candidate) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    function resolveSelectionBoundary(root, container, offset, preferEnd = false) {
+        const textNode = findBoundaryTextNode(container, preferEnd);
+        if (!root || !textNode || !root.contains(textNode)) {
+            return null;
+        }
+        const textContent = String(textNode.textContent || '');
+        const safeOffset = textNode === container
+            ? Math.max(0, Math.min(Number(offset) || 0, textContent.length))
+            : (preferEnd ? textContent.length : 0);
+        return {
+            node: textNode,
+            offset: safeOffset,
+            path: getTextNodePath(root, textNode)
+        };
+    }
+
+    function getAbsoluteTextOffset(root, targetNode, targetOffset) {
+        const walker = createTextWalker(root);
+        if (!walker || !targetNode) {
+            return -1;
+        }
+        let absolute = 0;
+        let node = walker.nextNode();
+        while (node) {
+            const textLength = String(node.textContent || '').length;
+            if (node === targetNode) {
+                return absolute + Math.max(0, Math.min(Number(targetOffset) || 0, textLength));
+            }
+            absolute += textLength;
+            node = walker.nextNode();
+        }
+        return -1;
+    }
+
+    function countTextOccurrence(fullText, targetText, startOffset) {
+        if (!fullText || !targetText) {
+            return 0;
+        }
+        let occurrence = 0;
+        let cursor = 0;
+        while (cursor >= 0) {
+            const hit = fullText.indexOf(targetText, cursor);
+            if (hit < 0 || hit >= startOffset) {
+                break;
+            }
+            occurrence += 1;
+            cursor = hit + targetText.length;
+        }
+        return occurrence;
+    }
+
+    function normalizeHighlightRecord(record = {}) {
+        if (!record || typeof record !== 'object') {
+            return null;
+        }
+        const scope = normalizeHighlightScope(record.scope || record.legacyScope);
+        const text = normalizeHighlightText(record.text);
+        if (!scope || !text) {
+            return null;
+        }
+        const normalized = {
+            scope,
+            legacyScope: record.legacyScope || record.scope || null,
+            text,
+            kind: record.kind === 'note' ? 'note' : 'highlight',
+            startPath: typeof record.startPath === 'string' ? record.startPath.trim() : '',
+            endPath: typeof record.endPath === 'string' ? record.endPath.trim() : '',
+            startOffset: Number.isFinite(Number(record.startOffset)) ? Number(record.startOffset) : null,
+            endOffset: Number.isFinite(Number(record.endOffset)) ? Number(record.endOffset) : null,
+            legacyStartOffset: Number.isFinite(Number(record.legacyStartOffset))
+                ? Number(record.legacyStartOffset)
+                : (Number.isFinite(Number(record.startOffset)) ? Number(record.startOffset) : null),
+            legacyEndOffset: Number.isFinite(Number(record.legacyEndOffset))
+                ? Number(record.legacyEndOffset)
+                : (Number.isFinite(Number(record.endOffset)) ? Number(record.endOffset) : null),
+            occurrence: Number.isFinite(Number(record.occurrence)) ? Number(record.occurrence) : 0,
+            before: typeof record.before === 'string' ? record.before : '',
+            after: typeof record.after === 'string' ? record.after : '',
+            schemaVersion: Number.isFinite(Number(record.schemaVersion))
+                ? Number(record.schemaVersion)
+                : HIGHLIGHT_SCHEMA_VERSION
+        };
+        if (
+            normalized.startPath
+            && normalized.endPath
+            && compareNodePaths(normalized.startPath, normalized.endPath) > 0
+        ) {
+            const swappedStartPath = normalized.startPath;
+            const swappedStartOffset = normalized.startOffset;
+            normalized.startPath = normalized.endPath;
+            normalized.startOffset = normalized.endOffset;
+            normalized.endPath = swappedStartPath;
+            normalized.endOffset = swappedStartOffset;
+        }
+        if (
+            normalized.startPath
+            && normalized.endPath
+            && compareNodePaths(normalized.startPath, normalized.endPath) === 0
+            && normalized.startOffset != null
+            && normalized.endOffset != null
+            && normalized.startOffset > normalized.endOffset
+        ) {
+            const swappedStartOffset = normalized.startOffset;
+            normalized.startOffset = normalized.endOffset;
+            normalized.endOffset = swappedStartOffset;
+        }
+        if (normalized.startPath && normalized.endPath && normalized.startOffset != null && normalized.endOffset != null) {
+            normalized.id = String(record.id || '').trim() || buildHighlightId(normalized);
+            return normalized;
+        }
+        if (normalized.legacyStartOffset != null && normalized.legacyEndOffset != null) {
+            normalized.id = String(record.id || '').trim() || buildHighlightId(normalized);
+            return normalized;
+        }
+        if (normalized.text) {
+            normalized.id = String(record.id || '').trim() || buildHighlightId(normalized);
+            return normalized;
+        }
+        return null;
+    }
+
+    function normalizeHighlightRecords(records = []) {
+        if (!Array.isArray(records)) {
+            return [];
+        }
+        return records
+            .map((record) => normalizeHighlightRecord(record))
+            .filter(Boolean);
+    }
+
+    function collectHighlightRecord(root, scope, node) {
+        if (!root || !node) {
+            return null;
+        }
+        const text = normalizeHighlightText(node.textContent || '');
+        if (!text) {
+            return null;
+        }
+        const textNodes = getTextNodesInOrder(node);
+        const startNode = textNodes[0] || findBoundaryTextNode(node, false);
+        const endNode = textNodes[textNodes.length - 1] || findBoundaryTextNode(node, true);
+        if (!startNode || !endNode) {
+            return null;
+        }
+        const startOffset = getAbsoluteTextOffset(root, startNode, 0);
+        const endOffset = getAbsoluteTextOffset(root, endNode, String(endNode.textContent || '').length);
+        if (startOffset < 0 || endOffset <= startOffset) {
+            return null;
+        }
+        const fullText = String(root.textContent || '');
+        const record = normalizeHighlightRecord({
+            scope,
+            legacyScope: scope === 'passage' ? 'left' : 'groups',
+            text,
+            kind: resolveHighlightKind(node),
+            startPath: getTextNodePath(root, startNode),
+            endPath: getTextNodePath(root, endNode),
+            startOffset: 0,
+            endOffset: String(endNode.textContent || '').length,
+            legacyStartOffset: startOffset,
+            legacyEndOffset: endOffset,
+            occurrence: countTextOccurrence(fullText, text, startOffset),
+            before: fullText.slice(Math.max(0, startOffset - HIGHLIGHT_TEXT_CONTEXT_WINDOW), startOffset),
+            after: fullText.slice(endOffset, endOffset + HIGHLIGHT_TEXT_CONTEXT_WINDOW),
+            schemaVersion: HIGHLIGHT_SCHEMA_VERSION
+        });
+        return record;
     }
 
     function collectHighlights() {
         const records = [];
         const addScopeHighlights = (scope, root) => {
-            if (!root) return;
-            const seenByText = new Map();
-            const fullText = String(root.textContent || '');
-            const cursorByText = new Map();
+            if (!root) {
+                return;
+            }
             Array.from(root.querySelectorAll('.hl')).forEach((node) => {
-                const text = String(node.textContent || '').trim();
-                if (!text) return;
-                const key = `${scope}::${text}`;
-                const seen = seenByText.get(key) || 0;
-                seenByText.set(key, seen + 1);
-                let cursor = cursorByText.get(key) || 0;
-                let hit = -1;
-                for (let index = 0; index <= seen; index += 1) {
-                    hit = fullText.indexOf(text, cursor);
-                    if (hit < 0) break;
-                    cursor = hit + text.length;
+                const record = collectHighlightRecord(root, scope, node);
+                if (record) {
+                    records.push(record);
                 }
-                if (hit < 0) return;
-                cursorByText.set(key, cursor);
-                records.push({
-                    scope,
-                    text,
-                    kind: resolveHighlightKind(node),
-                    occurrence: seen,
-                    startOffset: hit,
-                    endOffset: hit + text.length,
-                    before: fullText.slice(Math.max(0, hit - 20), hit),
-                    after: fullText.slice(hit + text.length, hit + text.length + 20)
-                });
             });
         };
-        addScopeHighlights('left', dom.left);
-        addScopeHighlights('groups', dom.groups);
-        return records;
+        addScopeHighlights('passage', dom.left);
+        addScopeHighlights('questions', dom.groups);
+        return normalizeHighlightRecords(records);
     }
 
     function resolveRangeFromOffsets(root, start, end) {
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+        const ownerDocument = root && root.ownerDocument ? root.ownerDocument : document;
+        const walker = ownerDocument.createTreeWalker(root, TEXT_NODE_FILTER, null);
         let node = walker.nextNode();
         let offset = 0;
         let startNode = null;
@@ -4710,16 +5077,49 @@
         return range;
     }
 
+    function resolveRangeFromAnchors(root, record) {
+        const startNode = resolveTextNodeByPath(root, record.startPath);
+        const endNode = resolveTextNodeByPath(root, record.endPath);
+        if (!startNode || !endNode) {
+            return null;
+        }
+        const startOffset = Math.max(0, Math.min(Number(record.startOffset) || 0, String(startNode.textContent || '').length));
+        const endOffset = Math.max(0, Math.min(Number(record.endOffset) || 0, String(endNode.textContent || '').length));
+        const range = root.ownerDocument.createRange();
+        range.setStart(startNode, startOffset);
+        range.setEnd(endNode, endOffset);
+        return range.collapsed ? null : range;
+    }
+
+    function createHighlightSpan(kind = 'highlight') {
+        const span = document.createElement('span');
+        applyHighlightKind(span, kind);
+        return span;
+    }
+
     function applyHighlightRecord(record) {
-        if (!record || !record.text) return;
-        const root = resolveHighlightRoot(record.scope);
+        const normalizedRecord = normalizeHighlightRecord(record);
+        if (!normalizedRecord || !normalizedRecord.text) return;
+        const root = resolveHighlightRoot(normalizedRecord.scope);
         if (!root) return;
         const fullText = String(root.textContent || '');
         if (!fullText) return;
-        const highlightKind = record.kind === 'note' ? 'note' : 'highlight';
-        const normalizedRecordText = String(record.text || '').replace(/\s+/g, ' ').trim();
-        const startOffset = Number(record.startOffset);
-        const endOffset = Number(record.endOffset);
+        const highlightKind = normalizedRecord.kind === 'note' ? 'note' : 'highlight';
+        const normalizedRecordText = normalizeHighlightText(normalizedRecord.text);
+        if (normalizedRecord.startPath && normalizedRecord.endPath) {
+            const anchoredRange = resolveRangeFromAnchors(root, normalizedRecord);
+            if (anchoredRange && !anchoredRange.collapsed) {
+                const anchoredSpan = createHighlightSpan(highlightKind);
+                try {
+                    anchoredRange.surroundContents(anchoredSpan);
+                    return;
+                } catch (_) {
+                    // fallback to legacy offsets
+                }
+            }
+        }
+        const startOffset = Number(normalizedRecord.legacyStartOffset);
+        const endOffset = Number(normalizedRecord.legacyEndOffset);
         if (
             Number.isFinite(startOffset)
             && Number.isFinite(endOffset)
@@ -4734,10 +5134,9 @@
                 || normalizedSegment.includes(normalizedRecordText)
                 || normalizedRecordText.includes(normalizedSegment);
             if (offsetLooksValid) {
-                const offsetRange = resolveRangeFromOffsets(root, startOffset, endOffset);
-                if (offsetRange && !offsetRange.collapsed) {
-                    const offsetSpan = document.createElement('span');
-                    applyHighlightKind(offsetSpan, highlightKind);
+                    const offsetRange = resolveRangeFromOffsets(root, startOffset, endOffset);
+                    if (offsetRange && !offsetRange.collapsed) {
+                    const offsetSpan = createHighlightSpan(highlightKind);
                     try {
                         offsetRange.surroundContents(offsetSpan);
                         return;
@@ -4749,29 +5148,28 @@
         }
         let cursor = 0;
         let hit = -1;
-        const requiredOccurrence = Number.isFinite(Number(record.occurrence)) ? Number(record.occurrence) : 0;
+        const requiredOccurrence = Number.isFinite(Number(normalizedRecord.occurrence)) ? Number(normalizedRecord.occurrence) : 0;
         for (let index = 0; index <= requiredOccurrence; index += 1) {
-            hit = fullText.indexOf(record.text, cursor);
+            hit = fullText.indexOf(normalizedRecord.text, cursor);
             if (hit < 0) break;
-            cursor = hit + record.text.length;
+            cursor = hit + normalizedRecord.text.length;
         }
         if (hit < 0) {
             return;
         }
-        const expectedBefore = String(record.before || '').trim();
-        const expectedAfter = String(record.after || '').trim();
+        const expectedBefore = String(normalizedRecord.before || '').trim();
+        const expectedAfter = String(normalizedRecord.after || '').trim();
         if (expectedBefore && !fullText.slice(Math.max(0, hit - expectedBefore.length), hit).includes(expectedBefore)) {
             return;
         }
-        if (expectedAfter && !fullText.slice(hit + record.text.length, hit + record.text.length + expectedAfter.length).includes(expectedAfter)) {
+        if (expectedAfter && !fullText.slice(hit + normalizedRecord.text.length, hit + normalizedRecord.text.length + expectedAfter.length).includes(expectedAfter)) {
             return;
         }
-        const range = resolveRangeFromOffsets(root, hit, hit + record.text.length);
+        const range = resolveRangeFromOffsets(root, hit, hit + normalizedRecord.text.length);
         if (!range || range.collapsed) {
             return;
         }
-        const span = document.createElement('span');
-        applyHighlightKind(span, highlightKind);
+        const span = createHighlightSpan(highlightKind);
         try {
             range.surroundContents(span);
         } catch (_) {
@@ -4785,7 +5183,7 @@
         if (!Array.isArray(records) || !records.length) {
             return;
         }
-        records.forEach((record) => applyHighlightRecord(record));
+        normalizeHighlightRecords(records).forEach((record) => applyHighlightRecord(record));
     }
 
     function dispatchSimulationNavigate(direction) {
@@ -4846,12 +5244,15 @@
                 markedQuestions: (typeof global.getPracticeMarkedQuestions === 'function')
                     ? global.getPracticeMarkedQuestions()
                     : [],
+                highlights: results.highlights || [],
                 readingCoachSnapshot: results.readingCoachSnapshot || null,
                 readingCoachTranscript: results.readingCoachTranscript || []
             },
+            highlights: results.highlights || [],
             readingCoachSnapshot: results.readingCoachSnapshot || null,
             readingCoachTranscript: results.readingCoachTranscript || [],
             realData: Object.assign({}, results.realData || {}, {
+                highlights: results.highlights || [],
                 readingCoachSnapshot: results.readingCoachSnapshot || null,
                 readingCoachTranscript: results.readingCoachTranscript || []
             })
