@@ -10,78 +10,78 @@
     "examId": "p2-high-123",
     "title": "Bird Migration 鸟类迁徙",
     "category": "P2",
-    "sourceDoc": "P2 33-59之_副本.md",
+    "sourceDoc": "ReadingPractice/PDF/36. P2 - Bird Migration 鸟类迁徙.pdf",
     "noteType": "总结",
-    "matchedTitle": "Bird Migration 鸟类迁徙【高】"
+    "matchedTitle": "Bird Migration 鸟类迁徙"
   },
   "passageNotes": [
     {
       "label": "Paragraph A",
-      "text": "鸟类拥有诸多独特生理结构，使其能完成惊人的耐力迁徙：轻质空心骨骼、兼顾升力与推力的复杂羽毛、远超人类的导航系统、高效保温设计（血液循环集中在温暖防水羽毛下，适应极端气候）。鸟类呼吸系统需在高空持续飞行中高效运作，其肺部氧气提取系统效率远超其他动物。夏季繁殖季后期食物充足时，鸟类体内会积累大量脂肪，为长途迁徙提供能量。"
+      "text": "A 段说明鸟类为什么具备迁徙能力：鸟类高度机动、飞行速度快，只要有能量就能向任意方向移动；它们有轻质空心骨骼、精细导航系统和保温设计，高空持续飞行时呼吸系统也能高效工作。这些特征让鸟类能够随季节来去，但途中仍要面对危险，并每天寻找食物、水和安全休息地。"
     },
     {
       "label": "Paragraph B",
-      "text": "鸟类迁徙的根本原因是冬季食物短缺时寻找充足食物，这对在北半球温带和北极地区繁殖的鸟类尤为重要 —— 这些地区短暂生长季内食物丰富，但许多鸟类虽能耐受低温，却无法在食物匮乏时生存，因此必须迁徙。尽管如此，仍有诸多耐人寻味的问题待解。"
+      "text": "B 段给出迁徙的主要原因：多数解释围绕食物。北半球温带和北极地区的食物只在短暂生长季丰富；迁徙使鸟类利用季节性资源，并在资源稀缺或恶劣天气到来时离开。许多鸟能耐寒，但没有食物时必须迁徙。"
     },
     {
       "label": "Paragraph C",
-      "text": "一个令人困惑的现象是，许多鸟类迁徙距离远超寻找食物和适宜天气的必要范围。例如，英国雨燕本可在赤道非洲过冬，却选择再飞行数千英里前往南非开普省；北极燕鸥和极地附近繁殖的滩涂滨鸟也有超长迁徙 —— 繁殖地越靠北的物种，越冬地越靠南，北极燕鸥每年往返需 2.5 万英里。更奇怪的是，它们在前往南半球越冬地的途中，会飞越两个半球内看似适宜的栖息地，人类尚无法完全理解鸟类选择特定越冬地的原因，只能惊叹其迁徙壮举。"
+      "text": "C 段提出未解之谜：虽然食物解释基本成立，但很多鸟飞得比寻找食物和好天气所需更远。北极鸟类和滩涂觅食的岸鸟会飞越两个半球中看似合适的栖息地，前往更南方越冬。这种强迫性的长途迁徙可能随天气波动演化而来，但原因并不真正清楚。"
     },
     {
       "label": "Paragraph D",
-      "text": "最大谜团之一是幼鸟如何在无亲鸟引导的情况下找到传统越冬地。极少有成鸟带领幼鸟迁徙，幼鸟甚至可能不认识亲鸟。布谷鸟便是典型案例：它将卵产在其他鸟类巢中，从不与幼鸟见面，但幼鸟被义亲抚养长大后，仍能独自飞往热带越冬地，次年再返回北欧寻找同类交配。这暗示幼鸟从亲鸟处继承了内置路线图、方向识别能力及同类外形认知，但目前无人知晓其实现机制。"
+      "text": "D 段关注幼鸟如何在没有亲鸟帮助时成功迁徙。很少有成鸟陪同后代迁徙，幼鸟甚至可能不认识亲鸟。布谷鸟把蛋产在其他鸟巢中，由寄养亲鸟抚养；幼鸟长大后仍能独自去热带祖传越冬地，再独自回到北欧寻找同类配偶。"
     },
     {
       "label": "Paragraph E",
-      "text": "越来越多证据表明，鸟类通过太阳和星辰位置确定方向，还能感知地球磁场（可能因脑部存在微量磁铁矿晶体）。但精准导航还需感知位置和时间（尤其迷路时），实验显示，鸟类被带至数千英里外陌生陆地后，仍能快速返回巢址。这种非凡能力源于对多种复杂信号的整合，包括天生的夜空地图和地球磁场引力。鸟类如何使用这些 “工具” 仍未知，但可确定的是，它们的感官感知远超人类。多数小型鸟类夜间迁徙，通过日落位置导航，同时还能感知日落产生的偏振光，校准罗盘。夜间迁徙还具备其他优势：避开日间捕食者、降低在温暖日照下长时间飞行导致的脱水风险，且夜间空气凉爽、湍流少，利于持续稳定飞行。"
+      "text": "E 段总结鸟类导航研究发现：证据显示鸟类利用太阳和星星获得罗盘方向，但真正导航还需要位置和时间意识。实验表明，鸟类被带到数千英里外的陌生陆地后仍能快速返回巢址。它们会综合夜空的先天地图、地球磁场等线索；小型鸟类多在夜间迁徙，并利用落日位置和偏振光校准罗盘。夜间飞行还能减少遇到捕食者和脱水的风险。"
     },
     {
       "label": "Paragraph F",
-      "text": "然而，所有迁徙都伴随巨大风险，安全抵达的关键技能之一是 “适时出发”—— 这需要精准天气预报和利用顺风。鸟类擅长这两项技能，实验室测试显示，部分鸟类能感知房间地板与天花板间微小的气压差异，还能在天气变化显现前做出反应。例如，以草地为食的凤头麦鸡，在寒潮来临时会从荷兰西迁至不列颠群岛、法国和西班牙（地面结冰会导致它们挨饿），而在融雪前又会返回荷兰，其归期与预示天气好转的气压变化相关。"
+      "text": "F 段说明迁徙成功需要选择正确出发时机。鸟类需要准确预测天气并利用顺风；测试显示，一些鸟能感知房间地板与天花板之间极微小的气压差。它们常在天气变化出现可见迹象前就作出反应，例如草地觅食鸟类会在寒潮开始时离开，并在解冻前返回。"
     },
     {
       "label": "Paragraph G",
-      "text": "曾有一只威尔士曼岛剪水鹱被带至美国放飞，竟比宣布其放飞的信件早一天返回彭布罗克郡海岸附近的斯科霍姆岛巢穴；相反，每年秋季都有少量北美鸟类被快速西风带吹过大西洋，不仅安全抵达欧洲，环志证据显示，部分鸟类次年春季还能返回北美（可能在非洲温暖地区与欧洲迁徙鸟类共同越冬）。"
+      "text": "G 段说明风会带来损失，但也有成功案例。过去人们以为黑暗大风夜里、没有可见参照点的鸟会像没有雷达的飞行员一样彻底迷失；现在知道并非如此。鸟确实会被强气团扫离路线而死亡，但每年秋天也有少量北美鸟被西风吹过大西洋后安全到达欧洲，并有些在次年春天返回北美。"
     }
   ],
   "questionExplanations": [
     {
-      "sectionTitle": "1. 段落标题匹配（Questions 14–20：Choose the correct heading）",
+      "sectionTitle": "1. 段落标题匹配（Questions 14-20：Choose the correct heading）",
       "mode": "group",
       "items": [
         {
           "questionNumber": 14,
-          "text": "（1）题目 14：Paragraph A\n答案：iv（Physical characteristics that allow birds to migrate，使鸟类能够迁徙的生理特征）\n解析：Paragraph A 详细列举鸟类的 “轻质骨骼、特殊羽毛、高效呼吸、脂肪积累” 等生理结构，核心是 “支持迁徙的生理特征”，与标题 iv 一致，因此选 iv。",
+          "text": "（1）题目 14：Paragraph A\n答案：ii（The physical characteristics of birds that allow them to migrate）\n解析：A 段集中列出鸟类迁徙所需的身体与能力基础，包括 lightweight, hollow bones、finely-tuned navigation system、heat-conserving design 和高效呼吸系统，核心是“使鸟类能够迁徙的生理特征”，因此选 ii。",
           "questionId": "q1"
         },
         {
           "questionNumber": 15,
-          "text": "（2）题目 15：Paragraph B\n答案：v（The main reason why birds migrate，鸟类迁徙的主要原因）\n解析：Paragraph B 开篇即指出 “鸟类迁徙的根本原因是冬季寻找充足食物”，核心是 “迁徙的主要原因”，与标题 v 一致，因此选 v。",
+          "text": "（2）题目 15：Paragraph B\n答案：iv（The main reason why birds migrate）\n解析：B 段第一句说 Most of the explanation revolves around food，随后解释季节性食物丰富与短缺如何驱动迁徙，核心就是鸟类迁徙的主要原因，因此选 iv。",
           "questionId": "q2"
         },
         {
           "questionNumber": 16,
-          "text": "（3）题目 16：Paragraph C\n答案：ii（The unexplained rejection of closer feeding grounds，无法解释的对更近觅食地的排斥）\n解析：Paragraph C 强调 “鸟类迁徙远超必要距离，飞越适宜栖息地却不停留”，核心是 “无法解释为何排斥近觅食地”，与标题 ii 一致，因此选 ii。",
+          "text": "（3）题目 16：Paragraph C\n答案：x（The unexplained rejection of closer feeding grounds）\n解析：C 段说许多鸟 journey much further than would be necessary，并飞越 seemingly suitable habitat，结尾说明 we do not really know，核心是无法解释为什么放弃更近的合适觅食地，因此选 x。",
           "questionId": "q3"
         },
         {
           "questionNumber": 17,
-          "text": "（4）题目 17：Paragraph D\n答案：x（Mysterious migration despite lack of teaching，无教导却能完成的神秘迁徙）\n解析：Paragraph D 以布谷鸟为例，描述 “幼鸟无亲鸟引导仍能精准迁徙”，核心是 “无教导的神秘迁徙”，与标题 x 一致，因此选 x。",
+          "text": "（4）题目 17：Paragraph D\n答案：vi（Successful migration despite a lack of teaching）\n解析：D 段问 young birds 如何在 without parental assistance 的情况下迁徙，并以布谷鸟长大后独自到祖传越冬地为例。这里不是泛泛讲神秘，而是强调缺少教导仍成功迁徙，因此选 vi。",
           "questionId": "q4"
         },
         {
           "questionNumber": 18,
-          "text": "（5）题目 18：Paragraph E\n答案：vii（Research findings on how birds migrate，关于鸟类如何迁徙的研究发现）\n解析：Paragraph E 呈现 “鸟类通过太阳星辰、地球磁场导航” 等研究证据，核心是 “迁徙机制的研究发现”，与标题 vii 一致，因此选 vii。",
+          "text": "（5）题目 18：Paragraph E\n答案：v（Research findings on how birds find their way）\n解析：E 段列出研究证据：鸟用 sun and stars 获得 compass directions，也利用夜空地图、地球磁场和偏振光等线索，主题是鸟类如何找到路线的研究发现，因此选 v。",
           "questionId": "q5"
         },
         {
           "questionNumber": 19,
-          "text": "（6）题目 19：Paragraph F\n答案：i（The best moment to migrate，最佳迁徙时机）\n解析：Paragraph F 围绕 “适时出发的重要性（结合天气预报、利用顺风）” 展开，核心是 “最佳迁徙时机”，与标题 i 一致，因此选 i。",
+          "text": "（6）题目 19：Paragraph F\n答案：i（Choosing the best moment to migrate）\n解析：F 段第一句指出安全抵达的技能之一是 setting off at the right time，随后讲天气预测、顺风和气压变化，核心是选择最佳迁徙时机，因此选 i。",
           "questionId": "q6"
         },
         {
           "questionNumber": 20,
-          "text": "（7）题目 20：Paragraph G\n答案：viii（Successful migration despite the trouble of wind，尽管有风干扰仍成功迁徙）\n解析：Paragraph G 列举 “剪水鹱逆风返回、北美鸟类被风吹至欧洲仍能返程”，核心是 “有风干扰仍成功迁徙”，与标题 viii 一致，因此选 viii。",
+          "text": "（7）题目 20：Paragraph G\n答案：ix（Success despite problems with wind during migration）\n解析：G 段先说强气团会把鸟扫离路线造成死亡，再说北美鸟被西风吹过大西洋后仍安全到达欧洲并有些返回北美。核心是迁徙中遇到风的问题仍可能成功，因此选 ix。",
           "questionId": "q7"
         }
       ],
@@ -89,40 +89,40 @@
         "start": 14,
         "end": 20
       },
-      "text": "答案：iv（Physical characteristics that allow birds to migrate，使鸟类能够迁徙的生理特征）\n解析：Paragraph A 详细列举鸟类的 “轻质骨骼、特殊羽毛、高效呼吸、脂肪积累” 等生理结构，核心是 “支持迁徙的生理特征”，与标题 iv 一致，因此选 iv。\n答案：v（The main reason why birds migrate，鸟类迁徙的主要原因）\n解析：Paragraph B 开篇即指出 “鸟类迁徙的根本原因是冬季寻找充足食物”，核心是 “迁徙的主要原因”，与标题 v 一致，因此选 v。\n答案：ii（The unexplained rejection of closer feeding grounds，无法解释的对更近觅食地的排斥）\n解析：Paragraph C 强调 “鸟类迁徙远超必要距离，飞越适宜栖息地却不停留”，核心是 “无法解释为何排斥近觅食地”，与标题 ii 一致，因此选 ii。\n答案：x（Mysterious migration despite lack of teaching，无教导却能完成的神秘迁徙）\n解析：Paragraph D 以布谷鸟为例，描述 “幼鸟无亲鸟引导仍能精准迁徙”，核心是 “无教导的神秘迁徙”，与标题 x 一致，因此选 x。\n答案：vii（Research findings on how birds migrate，关于鸟类如何迁徙的研究发现）\n解析：Paragraph E 呈现 “鸟类通过太阳星辰、地球磁场导航” 等研究证据，核心是 “迁徙机制的研究发现”，与标题 vii 一致，因此选 vii。\n答案：i（The best moment to migrate，最佳迁徙时机）\n解析：Paragraph F 围绕 “适时出发的重要性（结合天气预报、利用顺风）” 展开，核心是 “最佳迁徙时机”，与标题 i 一致，因此选 i。\n答案：viii（Successful migration despite the trouble of wind，尽管有风干扰仍成功迁徙）\n解析：Paragraph G 列举 “剪水鹱逆风返回、北美鸟类被风吹至欧洲仍能返程”，核心是 “有风干扰仍成功迁徙”，与标题 viii 一致，因此选 viii。"
+      "text": "答案：14 ii，15 iv，16 x，17 vi，18 v，19 i，20 ix。A 段是迁徙所需身体特征；B 段是食物驱动的主要原因；C 段是飞越近处合适栖息地的未解问题；D 段是缺少亲鸟教导仍能成功迁徙；E 段是鸟类如何找路的研究发现；F 段是选择正确出发时机；G 段是风造成问题但仍有成功迁徙。"
     },
     {
-      "sectionTitle": "2. 多选题（Questions 21–22：Choose TWO letters）",
+      "sectionTitle": "2. 多选题（Questions 21-22：Choose TWO letters）",
       "mode": "per_question",
       "items": [],
       "questionRange": {
         "start": 21,
         "end": 22
       },
-      "text": "题目：Which TWO of the following statements are true of bird migration?（以下哪两项关于鸟类迁徙的表述正确？）\n答案：A、C\n选项 A：Birds often fly further than they need to.（鸟类迁徙距离常远超必要范围）\n解析：定位 Paragraph C 中 “many birds journey much further than would be necessary just to find food and good weather”，明确提到鸟类迁徙距离远超寻找食物和天气的必要范围，A 符合。\n- 选项 C：Birds flying at night need less water.（夜间飞行的鸟类对水的需求更低）\n解析：定位 Paragraph E 中 “Travelling at night... the danger of dehydration due to flying for long periods in warm, sunlit skies is reduced”，“脱水风险降低” 意味着对水的需求更少，C 符合。\n- 排除 B：Paragraph D 指出 “极少有成鸟带领幼鸟迁徙”，且未提及 “家庭群体安全”；排除 D：文中仅说鸟类 “感官感知远超人类”，未特指 “视力更锐利”；排除 E：Paragraph G 显示 “被风吹过大西洋的不止岸鸟”，且未提及 “岸鸟抗风”，E 错误。"
+      "text": "题目：According to the passage, which TWO of the following statements are true of migrating birds?\n答案：A、C\nA 正确：C 段说 many birds journey much further than would be necessary to find food and good weather，对应 Many birds migrate longer distances than they need to。\nC 正确：E 段说夜间飞行会减少 dehydration risk，对应 Birds need less water if they migrate at night。\nB 错误：D 段说 very few adults migrate accompanied by their offspring，没有说家庭群体最成功。D 错误：G 段说强气团会把鸟扫离路线，没有说只有 shore birds 不受风影响。E 错误：D 段布谷鸟幼鸟与同类分离后仍能迁徙并返回寻找同类，原文不支持“分离即无法存活”。"
     },
     {
-      "sectionTitle": "3. 句子填空（Questions 23–26：NO MORE THAN TWO WORDS）",
+      "sectionTitle": "3. 句子填空（Questions 23-26：ONE WORD ONLY）",
       "mode": "group",
       "items": [
         {
           "questionNumber": 23,
-          "text": "（1）题目 23：It is a great mystery that young birds like cuckoos can find their wintering grounds without \\___\\___\\___\\_.\n题目翻译：像布谷鸟这样的幼鸟能在没有_\\___\\___\\___的情况下找到越冬地，这是一个巨大谜团。\n答案：parental guidance（亲鸟引导）\n解析：定位 Paragraph D 中 “how young birds know how to find the traditional wintering areas without parental guidance”，明确提到幼鸟无 “亲鸟引导” 仍能找到越冬地，因此答案为 “parental guidance”。",
+          "text": "（1）题目 23：The cuckoo is able to migrate despite a lack of ___ guidance.\n答案：parental\n解析：D 段原文是 without parental assistance，题干改写为 despite a lack of parental guidance。题目要求 ONE WORD ONLY，因此填 parental，不能填旧版的 parental guidance。",
           "questionId": "q10"
         },
         {
           "questionNumber": 24,
-          "text": "（2）题目 24：Evidence shows birds can tell directions like a \\___\\___\\____ by observing the sun and the stars.\n题目翻译：证据表明，鸟类可通过观察太阳和星辰辨别方向，如同使用_\\___\\___\\___。\n答案：compass（指南针）\n解析：定位 Paragraph E 中 “birds use the positions of the sun and stars to obtain compass directions”，“obtain compass directions” 对应 “tell directions like a compass”，因此答案为 “compass”。",
+          "text": "（2）题目 24：Night travel benefits birds because they can avoid contact with ___.\n答案：predators\n解析：E 段说 Travelling at night provides other benefits: the danger of meeting predators ... is reduced。avoid contact with 对应 meeting，答案是 predators。",
           "questionId": "q11"
         },
         {
           "questionNumber": 25,
-          "text": "（3）题目 25：One advantage for birds flying at night is that they can avoid contact with \\___\\___\\___\\_.\n题目翻译：鸟类夜间飞行的一个优势是能避免接触_\\___\\___\\___。\n答案：(daytime) predators（日间捕食者）\n解析：定位 Paragraph E 中 “Traveling at night provides other benefits. Daytime predators are avoided”，明确提到夜间飞行可避开 “日间捕食者”，因此答案为 “(daytime) predators”（括号内词汇可省略，仅填 “predators” 也符合要求）。",
+          "text": "（3）题目 25：Some birds can anticipate weather changes without ___ clues.\n答案：visible\n解析：F 段说 birds react to weather changes before there is any visible sign of them。without visible clues 对应 before there is any visible sign，因此填 visible。",
           "questionId": "q12"
         },
         {
           "questionNumber": 26,
-          "text": "（4）题目 26：Laboratory tests show that birds can detect weather without \\___\\___\\____ signs.\n题目翻译：实验室测试显示，鸟类能在没有_\\___\\___\\___迹象的情况下感知天气变化。\n答案：visible（可见的）\n解析：定位 Paragraph F 中 “Often birds react to weather changes before there is any visible sign of them”，“before there is any visible sign” 对应 “without visible signs”，因此答案为 “visible”。",
+          "text": "（4）题目 26：In the past, birds were thought to be ___ when flying in the dark.\n答案：lost\n解析：G 段说过去的 assumption 是黑暗大风夜里的鸟 was ... hopelessly lost。题干 In the past, birds were thought to be ___ 对应 lost。",
           "questionId": "q13"
         }
       ],
@@ -130,7 +130,7 @@
         "start": 23,
         "end": 26
       },
-      "text": "题目翻译：像布谷鸟这样的幼鸟能在没有_\\___\\___\\___的情况下找到越冬地，这是一个巨大谜团。\n答案：parental guidance（亲鸟引导）\n解析：定位 Paragraph D 中 “how young birds know how to find the traditional wintering areas without parental guidance”，明确提到幼鸟无 “亲鸟引导” 仍能找到越冬地，因此答案为 “parental guidance”。\n题目翻译：证据表明，鸟类可通过观察太阳和星辰辨别方向，如同使用_\\___\\___\\___。\n答案：compass（指南针）\n解析：定位 Paragraph E 中 “birds use the positions of the sun and stars to obtain compass directions”，“obtain compass directions” 对应 “tell directions like a compass”，因此答案为 “compass”。\n题目翻译：鸟类夜间飞行的一个优势是能避免接触_\\___\\___\\___。\n答案：(daytime) predators（日间捕食者）\n解析：定位 Paragraph E 中 “Traveling at night provides other benefits. Daytime predators are avoided”，明确提到夜间飞行可避开 “日间捕食者”，因此答案为 “(daytime) predators”（括号内词汇可省略，仅填 “predators” 也符合要求）。\n题目翻译：实验室测试显示，鸟类能在没有_\\___\\___\\___迹象的情况下感知天气变化。\n答案：visible（可见的）\n解析：定位 Paragraph F 中 “Often birds react to weather changes before there is any visible sign of them”，“before there is any visible sign” 对应 “without visible signs”，因此答案为 “visible”。"
+      "text": "答案：23 parental，24 predators，25 visible，26 lost。新版 PDF 明确要求 ONE WORD ONLY；旧数据把第 23 题填成 parental guidance、把第 26 题做成 weather/visible 相关，都是旧版题干残留。"
     }
   ]
 }
