@@ -7,6 +7,12 @@
     const EXPLANATION_STYLE_ID = 'reading-explanation-style';
     const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__';
     const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange';
+    const EXPLANATION_NODE_SELECTOR = [
+        '.reading-explanation-card',
+        '.reading-group-explanation',
+        '.reading-question-explanation',
+        '.reading-question-explanation-list'
+    ].join(', ');
     const EXPLANATION_SPLIT_KINDS = new Set([
         'single_choice',
         'multi_choice',
@@ -71,7 +77,45 @@
         resetBtn: null
     };
 
+    const interaction = {
+        timerRunning: true,
+        timerInterval: null,
+        lastRange: null,
+        currentHighlightNode: null,
+        keepToolbar: false
+    };
+
+    function ensurePracticeTimerBridge() {
+        if (global[PRACTICE_TIMER_BRIDGE_KEY] && typeof global[PRACTICE_TIMER_BRIDGE_KEY].getSnapshot === 'function') {
+            return;
+        }
+        global[PRACTICE_TIMER_BRIDGE_KEY] = {
+            eventName: PRACTICE_TIMER_EVENT,
+            getSnapshot() {
+                const elapsedSeconds = getPageElapsedSeconds();
+                const durationSeconds = Math.max(0, Math.round(elapsedSeconds));
+                const effectiveEndTimeMs = Date.now();
+                const effectiveStartTimeMs = Math.max(0, effectiveEndTimeMs - (durationSeconds * 1000));
+                return {
+                    running: !Number.isFinite(state.pagePausedAtMs),
+                    elapsedSeconds,
+                    durationSeconds,
+                    displaySeconds: Math.floor(elapsedSeconds),
+                    effectiveStartTimeMs,
+                    effectiveEndTimeMs,
+                    anchorMs: state.pageStartTime,
+                    mode: state.suiteTimerMode || 'elapsed',
+                    limitSeconds: state.suiteTimerLimitSeconds,
+                    source: state.suiteSessionId ? 'suite' : 'local',
+                    pausedAtMs: Number.isFinite(state.pagePausedAtMs) ? state.pagePausedAtMs : null,
+                    pausedOffsetMs: Math.max(0, Number(state.pagePausedOffsetMs) || 0)
+                };
+            }
+        };
+    }
+
     function getPracticeTimerBridge() {
+        ensurePracticeTimerBridge();
         return global[PRACTICE_TIMER_BRIDGE_KEY];
     }
 
@@ -111,6 +155,210 @@
             startTimeMs: Math.floor(Number(snapshot.effectiveStartTimeMs)),
             endTimeMs: Math.floor(Number(snapshot.effectiveEndTimeMs))
         };
+    }
+
+    function formatTimerSeconds(totalSeconds) {
+        const safeSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+        const minutes = String(Math.floor(safeSeconds / 60)).padStart(2, '0');
+        const seconds = String(safeSeconds % 60).padStart(2, '0');
+        return `${minutes}:${seconds}`;
+    }
+
+    function renderTimer() {
+        const timer = document.getElementById('timer');
+        if (!timer) return;
+        let displaySeconds = getPageElapsedSeconds();
+        if (state.suiteTimerMode === 'countdown' && Number.isFinite(Number(state.suiteTimerLimitSeconds))) {
+            displaySeconds = Math.max(0, Number(state.suiteTimerLimitSeconds) - displaySeconds);
+        }
+        timer.textContent = formatTimerSeconds(displaySeconds);
+        timer.classList.toggle('paused', !interaction.timerRunning);
+        timer.style.opacity = interaction.timerRunning ? '1' : '0.5';
+    }
+
+    function setTimerRunning(nextRunning) {
+        interaction.timerRunning = !!nextRunning;
+        syncPagePauseState(interaction.timerRunning);
+        renderTimer();
+        try {
+            global.dispatchEvent(new CustomEvent(PRACTICE_TIMER_EVENT, {
+                detail: getPracticeTimerSnapshot()
+            }));
+        } catch (_) {
+            // ignore timer bridge event failures
+        }
+    }
+
+    function attachUnifiedTimer() {
+        ensurePracticeTimerBridge();
+        const timer = document.getElementById('timer');
+        if (timer) {
+            timer.addEventListener('click', () => setTimerRunning(!interaction.timerRunning));
+        }
+        if (!interaction.timerInterval) {
+            interaction.timerInterval = global.setInterval(() => {
+                if (interaction.timerRunning) {
+                    renderTimer();
+                }
+            }, 1000);
+        }
+        renderTimer();
+    }
+
+    function closeFloatingPanels() {
+        const settingsPanel = document.getElementById('settings-panel');
+        const notesPanel = document.getElementById('notes-panel');
+        const overlay = document.querySelector('.overlay');
+        if (settingsPanel) settingsPanel.style.display = 'none';
+        if (notesPanel) notesPanel.style.display = 'none';
+        if (overlay) overlay.style.display = 'none';
+    }
+
+    function attachUnifiedPanels() {
+        const settingsPanel = document.getElementById('settings-panel');
+        const notesPanel = document.getElementById('notes-panel');
+        const overlay = document.querySelector('.overlay');
+        const settingsBtn = document.getElementById('settings-btn');
+        const noteBtn = document.getElementById('note-btn');
+        const closeNoteBtn = document.getElementById('close-note');
+
+        settingsBtn?.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const nextVisible = settingsPanel?.style.display !== 'block';
+            closeFloatingPanels();
+            if (settingsPanel && nextVisible) {
+                settingsPanel.style.display = 'block';
+            }
+        });
+        noteBtn?.addEventListener('click', () => {
+            closeFloatingPanels();
+            if (notesPanel) notesPanel.style.display = 'flex';
+            if (overlay) overlay.style.display = 'block';
+        });
+        closeNoteBtn?.addEventListener('click', closeFloatingPanels);
+        overlay?.addEventListener('click', closeFloatingPanels);
+        document.querySelectorAll('.settings-option[data-size]').forEach((button) => {
+            button.addEventListener('click', () => {
+                document.documentElement.className = `font-${button.dataset.size || 'normal'}`;
+                document.querySelectorAll('.settings-option[data-size]').forEach((item) => item.classList.remove('active'));
+                button.classList.add('active');
+            });
+        });
+        document.querySelectorAll('.settings-option[data-mode]').forEach((button) => {
+            button.addEventListener('click', () => {
+                document.body.classList.toggle('dark-mode', button.dataset.mode === 'dark');
+                document.querySelectorAll('.settings-option[data-mode]').forEach((item) => item.classList.remove('active'));
+                button.classList.add('active');
+            });
+        });
+    }
+
+    function positionSelectionToolbar(rect) {
+        const toolbar = document.getElementById('selbar');
+        if (!toolbar) return;
+        toolbar.style.display = 'flex';
+        global.requestAnimationFrame(() => {
+            const top = global.scrollY + rect.top - toolbar.offsetHeight - 8;
+            const left = global.scrollX + rect.left + (rect.width / 2) - (toolbar.offsetWidth / 2);
+            toolbar.style.top = `${top > 0 ? top : global.scrollY + rect.bottom + 8}px`;
+            toolbar.style.left = `${Math.max(8, left)}px`;
+        });
+    }
+
+    function updateSelectionToolbar() {
+        const toolbar = document.getElementById('selbar');
+        if (!toolbar) return;
+        const selection = global.getSelection();
+        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+            if (!interaction.keepToolbar && !interaction.currentHighlightNode) {
+                toolbar.style.display = 'none';
+                interaction.currentHighlightNode = null;
+            }
+            return;
+        }
+        const range = selection.getRangeAt(0);
+        let container = range.commonAncestorContainer;
+        if (container.nodeType === Node.TEXT_NODE) {
+            container = container.parentElement;
+        }
+        const leftPane = dom.left;
+        const rightPane = document.getElementById('right');
+        const isInAllowedPane = (leftPane && leftPane.contains(container)) || (rightPane && rightPane.contains(container));
+        const highlightNode = container instanceof HTMLElement
+            ? (container.matches('.hl') ? container : container.closest('.hl'))
+            : null;
+        if (!isInAllowedPane && !highlightNode) {
+            toolbar.style.display = 'none';
+            return;
+        }
+        interaction.lastRange = range.cloneRange();
+        interaction.currentHighlightNode = highlightNode || null;
+        positionSelectionToolbar(range.getBoundingClientRect());
+    }
+
+    function applySelectionHighlight(kind = 'highlight') {
+        const toolbar = document.getElementById('selbar');
+        const selection = global.getSelection();
+        if (!interaction.lastRange || interaction.lastRange.collapsed || interaction.currentHighlightNode) {
+            return;
+        }
+        const span = document.createElement('span');
+        span.className = 'hl';
+        if (kind === 'note') {
+            span.dataset.hlType = 'note';
+        }
+        try {
+            interaction.lastRange.surroundContents(span);
+        } catch (_) {
+            return;
+        }
+        selection?.removeAllRanges();
+        if (toolbar) toolbar.style.display = 'none';
+        interaction.lastRange = null;
+        interaction.currentHighlightNode = null;
+        syncSimulationDraftSnapshot('highlight');
+    }
+
+    function removeSelectionHighlight() {
+        const toolbar = document.getElementById('selbar');
+        const selection = global.getSelection();
+        let target = interaction.currentHighlightNode;
+        if (!target && interaction.lastRange) {
+            const ancestor = interaction.lastRange.commonAncestorContainer;
+            target = ancestor.nodeType === Node.TEXT_NODE
+                ? ancestor.parentElement?.closest('.hl')
+                : ancestor.closest?.('.hl');
+        }
+        if (target && target.parentNode) {
+            const parent = target.parentNode;
+            while (target.firstChild) {
+                parent.insertBefore(target.firstChild, target);
+            }
+            parent.removeChild(target);
+            parent.normalize();
+        }
+        selection?.removeAllRanges();
+        if (toolbar) toolbar.style.display = 'none';
+        interaction.lastRange = null;
+        interaction.currentHighlightNode = null;
+        syncSimulationDraftSnapshot('unhighlight');
+    }
+
+    function attachSelectionHighlightToolbar() {
+        const toolbar = document.getElementById('selbar');
+        if (!toolbar) return;
+        document.addEventListener('selectionchange', () => {
+            global.setTimeout(updateSelectionToolbar, 10);
+        });
+        toolbar.addEventListener('mousedown', () => {
+            interaction.keepToolbar = true;
+        });
+        toolbar.addEventListener('mouseup', () => {
+            interaction.keepToolbar = false;
+        });
+        document.getElementById('btnHL')?.addEventListener('click', () => applySelectionHighlight('highlight'));
+        document.getElementById('btnNote')?.addEventListener('click', () => applySelectionHighlight('note'));
+        document.getElementById('btnUH')?.addEventListener('click', removeSelectionHighlight);
     }
 
     function decodeParam(value) {
@@ -311,9 +559,11 @@
     }
 
     function clearExplanations() {
-        document.querySelectorAll(
-            '.reading-explanation-card, .reading-group-explanation, .reading-question-explanation, .reading-question-explanation-list'
-        ).forEach((node) => node.remove());
+        document.querySelectorAll(EXPLANATION_NODE_SELECTOR).forEach((node) => node.remove());
+    }
+
+    function getHighlightShared() {
+        return global.__READING_HIGHLIGHT_SHARED__ || null;
     }
 
     function parseQuestionNumber(value) {
@@ -872,14 +1122,53 @@
     }
 
     function attachDragDrop() {
-        // practice-page-ui.js already manages drag boundaries and placing items.
-        // We only need to ensure the dropzones have the correct structure initialized.
         getDropzones().forEach((dropzone, index) => {
             if (!dropzone.dataset.dropzoneId) {
                 dropzone.dataset.dropzoneId = `dropzone-${index + 1}`;
             }
             ensureDropzoneHolder(dropzone);
             updateDropzoneState(dropzone);
+        });
+        document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
+            if (item instanceof HTMLElement) {
+                attachDraggableBehavior(item);
+            }
+        });
+        document.addEventListener('dragover', (event) => {
+            const target = event.target instanceof HTMLElement
+                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                : null;
+            if (!target) {
+                return;
+            }
+            event.preventDefault();
+            target.classList.add('drag-over');
+        });
+        document.addEventListener('dragleave', (event) => {
+            const target = event.target instanceof HTMLElement
+                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                : null;
+            target?.classList?.remove('drag-over');
+        });
+        document.addEventListener('drop', (event) => {
+            const target = event.target instanceof HTMLElement
+                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                : null;
+            if (!target) {
+                return;
+            }
+            event.preventDefault();
+            target.classList.remove('drag-over');
+            const raw = event.dataTransfer?.getData('text/plain') || '';
+            const payload = parseDragPayload(raw);
+            if (!payload) {
+                return;
+            }
+            if (target.classList.contains('pool-items')) {
+                handleDropBackToPool(payload);
+                return;
+            }
+            handleDropOnDropzone(target, payload);
         });
     }
 
@@ -1618,12 +1907,20 @@
     function resetToAnsweringPresentation() {
         state.lastResults = null;
         state.submitted = false;
+        state.readOnly = false;
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
         }
         clearExplanations();
+        document.body.classList.remove('review-readonly-mode');
+        document.querySelectorAll('input, textarea, select').forEach((control) => {
+            if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
+                control.disabled = false;
+            }
+        });
         updateNavStatuses();
+        syncPrimaryActionButtons();
     }
 
     function applyReviewContext(data = {}) {
@@ -1659,6 +1956,7 @@
             state.reviewMode = false;
             resetToAnsweringPresentation();
             setReadOnlyMode(false);
+            syncPrimaryActionButtons();
         } else {
             state.reviewMode = true;
             setReadOnlyMode(data.readOnly !== false);
@@ -1692,7 +1990,7 @@
         state.lastResults = replayResults;
         state.submitted = true;
         renderResults(replayResults);
-        await renderExplanations();
+        await preserveHighlightsDuring(() => renderExplanations());
         updateNavStatuses(replayResults);
         setReadOnlyMode(data.readOnly !== false);
         if (typeof global.setPracticeMarkedQuestions === 'function') {
@@ -2061,195 +2359,42 @@
         }
     }
 
-    function unwrapHighlights(root) {
-        if (!root) return;
-        root.querySelectorAll('.hl').forEach((highlight) => {
-            const parent = highlight.parentNode;
-            if (!parent) return;
-            while (highlight.firstChild) {
-                parent.insertBefore(highlight.firstChild, highlight);
-            }
-            parent.removeChild(highlight);
-            parent.normalize();
-        });
-    }
-
-    function resolveHighlightKind(node) {
-        if (!(node instanceof HTMLElement)) {
-            return 'highlight';
-        }
-        if (node.dataset && node.dataset.hlType === 'note') {
-            return 'note';
-        }
-        return 'highlight';
-    }
-
-    function applyHighlightKind(node, kind = 'highlight') {
-        if (!(node instanceof HTMLElement)) {
-            return;
-        }
-        node.classList.add('hl');
-        if (kind === 'note') {
-            node.dataset.hlType = 'note';
-        } else {
-            delete node.dataset.hlType;
-        }
-    }
-
     function resolveHighlightRoot(scope) {
         if (scope === 'left') return dom.left;
         return dom.groups;
     }
 
     function collectHighlights() {
-        const records = [];
-        const addScopeHighlights = (scope, root) => {
-            if (!root) return;
-            const seenByText = new Map();
-            const fullText = String(root.textContent || '');
-            const cursorByText = new Map();
-            Array.from(root.querySelectorAll('.hl')).forEach((node) => {
-                const text = String(node.textContent || '').trim();
-                if (!text) return;
-                const key = `${scope}::${text}`;
-                const seen = seenByText.get(key) || 0;
-                seenByText.set(key, seen + 1);
-                let cursor = cursorByText.get(key) || 0;
-                let hit = -1;
-                for (let index = 0; index <= seen; index += 1) {
-                    hit = fullText.indexOf(text, cursor);
-                    if (hit < 0) break;
-                    cursor = hit + text.length;
-                }
-                if (hit < 0) return;
-                cursorByText.set(key, cursor);
-                records.push({
-                    scope,
-                    text,
-                    kind: resolveHighlightKind(node),
-                    occurrence: seen,
-                    startOffset: hit,
-                    endOffset: hit + text.length,
-                    before: fullText.slice(Math.max(0, hit - 20), hit),
-                    after: fullText.slice(hit + text.length, hit + text.length + 20)
-                });
-            });
-        };
-        addScopeHighlights('left', dom.left);
-        addScopeHighlights('groups', dom.groups);
-        return records;
-    }
-
-    function resolveRangeFromOffsets(root, start, end) {
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-        let node = walker.nextNode();
-        let offset = 0;
-        let startNode = null;
-        let endNode = null;
-        let startOffset = 0;
-        let endOffset = 0;
-        while (node) {
-            const text = node.textContent || '';
-            const nextOffset = offset + text.length;
-            if (!startNode && start >= offset && start <= nextOffset) {
-                startNode = node;
-                startOffset = Math.max(0, start - offset);
-            }
-            if (!endNode && end >= offset && end <= nextOffset) {
-                endNode = node;
-                endOffset = Math.max(0, end - offset);
-            }
-            if (startNode && endNode) {
-                break;
-            }
-            offset = nextOffset;
-            node = walker.nextNode();
+        const shared = getHighlightShared();
+        if (!shared) {
+            return [];
         }
-        if (!startNode || !endNode) {
-            return null;
-        }
-        const range = document.createRange();
-        range.setStart(startNode, startOffset);
-        range.setEnd(endNode, endOffset);
-        return range;
-    }
-
-    function applyHighlightRecord(record) {
-        if (!record || !record.text) return;
-        const root = resolveHighlightRoot(record.scope);
-        if (!root) return;
-        const fullText = String(root.textContent || '');
-        if (!fullText) return;
-        const highlightKind = record.kind === 'note' ? 'note' : 'highlight';
-        const normalizedRecordText = String(record.text || '').replace(/\s+/g, ' ').trim();
-        const startOffset = Number(record.startOffset);
-        const endOffset = Number(record.endOffset);
-        if (
-            Number.isFinite(startOffset)
-            && Number.isFinite(endOffset)
-            && endOffset > startOffset
-            && startOffset >= 0
-            && endOffset <= fullText.length
-        ) {
-            const segment = fullText.slice(startOffset, endOffset);
-            const normalizedSegment = String(segment || '').replace(/\s+/g, ' ').trim();
-            const offsetLooksValid = !normalizedRecordText
-                || normalizedSegment === normalizedRecordText
-                || normalizedSegment.includes(normalizedRecordText)
-                || normalizedRecordText.includes(normalizedSegment);
-            if (offsetLooksValid) {
-                const offsetRange = resolveRangeFromOffsets(root, startOffset, endOffset);
-                if (offsetRange && !offsetRange.collapsed) {
-                    const offsetSpan = document.createElement('span');
-                    applyHighlightKind(offsetSpan, highlightKind);
-                    try {
-                        offsetRange.surroundContents(offsetSpan);
-                        return;
-                    } catch (_) {
-                        // fallback to text-based restore
-                    }
-                }
-            }
-        }
-        let cursor = 0;
-        let hit = -1;
-        const requiredOccurrence = Number.isFinite(Number(record.occurrence)) ? Number(record.occurrence) : 0;
-        for (let index = 0; index <= requiredOccurrence; index += 1) {
-            hit = fullText.indexOf(record.text, cursor);
-            if (hit < 0) break;
-            cursor = hit + record.text.length;
-        }
-        if (hit < 0) {
-            return;
-        }
-        const expectedBefore = String(record.before || '').trim();
-        const expectedAfter = String(record.after || '').trim();
-        if (expectedBefore && !fullText.slice(Math.max(0, hit - expectedBefore.length), hit).includes(expectedBefore)) {
-            return;
-        }
-        if (expectedAfter && !fullText.slice(hit + record.text.length, hit + record.text.length + expectedAfter.length).includes(expectedAfter)) {
-            return;
-        }
-        const range = resolveRangeFromOffsets(root, hit, hit + record.text.length);
-        if (!range || range.collapsed) {
-            return;
-        }
-        const span = document.createElement('span');
-        applyHighlightKind(span, highlightKind);
-        try {
-            range.surroundContents(span);
-        } catch (_) {
-            // ignore malformed ranges
-        }
+        return shared.snapshotHighlights({
+            left: dom.left,
+            groups: dom.groups
+        });
     }
 
     function applyHighlights(records = []) {
-        unwrapHighlights(dom.left);
-        unwrapHighlights(dom.groups);
-        if (!Array.isArray(records) || !records.length) {
+        const shared = getHighlightShared();
+        if (!shared) {
             return;
         }
-        records.forEach((record) => applyHighlightRecord(record));
+        shared.restoreHighlights({
+            left: dom.left,
+            groups: dom.groups
+        }, Array.isArray(records) ? records : []);
+    }
+
+    function preserveHighlightsDuring(callback) {
+        const shared = getHighlightShared();
+        if (!shared) {
+            return callback();
+        }
+        return shared.preserveHighlights({
+            left: dom.left,
+            groups: dom.groups
+        }, callback);
     }
 
     function dispatchSimulationNavigate(direction) {
@@ -2277,7 +2422,7 @@
         const results = buildResults();
         state.lastResults = results;
         renderResults(results);
-        await renderExplanations();
+        await preserveHighlightsDuring(() => renderExplanations());
         updateNavStatuses(results);
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
         const timing = resolvePracticeTiming(1);
@@ -2577,6 +2722,9 @@
         }
         initDragPools();
 
+        attachUnifiedTimer();
+        attachUnifiedPanels();
+        attachSelectionHighlightToolbar();
         attachActionListeners();
         attachMessageBridge();
         attachPracticeTimerBridge();
