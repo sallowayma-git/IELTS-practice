@@ -14,8 +14,8 @@
     const FREQUENCY_SORT_RANK = {
         'ultra-high': 5,
         '超高频': 5,
-        'very-high': 4,
-        '次高频': 4,
+        'very-high': 2,
+        '次高频': 2,
         'high': 3,
         '高频': 3,
         'medium': 2,
@@ -89,6 +89,48 @@
     function applyBrowsePostFilters(exams) {
         const deduplicated = deduplicateExams(exams);
         return applyExamSort(deduplicated);
+    }
+
+    function formatFrequencyLabel(frequency) {
+        const raw = String(frequency || '').trim().toLowerCase();
+        if (!raw) {
+            return '';
+        }
+        const map = {
+            'ultra-high': '超高频',
+            'very-high': '次高频',
+            'high': '高频',
+            'medium': '中频',
+            'mid': '中频',
+            'low': '低频',
+            '超高频': '超高频',
+            '次高频': '次高频',
+            '高频': '高频',
+            '中频': '中频',
+            '低频': '低频'
+        };
+        return map[raw] || String(frequency);
+    }
+
+    global.formatFrequencyLabel = formatFrequencyLabel;
+
+    if (typeof global.formatExamMetaText !== 'function') {
+        global.formatExamMetaText = function formatExamMetaText(exam) {
+            const parts = [];
+            if (exam && typeof exam.sequenceNumber === 'number') {
+                parts.push(String(exam.sequenceNumber));
+            }
+            if (exam && exam.category) {
+                parts.push(exam.category);
+            }
+            if (exam && exam.type) {
+                parts.push(exam.type);
+            }
+            if (exam && exam.type === 'reading' && exam.frequency) {
+                parts.push(formatFrequencyLabel(exam.frequency));
+            }
+            return parts.join(' | ');
+        };
     }
 
     function escapeHtml(value) {
