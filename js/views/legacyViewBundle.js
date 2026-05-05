@@ -888,11 +888,18 @@
             // Add frequency text for reading materials
             if (exam && exam.type === 'reading' && exam.frequency) {
                 var frequencyLabels = {
-                    'ultra-high': '超高',
-                    'high': '高',
-                    'medium': '次',
-                    'low': '低',
-                    'standard': '标准'
+                    'ultra-high': '超高频',
+                    'very-high': '次高频',
+                    'high': '高频',
+                    'medium': '中频',
+                    'mid': '中频',
+                    'low': '低频',
+                    'standard': '标准',
+                    '超高频': '超高频',
+                    '次高频': '次高频',
+                    '高频': '高频',
+                    '中频': '中频',
+                    '低频': '低频'
                 };
                 var label = frequencyLabels[exam.frequency] || exam.frequency;
                 fallbackParts.push(label);

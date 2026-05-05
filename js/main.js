@@ -2561,10 +2561,8 @@ function performSearch(query) {
 
     // 调试日志
     console.log('[Search] 执行搜索，查询词:', normalizedQuery);
-    const activeList = getFilteredExamsState();
-    console.log('[Search] 当前 filteredExams 数量:', activeList.length);
-
-    const searchBase = activeList.length ? activeList : getExamIndexState();
+    const searchBase = getExamIndexState();
+    console.log('[Search] 全量索引数量:', searchBase.length);
     const searchResults = searchBase.filter(exam => {
         if (exam.searchText) {
             return exam.searchText.includes(normalizedQuery);
