@@ -112,7 +112,16 @@
         return map[raw] || String(frequency);
     }
 
+    function formatDifficultyLabel(score) {
+        const value = Number(score);
+        if (!Number.isFinite(value)) {
+            return '';
+        }
+        return `难度 ${Number.isInteger(value) ? String(value) : String(value)}`;
+    }
+
     global.formatFrequencyLabel = formatFrequencyLabel;
+    global.formatDifficultyLabel = formatDifficultyLabel;
 
     if (typeof global.formatExamMetaText !== 'function') {
         global.formatExamMetaText = function formatExamMetaText(exam) {
@@ -128,6 +137,12 @@
             }
             if (exam && exam.type === 'reading' && exam.frequency) {
                 parts.push(formatFrequencyLabel(exam.frequency));
+            }
+            if (exam && exam.type === 'reading') {
+                const difficultyLabel = formatDifficultyLabel(exam.difficultyScore);
+                if (difficultyLabel) {
+                    parts.push(difficultyLabel);
+                }
             }
             return parts.join(' | ');
         };
