@@ -2234,8 +2234,13 @@ function displayExams(exams) {
             if (!exam) return;
             const item = document.createElement('div');
             item.className = 'exam-item';
+            const metaText = typeof window.formatExamMetaText === 'function'
+                ? window.formatExamMetaText(exam)
+                : [exam.category || '', exam.type || '', Number.isFinite(Number(exam.difficultyScore)) ? '难度 ' + Number(exam.difficultyScore) : '']
+                    .filter(Boolean)
+                    .join(' | ');
             item.innerHTML = '<div class="exam-info"><h4>' + (exam.title || '') + '</h4>' +
-                '<div class="exam-meta">' + (exam.category || '') + ' | ' + (exam.type || '') + '</div></div>' +
+                '<div class="exam-meta">' + metaText + '</div></div>' +
                 '<div class="exam-actions">' +
                 '<button class="btn" onclick="window.openExam(\'' + (exam.id || '') + '\')">开始练习</button>' +
                 '<button class="btn btn-outline" onclick="window.viewPDF(\'' + (exam.id || '') + '\')">PDF</button>' +

@@ -904,6 +904,9 @@
                 var label = frequencyLabels[exam.frequency] || exam.frequency;
                 fallbackParts.push(label);
             }
+            if (exam && exam.type === 'reading' && typeof exam.difficultyScore === 'number' && isFinite(exam.difficultyScore)) {
+                fallbackParts.push('难度 ' + exam.difficultyScore);
+            }
 
             metaText = fallbackParts.join(' | ');
         }
