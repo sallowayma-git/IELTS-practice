@@ -299,7 +299,7 @@ async def _complete_passage(suite_page: Page, total_count: int, index: int) -> b
                     "  return !!current && current !== String(initialId || '');\n"
                     "}",
                     arg=current_exam_id,
-                    timeout=60000,
+                    timeout=12000,
                 )
                 
                 new_exam_id = await suite_page.evaluate("() => document.body.dataset.examId || ''")
@@ -309,8 +309,37 @@ async def _complete_passage(suite_page: Page, total_count: int, index: int) -> b
                 if suite_page.is_closed():
                     log_step("套题页面在切换时关闭", "WARNING")
                     return False
-                log_step("等待下一篇超时", "ERROR")
-                raise
+                # 兼容提交后先进入回看页，再由 next 导航到下一篇
+                log_step("自动切换未发生，尝试通过回看导航 next 切题...", "WARNING")
+                nav_next_selector = await suite_page.evaluate(
+                    """() => {
+                        const bar = document.getElementById('review-nav-bar') || document.getElementById('practice-review-nav');
+                        if (!bar) return '';
+                        const next = bar.querySelector('button[data-review-dir="next"], button[data-review-nav="next"]');
+                        if (!next || next.disabled) return '';
+                        if (next.getAttribute('data-review-dir')) {
+                            return '#review-nav-bar button[data-review-dir="next"]';
+                        }
+                        if (next.getAttribute('data-review-nav')) {
+                            return '#practice-review-nav button[data-review-nav="next"]';
+                        }
+                        return '';
+                    }"""
+                )
+                if not nav_next_selector:
+                    log_step("等待下一篇超时，且未找到可点击 next 导航", "ERROR")
+                    raise
+                await suite_page.click(nav_next_selector)
+                await suite_page.wait_for_function(
+                    "(initialId) => {\n"
+                    "  const current = document.body.dataset.examId || '';\n"
+                    "  return !!current && current !== String(initialId || '');\n"
+                    "}",
+                    arg=current_exam_id,
+                    timeout=60000,
+                )
+                new_exam_id = await suite_page.evaluate("() => document.body.dataset.examId || ''")
+                log_step(f"已通过回看导航切换到下一篇: {new_exam_id}", "SUCCESS")
 
             await suite_page.wait_for_function(
                 "() => { const btn = document.getElementById('complete-exam-btn'); return btn && !btn.disabled; }",

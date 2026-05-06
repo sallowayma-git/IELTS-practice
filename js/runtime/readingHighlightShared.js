@@ -53,6 +53,10 @@
             .join('');
     }
 
+    function normalizeComparableText(value) {
+        return String(value || '').replace(/\s+/g, ' ').trim();
+    }
+
     function unwrapHighlights(root) {
         if (!root) return;
         root.querySelectorAll('.hl').forEach((highlight) => {
@@ -147,15 +151,21 @@
                 }
                 if (hit < 0) return;
                 cursorByText.set(key, cursor);
+                const startOffset = hit;
+                const endOffset = hit + text.length;
+                const before = fullText.slice(Math.max(0, startOffset - 20), startOffset);
+                const after = fullText.slice(endOffset, endOffset + 20);
                 records.push({
                     scope,
                     text,
                     kind: resolveHighlightKind(node),
                     occurrence: seen,
-                    startOffset: hit,
-                    endOffset: hit + text.length,
-                    before: fullText.slice(Math.max(0, hit - 20), hit),
-                    after: fullText.slice(hit + text.length, hit + text.length + 20)
+                    start: startOffset,
+                    end: endOffset,
+                    startOffset,
+                    endOffset,
+                    before,
+                    after
                 });
             });
         });
@@ -171,9 +181,39 @@
             return;
         }
         const highlightKind = record.kind === 'note' ? 'note' : 'highlight';
-        const normalizedRecordText = String(record.text || '').replace(/\s+/g, ' ').trim();
-        const startOffset = Number(record.startOffset);
-        const endOffset = Number(record.endOffset);
+        const normalizedRecordText = normalizeComparableText(record.text);
+        const startOffset = Number(
+            Object.prototype.hasOwnProperty.call(record, 'start')
+                ? record.start
+                : record.startOffset
+        );
+        const endOffset = Number(
+            Object.prototype.hasOwnProperty.call(record, 'end')
+                ? record.end
+                : record.endOffset
+        );
+        const expectedBefore = normalizeComparableText(record.before);
+        const expectedAfter = normalizeComparableText(record.after);
+        const occurrence = Number.isFinite(Number(record.occurrence)) ? Number(record.occurrence) : 0;
+        const hasOffsetSnapshot = Number.isFinite(startOffset)
+            && Number.isFinite(endOffset)
+            && endOffset > startOffset;
+
+        const offsetMatchByContext = (candidateStart) => {
+            const candidateEnd = candidateStart + String(record.text || '').length;
+            const candidateBefore = fullText.slice(Math.max(0, candidateStart - expectedBefore.length), candidateStart);
+            const candidateAfter = fullText.slice(candidateEnd, candidateEnd + expectedAfter.length);
+            const normalizedBefore = normalizeComparableText(candidateBefore);
+            const normalizedAfter = normalizeComparableText(candidateAfter);
+            if (expectedBefore && !normalizedBefore.endsWith(expectedBefore)) {
+                return false;
+            }
+            if (expectedAfter && !normalizedAfter.startsWith(expectedAfter)) {
+                return false;
+            }
+            return true;
+        };
+
         if (
             Number.isFinite(startOffset)
             && Number.isFinite(endOffset)
@@ -182,7 +222,7 @@
             && endOffset <= fullText.length
         ) {
             const segment = fullText.slice(startOffset, endOffset);
-            const normalizedSegment = String(segment || '').replace(/\s+/g, ' ').trim();
+            const normalizedSegment = normalizeComparableText(segment);
             const offsetLooksValid = !normalizedRecordText
                 || normalizedSegment === normalizedRecordText
                 || normalizedSegment.includes(normalizedRecordText)
@@ -194,7 +234,7 @@
                     applyHighlightKind(offsetSpan, highlightKind);
                     try {
                         offsetRange.surroundContents(offsetSpan);
-                        return;
+                        return true;
                     } catch (_) {
                         // fallback to text-based restore
                     }
@@ -203,34 +243,50 @@
         }
         let cursor = 0;
         let hit = -1;
-        const requiredOccurrence = Number.isFinite(Number(record.occurrence)) ? Number(record.occurrence) : 0;
-        for (let index = 0; index <= requiredOccurrence; index += 1) {
+        let matchedLength = String(record.text || '').length;
+        for (let index = 0; index <= occurrence; index += 1) {
             hit = fullText.indexOf(record.text, cursor);
             if (hit < 0) break;
             cursor = hit + record.text.length;
         }
+        if (hit < 0 && normalizedRecordText) {
+            const escapedTokens = normalizedRecordText
+                .split(/\s+/)
+                .filter(Boolean)
+                .map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+            if (escapedTokens.length) {
+                const pattern = new RegExp(escapedTokens.join('\\s+'), 'g');
+                let matched = null;
+                let index = 0;
+                while ((matched = pattern.exec(fullText)) !== null) {
+                    if (index === occurrence) {
+                        hit = matched.index;
+                        matchedLength = String(matched[0] || '').length || matchedLength;
+                        break;
+                    }
+                    index += 1;
+                    if (pattern.lastIndex === matched.index) {
+                        pattern.lastIndex += 1;
+                    }
+                }
+            }
+        }
         if (hit < 0) {
-            return;
+            return false;
         }
-        const expectedBefore = String(record.before || '').trim();
-        const expectedAfter = String(record.after || '').trim();
-        if (expectedBefore && !fullText.slice(Math.max(0, hit - expectedBefore.length), hit).includes(expectedBefore)) {
-            return;
-        }
-        if (expectedAfter && !fullText.slice(hit + record.text.length, hit + record.text.length + expectedAfter.length).includes(expectedAfter)) {
-            return;
-        }
-        const range = resolveRangeFromOffsets(root, hit, hit + record.text.length);
+        const range = resolveRangeFromOffsets(root, hit, hit + matchedLength);
         if (!range || range.collapsed) {
-            return;
+            return false;
         }
         const span = document.createElement('span');
         applyHighlightKind(span, highlightKind);
         try {
             range.surroundContents(span);
+            return true;
         } catch (_) {
             // ignore malformed ranges
         }
+        return false;
     }
 
     function restoreHighlights(rootsByScope, records = []) {
@@ -238,13 +294,17 @@
             Object.values(rootsByScope).forEach((root) => unwrapHighlights(root));
         }
         if (!Array.isArray(records) || !records.length || !rootsByScope || typeof rootsByScope !== 'object') {
-            return;
+            return 0;
         }
+        let restoredCount = 0;
         records.forEach((record) => {
             const root = rootsByScope[record.scope];
             if (!root) return;
-            restoreHighlightRecord(root, record);
+            if (restoreHighlightRecord(root, record)) {
+                restoredCount += 1;
+            }
         });
+        return restoredCount;
     }
 
     async function preserveHighlights(rootsByScope, callback) {
