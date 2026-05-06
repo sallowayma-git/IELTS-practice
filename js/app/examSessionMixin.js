@@ -1806,7 +1806,21 @@
                         break;
                     case 'SIMULATION_DRAFT_SYNC':
                         if (this.currentSuiteSession && data && data.draft) {
-                            this.currentSuiteSession.draftsByExam[examId] = data.draft;
+                            const incomingUpdatedAt = Number(data.draftUpdatedAt ?? data.draft.updatedAt);
+                            const previousDraft = this.currentSuiteSession.draftsByExam[examId] || null;
+                            const previousUpdatedAt = Number(previousDraft && previousDraft.updatedAt);
+                            const shouldAcceptDraft = !(
+                                previousDraft
+                                && Number.isFinite(previousUpdatedAt)
+                                && Number.isFinite(incomingUpdatedAt)
+                                && incomingUpdatedAt < previousUpdatedAt
+                            );
+                            if (shouldAcceptDraft) {
+                                this.currentSuiteSession.draftsByExam[examId] = {
+                                    ...data.draft,
+                                    updatedAt: Number.isFinite(incomingUpdatedAt) ? incomingUpdatedAt : Date.now()
+                                };
+                            }
                             if (typeof this._mirrorSessionToStorage === 'function') {
                                 this._mirrorSessionToStorage(this.currentSuiteSession);
                             }

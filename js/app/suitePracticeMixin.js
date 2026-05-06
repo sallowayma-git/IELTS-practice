@@ -229,7 +229,10 @@
             session.draftsByExam[examId] = {
                 answers: data.answers || {},
                 highlights: data.highlights || [],
-                scrollY: data.scrollY || 0
+                scrollY: data.scrollY || 0,
+                updatedAt: Number.isFinite(Number(data && data.draftUpdatedAt))
+                    ? Number(data.draftUpdatedAt)
+                    : Date.now()
             };
             if (Number.isFinite(Number(data && data.duration))) {
                 session.elapsedByExam[examId] = Math.max(0, Number(data.duration));
@@ -773,7 +776,21 @@
 
                 // Save current draft before switching
                 if (data && data.draft) {
-                    session.draftsByExam[normalizedExamId] = data.draft;
+                    const incomingUpdatedAt = Number(data.draftUpdatedAt ?? data.draft.updatedAt);
+                    const previousDraft = session.draftsByExam[normalizedExamId] || null;
+                    const previousUpdatedAt = Number(previousDraft && previousDraft.updatedAt);
+                    const shouldAcceptDraft = !(
+                        previousDraft
+                        && Number.isFinite(previousUpdatedAt)
+                        && Number.isFinite(incomingUpdatedAt)
+                        && incomingUpdatedAt < previousUpdatedAt
+                    );
+                    if (shouldAcceptDraft) {
+                        session.draftsByExam[normalizedExamId] = {
+                            ...data.draft,
+                            updatedAt: Number.isFinite(incomingUpdatedAt) ? incomingUpdatedAt : Date.now()
+                        };
+                    }
                 }
                 if (data && typeof data.elapsed === 'number') {
                     session.elapsedByExam[normalizedExamId] = data.elapsed;

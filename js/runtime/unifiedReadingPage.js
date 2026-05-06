@@ -74,7 +74,8 @@
         results: null,
         nav: null,
         submitBtn: null,
-        resetBtn: null
+        resetBtn: null,
+        exitBtn: null
     };
 
     const interaction = {
@@ -419,6 +420,7 @@
         dom.nav = document.getElementById('question-nav');
         dom.submitBtn = document.getElementById('submit-btn');
         dom.resetBtn = document.getElementById('reset-btn');
+        dom.exitBtn = document.getElementById('exit-btn');
     }
 
     function loadScript(url) {
@@ -835,19 +837,33 @@
     }
 
     function locateQuestionContainer(groupEl, questionId) {
+        const itemContainerSelector = '.question-item, .tfng-item, .match-question-item, .question-row, .summary-completion, tr, li';
         const escaped = escapeSelector(questionId);
         const directByAnchor = groupEl.querySelector(`#${escaped}-anchor`);
         if (directByAnchor) {
-            return directByAnchor.closest('.question-item, .tfng-item, .match-question-item, .question-row, .summary-completion')
+            return directByAnchor.closest(itemContainerSelector)
                 || directByAnchor.parentElement;
         }
         const inputByName = groupEl.querySelector(`[name="${escaped}"]`);
         if (inputByName) {
-            return inputByName.closest('.question-item, .tfng-item, .match-question-item, .question-row, .summary-completion');
+            return inputByName.closest(itemContainerSelector);
         }
         const byData = groupEl.querySelector(`[data-question="${escaped}"]`);
         if (byData) {
-            return byData.closest('.question-item, .match-question-item, .paragraph-wrapper, .summary-completion') || byData.parentElement;
+            return byData.closest('.question-item, .match-question-item, .question-row, .summary-completion, .paragraph-wrapper, tr, li')
+                || byData.parentElement;
+        }
+        const displayNumber = Number(questionNumberFromId(questionId));
+        if (Number.isFinite(displayNumber)) {
+            const candidates = Array.from(groupEl.querySelectorAll(itemContainerSelector));
+            for (let index = 0; index < candidates.length; index += 1) {
+                const candidate = candidates[index];
+                const text = String(candidate.textContent || '');
+                if (!text) continue;
+                if (new RegExp(`\\b${displayNumber}\\b`).test(text)) {
+                    return candidate;
+                }
+            }
         }
         return null;
     }
@@ -917,11 +933,14 @@
                 number: questionNumberFromId(questionId)
             })).filter((pair) => Number.isFinite(pair.number));
             const questionNumbers = questionPairs.map((pair) => pair.number);
-            const splitMode = EXPLANATION_SPLIT_KINDS.has(group.kind);
+            const sectionForGroup = pickSectionForGroup(questionNumbers, 'per_question')
+                || pickSectionForGroup(questionNumbers, 'group')
+                || pickSectionForGroup(questionNumbers, null);
+            const hasPerQuestionItems = Array.isArray(sectionForGroup?.items) && sectionForGroup.items.length > 0;
+            const splitMode = EXPLANATION_SPLIT_KINDS.has(group.kind) || hasPerQuestionItems;
 
             if (splitMode) {
-                const section = pickSectionForGroup(questionNumbers, 'per_question')
-                    || pickSectionForGroup(questionNumbers, null);
+                const section = sectionForGroup || pickSectionForGroup(questionNumbers, null);
                 if (section) {
                     renderPerQuestionExplanations(groupEl, section, questionPairs);
                 }
@@ -1776,6 +1795,32 @@
         refreshSimulationDraftSyncLifecycle();
     }
 
+    function disableDragInteractions() {
+        document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
+            if (!(item instanceof HTMLElement)) return;
+            item.setAttribute('draggable', state.readOnly ? 'false' : 'true');
+            item.classList.toggle('drag-item-locked', state.readOnly);
+        });
+    }
+
+    function setExitButtonVisible(visible) {
+        if (!dom.exitBtn) return;
+        dom.exitBtn.style.display = visible ? 'block' : 'none';
+    }
+
+    function enterSubmittedReadOnlyState(reason = 'submit') {
+        state.submitted = true;
+        setReadOnlyMode(true);
+        disableDragInteractions();
+        setTimerRunning(false);
+        if (dom.submitBtn) dom.submitBtn.disabled = true;
+        if (dom.resetBtn) dom.resetBtn.disabled = true;
+        setExitButtonVisible(true);
+        if (reason === 'simulation-final-submit' || reason === 'replay-review') {
+            stopSimulationDraftSync();
+        }
+    }
+
     function syncSimulationRuntimeFlags() {
         try {
             global.__UNIFIED_READING_SIMULATION_MODE__ = Boolean(state.simulationMode);
@@ -1919,6 +1964,9 @@
                 control.disabled = false;
             }
         });
+        disableDragInteractions();
+        setTimerRunning(true);
+        setExitButtonVisible(false);
         updateNavStatuses();
         syncPrimaryActionButtons();
     }
@@ -1959,7 +2007,11 @@
             syncPrimaryActionButtons();
         } else {
             state.reviewMode = true;
-            setReadOnlyMode(data.readOnly !== false);
+            if (data.readOnly !== false) {
+                enterSubmittedReadOnlyState('stationary-review');
+            } else {
+                setReadOnlyMode(false);
+            }
         }
     }
 
@@ -1987,12 +2039,21 @@
         state.reviewMode = true;
         state.reviewViewMode = 'review';
         applyReplayAnswersToDom(replayResults.answers || {});
+        const replayHighlights = Array.isArray(entry.highlights) ? entry.highlights : [];
+        applyHighlights(replayHighlights);
+        if (Number.isFinite(Number(entry.scrollY))) {
+            global.scrollTo(0, Number(entry.scrollY));
+        }
         state.lastResults = replayResults;
-        state.submitted = true;
         renderResults(replayResults);
-        await preserveHighlightsDuring(() => renderExplanations());
+        await renderExplanations();
+        applyHighlights(replayHighlights);
         updateNavStatuses(replayResults);
-        setReadOnlyMode(data.readOnly !== false);
+        if (data.readOnly !== false) {
+            enterSubmittedReadOnlyState('replay-review');
+        } else {
+            setReadOnlyMode(false);
+        }
         if (typeof global.setPracticeMarkedQuestions === 'function') {
             try {
                 global.setPracticeMarkedQuestions(replayMarks);
@@ -2194,10 +2255,12 @@
 
     function collectCurrentDraft() {
         const answers = collectAnswers();
+        const updatedAt = Date.now();
         return {
             answers,
             highlights: collectHighlights(),
-            scrollY: global.scrollY || 0
+            scrollY: global.scrollY || 0,
+            updatedAt
         };
     }
 
@@ -2218,6 +2281,7 @@
         persistSimulationDraftMirror(mirroredDraft);
         postMessage('SIMULATION_DRAFT_SYNC', {
             draft: mirroredDraft,
+            draftUpdatedAt: Number.isFinite(Number(mirroredDraft.updatedAt)) ? Number(mirroredDraft.updatedAt) : Date.now(),
             elapsed: getPageElapsedSeconds()
         });
     }
@@ -2378,9 +2442,9 @@
     function applyHighlights(records = []) {
         const shared = getHighlightShared();
         if (!shared) {
-            return;
+            return 0;
         }
-        shared.restoreHighlights({
+        return shared.restoreHighlights({
             left: dom.left,
             groups: dom.groups
         }, Array.isArray(records) ? records : []);
@@ -2397,32 +2461,59 @@
         }, callback);
     }
 
-    function dispatchSimulationNavigate(direction) {
+    function buildSubmissionSnapshot() {
+        const results = buildResults();
+        return {
+            results,
+            answers: results.answers || {},
+            highlights: collectHighlights(),
+            scrollY: global.scrollY || 0,
+            elapsed: getPageElapsedSeconds(),
+            updatedAt: Date.now()
+        };
+    }
+
+    function dispatchSimulationNavigate(direction, submissionSnapshot = null) {
         if (!state.simulationMode || !state.simulationCtx || state.readOnly) {
             return;
         }
+        const snapshot = submissionSnapshot || buildSubmissionSnapshot();
         postMessage('SIMULATION_NAVIGATE', {
             direction: direction === 'prev' ? 'prev' : 'next',
-            draft: collectCurrentDraft(),
-            resultSnapshot: buildResults(),
-            elapsed: getPageElapsedSeconds()
+            draft: {
+                answers: snapshot.answers || {},
+                highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
+                scrollY: Number.isFinite(Number(snapshot.scrollY)) ? Number(snapshot.scrollY) : 0,
+                updatedAt: Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now()
+            },
+            draftUpdatedAt: Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now(),
+            resultSnapshot: snapshot.results,
+            answers: snapshot.answers || {},
+            highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
+            scrollY: Number.isFinite(Number(snapshot.scrollY)) ? Number(snapshot.scrollY) : 0,
+            elapsed: Number.isFinite(Number(snapshot.elapsed)) ? Number(snapshot.elapsed) : getPageElapsedSeconds()
         });
     }
     async function handleSubmit() {
         if (state.readOnly) {
             return;
         }
+        const submissionSnapshot = buildSubmissionSnapshot();
         if (state.simulationMode) {
             syncSimulationDraftSnapshot('submit');
         }
         if (state.simulationMode && state.simulationCtx && !state.simulationCtx.isLast) {
-            dispatchSimulationNavigate('next');
+            dispatchSimulationNavigate('next', submissionSnapshot);
             return;
         }
-        const results = buildResults();
+        const results = submissionSnapshot.results;
+        const highlightSnapshot = Array.isArray(submissionSnapshot.highlights)
+            ? submissionSnapshot.highlights
+            : [];
         state.lastResults = results;
         renderResults(results);
-        await preserveHighlightsDuring(() => renderExplanations());
+        await renderExplanations();
+        applyHighlights(highlightSnapshot);
         updateNavStatuses(results);
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
         const timing = resolvePracticeTiming(1);
@@ -2444,22 +2535,26 @@
                 markedQuestions: (typeof global.getPracticeMarkedQuestions === 'function')
                     ? global.getPracticeMarkedQuestions()
                     : []
-            }
+            },
+            answers: submissionSnapshot.answers || {},
+            highlights: Array.isArray(submissionSnapshot.highlights) ? submissionSnapshot.highlights : [],
+            scrollY: Number.isFinite(Number(submissionSnapshot.scrollY)) ? Number(submissionSnapshot.scrollY) : 0
         }, results));
         if (state.simulationMode && state.simulationCtx && state.simulationCtx.isLast) {
             stopSimulationDraftSync();
             clearSimulationDraftMirror();
             state.simulationDraftFingerprint = '';
         }
+        enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
     }
 
     function handleReset() {
-        if (state.readOnly) {
+        if (state.readOnly || state.submitted) {
             return;
         }
         if (state.simulationMode && state.simulationCtx) {
             if (state.simulationCtx.canPrev) {
-                dispatchSimulationNavigate('prev');
+                dispatchSimulationNavigate('prev', buildSubmissionSnapshot());
             }
             return;
         }
@@ -2480,12 +2575,45 @@
             dom.results.innerHTML = '';
         }
         clearExplanations();
+        setExitButtonVisible(false);
         updateNavStatuses();
+    }
+
+    function handleExitClick() {
+        const inSuiteLikeMode = Boolean(state.suiteSessionId || state.reviewMode || state.suiteReviewMode);
+        const hasEndlessMarker = /(?:^|[?&])endless(?:=|&|$)/i.test(global.location.search || '')
+            || document.body?.dataset?.endlessMode === 'true'
+            || global.__ENDLESS_PRACTICE_MODE__ === true;
+        const opener = global.opener && !global.opener.closed ? global.opener : null;
+        if (hasEndlessMarker && opener) {
+            try {
+                opener.postMessage({ type: 'ENDLESS_USER_EXIT' }, '*');
+                if (typeof opener.stopEndlessPractice === 'function') {
+                    opener.stopEndlessPractice();
+                } else if (opener.AppActions && typeof opener.AppActions.stopEndlessPractice === 'function') {
+                    opener.AppActions.stopEndlessPractice();
+                }
+            } catch (_) {
+                // ignore endless callback failures
+            }
+        } else if (inSuiteLikeMode) {
+            postMessage('SUITE_USER_EXIT', {
+                reviewMode: state.reviewMode,
+                suiteReviewMode: state.suiteReviewMode,
+                submitted: state.submitted
+            });
+        }
+        try {
+            global.close();
+        } catch (_) {
+            // ignore close failures
+        }
     }
 
     function attachActionListeners() {
         dom.submitBtn?.addEventListener('click', handleSubmit);
         dom.resetBtn?.addEventListener('click', handleReset);
+        dom.exitBtn?.addEventListener('click', handleExitClick);
         document.addEventListener('change', () => updateNavStatuses());
         document.addEventListener('input', () => updateNavStatuses());
         document.addEventListener('drop', () => {
@@ -2577,7 +2705,11 @@
             }
             if (data.reviewMode) {
                 state.reviewMode = true;
-                setReadOnlyMode(data.readOnly !== false);
+                if (data.readOnly !== false) {
+                    enterSubmittedReadOnlyState('stationary-review');
+                } else {
+                    setReadOnlyMode(false);
+                }
             }
             syncPrimaryActionButtons();
             refreshSimulationDraftSyncLifecycle();
@@ -2729,6 +2861,7 @@
         attachMessageBridge();
         attachPracticeTimerBridge();
         syncSuiteModeState();
+        setExitButtonVisible(false);
         updateNavStatuses();
         refreshSimulationDraftSyncLifecycle();
         startInitLoop();
