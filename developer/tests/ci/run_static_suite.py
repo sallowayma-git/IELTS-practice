@@ -1065,6 +1065,70 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("模拟模式切题回灌回归测试", False, "测试脚本缺失"))
         all_passed = False
 
+    unified_submit_readonly_test = REPO_ROOT / "developer" / "tests" / "e2e" / "unified_submit_readonly_regression.py"
+    if unified_submit_readonly_test.exists():
+        try:
+            completed_unified_submit = subprocess.run(
+                [sys.executable, str(unified_submit_readonly_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=240,
+                encoding="utf-8"
+            )
+        except subprocess.TimeoutExpired:
+            unified_submit_passed = False
+            unified_submit_detail = "执行超时（240秒）"
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            unified_submit_passed = False
+            unified_submit_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_unified_submit = (completed_unified_submit.stdout or "").strip() or (completed_unified_submit.stderr or "").strip()
+            try:
+                unified_submit_payload = json.loads(raw_unified_submit or "{}")
+            except json.JSONDecodeError as parse_error:
+                unified_submit_passed = False
+                unified_submit_detail = f"输出解析失败: {parse_error}"
+            else:
+                unified_submit_passed = unified_submit_payload.get("status") == "pass"
+                unified_submit_detail = unified_submit_payload.get("detail", unified_submit_payload)
+        results.append(_format_result("统一阅读提交只读高亮回归测试", unified_submit_passed, unified_submit_detail))
+        all_passed &= unified_submit_passed
+    else:
+        results.append(_format_result("统一阅读提交只读高亮回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    unified_lock_regression_test = REPO_ROOT / "developer" / "tests" / "js" / "unifiedReadingLockRegression.test.js"
+    if unified_lock_regression_test.exists():
+        try:
+            completed_unified_lock = subprocess.run(
+                ["node", str(unified_lock_regression_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8"
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            unified_lock_passed = False
+            unified_lock_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_unified_lock = (completed_unified_lock.stdout or "").strip() or (completed_unified_lock.stderr or "").strip()
+            try:
+                unified_lock_payload = json.loads(raw_unified_lock or "{}")
+            except json.JSONDecodeError as parse_error:
+                unified_lock_passed = False
+                unified_lock_detail = f"输出解析失败: {parse_error}"
+            else:
+                unified_lock_passed = unified_lock_payload.get("status") == "pass"
+                unified_lock_detail = unified_lock_payload.get("detail", unified_lock_payload)
+        results.append(_format_result("统一阅读锁定与退出静态回归测试", unified_lock_passed, unified_lock_detail))
+        all_passed &= unified_lock_passed
+    else:
+        results.append(_format_result("统一阅读锁定与退出静态回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
     inline_fallback_test = REPO_ROOT / "developer" / "tests" / "js" / "suiteInlineFallback.test.js"
     if inline_fallback_test.exists():
         try:
