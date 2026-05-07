@@ -1124,7 +1124,10 @@ class ScoreStorage {
             const correctAnswer = correctMap && correctMap[questionId] ? String(correctMap[questionId]) : '-';
             let isCorrect = null;
             if (correctAnswer !== '-') {
-                isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+                const matchCore = window.AnswerMatchCore;
+                isCorrect = matchCore && typeof matchCore.compareAnswers === 'function'
+                    ? matchCore.compareAnswers(userAnswer, correctAnswer) === true
+                    : userAnswer.toLowerCase() === correctAnswer.toLowerCase();
             }
             details[questionId] = {
                 userAnswer,
