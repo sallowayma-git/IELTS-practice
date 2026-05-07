@@ -1220,6 +1220,36 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("PracticeCore 单元测试", False, "测试脚本缺失"))
         all_passed = False
 
+    practice_recorder_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceRecorder.test.js"
+    if practice_recorder_test.exists():
+        try:
+            completed_practice_recorder = subprocess.run(
+                ["node", str(practice_recorder_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8"
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            practice_recorder_passed = False
+            practice_recorder_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_practice_recorder_output = (completed_practice_recorder.stdout or "").strip() or (completed_practice_recorder.stderr or "").strip()
+            try:
+                practice_recorder_payload = json.loads(raw_practice_recorder_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_recorder_passed = False
+                practice_recorder_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_recorder_passed = practice_recorder_payload.get("status") == "pass"
+                practice_recorder_detail = practice_recorder_payload.get("detail", practice_recorder_payload)
+        results.append(_format_result("PracticeRecorder 单元测试", practice_recorder_passed, practice_recorder_detail))
+        all_passed &= practice_recorder_passed
+    else:
+        results.append(_format_result("PracticeRecorder 单元测试", False, "测试脚本缺失"))
+        all_passed = False
+
     resource_core_test = REPO_ROOT / "developer" / "tests" / "js" / "resourceCore.test.js"
     if resource_core_test.exists():
         try:

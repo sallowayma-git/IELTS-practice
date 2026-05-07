@@ -1072,6 +1072,12 @@ class ScoreStorage {
                 || normalizedScoreInfo?.details
                 || entry.rawData?.answerComparison
                 || null;
+            const highlights = Array.isArray(entry.highlights)
+                ? entry.highlights.slice()
+                : (Array.isArray(entry.rawData?.highlights) ? entry.rawData.highlights.slice() : []);
+            const scrollY = Number.isFinite(Number(entry.scrollY))
+                ? Number(entry.scrollY)
+                : (Number.isFinite(Number(entry.rawData?.scrollY)) ? Number(entry.rawData.scrollY) : 0);
             return {
                 examId: entry.examId || null,
                 title: entry.title || entry.examTitle || `套题第${index + 1}篇`,
@@ -1081,6 +1087,8 @@ class ScoreStorage {
                 answers: answerMap,
                 answerComparison: this.clonePlainObject(answerComparisonSource) || null,
                 metadata: entry.metadata ? Object.assign({}, entry.metadata) : {},
+                highlights,
+                scrollY,
                 rawData: entry.rawData ? this.clonePlainObject(entry.rawData) : null
             };
         }).filter(Boolean);

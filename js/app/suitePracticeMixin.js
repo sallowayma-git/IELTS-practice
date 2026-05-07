@@ -334,6 +334,90 @@
             return String(value).trim() !== '';
         },
 
+        _resolveSuiteEntryDraft(session, examId) {
+            if (!session || !session.draftsByExam || !examId) {
+                return null;
+            }
+            const draft = session.draftsByExam[examId];
+            return draft && typeof draft === 'object' ? draft : null;
+        },
+
+        _cloneSuitePlainObject(value) {
+            if (!value || typeof value !== 'object') {
+                return value;
+            }
+            try {
+                return JSON.parse(JSON.stringify(value));
+            } catch (_) {
+                return Array.isArray(value) ? value.slice() : { ...value };
+            }
+        },
+
+        _sanitizeSuiteRawData(rawData) {
+            const cloned = this._cloneSuitePlainObject(rawData || {});
+            if (!cloned || typeof cloned !== 'object') {
+                return {};
+            }
+            delete cloned.highlights;
+            delete cloned.scrollY;
+            return cloned;
+        },
+
+        _buildSuiteEntryIndividualPayload(session, entry) {
+            const rawData = this._sanitizeSuiteRawData(entry && entry.rawData);
+            const draft = this._resolveSuiteEntryDraft(session, entry && entry.examId);
+            const highlights = this._resolveSuiteEntryHighlights(entry, draft);
+            if (highlights.length > 0) {
+                rawData.highlights = highlights;
+            }
+            const scrollY = this._resolveSuiteEntryScrollY(entry, draft);
+            if (Number.isFinite(Number(scrollY))) {
+                rawData.scrollY = Number(scrollY);
+            }
+            return rawData;
+        },
+
+        _resolveSuiteEntryHighlights(entry, draft = null) {
+            const sources = [
+                draft && draft.highlights,
+                entry && entry.highlights,
+                entry && entry.rawData && entry.rawData.highlights
+            ];
+            for (const source of sources) {
+                if (Array.isArray(source) && source.length > 0) {
+                    return source.slice();
+                }
+            }
+            return [];
+        },
+
+        _resolveSuiteEntryScrollY(entry, draft = null) {
+            if (draft && Array.isArray(draft.highlights) && draft.highlights.length > 0) {
+                const normalized = Number(draft.scrollY);
+                return Number.isFinite(normalized) ? normalized : 0;
+            }
+            if (entry && Array.isArray(entry.highlights) && entry.highlights.length > 0) {
+                const normalized = Number(entry.scrollY);
+                return Number.isFinite(normalized) ? normalized : 0;
+            }
+            if (entry && entry.rawData && Array.isArray(entry.rawData.highlights) && entry.rawData.highlights.length > 0) {
+                const normalized = Number(entry.rawData.scrollY);
+                return Number.isFinite(normalized) ? normalized : 0;
+            }
+            const sources = [
+                draft && draft.scrollY,
+                entry && entry.scrollY,
+                entry && entry.rawData && entry.rawData.scrollY
+            ];
+            for (const source of sources) {
+                const normalized = Number(source);
+                if (Number.isFinite(normalized)) {
+                    return normalized;
+                }
+            }
+            return 0;
+        },
+
         _buildSuiteReplayEntry(session, examId) {
             if (!session || !Array.isArray(session.results)) {
                 return null;
@@ -379,13 +463,16 @@
                 filteredAnswers[questionId] = value;
             });
 
+            const draft = this._resolveSuiteEntryDraft(session, result.examId || examId);
             return {
                 examId: result.examId,
                 title: result.title,
                 answers: filteredAnswers,
                 answerComparison: filteredComparison,
                 scoreInfo: result.scoreInfo || {},
-                markedQuestions: Array.isArray(result.markedQuestions) ? result.markedQuestions.slice() : []
+                markedQuestions: Array.isArray(result.markedQuestions) ? result.markedQuestions.slice() : [],
+                highlights: this._resolveSuiteEntryHighlights(result, draft),
+                scrollY: this._resolveSuiteEntryScrollY(result, draft)
             };
         },
 
@@ -689,7 +776,9 @@
                     results: (session.results || []).map(r => ({
                         examId: r.examId, title: r.title, category: r.category,
                         duration: r.duration, scoreInfo: r.scoreInfo,
-                        answers: r.answers, answerComparison: r.answerComparison
+                        answers: r.answers, answerComparison: r.answerComparison,
+                        markedQuestions: Array.isArray(r.markedQuestions) ? r.markedQuestions.slice() : [],
+                        rawData: this._sanitizeSuiteRawData(r.rawData)
                     })),
                     startTime: session.startTime,
                     activeExamId: session.activeExamId
@@ -797,9 +886,21 @@
                 }
                 const currentEntry = session.sequence.find(e => e && e.examId === normalizedExamId);
                 if (currentEntry && data && data.resultSnapshot) {
+                    const draftSnapshot = data.draft && typeof data.draft === 'object' ? data.draft : {};
                     const snapshot = {
                         ...data.resultSnapshot,
-                        duration: Number.isFinite(Number(data.elapsed)) ? Number(data.elapsed) : data.resultSnapshot.duration
+                        duration: Number.isFinite(Number(data.elapsed)) ? Number(data.elapsed) : data.resultSnapshot.duration,
+                        answers: data.resultSnapshot.answers || data.answers || draftSnapshot.answers || {},
+                        highlights: Array.isArray(data.resultSnapshot.highlights)
+                            ? data.resultSnapshot.highlights
+                            : (Array.isArray(data.highlights)
+                                ? data.highlights
+                                : (Array.isArray(draftSnapshot.highlights) ? draftSnapshot.highlights : [])),
+                        scrollY: Number.isFinite(Number(data.resultSnapshot.scrollY))
+                            ? Number(data.resultSnapshot.scrollY)
+                            : (Number.isFinite(Number(data.scrollY))
+                                ? Number(data.scrollY)
+                                : (Number.isFinite(Number(draftSnapshot.scrollY)) ? Number(draftSnapshot.scrollY) : 0))
                     };
                     const normalizedSnapshot = this._normalizeSuiteResult(currentEntry.exam, snapshot);
                     this._upsertSuiteResult(session, normalizedExamId, normalizedSnapshot);
@@ -1333,17 +1434,22 @@
 
             try {
                 const completionTime = Date.now();
-                const suiteEntries = session.results.map(entry => ({
-                    examId: entry.examId,
-                    title: entry.title,
-                    category: entry.category,
-                    duration: entry.duration,
-                    scoreInfo: entry.scoreInfo,
-                    answers: entry.answers,
-                    answerComparison: entry.answerComparison,
-                    markedQuestions: Array.isArray(entry.markedQuestions) ? entry.markedQuestions.slice() : [],
-                    rawData: entry.rawData || {}
-                }));
+                const suiteEntries = session.results.map(entry => {
+                    const draft = this._resolveSuiteEntryDraft(session, entry && entry.examId);
+                    return {
+                        examId: entry.examId,
+                        title: entry.title,
+                        category: entry.category,
+                        duration: entry.duration,
+                        scoreInfo: entry.scoreInfo,
+                        answers: entry.answers,
+                        answerComparison: entry.answerComparison,
+                        markedQuestions: Array.isArray(entry.markedQuestions) ? entry.markedQuestions.slice() : [],
+                        highlights: this._resolveSuiteEntryHighlights(entry, draft),
+                        scrollY: this._resolveSuiteEntryScrollY(entry, draft),
+                        rawData: this._sanitizeSuiteRawData(entry.rawData)
+                    };
+                });
 
                 const entryDurations = session.results.map(entry => Number.isFinite(entry.duration) ? entry.duration : 0);
                 const summedDuration = entryDurations.reduce((sum, value) => sum + value, 0);
@@ -1415,7 +1521,7 @@
                         suiteSequence,
                         suiteDisplayDate: dateLabel,
                         suiteSessionId: session.id,
-                        suiteEntries,
+                        suiteEntryCount: suiteEntries.length,
                         startedAt: startTimeIso,
                         completedAt: endTimeIso
                     },
@@ -1427,7 +1533,7 @@
                         total: totalQuestions,
                         accuracy,
                         percentage,
-                        suiteEntries
+                        suiteEntryCount: suiteEntries.length
                     },
                     sessionId: session.id
                 };
@@ -1921,7 +2027,7 @@
                 markedQuestions: Array.isArray(rawData?.metadata?.markedQuestions)
                     ? rawData.metadata.markedQuestions.slice()
                     : (Array.isArray(rawData?.markedQuestions) ? rawData.markedQuestions.slice() : []),
-                rawData: rawData || {}
+                rawData: this._sanitizeSuiteRawData(rawData)
             };
         },
 
@@ -2205,7 +2311,7 @@
 
             for (const entry of session.results) {
                 try {
-                    await this.saveRealPracticeData(entry.examId, entry.rawData, { forceIndividualSave: true });
+                    await this.saveRealPracticeData(entry.examId, this._buildSuiteEntryIndividualPayload(session, entry), { forceIndividualSave: true });
                     this.updateExamStatus && this.updateExamStatus(entry.examId, 'completed');
                 } catch (error) {
                     console.error('[SuitePractice] 保存单篇记录失败:', error);
@@ -2307,7 +2413,7 @@
                         continue;
                     }
                     try {
-                        await this.saveRealPracticeData(entry.examId, entry.rawData, { forceIndividualSave: true });
+                        await this.saveRealPracticeData(entry.examId, this._buildSuiteEntryIndividualPayload(session, entry), { forceIndividualSave: true });
                         this.updateExamStatus && this.updateExamStatus(entry.examId, 'completed');
                     } catch (error) {
                         console.error('[SuitePractice] 套题中断时保存记录失败:', error);
