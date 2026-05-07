@@ -1744,7 +1744,13 @@ class PracticeRecorder {
      * 手动更新用户统计
      */
     async updateUserStatsManually(practiceRecord) {
-        return this.updateUserStats(practiceRecord);
+        try {
+            await this.updateUserStats(practiceRecord);
+            return true;
+        } catch (error) {
+            console.error('[PracticeRecorder] 手动更新用户统计失败:', error);
+            return false;
+        }
     }
 
     /**

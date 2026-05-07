@@ -2473,6 +2473,12 @@
 
                 comparison = this._finalizeReplayComparison(answers, correctAnswers, comparison);
                 const scoreInfo = this._deriveReplayScoreInfo(entry.scoreInfo || entry.realData?.scoreInfo || record.scoreInfo || record.realData?.scoreInfo, comparison);
+                const highlights = Array.isArray(entry.highlights)
+                    ? entry.highlights.slice()
+                    : (Array.isArray(entry.rawData?.highlights) ? entry.rawData.highlights.slice() : []);
+                const scrollY = Number.isFinite(Number(entry.scrollY))
+                    ? Number(entry.scrollY)
+                    : (Number.isFinite(Number(entry.rawData?.scrollY)) ? Number(entry.rawData.scrollY) : 0);
                 const mergedMetadata = Object.assign({}, recordMetadata, entryMetadata, {
                     examId: entryExamId
                 });
@@ -2497,6 +2503,8 @@
                         : (Array.isArray(entryMetadata.markedQuestions)
                             ? entryMetadata.markedQuestions.slice()
                             : (Array.isArray(recordMetadata.markedQuestions) ? recordMetadata.markedQuestions.slice() : [])),
+                    highlights,
+                    scrollY,
                     metadata: mergedMetadata
                 };
                 built.allQuestionIds = this._collectReplayQuestionIds(built);

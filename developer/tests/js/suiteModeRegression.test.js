@@ -134,6 +134,10 @@ function createApp(windowStub) {
     return app;
 }
 
+function plain(value) {
+    return JSON.parse(JSON.stringify(value));
+}
+
 function makeSession(sessionId = 'suite_test_1') {
     const sequence = [
         { examId: 'reading-p1', exam: { id: 'reading-p1', title: 'Passage 1', category: 'P1' } },
@@ -257,14 +261,17 @@ async function run() {
         };
 
         // Navigate prev from P2 to P1
+        const p2Highlights = [{ scope: 'left', text: 'important P2 text', color: 'yellow' }];
         const navPrev = await app._handleSimulationNavigate('reading-p2', {
             direction: 'prev',
-            draft: { answers: { q1: 'B' }, highlights: [], scrollY: 100 },
+            draft: { answers: { q1: 'B' }, highlights: p2Highlights, scrollY: 100 },
             resultSnapshot: {
                 answers: { q1: 'B' },
                 answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } },
                 scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }
             },
+            highlights: p2Highlights,
+            scrollY: 100,
             elapsed: 120
         }, session.windowRef);
         assert.strictEqual(navPrev, true, '向前导航应成功');
@@ -276,6 +283,9 @@ async function run() {
         assert.strictEqual(session.elapsedByExam['reading-p2'], 120, 'P2 elapsed 应被保存');
         assert.strictEqual(session.results.length, 1, '导航时应记录当前篇快照结果');
         assert.strictEqual(session.results[0].examId, 'reading-p2', '导航快照应绑定当前篇');
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(session.results[0], 'highlights'), false, 'results 不应重复持久化高亮');
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(session.results[0], 'scrollY'), false, 'results 不应重复持久化滚动位置');
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(session.results[0].rawData || {}, 'highlights'), false, 'rawData 不应重复持久化高亮');
 
         // Navigate next from P1 to P2
         const navNext = await app._handleSimulationNavigate('reading-p1', {
@@ -291,12 +301,158 @@ async function run() {
         assert.strictEqual(session.currentIndex, 1, '应回到第二篇');
         assert.deepStrictEqual(session.draftsByExam['reading-p1'].answers, { q1: 'A' }, 'P1 draft 应被保存');
         assert.strictEqual(session.results.length, 2, '应记录两个篇章快照结果');
+        const mirroredSession = JSON.parse(sessionStorageStub.get('ielts_sim_session'));
+        const mirroredP2Result = mirroredSession.results.find(entry => entry.examId === 'reading-p2');
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(mirroredP2Result, 'highlights'), false, 'sessionStorage results 不应重复写高亮');
+        assert.deepStrictEqual(mirroredSession.draftsByExam['reading-p2'].highlights, p2Highlights, 'sessionStorage 应只在 draft 中保存 P2 高亮');
+
+        const p2Replay = app._buildSuiteReplayEntry(session, 'reading-p2');
+        assert.deepStrictEqual(p2Replay.highlights, p2Highlights, '套题中途回看必须能恢复 P2 高亮');
+        assert.strictEqual(p2Replay.scrollY, 100, '套题中途回看必须能恢复 P2 滚动位置');
 
         // Out of bounds
         session.currentIndex = 0;
         session.activeExamId = 'reading-p1';
         const navOob = await app._handleSimulationNavigate('reading-p1', { direction: 'prev' }, session.windowRef);
         assert.strictEqual(navOob, false, '向前越界应失败');
+    }
+
+    // Case 2.0.0: 手动/回顾模式结果缺少高亮时，必须从同篇 draft 回灌
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_review_draft_highlight');
+        const p2Highlights = [{ scope: 'groups', text: 'P2 draft evidence', kind: 'highlight', start: 8, end: 25 }];
+        session.flowMode = 'stationary';
+        session.autoAdvanceAfterSubmit = false;
+        session.results = [
+            {
+                examId: 'reading-p2',
+                title: 'Passage 2',
+                answers: { q1: 'B' },
+                answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } },
+                scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+                highlights: [],
+                scrollY: 0,
+                rawData: {}
+            }
+        ];
+        session.draftsByExam['reading-p2'] = {
+            answers: { q1: 'B' },
+            highlights: p2Highlights,
+            scrollY: 288,
+            updatedAt: Date.now()
+        };
+
+        const p2Replay = app._buildSuiteReplayEntry(session, 'reading-p2');
+        assert.deepStrictEqual(p2Replay.highlights, p2Highlights, '回顾态 replay 必须从 P2 draft 回灌高亮');
+        assert.strictEqual(p2Replay.scrollY, 288, '回顾态 replay 必须从 P2 draft 回灌滚动位置');
+
+        let savedRecord = null;
+        app._saveSuitePracticeRecord = async (record) => {
+            savedRecord = record;
+        };
+        app._updatePracticeRecordsState = async () => {};
+        app._teardownSuiteSession = async () => {};
+        await app.finalizeSuiteRecord(session);
+        const p2Entry = savedRecord.suiteEntries.find(entry => entry.examId === 'reading-p2');
+        assert.deepStrictEqual(p2Entry.highlights, p2Highlights, '最终记录也必须保留 draft 中的 P2 高亮');
+        assert.strictEqual(p2Entry.scrollY, 288, '最终记录也必须保留 draft 中的 P2 滚动位置');
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(p2Entry.rawData || {}, 'highlights'), false, '最终 entry.rawData 不应重复持久化高亮');
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(savedRecord.metadata || {}, 'suiteEntries'), false, 'metadata 不应重复持久化 suiteEntries');
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(savedRecord.realData || {}, 'suiteEntries'), false, 'realData 不应重复持久化 suiteEntries');
+    }
+
+    // Case 2.0.1: 模拟模式最终聚合记录必须保留 P2 高亮展示态
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_final_highlight');
+        const p2Highlights = [{ scope: 'groups', text: 'P2 answer evidence', color: 'green' }];
+        session.results = [
+            { examId: 'reading-p1', title: 'Passage 1', answers: { q1: 'A' }, answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, rawData: {} },
+            { examId: 'reading-p2', title: 'Passage 2', answers: { q1: 'B' }, answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, highlights: p2Highlights, scrollY: 240, rawData: { highlights: p2Highlights, scrollY: 240 } },
+            { examId: 'reading-p3', title: 'Passage 3', answers: { q1: 'C' }, answerComparison: { q1: { userAnswer: 'C', correctAnswer: 'C', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 }, rawData: {} }
+        ];
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+
+        let savedRecord = null;
+        app._saveSuitePracticeRecord = async (record) => {
+            savedRecord = record;
+        };
+        app._updatePracticeRecordsState = async () => {};
+        app._teardownSuiteSession = async () => {};
+
+        await app.finalizeSuiteRecord(session);
+        const p2Entry = savedRecord.suiteEntries.find(entry => entry.examId === 'reading-p2');
+        assert(p2Entry, '最终套题记录必须包含 P2 entry');
+        assert.deepStrictEqual(p2Entry.highlights, p2Highlights, '最终套题记录必须保留 P2 高亮');
+        assert.strictEqual(p2Entry.scrollY, 240, '最终套题记录必须保留 P2 滚动位置');
+
+        const replayEntries = app._buildReviewReplayEntriesFromRecord(savedRecord);
+        const p2Replay = replayEntries.find(entry => entry.examId === 'reading-p2');
+        assert.deepStrictEqual(p2Replay.highlights, p2Highlights, '最终回放 entry 必须保留 P2 高亮');
+        assert.strictEqual(p2Replay.scrollY, 240, '最终回放 entry 必须保留 P2 滚动位置');
+    }
+
+    // Case 2.0.2: 回顾模式上一题/下一题必须把第二篇高亮下发到新页面
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_review_replay_highlight');
+        const p2Highlights = [{ scope: 'left', text: 'P2 review evidence', kind: 'highlight', start: 12, end: 30 }];
+        const p2Entry = {
+            examId: 'reading-p2',
+            title: 'Passage 2',
+            answers: { q1: 'B' },
+            answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+            highlights: p2Highlights,
+            scrollY: 321,
+            rawData: { highlights: p2Highlights, scrollY: 321 }
+        };
+        const record = {
+            id: session.id,
+            suiteMode: true,
+            suiteEntries: [
+                { examId: 'reading-p1', title: 'Passage 1', answers: { q1: 'A' }, answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } }, scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 } },
+                p2Entry
+            ],
+            metadata: { suiteSessionId: session.id, frequency: 'suite' }
+        };
+        const reviewSession = app._buildReviewSession(record);
+        app._ensureReviewReplayStore().set(reviewSession.sessionId, reviewSession);
+
+        const firstWindow = createStubWindow('review-window');
+        const secondWindow = createStubWindow('review-window');
+        app.examWindows = new Map();
+        app.examWindows.set('reading-p1', {
+            window: firstWindow,
+            reviewMode: true,
+            reviewSessionId: reviewSession.sessionId,
+            reviewEntryIndex: 0,
+            readOnly: true
+        });
+        app.openExam = async (examId, options = {}) => {
+            assert.strictEqual(examId, 'reading-p2', '下一题应打开 P2');
+            app.examWindows.set(examId, {
+                window: secondWindow,
+                reviewMode: Boolean(options.reviewMode),
+                reviewSessionId: options.reviewSessionId,
+                reviewEntryIndex: options.reviewEntryIndex,
+                readOnly: true
+            });
+            app._dispatchReviewReplayForExam(examId, secondWindow);
+            return secondWindow;
+        };
+
+        await app.handleReviewReplayNavigate('reading-p1', {
+            direction: 'next',
+            reviewSessionId: reviewSession.sessionId
+        }, firstWindow);
+
+        const replayMsg = secondWindow._messages.find(msg => msg && msg.type === 'REPLAY_PRACTICE_RECORD');
+        assert(replayMsg, '跨题回顾导航必须向 P2 页面下发回放数据');
+        assert.deepStrictEqual(plain(replayMsg.data.entry.highlights), p2Highlights, '跨题回顾导航必须保留 P2 高亮');
+        assert.strictEqual(replayMsg.data.entry.scrollY, 321, '跨题回顾导航必须保留 P2 滚动位置');
     }
 
     // Case 2.1: 模拟模式多次切换后不得回退为经典模式
