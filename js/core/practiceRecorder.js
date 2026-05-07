@@ -783,9 +783,13 @@ class PracticeRecorder {
                 ? correctMap[questionId]
                 : '';
             const normalizedCorrect = this.normalizeAnswerValue(rawCorrect);
-            const isCorrect = normalizedCorrect
-                ? normalizedAnswer.toLowerCase() === normalizedCorrect.toLowerCase()
-                : undefined;
+            let isCorrect = undefined;
+            if (normalizedCorrect) {
+                const matchCore = window.AnswerMatchCore;
+                isCorrect = matchCore && typeof matchCore.compareAnswers === 'function'
+                    ? matchCore.compareAnswers(normalizedAnswer, normalizedCorrect) === true
+                    : normalizedAnswer.toLowerCase() === normalizedCorrect.toLowerCase();
+            }
             list.push({
                 questionId: questionId || `q${index + 1}`,
                 answer: normalizedAnswer,
@@ -827,7 +831,10 @@ class PracticeRecorder {
             const correctAnswer = this.normalizeAnswerValue(correctMap[questionId]);
             let isCorrect = null;
             if (correctAnswer) {
-                isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+                const matchCore = window.AnswerMatchCore;
+                isCorrect = matchCore && typeof matchCore.compareAnswers === 'function'
+                    ? matchCore.compareAnswers(userAnswer, correctAnswer) === true
+                    : userAnswer.toLowerCase() === correctAnswer.toLowerCase();
             }
             details[questionId] = {
                 userAnswer: userAnswer || '-',
@@ -1737,48 +1744,7 @@ class PracticeRecorder {
      * 手动更新用户统计
      */
     async updateUserStatsManually(practiceRecord) {
-        try {
-            const stats = await this.metaRepo.get('user_stats', {
-                totalPractices: 0,
-                totalTimeSpent: 0,
-                averageScore: 0,
-                categoryStats: {},
-                questionTypeStats: {},
-                streakDays: 0,
-                practiceDays: [],
-                lastPracticeDate: null,
-                achievements: []
-            });
-
-            // 更新基础统计
-            const duration = Number(practiceRecord.duration) || 0;
-            const accuracy = Number(practiceRecord.accuracy) || 0;
-            const normalizedRecord = { ...practiceRecord, duration, accuracy };
-
-            stats.totalPractices += 1;
-            stats.totalTimeSpent += duration;
-
-            // 计算平均分数
-            const totalScore = (stats.averageScore * (stats.totalPractices - 1)) + accuracy;
-            stats.averageScore = totalScore / stats.totalPractices;
-
-            // 更新连续学习天数
-            this.updateStreakDays(stats, normalizedRecord);
-
-            // 更新时间戳
-            stats.updatedAt = new Date().toISOString();
-
-            const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
-            if (practiceCoreStore && typeof practiceCoreStore.writeMeta === 'function') {
-                await practiceCoreStore.writeMeta('user_stats', stats);
-            } else {
-                await this.metaRepo.set('user_stats', stats);
-            }
-            console.log('[PracticeRecorder] 用户统计手动更新完成');
-
-        } catch (error) {
-            console.error('[PracticeRecorder] 手动更新用户统计失败:', error);
-        }
+        return this.updateUserStats(practiceRecord);
     }
 
     /**

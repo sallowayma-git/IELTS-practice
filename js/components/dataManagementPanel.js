@@ -591,7 +591,11 @@ class DataManagementPanel {
             
             // 异步读取文件内容
             this.readFile(file).then(content => {
-                this.selectedFileContent = content;
+                try {
+                    this.selectedFileContent = JSON.parse(content);
+                } catch (_) {
+                    this.selectedFileContent = content;
+                }
                 console.log('[DataManagementPanel] File content loaded');
             }).catch(error => {
                 console.error('[DataManagementPanel] Failed to read file:', error);
