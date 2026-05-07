@@ -346,7 +346,10 @@
             const correctAnswer = normalizeAnswerValue(correctMap[questionId]);
             let isCorrect = null;
             if (correctAnswer) {
-                isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+                const matchCore = global.AnswerMatchCore;
+                isCorrect = matchCore && typeof matchCore.compareAnswers === 'function'
+                    ? matchCore.compareAnswers(userAnswer, correctAnswer) === true
+                    : userAnswer.toLowerCase() === correctAnswer.toLowerCase();
             }
             details[questionId] = {
                 userAnswer: userAnswer || '-',

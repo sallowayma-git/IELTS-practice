@@ -347,8 +347,9 @@ async function syncPracticeRecords(options = {}) {
                     const sInfo = r && (r.scoreInfo || rd.scoreInfo) || {};
                     const correct = (typeof r.correctAnswers === 'number') ? r.correctAnswers : (typeof sInfo.correct === 'number' ? sInfo.correct : (typeof r.score === 'number' ? r.score : 0));
                     const total = (typeof r.totalQuestions === 'number') ? r.totalQuestions : (typeof sInfo.total === 'number' ? sInfo.total : (rd.answers ? Object.keys(rd.answers).length : 0));
-                    const acc = (typeof r.accuracy === 'number') ? r.accuracy : (total > 0 ? (correct / total) : 0);
-                    const pct = (typeof r.percentage === 'number') ? r.percentage : Math.round(acc * 100);
+                    let acc = (typeof r.accuracy === 'number') ? r.accuracy : (total > 0 ? (correct / total) : 0);
+                    if (acc > 1 && acc <= 100) { acc = acc / 100; }
+                    const pct = (typeof r.percentage === 'number' && r.percentage >= 0 && r.percentage <= 100) ? r.percentage : Math.round(acc * 100);
                     let dur = (typeof r.duration === 'number') ? r.duration : undefined;
                     if (!(Number.isFinite(dur) && dur > 0)) {
                         if (typeof rd.duration === 'number' && rd.duration > 0) {
@@ -976,8 +977,9 @@ async function savePracticeRecordFallback(examId, realData) {
         const normalizedAnswers = normalizeFallbackAnswerMap(realData.answers);
         const normalizedCorrectMap = normalizeFallbackAnswerMap(realData.correctAnswers);
         const total = typeof sInfo.total === 'number' ? sInfo.total : Object.keys(normalizedCorrectMap).length || Object.keys(normalizedAnswers).length;
-        const acc = typeof sInfo.accuracy === 'number' ? sInfo.accuracy : (total > 0 ? correct / total : 0);
-        const pct = typeof sInfo.percentage === 'number' ? sInfo.percentage : Math.round(acc * 100);
+        let acc = typeof sInfo.accuracy === 'number' ? sInfo.accuracy : (total > 0 ? correct / total : 0);
+        if (acc > 1 && acc <= 100) { acc = acc / 100; }
+        const pct = typeof sInfo.percentage === 'number' && sInfo.percentage >= 0 && sInfo.percentage <= 100 ? sInfo.percentage : Math.round(acc * 100);
 
         const answerDetails = buildFallbackAnswerDetails(normalizedAnswers, normalizedCorrectMap);
         const answerComparison = normalizeFallbackAnswerComparison(realData.answerComparison, normalizedAnswers, normalizedCorrectMap);
@@ -1750,7 +1752,7 @@ function computePracticeSummaryFallback(records) {
         if (!record) {
             return;
         }
-        const percentage = typeof record.percentage === 'number' ? record.percentage : 0;
+        const percentage = typeof record.percentage === 'number' ? record.percentage : (typeof record.accuracy === 'number' ? Math.round(record.accuracy * 100) : 0);
         const duration = typeof record.duration === 'number' ? record.duration : 0;
         totalScore += percentage;
         totalDuration += duration;

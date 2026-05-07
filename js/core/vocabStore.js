@@ -106,6 +106,15 @@
 
     function generateId(seed) {
         if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            var seedStr = seed ? String(seed).trim() : '';
+            if (seedStr) {
+                var hash = 0;
+                for (var i = 0; i < seedStr.length; i++) {
+                    hash = ((hash << 5) - hash) + seedStr.charCodeAt(i);
+                    hash |= 0;
+                }
+                return 'word-' + Math.abs(hash).toString(36);
+            }
             return crypto.randomUUID();
         }
         const base = seed ? String(seed).trim().toLowerCase().replace(/[^a-z0-9]+/gi, '-') : 'word';

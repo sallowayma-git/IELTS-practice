@@ -3,6 +3,7 @@
     const SM2_CONSTANTS = Object.freeze({
         MIN_EASE_FACTOR: 1.3,
         MAX_EASE_FACTOR: 3.0,
+        DEFAULT_EASE_FACTOR: 2.5,
         INITIAL_INTERVAL_DAYS: 1,
         SECOND_INTERVAL_DAYS: 6,
         MAX_INTRA_CYCLES: 12
