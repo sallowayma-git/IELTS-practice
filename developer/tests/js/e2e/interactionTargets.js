@@ -11,6 +11,7 @@
       "check-updates-btn",
       "export-data-btn",
       "import-data-btn",
+      "theme-switcher-btn-entry",
       "show-onboarding-btn"
     ]
   });

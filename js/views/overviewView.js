@@ -238,55 +238,29 @@
 
         createSuiteModeButton() {
             return this.dom.create('button', {
-                className: 'btn btn-primary',
+                className: 'btn liquid-action liquid-action--suite',
                 type: 'button',
                 dataset: {
                     action: 'start-suite-mode',
                     overviewAction: 'suite'
-                },
-                style: {
-                    padding: '8px 16px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    borderRadius: '6px',
-                    backgroundColor: '#646b20ff',
-                    border: 'none',
-                    color: 'white',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px'
                 }
             }, [
-                this.dom.create('span', { ariaHidden: 'true' }, '🚀'),
+                this.createSvgIcon('<path d="M4 19h16"></path><path d="M7 16V7.5a2.5 2.5 0 0 1 5 0V16"></path><path d="M12 11h5a3 3 0 0 1 0 6h-5"></path><path d="M7 11h5"></path>'),
                 this.dom.create('span', {}, '套题模式')
             ]);
         }
 
         createEndlessModeButton() {
             return this.dom.create('button', {
-                className: 'btn',
+                className: 'btn liquid-action liquid-action--endless',
                 type: 'button',
                 id: 'endless-mode-btn',
                 dataset: {
                     action: 'start-endless-mode',
                     overviewAction: 'endless'
-                },
-                style: {
-                    padding: '8px 16px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    borderRadius: '6px',
-                    backgroundColor: '#7c3aed',
-                    border: 'none',
-                    color: 'white',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px'
                 }
             }, [
-                this.dom.create('span', { ariaHidden: 'true' }, '♾️'),
+                this.createSvgIcon('<path d="M17 8c2.2 0 4 1.8 4 4s-1.8 4-4 4c-1.9 0-3.1-1.1-4.4-2.7L11.4 12C10.1 10.4 8.9 9 7 9c-1.7 0-3 1.3-3 3s1.3 3 3 3c1.4 0 2.4-.8 3.6-2.2"></path><path d="M13.4 10.7C14.7 9.1 15.9 8 17 8"></path>'),
                 this.dom.create('span', {}, '无尽模式')
             ]);
         }

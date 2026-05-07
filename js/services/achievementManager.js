@@ -56,6 +56,22 @@
                     tier: 3,
                     condition: (stats) => stats.totalPracticed >= 100
                 },
+                {
+                    id: 'practice_platinum',
+                    title: '题海行者',
+                    description: '累计完成 200 次练习',
+                    icon: '🏆',
+                    tier: 3,
+                    condition: (stats) => stats.totalPracticed >= 200
+                },
+                {
+                    id: 'practice_marathon',
+                    title: '长期主义',
+                    description: '累计完成 365 次练习',
+                    icon: '💎',
+                    tier: 3,
+                    condition: (stats) => stats.totalPracticed >= 365
+                },
 
                 // --- Streak Milestones ---
                 {
@@ -81,6 +97,22 @@
                     icon: '🔥',
                     tier: 3,
                     condition: (stats) => stats.streakDays >= 30
+                },
+                {
+                    id: 'streak_fortnight',
+                    title: '两周不断',
+                    description: '连续学习 14 天',
+                    icon: '📆',
+                    tier: 2,
+                    condition: (stats) => stats.streakDays >= 14
+                },
+                {
+                    id: 'streak_season',
+                    title: '季度守望',
+                    description: '连续学习 60 天',
+                    icon: '🗓️',
+                    tier: 3,
+                    condition: (stats) => stats.streakDays >= 60
                 },
 
                 // --- Category Mastery: Listening ---
@@ -134,6 +166,14 @@
                     tier: 3,
                     condition: (stats) => stats.readingCount >= 100
                 },
+                {
+                    id: 'reading_master',
+                    title: '精读大师',
+                    description: '累计完成 200 篇阅读练习',
+                    icon: '📖',
+                    tier: 3,
+                    condition: (stats) => stats.readingCount >= 200
+                },
 
                 // --- Special Achievements ---
                 {
@@ -159,6 +199,22 @@
                     icon: '⚡',
                     tier: 3,
                     condition: (stats) => stats.hasSpeedDemon
+                },
+                {
+                    id: 'reading_first',
+                    title: '开卷有益',
+                    description: '完成第一篇阅读练习',
+                    icon: '🔖',
+                    tier: 1,
+                    condition: (stats) => stats.readingCount >= 1
+                },
+                {
+                    id: 'listening_first',
+                    title: '听见开始',
+                    description: '完成第一篇听力练习',
+                    icon: '🎧',
+                    tier: 1,
+                    condition: (stats) => stats.listeningCount >= 1
                 }
             ];
         }

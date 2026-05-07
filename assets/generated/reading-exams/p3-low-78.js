@@ -68,7 +68,7 @@
     "q4": "D",
     "q5": "NOT GIVEN",
     "q6": "NO",
-    "q7": "NOT GIVEN",
+    "q7": "NO",
     "q8": "NO",
     "q9": "YES",
     "q10": "B",

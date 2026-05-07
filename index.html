@@ -456,7 +456,7 @@
 
                     <!-- 主题切换按钮 -->
                     <div style="margin-top: 25px;">
-                        <button class="btn btn-secondary hero-btn hero-btn--ghost" data-action="show-theme-switcher">
+                        <button class="btn btn-secondary hero-btn hero-btn--ghost" id="theme-switcher-btn-entry" data-action="show-theme-switcher">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2" style="margin-right: 4px; vertical-align: text-bottom;">
                                 <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
@@ -719,7 +719,8 @@
     </div>
 
     <!-- 启动与懒加载工具 -->
-    <script src="js/presentation/shuiBackground.js" defer></script>
+    <script src="assets/vendor/three.min.js" defer></script>
+    <script src="js/presentation/threeBackground.js" defer></script>
     <script src="js/runtime/bootScreen.js" defer></script>
     <script src="js/runtime/lazyLoader.js" defer></script>
     <script src="js/utils/suitePreference.js" defer></script>
@@ -752,6 +753,7 @@
 
     <!-- 入口与懒加载代理 -->
     <script src="js/app/main-entry.js"></script>
+    <script src="js/presentation/emojiIconizer.js"></script>
     <script src="js/presentation/indexInteractions.js"></script>
     <script src="js/boot-fallbacks.js"></script>
     <script src="js/patches/runtime-fixes.js"></script>
@@ -986,15 +988,26 @@
         document.addEventListener('DOMContentLoaded', () => {
             const nav = document.querySelector('.hero-nav');
             if (!nav) return;
-            
+
+            let indicator = nav.querySelector('.hero-nav__liquid-indicator');
+            if (!indicator) {
+                indicator = document.createElement('span');
+                indicator.className = 'hero-nav__liquid-indicator';
+                indicator.setAttribute('aria-hidden', 'true');
+                nav.prepend(indicator);
+            }
+
             function updateSlider() {
                 const activeBtn = nav.querySelector('.hero-nav__btn.active') || nav.querySelector('.nav-btn.active');
                 if (activeBtn) {
-                    nav.style.setProperty('--slider-left', `${activeBtn.offsetLeft}px`);
-                    nav.style.setProperty('--slider-width', `${activeBtn.offsetWidth}px`);
+                    indicator.style.left = `${activeBtn.offsetLeft}px`;
+                    indicator.style.top = `${activeBtn.offsetTop}px`;
+                    indicator.style.width = `${activeBtn.offsetWidth}px`;
+                    indicator.style.height = `${activeBtn.offsetHeight}px`;
+                    nav.classList.add('hero-nav--liquid-ready');
                 }
             }
-            
+
             // Setup observers for dynamic active class toggling
             const observer = new MutationObserver((mutations) => {
                 let shouldUpdate = false;
@@ -1010,7 +1023,7 @@
                 observer.observe(btn, { attributes: true });
                 btn.addEventListener('click', () => setTimeout(updateSlider, 10));
             });
-            
+
             window.addEventListener('resize', updateSlider);
             // Initial position calculate
             setTimeout(updateSlider, 50);

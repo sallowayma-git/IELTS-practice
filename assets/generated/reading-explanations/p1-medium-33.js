@@ -89,7 +89,7 @@
       "items": [
         {
           "questionNumber": 8,
-          "text": "题目：it was made from ______, cement and marble\n题目翻译：它由 ______、水泥和大理石建成。\n答案：brick\n解析：第三段写内部结构是“constructed from brick ... and cement”，外层有 white Carrara marble，对应 brick。",
+          "text": "题目：it was made from ______ and cement\n题目翻译：它由 ______ 和水泥建成。\n答案：brick\n解析：第三段写内部结构是“constructed from brick ... and cement”，对应 brick。",
           "questionId": "q8"
         },
         {
@@ -122,7 +122,7 @@
         "start": 8,
         "end": 13
       },
-      "text": "题目8答案brick：材料包含砖、水泥和大理石。\n题目9答案shape：该金字塔形制不同于典型埃及金字塔。\n题目10答案countryside：因城内禁墓而建在乡野。\n题目11答案statues：挖掘发现青铜雕像碎片。\n题目12答案tunnel：墓内通道暗示曾遭盗掘。\n题目13答案pollution：现阶段维护核心是去除城市污染。"
+      "text": "题目8答案brick：内部材料为砖与水泥。\n题目9答案shape：该金字塔形制不同于典型埃及金字塔。\n题目10答案countryside：因城内禁墓而建在乡野。\n题目11答案statues：挖掘发现青铜雕像碎片。\n题目12答案tunnel：墓内通道暗示曾遭盗掘。\n题目13答案pollution：现阶段维护核心是去除城市污染。"
     }
   ]
 });

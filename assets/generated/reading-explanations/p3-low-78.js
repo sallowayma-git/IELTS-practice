@@ -96,7 +96,7 @@
         },
         {
           "questionNumber": 33,
-          "text": "(3) 题目 33：First brands to enter a new market only hold their advantage if they are supported by advertising. （首先进入新市场的品牌只有在广告支持下才能保持优势。）\n答案：NOT GIVEN\n解析：定位第2段末尾和第3段末尾。第2段说“advertising alone cannot explain the strength of brand loyalty”（单靠广告无法解释品牌忠诚度）；第3段末尾说先发优势“could last longer than might be assumed”（可能持续得比假设的更久）。原文没有说明先进入市场的品牌是否必须依靠广告支持才能保持优势。",
+          "text": "(3) 题目 33：First brands to enter a new market only hold their advantage if they are supported by advertising. （首先进入新市场的品牌只有在广告支持下才能保持优势。）\n答案：NO\n解析：定位第2段末尾和第3段末尾。第2段说“advertising alone cannot explain the strength of brand loyalty”（单靠广告无法解释品牌忠诚度）；第3段末尾说先发优势“could last longer than might be assumed”（可能持续得比假设的更久），并未将此归因于广告。",
           "questionId": "q7"
         },
         {
@@ -114,7 +114,7 @@
         "start": 31,
         "end": 35
       },
-      "text": "答案：NOT GIVEN\n解析：定位第3段。研究确实追踪了跨州移民，但并未比较“不同州的品牌忠诚度高低”，只是说品牌忠诚度普遍存在。\n答案：NO\n解析：定位第3段。原文提到差异是“faded”（减弱/消失）的，尽管“took 20 years to halve”（需要20年才能减半），但总体趋势是减小而非增加。\n答案：NOT GIVEN\n解析：定位第2段末尾和第3段末尾。第2段说“advertising alone cannot explain the strength of brand loyalty”（单靠广告无法解释品牌忠诚度）；第3段末尾说先发优势“could last longer than might be assumed”（可能持续得比假设的更久）。原文没有说明先进入市场的品牌是否必须依靠广告支持才能保持优势。\n答案：NO\n解析：定位第5段。原文明确说是因为“prevalence of internal barriers to trade”（内部贸易壁垒的普遍存在），即贸易是受限的，而非不受限制。\n答案：YES\n解析：定位第5段末尾。原文提到：“foods a region specialises in producing are instead cheaper in that region” （一个地区专门生产的食物在该地区反而更便宜）。"
+      "text": "答案：NOT GIVEN\n解析：定位第3段。研究确实追踪了跨州移民，但并未比较“不同州的品牌忠诚度高低”，只是说品牌忠诚度普遍存在。\n答案：NO\n解析：定位第3段。原文提到差异是“faded”（减弱/消失）的，尽管“took 20 years to halve”（需要20年才能减半），但总体趋势是减小而非增加。\n答案：NO\n解析：定位第2段末尾和第3段末尾。第2段说“advertising alone cannot explain the strength of brand loyalty”（单靠广告无法解释品牌忠诚度）；第3段末尾说先发优势“could last longer than might be assumed”（可能持续得比假设的更久），并未将此归因于广告。\n答案：NO\n解析：定位第5段。原文明确说是因为“prevalence of internal barriers to trade”（内部贸易壁垒的普遍存在），即贸易是受限的，而非不受限制。\n答案：YES\n解析：定位第5段末尾。原文提到：“foods a region specialises in producing are instead cheaper in that region” （一个地区专门生产的食物在该地区反而更便宜）。"
     },
     {
       "sectionTitle": "3. 摘要填空（Questions 36–40）",
