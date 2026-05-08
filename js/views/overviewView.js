@@ -250,21 +250,13 @@
 
         createSuiteModeButton() {
             return this.dom.create('button', {
-                className: 'btn btn-primary',
+                className: 'shui-glass-btn',
                 type: 'button',
                 dataset: {
                     action: 'start-suite-mode',
                     overviewAction: 'suite'
                 },
                 style: {
-                    padding: '8px 16px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    borderRadius: '6px',
-                    backgroundColor: '#646b20ff',
-                    border: 'none',
-                    color: 'white',
-                    cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px'
@@ -277,7 +269,7 @@
 
         createEndlessModeButton() {
             return this.dom.create('button', {
-                className: 'btn',
+                className: 'shui-glass-btn',
                 type: 'button',
                 id: 'endless-mode-btn',
                 dataset: {
@@ -285,14 +277,6 @@
                     overviewAction: 'endless'
                 },
                 style: {
-                    padding: '8px 16px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    borderRadius: '6px',
-                    backgroundColor: '#7c3aed',
-                    border: 'none',
-                    color: 'white',
-                    cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px'
