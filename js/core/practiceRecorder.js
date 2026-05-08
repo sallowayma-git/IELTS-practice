@@ -1100,7 +1100,11 @@ class PracticeRecorder {
             results?.answerComparison || results?.realData?.answerComparison || null
         );
 
-        const durationMs = Math.max(new Date(resolvedEndTime) - new Date(resolvedStartTime), 0);
+        const explicitDurationSeconds = Number(results?.duration);
+        const hasExplicitDuration = Number.isFinite(explicitDurationSeconds) && explicitDurationSeconds >= 0;
+        const durationMs = hasExplicitDuration
+            ? Math.floor(explicitDurationSeconds * 1000)
+            : Math.max(new Date(resolvedEndTime) - new Date(resolvedStartTime), 0);
 
         const practiceRecord = {
             id: `record_${session.sessionId || this.generateSessionId(resolvedExamId)}`,

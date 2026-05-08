@@ -222,6 +222,7 @@
 
             const normalized = this._normalizeSuiteResult(sequenceEntry.exam, data);
             this._upsertSuiteResult(session, examId, normalized);
+            this._syncSuiteTimerFromPayload(session, data);
             session.lastUpdate = Date.now();
             this.updateExamStatus && this.updateExamStatus(examId, 'completed');
 
@@ -769,6 +770,9 @@
                     draftsByExam: session.draftsByExam || {},
                     elapsedByExam: session.elapsedByExam || {},
                     globalTimerAnchorMs: session.globalTimerAnchorMs,
+                    suiteTimerPausedOffsetMs: Math.max(0, Number(session.suiteTimerPausedOffsetMs) || 0),
+                    suiteTimerPausedAtMs: Number.isFinite(Number(session.suiteTimerPausedAtMs)) ? Number(session.suiteTimerPausedAtMs) : null,
+                    suiteTimerRunning: session.suiteTimerRunning !== false,
                     flowMode: session.flowMode || 'simulation',
                     autoAdvanceAfterSubmit: typeof session.autoAdvanceAfterSubmit === 'boolean'
                         ? session.autoAdvanceAfterSubmit
@@ -808,15 +812,71 @@
             } catch (_) { /* ignore */ }
         },
 
+        _syncSuiteTimerFromPayload(session, data = {}) {
+            if (!session || !data || typeof data !== 'object') return;
+            const timerSnapshot = data.timerSnapshot && typeof data.timerSnapshot === 'object'
+                ? data.timerSnapshot
+                : null;
+            const anchorMs = Number(
+                (timerSnapshot && (timerSnapshot.anchorMs ?? timerSnapshot.effectiveStartTimeMs))
+                ?? data.suiteTimerAnchorMs
+                ?? data.globalTimerAnchorMs
+            );
+            const existingAnchorMs = Number(session.globalTimerAnchorMs);
+            if ((!Number.isFinite(existingAnchorMs) || existingAnchorMs <= 0) && Number.isFinite(anchorMs) && anchorMs > 0) {
+                session.globalTimerAnchorMs = Math.floor(anchorMs);
+            }
+            const pausedOffsetMs = Number(
+                (timerSnapshot && timerSnapshot.pausedOffsetMs)
+                ?? data.suiteTimerPausedOffsetMs
+                ?? data.pausedOffsetMs
+            );
+            if (Number.isFinite(pausedOffsetMs) && pausedOffsetMs >= 0) {
+                const existingOffsetMs = Math.max(0, Number(session.suiteTimerPausedOffsetMs) || 0);
+                session.suiteTimerPausedOffsetMs = Math.max(existingOffsetMs, Math.max(0, pausedOffsetMs));
+            }
+            const running = timerSnapshot ? timerSnapshot.running : data.suiteTimerRunning;
+            session.suiteTimerRunning = running !== false;
+            const pausedAtMs = Number(
+                (timerSnapshot && timerSnapshot.pausedAtMs)
+                ?? data.suiteTimerPausedAtMs
+                ?? data.pausedAtMs
+            );
+            session.suiteTimerPausedAtMs = (
+                session.suiteTimerRunning === false
+                && Number.isFinite(pausedAtMs)
+                && pausedAtMs > 0
+            ) ? Math.floor(pausedAtMs) : null;
+        },
+
+        _computeSuiteElapsedSeconds(session, referenceNow = Date.now()) {
+            if (!session || typeof session !== 'object') return 0;
+            const anchorMs = Number(session.globalTimerAnchorMs) > 0
+                ? Number(session.globalTimerAnchorMs)
+                : Number(session.startTime) || Number(referenceNow) || Date.now();
+            const pausedOffsetMs = Math.max(0, Number(session.suiteTimerPausedOffsetMs) || 0);
+            const pausedAtMs = Number(session.suiteTimerPausedAtMs);
+            const endMs = Number.isFinite(pausedAtMs) && pausedAtMs > 0
+                ? pausedAtMs
+                : (Number(referenceNow) || Date.now());
+            return Math.max(0, Math.round((endMs - anchorMs - pausedOffsetMs) / 1000));
+        },
+
         _sendSimulationContext(session, examId, targetWindow) {
             if (!session || !examId || !targetWindow || targetWindow.closed) return false;
             if (session.flowMode !== 'simulation') return false;
             const idx = session.sequence.findIndex(e => e && e.examId === examId);
             if (idx < 0) return false;
             const draft = session.draftsByExam && session.draftsByExam[examId] || null;
+            const timerAnchorMs = Number(session.globalTimerAnchorMs) > 0
+                ? Number(session.globalTimerAnchorMs)
+                : Number(session.startTime) || Date.now();
             const elapsed = Number.isFinite(Number(session.elapsedByExam && session.elapsedByExam[examId]))
                 ? Math.max(0, Number(session.elapsedByExam[examId]))
-                : 0;
+                : this._computeSuiteElapsedSeconds(session, Date.now());
+            const pausedOffsetMs = Math.max(0, Number(session.suiteTimerPausedOffsetMs) || 0);
+            const pausedAtMs = Number.isFinite(Number(session.suiteTimerPausedAtMs)) ? Number(session.suiteTimerPausedAtMs) : null;
+            const suiteTimerRunning = session.suiteTimerRunning !== false;
             const payload = {
                 type: 'SIMULATION_CONTEXT',
                 data: {
@@ -830,7 +890,18 @@
                     canNext: idx < session.sequence.length - 1,
                     draft,
                     elapsed,
-                    globalTimerAnchorMs: session.globalTimerAnchorMs
+                    globalTimerAnchorMs: timerAnchorMs,
+                    suiteTimerAnchorMs: timerAnchorMs,
+                    suiteTimerPausedOffsetMs: pausedOffsetMs,
+                    suiteTimerPausedAtMs: pausedAtMs,
+                    suiteTimerRunning,
+                    timerSnapshot: {
+                        anchorMs: timerAnchorMs,
+                        effectiveStartTimeMs: timerAnchorMs,
+                        pausedOffsetMs,
+                        pausedAtMs,
+                        running: suiteTimerRunning
+                    }
                 }
             };
             try {
@@ -884,6 +955,7 @@
                 if (data && typeof data.elapsed === 'number') {
                     session.elapsedByExam[normalizedExamId] = data.elapsed;
                 }
+                this._syncSuiteTimerFromPayload(session, data);
                 const currentEntry = session.sequence.find(e => e && e.examId === normalizedExamId);
                 if (currentEntry && data && data.resultSnapshot) {
                     const draftSnapshot = data.draft && typeof data.draft === 'object' ? data.draft : {};
@@ -1451,12 +1523,17 @@
                     };
                 });
 
-                const entryDurations = session.results.map(entry => Number.isFinite(entry.duration) ? entry.duration : 0);
-                const summedDuration = entryDurations.reduce((sum, value) => sum + value, 0);
-                const startTimestamp = session.startTime || completionTime;
-                const elapsedMs = Math.max(0, completionTime - startTimestamp);
-                const elapsedSeconds = Math.max(0, Math.round(elapsedMs / 1000));
-                const totalDuration = elapsedSeconds > 0 ? Math.max(summedDuration, elapsedSeconds) : summedDuration;
+                const timerAnchorMs = Number(session.globalTimerAnchorMs) > 0
+                    ? Number(session.globalTimerAnchorMs)
+                    : Number(session.startTime) || completionTime;
+                const startTimestamp = timerAnchorMs;
+                let pausedOffsetMs = Math.max(0, Number(session.suiteTimerPausedOffsetMs) || 0);
+                const pausedAtMs = Number(session.suiteTimerPausedAtMs);
+                if (Number.isFinite(pausedAtMs) && pausedAtMs > 0 && completionTime > pausedAtMs) {
+                    pausedOffsetMs += (completionTime - pausedAtMs);
+                }
+                const elapsedMs = Math.max(0, completionTime - startTimestamp - pausedOffsetMs);
+                const totalDuration = Math.max(0, Math.round(elapsedMs / 1000));
                 const totalCorrect = session.results.reduce((sum, entry) => sum + entry.scoreInfo.correct, 0);
                 const totalQuestions = session.results.reduce((sum, entry) => sum + entry.scoreInfo.total, 0);
                 const accuracy = totalQuestions > 0 ? (totalCorrect / totalQuestions) : 0;
@@ -1887,16 +1964,20 @@
                 const lockedAutoAdvance = flowMode === 'stationary'
                     ? false
                     : true;
+                const timerAnchorMs = Date.now();
                 const session = {
                     id: suiteSessionId,
                     status: 'initializing',
-                    startTime: Date.now(),
+                    startTime: timerAnchorMs,
                     sequence: normalizedSequence,
                     currentIndex: 0,
                     results: [],
                     draftsByExam: {},
                     elapsedByExam: {},
-                    globalTimerAnchorMs: Date.now(),
+                    globalTimerAnchorMs: timerAnchorMs,
+                    suiteTimerPausedOffsetMs: 0,
+                    suiteTimerPausedAtMs: null,
+                    suiteTimerRunning: true,
                     flowMode,
                     frequencyScope,
                     autoAdvanceAfterSubmit: lockedAutoAdvance,
