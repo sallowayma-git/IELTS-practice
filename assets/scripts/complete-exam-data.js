@@ -2594,6 +2594,18 @@ window.completeExamIndex = [
         hasPdf: true,
         pdfFilename: 'ReadingPractice/PDF/233. P2 - Why don’t we sleep 失眠的原因.pdf',
     },
+    {
+        id: 'p2-high-234',
+        title: 'How do plants talk to each other 植物交流',
+        category: 'P2',
+        frequency: '高频',
+        difficultyScore: 4,
+        path: 'ReadingPractice/PDF/',
+        filename: '234. P2 - How do plants talk to each other 植物交流.pdf',
+        hasHtml: true,
+        hasPdf: true,
+        pdfFilename: 'ReadingPractice/PDF/234. P2 - How do plants talk to each other 植物交流.pdf',
+    },
 ];
 window.completeExamIndex.pathRoot = {
     reading: '三月/',
