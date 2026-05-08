@@ -101,6 +101,26 @@ async def _ensure_app_ready(page: Page) -> None:
 
 
 async def _dismiss_overlays(page: Page) -> None:
+    try:
+        await page.evaluate(
+            """
+            () => {
+                try {
+                    localStorage.setItem('hasSeenGplLicense', 'true');
+                } catch (_) {}
+                if (typeof window.acceptGplLicense === 'function') {
+                    try { window.acceptGplLicense(); } catch (_) {}
+                }
+                const modal = document.getElementById('license-modal');
+                if (modal) {
+                    modal.classList.remove('show');
+                }
+            }
+            """
+        )
+    except Exception:
+        pass
+
     overlay = page.locator("#library-loader-overlay")
     if await overlay.count():
         try:
@@ -337,39 +357,15 @@ async def run() -> None:
             if "assets/generated/reading-exams/reading-practice-unified.html" not in unified_url:
                 raise AssertionError(f"统一阅读页 URL 非预期: {unified_url}")
 
-            completion_payload = {
-                "examId": exam_id,
-                "sessionId": session_id,
-                "duration": 95,
-                "startTime": datetime.now().isoformat(),
-                "endTime": datetime.now().isoformat(),
-                "scoreInfo": {
-                    "correct": 1,
-                    "total": 2,
-                    "accuracy": 0.5,
-                    "percentage": 50,
-                    "source": "practice_page",
-                },
-                "answers": {"q1": "A", "q2": "B"},
-                "correctAnswers": {"q1": "A", "q2": "C"},
-                "answerComparison": {
-                    "q1": {"questionId": "q1", "userAnswer": "A", "correctAnswer": "A", "isCorrect": True},
-                    "q2": {"questionId": "q2", "userAnswer": "B", "correctAnswer": "C", "isCorrect": False},
-                },
-                "metadata": {"source": "reading_single_e2e"},
-            }
-            await practice_page.evaluate(
-                """
-                (payload) => {
-                    const target = window.opener || window.parent;
-                    if (!target || typeof target.postMessage !== 'function') {
-                        throw new Error('missing_message_target');
-                    }
-                    target.postMessage({ type: 'PRACTICE_COMPLETE', data: payload, source: 'practice_page' }, '*');
-                }
-                """,
-                completion_payload,
-            )
+            submission_begin_ms = int(datetime.now().timestamp() * 1000)
+            await practice_page.wait_for_selector("#timer", state="visible", timeout=15000)
+            await practice_page.wait_for_selector("#submit-btn", state="visible", timeout=15000)
+            await practice_page.wait_for_timeout(1100)
+            await practice_page.locator("#timer").click()
+            paused_at_ms = int(datetime.now().timestamp() * 1000)
+            await practice_page.wait_for_timeout(2200)
+            await practice_page.locator("#submit-btn").click()
+            submit_clicked_ms = int(datetime.now().timestamp() * 1000)
             await page.wait_for_timeout(1800)
             if not practice_page.is_closed():
                 await practice_page.close()
@@ -397,6 +393,51 @@ async def run() -> None:
                 timeout=30000,
             )
             log_step("练习记录已落地", "SUCCESS")
+            semantic = await page.evaluate(
+                """
+                ({ targetExamId, targetSessionId }) => {
+                    const records = window.getPracticeRecordsState?.()
+                        || window.app?.state?.practice?.records
+                        || [];
+                    const matched = Array.isArray(records)
+                        ? records
+                            .filter(r => String(r?.examId || '') === String(targetExamId))
+                            .filter(r => !targetSessionId || String(r?.sessionId || '') === String(targetSessionId))
+                        : [];
+                    const record = matched.length ? matched[matched.length - 1] : null;
+                    if (!record) {
+                        return { found: false };
+                    }
+                    return {
+                        found: true,
+                        duration: Number(record.duration) || 0,
+                        startTimeMs: record.startTime ? new Date(record.startTime).getTime() : null,
+                        endTimeMs: record.endTime ? new Date(record.endTime).getTime() : null,
+                    };
+                }
+                """,
+                {"targetExamId": exam_id, "targetSessionId": session_id},
+            )
+            if not semantic.get("found"):
+                raise AssertionError("未找到目标练习记录用于时间语义断言")
+            duration_sec = float(semantic.get("duration") or 0)
+            end_time_ms = int(semantic.get("endTimeMs") or 0)
+            wall_clock_sec = max(0.0, (submit_clicked_ms - submission_begin_ms) / 1000.0)
+            paused_wall_sec = max(0.0, (submit_clicked_ms - paused_at_ms) / 1000.0)
+            if not (duration_sec + 0.6 < wall_clock_sec):
+                raise AssertionError(
+                    f"duration 未扣除暂停时间: duration={duration_sec:.2f}s, wallClock={wall_clock_sec:.2f}s"
+                )
+            if abs(end_time_ms - submit_clicked_ms) > 3500:
+                raise AssertionError(
+                    f"endTime 不是提交真实时间附近: endTimeMs={end_time_ms}, submitMs={submit_clicked_ms}"
+                )
+            if not (duration_sec + 0.6 < paused_wall_sec + duration_sec):
+                raise AssertionError("暂停窗口未产生可观测 wall-clock 差值，语义断言不可靠")
+            log_step(
+                f"时间语义校验通过: duration={duration_sec:.2f}s, wallClock={wall_clock_sec:.2f}s",
+                "SUCCESS",
+            )
 
             tail_logs = console_log[checkpoint:]
             fallback_hits = [e for e in tail_logs if "[Fallback]" in e.text]

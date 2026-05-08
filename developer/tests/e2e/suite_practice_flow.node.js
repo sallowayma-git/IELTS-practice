@@ -73,6 +73,25 @@ async function completePassage(suitePage, totalCount, index) {
     const btn = document.getElementById('complete-exam-btn');
     return btn && !btn.disabled;
   }, { timeout: 20_000 });
+  if (index === 0) {
+    try {
+      await suitePage.waitForFunction(() => {
+        const el = document.getElementById('timer');
+        const text = el ? String(el.textContent || '').trim() : '';
+        const match = text.match(/^(\d+)[:：](\d{2})$/);
+        if (!match) return false;
+        return ((Number(match[1]) * 60) + Number(match[2])) >= 2;
+      }, { timeout: 12_000 });
+    } catch (_) {}
+  }
+
+  const timerBeforeSubmit = await suitePage.evaluate(() => {
+    const el = document.getElementById('timer');
+    const text = el ? String(el.textContent || '').trim() : '';
+    const match = text.match(/^(\d+)[:：](\d{2})$/);
+    if (!match) return 0;
+    return Math.max(0, (Number(match[1]) * 60) + Number(match[2]));
+  });
 
   const currentExamId = await suitePage.evaluate(() => document.body.dataset.examId || '');
   await suitePage.click('#complete-exam-btn');
@@ -94,6 +113,16 @@ async function completePassage(suitePage, totalCount, index) {
     const btn = document.getElementById('complete-exam-btn');
     return btn && !btn.disabled;
   }, { timeout: 20_000 });
+  const timerAfterSwitch = await suitePage.evaluate(() => {
+    const el = document.getElementById('timer');
+    const text = el ? String(el.textContent || '').trim() : '';
+    const match = text.match(/^(\d+)[:：](\d{2})$/);
+    if (!match) return 0;
+    return Math.max(0, (Number(match[1]) * 60) + Number(match[2]));
+  });
+  if (timerBeforeSubmit > 0 && timerAfterSwitch < Math.max(1, timerBeforeSubmit - 1)) {
+    throw new Error(`Suite timer reset detected: before=${timerBeforeSubmit}s, after=${timerAfterSwitch}s`);
+  }
 
   return true;
 }
@@ -182,6 +211,14 @@ async function run() {
 
     const recordId = await suiteRecord.getAttribute('data-record-id');
     if (!recordId) throw new Error('Suite practice record not found in history list');
+    const suiteDuration = await page.evaluate(async (id) => {
+      const records = await window.storage.get('practice_records', []);
+      const target = Array.isArray(records) ? records.find((item) => item && item.id === id) : null;
+      return target && Number.isFinite(Number(target.duration)) ? Number(target.duration) : -1;
+    }, recordId);
+    if (suiteDuration < 2) {
+      throw new Error(`Unexpected suite duration: ${suiteDuration}`);
+    }
 
     const recordCountBefore = await page.evaluate(async () => {
       if (window.storage && typeof window.storage.get === 'function') {

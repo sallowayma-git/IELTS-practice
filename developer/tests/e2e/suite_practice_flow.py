@@ -250,6 +250,20 @@ async def _dismiss_overlays(page: Page) -> None:
         except Exception as e:
             log_step(f"关闭备份模态框失败: {e}", "WARNING")
 
+async def _read_timer_seconds(page: Page) -> int:
+    return await page.evaluate(
+        "() => {\n"
+        "  const el = document.getElementById('timer');\n"
+        "  const text = el ? String(el.textContent || '').trim() : '';\n"
+        "  const m = text.match(/^(\\d+)[:：](\\d{2})$/);\n"
+        "  if (!m) return 0;\n"
+        "  const minutes = Number(m[1]);\n"
+        "  const seconds = Number(m[2]);\n"
+        "  if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) return 0;\n"
+        "  return Math.max(0, (minutes * 60) + seconds);\n"
+        "}"
+    )
+
 
 async def _group_loaded(page: Page, group_name: str) -> bool:
     return await page.evaluate(
@@ -273,9 +287,25 @@ async def _complete_passage(suite_page: Page, total_count: int, index: int) -> b
             "() => { const btn = document.getElementById('complete-exam-btn'); return btn && !btn.disabled; }",
             timeout=20000,
         )
-        
+        if index == 0:
+            try:
+                await suite_page.wait_for_function(
+                    "() => {\n"
+                    "  const el = document.getElementById('timer');\n"
+                    "  const text = el ? String(el.textContent || '').trim() : '';\n"
+                    "  const m = text.match(/^(\\d+)[:：](\\d{2})$/);\n"
+                    "  if (!m) return false;\n"
+                    "  return ((Number(m[1]) * 60) + Number(m[2])) >= 2;\n"
+                    "}",
+                    timeout=12000,
+                )
+            except PlaywrightTimeoutError:
+                log_step("未在 12s 内观测到计时器>=2s，继续执行并在切题后做非归零校验。", "WARNING")
+
         current_exam_id = await suite_page.evaluate("() => document.body.dataset.examId || ''")
+        timer_before_submit = await _read_timer_seconds(suite_page)
         log_step(f"当前题目 ID: {current_exam_id}", "DEBUG")
+        log_step(f"提交前计时器: {timer_before_submit}s", "DEBUG")
         
         await suite_page.click("#complete-exam-btn")
         log_step("已点击完成按钮")
@@ -345,6 +375,12 @@ async def _complete_passage(suite_page: Page, total_count: int, index: int) -> b
                 "() => { const btn = document.getElementById('complete-exam-btn'); return btn && !btn.disabled; }",
                 timeout=20000,
             )
+            timer_after_switch = await _read_timer_seconds(suite_page)
+            if timer_before_submit > 0 and timer_after_switch < max(1, timer_before_submit - 1):
+                raise AssertionError(
+                    f"Suite timer reset detected: before={timer_before_submit}s, after={timer_after_switch}s"
+                )
+            log_step(f"切题后计时器: {timer_after_switch}s（通过）", "SUCCESS")
             log_step(f"第 {index + 2} 篇练习已准备就绪", "SUCCESS")
         else:
             log_step("已完成所有练习", "SUCCESS")
@@ -669,6 +705,19 @@ async def run() -> None:
             record_id = await target_record.get_attribute("data-record-id")
             if not record_id:
                 raise AssertionError("Suite practice record not found in history list")
+            suite_duration = await page.evaluate(
+                "(id) => {\n"
+                "  if (!window.storage || typeof window.storage.get !== 'function') return -1;\n"
+                "  return window.storage.get('practice_records', []).then((records) => {\n"
+                "    const target = Array.isArray(records) ? records.find((item) => item && item.id === id) : null;\n"
+                "    const value = target && Number.isFinite(Number(target.duration)) ? Number(target.duration) : -1;\n"
+                "    return value;\n"
+                "  });\n"
+                "}",
+                record_id,
+            )
+            if suite_duration < 2:
+                raise AssertionError(f"Unexpected suite duration: {suite_duration}")
             
             log_step(f"找到套题记录: {record_id}", "SUCCESS")
 
