@@ -93,10 +93,13 @@
         global[PRACTICE_TIMER_BRIDGE_KEY] = {
             eventName: PRACTICE_TIMER_EVENT,
             getSnapshot() {
-                const elapsedSeconds = getPageElapsedSeconds();
+                const nowMs = Date.now();
+                const anchorMs = resolveTimerAnchorMs();
+                const elapsedMs = resolveElapsedMs();
+                const elapsedSeconds = Math.round(elapsedMs / 1000);
                 const durationSeconds = Math.max(0, Math.round(elapsedSeconds));
-                const effectiveEndTimeMs = Date.now();
-                const effectiveStartTimeMs = Math.max(0, effectiveEndTimeMs - (durationSeconds * 1000));
+                const effectiveStartTimeMs = Math.max(0, anchorMs);
+                const effectiveEndTimeMs = Math.max(effectiveStartTimeMs, effectiveStartTimeMs + elapsedMs);
                 return {
                     running: !Number.isFinite(state.pagePausedAtMs),
                     elapsedSeconds,
@@ -104,10 +107,11 @@
                     displaySeconds: Math.floor(elapsedSeconds),
                     effectiveStartTimeMs,
                     effectiveEndTimeMs,
-                    anchorMs: state.pageStartTime,
+                    anchorMs,
                     mode: state.suiteTimerMode || 'elapsed',
                     limitSeconds: state.suiteTimerLimitSeconds,
                     source: state.suiteSessionId ? 'suite' : 'local',
+                    actualEndTimeMs: nowMs,
                     pausedAtMs: Number.isFinite(state.pagePausedAtMs) ? state.pagePausedAtMs : null,
                     pausedOffsetMs: Math.max(0, Number(state.pagePausedOffsetMs) || 0)
                 };
@@ -124,14 +128,26 @@
         return getPracticeTimerBridge().getSnapshot();
     }
 
-    function getPageElapsedSeconds() {
+    function resolveTimerAnchorMs() {
+        const suiteAnchorMs = Number(state.suiteTimerAnchorMs);
+        if (state.suiteSessionId && Number.isFinite(suiteAnchorMs) && suiteAnchorMs > 0) {
+            return Math.floor(suiteAnchorMs);
+        }
+        return Math.floor(Number(state.pageStartTime) || Date.now());
+    }
+
+    function resolveElapsedMs() {
         const referenceNow = Number.isFinite(state.pagePausedAtMs)
             ? state.pagePausedAtMs
             : Date.now();
         return Math.max(
             0,
-            Math.round((referenceNow - state.pageStartTime - state.pagePausedOffsetMs) / 1000)
+            referenceNow - resolveTimerAnchorMs() - Math.max(0, Number(state.pagePausedOffsetMs) || 0)
         );
+    }
+
+    function getPageElapsedSeconds() {
+        return Math.round(resolveElapsedMs() / 1000);
     }
 
     function syncPagePauseState(isRunning) {
@@ -149,12 +165,22 @@
         }
     }
 
-    function resolvePracticeTiming(minDurationSeconds = 0) {
-        const snapshot = getPracticeTimerSnapshot();
+    function resolvePracticeTiming(minDurationSeconds = 0, timerSnapshot = null) {
+        const snapshot = timerSnapshot && typeof timerSnapshot === 'object'
+            ? timerSnapshot
+            : getPracticeTimerSnapshot();
+        const startTimeMs = Math.floor(Number(snapshot.effectiveStartTimeMs));
+        const duration = Math.max(minDurationSeconds, Math.round(Number(snapshot.durationSeconds)));
+        const actualEndTimeMsRaw = Number(snapshot.actualEndTimeMs);
+        const endTimeMs = Number.isFinite(actualEndTimeMsRaw)
+            ? Math.floor(actualEndTimeMsRaw)
+            : Date.now();
+        const effectiveEndTimeMs = Math.max(startTimeMs, startTimeMs + duration * 1000);
         return {
-            duration: Math.max(minDurationSeconds, Math.round(Number(snapshot.durationSeconds))),
-            startTimeMs: Math.floor(Number(snapshot.effectiveStartTimeMs)),
-            endTimeMs: Math.floor(Number(snapshot.effectiveEndTimeMs))
+            duration,
+            startTimeMs,
+            endTimeMs,
+            effectiveEndTimeMs
         };
     }
 
@@ -2463,12 +2489,14 @@
 
     function buildSubmissionSnapshot() {
         const results = buildResults();
+        const timerSnapshot = getPracticeTimerSnapshot();
         return {
             results,
             answers: results.answers || {},
             highlights: collectHighlights(),
             scrollY: global.scrollY || 0,
-            elapsed: getPageElapsedSeconds(),
+            elapsed: Math.max(0, Number(timerSnapshot.durationSeconds) || 0),
+            timerSnapshot,
             updatedAt: Date.now()
         };
     }
@@ -2491,7 +2519,8 @@
             answers: snapshot.answers || {},
             highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
             scrollY: Number.isFinite(Number(snapshot.scrollY)) ? Number(snapshot.scrollY) : 0,
-            elapsed: Number.isFinite(Number(snapshot.elapsed)) ? Number(snapshot.elapsed) : getPageElapsedSeconds()
+            elapsed: Number.isFinite(Number(snapshot.elapsed)) ? Number(snapshot.elapsed) : getPageElapsedSeconds(),
+            timerSnapshot: snapshot.timerSnapshot || getPracticeTimerSnapshot()
         });
     }
     async function handleSubmit() {
@@ -2516,11 +2545,14 @@
         applyHighlights(highlightSnapshot);
         updateNavStatuses(results);
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
-        const timing = resolvePracticeTiming(1);
+        const timing = resolvePracticeTiming(1, submissionSnapshot.timerSnapshot);
         postMessage(messageType, Object.assign({
             duration: timing.duration,
             startTime: new Date(timing.startTimeMs).toISOString(),
             endTime: new Date(timing.endTimeMs).toISOString(),
+            effectiveEndTime: new Date(timing.effectiveEndTimeMs).toISOString(),
+            effectiveEndTimeMs: timing.effectiveEndTimeMs,
+            timerSnapshot: submissionSnapshot.timerSnapshot || getPracticeTimerSnapshot(),
             metadata: {
                 examId: state.examId,
                 examTitle: state.dataset?.meta?.title || '',
@@ -2673,6 +2705,16 @@
             if (Number.isFinite(Number(data.suiteTimerLimitSeconds))) {
                 state.suiteTimerLimitSeconds = Number(data.suiteTimerLimitSeconds);
             }
+            const initPausedOffsetMs = Number(data.suiteTimerPausedOffsetMs ?? data.pausedOffsetMs);
+            if (Number.isFinite(initPausedOffsetMs) && initPausedOffsetMs >= 0) {
+                state.pagePausedOffsetMs = Math.max(0, initPausedOffsetMs);
+            }
+            const initPausedAtMs = Number(data.suiteTimerPausedAtMs ?? data.pausedAtMs);
+            const initRunning = data.suiteTimerRunning !== false;
+            interaction.timerRunning = initRunning;
+            state.pagePausedAtMs = (!initRunning && Number.isFinite(initPausedAtMs) && initPausedAtMs > 0)
+                ? Math.floor(initPausedAtMs)
+                : null;
             if (data.reviewSessionId) {
                 state.reviewSessionId = data.reviewSessionId;
             }
@@ -2780,11 +2822,31 @@
             if (Number.isFinite(Number(data.suiteTimerLimitSeconds))) {
                 state.suiteTimerLimitSeconds = Number(data.suiteTimerLimitSeconds);
             }
-            const elapsedSeconds = Number.isFinite(Number(data.elapsed)) ? Number(data.elapsed) : 0;
-            state.pageStartTime = Date.now() - (elapsedSeconds * 1000);
-            state.pagePausedAtMs = null;
-            state.pagePausedOffsetMs = 0;
+            const timerSnapshot = data && data.timerSnapshot && typeof data.timerSnapshot === 'object'
+                ? data.timerSnapshot
+                : null;
+            const snapshotPausedOffsetMs = Number(
+                (timerSnapshot && timerSnapshot.pausedOffsetMs)
+                ?? data.suiteTimerPausedOffsetMs
+                ?? data.pausedOffsetMs
+            );
+            if (Number.isFinite(snapshotPausedOffsetMs) && snapshotPausedOffsetMs >= 0) {
+                state.pagePausedOffsetMs = Math.max(0, snapshotPausedOffsetMs);
+            }
+            const snapshotRunning = timerSnapshot ? timerSnapshot.running : data.suiteTimerRunning;
+            interaction.timerRunning = snapshotRunning !== false;
+            const snapshotPausedAtMs = Number(
+                (timerSnapshot && timerSnapshot.pausedAtMs)
+                ?? data.suiteTimerPausedAtMs
+                ?? data.pausedAtMs
+            );
+            state.pagePausedAtMs = (
+                interaction.timerRunning === false
+                && Number.isFinite(snapshotPausedAtMs)
+                && snapshotPausedAtMs > 0
+            ) ? Math.floor(snapshotPausedAtMs) : null;
             syncPrimaryActionButtons();
+            renderTimer();
             const draftFromParent = data && data.draft && typeof data.draft === 'object'
                 ? data.draft
                 : null;
