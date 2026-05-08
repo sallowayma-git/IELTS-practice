@@ -1912,6 +1912,27 @@ function filterByType(type) {
         window.browseController.resetToDefault();
     }
 
+    // 更新题库浏览筛选按钮的 active 状态
+    var container = document.getElementById('type-filter-buttons');
+    if (container) {
+        var buttons = container.querySelectorAll('.shui-segmented-btn');
+        for (var i = 0; i < buttons.length; i++) {
+            var btn = buttons[i];
+            if (btn.dataset.filterType === type || btn.dataset.filterId === type) {
+                btn.classList.add('active');
+                btn.setAttribute('aria-pressed', 'true');
+            } else {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-pressed', 'false');
+            }
+        }
+    }
+
+    // 触发滑块指示器同步
+    if (typeof window.updateSegmentedIndicators === 'function') {
+        setTimeout(window.updateSegmentedIndicators, 10);
+    }
+
     // 刷新题库列表
     loadExamList();
 }
@@ -2074,6 +2095,28 @@ if (typeof window.browseCategory !== 'function') {
 
 function filterRecordsByType(type) {
     setBrowseFilterState(getCurrentCategory(), type);
+
+    // 更新练习历史筛选按钮的 active 状态
+    var container = document.getElementById('record-type-filter-buttons');
+    if (container) {
+        var buttons = container.querySelectorAll('.shui-segmented-btn');
+        for (var i = 0; i < buttons.length; i++) {
+            var btn = buttons[i];
+            if (btn.dataset.filterType === type) {
+                btn.classList.add('active');
+                btn.setAttribute('aria-pressed', 'true');
+            } else {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-pressed', 'false');
+            }
+        }
+    }
+
+    // 触发滑块指示器同步
+    if (typeof window.updateSegmentedIndicators === 'function') {
+        setTimeout(window.updateSegmentedIndicators, 10);
+    }
+
     updatePracticeView();
 }
 

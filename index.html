@@ -147,7 +147,9 @@
 
             <!-- 总览页面 -->
             <div id="overview-view" class="view active hero-panel hero-section">
-                <h2>📊 学习总览</h2>
+                <div class="hero-panel__header">
+                    <h2 class="hero-panel__title" style="margin: 0;">📊 学习总览</h2>
+                </div>
 
                 <div class="category-grid" id="category-overview">
                     <!-- 分类卡片将通过JavaScript动态生成 -->
@@ -170,7 +172,7 @@
                             aria-hidden="true"
                         ></span>
                     </button>
-                    <h2 id="browse-title">题库浏览</h2>
+                    <h2 id="browse-title" class="hero-panel__title" style="margin: 0;">题库浏览</h2>
                     <div
                         class="browse-preference-panel"
                         id="browse-preference-panel"
@@ -188,10 +190,10 @@
                     </div>
                     <div
                         id="type-filter-buttons"
-                        class="hero-panel__actions shui-filter-group"
+                        class="hero-panel__actions shui-filter-group shui-segmented-control"
                     >
                         <button
-                            class="btn btn-sm shui-filter-btn active"
+                            class="shui-segmented-btn active"
                             type="button"
                             aria-pressed="true"
                             data-filter-type="all"
@@ -200,7 +202,7 @@
                             全部
                         </button>
                         <button
-                            class="btn btn-sm shui-filter-btn"
+                            class="shui-segmented-btn"
                             type="button"
                             aria-pressed="false"
                             data-filter-type="reading"
@@ -209,7 +211,7 @@
                             阅读
                         </button>
                         <button
-                            class="btn btn-sm shui-filter-btn"
+                            class="shui-segmented-btn"
                             type="button"
                             aria-pressed="false"
                             data-filter-type="listening"
@@ -295,7 +297,9 @@
 
             <!-- 练习记录页面 -->
             <div id="practice-view" class="view hero-panel hero-section">
-                <h2>📝 练习记录</h2>
+                <div class="hero-panel__header">
+                    <h2 class="hero-panel__title" style="margin: 0;">📝 练习记录</h2>
+                </div>
 
                 <div class="practice-stats hero-grid hero-grid--stats">
                     <div class="hero-card hero-card--stat">
@@ -326,14 +330,13 @@
                     <div class="hero-panel__header">
                         <h3 class="hero-panel__title">
                             📈 练习历史
-                            <span class="hero-tag">SHUI Timeline</span>
                         </h3>
                         <div
                             id="record-type-filter-buttons"
-                            class="hero-panel__actions shui-filter-group"
+                            class="hero-panel__actions shui-filter-group shui-segmented-control"
                         >
                             <button
-                                class="btn btn-sm shui-filter-btn"
+                                class="shui-segmented-btn active"
                                 type="button"
                                 aria-pressed="true"
                                 data-filter-type="all"
@@ -342,7 +345,7 @@
                                 全部
                             </button>
                             <button
-                                class="btn btn-sm shui-filter-btn"
+                                class="shui-segmented-btn"
                                 type="button"
                                 aria-pressed="false"
                                 data-filter-type="reading"
@@ -351,7 +354,7 @@
                                 阅读
                             </button>
                             <button
-                                class="btn btn-sm shui-filter-btn"
+                                class="shui-segmented-btn"
                                 type="button"
                                 aria-pressed="false"
                                 data-filter-type="listening"
@@ -426,7 +429,9 @@
 
             <!-- 设置页面 -->
             <div id="settings-view" class="view hero-panel hero-section">
-                <h2>⚙️ 系统设置</h2>
+                <div class="hero-panel__header">
+                    <h2 class="hero-panel__title" style="margin: 0;">⚙️ 系统设置</h2>
+                </div>
                 <div class="hero-settings-group">
                     <div
                         class="hero-panel hero-section system-management-panel"
@@ -621,7 +626,7 @@
             <!-- 更多页面 -->
             <div id="more-view" class="view hero-panel hero-section">
                 <div class="hero-panel__header">
-                    <h2 class="hero-panel__title">✨ 更多工具</h2>
+                    <h2 class="hero-panel__title" style="margin: 0;">✨ 更多工具</h2>
                 </div>
                 <p class="more-view-subtitle">
                     探索额外的学习辅助功能，助你高效备考。

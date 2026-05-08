@@ -389,9 +389,98 @@
         global.__heroNavLiquidInitialized = true;
     }
 
+    function setupSegmentedControls() {
+        if (global.__segmentedControlsInitialized) return;
+        
+        function syncIndicator(control) {
+            // indicator 可能在 innerHTML='' 后被销毁，必须每次检查重建
+            var indicator = control.querySelector('.shui-segmented-indicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.className = 'shui-segmented-indicator';
+                control.insertBefore(indicator, control.firstChild);
+            }
+            
+            var activeBtn = control.querySelector('.shui-segmented-btn.active') || control.querySelector('.shui-segmented-btn[aria-pressed="true"]');
+            if (activeBtn && activeBtn.offsetWidth > 0) {
+                indicator.style.width = activeBtn.offsetWidth + 'px';
+                indicator.style.transform = 'translateX(' + activeBtn.offsetLeft + 'px)';
+                indicator.style.opacity = '1';
+            } else {
+                indicator.style.opacity = '0';
+            }
+        }
+
+        function syncAll() {
+            var controls = document.querySelectorAll('.shui-segmented-control');
+            for (var i = 0; i < controls.length; i++) {
+                syncIndicator(controls[i]);
+            }
+        }
+
+        // 点击任何 segmented btn 时立即同步
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.closest && e.target.closest('.shui-segmented-btn')) {
+                setTimeout(syncAll, 10);
+                setTimeout(syncAll, 60);
+            }
+        });
+
+        // 监听 DOM 变更：browseController 重建按钮时 childList 会变更
+        var observer = new MutationObserver(function(mutations) {
+            var needsSync = false;
+            for (var i = 0; i < mutations.length; i++) {
+                var mutation = mutations[i];
+                var target = mutation.target;
+                // childList 变更直接在 segmented-control 容器上
+                if (mutation.type === 'childList' && target.classList && target.classList.contains('shui-segmented-control')) {
+                    needsSync = true;
+                    break;
+                }
+                // class 属性变更在 segmented-btn 上（active 切换）
+                if (mutation.type === 'attributes' && target.classList && target.classList.contains('shui-segmented-btn')) {
+                    needsSync = true;
+                    break;
+                }
+                // 向上查找（safety net）
+                if (target.closest && target.closest('.shui-segmented-control')) {
+                    needsSync = true;
+                    break;
+                }
+            }
+            if (needsSync) {
+                setTimeout(syncAll, 15);
+            }
+        });
+        
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+        global.addEventListener('resize', syncAll);
+        
+        // 视图切换时重新同步（view 从 display:none 变为可见后 offsetLeft 才有效）
+        document.addEventListener('click', function(e) {
+            var navBtn = e.target && e.target.closest && e.target.closest('.hero-nav__btn');
+            if (navBtn) {
+                // 视图切换动画完成后同步
+                setTimeout(syncAll, 50);
+                setTimeout(syncAll, 200);
+                setTimeout(syncAll, 500);
+            }
+        });
+        
+        if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+            document.fonts.ready.then(syncAll);
+        }
+        
+        setTimeout(syncAll, 50);
+        setTimeout(syncAll, 300);
+        global.__segmentedControlsInitialized = true;
+        global.updateSegmentedIndicators = syncAll;
+    }
+
     function initializeIndexInteractions() {
         setupIndexSettingsButtons();
         setupQuickLaneInteractions();
+        setupSegmentedControls();
     }
 
     function init() {
