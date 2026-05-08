@@ -1555,6 +1555,13 @@
     "script": "./p2-high-233.js",
     "title": "Why don’t we sleep 失眠的原因",
     "category": "P2"
+  },
+  "p2-high-234": {
+    "examId": "p2-high-234",
+    "dataKey": "p2-high-234",
+    "script": "./p2-high-234.js",
+    "title": "How do plants talk to each other 植物交流",
+    "category": "P2"
   }
 };
 })(typeof window !== "undefined" ? window : globalThis);
