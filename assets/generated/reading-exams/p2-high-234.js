@@ -10,9 +10,9 @@
     "title": "How do plants talk to each other 植物交流",
     "category": "P2",
     "frequency": "high",
-    "pdfFilename": "234. P2 - How do plants talk to each other 植物交流.pdf",
+    "pdfFilename": "234. P2 - The Secret Language of Plants 植物交流.pdf",
     "legacyPath": "ReadingPractice/PDF/",
-    "legacyFilename": "234. P2 - How do plants talk to each other 植物交流.pdf",
+    "legacyFilename": "234. P2 - The Secret Language of Plants 植物交流.pdf",
     "questionIntroHtml": "<h3>Questions</h3>"
   },
   "passage": {
@@ -80,7 +80,7 @@
   },
   "sourceRefs": {
     "shuiHtml": null,
-    "shuiPdf": "ReadingPractice/PDF/234. P2 - How do plants talk to each other 植物交流.pdf",
+    "shuiPdf": "ReadingPractice/PDF/234. P2 - The Secret Language of Plants 植物交流.pdf",
     "ieltsHtml": null
   },
   "audit": {
