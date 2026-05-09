@@ -47,6 +47,8 @@
         simulationGlobalAnchorMs: null,
         suiteTimerAnchorMs: null,
         suiteTimerMode: null,
+        endlessCountdownSeconds: 0,
+        endlessCountdownEndTime: null,
         suiteTimerLimitSeconds: null,
         ready: false,
         submitted: false,
@@ -194,13 +196,25 @@
     function renderTimer() {
         const timer = document.getElementById('timer');
         if (!timer) return;
-        let displaySeconds = getPageElapsedSeconds();
-        if (state.suiteTimerMode === 'countdown' && Number.isFinite(Number(state.suiteTimerLimitSeconds))) {
-            displaySeconds = Math.max(0, Number(state.suiteTimerLimitSeconds) - displaySeconds);
+        var displaySeconds;
+        if (state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime)) {
+            var remainingMs = state.endlessCountdownEndTime - Date.now();
+            displaySeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+            if (remainingMs <= 0) {
+                state.endlessCountdownSeconds = 0;
+                state.endlessCountdownEndTime = null;
+                timer.classList.remove('endless-countdown');
+            }
+        } else {
+            displaySeconds = getPageElapsedSeconds();
+            if (state.suiteTimerMode === 'countdown' && Number.isFinite(Number(state.suiteTimerLimitSeconds))) {
+                displaySeconds = Math.max(0, Number(state.suiteTimerLimitSeconds) - displaySeconds);
+            }
         }
         timer.textContent = formatTimerSeconds(displaySeconds);
-        timer.classList.toggle('paused', !interaction.timerRunning);
-        timer.style.opacity = interaction.timerRunning ? '1' : '0.5';
+        var hasEndlessCountdown = state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime);
+        timer.classList.toggle('paused', !interaction.timerRunning && !hasEndlessCountdown);
+        timer.style.opacity = (interaction.timerRunning || hasEndlessCountdown) ? '1' : '0.5';
     }
 
     function setTimerRunning(nextRunning) {
@@ -224,10 +238,10 @@
         }
         if (!interaction.timerInterval) {
             interaction.timerInterval = global.setInterval(() => {
-                if (interaction.timerRunning) {
+                if (interaction.timerRunning || (state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime))) {
                     renderTimer();
                 }
-            }, 1000);
+            }, 250);
         }
         renderTimer();
     }
@@ -2179,6 +2193,14 @@
         });
     }
 
+    function dispatchReady() {
+        postMessage('REQUEST_INIT', {
+            derivedExamId: state.examId,
+            url: global.location.href,
+            title: state.dataset?.meta?.title || document.title || ''
+        });
+    }
+
     function startInitLoop() {
         stopInitLoop();
         state.initTimer = setInterval(() => {
@@ -2858,6 +2880,33 @@
             }
             refreshSimulationDraftSyncLifecycle();
             updateNavStatuses();
+            return;
+        }
+        if (type === 'ENDLESS_COUNTDOWN') {
+            var countdownSeconds = Number(data && data.seconds);
+            if (Number.isFinite(countdownSeconds) && countdownSeconds > 0) {
+                state.endlessCountdownSeconds = Math.ceil(countdownSeconds);
+                state.endlessCountdownEndTime = Date.now() + state.endlessCountdownSeconds * 1000;
+                var timer = document.getElementById('timer');
+                if (timer) timer.classList.add('endless-countdown');
+            }
+            return;
+        }
+        if (type === 'ENDLESS_COUNTDOWN_TICK') {
+            var tickSeconds = Number(data && data.seconds);
+            if (Number.isFinite(tickSeconds)) {
+                state.endlessCountdownSeconds = Math.max(0, Math.ceil(tickSeconds));
+                state.endlessCountdownEndTime = Date.now() + state.endlessCountdownSeconds * 1000;
+                var timerEl = document.getElementById('timer');
+                if (timerEl) timerEl.classList.add('endless-countdown');
+            }
+            return;
+        }
+        if (type === 'ENDLESS_COUNTDOWN_END') {
+            state.endlessCountdownSeconds = 0;
+            state.endlessCountdownEndTime = null;
+            var timerEnd = document.getElementById('timer');
+            if (timerEnd) timerEnd.classList.remove('endless-countdown');
             return;
         }
         if (type === 'SUITE_FORCE_CLOSE') {

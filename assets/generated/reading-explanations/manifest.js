@@ -1049,14 +1049,6 @@
     "sourceDoc": "PDF句段翻译",
     "matchedTitle": "Tunnelling under the Thames 泰晤士河隧道"
   },
-  "p1-medium-161": {
-    "examId": "p1-medium-161",
-    "dataKey": "p1-medium-161",
-    "script": "../reading-explanations/p1-medium-161.js",
-    "title": "Deep sea discovery 深海发光生物研究",
-    "sourceDoc": "PDF句段翻译",
-    "matchedTitle": "Deep sea discovery 深海发光生物研究"
-  },
   "p2-high-134": {
     "examId": "p2-high-134",
     "dataKey": "p2-high-134",

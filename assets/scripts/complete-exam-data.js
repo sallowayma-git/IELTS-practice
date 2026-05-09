@@ -2265,17 +2265,6 @@ window.completeExamIndex = [
         pdfFilename: 'ReadingPractice/PDF/216. P1 - Australia’s cane toad problem 澳洲蟾蜍.pdf',
     },
     {
-        id: 'p1-medium-161',
-        title: 'Deep sea discovery 深海发光生物研究',
-        category: 'P1',
-        frequency: 'low',
-        path: '三月/2.P1 次高频/',
-        filename: '161. P1 - Deep sea discovery 深海发光生物研究【次】.html',
-        hasHtml: true,
-        hasPdf: false,
-        pdfFilename: 'ReadingPractice/PDF/161. P1 - Deep sea discovery 深海发光生物研究.pdf',
-    },
-    {
         id: 'p1-high-194',
         title: 'The history of the British wool industry 英国羊毛产业的历史',
         category: 'P1',
@@ -2601,10 +2590,10 @@ window.completeExamIndex = [
         frequency: '高频',
         difficultyScore: 4,
         path: 'ReadingPractice/PDF/',
-        filename: '234. P2 - How do plants talk to each other 植物交流.pdf',
+        filename: '234. P2 - The Secret Language of Plants 植物交流.pdf',
         hasHtml: true,
         hasPdf: true,
-        pdfFilename: 'ReadingPractice/PDF/234. P2 - How do plants talk to each other 植物交流.pdf',
+        pdfFilename: 'ReadingPractice/PDF/234. P2 - The Secret Language of Plants 植物交流.pdf',
     },
 ];
 window.completeExamIndex.pathRoot = {

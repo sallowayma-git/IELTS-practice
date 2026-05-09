@@ -1359,13 +1359,6 @@
     "title": "The history of the British wool industry 英国羊毛产业的历史【高】",
     "category": "P1"
   },
-  "p1-medium-161": {
-    "examId": "p1-medium-161",
-    "dataKey": "p1-medium-161",
-    "script": "./p1-medium-161.js",
-    "title": "Deep sea discovery 深海发光生物研究【次】",
-    "category": "P1"
-  },
   "p2-high-192": {
     "examId": "p2-high-192",
     "dataKey": "p2-high-192",
