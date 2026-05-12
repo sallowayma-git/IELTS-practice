@@ -1,8 +1,8 @@
 :root {
-    --shui-shell-max-width: 1200px;
-    --shui-panel-bg: rgba(255, 255, 255, 0.82);
-    --shui-panel-border: rgba(255, 255, 255, 0.55);
-    --shui-panel-shadow: 0 30px 60px rgba(15, 23, 42, 0.15);
+    --shui-shell-max-width: 1400px;
+    --shui-panel-bg: rgba(255, 255, 255, 0.25);
+    --shui-panel-border: rgba(255, 255, 255, 0.4);
+    --shui-panel-shadow: 0 20px 40px rgba(0, 0, 0, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.6), inset 0 -1px 1px rgba(255, 255, 255, 0.1);
     --shui-surface-bg: rgba(255, 255, 255, 0.65);
     --shui-surface-border: rgba(148, 163, 184, 0.35);
     --shui-text-strong: var(--color-gray-900);
@@ -18,7 +18,7 @@
     --shui-radius-lg: 20px;
     --shui-radius-md: 16px;
     --shui-radius-sm: 12px;
-    --shui-blur: 28px;
+    --shui-blur: 32px;
 
     /* Bauhaus Theme Variables for Settings View */
     --bauhaus-text-main: #0f172a;
@@ -36,33 +36,22 @@
 body.hero-body {
     color: var(--shui-text-strong);
     position: relative;
-    background: transparent;
+    z-index: 0;
+    isolation: isolate;
+    background: #fbfffd;
     animation: none;
 }
 
-:root[data-theme="blue"] #shui-bg-canvas {
-    display: none;
-}
-
-:root:not([data-theme="blue"]) body.hero-body.shui-bg-active {
-    animation: none;
-    background: transparent !important;
-}
-
-:root:not([data-theme="blue"]) body.hero-body.shui-bg-static {
-    animation: none;
-    background: linear-gradient(135deg, var(--shui-gradient-start) 0%, var(--shui-gradient-end) 100%);
-}
-
-#shui-bg-canvas {
+#shui-three-bg {
     position: fixed;
     inset: 0;
     width: 100%;
     height: 100%;
-    z-index: -1;
+    z-index: 0;
     pointer-events: none;
-    mix-blend-mode: normal;
-    opacity: 1;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    will-change: transform;
 }
 
 :root:not([data-theme="blue"]) body.hero-body::before {
@@ -70,6 +59,8 @@ body.hero-body {
 }
 
 .hero-shell {
+    position: relative;
+    z-index: 1;
     max-width: var(--shui-shell-max-width);
     margin: 0 auto;
     padding: clamp(32px, 5vw, 72px) clamp(16px, 5vw, 48px) 80px;
@@ -128,47 +119,131 @@ body.hero-body {
 }
 
 .hero-nav {
+    position: relative;
     display: flex;
-    gap: 12px;
-    padding: 12px;
-    background: rgba(255, 255, 255, 0.35);
-    border-radius: var(--shui-radius-xl);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
-    backdrop-filter: blur(var(--shui-blur));
+    gap: 4px;
+    padding: 6px;
+    background: rgba(245, 245, 247, 0.55);
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04),
+                inset 0 -1px 1px rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.hero-nav::before {
+    display: none;
+}
+
+.hero-nav__liquid-indicator {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 1;
+    pointer-events: none;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.05));
+    box-shadow: 
+        inset 0 2px 3px rgba(255, 255, 255, 0.9), 
+        inset 0 -2px 5px rgba(255, 255, 255, 0.2),
+        inset 0 0 10px rgba(255, 255, 255, 0.4),
+        0 4px 12px rgba(0, 0, 0, 0.06);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    opacity: 0;
+    transition: left 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.15),
+                top 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.15),
+                width 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.15),
+                height 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.15),
+                opacity 0.22s ease;
+    will-change: left, top, width, height;
 }
 
 .hero-nav__btn {
     flex: 1;
-    border: none;
+    position: relative;
+    z-index: 2;
+    border: 1px solid transparent;
     background: transparent;
-    color: var(--shui-text-muted);
-    padding: 16px;
-    border-radius: var(--shui-radius-md);
-    font-size: 1rem;
+    color: rgba(60, 60, 67, 0.7);
+    padding: 10px 14px;
+    border-radius: 999px;
+    font-size: 0.95rem;
     font-weight: 600;
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 8px;
-    transition: color var(--transition-normal), background var(--transition-normal), transform var(--transition-normal);
+    gap: 6px;
+    transition: color 260ms ease, background 260ms ease, box-shadow 260ms ease;
+}
+
+.hero-nav__btn::before {
+    display: none;
 }
 
 .hero-nav__btn:hover {
-    color: var(--shui-text-strong);
-    background: rgba(255, 255, 255, 0.6);
-    transform: translateY(-1px);
+    color: rgba(0, 0, 0, 0.85);
+    background: rgba(255, 255, 255, 0.45);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.03), inset 0 1px 1px rgba(255,255,255,0.7);
 }
 
 .hero-nav__btn.active {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.35), rgba(118, 75, 162, 0.4));
-    color: var(--color-white);
-    box-shadow: 0 12px 25px rgba(102, 126, 234, 0.35);
+    color: #1d1d1f;
+    background: transparent;
+    box-shadow: none;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+.hero-nav__btn.active::before {
+    display: none;
+}
+
+.hero-nav.hero-nav--liquid-ready .hero-nav__liquid-indicator {
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hero-nav__btn,
+    .hero-nav__btn::before,
+    .hero-nav__liquid-indicator {
+        transition: none !important;
+        animation: none !important;
+    }
+}
+
+.ui-emoji-icon {
+    display: inline-flex;
+    width: 1em;
+    height: 1em;
+    color: currentColor;
+    vertical-align: -0.14em;
+    flex: 0 0 auto;
+}
+
+.ui-emoji-icon svg {
+    width: 100%;
+    height: 100%;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.tool-card-icon .ui-emoji-icon,
+.theme-name .ui-emoji-icon,
+.hero-panel__title .ui-emoji-icon {
+    width: 1.15em;
+    height: 1.15em;
 }
 
 .hero-grid {
     display: grid;
-    gap: 20px;
+    gap: 32px;
 }
 
 .hero-grid--stats {
@@ -177,7 +252,7 @@ body.hero-body {
 
 .hero-card {
     position: relative;
-    padding: 24px;
+    padding: 32px;
     border-radius: var(--shui-radius-lg);
     background: var(--shui-panel-bg);
     border: 1px solid var(--shui-panel-border);
@@ -222,7 +297,7 @@ body.hero-body {
     background: var(--shui-panel-bg);
     border-radius: var(--shui-radius-xl);
     border: 1px solid var(--shui-panel-border);
-    padding: clamp(20px, 3vw, 32px);
+    padding: clamp(28px, 4vw, 48px);
     box-shadow: var(--shui-panel-shadow);
     backdrop-filter: blur(var(--shui-blur));
 }
@@ -327,6 +402,124 @@ body.hero-body {
     color: #3b1f00;
 }
 
+/* Premium Apple Liquid Glass Button */
+.shui-glass-btn {
+    position: relative;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.15) !important;
+    border: 1px solid rgba(255, 255, 255, 0.4) !important;
+    border-radius: 999px !important;
+    color: var(--shui-text-strong) !important;
+    font-weight: 600 !important;
+    padding: 8px 20px !important;
+    box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.05),
+        inset 0 1px 1px rgba(255, 255, 255, 0.8),
+        inset 0 -1px 1px rgba(255, 255, 255, 0.2) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background-image: none !important;
+    text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
+}
+
+.shui-glass-btn:hover,
+.shui-glass-btn:focus-visible {
+    background: rgba(255, 255, 255, 0.35) !important;
+    box-shadow: 
+        0 8px 24px rgba(0, 0, 0, 0.1),
+        inset 0 1px 2px rgba(255, 255, 255, 1),
+        inset 0 -1px 1px rgba(255, 255, 255, 0.3) !important;
+    transform: translateY(-2px) scale(1.02) !important;
+    border-color: rgba(255, 255, 255, 0.65) !important;
+}
+
+.shui-glass-btn:active {
+    transform: translateY(1px) scale(0.98) !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 
+        0 2px 4px rgba(0, 0, 0, 0.05),
+        inset 0 1px 1px rgba(255, 255, 255, 0.4) !important;
+}
+
+.shui-glass-btn.active,
+.shui-glass-btn[aria-pressed="true"] {
+    background: rgba(255, 255, 255, 0.55) !important;
+    color: #0f172a !important;
+    box-shadow: 
+        0 8px 24px rgba(0, 0, 0, 0.12),
+        inset 0 1px 2px rgba(255, 255, 255, 1),
+        inset 0 -1px 1px rgba(255, 255, 255, 0.5) !important;
+    border-color: rgba(255, 255, 255, 0.85) !important;
+}
+
+#overview-view .shui-glass-btn[data-action="start-endless-mode"] .ui-emoji-icon {
+    color: #7c3aed;
+}
+#overview-view .shui-glass-btn[data-action="start-suite-mode"] .ui-emoji-icon {
+    color: #646b20;
+}
+
+/* Segmented Control (Apple style toggle) */
+.shui-segmented-control {
+    display: inline-flex;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 999px;
+    padding: 4px;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    gap: 2px;
+    position: relative;
+    isolation: isolate;
+}
+
+.shui-segmented-indicator {
+    position: absolute;
+    top: 4px;
+    left: 0;
+    height: calc(100% - 8px);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.65);
+    box-shadow: 
+        0 2px 8px rgba(0, 0, 0, 0.12),
+        inset 0 1px 1px rgba(255, 255, 255, 1),
+        inset 0 -1px 1px rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    transition: transform 0.4s cubic-bezier(0.25, 1, 0.3, 1), width 0.4s cubic-bezier(0.25, 1, 0.3, 1), opacity 0.2s ease;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.shui-segmented-btn {
+    position: relative;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: var(--shui-text-muted);
+    font-weight: 600;
+    padding: 6px 16px;
+    font-size: 0.9rem;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    cursor: pointer;
+    text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
+    z-index: 1;
+}
+
+.shui-segmented-btn:hover {
+    color: var(--shui-text-strong);
+}
+
+.shui-segmented-btn.active,
+.shui-segmented-btn[aria-pressed="true"] {
+    color: var(--shui-text-strong);
+}
+
 .hero-panel .btn.btn-info {
     background-image: linear-gradient(135deg, rgba(106, 204, 199, 0.85), rgba(106, 204, 199, 1));
 }
@@ -348,18 +541,6 @@ body.hero-body {
 }
 
 /* Specific Button Colors & Exquisite Overrides */
-#show-onboarding-btn {
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-
-#show-onboarding-btn:hover {
-    filter: brightness(1.08) saturate(1.05);
-    /* Light, textured color shift */
-    transform: scale(1.02);
-    /* Slight organic scale */
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.6) inset !important;
-    background-image: linear-gradient(135deg, var(--shui-gradient-start), var(--shui-gradient-end));
-}
 
 /* Apple Liquid Glassmorphism for Exam Item Action Buttons */
 #browse-view .exam-item-action-btn {
@@ -584,46 +765,32 @@ body.hero-body {
     }
 }
 
-body.hero-body.shui-bg-static {
-    animation: none;
-}
+/* End of heroui-bridge.css */
 
 /* =========================================
-   Bauhaus Settings View Styles (Merged)
+   Liquid Glass Settings View Styles
    ========================================= */
 
+/* #settings-view container will use standard .hero-panel styles */
 #settings-view {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
     margin-top: 20px;
 }
 
-#settings-view h2 {
-    font-size: 2.5rem;
-    font-weight: 800;
-    margin-bottom: 2rem;
-    color: var(--bauhaus-text-main);
-    letter-spacing: -0.03em;
-    text-shadow: 0 2px 4px rgba(255, 255, 255, 0.5);
-}
 
 #settings-view .hero-settings-group {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-    gap: 24px;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
 }
 
-/* Bauhaus Card Style */
+/* Liquid Glass Card Style */
 #settings-view .hero-panel {
-    /* Updated background for better visibility and pale tint */
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(241, 245, 249, 0.88));
-    backdrop-filter: blur(24px) saturate(120%);
-    -webkit-backdrop-filter: blur(24px) saturate(120%);
-    border: 1px solid var(--bauhaus-glass-border);
+    background: var(--shui-panel-bg);
+    backdrop-filter: blur(var(--shui-blur)) saturate(150%);
+    -webkit-backdrop-filter: blur(var(--shui-blur)) saturate(150%);
+    border: 1px solid var(--shui-panel-border);
     border-radius: var(--shui-radius-lg);
-    box-shadow: var(--bauhaus-glass-shadow);
+    box-shadow: var(--shui-panel-shadow);
     padding: 32px;
     transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s ease, border-color 0.3s ease;
     position: relative;
@@ -632,11 +799,11 @@ body.hero-body.shui-bg-static {
 
 #settings-view .hero-panel:hover {
     transform: translateY(-4px);
-    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
-    border-color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+    border-color: rgba(255, 255, 255, 0.7);
 }
 
-/* Inner Glow/Highlight */
+/* Liquid Glass Inner Glow/Highlight */
 #settings-view .hero-panel::before {
     content: '';
     position: absolute;
@@ -721,7 +888,9 @@ body.hero-body.shui-bg-static {
 
 #settings-view #load-library-btn,
 #settings-view #library-config-btn,
-#settings-view #force-refresh-btn {
+#settings-view #force-refresh-btn,
+#settings-view #theme-switcher-btn-entry,
+#settings-view #show-onboarding-btn {
     background: rgba(255, 255, 255, 0.7);
     color: var(--bauhaus-text-main) !important;
     border: 1px solid rgba(15, 23, 42, 0.15);
@@ -729,7 +898,9 @@ body.hero-body.shui-bg-static {
 
 #settings-view #load-library-btn:hover,
 #settings-view #library-config-btn:hover,
-#settings-view #force-refresh-btn:hover {
+#settings-view #force-refresh-btn:hover,
+#settings-view #theme-switcher-btn-entry:hover,
+#settings-view #show-onboarding-btn:hover {
     background: var(--bauhaus-accent-blue);
     color: white !important;
     box-shadow: 0 12px 24px rgba(37, 99, 235, 0.3);
@@ -747,6 +918,22 @@ body.hero-body.shui-bg-static {
     color: white !important;
     box-shadow: 0 12px 24px rgba(15, 23, 42, 0.25);
     border-color: transparent;
+}
+
+#settings-view .hero-settings-actions {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+#settings-view .hero-settings-actions .btn {
+    flex: 1 1 auto;
+    min-width: 140px;
+    justify-content: center;
+    display: flex;
+    align-items: center;
 }
 
 #settings-view .hero-surface {

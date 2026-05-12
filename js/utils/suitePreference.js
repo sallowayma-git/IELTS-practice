@@ -6,7 +6,7 @@
     const AUTO_ADVANCE_STORAGE_KEY = 'suite_auto_advance_after_submit';
 
     const FLOW_MODES = ['classic', 'simulation', 'stationary'];
-    const FREQUENCY_SCOPES = ['high', 'high_medium', 'all'];
+    const FREQUENCY_SCOPES = ['high', 'high_medium', 'all', 'custom'];
 
     const FREQUENCY_ALIASES = new Map([
         ['high', 'high'],
@@ -61,6 +61,9 @@
         if (normalized === 'all' || normalized === 'default') {
             return 'all';
         }
+        if (normalized === 'custom' || normalized === 'self_select' || normalized === 'self-select') {
+            return 'custom';
+        }
         if (normalized === '高频' || normalized === '仅高频') {
             return 'high';
         }
@@ -95,6 +98,9 @@
         }
         if (normalizedScope === 'high_medium') {
             return normalizedFrequency === 'high' || normalizedFrequency === 'medium';
+        }
+        if (normalizedScope === 'custom') {
+            return true;
         }
         return true;
     }

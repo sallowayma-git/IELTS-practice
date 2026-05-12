@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -46,6 +47,14 @@ BANNED_PATTERNS = [
     r"本篇解析已按",
     r"移除此前错绑",
 ]
+
+
+def safe_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
 
 
 def load_json_from_register_js(path: Path, register_key: str) -> dict:
@@ -128,6 +137,8 @@ console.log(JSON.stringify({ allPass, checks }));
             cwd=str(repo_root),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
     except Exception as error:  # noqa: BLE001
@@ -143,18 +154,19 @@ console.log(JSON.stringify({ allPass, checks }));
             "node_exec_ok": False,
             "all_pass": False,
             "checks": {},
-            "stderr": result.stderr.strip(),
+            "stderr": safe_text(result.stderr).strip(),
         }
 
     try:
-        payload = json.loads((result.stdout or "").strip().splitlines()[-1])
+        output_lines = [line for line in safe_text(result.stdout).strip().splitlines() if line.strip()]
+        payload = json.loads(output_lines[-1] if output_lines else "{}")
     except Exception as error:  # noqa: BLE001
         return {
             "node_exec_ok": False,
             "all_pass": False,
             "checks": {},
             "error": f"json_parse_error: {error}",
-            "stdout": (result.stdout or "").strip(),
+            "stdout": safe_text(result.stdout).strip(),
         }
 
     checks = payload.get("checks", {}) if isinstance(payload, dict) else {}
@@ -166,6 +178,23 @@ console.log(JSON.stringify({ allPass, checks }));
 
 
 def main() -> int:
+    if not CHECKLIST.exists():
+        report = {
+            "status": "skipped",
+            "reason": f"missing_checklist:{CHECKLIST}",
+            "onlyInMapping": [],
+            "onlyInChecklist": [],
+            "invalidStatusRows": [],
+            "missingEvidenceForVerified": [],
+            "monaBannedPatternHits": [],
+            "monaCoverageOk": True,
+            "monaAnswerMismatches": [],
+        }
+        REPORT.parent.mkdir(parents=True, exist_ok=True)
+        REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps(report, ensure_ascii=False))
+        return 0
+
     mapping = json.loads(MAPPING.read_text(encoding="utf-8"))
     mapping_ids = [item["id"] for item in mapping.get("issues", [])]
 

@@ -37,7 +37,7 @@
                 if (typeof view.actions.onBrowseCategory === 'function') {
                     // 传递 filterMode 和 path 参数（如果存在）
                     view.actions.onBrowseCategory(
-                        this.dataset.category, 
+                        this.dataset.category,
                         this.dataset.type,
                         this.dataset.filterMode,
                         this.dataset.path
@@ -49,7 +49,7 @@
                 event.preventDefault();
                 if (typeof view.actions.onRandomPractice === 'function') {
                     view.actions.onRandomPractice(
-                        this.dataset.category, 
+                        this.dataset.category,
                         this.dataset.type,
                         this.dataset.filterMode,
                         this.dataset.path
@@ -99,34 +99,35 @@
 
             fragment.appendChild(readingSection);
 
-            const listeningEntries = (stats?.listening || []).filter((entry) => entry.total > 0);
-            if (listeningEntries.length > 0) {
-                fragment.appendChild(this.createSection({
-                    title: '听力',
-                    icon: '🎧',
-                    entries: listeningEntries,
-                    style: { gridColumn: '1 / -1', marginTop: '40px' }
-                }));
-            }
-            
-            // 新增：渲染特殊听力分类（100 P1 和 100 P4）
-            const specialListeningEntries = (stats?.specialListening || []).filter((entry) => entry.total > 0);
-            if (specialListeningEntries.length > 0) {
-                fragment.appendChild(this.createSection({
-                    title: '听力练习 - 频率分类',
-                    icon: '🎧',
-                    entries: specialListeningEntries,
-                    style: { gridColumn: '1 / -1', marginTop: '40px' },
-                    isSpecial: true
-                }));
-            }
+            // [DISABLED] 听力入口已禁用
+            // const listeningEntries = (stats?.listening || []).filter((entry) => entry.total > 0);
+            // if (listeningEntries.length > 0) {
+            //     fragment.appendChild(this.createSection({
+            //         title: '听力',
+            //         icon: '🎧',
+            //         entries: listeningEntries,
+            //         style: { gridColumn: '1 / -1', marginTop: '40px' }
+            //     }));
+            // }
+
+            // [DISABLED] 听力练习 - 频率分类入口已禁用
+            // const specialListeningEntries = (stats?.specialListening || []).filter((entry) => entry.total > 0);
+            // if (specialListeningEntries.length > 0) {
+            //     fragment.appendChild(this.createSection({
+            //         title: '听力练习 - 频率分类',
+            //         icon: '🎧',
+            //         entries: specialListeningEntries,
+            //         style: { gridColumn: '1 / -1', marginTop: '40px' },
+            //         isSpecial: true
+            //     }));
+            // }
 
             this.dom.replaceContent(container, fragment);
         }
 
         createSection({ title, icon, entries, style, rightButton, rightButtons, isSpecial = false }) {
             const sectionFragment = document.createDocumentFragment();
-            
+
             // 创建标题容器，支持右侧按钮
             const titleContainer = this.dom.create('div', {
                 style: {
@@ -137,11 +138,13 @@
                     ...style
                 }
             });
-            
+
             titleContainer.appendChild(this.dom.create('h3', {
                 className: 'overview-section-title',
                 style: { margin: 0 }
             }, title));
+
+
             // 支持单个 rightButton（向后兼容）或多个 rightButtons
             const buttons = rightButtons || (rightButton ? [rightButton] : []);
             if (buttons.length > 0) {
@@ -151,7 +154,7 @@
                 buttons.forEach(btn => btnGroup.appendChild(btn));
                 titleContainer.appendChild(btnGroup);
             }
-            
+
             sectionFragment.appendChild(titleContainer);
 
             entries.forEach((entry) => {
@@ -167,12 +170,12 @@
 
         createCategoryCard({ icon, entry, isSpecial = false }) {
             const actions = this.createCardActions(entry, isSpecial);
-            
+
             // 特殊卡片使用不同的标题格式
-            const titleText = isSpecial 
-                ? entry.category 
+            const titleText = isSpecial
+                ? entry.category
                 : `${entry.category} ${entry.type === 'reading' ? '阅读' : '听力'}`;
-            
+
             const content = [
                 this.dom.create('div', { className: 'category-header' }, [
                     this.dom.create('div', { className: 'category-icon' }, icon),
@@ -200,7 +203,7 @@
                 category: entry.category,
                 type: entry.type
             };
-            
+
             const browseButton = this.dom.create('button', {
                 className: 'btn',
                 type: 'button',
@@ -236,36 +239,37 @@
             }, [browseButton, randomButton]);
         }
 
+        createSvgIcon(svgContent) {
+            const span = document.createElement('span');
+            span.className = 'ui-emoji-icon';
+            span.setAttribute('aria-hidden', 'true');
+            span.style.display = 'inline-flex';
+            span.innerHTML = `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${svgContent}</svg>`;
+            return span;
+        }
+
         createSuiteModeButton() {
             return this.dom.create('button', {
-                className: 'btn btn-primary',
+                className: 'shui-glass-btn',
                 type: 'button',
                 dataset: {
                     action: 'start-suite-mode',
                     overviewAction: 'suite'
                 },
                 style: {
-                    padding: '8px 16px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    borderRadius: '6px',
-                    backgroundColor: '#646b20ff',
-                    border: 'none',
-                    color: 'white',
-                    cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px'
                 }
             }, [
-                this.dom.create('span', { ariaHidden: 'true' }, '🚀'),
+                this.createSvgIcon('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6"></path><path d="M8 13h8M8 17h6"></path>'),
                 this.dom.create('span', {}, '套题模式')
             ]);
         }
 
         createEndlessModeButton() {
             return this.dom.create('button', {
-                className: 'btn',
+                className: 'shui-glass-btn',
                 type: 'button',
                 id: 'endless-mode-btn',
                 dataset: {
@@ -273,20 +277,12 @@
                     overviewAction: 'endless'
                 },
                 style: {
-                    padding: '8px 16px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    borderRadius: '6px',
-                    backgroundColor: '#7c3aed',
-                    border: 'none',
-                    color: 'white',
-                    cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px'
                 }
             }, [
-                this.dom.create('span', { ariaHidden: 'true' }, '♾️'),
+                this.createSvgIcon('<path d="M20 6v5h-5"></path><path d="M4 18v-5h5"></path><path d="M6.2 11a6 6 0 0 1 10.6-2.4L20 11"></path><path d="M17.8 13a6 6 0 0 1-10.6 2.4L4 13"></path>'),
                 this.dom.create('span', {}, '无尽模式')
             ]);
         }

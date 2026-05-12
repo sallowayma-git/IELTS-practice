@@ -147,10 +147,15 @@
             // 清空现有按钮
             this.buttonContainer.innerHTML = '';
 
+            // 确保容器拥有 segmented control 类
+            if (!this.buttonContainer.classList.contains('shui-segmented-control')) {
+                this.buttonContainer.classList.add('shui-segmented-control');
+            }
+
             // 生成新按钮
             config.filters.forEach(filter => {
                 const button = document.createElement('button');
-                button.className = 'btn btn-sm shui-filter-btn';
+                button.className = 'shui-segmented-btn';
                 button.textContent = filter.label;
                 button.dataset.filterId = filter.id;
 
@@ -167,6 +172,11 @@
 
                 this.buttonContainer.appendChild(button);
             });
+
+            // 触发滑块指示器同步
+            if (typeof global.updateSegmentedIndicators === 'function') {
+                setTimeout(global.updateSegmentedIndicators, 20);
+            }
         }
 
         /**
@@ -191,7 +201,7 @@
                 return;
             }
 
-            const buttons = this.buttonContainer.querySelectorAll('.btn');
+            const buttons = this.buttonContainer.querySelectorAll('.shui-segmented-btn');
             buttons.forEach(button => {
                 const filterId = button.dataset.filterId;
                 if (filterId === this.activeFilter) {
