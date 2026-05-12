@@ -363,6 +363,21 @@ def _check_metadata_field(path: Path, keyword: str = "pathRoot") -> Tuple[bool, 
     return False, f"缺少 {keyword} 元数据"
 
 
+def _check_json_path_map(path: Path) -> Tuple[bool, str]:
+    if not path.exists():
+        return False, "路径映射文件缺失"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, f"读取失败：{exc}"
+
+    reading_root = (((payload or {}).get("reading") or {}).get("root"))
+    listening_root = (((payload or {}).get("listening") or {}).get("root"))
+    if isinstance(reading_root, str) and reading_root.strip() and isinstance(listening_root, str) and listening_root.strip():
+        return True, "检测到 reading/listening 路径映射"
+    return False, "路径映射缺少 reading/listening root"
+
+
 def _extract_registered_payload(path: Path) -> Optional[dict]:
     try:
         text = path.read_text(encoding="utf-8")
@@ -530,6 +545,14 @@ def _format_result(name: str, passed: bool, detail: str) -> dict:
     }
 
 
+def _safe_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
 def _ensure_exists(path: Path) -> Tuple[bool, str]:
     exists = path.exists()
     return exists, ("已找到" if exists else "文件缺失")
@@ -550,18 +573,20 @@ def _run_json_subprocess(
             text=True,
             timeout=timeout,
             env=env,
+            encoding="utf-8",
+            errors="replace"
         )
     except subprocess.TimeoutExpired:
         return False, f"执行超时（{timeout}秒）"
     except subprocess.CalledProcessError as exc:
-        output_text = exc.stdout or exc.stderr or str(exc)
+        output_text = _safe_text(exc.stdout) + _safe_text(exc.stderr) + _safe_text(exc)
         return False, f"执行失败: {output_text.strip()}"
 
     if parse_mode == "last-line":
-        output_lines = [line.strip() for line in (completed.stdout or "").splitlines() if line.strip()]
+        output_lines = [line.strip() for line in _safe_text(completed.stdout).splitlines() if line.strip()]
         parse_target = output_lines[-1] if output_lines else ""
     else:
-        parse_target = completed.stdout.strip() or completed.stderr.strip()
+        parse_target = _safe_text(completed.stdout).strip() or _safe_text(completed.stderr).strip()
 
     try:
         payload = json.loads(parse_target or "{}")
@@ -821,14 +846,26 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("ResourceCore resolveExamBasePath 路径组合逻辑", resolve_passed, resolve_detail))
         all_passed &= resolve_passed
 
-    metadata_targets = [
-        REPO_ROOT / "assets" / "scripts" / "complete-exam-data.js",
-        REPO_ROOT / "assets" / "scripts" / "listening-exam-data.js",
-    ]
-    for metadata_path in metadata_targets:
-        meta_passed, meta_detail = _check_metadata_field(metadata_path)
-        results.append(_format_result(f"{metadata_path.name} 根目录元数据", meta_passed, meta_detail))
-        all_passed &= meta_passed
+    complete_exam_data = REPO_ROOT / "assets" / "scripts" / "complete-exam-data.js"
+    complete_meta_passed, complete_meta_detail = _ensure_exists(complete_exam_data)
+    results.append(_format_result("complete-exam-data.js 存在性", complete_meta_passed, complete_meta_detail))
+    all_passed &= complete_meta_passed
+
+    path_map_path = REPO_ROOT / "assets" / "data" / "path-map.json"
+    path_map_passed, path_map_detail = _check_json_path_map(path_map_path)
+    results.append(_format_result("path-map.json 路径映射", path_map_passed, path_map_detail))
+    all_passed &= path_map_passed
+
+    lazy_loader_path = REPO_ROOT / "js" / "runtime" / "lazyLoader.js"
+    if lazy_loader_path.exists():
+        lazy_loader_source = lazy_loader_path.read_text(encoding="utf-8")
+        legacy_listening_ref_absent = "assets/scripts/listening-exam-data.js" not in lazy_loader_source
+        results.append(_format_result(
+            "lazyLoader 已移除 listening-exam-data.js 依赖",
+            legacy_listening_ref_absent,
+            "未检测到旧 listening 数据脚本引用" if legacy_listening_ref_absent else "仍检测到旧 listening 数据脚本引用",
+        ))
+        all_passed &= legacy_listening_ref_absent
 
     explanation_alignment_passed, explanation_alignment_detail = _check_reading_explanation_alignment()
     results.append(_format_result("阅读题目-解析一致性校验", explanation_alignment_passed, explanation_alignment_detail))
@@ -895,13 +932,15 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace"
             )
         except subprocess.CalledProcessError as exc:
             sanitizer_passed = False
-            sanitizer_detail = f"执行失败: {(exc.stdout or exc.stderr or str(exc)).strip()}"
+            sanitizer_detail = f"执行失败: {((exc.stdout or '') + (exc.stderr or '') + str(exc)).strip()}"
         else:
             sanitizer_passed = True
-            sanitizer_detail = completed_sanitizer.stdout.strip() or "已执行"
+            sanitizer_detail = (completed_sanitizer.stdout or "").strip() or "已执行"
         results.append(_format_result("AnswerSanitizer 单元测试", sanitizer_passed, sanitizer_detail))
         all_passed &= sanitizer_passed
     else:
@@ -916,13 +955,15 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace"
             )
         except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
             result_detail = f"执行失败: {output_text.strip()}"
             suite_passed = False
         else:
-            raw_output = completed.stdout.strip() or completed.stderr.strip()
+            raw_output = (completed.stdout or "").strip() or (completed.stderr or "").strip()
             try:
                 payload = json.loads(raw_output or "{}")
             except json.JSONDecodeError as parse_error:
@@ -945,13 +986,15 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace"
             )
         except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
             suite_regression_passed = False
             suite_regression_detail = f"执行失败: {output_text.strip()}"
         else:
-            raw_suite_regression = completed_suite_regression.stdout.strip() or completed_suite_regression.stderr.strip()
+            raw_suite_regression = (completed_suite_regression.stdout or "").strip() or (completed_suite_regression.stderr or "").strip()
             try:
                 suite_regression_payload = json.loads(raw_suite_regression or "{}")
             except json.JSONDecodeError as parse_error:
@@ -970,21 +1013,23 @@ def run_checks() -> Tuple[List[dict], bool]:
     if simulation_nb_drag_test.exists():
         try:
             completed_sim_nb_drag = subprocess.run(
-                ["python3", str(simulation_nb_drag_test)],
+                [sys.executable, str(simulation_nb_drag_test)],
                 check=True,
                 capture_output=True,
                 text=True,
                 timeout=240,
+                encoding="utf-8",
+                errors="replace"
             )
         except subprocess.TimeoutExpired:
             sim_nb_drag_passed = False
             sim_nb_drag_detail = "执行超时（240秒）"
         except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
             sim_nb_drag_passed = False
             sim_nb_drag_detail = f"执行失败: {output_text.strip()}"
         else:
-            raw_sim_nb_drag = completed_sim_nb_drag.stdout.strip() or completed_sim_nb_drag.stderr.strip()
+            raw_sim_nb_drag = (completed_sim_nb_drag.stdout or "").strip() or (completed_sim_nb_drag.stderr or "").strip()
             try:
                 sim_nb_drag_payload = json.loads(raw_sim_nb_drag or "{}")
             except json.JSONDecodeError as parse_error:
@@ -1003,21 +1048,23 @@ def run_checks() -> Tuple[List[dict], bool]:
     if simulation_roundtrip_restore_test.exists():
         try:
             completed_sim_roundtrip_restore = subprocess.run(
-                ["python3", str(simulation_roundtrip_restore_test)],
+                [sys.executable, str(simulation_roundtrip_restore_test)],
                 check=True,
                 capture_output=True,
                 text=True,
                 timeout=360,
+                encoding="utf-8",
+                errors="replace"
             )
         except subprocess.TimeoutExpired:
             sim_roundtrip_restore_passed = False
             sim_roundtrip_restore_detail = "执行超时（360秒）"
         except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
             sim_roundtrip_restore_passed = False
             sim_roundtrip_restore_detail = f"执行失败: {output_text.strip()}"
         else:
-            raw_sim_roundtrip_restore = completed_sim_roundtrip_restore.stdout.strip() or completed_sim_roundtrip_restore.stderr.strip()
+            raw_sim_roundtrip_restore = (completed_sim_roundtrip_restore.stdout or "").strip() or (completed_sim_roundtrip_restore.stderr or "").strip()
             try:
                 sim_roundtrip_restore_payload = json.loads(raw_sim_roundtrip_restore or "{}")
             except json.JSONDecodeError as parse_error:
@@ -1032,6 +1079,72 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("模拟模式切题回灌回归测试", False, "测试脚本缺失"))
         all_passed = False
 
+    unified_submit_readonly_test = REPO_ROOT / "developer" / "tests" / "e2e" / "unified_submit_readonly_regression.py"
+    if unified_submit_readonly_test.exists():
+        try:
+            completed_unified_submit = subprocess.run(
+                [sys.executable, str(unified_submit_readonly_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=240,
+                encoding="utf-8",
+                errors="replace"
+            )
+        except subprocess.TimeoutExpired:
+            unified_submit_passed = False
+            unified_submit_detail = "执行超时（240秒）"
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            unified_submit_passed = False
+            unified_submit_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_unified_submit = (completed_unified_submit.stdout or "").strip() or (completed_unified_submit.stderr or "").strip()
+            try:
+                unified_submit_payload = json.loads(raw_unified_submit or "{}")
+            except json.JSONDecodeError as parse_error:
+                unified_submit_passed = False
+                unified_submit_detail = f"输出解析失败: {parse_error}"
+            else:
+                unified_submit_passed = unified_submit_payload.get("status") == "pass"
+                unified_submit_detail = unified_submit_payload.get("detail", unified_submit_payload)
+        results.append(_format_result("统一阅读提交只读高亮回归测试", unified_submit_passed, unified_submit_detail))
+        all_passed &= unified_submit_passed
+    else:
+        results.append(_format_result("统一阅读提交只读高亮回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    unified_lock_regression_test = REPO_ROOT / "developer" / "tests" / "js" / "unifiedReadingLockRegression.test.js"
+    if unified_lock_regression_test.exists():
+        try:
+            completed_unified_lock = subprocess.run(
+                ["node", str(unified_lock_regression_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            unified_lock_passed = False
+            unified_lock_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_unified_lock = (completed_unified_lock.stdout or "").strip() or (completed_unified_lock.stderr or "").strip()
+            try:
+                unified_lock_payload = json.loads(raw_unified_lock or "{}")
+            except json.JSONDecodeError as parse_error:
+                unified_lock_passed = False
+                unified_lock_detail = f"输出解析失败: {parse_error}"
+            else:
+                unified_lock_passed = unified_lock_payload.get("status") == "pass"
+                unified_lock_detail = unified_lock_payload.get("detail", unified_lock_payload)
+        results.append(_format_result("统一阅读锁定与退出静态回归测试", unified_lock_passed, unified_lock_detail))
+        all_passed &= unified_lock_passed
+    else:
+        results.append(_format_result("统一阅读锁定与退出静态回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
     inline_fallback_test = REPO_ROOT / "developer" / "tests" / "js" / "suiteInlineFallback.test.js"
     if inline_fallback_test.exists():
         try:
@@ -1040,13 +1153,15 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace"
             )
         except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
             inline_passed = False
             inline_detail = f"执行失败: {output_text.strip()}"
         else:
-            raw_inline_output = completed_inline.stdout.strip() or completed_inline.stderr.strip()
+            raw_inline_output = (completed_inline.stdout or "").strip() or (completed_inline.stderr or "").strip()
             try:
                 inline_payload = json.loads(raw_inline_output or "{}")
             except json.JSONDecodeError as parse_error:
@@ -1070,13 +1185,15 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace"
             )
         except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
             full_lib_passed = False
             full_lib_detail = f"执行失败: {output_text.strip()}"
         else:
-            raw_full_lib_output = completed_full_lib.stdout.strip() or completed_full_lib.stderr.strip()
+            raw_full_lib_output = (completed_full_lib.stdout or "").strip() or (completed_full_lib.stderr or "").strip()
             try:
                 full_lib_payload = json.loads(raw_full_lib_output or "{}")
             except json.JSONDecodeError as parse_error:
@@ -1099,13 +1216,15 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace"
             )
         except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
             practice_core_passed = False
             practice_core_detail = f"执行失败: {output_text.strip()}"
         else:
-            raw_practice_core_output = completed_practice_core.stdout.strip() or completed_practice_core.stderr.strip()
+            raw_practice_core_output = (completed_practice_core.stdout or "").strip() or (completed_practice_core.stderr or "").strip()
             try:
                 practice_core_payload = json.loads(raw_practice_core_output or "{}")
             except json.JSONDecodeError as parse_error:
@@ -1120,6 +1239,37 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("PracticeCore 单元测试", False, "测试脚本缺失"))
         all_passed = False
 
+    practice_recorder_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceRecorder.test.js"
+    if practice_recorder_test.exists():
+        try:
+            completed_practice_recorder = subprocess.run(
+                ["node", str(practice_recorder_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            practice_recorder_passed = False
+            practice_recorder_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_practice_recorder_output = (completed_practice_recorder.stdout or "").strip() or (completed_practice_recorder.stderr or "").strip()
+            try:
+                practice_recorder_payload = json.loads(raw_practice_recorder_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_recorder_passed = False
+                practice_recorder_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_recorder_passed = practice_recorder_payload.get("status") == "pass"
+                practice_recorder_detail = practice_recorder_payload.get("detail", practice_recorder_payload)
+        results.append(_format_result("PracticeRecorder 单元测试", practice_recorder_passed, practice_recorder_detail))
+        all_passed &= practice_recorder_passed
+    else:
+        results.append(_format_result("PracticeRecorder 单元测试", False, "测试脚本缺失"))
+        all_passed = False
+
     resource_core_test = REPO_ROOT / "developer" / "tests" / "js" / "resourceCore.test.js"
     if resource_core_test.exists():
         try:
@@ -1128,13 +1278,15 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace"
             )
         except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
             resource_core_passed = False
             resource_core_detail = f"执行失败: {output_text.strip()}"
         else:
-            raw_resource_core_output = completed_resource_core.stdout.strip() or completed_resource_core.stderr.strip()
+            raw_resource_core_output = (completed_resource_core.stdout or "").strip() or (completed_resource_core.stderr or "").strip()
             try:
                 resource_core_payload = json.loads(raw_resource_core_output or "{}")
             except json.JSONDecodeError as parse_error:
@@ -1157,13 +1309,15 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace"
             )
         except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
             on_demand_passed = False
             on_demand_detail = f"执行失败: {output_text.strip()}"
         else:
-            raw_on_demand_output = completed_on_demand.stdout.strip() or completed_on_demand.stderr.strip()
+            raw_on_demand_output = (completed_on_demand.stdout or "").strip() or (completed_on_demand.stderr or "").strip()
             try:
                 on_demand_payload = json.loads(raw_on_demand_output or "{}")
             except json.JSONDecodeError as parse_error:
@@ -1186,13 +1340,15 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace"
             )
         except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
             practice_core_guard_passed = False
             practice_core_guard_detail = f"执行失败: {output_text.strip()}"
         else:
-            raw_guard_output = completed_practice_core_guard.stdout.strip() or completed_practice_core_guard.stderr.strip()
+            raw_guard_output = (completed_practice_core_guard.stdout or "").strip() or (completed_practice_core_guard.stderr or "").strip()
             try:
                 practice_core_guard_payload = json.loads(raw_guard_output or "{}")
             except json.JSONDecodeError as parse_error:
@@ -1215,13 +1371,15 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace"
             )
         except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
             practice_record_persistence_passed = False
             practice_record_persistence_detail = f"执行失败: {output_text.strip()}"
         else:
-            raw_persistence_output = completed_practice_record_persistence.stdout.strip() or completed_practice_record_persistence.stderr.strip()
+            raw_persistence_output = (completed_practice_record_persistence.stdout or "").strip() or (completed_practice_record_persistence.stderr or "").strip()
             try:
                 practice_record_persistence_payload = json.loads(raw_persistence_output or "{}")
             except json.JSONDecodeError as parse_error:
@@ -1244,13 +1402,15 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace"
             )
         except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
             practice_core_app_state_sync_passed = False
             practice_core_app_state_sync_detail = f"执行失败: {output_text.strip()}"
         else:
-            raw_app_state_output = completed_practice_core_app_state_sync.stdout.strip() or completed_practice_core_app_state_sync.stderr.strip()
+            raw_app_state_output = (completed_practice_core_app_state_sync.stdout or "").strip() or (completed_practice_core_app_state_sync.stderr or "").strip()
             try:
                 practice_core_app_state_sync_payload = json.loads(raw_app_state_output or "{}")
             except json.JSONDecodeError as parse_error:
@@ -1273,13 +1433,15 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
         except subprocess.CalledProcessError as exc:
             output_text = exc.stdout or exc.stderr or str(exc)
             practice_page_ui_passed = False
             practice_page_ui_detail = f"执行失败: {output_text.strip()}"
         else:
-            raw_practice_page_ui_output = completed_practice_page_ui.stdout.strip() or completed_practice_page_ui.stderr.strip()
+            raw_practice_page_ui_output = (completed_practice_page_ui.stdout or "").strip() or (completed_practice_page_ui.stderr or "").strip()
             try:
                 practice_page_ui_payload = json.loads(raw_practice_page_ui_output or "{}")
             except json.JSONDecodeError as parse_error:
@@ -1302,13 +1464,15 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
         except subprocess.CalledProcessError as exc:
             output_text = exc.stdout or exc.stderr or str(exc)
             practice_page_enhancer_passed = False
             practice_page_enhancer_detail = f"执行失败: {output_text.strip()}"
         else:
-            raw_practice_page_enhancer_output = completed_practice_page_enhancer.stdout.strip() or completed_practice_page_enhancer.stderr.strip()
+            raw_practice_page_enhancer_output = (completed_practice_page_enhancer.stdout or "").strip() or (completed_practice_page_enhancer.stderr or "").strip()
             try:
                 practice_page_enhancer_payload = json.loads(raw_practice_page_enhancer_output or "{}")
             except json.JSONDecodeError as parse_error:
@@ -1331,13 +1495,15 @@ def run_checks() -> Tuple[List[dict], bool]:
                 check=True,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
         except subprocess.CalledProcessError as exc:
             output_text = exc.stdout or exc.stderr or str(exc)
             unified_reading_page_passed = False
             unified_reading_page_detail = f"执行失败: {output_text.strip()}"
         else:
-            raw_unified_reading_page_output = completed_unified_reading_page.stdout.strip() or completed_unified_reading_page.stderr.strip()
+            raw_unified_reading_page_output = (completed_unified_reading_page.stdout or "").strip() or (completed_unified_reading_page.stderr or "").strip()
             try:
                 unified_reading_page_payload = json.loads(raw_unified_reading_page_output or "{}")
             except json.JSONDecodeError as parse_error:
@@ -1381,16 +1547,18 @@ def run_checks() -> Tuple[List[dict], bool]:
                     capture_output=True,
                     text=True,
                     timeout=30,
+                    encoding="utf-8",
+                    errors="replace"
                 )
             except subprocess.TimeoutExpired:
                 integration_passed = False
                 integration_detail = "执行超时（30秒）"
             except subprocess.CalledProcessError as exc:
-                output_text = exc.stdout or exc.stderr or str(exc)
+                output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
                 integration_passed = False
                 integration_detail = f"执行失败: {output_text.strip()}"
             else:
-                raw_integration_output = completed_integration.stdout.strip() or completed_integration.stderr.strip()
+                raw_integration_output = (completed_integration.stdout or "").strip() or (completed_integration.stderr or "").strip()
                 try:
                     integration_payload = json.loads(raw_integration_output or "{}")
                 except json.JSONDecodeError as parse_error:
@@ -1415,21 +1583,23 @@ def run_checks() -> Tuple[List[dict], bool]:
     if reading_question_audit_script.exists():
         try:
             completed_reading_audit = subprocess.run(
-                ["python3", str(reading_question_audit_script), "--mode", "quick"],
+                [sys.executable, str(reading_question_audit_script), "--mode", "quick"],
                 check=True,
                 capture_output=True,
                 text=True,
                 timeout=480,
+                encoding="utf-8",
+                errors="replace"
             )
         except subprocess.TimeoutExpired:
             reading_audit_passed = False
             reading_audit_detail = "执行超时（480秒）"
         except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
             reading_audit_passed = False
             reading_audit_detail = f"执行失败: {output_text.strip()}"
         else:
-            output_text = completed_reading_audit.stdout.strip() or completed_reading_audit.stderr.strip()
+            output_text = (completed_reading_audit.stdout or "").strip() or (completed_reading_audit.stderr or "").strip()
             reading_report_path = REPO_ROOT / "developer" / "tests" / "e2e" / "reports" / "reading-question-audit-quick.json"
             if reading_report_path.exists():
                 try:
@@ -1460,7 +1630,7 @@ def run_checks() -> Tuple[List[dict], bool]:
     pdf_audit_script = REPO_ROOT / "developer" / "tests" / "ci" / "audit_pdf_checklist_and_mona.py"
     if pdf_audit_script.exists():
         pdf_audit_passed, pdf_audit_detail = _run_json_subprocess(
-            ["python3", str(pdf_audit_script)],
+            [sys.executable, str(pdf_audit_script)],
             timeout=120,
         )
 
@@ -1473,7 +1643,7 @@ def run_checks() -> Tuple[List[dict], bool]:
     reading_integrity_script = REPO_ROOT / "developer" / "tests" / "ci" / "check_reading_data_integrity.py"
     if reading_integrity_script.exists():
         reading_integrity_passed, reading_integrity_detail = _run_json_subprocess(
-            ["python3", str(reading_integrity_script)],
+            [sys.executable, str(reading_integrity_script)],
             timeout=30,
             parse_mode="last-line",
         )
@@ -1489,7 +1659,7 @@ def run_checks() -> Tuple[List[dict], bool]:
         checklist_env = os.environ.copy()
         checklist_env["CHECKLIST_IGNORE_RUN_STATIC_CLAIM"] = "1"
         checklist_consistency_ok, checklist_payload_or_error = _run_json_subprocess(
-            ["python3", str(checklist_consistency_script)],
+            [sys.executable, str(checklist_consistency_script)],
             timeout=30,
             env=checklist_env,
         )
@@ -1515,6 +1685,10 @@ def run_checks() -> Tuple[List[dict], bool]:
 
 
 def main() -> int:
+    if sys.platform.startswith('win'):
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
     results, all_passed = run_checks()
 
     report = {

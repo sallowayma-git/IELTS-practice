@@ -1056,10 +1056,7 @@ class StorageManager {
 
             const practiceRecords = await this.get('practice_records', [], { skipReady });
             if (practiceRecords.length > 0) {
-                // 压缩练习记录数据，但保留所有记录
-                const compressedRecords = practiceRecords.map(record => this.compressObject(record));
-                await this.set('practice_records', compressedRecords, { skipReady });
-                console.log(`[Storage] 已压缩练习记录数据，保留${practiceRecords.length}条记录`);
+                console.log(`[Storage] 练习记录数据保留${practiceRecords.length}条记录，跳过压缩以保护答案数据完整性`);
             }
 
             // 清理错误日志

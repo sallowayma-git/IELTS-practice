@@ -129,7 +129,7 @@
                 flowMode = 'classic';
             }
             var frequencyScope = String(overrides && overrides.frequencyScope || '').trim().toLowerCase();
-            if (frequencyScope !== 'high' && frequencyScope !== 'high_medium' && frequencyScope !== 'all') {
+            if (frequencyScope !== 'high' && frequencyScope !== 'high_medium' && frequencyScope !== 'all' && frequencyScope !== 'custom') {
                 frequencyScope = 'all';
             }
             return {
@@ -217,6 +217,7 @@
                     '<option value="high_medium">高频 + 次高频</option>',
                     '<option value="high">仅高频</option>',
                     '<option value="all">全部频率（默认）</option>',
+                    '<option value="custom">自选套题（P1/P2/P3）</option>',
                     '</select>',
                     '<div style="position:absolute;right:14px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--color-gray-500, #64748b);">',
                     '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -442,6 +443,10 @@
             clearInterval(endlessState.countdownTimer);
             endlessState.countdownTimer = null;
         }
+        if (endlessState.windowMonitor) {
+            clearInterval(endlessState.windowMonitor);
+            endlessState.windowMonitor = null;
+        }
         if (endlessState.messageHandler) {
             window.removeEventListener('message', endlessState.messageHandler);
             endlessState.messageHandler = null;
@@ -450,6 +455,29 @@
         if (!silent && typeof global.showMessage === 'function') {
             global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\u5df2\u9000\u51fa', 'info');
         }
+    }
+
+    function startEndlessWindowMonitor() {
+        if (!endlessState) return;
+        if (endlessState.windowMonitor) {
+            clearInterval(endlessState.windowMonitor);
+        }
+        endlessState.windowMonitor = setInterval(function () {
+            if (!endlessState || !endlessState.active) {
+                if (endlessState && endlessState.windowMonitor) {
+                    clearInterval(endlessState.windowMonitor);
+                    endlessState.windowMonitor = null;
+                }
+                return;
+            }
+            var win = endlessState.currentWindow;
+            if (win && win.closed) {
+                if (typeof global.showMessage === 'function') {
+                    global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\uff1a\u7ec3\u4e60\u7a97\u53e3\u5df2\u5173\u95ed\uff0c\u6b63\u5728\u9000\u51fa', 'warning');
+                }
+                stopEndlessPractice({ silent: true });
+            }
+        }, 1000);
     }
 
     function pickRandomExam() {
@@ -541,6 +569,15 @@
                 clearInterval(endlessState.countdownTimer);
                 endlessState.countdownTimer = null;
 
+                try {
+                    if (sourceWindow && !sourceWindow.closed) {
+                        sourceWindow.postMessage({
+                            type: 'ENDLESS_COUNTDOWN_END',
+                            data: {}
+                        }, '*');
+                    }
+                } catch (_) { }
+
                 if (!endlessState || !endlessState.active) return;
 
                 var nextExam = pickRandomExam();
@@ -560,18 +597,11 @@
                 var newWin = openEndlessExam(nextExam, reuseWin);
                 if (newWin) {
                     endlessState.currentWindow = newWin;
-                    // 注入数据采集脚本（延迟，等页面加载）
-                    if (global.app && typeof global.app.injectDataCollectionScript === 'function') {
-                        setTimeout(function () {
-                            if (newWin && !newWin.closed) {
-                                try { global.app.startPracticeSession && global.app.startPracticeSession(nextExam.id); } catch (_) { }
-                                global.app.injectDataCollectionScript(newWin, nextExam.id, nextExam);
-                                global.app.setupExamWindowManagement && global.app.setupExamWindowManagement(newWin, nextExam.id, nextExam, {});
-                            }
-                        }, 600);
-                    } else if (typeof global.openExam === 'function') {
-                        // fallback: 重新通过标准路径打开（会产生新窗口，但保证注入）
-                        try { global.openExam(nextExam.id); } catch (_) { }
+                    if (global.app && typeof global.app.setupExamWindowManagement === 'function') {
+                        global.app.setupExamWindowManagement(newWin, nextExam.id, nextExam, {});
+                    }
+                    if (global.app && typeof global.app.startPracticeSession === 'function') {
+                        try { global.app.startPracticeSession(nextExam.id); } catch (_) { }
                     }
                 }
             }
@@ -600,16 +630,27 @@
             active: true,
             countdownTimer: null,
             currentWindow: null,
-            messageHandler: null
+            messageHandler: null,
+            windowMonitor: null
         };
 
-        // 监听 PRACTICE_COMPLETE 消息（无尽模式专用拦截）
+        // 监听 PRACTICE_COMPLETE / REQUEST_INIT 消息（无尽模式专用拦截）
         var handler = function (event) {
             if (!endlessState || !endlessState.active) return;
             var msg = event && event.data;
             if (!msg || typeof msg.type !== 'string') return;
             if (msg.type === 'ENDLESS_USER_EXIT') {
                 stopEndlessPractice();
+                return;
+            }
+            if (msg.type === 'REQUEST_INIT') {
+                var initSrcWin = event.source || (endlessState.currentWindow && !endlessState.currentWindow.closed ? endlessState.currentWindow : null);
+                if (initSrcWin && !initSrcWin.closed && global.app && typeof global.app.setupExamWindowCommunication === 'function') {
+                    var data = msg.data || msg;
+                    var examId = (data && data.derivedExamId) || '';
+                    if (examId && global.app.examWindows && global.app.examWindows.has(examId)) return;
+                    global.app.setupExamWindowCommunication(initSrcWin, examId, null, {});
+                }
                 return;
             }
             if (msg.type !== 'PRACTICE_COMPLETE') return;
@@ -636,11 +677,13 @@
                     windowName: ENDLESS_WINDOW_NAME
                 })).then(function (w) {
                     if (w && endlessState) endlessState.currentWindow = w;
+                    startEndlessWindowMonitor();
                 }).catch(function () { });
             } catch (_) { }
         } else {
             win = openEndlessExam(firstExam, null);
             if (win && endlessState) endlessState.currentWindow = win;
+            startEndlessWindowMonitor();
         }
     }
 

@@ -106,9 +106,10 @@ def main() -> int:
     if not CHECKLIST_PATH.exists():
         result = {
             "skipped": True,
+            "status": "skipped",
             "reason": "checklist.md 已移除，跳过 checklist 一致性校验",
             "summaryStatusCount": {},
-            "issueStatusCount": {},
+            "issueStatusCount": {key: 0 for key in STATUS_BUCKETS},
             "summaryMismatches": [],
             "claims": {},
             "claimMismatches": [],

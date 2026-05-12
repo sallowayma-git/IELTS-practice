@@ -54,7 +54,7 @@
         if (Array.isArray(value)) {
             var normalizedArray = value
                 .map(function (item) { return normalizeValue(item); })
-                .filter(function (item) { return item; })
+                .filter(function (item) { return item !== null && item !== undefined && item !== ''; })
                 .join(', ');
             return normalizedArray.trim();
         }
