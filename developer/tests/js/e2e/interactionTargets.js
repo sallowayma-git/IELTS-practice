@@ -6,6 +6,7 @@
       "load-library-btn",
       "library-config-btn",
       "force-refresh-btn",
+      "theme-switcher-btn-entry",
       "create-backup-btn",
       "backup-list-btn",
       "export-data-btn",

@@ -1359,13 +1359,6 @@
     "title": "The history of the British wool industry 英国羊毛产业的历史【高】",
     "category": "P1"
   },
-  "p1-medium-161": {
-    "examId": "p1-medium-161",
-    "dataKey": "p1-medium-161",
-    "script": "./p1-medium-161.js",
-    "title": "Deep sea discovery 深海发光生物研究【次】",
-    "category": "P1"
-  },
   "p2-high-192": {
     "examId": "p2-high-192",
     "dataKey": "p2-high-192",
@@ -1519,6 +1512,49 @@
     "script": "./p3-high-228.js",
     "title": "On art and artists 艺术与艺术家",
     "category": "P3"
+
+  },
+  "p1-high-229": {
+    "examId": "p1-high-229",
+    "dataKey": "p1-high-229",
+    "script": "./p1-high-229.js",
+    "title": "New Understanding of Giraffes in the Wild 野生长颈鹿",
+    "category": "P1"
+  },
+  "p1-high-230": {
+    "examId": "p1-high-230",
+    "dataKey": "p1-high-230",
+    "script": "./p1-high-230.js",
+    "title": "The History of the Pencil 铅笔的历史",
+    "category": "P1"
+  },
+  "p1-high-231": {
+    "examId": "p1-high-231",
+    "dataKey": "p1-high-231",
+    "script": "./p1-high-231.js",
+    "title": "The History of the Pencil 铅笔的历史（流程图版）",
+    "category": "P1"
+  },
+  "p2-high-232": {
+    "examId": "p2-high-232",
+    "dataKey": "p2-high-232",
+    "script": "./p2-high-232.js",
+    "title": "The origin and development of applause 掌声的历史",
+    "category": "P2"
+  },
+  "p2-high-233": {
+    "examId": "p2-high-233",
+    "dataKey": "p2-high-233",
+    "script": "./p2-high-233.js",
+    "title": "Why don’t we sleep 失眠的原因",
+    "category": "P2"
+  },
+  "p2-high-234": {
+    "examId": "p2-high-234",
+    "dataKey": "p2-high-234",
+    "script": "./p2-high-234.js",
+    "title": "How do plants talk to each other 植物交流",
+    "category": "P2"
   }
 };
 })(typeof window !== "undefined" ? window : globalThis);

@@ -456,7 +456,18 @@
             ? record.percentage
             : Math.round((record.accuracy || 0) * 100);
 
-        var recordId = record && record.id != null ? String(record.id) : '';
+        var recordId = '';
+        if (record && record.id != null) {
+            recordId = String(record.id);
+        } else if (record && record.sessionId != null) {
+            recordId = String(record.sessionId);
+        } else if (record && record.realData && record.realData.sessionId != null) {
+            recordId = String(record.realData.sessionId);
+        } else if (record && record.timestamp != null) {
+            recordId = String(record.timestamp);
+        } else if (record && record.realData && record.realData.timestamp != null) {
+            recordId = String(record.realData.timestamp);
+        }
 
         var item = createNode('div', {
             className: 'history-item history-record-item',
@@ -833,10 +844,30 @@
         }
 
         var status = this._getCompletionStatus(exam);
+        var selectionMode = options && options.selectionMode ? String(options.selectionMode) : '';
+        var draft = options && options.customSuiteDraft ? options.customSuiteDraft : null;
+        var categories = draft && Array.isArray(draft.categories) && draft.categories.length
+            ? draft.categories
+            : ['P1', 'P2', 'P3'];
+        var stageIndex = draft && Number.isInteger(draft.stageIndex) ? draft.stageIndex : 0;
+        var currentCategory = draft && draft.status !== 'ready' && stageIndex < categories.length
+            ? categories[stageIndex]
+            : null;
+        var examCategory = exam && typeof exam.category === 'string'
+            ? exam.category.trim().toUpperCase()
+            : '';
+        var isSelecting = selectionMode === 'custom-suite' && !!draft && draft.status !== 'ready';
+        var isSelected = !!draft && draft.pickedByCategory && examCategory && draft.pickedByCategory[examCategory]
+            && String(draft.pickedByCategory[examCategory].examId) === String(exam.id);
         var examItem = this._createElement('div', {
-            className: 'exam-item',
+            className: 'exam-item' + (isSelecting ? ' exam-item--suite-selecting' : '') + (isSelected ? ' exam-item--suite-selected' : ''),
             dataset: { examId: exam.id }
         });
+        if (isSelecting) {
+            examItem.dataset.action = 'suite-custom-select';
+            examItem.setAttribute('role', 'button');
+            examItem.setAttribute('tabindex', '0');
+        }
 
         var info = this._createElement('div', { className: 'exam-info' });
         var infoContent = this._createElement('div');
@@ -869,14 +900,24 @@
             // Add frequency text for reading materials
             if (exam && exam.type === 'reading' && exam.frequency) {
                 var frequencyLabels = {
-                    'ultra-high': '超高',
-                    'high': '高',
-                    'medium': '次',
-                    'low': '低',
-                    'standard': '标准'
+                    'ultra-high': '超高频',
+                    'very-high': '次高频',
+                    'high': '高频',
+                    'medium': '中频',
+                    'mid': '中频',
+                    'low': '低频',
+                    'standard': '标准',
+                    '超高频': '超高频',
+                    '次高频': '次高频',
+                    '高频': '高频',
+                    '中频': '中频',
+                    '低频': '低频'
                 };
                 var label = frequencyLabels[exam.frequency] || exam.frequency;
                 fallbackParts.push(label);
+            }
+            if (exam && exam.type === 'reading' && typeof exam.difficultyScore === 'number' && isFinite(exam.difficultyScore)) {
+                fallbackParts.push('难度 ' + exam.difficultyScore);
             }
 
             metaText = fallbackParts.join(' | ');
@@ -886,6 +927,9 @@
         infoContent.appendChild(title);
         infoContent.appendChild(meta);
         info.appendChild(infoContent);
+        if (isSelecting && currentCategory) {
+            info.appendChild(this._createElement('div', { className: 'suite-custom-selection-badge' }, currentCategory + ' Pending'));
+        }
 
         var actions = this._createElement('div', { className: 'exam-actions' });
         var actionConfig = this._resolveActionConfig(exam, options);
@@ -895,6 +939,10 @@
             dataset: { action: actionConfig.startAction, examId: exam.id },
             type: 'button'
         }, actionConfig.startLabel);
+        if (isSelecting) {
+            startBtn.disabled = true;
+            startBtn.setAttribute('aria-disabled', 'true');
+        }
         actions.appendChild(startBtn);
 
         if (actionConfig.includePdfButton) {
@@ -904,6 +952,10 @@
                 type: 'button',
                 title: '查看PDF版本'
             }, '查看PDF');
+            if (isSelecting) {
+                pdfBtn.disabled = true;
+                pdfBtn.setAttribute('aria-disabled', 'true');
+            }
             actions.appendChild(pdfBtn);
         }
 
@@ -914,6 +966,10 @@
                 type: 'button',
                 title: '为此题目生成HTML版本'
             }, '生成HTML');
+            if (isSelecting) {
+                generateBtn.disabled = true;
+                generateBtn.setAttribute('aria-disabled', 'true');
+            }
             actions.appendChild(generateBtn);
         }
 

@@ -346,7 +346,10 @@
             const correctAnswer = normalizeAnswerValue(correctMap[questionId]);
             let isCorrect = null;
             if (correctAnswer) {
-                isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+                const matchCore = global.AnswerMatchCore;
+                isCorrect = matchCore && typeof matchCore.compareAnswers === 'function'
+                    ? matchCore.compareAnswers(userAnswer, correctAnswer) === true
+                    : userAnswer.toLowerCase() === correctAnswer.toLowerCase();
             }
             details[questionId] = {
                 userAnswer: userAnswer || '-',
@@ -555,6 +558,12 @@
                 || (entry.scoreInfo && entry.scoreInfo.details)
                 || (entry.rawData && entry.rawData.answerComparison)
                 || null;
+            const highlights = Array.isArray(entry.highlights)
+                ? entry.highlights.slice()
+                : (Array.isArray(entry.rawData && entry.rawData.highlights) ? entry.rawData.highlights.slice() : []);
+            const scrollY = Number.isFinite(Number(entry.scrollY))
+                ? Number(entry.scrollY)
+                : (Number.isFinite(Number(entry.rawData && entry.rawData.scrollY)) ? Number(entry.rawData.scrollY) : 0);
             return {
                 examId: entry.examId || null,
                 title: entry.title || entry.examTitle || `套题第${index + 1}篇`,
@@ -564,6 +573,8 @@
                 answers: answerMap,
                 answerComparison: clonePlainObject(answerComparisonSource) || null,
                 metadata: entry.metadata ? Object.assign({}, entry.metadata) : {},
+                highlights,
+                scrollY,
                 rawData: entry.rawData ? clonePlainObject(entry.rawData) : null
             };
         }).filter(Boolean);

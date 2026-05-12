@@ -63,6 +63,21 @@ async function ensureAppReady(page) {
 }
 
 async function dismissOverlays(page) {
+  try {
+    await page.evaluate(() => {
+      try {
+        localStorage.setItem('hasSeenGplLicense', 'true');
+      } catch (_) { }
+      if (typeof window.acceptGplLicense === 'function') {
+        try { window.acceptGplLicense(); } catch (_) { }
+      }
+      const modal = document.getElementById('license-modal');
+      if (modal) {
+        modal.classList.remove('show');
+      }
+    });
+  } catch (_) { }
+
   const overlay = page.locator('#library-loader-overlay');
   if (await overlay.count()) {
     try {

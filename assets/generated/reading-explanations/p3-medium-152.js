@@ -98,7 +98,7 @@
         },
         {
           "questionNumber": 35,
-          "text": "（4）题目 35：People today are more trusting than they used to be.（如今的人比过去更易信任他人）\n答案：NOT GIVEN（未提及）\n解析：Paragraph 4 提到 “人类先天易触发不信任，古代安全依赖亲友”，但未对比 “过去与现在的信任程度”，无相关信息，因此判定为 NOT GIVEN。",
+          "text": "（4）题目 35：People today are more trusting than they used to be.（如今的人比过去更易信任他人）\n答案：NO（错误）\n解析：Paragraph 4 提到 “人类先天易触发不信任，古代安全依赖亲友”，与题干“如今的人比过去更易信任他人”相反，因此判定为 NO。",
           "questionId": "q9"
         }
       ],
@@ -106,7 +106,7 @@
         "start": 32,
         "end": 35
       },
-      "text": "答案：YES（正确）\n解析：定位 Paragraph 2 中 “It is an effective approach explaining why people behave as they do, particularly at work”，作者评价尼科尔森的方法 “有效”，即 “论证有说服力”，与题干描述一致，因此判定为 YES。\n答案：NO（错误）\n解析：定位 Paragraph 3 中 “As Tooby and Cosmides stress, there have not been enough generations for a brain that is well-adapted to our post-industrial life to evolve through natural selection”，明确提到 “代际数量不足，自然选择未让大脑适应现代生活”，与题干 “已适应” 描述矛盾，因此判定为 NO。\n答案：NOT GIVEN（未提及）\n解析：Paragraph 4 仅提到 “科技主导商业世界，情绪仍是导航工具”，未建立 “科技依赖→情绪问题” 的因果关系，无相关信息，因此判定为 NOT GIVEN。\n答案：NOT GIVEN（未提及）\n解析：Paragraph 4 提到 “人类先天易触发不信任，古代安全依赖亲友”，但未对比 “过去与现在的信任程度”，无相关信息，因此判定为 NOT GIVEN。"
+      "text": "答案：YES（正确）\n解析：定位 Paragraph 2 中 “It is an effective approach explaining why people behave as they do, particularly at work”，作者评价尼科尔森的方法 “有效”，即 “论证有说服力”，与题干描述一致，因此判定为 YES。\n答案：NO（错误）\n解析：定位 Paragraph 3 中 “As Tooby and Cosmides stress, there have not been enough generations for a brain that is well-adapted to our post-industrial life to evolve through natural selection”，明确提到 “代际数量不足，自然选择未让大脑适应现代生活”，与题干 “已适应” 描述矛盾，因此判定为 NO。\n答案：NOT GIVEN（未提及）\n解析：Paragraph 4 仅提到 “科技主导商业世界，情绪仍是导航工具”，未建立 “科技依赖→情绪问题” 的因果关系，无相关信息，因此判定为 NOT GIVEN。\n答案：NO（错误）\n解析：Paragraph 4 提到 “人类先天易触发不信任，古代安全依赖亲友”，与题干“如今的人比过去更易信任他人”相反，因此判定为 NO。"
     },
     {
       "sectionTitle": "3. 摘要选词填空（Questions 36–40：Choose A–I）",

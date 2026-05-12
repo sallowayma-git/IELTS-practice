@@ -719,7 +719,7 @@
             .filter(Boolean);
 
         for (const item of candidates) {
-            const match = item.match(/p([1-3])/i);
+            const match = item.match(/p([1-4])/i);
             if (match) {
                 return `P${match[1]}`;
             }

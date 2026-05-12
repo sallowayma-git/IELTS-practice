@@ -17,7 +17,13 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import io
 from typing import Dict, List, Optional
+
+# 强制设置控制台输出为 UTF-8，解决 Windows 环境下的编码问题
+if sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INDEX_PATH = REPO_ROOT / "index.html"
@@ -35,7 +41,12 @@ try:
     )
 except ModuleNotFoundError:
     venv_dir = (REPO_ROOT / ".venv").resolve()
-    venv_python = REPO_ROOT / ".venv" / "bin" / "python"
+    # 适配 Windows 和 Unix 系统的虚拟环境路径
+    if sys.platform == "win32":
+        venv_python = REPO_ROOT / ".venv" / "Scripts" / "python.exe"
+    else:
+        venv_python = REPO_ROOT / ".venv" / "bin" / "python"
+
     current_prefix = Path(sys.prefix).resolve()
     if venv_python.exists() and current_prefix != venv_dir:
         completed = subprocess.run([
@@ -99,6 +110,7 @@ async def _click_nav(page: Page, view: str) -> None:
     log_step(f"点击导航: {view}")
     
     try:
+        await _dismiss_overlays(page)
         await page.locator(f"nav button[data-view='{view}']").click()
         await page.wait_for_selector(f"#{view}-view.active", timeout=15000)
         log_step(f"视图 {view} 已激活", "SUCCESS")
@@ -180,6 +192,26 @@ async def _dismiss_overlays(page: Page) -> None:
     """关闭可能阻塞交互的覆盖层"""
     log_step("检查并关闭覆盖层...")
 
+    try:
+        await page.evaluate(
+            """() => {
+                try {
+                    localStorage.setItem('hasSeenGplLicense', 'true');
+                } catch (_) {
+                    // ignore storage errors
+                }
+                if (typeof window.acceptGplLicense === 'function') {
+                    try { window.acceptGplLicense(); } catch (_) {}
+                }
+                const modal = document.getElementById('license-modal');
+                if (modal) {
+                    modal.classList.remove('show');
+                }
+            }"""
+        )
+    except Exception as e:
+        log_step(f"预清理 GPL 弹窗失败: {e}", "WARNING")
+
     # 关闭 GPL 许可弹窗
     license_modal = page.locator("#license-modal.show")
     if await license_modal.count():
@@ -218,6 +250,20 @@ async def _dismiss_overlays(page: Page) -> None:
         except Exception as e:
             log_step(f"关闭备份模态框失败: {e}", "WARNING")
 
+async def _read_timer_seconds(page: Page) -> int:
+    return await page.evaluate(
+        "() => {\n"
+        "  const el = document.getElementById('timer');\n"
+        "  const text = el ? String(el.textContent || '').trim() : '';\n"
+        "  const m = text.match(/^(\\d+)[:：](\\d{2})$/);\n"
+        "  if (!m) return 0;\n"
+        "  const minutes = Number(m[1]);\n"
+        "  const seconds = Number(m[2]);\n"
+        "  if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) return 0;\n"
+        "  return Math.max(0, (minutes * 60) + seconds);\n"
+        "}"
+    )
+
 
 async def _group_loaded(page: Page, group_name: str) -> bool:
     return await page.evaluate(
@@ -241,9 +287,25 @@ async def _complete_passage(suite_page: Page, total_count: int, index: int) -> b
             "() => { const btn = document.getElementById('complete-exam-btn'); return btn && !btn.disabled; }",
             timeout=20000,
         )
-        
+        if index == 0:
+            try:
+                await suite_page.wait_for_function(
+                    "() => {\n"
+                    "  const el = document.getElementById('timer');\n"
+                    "  const text = el ? String(el.textContent || '').trim() : '';\n"
+                    "  const m = text.match(/^(\\d+)[:：](\\d{2})$/);\n"
+                    "  if (!m) return false;\n"
+                    "  return ((Number(m[1]) * 60) + Number(m[2])) >= 2;\n"
+                    "}",
+                    timeout=12000,
+                )
+            except PlaywrightTimeoutError:
+                log_step("未在 12s 内观测到计时器>=2s，继续执行并在切题后做非归零校验。", "WARNING")
+
         current_exam_id = await suite_page.evaluate("() => document.body.dataset.examId || ''")
+        timer_before_submit = await _read_timer_seconds(suite_page)
         log_step(f"当前题目 ID: {current_exam_id}", "DEBUG")
+        log_step(f"提交前计时器: {timer_before_submit}s", "DEBUG")
         
         await suite_page.click("#complete-exam-btn")
         log_step("已点击完成按钮")
@@ -267,7 +329,7 @@ async def _complete_passage(suite_page: Page, total_count: int, index: int) -> b
                     "  return !!current && current !== String(initialId || '');\n"
                     "}",
                     arg=current_exam_id,
-                    timeout=60000,
+                    timeout=12000,
                 )
                 
                 new_exam_id = await suite_page.evaluate("() => document.body.dataset.examId || ''")
@@ -277,13 +339,48 @@ async def _complete_passage(suite_page: Page, total_count: int, index: int) -> b
                 if suite_page.is_closed():
                     log_step("套题页面在切换时关闭", "WARNING")
                     return False
-                log_step("等待下一篇超时", "ERROR")
-                raise
+                # 兼容提交后先进入回看页，再由 next 导航到下一篇
+                log_step("自动切换未发生，尝试通过回看导航 next 切题...", "WARNING")
+                nav_next_selector = await suite_page.evaluate(
+                    """() => {
+                        const bar = document.getElementById('review-nav-bar') || document.getElementById('practice-review-nav');
+                        if (!bar) return '';
+                        const next = bar.querySelector('button[data-review-dir="next"], button[data-review-nav="next"]');
+                        if (!next || next.disabled) return '';
+                        if (next.getAttribute('data-review-dir')) {
+                            return '#review-nav-bar button[data-review-dir="next"]';
+                        }
+                        if (next.getAttribute('data-review-nav')) {
+                            return '#practice-review-nav button[data-review-nav="next"]';
+                        }
+                        return '';
+                    }"""
+                )
+                if not nav_next_selector:
+                    log_step("等待下一篇超时，且未找到可点击 next 导航", "ERROR")
+                    raise
+                await suite_page.click(nav_next_selector)
+                await suite_page.wait_for_function(
+                    "(initialId) => {\n"
+                    "  const current = document.body.dataset.examId || '';\n"
+                    "  return !!current && current !== String(initialId || '');\n"
+                    "}",
+                    arg=current_exam_id,
+                    timeout=60000,
+                )
+                new_exam_id = await suite_page.evaluate("() => document.body.dataset.examId || ''")
+                log_step(f"已通过回看导航切换到下一篇: {new_exam_id}", "SUCCESS")
 
             await suite_page.wait_for_function(
                 "() => { const btn = document.getElementById('complete-exam-btn'); return btn && !btn.disabled; }",
                 timeout=20000,
             )
+            timer_after_switch = await _read_timer_seconds(suite_page)
+            if timer_before_submit > 0 and timer_after_switch < max(1, timer_before_submit - 1):
+                raise AssertionError(
+                    f"Suite timer reset detected: before={timer_before_submit}s, after={timer_after_switch}s"
+                )
+            log_step(f"切题后计时器: {timer_after_switch}s（通过）", "SUCCESS")
             log_step(f"第 {index + 2} 篇练习已准备就绪", "SUCCESS")
         else:
             log_step("已完成所有练习", "SUCCESS")
@@ -514,7 +611,7 @@ async def run() -> None:
             log_step("套题练习按钮已就绪", "SUCCESS")
             await _preset_suite_preferences(
                 page,
-                mode="classic",
+                mode="simulation",
                 frequency_scope="all",
                 auto_advance_after_submit=True,
             )
@@ -522,7 +619,7 @@ async def run() -> None:
             log_step("启动套题练习...")
             async with page.expect_popup() as popup_wait:
                 await start_button.click()
-                await _select_suite_flow_mode(page, "classic")
+                await _select_suite_flow_mode(page, "simulation")
             suite_page = await popup_wait.value
             _collect_console(suite_page, console_log)
             log_step("套题练习窗口已打开", "SUCCESS")
@@ -608,6 +705,19 @@ async def run() -> None:
             record_id = await target_record.get_attribute("data-record-id")
             if not record_id:
                 raise AssertionError("Suite practice record not found in history list")
+            suite_duration = await page.evaluate(
+                "(id) => {\n"
+                "  if (!window.storage || typeof window.storage.get !== 'function') return -1;\n"
+                "  return window.storage.get('practice_records', []).then((records) => {\n"
+                "    const target = Array.isArray(records) ? records.find((item) => item && item.id === id) : null;\n"
+                "    const value = target && Number.isFinite(Number(target.duration)) ? Number(target.duration) : -1;\n"
+                "    return value;\n"
+                "  });\n"
+                "}",
+                record_id,
+            )
+            if suite_duration < 2:
+                raise AssertionError(f"Unexpected suite duration: {suite_duration}")
             
             log_step(f"找到套题记录: {record_id}", "SUCCESS")
 

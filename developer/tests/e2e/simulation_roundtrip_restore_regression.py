@@ -222,6 +222,31 @@ async def ensure_fixed_suite_index(page) -> None:
         raise RuntimeError("cannot_patch_suite_index")
 
 
+async def dismiss_license_modal_if_present(page) -> None:
+    await page.evaluate(
+        """() => {
+            try {
+                if (typeof window.acceptGplLicense === 'function') {
+                    window.acceptGplLicense();
+                    return;
+                }
+                if (window.localStorage) {
+                    window.localStorage.setItem('hasSeenGplLicense', 'true');
+                }
+            } catch (_) {
+                // ignore storage errors
+            }
+            const modal = document.getElementById('license-modal');
+            if (modal) {
+                modal.classList.remove('show');
+            }
+        }"""
+    )
+    modal = page.locator("#license-modal.show")
+    if await modal.count() > 0:
+        await page.wait_for_timeout(150)
+
+
 async def run() -> Dict[str, Any]:
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--allow-file-access-from-files"])
@@ -230,6 +255,7 @@ async def run() -> Dict[str, Any]:
         page = await context.new_page()
         await page.goto(INDEX_URL)
         await page.wait_for_function("() => window.app && window.app.isInitialized", timeout=60000)
+        await dismiss_license_modal_if_present(page)
         await ensure_fixed_suite_index(page)
 
         start_button = page.locator("button[data-action='start-suite-mode']").first

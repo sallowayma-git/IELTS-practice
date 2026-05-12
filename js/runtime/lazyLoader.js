@@ -18,8 +18,7 @@
 
     function registerDefaultManifest() {
         manifest['exam-data'] = [
-            'assets/scripts/complete-exam-data.js',
-            'assets/scripts/listening-exam-data.js'
+            'assets/scripts/complete-exam-data.js'
         ];
 
         manifest['state-core'] = [
@@ -72,6 +71,7 @@
 
         manifest['more-tools'] = [
             // 更多工具与词汇模块
+            'assets/wordlists/ielts_core.bundle.js',
             'js/utils/vocabDataIO.js',
             'js/core/vocabScheduler.js',
             'js/core/vocabStore.js',
