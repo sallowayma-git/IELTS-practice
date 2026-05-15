@@ -236,6 +236,14 @@
             }, [browseButton, randomButton]);
         }
 
+        createSvgIcon(svgContent) {
+            const span = document.createElement('span');
+            span.className = 'ui-emoji-icon';
+            span.setAttribute('aria-hidden', 'true');
+            span.innerHTML = `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${svgContent}</svg>`;
+            return span;
+        }
+
         createSuiteModeButton() {
             return this.dom.create('button', {
                 className: 'btn liquid-action liquid-action--suite',

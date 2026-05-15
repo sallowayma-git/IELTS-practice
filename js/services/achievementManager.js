@@ -91,20 +91,20 @@
                     condition: (stats) => stats.streakDays >= 7
                 },
                 {
-                    id: 'streak_gold',
-                    title: '意志如铁',
-                    description: '连续学习 30 天',
-                    icon: '🔥',
-                    tier: 3,
-                    condition: (stats) => stats.streakDays >= 30
-                },
-                {
                     id: 'streak_fortnight',
                     title: '两周不断',
                     description: '连续学习 14 天',
                     icon: '📆',
                     tier: 2,
                     condition: (stats) => stats.streakDays >= 14
+                },
+                {
+                    id: 'streak_gold',
+                    title: '意志如铁',
+                    description: '连续学习 30 天',
+                    icon: '🔥',
+                    tier: 3,
+                    condition: (stats) => stats.streakDays >= 30
                 },
                 {
                     id: 'streak_season',
@@ -173,6 +173,30 @@
                     icon: '📖',
                     tier: 3,
                     condition: (stats) => stats.readingCount >= 200
+                },
+                {
+                    id: 'reading_legend',
+                    title: '阅读传说',
+                    description: '累计完成 365 篇阅读练习',
+                    icon: '📚',
+                    tier: 3,
+                    condition: (stats) => stats.readingCount >= 365
+                },
+                {
+                    id: 'listening_master',
+                    title: '听力达人',
+                    description: '累计完成 200 篇听力练习',
+                    icon: '🎧',
+                    tier: 3,
+                    condition: (stats) => stats.listeningCount >= 200
+                },
+                {
+                    id: 'accuracy_master',
+                    title: '准度掌控',
+                    description: '单次练习获得 100% 正确率',
+                    icon: '🎯',
+                    tier: 3,
+                    condition: (stats) => stats.hasPerfectAccuracy
                 },
 
                 // --- Special Achievements ---
