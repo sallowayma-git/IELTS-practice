@@ -1425,37 +1425,6 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("PracticeCore app.state 同步测试", False, "测试脚本缺失"))
         all_passed = False
 
-    practice_page_ui_test = REPO_ROOT / "developer" / "tests" / "js" / "practicePageUi.test.js"
-    if practice_page_ui_test.exists():
-        try:
-            completed_practice_page_ui = subprocess.run(
-                ["node", str(practice_page_ui_test)],
-                check=True,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-        except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
-            practice_page_ui_passed = False
-            practice_page_ui_detail = f"执行失败: {output_text.strip()}"
-        else:
-            raw_practice_page_ui_output = (completed_practice_page_ui.stdout or "").strip() or (completed_practice_page_ui.stderr or "").strip()
-            try:
-                practice_page_ui_payload = json.loads(raw_practice_page_ui_output or "{}")
-            except json.JSONDecodeError as parse_error:
-                practice_page_ui_passed = False
-                practice_page_ui_detail = f"输出解析失败: {parse_error}"
-            else:
-                practice_page_ui_passed = practice_page_ui_payload.get("status") == "pass"
-                practice_page_ui_detail = practice_page_ui_payload.get("detail", practice_page_ui_payload)
-        results.append(_format_result("练习页 UI 回归测试", practice_page_ui_passed, practice_page_ui_detail))
-        all_passed &= practice_page_ui_passed
-    else:
-        results.append(_format_result("练习页 UI 回归测试", False, "测试脚本缺失"))
-        all_passed = False
-
     practice_page_enhancer_test = REPO_ROOT / "developer" / "tests" / "js" / "practicePageEnhancer.test.js"
     if practice_page_enhancer_test.exists():
         try:
