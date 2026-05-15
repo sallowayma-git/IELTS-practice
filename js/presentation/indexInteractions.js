@@ -440,7 +440,9 @@
 
       var activeBtn =
         control.querySelector(".shui-segmented-btn.active") ||
-        control.querySelector('.shui-segmented-btn[aria-pressed="true"]');
+        control.querySelector('.shui-segmented-btn[aria-pressed="true"]') ||
+        control.querySelector(".shui-filter-btn.active") ||
+        control.querySelector('.shui-filter-btn[aria-pressed="true"]');
       if (activeBtn && activeBtn.offsetWidth > 0) {
         indicator.style.width = activeBtn.offsetWidth + "px";
         indicator.style.transform =
@@ -463,7 +465,8 @@
       if (
         e.target &&
         e.target.closest &&
-        e.target.closest(".shui-segmented-btn")
+        (e.target.closest(".shui-segmented-btn") ||
+          e.target.closest(".shui-filter-btn"))
       ) {
         setTimeout(syncAll, 10);
         setTimeout(syncAll, 60);
@@ -489,7 +492,8 @@
         if (
           mutation.type === "attributes" &&
           target.classList &&
-          target.classList.contains("shui-segmented-btn")
+          (target.classList.contains("shui-segmented-btn") ||
+            target.classList.contains("shui-filter-btn"))
         ) {
           needsSync = true;
           break;

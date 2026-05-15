@@ -174,7 +174,7 @@ function testInitSessionSimulationSyncsButtonsAndSuiteState() {
     assert.strictEqual(harness.hooks.state.simulationMode, true, 'simulation flow 应开启 simulationMode');
     assert.strictEqual(harness.submitBtn.textContent, '下一题', 'simulation 非最后一题时 submit 应切成 下一题');
     assert.strictEqual(harness.resetBtn.textContent, '上一题', 'simulation 模式下 reset 应切成 上一题');
-    assert.deepStrictEqual(harness.suiteModeCalls, [true], 'suite mode 状态应同步给 practice-page-ui');
+    assert.deepStrictEqual(harness.suiteModeCalls, [true], 'suite mode 状态应同步给 unified practice runtime');
     assert.strictEqual(harness.windowStub.__UNIFIED_READING_SIMULATION_MODE__, true, 'runtime flag 应同步到全局');
     assert.strictEqual(harness.postedMessages.length, 1, 'INIT_SESSION 后应向父窗口回发 SESSION_READY');
     assert.strictEqual(harness.postedMessages[0].message.type, 'SESSION_READY', '应回发 SESSION_READY');

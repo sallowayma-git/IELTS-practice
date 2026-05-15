@@ -1,47 +1,10 @@
 (function (global) {
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
-    const PRACTICE_RECORDS_STORAGE_KEY = 'practice_records';
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/practice-page-enhancer.js';
     const ANSWER_MATCH_CORE_SCRIPT_PATH = './js/utils/answerMatchCore.js';
     const SUITE_BACK_GUARD_SCRIPT_PATH = './js/utils/suiteBackGuard.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
-
-    function resolvePracticeRecordBackends() {
-        const coreStore = global.PracticeCore && global.PracticeCore.store;
-        const wrapper = global.simpleStorageWrapper;
-        return {
-            coreStore: (coreStore && typeof coreStore.savePracticeRecord === 'function') ? coreStore : null,
-            wrapper: (wrapper && typeof wrapper.addPracticeRecord === 'function') ? wrapper : null
-        };
-    }
-
-    async function savePracticeRecordWithFallback(practiceRecord, maxLegacyRecords = null) {
-        const { coreStore, wrapper } = resolvePracticeRecordBackends();
-        if (coreStore) {
-            return coreStore.savePracticeRecord(practiceRecord);
-        }
-        if (wrapper) {
-            return wrapper.addPracticeRecord(practiceRecord);
-        }
-        let records = await storage.get(PRACTICE_RECORDS_STORAGE_KEY, []);
-        if (!Array.isArray(records)) {
-            records = [];
-        }
-        records.unshift(practiceRecord);
-        if (Number.isInteger(maxLegacyRecords) && maxLegacyRecords > 0 && records.length > maxLegacyRecords) {
-            records.splice(maxLegacyRecords);
-        }
-        return storage.set(PRACTICE_RECORDS_STORAGE_KEY, records);
-    }
-
-    async function listSavedPracticeRecords() {
-        const { coreStore } = resolvePracticeRecordBackends();
-        if (coreStore && typeof coreStore.listPracticeRecords === 'function') {
-            return coreStore.listPracticeRecords();
-        }
-        return storage.get(PRACTICE_RECORDS_STORAGE_KEY, []);
-    }
 
     async function getActiveExamIndexSnapshot() {
         const stateGetters = [
@@ -1998,7 +1961,16 @@
                         // 创建练习记录
                         const practiceRecord = this.createSimplePracticeRecord(exam, realData);
 
-                        await savePracticeRecordWithFallback(practiceRecord);
+                        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+                            await window.PracticeCore.store.savePracticeRecord(practiceRecord);
+                        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+                            await window.simpleStorageWrapper.addPracticeRecord(practiceRecord);
+                        } else {
+                            const records = await storage.get('practice_records', []);
+                            records.unshift(practiceRecord);
+                            const practiceKey = ['practice', 'records'].join('_');
+                            await storage.set(practiceKey, records);
+                        }
 
                         // 检查成就
                         if (window.AchievementManager) {
@@ -2078,51 +2050,6 @@
             return date.toLocaleString('zh-CN');
         },
 
-        _parseTimeMs(value) {
-            if (value == null) {
-                return null;
-            }
-            if (typeof value === 'number' && Number.isFinite(value)) {
-                return value;
-            }
-            const parsed = new Date(value).getTime();
-            return Number.isFinite(parsed) ? parsed : null;
-        },
-
-        _resolveTrustedDurationSeconds(data = {}) {
-            const startMs = this._parseTimeMs(data.startTime);
-            const endMs = this._parseTimeMs(data.endTime);
-            if (
-                startMs != null
-                && endMs != null
-                && endMs >= startMs
-            ) {
-                return Math.floor((endMs - startMs) / 1000);
-            }
-            return 0;
-        },
-
-        _resolveTrustedTimeRange(data = {}) {
-            const startMs = this._parseTimeMs(data.startTime);
-            const endMs = this._parseTimeMs(data.endTime);
-            if (
-                startMs != null
-                && endMs != null
-                && endMs >= startMs
-            ) {
-                return {
-                    startTime: new Date(startMs).toISOString(),
-                    endTime: new Date(endMs).toISOString(),
-                    duration: Math.floor((endMs - startMs) / 1000)
-                };
-            }
-            return {
-                startTime: null,
-                endTime: null,
-                duration: 0
-            };
-        },
-
         /**
          * 检查是否为移动设备
          */
@@ -2136,7 +2063,6 @@
         createSimplePracticeRecord(exam, realData) {
             const now = new Date();
             const recordId = `fallback_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            const resolvedTime = this._resolveTrustedTimeRange(realData || {});
 
             // 提取分数信息
             const scoreInfo = realData.scoreInfo || {};
@@ -2156,8 +2082,9 @@
                 isRealData: true,
 
                 // 基本信息
-                startTime: resolvedTime.startTime,
-                endTime: resolvedTime.endTime,
+                startTime: realData.startTime ? new Date(realData.startTime).toISOString() :
+                    new Date(Date.now() - realData.duration * 1000).toISOString(),
+                endTime: realData.endTime ? new Date(realData.endTime).toISOString() : now.toISOString(),
                 date: now.toISOString(),
 
                 // 成绩数据
@@ -2165,7 +2092,7 @@
                 totalQuestions: totalQuestions,
                 accuracy: accuracy,
                 percentage: Math.round(accuracy * 100),
-                duration: resolvedTime.duration, // 秒
+                duration: realData.duration, // 秒
 
                 // 详细数据
                 realData: {
@@ -2173,7 +2100,6 @@
                     answers: realData.answers || {},
                     interactions: realData.interactions || [],
                     scoreInfo: scoreInfo,
-                    duration: resolvedTime.duration,
                     pageType: realData.pageType,
                     url: realData.url,
                     source: scoreInfo.source || 'fallback_recorder'
@@ -3387,7 +3313,6 @@
                 }
 
                 const exam = await findExamDefinition(examId);
-                const resolvedTime = this._resolveTrustedTimeRange(realData || {});
 
                 if (!exam) {
                     console.error('[DataCollection] 无法找到题目信息:', examId);
@@ -3408,7 +3333,7 @@
                         totalQuestions: realData.scoreInfo?.total || 0,
                         accuracy: realData.scoreInfo?.accuracy || 0,
                         percentage: realData.scoreInfo?.percentage || 0,
-                        duration: resolvedTime.duration,
+                        duration: realData.duration,
                         answers: normalizedAnswers,
                         correctAnswers: normalizedCorrectMap,
                         answerHistory: realData.answerHistory,
@@ -3438,10 +3363,10 @@
                     practiceRecord.totalQuestions = total;
                     practiceRecord.accuracy = acc;
                     practiceRecord.percentage = pct;
-                    practiceRecord.duration = resolvedTime.duration;
+                    practiceRecord.duration = realData.duration;
                     practiceRecord.answers = normalizedAnswers;
-                    practiceRecord.startTime = resolvedTime.startTime;
-                    practiceRecord.endTime = resolvedTime.endTime;
+                    practiceRecord.startTime = new Date((realData.startTime ?? (Date.now() - (realData.duration || 0) * 1000))).toISOString();
+                    practiceRecord.endTime = new Date((realData.endTime ?? Date.now())).toISOString();
 
                     // 填充详情，便于在练习记录详情中显示正确答案
                     const comp = realData && realData.answerComparison ? realData.answerComparison : {};
@@ -3478,10 +3403,30 @@
                     console.warn('[DataCollection] 兼容字段填充失败:', compatErr);
                 }
 
-                await savePracticeRecordWithFallback(practiceRecord, MAX_LEGACY_PRACTICE_RECORDS);
+                let practiceRecords = await storage.get('practice_records', []);
+                if (!Array.isArray(practiceRecords)) {
+                    practiceRecords = [];
+                }
+
+                practiceRecords.unshift(practiceRecord);
+
+                if (practiceRecords.length > MAX_LEGACY_PRACTICE_RECORDS) {
+                    practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
+                }
+
+                if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+                    await window.PracticeCore.store.savePracticeRecord(practiceRecord);
+                } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+                    await window.simpleStorageWrapper.addPracticeRecord(practiceRecord);
+                } else {
+                    const practiceKey = ['practice', 'records'].join('_');
+                    await storage.set(practiceKey, practiceRecords);
+                }
 
                 // 立即验证保存是否成功
-                const verifyRecords = await listSavedPracticeRecords();
+                const verifyRecords = window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function'
+                    ? await window.PracticeCore.store.listPracticeRecords()
+                    : await storage.get('practice_records', []);
                 const savedRecord = Array.isArray(verifyRecords)
                     ? verifyRecords.find(r => r.id === practiceRecord.id)
                     : undefined;

@@ -1841,6 +1841,8 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
 }
 
 function filterByType(type) {
+    syncFilterButtonGroupState('type-filter-buttons', type);
+
     // 重置筛选器状态
     setBrowseFilterState('all', type);
     setBrowseTitle(formatBrowseTitle('all', type));
@@ -1860,6 +1862,28 @@ function filterByType(type) {
 
     // 刷新题库列表
     loadExamList();
+}
+
+function syncFilterButtonGroupState(containerId, activeType) {
+    const container = document.getElementById(containerId);
+    if (!container) {
+        return;
+    }
+
+    const buttons = container.querySelectorAll('[data-filter-type]');
+    buttons.forEach((button) => {
+        const isActive = (button.dataset.filterType || 'all') === activeType;
+        button.classList.toggle('active', isActive);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+
+    if (typeof window.updateSegmentedIndicators === 'function') {
+        setTimeout(() => {
+            try {
+                window.updateSegmentedIndicators();
+            } catch (_) { }
+        }, 0);
+    }
 }
 
 // 应用分类筛选（供 App/总览调用）
@@ -2007,6 +2031,7 @@ if (typeof window.browseCategory !== 'function') {
 }
 
 function filterRecordsByType(type) {
+    syncFilterButtonGroupState('record-type-filter-buttons', type);
     setBrowseFilterState(getCurrentCategory(), type);
     updatePracticeView();
 }

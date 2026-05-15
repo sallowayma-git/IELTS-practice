@@ -36,7 +36,6 @@ PRACTICE_MODAL = ROOT / "js" / "components" / "practiceRecordModal.js"
 APP_ACTIONS = ROOT / "js" / "presentation" / "app-actions.js"
 SUITE_MIXIN = ROOT / "js" / "app" / "suitePracticeMixin.js"
 PRACTICE_ENHANCER = ROOT / "js" / "practice-page-enhancer.js"
-PRACTICE_UI = ROOT / "js" / "practice-page-ui.js"
 ANSWER_MATCH_CORE = ROOT / "js" / "utils" / "answerMatchCore.js"
 ANSWER_UTIL = ROOT / "js" / "utils" / "answerComparisonUtils.js"
 UNIFIED_PAGE = ROOT / "js" / "runtime" / "unifiedReadingPage.js"
@@ -404,10 +403,7 @@ def main() -> int:
     }
 
     # Mark persistence in suite replay
-    practice_ui_text = PRACTICE_UI.read_text(encoding="utf-8")
     marks_checks = {
-        "ui_getter_exposed": "window.getPracticeMarkedQuestions = function getPracticeMarkedQuestions()" in practice_ui_text,
-        "ui_setter_exposed": "window.setPracticeMarkedQuestions = function setPracticeMarkedQuestions(values)" in practice_ui_text,
         "suite_entry_contains_marks": "markedQuestions: Array.isArray(result.markedQuestions) ? result.markedQuestions.slice() : []" in suite_mixin_text,
         "replay_payload_contains_marks": "markedQuestions: Array.isArray(replayEntry.markedQuestions) ? replayEntry.markedQuestions : []" in suite_mixin_text,
         "unified_submit_contains_marks": "markedQuestions: (typeof global.getPracticeMarkedQuestions === 'function')" in unified_page_text,
@@ -433,8 +429,8 @@ def main() -> int:
 
     # Drag/heading answer-state sync guard
     drag_status_checks = {
-        "dropzone_selector_covered": "const DROP_ZONE_SELECTOR = '.paragraph-dropzone .dropped-items, .match-dropzone, .dropzone, .drop-target-summary';" in practice_ui_text,
-        "nav_status_updated_after_answer": "setNavStatus(questionId, hasValue ? 'answered' : null);" in practice_ui_text,
+        "dropzone_restore_supported": "function applyDropzoneAnswer(" in unified_page_text,
+        "drag_draft_replay_supported": "if (applyDropzoneAnswer(normalized, value)) {" in unified_page_text,
         "unified_nav_updates_on_input_change": "document.addEventListener('change', () => updateNavStatuses());" in unified_page_text
         and "document.addEventListener('input', () => updateNavStatuses());" in unified_page_text,
     }
