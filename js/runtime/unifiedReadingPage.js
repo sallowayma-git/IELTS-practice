@@ -61,6 +61,7 @@
         groups: null,
         results: null,
         nav: null,
+        exitBtn: null,
         submitBtn: null,
         resetBtn: null
     };
@@ -157,6 +158,7 @@
         dom.groups = document.getElementById('question-groups');
         dom.results = document.getElementById('results');
         dom.nav = document.getElementById('question-nav');
+        dom.exitBtn = document.getElementById('exit-btn');
         dom.submitBtn = document.getElementById('submit-btn');
         dom.resetBtn = document.getElementById('reset-btn');
     }
@@ -709,6 +711,14 @@
         dropzone.classList.toggle('dropzone-empty', !hasValue);
     }
 
+    function isPoolContainer(node) {
+        return !!(
+            node
+            && node instanceof HTMLElement
+            && node.matches('.cardpool, .option-pool, .pool-items, #word-options')
+        );
+    }
+
     function clearDropzone(dropzone) {
         if (!dropzone) return;
         dropzone.dataset.answerValue = '';
@@ -860,8 +870,6 @@
     }
 
     function attachDragDrop() {
-        // practice-page-ui.js already manages drag boundaries and placing items.
-        // We only need to ensure the dropzones have the correct structure initialized.
         getDropzones().forEach((dropzone, index) => {
             if (!dropzone.dataset.dropzoneId) {
                 dropzone.dataset.dropzoneId = `dropzone-${index + 1}`;
@@ -869,6 +877,52 @@
             ensureDropzoneHolder(dropzone);
             updateDropzoneState(dropzone);
         });
+        document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
+            attachDraggableBehavior(item);
+        });
+        document.addEventListener('dragover', (event) => {
+            const target = event.target instanceof HTMLElement ? event.target : null;
+            const dropzone = target && target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary');
+            const pool = target && target.closest('.cardpool, .option-pool, .pool-items, #word-options');
+            const receiver = dropzone || pool;
+            if (!receiver) {
+                return;
+            }
+            event.preventDefault();
+            receiver.classList.add('drag-over');
+        });
+        document.addEventListener('dragleave', (event) => {
+            const target = event.target instanceof HTMLElement ? event.target : null;
+            const receiver = target && target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .cardpool, .option-pool, .pool-items, #word-options');
+            if (receiver) {
+                receiver.classList.remove('drag-over');
+            }
+        });
+        document.addEventListener('drop', (event) => {
+            const target = event.target instanceof HTMLElement ? event.target : null;
+            if (!target) {
+                return;
+            }
+            const payload = parseDragPayload(event.dataTransfer?.getData('text/plain'));
+            if (!payload) {
+                return;
+            }
+            const dropzone = target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary');
+            const pool = target.closest('.cardpool, .option-pool, .pool-items, #word-options');
+            if (!dropzone && !pool) {
+                return;
+            }
+            event.preventDefault();
+            if (dropzone) {
+                dropzone.classList.remove('drag-over');
+                handleDropOnDropzone(dropzone, payload);
+                return;
+            }
+            pool.classList.remove('drag-over');
+            if (isPoolContainer(pool)) {
+                handleDropBackToPool(payload);
+            }
+        }, true);
     }
 
     function getCheckboxAnswers() {
@@ -1451,6 +1505,10 @@
     function setReadOnlyMode(enabled) {
         state.readOnly = Boolean(enabled);
         document.body.classList.toggle('review-readonly-mode', state.readOnly);
+        if (dom.exitBtn) {
+            dom.exitBtn.style.display = state.readOnly ? 'block' : 'none';
+            dom.exitBtn.disabled = false;
+        }
         if (dom.submitBtn) {
             if (!dom.submitBtn.dataset.defaultLabel) {
                 dom.submitBtn.dataset.defaultLabel = dom.submitBtn.textContent || 'Submit';
@@ -1473,6 +1531,48 @@
         });
         syncPrimaryActionButtons();
         refreshSimulationDraftSyncLifecycle();
+    }
+
+    function stopEndlessPractice() {
+        if (typeof global.stopEndlessPractice === 'function') {
+            try {
+                global.stopEndlessPractice();
+                return;
+            } catch (_) {
+                // try AppActions fallback
+            }
+        }
+        if (global.AppActions && typeof global.AppActions.stopEndlessPractice === 'function') {
+            try {
+                global.AppActions.stopEndlessPractice();
+            } catch (_) {
+                // ignore cross-window shutdown errors
+            }
+        }
+    }
+
+    function enterSubmittedReadOnlyState() {
+        state.submitted = true;
+        setReadOnlyMode(true);
+    }
+
+    function handleExitClick() {
+        if (state.suiteSessionId) {
+            postMessage('SUITE_USER_EXIT', {
+                draft: collectCurrentDraft(),
+                elapsed: getElapsedSeconds()
+            });
+        }
+        postMessage('ENDLESS_USER_EXIT', {
+            draft: collectCurrentDraft(),
+            elapsed: getElapsedSeconds()
+        });
+        stopEndlessPractice();
+        try {
+            global.close();
+        } catch (_) {
+            // keep file:// compatible, ignore close failures
+        }
     }
 
     function syncSimulationRuntimeFlags() {
@@ -1598,6 +1698,7 @@
     function resetToAnsweringPresentation() {
         state.lastResults = null;
         state.submitted = false;
+        setReadOnlyMode(false);
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
@@ -1644,10 +1745,10 @@
         const replayResults = buildReplayResults(entry);
         const replayMarks = resolveReplayMarkedQuestions(data, entry);
         syncReviewCursor(data, 'reviewEntryIndex');
+        enterSubmittedReadOnlyState();
         applyReviewMode(true, data, 'review');
         applyReplayAnswersToDom(replayResults.answers || {});
         state.lastResults = replayResults;
-        state.submitted = true;
         renderResults(replayResults);
         await renderExplanations();
         updateNavStatuses(replayResults);
@@ -2211,6 +2312,7 @@
         state.lastResults = results;
         renderResults(results);
         await renderExplanations();
+        enterSubmittedReadOnlyState();
         updateNavStatuses(results);
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
         postMessage(messageType, Object.assign({
@@ -2271,6 +2373,7 @@
     }
 
     function attachActionListeners() {
+        dom.exitBtn?.addEventListener('click', handleExitClick);
         dom.submitBtn?.addEventListener('click', handleSubmit);
         dom.resetBtn?.addEventListener('click', handleReset);
         document.addEventListener('change', () => updateNavStatuses());
