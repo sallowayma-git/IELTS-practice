@@ -11,12 +11,8 @@
             'assets/scripts/complete-exam-data.js'
         ];
 
-        manifest['state-core'] = [
-            'js/core/practiceCore.js',
-            'js/core/resourceCore.js',
-            'js/app/state-service.js',
-            'js/services/libraryManager.js'
-        ];
+        // state-core is intentionally empty because core foundation is provided by js/bundles/core-foundation.bundle.js.
+        manifest['state-core'] = [];
 
         manifest['practice-suite'] = [
             // 练习记录功能与存储相关，需按用户行为加载
