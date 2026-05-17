@@ -5,6 +5,7 @@
     var scriptStatus = Object.create(null);
     var groupStatus = Object.create(null);
     var dependencies = Object.create(null);
+    var providedScripts = new Set();
 
     function registerDefaultManifest() {
         manifest['exam-data'] = [
@@ -102,6 +103,23 @@
         }
     }
 
+    function markProvided(files) {
+        if (!Array.isArray(files)) {
+            return;
+        }
+        files.forEach(function markFile(file) {
+            if (!file) {
+                return;
+            }
+            providedScripts.add(normalizeScriptUrl(file));
+            scriptStatus[file] = 'loaded';
+        });
+    }
+
+    function isProvided(url) {
+        return providedScripts.has(normalizeScriptUrl(url)) || scriptStatus[url] === 'loaded';
+    }
+
     function findExistingScriptTag(url) {
         if (typeof document === 'undefined') {
             return null;
@@ -128,7 +146,8 @@
         if (!url) {
             return Promise.resolve();
         }
-        if (scriptStatus[url] === 'loaded') {
+        if (isProvided(url)) {
+            scriptStatus[url] = 'loaded';
             return Promise.resolve();
         }
         if (scriptStatus[url] && scriptStatus[url].then) {
@@ -303,4 +322,5 @@
     global.AppLazyLoader.ensureGroup = ensureGroup;
     global.AppLazyLoader.registerGroup = registerGroup;
     global.AppLazyLoader.getStatus = getStatus;
+    global.AppLazyLoader.markProvided = markProvided;
 })(typeof window !== 'undefined' ? window : this);
