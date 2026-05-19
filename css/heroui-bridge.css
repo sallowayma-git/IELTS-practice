@@ -414,6 +414,69 @@ body.hero-body {
         linear-gradient(135deg, rgba(229, 219, 255, 0.66), rgba(116, 211, 205, 0.55));
 }
 
+/* Premium Apple Liquid Glass Button */
+.shui-glass-btn {
+    position: relative;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.15) !important;
+    border: 1px solid rgba(255, 255, 255, 0.4) !important;
+    border-radius: 999px !important;
+    color: var(--shui-text-strong) !important;
+    font-weight: 600 !important;
+    padding: 8px 20px !important;
+    box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.05),
+        inset 0 1px 1px rgba(255, 255, 255, 0.8),
+        inset 0 -1px 1px rgba(255, 255, 255, 0.2) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background-image: none !important;
+    text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
+}
+
+.shui-glass-btn:hover,
+.shui-glass-btn:focus-visible {
+    background: rgba(255, 255, 255, 0.35) !important;
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.1),
+        inset 0 1px 2px rgba(255, 255, 255, 1),
+        inset 0 -1px 1px rgba(255, 255, 255, 0.3) !important;
+    transform: translateY(-2px) scale(1.02) !important;
+    border-color: rgba(255, 255, 255, 0.65) !important;
+}
+
+.shui-glass-btn:active {
+    transform: translateY(1px) scale(0.98) !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    box-shadow:
+        0 2px 4px rgba(0, 0, 0, 0.05),
+        inset 0 1px 1px rgba(255, 255, 255, 0.4) !important;
+}
+
+.shui-glass-btn.active,
+.shui-glass-btn[aria-pressed="true"] {
+    background: rgba(255, 255, 255, 0.55) !important;
+    color: #0f172a !important;
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.12),
+        inset 0 1px 2px rgba(255, 255, 255, 1),
+        inset 0 -1px 1px rgba(255, 255, 255, 0.5) !important;
+    border-color: rgba(255, 255, 255, 0.85) !important;
+}
+
+#overview-view .shui-glass-btn[data-action="start-endless-mode"] .ui-emoji-icon {
+    color: #7c3aed;
+}
+
+#overview-view .shui-glass-btn[data-action="start-suite-mode"] .ui-emoji-icon {
+    color: #646b20;
+}
+
 .shui-filter-group {
     justify-content: flex-start;
     gap: 8px;

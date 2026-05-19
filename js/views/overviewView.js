@@ -240,32 +240,43 @@
             const span = document.createElement('span');
             span.className = 'ui-emoji-icon';
             span.setAttribute('aria-hidden', 'true');
+            span.style.display = 'inline-flex';
             span.innerHTML = `<svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${svgContent}</svg>`;
             return span;
         }
 
         createSuiteModeButton() {
             return this.dom.create('button', {
-                className: 'btn liquid-action liquid-action--suite',
+                className: 'btn shui-glass-btn',
                 type: 'button',
                 dataset: {
                     action: 'start-suite-mode',
                     overviewAction: 'suite'
+                },
+                style: {
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
                 }
             }, [
-                this.createSvgIcon('<path d="M4 19h16"></path><path d="M7 16V7.5a2.5 2.5 0 0 1 5 0V16"></path><path d="M12 11h5a3 3 0 0 1 0 6h-5"></path><path d="M7 11h5"></path>'),
+                this.createSvgIcon('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6"></path><path d="M8 13h8M8 17h6"></path>'),
                 this.dom.create('span', {}, '套题模式')
             ]);
         }
 
         createEndlessModeButton() {
             return this.dom.create('button', {
-                className: 'btn liquid-action liquid-action--endless',
+                className: 'btn shui-glass-btn',
                 type: 'button',
                 id: 'endless-mode-btn',
                 dataset: {
                     action: 'start-endless-mode',
                     overviewAction: 'endless'
+                },
+                style: {
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
                 }
             }, [
                 this.createSvgIcon('<path d="M17 8c2.2 0 4 1.8 4 4s-1.8 4-4 4c-1.9 0-3.1-1.1-4.4-2.7L11.4 12C10.1 10.4 8.9 9 7 9c-1.7 0-3 1.3-3 3s1.3 3 3 3c1.4 0 2.4-.8 3.6-2.2"></path><path d="M13.4 10.7C14.7 9.1 15.9 8 17 8"></path>'),

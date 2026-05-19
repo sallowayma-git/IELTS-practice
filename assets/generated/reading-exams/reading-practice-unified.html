@@ -398,6 +398,29 @@
             opacity: 0.5;
         }
 
+        #timer.endless-countdown {
+            background: rgba(239, 68, 68, 0.18);
+            color: #dc2626;
+            animation: endless-pulse 1s ease-in-out infinite;
+            font-weight: 700;
+        }
+
+        @keyframes endless-pulse {
+            0%, 100% { background: rgba(239, 68, 68, 0.18); }
+            50% { background: rgba(239, 68, 68, 0.28); }
+        }
+
+        body.dark-mode #timer.endless-countdown {
+            background: rgba(239, 68, 68, 0.25);
+            color: #fca5a5;
+            animation: endless-pulse-dark 1s ease-in-out infinite;
+        }
+
+        @keyframes endless-pulse-dark {
+            0%, 100% { background: rgba(239, 68, 68, 0.25); }
+            50% { background: rgba(239, 68, 68, 0.35); }
+        }
+
         #settings-btn {
             font-size: 1.1rem;
             padding: 6px 12px;
@@ -891,9 +914,9 @@
 
     <script src="../../../js/runtime/readingExamRegistry.js"></script>
     <script src="../../../js/runtime/readingExplanationRegistry.js"></script>
+    <script src="../../../js/runtime/readingHighlightShared.js"></script>
     <script src="./manifest.js"></script>
     <script src="../../../js/utils/answerMatchCore.js"></script>
-    <script src="../../../js/practice-page-ui.js"></script>
     <script src="../../../js/runtime/unifiedReadingPage.js"></script>
 </body>
 
