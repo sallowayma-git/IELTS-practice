@@ -14,6 +14,15 @@
     - **`developer/tests/js/`** – reusable JavaScript utilities for manual and automated QA.
     - **`developer/tests/ci/`** – CI/CD bootstrap scripts and documentation.
 
+## Release / Distribution
+
+- **`developer/release.sh`** – 发布打包脚本。
+  - 运行 `node scripts/build-bundles.mjs` 生成 `js/bundles/*.bundle.js`。
+  - 打包为 `dist/ielts-practice-{version}.zip`，仅包含运行时文件（`index.html`, `css/`, `js/bundles/`, `assets/`, `ReadingPractice/`）。
+  - 源码目录（`js/app/`, `js/core/` 等）、开发工具（`developer/`, `scripts/`）、`node_modules/` 均不进入分发包。
+  - 用户解压后双击 `index.html` 即可使用，无需 Node.js 或任何构建环境。
+  - 用法: `bash developer/release.sh [version]`
+
 ## Test & CI expectations
 - The repo ships with a static E2E harness; **after every优化或功能改动 / after every optimization or feature change, run the following commands in order**:
   ```bash
