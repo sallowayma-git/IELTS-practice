@@ -65,9 +65,9 @@
         return 0;
     }
 
-    function applyExamSort(exams) {
+    function applyExamSort(exams, sortMode) {
         const list = Array.isArray(exams) ? exams.slice() : [];
-        const mode = String(global.__browseSortMode || 'default').trim().toLowerCase();
+        const mode = String(sortMode || global.__browseSortMode || 'default').trim().toLowerCase();
         if (mode !== 'frequency-desc') {
             return list;
         }
@@ -86,9 +86,64 @@
         });
     }
 
-    function applyBrowsePostFilters(exams) {
+    function applyBrowsePostFilters(exams, sortMode) {
         const deduplicated = deduplicateExams(exams);
-        return applyExamSort(deduplicated);
+        return applyExamSort(deduplicated, sortMode);
+    }
+
+    function filterExamsWithLegacyFallback(exams, state) {
+        const inputList = Array.isArray(exams) ? exams : [];
+        const safeState = state && typeof state === 'object' ? state : {};
+        const activeCategory = String(safeState.activeCategory || safeState.category || 'all');
+        const activeExamType = String(safeState.activeExamType || safeState.examType || 'all');
+        const filterMode = String(safeState.browseFilterMode || safeState.filterMode || 'default');
+        const sortMode = String(safeState.sortMode || safeState.browseSortMode || global.__browseSortMode || 'default');
+        const isFrequencyMode = filterMode !== 'default';
+        const basePathFilter = isFrequencyMode
+            && typeof safeState.basePathFilter === 'string'
+            && safeState.basePathFilter.trim()
+            ? safeState.basePathFilter.trim()
+            : (isFrequencyMode && typeof safeState.browsePath === 'string' && safeState.browsePath.trim()
+                ? safeState.browsePath.trim()
+                : null);
+        const preferredMap = safeState.preferredFirstExamByCategory && typeof safeState.preferredFirstExamByCategory === 'object'
+            ? safeState.preferredFirstExamByCategory
+            : preferredFirstExamByCategory;
+        let list = inputList.slice();
+
+        if (activeExamType !== 'all') {
+            list = list.filter(exam => exam.type === activeExamType);
+        }
+        if (activeCategory !== 'all') {
+            const filteredByCategory = list.filter(exam => exam.category === activeCategory);
+            if (filteredByCategory.length > 0 || !basePathFilter) {
+                list = filteredByCategory;
+            }
+        }
+        if (basePathFilter) {
+            list = list.filter((exam) => typeof exam?.path === 'string' && exam.path.includes(basePathFilter));
+        }
+
+        if (activeCategory !== 'all' && activeExamType !== 'all') {
+            const key = `${activeCategory}_${activeExamType}`;
+            const preferred = preferredMap[key];
+            if (preferred) {
+                let preferredIndex = list.findIndex(exam => exam.id === preferred.id);
+                if (preferredIndex === -1) {
+                    preferredIndex = list.findIndex(exam =>
+                        exam.title === preferred.title &&
+                        exam.category === activeCategory &&
+                        exam.type === activeExamType
+                    );
+                }
+                if (preferredIndex > -1) {
+                    const [item] = list.splice(preferredIndex, 1);
+                    list.unshift(item);
+                }
+            }
+        }
+
+        return applyBrowsePostFilters(list, sortMode);
     }
 
     function formatFrequencyLabel(frequency) {
@@ -612,8 +667,6 @@
             examIndexSnapshot = Array.isArray(global.examIndex) ? global.examIndex : [];
         }
 
-        let examsToShow = Array.from(examIndexSnapshot);
-
         // 3. 获取筛选条件
         let activeCategory = 'all';
         let activeExamType = 'all';
@@ -634,49 +687,15 @@
             ? global.__browsePath.trim()
             : null;
 
-        if (activeExamType !== 'all') {
-            examsToShow = examsToShow.filter(exam => exam.type === activeExamType);
-        }
-        if (activeCategory !== 'all') {
-            const filteredByCategory = examsToShow.filter(exam => exam.category === activeCategory);
-            // 只有在有筛选结果或不是频率模式时才应用分类过滤
-            if (filteredByCategory.length > 0 || !basePathFilter) {
-                examsToShow = filteredByCategory;
-            }
-        }
-        // 只有在频率模式下才应用路径过滤
-        if (basePathFilter) {
-            examsToShow = examsToShow.filter((exam) => {
-                return typeof exam?.path === 'string' && exam.path.includes(basePathFilter);
-            });
-        }
-
-        // 5. 执行置顶逻辑
-        if (activeCategory !== 'all' && activeExamType !== 'all') {
-            const key = `${activeCategory}_${activeExamType}`;
-            const preferred = preferredFirstExamByCategory[key];
-
-            if (preferred) {
-                // 优先通过 preferred.id 在过滤后的 examsToShow 中查找
-                let preferredIndex = examsToShow.findIndex(exam => exam.id === preferred.id);
-
-                // 如果失败，fallback 到 preferred.title + currentCategory + currentExamType 匹配
-                if (preferredIndex === -1) {
-                    preferredIndex = examsToShow.findIndex(exam =>
-                        exam.title === preferred.title &&
-                        exam.category === activeCategory &&
-                        exam.type === activeExamType
-                    );
-                }
-
-                if (preferredIndex > -1) {
-                    const [item] = examsToShow.splice(preferredIndex, 1);
-                    examsToShow.unshift(item);
-                }
-            }
-        }
-
-        examsToShow = applyBrowsePostFilters(examsToShow);
+        const examsToShow = filterExamsWithLegacyFallback(examIndexSnapshot, {
+            activeCategory,
+            activeExamType,
+            browseFilterMode: global.__browseFilterMode,
+            basePathFilter,
+            browsePath: global.__browsePath,
+            sortMode: global.__browseSortMode,
+            preferredFirstExamByCategory
+        });
         const customSuiteDraft = getCustomSuiteDraft();
         const selectionMode = isCustomSuiteSelectionActive() ? 'custom-suite' : '';
 
@@ -1046,11 +1065,18 @@
         return Promise.resolve();
     }
 
+    function ensureSettingsToolsReady() {
+        if (global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function') {
+            return global.AppLazyLoader.ensureGroup('settings-tools');
+        }
+        return ensureBrowseGroupReady();
+    }
+
     async function ensureDataIntegrityManagerReady() {
         try {
-            await ensureBrowseGroupReady();
+            await ensureSettingsToolsReady();
         } catch (error) {
-            console.warn('[ExamActions] 浏览组预加载失败，继续尝试导出:', error);
+            console.warn('[ExamActions] 设置工具预加载失败，继续尝试导出:', error);
         }
 
         if (!global.dataIntegrityManager && global.DataIntegrityManager) {
@@ -1111,9 +1137,43 @@
         }
     }
 
+    function renderExamListView(exams, options = {}) {
+        if (typeof document === 'undefined') {
+            return false;
+        }
+        const container = document.getElementById('exam-list-container');
+        if (!container) {
+            return false;
+        }
+        displayExams(exams, options);
+        return true;
+    }
+
     // ============================================================================
     // 导出到全局
     // ============================================================================
+
+    global.ExamFilterService = Object.assign({}, global.ExamFilterService || {}, {
+        filterExams: filterExamsWithLegacyFallback
+    });
+    global.ExamListView = Object.assign({}, global.ExamListView || {}, {
+        render: renderExamListView,
+        createExamCard,
+        renderEmptyState
+    });
+    global.CustomSuiteSelection = Object.assign({}, global.CustomSuiteSelection || {}, {
+        getDraft: getCustomSuiteDraft,
+        isActive: isCustomSuiteSelectionActive,
+        normalizeExamCategory,
+        getCurrentCategory: getCustomSuiteCurrentCategory,
+        render: renderCustomSuiteSelectionPortal,
+        refresh: refreshCustomSuiteSelectionPortal,
+        hide: hideCustomSuiteSelectionPortal,
+        select: handleCustomSuiteSelect,
+        remove: handleCustomSuiteDelete,
+        confirm: handleCustomSuiteConfirm,
+        cancel: handleCustomSuiteCancel
+    });
 
     global.ExamActions = {
         loadExamList,

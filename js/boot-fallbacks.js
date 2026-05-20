@@ -1,4 +1,42 @@
 (function () {
+  function ensureCompatPatch(global) {
+    if (!global || (global.CompatPatch && typeof global.CompatPatch.register === 'function')) {
+      return global && global.CompatPatch ? global.CompatPatch : null;
+    }
+    var patches = [];
+    var register = function register(name, metadata) {
+      if (!name) {
+        return null;
+      }
+      var patch = Object.assign({
+        name: String(name),
+        owner: 'legacy',
+        reason: '',
+        removeAfter: ''
+      }, metadata || {});
+      patches.push(patch);
+      return patch;
+    };
+    var list = function list() {
+      return patches.slice();
+    };
+    global.CompatPatch = Object.assign({}, global.CompatPatch || {}, {
+      register: register,
+      list: list
+    });
+    return global.CompatPatch;
+  }
+
+  ensureCompatPatch(window);
+
+  if (window.CompatPatch && typeof window.CompatPatch.register === 'function') {
+    window.CompatPatch.register('boot-fallbacks', {
+      owner: 'runtime',
+      reason: 'legacy navigation and backup delegates for browser-only/file protocol startup',
+      removeAfter: 'after navigation controller owns all callers'
+    });
+  }
+
   var storage = window.storage;
   // Fallback for navigation
   if (typeof window.showView !== 'function') {
@@ -125,7 +163,7 @@
 
     if (!_fallbackDataIntegrityLoadPromise) {
       if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
-        _fallbackDataIntegrityLoadPromise = window.AppLazyLoader.ensureGroup('browse-runtime');
+        _fallbackDataIntegrityLoadPromise = window.AppLazyLoader.ensureGroup('settings-tools');
       } else if (typeof document !== 'undefined' && !window.DataIntegrityManager) {
         _fallbackDataIntegrityLoadPromise = new Promise(function (resolve, reject) {
           var script = document.createElement('script');
@@ -335,6 +373,10 @@
         return Promise.resolve(new window.DataBackupManager());
       }
       if (loading) {
+        return loading.then(() => new window.DataBackupManager());
+      }
+      if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+        loading = window.AppLazyLoader.ensureGroup('settings-tools');
         return loading.then(() => new window.DataBackupManager());
       }
       loading = new Promise((resolve, reject) => {

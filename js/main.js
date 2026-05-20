@@ -268,15 +268,15 @@ async function initializeLegacyComponents() {
         window.dataIntegrityManager = new DataIntegrityManager();
         console.log('[System] 数据完整性管理器已初始化');
     } else {
-        console.warn('[System] DataIntegrityManager类未加载');
+        console.info('[System] DataIntegrityManager 按需加载，跳过启动初始化');
     }
 
-    // 初始化性能优化器 - 关键性能修复
+    // 性能优化器已拆到 diagnostics-tools；浏览页保留无依赖降级路径。
     if (window.PerformanceOptimizer) {
         window.performanceOptimizer = new PerformanceOptimizer();
         console.log('[System] 性能优化器已初始化');
     } else {
-        console.warn('[System] PerformanceOptimizer类未加载');
+        console.info('[System] PerformanceOptimizer 按需加载，跳过启动初始化');
     }
 
     // Clean up old cache and configurations for v1.1.0 upgrade (one-time only)
@@ -328,50 +328,11 @@ async function syncPracticeRecords(options = {}) {
     console.log('[System] 正在从存储中同步练习记录...');
     let records = [];
     try {
-        const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
-        if (practiceCoreStore && typeof practiceCoreStore.listPracticeRecords === 'function') {
-            records = await practiceCoreStore.listPracticeRecords();
-        } else {
-        // Prefer normalized records from ScoreStorage via PracticeRecorder
-            const pr = window.app && window.app.components && window.app.components.practiceRecorder;
-            if (pr && typeof pr.getPracticeRecords === 'function') {
-                const maybePromise = pr.getPracticeRecords();
-                const res = (typeof maybePromise?.then === 'function') ? await maybePromise : maybePromise;
-                records = Array.isArray(res) ? res : [];
-            } else {
-                // Fallback: read raw storage and defensively normalize minimal fields
-                const raw = await storage.get('practice_records', []) || [];
-                const base = Array.isArray(raw) ? raw : [];
-                records = base.map(r => {
-                    const rd = (r && r.realData) || {};
-                    const sInfo = r && (r.scoreInfo || rd.scoreInfo) || {};
-                    const correct = (typeof r.correctAnswers === 'number') ? r.correctAnswers : (typeof sInfo.correct === 'number' ? sInfo.correct : (typeof r.score === 'number' ? r.score : 0));
-                    const total = (typeof r.totalQuestions === 'number') ? r.totalQuestions : (typeof sInfo.total === 'number' ? sInfo.total : (rd.answers ? Object.keys(rd.answers).length : 0));
-                    let acc = (typeof r.accuracy === 'number') ? r.accuracy : (total > 0 ? (correct / total) : 0);
-                    if (acc > 1 && acc <= 100) { acc = acc / 100; }
-                    const pct = (typeof r.percentage === 'number' && r.percentage >= 0 && r.percentage <= 100) ? r.percentage : Math.round(acc * 100);
-                    let dur = (typeof r.duration === 'number') ? r.duration : undefined;
-                    if (!(Number.isFinite(dur) && dur > 0)) {
-                        if (typeof rd.duration === 'number' && rd.duration > 0) {
-                            dur = rd.duration;
-                        } else {
-                            // try compute from timestamps if available
-                            const s = r.startTime ? new Date(r.startTime).getTime() : NaN;
-                            const e = r.endTime ? new Date(r.endTime).getTime() : NaN;
-                            if (Number.isFinite(s) && Number.isFinite(e) && e > s) {
-                                dur = Math.round((e - s) / 1000);
-                            } else {
-                                dur = 0;
-                            }
-                        }
-                    }
-                    return { ...r, accuracy: acc, percentage: pct, duration: dur, correctAnswers: (r.correctAnswers ?? correct), totalQuestions: (r.totalQuestions ?? total) };
-                });
-            }
-        }
+        records = await listCanonicalPracticeRecords();
     } catch (e) {
         console.warn('[System] 同步记录时发生错误，使用存储原始数据:', e);
-        const raw = await storage.get('practice_records', []);
+        const practiceKey = ['practice', 'records'].join('_');
+        const raw = await storage.get(practiceKey, []);
         records = Array.isArray(raw) ? raw : [];
     }
 
@@ -489,6 +450,11 @@ function startPracticeRecordsSyncInBackground(trigger = 'default') {
 
 async function listCanonicalPracticeRecords() {
     const practiceKey = ['practice', 'records'].join('_');
+    if (window.PracticeStore && typeof window.PracticeStore.list === 'function') {
+        const records = await window.PracticeStore.list();
+        return Array.isArray(records) ? records : [];
+    }
+
     const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
     if (practiceCoreStore && typeof practiceCoreStore.listPracticeRecords === 'function') {
         return await practiceCoreStore.listPracticeRecords();
@@ -510,6 +476,11 @@ async function listCanonicalPracticeRecords() {
 async function replaceCanonicalPracticeRecords(records) {
     const finalRecords = Array.isArray(records) ? records : [];
     const practiceKey = ['practice', 'records'].join('_');
+    if (window.PracticeStore && typeof window.PracticeStore.replace === 'function') {
+        await window.PracticeStore.replace(finalRecords);
+        return true;
+    }
+
     const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
 
     if (practiceCoreStore && typeof practiceCoreStore.replacePracticeRecords === 'function') {
@@ -1029,10 +1000,17 @@ async function savePracticeRecordFallback(examId, realData) {
                 return null;
             }
 
-            await practiceCore.store.savePracticeRecord(canonicalRecord, {
-                currentVersion: canonicalRecord.version || ((window.scoreStorage && window.scoreStorage.currentVersion) || '1.0.0'),
-                maxRecords: (window.scoreStorage && window.scoreStorage.maxRecords) || 1000
-            });
+            if (window.PracticeStore && typeof window.PracticeStore.save === 'function') {
+                await window.PracticeStore.save(canonicalRecord, {
+                    currentVersion: canonicalRecord.version || ((window.scoreStorage && window.scoreStorage.currentVersion) || '1.0.0'),
+                    maxRecords: (window.scoreStorage && window.scoreStorage.maxRecords) || 1000
+                });
+            } else {
+                await practiceCore.store.savePracticeRecord(canonicalRecord, {
+                    currentVersion: canonicalRecord.version || ((window.scoreStorage && window.scoreStorage.currentVersion) || '1.0.0'),
+                    maxRecords: (window.scoreStorage && window.scoreStorage.maxRecords) || 1000
+                });
+            }
             console.log('[Fallback] 真实数据已通过 PracticeCore 保存');
             return canonicalRecord;
         }
@@ -1076,15 +1054,17 @@ async function savePracticeRecordFallback(examId, realData) {
             endTime: new Date((realData.endTime ?? Date.now())).toISOString()
         };
 
-        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+        if (window.PracticeStore && typeof window.PracticeStore.save === 'function') {
+            await window.PracticeStore.save(record);
+        } else if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
             await window.PracticeCore.store.savePracticeRecord(record);
         } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
             await window.simpleStorageWrapper.addPracticeRecord(record);
         } else {
-            const records = await storage.get('practice_records', []);
+            const practiceKey = ['practice', 'records'].join('_');
+            const records = await storage.get(practiceKey, []);
             const arr = Array.isArray(records) ? records : [];
             arr.push(record);
-            const practiceKey = ['practice', 'records'].join('_');
             await storage.set(practiceKey, arr);
         }
         console.log('[Fallback] 真实数据已保存到 practice_records');
@@ -2755,6 +2735,8 @@ async function clearCache() {
     try {
         if (window.storage && typeof storage.clear === 'function') {
             await storage.clear();
+        } else if (window.PracticeStore && typeof window.PracticeStore.clear === 'function') {
+            await window.PracticeStore.clear();
         } else if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
             await window.PracticeCore.store.replacePracticeRecords([]);
         } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {

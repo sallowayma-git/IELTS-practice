@@ -77,6 +77,7 @@
                         href="https://github.com/sallowayma-git/IELTS-practice"
                         target="_blank"
                         rel="noopener noreferrer"
+                        class="inline-hover-link"
                         aria-label="GitHub Repository"
                         style="
                             margin-left: auto;
@@ -86,8 +87,6 @@
                             align-items: center;
                             transition: opacity 0.2s;
                         "
-                        onmouseover="this.style.opacity = '0.7'"
-                        onmouseout="this.style.opacity = '1'"
                     >
                         <svg
                             viewBox="0 0 24 24"
@@ -197,7 +196,8 @@
                             type="button"
                             aria-pressed="true"
                             data-filter-type="all"
-                            onclick="filterByType('all')"
+                            data-index-action="filter-exams"
+                            data-action-value="all"
                         >
                             全部
                         </button>
@@ -206,7 +206,8 @@
                             type="button"
                             aria-pressed="false"
                             data-filter-type="reading"
-                            onclick="filterByType('reading')"
+                            data-index-action="filter-exams"
+                            data-action-value="reading"
                         >
                             阅读
                         </button>
@@ -215,7 +216,8 @@
                             type="button"
                             aria-pressed="false"
                             data-filter-type="listening"
-                            onclick="filterByType('listening')"
+                            data-index-action="filter-exams"
+                            data-action-value="listening"
                         >
                             听力
                         </button>
@@ -231,7 +233,7 @@
                                 id="exam-search-input"
                                 placeholder="搜索题目..."
                                 aria-label="搜索题目"
-                                onkeyup="searchExams(this.value)"
+                                data-index-action="search-exams"
                             />
                             <button
                                 type="button"
@@ -239,7 +241,7 @@
                                 id="search-clear-btn"
                                 aria-label="清除搜索"
                                 hidden
-                                onclick="clearSearch()"
+                                data-index-action="clear-search"
                             >
                                 <svg
                                     viewBox="0 0 24 24"
@@ -340,7 +342,8 @@
                                 type="button"
                                 aria-pressed="true"
                                 data-filter-type="all"
-                                onclick="filterRecordsByType('all')"
+                                data-index-action="filter-records"
+                                data-action-value="all"
                             >
                                 全部
                             </button>
@@ -349,7 +352,8 @@
                                 type="button"
                                 aria-pressed="false"
                                 data-filter-type="reading"
-                                onclick="filterRecordsByType('reading')"
+                                data-index-action="filter-records"
+                                data-action-value="reading"
                             >
                                 阅读
                             </button>
@@ -358,7 +362,8 @@
                                 type="button"
                                 aria-pressed="false"
                                 data-filter-type="listening"
-                                onclick="filterRecordsByType('listening')"
+                                data-index-action="filter-records"
+                                data-action-value="listening"
                             >
                                 听力
                             </button>
@@ -366,16 +371,13 @@
                         <div class="hero-panel__actions">
                             <button
                                 class="btn btn-secondary hero-btn hero-btn--ghost"
-                                onclick="
-                                    window.AppActions &&
-                                        window.AppActions.exportPracticeMarkdown()
-                                "
+                                data-index-action="export-practice-markdown"
                             >
                                 📄 导出Markdown
                             </button>
                             <button
                                 class="btn btn-info hero-btn"
-                                onclick="toggleBulkDelete()"
+                                data-index-action="toggle-bulk-delete"
                                 id="bulk-delete-btn"
                             >
                                 <svg
@@ -401,7 +403,7 @@
                             </button>
                             <button
                                 class="btn btn-warning hero-btn hero-btn--warn"
-                                onclick="clearPracticeData()"
+                                data-index-action="clear-practice-data"
                             >
                                 🗑️ 清除记录
                             </button>
@@ -454,14 +456,12 @@
                             <button
                                 class="btn btn-warning hero-btn hero-btn--warn"
                                 id="theme-switcher-btn-entry"
-                                onclick="showThemeSwitcherModal()"
                             >
                                 🎨 主题切换
                             </button>
                             <button
                                 class="btn btn-warning hero-btn hero-btn--warn"
                                 id="show-onboarding-btn"
-                                onclick="OnboardingTour.start(true)"
                             >
                                 🎯 显示引导
                             </button>
@@ -591,6 +591,7 @@
                                 href="https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT"
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                class="inline-hover-link"
                                 style="
                                     color: #ff1c1c;
                                     text-decoration: none;
@@ -600,8 +601,6 @@
                                     margin-bottom: 12px;
                                     transition: opacity 0.2s;
                                 "
-                                onmouseover="this.style.opacity = '0.7'"
-                                onmouseout="this.style.opacity = '1'"
                             >
                                 问题反馈
                             </a>
@@ -669,7 +668,7 @@
                     <button
                         class="tool-card"
                         type="button"
-                        onclick="showAchievements()"
+                        data-index-action="show-achievements"
                     >
                         <div class="tool-card-icon">🏆</div>
                         <div class="tool-card-content">
@@ -831,7 +830,7 @@
                     <h3>🎨 主题切换</h3>
                     <button
                         class="theme-modal-close"
-                        onclick="hideThemeSwitcherModal()"
+                        data-index-action="hide-theme-switcher"
                         aria-label="关闭"
                     >
                         ×
@@ -839,213 +838,6 @@
                 </div>
                 <div class="theme-modal-body">
                     <div class="theme-options-viewport" role="presentation">
-                        <style>
-                            .theme-options-glass {
-                                display: flex;
-                                gap: 24px;
-                                padding: 20px;
-                                justify-content: flex-start;
-                                flex-wrap: nowrap;
-                                overflow-x: auto;
-                                overflow-y: hidden;
-                                -webkit-overflow-scrolling: touch;
-                                scrollbar-width: none;
-                                scroll-snap-type: x mandatory;
-                                padding-bottom: 30px; /* space for shadow */
-                            }
-                            .theme-options-glass::-webkit-scrollbar {
-                                display: none;
-                            }
-                            .theme-card {
-                                flex-shrink: 0;
-                                scroll-snap-align: center;
-                                position: relative;
-                                width: 250px;
-                                height: 350px;
-                                border-radius: 18px;
-                                overflow: hidden;
-                                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-                                transition:
-                                    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-                                    box-shadow 0.3s ease;
-                                display: flex;
-                                flex-direction: column;
-                                justify-content: flex-end;
-                                text-align: left;
-                            }
-                            .theme-card:hover {
-                                transform: translateY(-4px);
-                                box-shadow: 0 16px 32px rgba(0, 0, 0, 0.15);
-                            }
-                            .theme-card-bg {
-                                position: absolute;
-                                inset: 0;
-                                z-index: 1;
-                            }
-                            /* 晨雾群山色彩抽象 */
-                            .theme-bg-misty {
-                                background: linear-gradient(
-                                    150deg,
-                                    #f2eadf 0%,
-                                    #dbccc0 35%,
-                                    #76849c 70%,
-                                    #2f3d59 100%
-                                );
-                            }
-                            .theme-bg-misty::after {
-                                content: "";
-                                position: absolute;
-                                top: 15%;
-                                left: 25%;
-                                width: 90px;
-                                height: 90px;
-                                background: radial-gradient(
-                                    circle,
-                                    #f2906b 0%,
-                                    rgba(242, 144, 107, 0) 60%
-                                );
-                                opacity: 0.85;
-                            }
-                            /* 深海孤航色彩抽象 */
-                            .theme-bg-ocean {
-                                background: linear-gradient(
-                                    180deg,
-                                    #81959c 0%,
-                                    #bac9d1 35%,
-                                    #0e4c56 38%,
-                                    #031c21 100%
-                                );
-                            }
-                            .theme-bg-ocean::after {
-                                content: "";
-                                position: absolute;
-                                bottom: 35%;
-                                left: 30%;
-                                right: 0;
-                                width: 100px;
-                                height: 20px;
-                                background: radial-gradient(
-                                    ellipse,
-                                    rgba(0, 0, 0, 0.4) 0%,
-                                    transparent 60%
-                                );
-                                opacity: 0.6;
-                            }
-                            /* 落日雾花色彩抽象 */
-                            .theme-bg-floral {
-                                background: linear-gradient(
-                                    150deg,
-                                    #fce0cd 0%,
-                                    #f7b9bc 40%,
-                                    #8db2d8 80%,
-                                    #4b8cd1 100%
-                                );
-                            }
-                            .theme-bg-floral::after {
-                                content: "";
-                                position: absolute;
-                                top: 15%;
-                                left: 40%;
-                                width: 100px;
-                                height: 100px;
-                                background: radial-gradient(
-                                    circle,
-                                    #7d96f1 0%,
-                                    rgba(125, 150, 241, 0) 70%
-                                );
-                                opacity: 0.8;
-                                mix-blend-mode: multiply;
-                            }
-                            .theme-bg-floral::before {
-                                content: "";
-                                position: absolute;
-                                top: 40%;
-                                left: 10%;
-                                width: 120px;
-                                height: 100px;
-                                background: radial-gradient(
-                                    circle,
-                                    #ff6b4a 0%,
-                                    rgba(255, 107, 74, 0) 65%
-                                );
-                                opacity: 0.8;
-                                filter: blur(5px);
-                            }
-                            /* 液态玻璃模糊层 */
-                            .theme-card-glass-layer {
-                                position: relative;
-                                z-index: 2;
-                                padding: 16px;
-                                padding-top: 36px;
-                                background: rgba(28, 28, 28, 0.45);
-                                backdrop-filter: blur(14px);
-                                -webkit-backdrop-filter: blur(14px);
-                                -webkit-mask-image: linear-gradient(
-                                    to bottom,
-                                    transparent 0%,
-                                    rgba(0, 0, 0, 1) 36%,
-                                    rgba(0, 0, 0, 1) 100%
-                                );
-                                mask-image: linear-gradient(
-                                    to bottom,
-                                    transparent 0%,
-                                    rgba(0, 0, 0, 1) 36%,
-                                    rgba(0, 0, 0, 1) 100%
-                                );
-                                color: #fff;
-                            }
-                            .theme-card-header {
-                                margin-bottom: 20px;
-                            }
-                            .theme-card-title {
-                                font-size: 1.25rem;
-                                font-weight: 600;
-                                margin: 0 0 6px 0;
-                                letter-spacing: 0.5px;
-                                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-                            }
-                            .theme-card-subtitle {
-                                font-size: 0.8rem;
-                                color: rgba(255, 255, 255, 0.7);
-                                display: flex;
-                                align-items: center;
-                                gap: 6px;
-                            }
-                            .theme-card-footer {
-                                display: flex;
-                                align-items: center;
-                                justify-content: space-between;
-                            }
-                            .theme-card-tag {
-                                background: rgba(0, 0, 0, 0.5);
-                                color: #fff;
-                                padding: 8px 16px;
-                                border-radius: 20px;
-                                font-size: 0.85rem;
-                                font-weight: 600;
-                                border: 1px solid rgba(255, 255, 255, 0.08);
-                                letter-spacing: 0.5px;
-                            }
-                            .theme-card-btn {
-                                background: #ffffff;
-                                color: #1a1a1a;
-                                border: none;
-                                padding: 8px 20px;
-                                border-radius: 20px;
-                                font-size: 0.85rem;
-                                font-weight: 600;
-                                cursor: pointer;
-                                transition: all 0.2s;
-                                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-                            }
-                            .theme-card-btn:hover {
-                                background: #f0f0f0;
-                                transform: scale(1.04);
-                            }
-                            .theme-card-btn:active {
-                                transform: scale(0.98);
-                            }
-                        </style>
                         <div class="theme-options-glass">
                             <!-- 晨雾群山 -->
                             <div class="theme-card">
@@ -1065,11 +857,8 @@
                                         <span class="theme-card-tag">动态</span>
                                         <button
                                             class="theme-card-btn"
-                                            onclick="
-                                                window.switchBgTheme(
-                                                    'misty-mountain',
-                                                )
-                                            "
+                                            data-index-action="switch-bg-theme"
+                                            data-action-value="misty-mountain"
                                         >
                                             应用
                                         </button>
@@ -1094,11 +883,8 @@
                                         <span class="theme-card-tag">动态</span>
                                         <button
                                             class="theme-card-btn"
-                                            onclick="
-                                                window.switchBgTheme(
-                                                    'teal-ocean',
-                                                )
-                                            "
+                                            data-index-action="switch-bg-theme"
+                                            data-action-value="teal-ocean"
                                         >
                                             应用
                                         </button>
@@ -1125,11 +911,8 @@
                                         <span class="theme-card-tag">静态</span>
                                         <button
                                             class="theme-card-btn"
-                                            onclick="
-                                                window.switchBgTheme(
-                                                    'floral-bloom',
-                                                )
-                                            "
+                                            data-index-action="switch-bg-theme"
+                                            data-action-value="floral-bloom"
                                         >
                                             应用
                                         </button>
@@ -1144,54 +927,16 @@
 
         <!-- 启动与懒加载工具 -->
         <script src="assets/vendor/three.min.js"></script>
-        <script src="js/presentation/threeBackground.js"></script>
-        <script src="js/runtime/bootScreen.js" defer></script>
-        <script src="js/runtime/lazyLoader.js" defer></script>
-        <script src="js/utils/suitePreference.js" defer></script>
-        <script src="js/presentation/app-actions.js" defer></script>
+        <script src="js/bundles/runtime-entry.bundle.js"></script>
 
         <!-- 基础环境与日志 -->
-        <script src="js/utils/environmentDetector.js"></script>
-        <script src="js/utils/logger.js"></script>
-        <script src="js/utils/storage.js"></script>
-        <script src="js/core/storageProviderRegistry.js"></script>
-        <script src="js/data/dataSources/storageDataSource.js"></script>
-        <script src="js/data/repositories/baseRepository.js"></script>
-        <script src="js/data/repositories/dataRepositoryRegistry.js"></script>
-        <script src="js/data/repositories/practiceRepository.js"></script>
-        <script src="js/data/repositories/settingsRepository.js"></script>
-        <script src="js/data/repositories/backupRepository.js"></script>
-        <script src="js/data/repositories/metaRepository.js"></script>
-        <script src="js/data/index.js"></script>
-        <script src="js/core/practiceCore.js"></script>
-        <script src="js/core/resourceCore.js"></script>
-        <script src="assets/generated/reading-exams/manifest.js"></script>
-        <script src="js/utils/stateSerializer.js"></script>
-        <script src="js/utils/simpleStorageWrapper.js"></script>
+        <script src="js/bundles/core-foundation.bundle.js"></script>
 
         <!-- 工具库与基础视图 -->
-        <script src="js/utils/dom.js"></script>
-        <script src="js/services/overviewStats.js"></script>
-        <script src="js/views/overviewView.js"></script>
-        <script src="js/presentation/navigation-controller.js"></script>
+        <script src="js/bundles/ui-shell.bundle.js"></script>
 
         <!-- 入口与懒加载代理 -->
-        <script src="js/app/main-entry.js"></script>
-        <script src="js/presentation/indexInteractions.js"></script>
-        <script src="js/presentation/emojiIconizer.js"></script>
-        <script src="js/boot-fallbacks.js"></script>
-        <script src="js/patches/runtime-fixes.js"></script>
-
-        <!-- 应用核心 -->
-        <script src="js/app/stateMixin.js"></script>
-        <script src="js/app/bootstrapMixin.js"></script>
-        <script src="js/app/lifecycleMixin.js"></script>
-        <script src="js/app/navigationMixin.js"></script>
-        <script src="js/app/fallbackMixin.js"></script>
-        <script src="js/app.js"></script>
-
-        <!-- 引导流程组件 -->
-        <script src="js/components/onboardingTour.js"></script>
+        <script src="js/bundles/legacy-app.bundle.js"></script>
 
         <!-- 成就系统模态框 -->
         <div id="achievements-modal" class="theme-modal">
@@ -1200,7 +945,7 @@
                     <h3>🏆 我的成就</h3>
                     <button
                         class="theme-modal-close"
-                        onclick="hideAchievements()"
+                        data-index-action="hide-achievements"
                         aria-label="关闭"
                     >
                         ×
@@ -1214,143 +959,7 @@
             </div>
         </div>
 
-        <!-- 首次开源许可弹窗 (Claude 暖色极简设计风格) -->
-        <style>
-            /* ── License Modal ── */
-            #license-modal {
-                font-family:
-                    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-                    Helvetica, Arial, sans-serif;
-                position: fixed;
-                inset: 0;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                background: rgba(245, 244, 239, 0.88);
-                backdrop-filter: blur(6px);
-                -webkit-backdrop-filter: blur(6px);
-                opacity: 0;
-                pointer-events: none;
-                transition: opacity 0.35s ease;
-                z-index: 9999;
-            }
-
-            #license-modal.show {
-                opacity: 1;
-                pointer-events: auto;
-            }
-
-            #license-modal .lm-card {
-                max-width: 480px;
-                width: calc(100% - 48px);
-                background: #fffefb;
-                border: 1px solid rgba(0, 0, 0, 0.07);
-                border-radius: 16px;
-                padding: 32px;
-                box-shadow:
-                    0 2px 4px rgba(0, 0, 0, 0.04),
-                    0 8px 24px rgba(0, 0, 0, 0.07),
-                    0 24px 48px rgba(0, 0, 0, 0.05);
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                text-align: center;
-                box-sizing: border-box;
-                transform: translateY(8px);
-                transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            }
-
-            #license-modal.show .lm-card {
-                transform: translateY(0);
-            }
-
-            #license-modal .lm-title {
-                color: #1a1614;
-                font-size: 22px;
-                line-height: 32px;
-                font-weight: 600;
-                margin: 0 0 24px 0;
-                letter-spacing: -0.01em;
-            }
-
-            #license-modal .lm-body {
-                width: 100%;
-                display: flex;
-                flex-direction: column;
-                gap: 14px;
-                text-align: left;
-            }
-
-            #license-modal .lm-body p {
-                margin: 0;
-                color: #5a534e;
-                font-size: 15px;
-                line-height: 24px;
-            }
-
-            #license-modal .lm-body .lm-warning {
-                color: #c06025;
-                font-weight: 600;
-            }
-
-            #license-modal .lm-body strong {
-                color: #1a1614;
-                font-weight: 600;
-            }
-
-            #license-modal .lm-info-box {
-                padding: 14px 16px;
-                background: #f8f5f0;
-                border: 1px solid #ede7dc;
-                border-radius: 10px;
-            }
-
-            #license-modal .lm-footer {
-                margin-top: 24px;
-                width: 100%;
-                display: flex;
-                justify-content: center;
-            }
-
-            #license-modal .lm-btn {
-                background: #1a1614;
-                color: #fffefb;
-                border: none;
-                border-radius: 8px;
-                padding: 12px 40px;
-                font-size: 15px;
-                line-height: 24px;
-                font-weight: 500;
-                cursor: pointer;
-                letter-spacing: 0.01em;
-                /* layered shadow for depth */
-                box-shadow:
-                    0 1px 0 rgba(255, 255, 255, 0.08) inset,
-                    0 2px 4px rgba(0, 0, 0, 0.2),
-                    0 4px 8px rgba(0, 0, 0, 0.1);
-                transition:
-                    background 0.18s ease,
-                    box-shadow 0.18s ease,
-                    transform 0.12s ease;
-            }
-
-            #license-modal .lm-btn:hover {
-                background: #2e2521;
-                box-shadow:
-                    0 1px 0 rgba(255, 255, 255, 0.1) inset,
-                    0 4px 10px rgba(0, 0, 0, 0.22),
-                    0 8px 20px rgba(0, 0, 0, 0.12);
-                transform: translateY(-1px);
-            }
-
-            #license-modal .lm-btn:active {
-                background: #0f0c0b;
-                box-shadow:
-                    0 1px 0 rgba(255, 255, 255, 0.05) inset,
-                    0 1px 3px rgba(0, 0, 0, 0.2);
-                transform: translateY(0);
-            }
-        </style>
+        <!-- 首次开源许可弹窗 -->
         <div id="license-modal">
             <div class="lm-card">
                 <h2 class="lm-title">开源项目使用须知</h2>
@@ -1384,44 +993,11 @@
                     </div>
                 </div>
                 <div class="lm-footer">
-                    <button class="lm-btn" onclick="acceptGplLicense()">
+                    <button class="lm-btn" data-index-action="accept-license">
                         我已了解
                     </button>
                 </div>
             </div>
         </div>
-        <script>
-            window.acceptGplLicense = function () {
-                try {
-                    localStorage.setItem("hasSeenGplLicense", "true");
-                } catch (e) {
-                    console.warn("LocalStorage error:", e);
-                }
-                var modal = document.getElementById("license-modal");
-                if (modal) {
-                    // Use opacity/pointer-events only — never touch display
-                    modal.classList.remove("show");
-                }
-            };
-
-            // Show only when not yet accepted
-            (function () {
-                try {
-                    if (!localStorage.getItem("hasSeenGplLicense")) {
-                        var modal = document.getElementById("license-modal");
-                        if (modal) {
-                            // Use rAF so the CSS transition fires after initial render
-                            requestAnimationFrame(function () {
-                                requestAnimationFrame(function () {
-                                    modal.classList.add("show");
-                                });
-                            });
-                        }
-                    }
-                } catch (e) {
-                    /* ignore */
-                }
-            })();
-        </script>
     </body>
 </html>
