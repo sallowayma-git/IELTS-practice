@@ -123,6 +123,238 @@ def _check_contains(path: Path, snippet: str) -> Tuple[bool, str]:
     return present, ("已包含片段" if present else f"缺少片段：{snippet}")
 
 
+def _extract_script_srcs_from_html(source: str) -> List[str]:
+    return [
+        match.group(1).strip()
+        for match in re.finditer(r"<script\b[^>]*\bsrc\s*=\s*['\"]([^'\"]+)['\"][^>]*>", source, re.IGNORECASE)
+        if match.group(1).strip()
+    ]
+
+def _extract_css_hrefs_from_html(source: str) -> List[str]:
+    return [
+        match.group(1).strip()
+        for match in re.finditer(
+            r"<link\b[^>]*\brel\s*=\s*['\"]stylesheet['\"][^>]*\bhref\s*=\s*['\"]([^'\"]+)['\"][^>]*>",
+            source,
+            re.IGNORECASE,
+        )
+        if match.group(1).strip()
+    ]
+
+def _strip_js_comments(source: str) -> str:
+    without_block = re.sub(r"/\*[\s\S]*?\*/", "", source)
+    without_line = re.sub(r"//.*$", "", without_block, flags=re.MULTILINE)
+    return without_line
+
+def _is_forward_only_js_source(source: str) -> bool:
+    cleaned = _strip_js_comments(source)
+    normalized = re.sub(r"\s+", " ", cleaned).strip()
+    if not normalized:
+        return True
+
+    if re.fullmatch(r"export\s+(\*\s+from|\{[^}]+\}\s+from)\s+['\"][^'\"]+['\"]\s*;?\s*", normalized):
+        return True
+    if re.fullmatch(r"module\.exports\s*=\s*require\(['\"][^'\"]+['\"]\)\s*;?\s*", normalized):
+        return True
+
+    function_count = len(re.findall(r"\bfunction\b", cleaned))
+    direct_alias = re.search(
+        r"(window|globalThis|global)\.[A-Za-z_$][\w$]*\s*=\s*(window|globalThis|global)\.[A-Za-z_$][\w$]*\s*;?",
+        cleaned,
+    )
+    object_assign_alias = re.search(
+        r"(window|globalThis|global)\.[A-Za-z_$][\w$]*\s*=\s*Object\.assign\(\{\}\s*,\s*(window|globalThis|global)\.[A-Za-z_$][\w$]*\s*\|\|\s*\{\}\s*\)\s*;?",
+        cleaned,
+    )
+    return function_count <= 1 and bool(direct_alias or object_assign_alias)
+
+def _check_features_no_forward_only_files(features_dir: Path) -> Tuple[bool, dict]:
+    if not features_dir.exists():
+        return True, {"scanned": 0, "forwardOnlyFiles": [], "note": "js/features 已完全收敛删除"}
+
+    forward_only_files: List[str] = []
+    scanned = 0
+    for js_path in sorted(features_dir.rglob("*.js")):
+        scanned += 1
+        try:
+            source = js_path.read_text(encoding="utf-8")
+        except Exception as exc:  # pragma: no cover - defensive guard
+            return False, {"error": f"读取失败：{js_path}: {exc}"}
+        if _is_forward_only_js_source(source):
+            forward_only_files.append(str(js_path.relative_to(REPO_ROOT)).replace("\\", "/"))
+
+    return len(forward_only_files) == 0, {
+        "scannedCount": scanned,
+        "forwardOnlyFiles": forward_only_files,
+    }
+
+def _check_index_css_convergence(index_path: Path) -> Tuple[bool, dict]:
+    try:
+        source = index_path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取失败：{exc}"}
+
+    css_hrefs = _extract_css_hrefs_from_html(source)
+    allowed = {
+        "css/main.css",
+        "css/heroui-bridge.css",
+        "css/onboarding.css",
+    }
+    unexpected = sorted([href for href in css_hrefs if href not in allowed])
+    missing_required = sorted([href for href in ("css/main.css",) if href not in css_hrefs])
+
+    passed = not unexpected and not missing_required
+    return passed, {
+        "cssLinks": css_hrefs,
+        "unexpectedCssLinks": unexpected,
+        "missingRequiredCssLinks": missing_required,
+    }
+
+def _check_build_bundles_no_deleted_refs(build_script: Path) -> Tuple[bool, dict]:
+    removed_scripts = [
+        "js/features/session/examSessionService.js",
+        "js/features/session/sessionFeature.js",
+        "js/features/app/app-init.js",
+        "js/features/practice/practice-sync.js",
+        "js/features/overview/overview-runtime.js",
+        "js/runtime/mainRuntime.js",
+        "js/runtime/legacyPublicAPI.js",
+    ]
+    try:
+        source = build_script.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取失败：{exc}"}
+
+    stale_refs = sorted([item for item in removed_scripts if item in source])
+    return len(stale_refs) == 0, {
+        "checkedRemovedScripts": removed_scripts,
+        "staleRefs": stale_refs,
+    }
+
+
+def _extract_snapshot_html(snapshot_path: Path) -> Tuple[Optional[str], str]:
+    if not snapshot_path.exists():
+        return None, "快照文件缺失"
+    try:
+        source = snapshot_path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return None, f"读取失败：{exc}"
+
+    marker = "window.__APP_INDEX_HTML_SNAPSHOT__ = `"
+    start = source.find(marker)
+    if start < 0:
+        return None, "未找到快照模板字面量起点"
+    start += len(marker)
+
+    end = source.rfind("`")
+    if end <= start:
+        return None, "未找到快照模板字面量终点"
+
+    return source[start:end], "已提取快照 HTML"
+
+
+def _check_index_script_layout(index_path: Path) -> Tuple[bool, dict]:
+    try:
+        source = index_path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取失败：{exc}"}
+
+    script_srcs = _extract_script_srcs_from_html(source)
+    bundle_scripts = sorted({
+        src for src in script_srcs if src.startswith("js/bundles/") and src.endswith(".bundle.js")
+    })
+    expected_bundle_scripts = sorted([
+        "js/bundles/runtime-entry.bundle.js",
+        "js/bundles/core-foundation.bundle.js",
+        "js/bundles/ui-shell.bundle.js",
+        "js/bundles/legacy-app.bundle.js",
+    ])
+    legacy_entry_scripts = sorted([
+        "js/main.js",
+        "js/app/main-entry.js",
+        "js/app.js",
+    ])
+    legacy_hits = sorted([src for src in script_srcs if src in legacy_entry_scripts])
+
+    mode = "bundle" if bundle_scripts else "source"
+    if mode == "bundle":
+        missing_bundle_scripts = sorted(set(expected_bundle_scripts) - set(bundle_scripts))
+        passed = not missing_bundle_scripts and not legacy_hits
+        detail = {
+            "mode": mode,
+            "bundles": bundle_scripts,
+            "missingBundles": missing_bundle_scripts,
+            "legacyDirectHits": legacy_hits,
+        }
+        return passed, detail
+
+    required_legacy_scripts = ["js/main.js", "js/app.js"]
+    missing_legacy_scripts = sorted([src for src in required_legacy_scripts if src not in script_srcs])
+    passed = not missing_legacy_scripts
+    detail = {
+        "mode": mode,
+        "requiredLegacyScripts": required_legacy_scripts,
+        "missingLegacyScripts": missing_legacy_scripts,
+    }
+    return passed, detail
+
+
+def _check_index_no_inline_runtime(index_path: Path) -> Tuple[bool, dict]:
+    try:
+        source = index_path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取失败：{exc}"}
+
+    inline_event_hits = [
+        {"line": line_no, "text": line.strip()}
+        for line_no, line in enumerate(source.splitlines(), start=1)
+        if re.search(r"\son[a-z]+\s*=", line, re.IGNORECASE)
+    ]
+    inline_style_blocks = [
+        {"line": source.count("\n", 0, match.start()) + 1, "text": "<style>"}
+        for match in re.finditer(r"<style\b", source, re.IGNORECASE)
+    ]
+    inline_scripts = []
+    for match in re.finditer(r"<script\b([^>]*)>", source, re.IGNORECASE):
+        attrs = match.group(1) or ""
+        if not re.search(r"\bsrc\s*=", attrs, re.IGNORECASE):
+            inline_scripts.append({
+                "line": source.count("\n", 0, match.start()) + 1,
+                "text": match.group(0)
+            })
+
+    passed = not inline_event_hits and not inline_style_blocks and not inline_scripts
+    return passed, {
+        "inlineEventHits": inline_event_hits,
+        "inlineStyleBlocks": inline_style_blocks,
+        "inlineScripts": inline_scripts,
+    }
+
+
+def _check_index_snapshot_script_sync(index_path: Path, snapshot_path: Path) -> Tuple[bool, dict]:
+    try:
+        index_source = index_path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取 index 失败：{exc}"}
+
+    snapshot_html, snapshot_detail = _extract_snapshot_html(snapshot_path)
+    if snapshot_html is None:
+        return False, {"error": snapshot_detail}
+
+    index_scripts = sorted(set(_extract_script_srcs_from_html(index_source)))
+    snapshot_scripts = sorted(set(_extract_script_srcs_from_html(snapshot_html)))
+    missing_in_snapshot = sorted(set(index_scripts) - set(snapshot_scripts))
+    only_in_snapshot = sorted(set(snapshot_scripts) - set(index_scripts))
+    passed = not missing_in_snapshot and not only_in_snapshot
+    detail = {
+        "indexScriptCount": len(index_scripts),
+        "snapshotScriptCount": len(snapshot_scripts),
+        "missingInSnapshot": missing_in_snapshot,
+        "onlyInSnapshot": only_in_snapshot,
+    }
+    return passed, detail
+
+
 def _check_main_entry_on_demand(main_entry: Path) -> Tuple[bool, str]:
     try:
         source = main_entry.read_text(encoding="utf-8")
@@ -183,6 +415,44 @@ def _check_lazy_loader_dedupe(loader_path: Path) -> Tuple[bool, str]:
     if missing:
         return False, {"missing": missing}
     return True, "已检测到静态脚本去重逻辑"
+
+
+def _check_settings_tools_split() -> Tuple[bool, dict]:
+    build_script = REPO_ROOT / "scripts" / "build-bundles.mjs"
+    lazy_loader = REPO_ROOT / "js" / "runtime" / "lazyLoader.js"
+    boot_fallbacks = REPO_ROOT / "js" / "boot-fallbacks.js"
+    exam_actions = REPO_ROOT / "js" / "app" / "examActions.js"
+
+    try:
+        build_source = build_script.read_text(encoding="utf-8")
+        loader_source = lazy_loader.read_text(encoding="utf-8")
+        fallback_source = boot_fallbacks.read_text(encoding="utf-8")
+        actions_source = exam_actions.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取失败：{exc}"}
+
+    required = {
+        "buildSettingsBundle": "'js/bundles/settings.bundle.js'" in build_source,
+        "settingsHasDataIntegrityManager": "'js/components/DataIntegrityManager.js'" in build_source,
+        "settingsHasDataBackupManager": "'js/utils/dataBackupManager.js'" in build_source,
+        "loaderManifest": "manifest['settings-tools']" in loader_source,
+        "loaderDependency": "dependencies['settings-tools'] = ['state-core'];" in loader_source,
+        "moreDependsOnSettings": "dependencies['more-tools'] = ['state-core', 'settings-tools'];" in loader_source,
+        "diagnosticsDependsOnSettings": "dependencies['diagnostics-tools'] = ['state-core', 'settings-tools'];" in loader_source,
+        "fallbackUsesSettingsTools": "ensureGroup('settings-tools')" in fallback_source,
+        "examActionsUsesSettingsTools": "ensureGroup('settings-tools')" in actions_source,
+    }
+
+    forbidden = {
+        "fallbackLoadsBrowseForDataIntegrity": "ensureGroup('browse-runtime')" in fallback_source,
+        "examActionsLoadsDiagnosticsForDataIntegrity": "ensureGroup('diagnostics-tools')" in actions_source,
+    }
+
+    passed = all(required.values()) and not any(forbidden.values())
+    return passed, {
+        "required": required,
+        "forbidden": forbidden,
+    }
 
 
 def _check_practice_recorder_synthetic_guard(recorder_path: Path) -> Tuple[bool, str]:
@@ -395,8 +665,36 @@ def _extract_registered_payload(path: Path) -> Optional[dict]:
     try:
         payload = json.loads(match.group(2))
     except json.JSONDecodeError:
-        return None
+        payload = _extract_registered_payload_from_js_object(match.group(2))
     return payload if isinstance(payload, dict) else None
+
+
+def _extract_registered_payload_from_js_object(source: str) -> Optional[dict]:
+    exam_match = re.search(r"\bexamId\s*:\s*['\"]([^'\"]+)['\"]", source)
+    if not exam_match:
+        return None
+
+    payload: Dict[str, object] = {"examId": exam_match.group(1)}
+
+    title_match = re.search(r"\btitle\s*:\s*['\"]([^'\"]+)['\"]", source)
+    if title_match:
+        payload["meta"] = {"title": title_match.group(1)}
+
+    display_map_match = re.search(r"\bquestionDisplayMap\s*:\s*\{([\s\S]*?)\}\s*,", source)
+    if display_map_match:
+        display_map: Dict[str, str] = {}
+        for key, value in re.findall(r"\b(q\d+)\s*:\s*['\"]([^'\"]+)['\"]", display_map_match.group(1)):
+            display_map[key] = value
+        if display_map:
+            payload["questionDisplayMap"] = display_map
+
+    order_match = re.search(r"\bquestionOrder\s*:\s*\[([\s\S]*?)\]\s*,", source)
+    if order_match:
+        order = re.findall(r"['\"](q\d+)['\"]", order_match.group(1))
+        if order:
+            payload["questionOrder"] = order
+
+    return payload
 
 
 def _normalize_title_for_similarity(title: str) -> str:
@@ -597,6 +895,28 @@ def run_checks() -> Tuple[List[dict], bool]:
     passed, detail = _ensure_exists(index_file)
     results.append(_format_result("index.html 存在性", passed, detail))
     all_passed &= passed
+    if passed:
+        script_layout_passed, script_layout_detail = _check_index_script_layout(index_file)
+        results.append(_format_result("index.html 脚本入口形态守卫", script_layout_passed, script_layout_detail))
+        all_passed &= script_layout_passed
+
+        inline_runtime_passed, inline_runtime_detail = _check_index_no_inline_runtime(index_file)
+        results.append(_format_result("index.html 禁止内联运行时", inline_runtime_passed, inline_runtime_detail))
+        all_passed &= inline_runtime_passed
+
+        css_convergence_passed, css_convergence_detail = _check_index_css_convergence(index_file)
+        results.append(_format_result("index.html CSS 收敛守卫", css_convergence_passed, css_convergence_detail))
+        all_passed &= css_convergence_passed
+
+    features_dir = REPO_ROOT / "js" / "features"
+    feature_convergence_passed, feature_convergence_detail = _check_features_no_forward_only_files(features_dir)
+    results.append(_format_result("js/features 禁止转发-only 文件", feature_convergence_passed, feature_convergence_detail))
+    all_passed &= feature_convergence_passed
+
+    build_script = REPO_ROOT / "scripts" / "build-bundles.mjs"
+    build_ref_passed, build_ref_detail = _check_build_bundles_no_deleted_refs(build_script)
+    results.append(_format_result("build-bundles 删除脚本引用守卫", build_ref_passed, build_ref_detail))
+    all_passed &= build_ref_passed
 
     # Static regression harnesses should start with a doctype for consistent rendering
     static_html_files = sorted((REPO_ROOT / "developer" / "tests").glob("*.html"))
@@ -629,6 +949,10 @@ def run_checks() -> Tuple[List[dict], bool]:
             script_passed, script_detail = _ensure_exists(script_path)
             results.append(_format_result(f"E2E 依赖 {script_path.name}", script_passed, script_detail))
             all_passed &= script_passed
+        snapshot_path = REPO_ROOT / "developer" / "tests" / "js" / "e2e" / "indexSnapshot.js"
+        snapshot_sync_passed, snapshot_sync_detail = _check_index_snapshot_script_sync(index_file, snapshot_path)
+        results.append(_format_result("E2E 快照脚本清单与 index 同步", snapshot_sync_passed, snapshot_sync_detail))
+        all_passed &= snapshot_sync_passed
 
         fixture_path = REPO_ROOT / "developer" / "tests" / "e2e" / "fixtures" / "data-integrity-import-sample.json"
         fixture_passed, fixture_detail = _ensure_exists(fixture_path)
@@ -781,6 +1105,10 @@ def run_checks() -> Tuple[List[dict], bool]:
     dedupe_ok, dedupe_detail = _check_lazy_loader_dedupe(lazy_loader_path)
     results.append(_format_result("lazyLoader 静态脚本去重", dedupe_ok, dedupe_detail))
     all_passed &= dedupe_ok
+
+    settings_split_ok, settings_split_detail = _check_settings_tools_split()
+    results.append(_format_result("settings-tools 拆包守卫", settings_split_ok, settings_split_detail))
+    all_passed &= settings_split_ok
 
     practice_recorder_path = REPO_ROOT / "js" / "core" / "practiceRecorder.js"
     synthetic_guard_ok, synthetic_guard_detail = _check_practice_recorder_synthetic_guard(practice_recorder_path)
@@ -1308,6 +1636,66 @@ def run_checks() -> Tuple[List[dict], bool]:
         all_passed &= on_demand_passed
     else:
         results.append(_format_result("按需入口回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    service_facade_test = REPO_ROOT / "developer" / "tests" / "js" / "serviceFacade.test.js"
+    if service_facade_test.exists():
+        try:
+            completed_service_facade = subprocess.run(
+                ["node", str(service_facade_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8"
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            service_facade_passed = False
+            service_facade_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_service_facade_output = (completed_service_facade.stdout or "").strip() or (completed_service_facade.stderr or "").strip()
+            try:
+                service_facade_payload = json.loads(raw_service_facade_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                service_facade_passed = False
+                service_facade_detail = f"输出解析失败: {parse_error}"
+            else:
+                service_facade_passed = service_facade_payload.get("status") == "pass"
+                service_facade_detail = service_facade_payload.get("detail", service_facade_payload)
+        results.append(_format_result("服务门面回归测试", service_facade_passed, service_facade_detail))
+        all_passed &= service_facade_passed
+    else:
+        results.append(_format_result("服务门面回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    exam_filter_service_test = REPO_ROOT / "developer" / "tests" / "js" / "examFilterService.test.js"
+    if exam_filter_service_test.exists():
+        try:
+            completed_exam_filter_service = subprocess.run(
+                ["node", str(exam_filter_service_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8"
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            exam_filter_service_passed = False
+            exam_filter_service_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_exam_filter_service_output = (completed_exam_filter_service.stdout or "").strip() or (completed_exam_filter_service.stderr or "").strip()
+            try:
+                exam_filter_service_payload = json.loads(raw_exam_filter_service_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                exam_filter_service_passed = False
+                exam_filter_service_detail = f"输出解析失败: {parse_error}"
+            else:
+                exam_filter_service_passed = exam_filter_service_payload.get("status") == "pass"
+                exam_filter_service_detail = exam_filter_service_payload.get("detail", exam_filter_service_payload)
+        results.append(_format_result("ExamFilterService 回归测试", exam_filter_service_passed, exam_filter_service_detail))
+        all_passed &= exam_filter_service_passed
+    else:
+        results.append(_format_result("ExamFilterService 回归测试", False, "测试脚本缺失"))
         all_passed = False
 
     practice_core_guard_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCore.guard.test.js"
