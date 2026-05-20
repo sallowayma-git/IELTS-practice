@@ -2563,6 +2563,7 @@
             : [];
         state.lastResults = results;
         renderResults(results);
+        enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
         await renderExplanations();
         applyHighlights(highlightSnapshot);
         updateNavStatuses(results);
@@ -2599,7 +2600,6 @@
             clearSimulationDraftMirror();
             state.simulationDraftFingerprint = '';
         }
-        enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
     }
 
     function handleReset() {

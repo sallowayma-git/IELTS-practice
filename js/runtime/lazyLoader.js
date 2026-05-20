@@ -5,6 +5,7 @@
     var scriptStatus = Object.create(null);
     var groupStatus = Object.create(null);
     var dependencies = Object.create(null);
+    var providedScripts = new Set();
 
     function registerDefaultManifest() {
         manifest['exam-data'] = [
@@ -12,73 +13,38 @@
         ];
 
         manifest['state-core'] = [
-            'js/core/practiceCore.js',
-            'js/core/resourceCore.js',
-            'js/app/state-service.js',
-            'js/services/libraryManager.js'
+            // Provided by js/bundles/core-foundation.bundle.js.
         ];
 
         manifest['practice-suite'] = [
-            // 练习记录功能与存储相关，需按用户行为加载
-            'js/app/spellingErrorCollector.js',
-            'js/utils/markdownExporter.js',
-            'js/components/practiceRecordModal.js',
-            'js/components/practiceHistoryEnhancer.js',
-            'js/core/scoreStorage.js',
-            'js/utils/answerSanitizer.js',
-            'js/core/practiceRecorder.js'
+            'js/bundles/practice.bundle.js'
         ];
 
         manifest['browse-runtime'] = [
-            // 浏览和主逻辑（main.js 保持组内最后加载）
-            'js/views/legacyViewBundle.js',
-            'js/app/examActions.js',
-            // 单篇练习通信与会话能力属于 browse/practice 主流程
-            'js/app/readingLaunchMixin.js',
-            'js/app/examSessionMixin.js',
-            'js/app/browseController.js',
-            'js/presentation/message-center.js',
-            'js/components/PDFHandler.js',
-            'js/components/SystemDiagnostics.js',
-            'js/components/PerformanceOptimizer.js',
-            'js/components/DataIntegrityManager.js',
-            'js/components/BrowseStateManager.js',
-            'js/utils/dataConsistencyManager.js',
-            'js/utils/suitePreference.js',
-            'js/utils/suiteBackGuard.js',
-            'js/utils/answerMatchCore.js',
-            'js/utils/answerComparisonUtils.js',
-            'js/utils/BrowsePreferencesUtils.js',
-            'js/utils/performance.js',
-            'js/utils/typeChecker.js',
-            'js/utils/codeStandards.js',
-            'js/main.js'
+            'js/bundles/browse.bundle.js'
         ];
 
         // 向后兼容旧组名
         manifest['browse-view'] = manifest['browse-runtime'].slice();
 
         manifest['session-suite'] = [
-            'js/app/suitePracticeMixin.js'
+            'js/bundles/session.bundle.js'
         ];
 
         manifest['more-tools'] = [
-            // 更多工具与词汇模块
-            'assets/wordlists/ielts_core.bundle.js',
-            'js/utils/vocabDataIO.js',
-            'js/core/vocabScheduler.js',
-            'js/core/vocabStore.js',
-            'js/app/vocabListSwitcher.js',
-            'js/components/vocabDashboardCards.js',
-            'js/components/vocabSessionView.js',
-            'js/utils/dataBackupManager.js',
-            'js/presentation/moreView.js',
-            'js/presentation/miniGames.js',
-            'js/services/achievementManager.js'
+            'js/bundles/more.bundle.js'
         ];
 
         manifest['theme-tools'] = [
-            'js/theme-switcher.js'
+            'js/bundles/theme.bundle.js'
+        ];
+
+        manifest['settings-tools'] = [
+            'js/bundles/settings.bundle.js'
+        ];
+
+        manifest['diagnostics-tools'] = [
+            'js/bundles/diagnostics.bundle.js'
         ];
 
         dependencies['state-core'] = [];
@@ -87,8 +53,10 @@
         dependencies['browse-runtime'] = ['state-core'];
         dependencies['browse-view'] = ['state-core'];
         dependencies['session-suite'] = ['browse-runtime', 'practice-suite'];
-        dependencies['more-tools'] = ['state-core'];
+        dependencies['settings-tools'] = ['state-core'];
+        dependencies['more-tools'] = ['state-core', 'settings-tools'];
         dependencies['theme-tools'] = [];
+        dependencies['diagnostics-tools'] = ['state-core', 'settings-tools'];
     }
 
     function normalizeScriptUrl(url) {
@@ -124,8 +92,34 @@
         return null;
     }
 
+    function markProvided(files) {
+        if (!Array.isArray(files)) {
+            return;
+        }
+        files.forEach(function mark(file) {
+            if (!file) {
+                return;
+            }
+            var normalized = normalizeScriptUrl(file);
+            providedScripts.add(normalized);
+            scriptStatus[file] = 'loaded';
+            if (normalized) {
+                scriptStatus[normalized] = 'loaded';
+            }
+        });
+    }
+
+    function isProvided(url) {
+        var normalized = normalizeScriptUrl(url);
+        return providedScripts.has(normalized) || scriptStatus[url] === 'loaded' || scriptStatus[normalized] === 'loaded';
+    }
+
     function loadScript(url) {
         if (!url) {
+            return Promise.resolve();
+        }
+        if (isProvided(url)) {
+            scriptStatus[url] = 'loaded';
             return Promise.resolve();
         }
         if (scriptStatus[url] === 'loaded') {
@@ -193,7 +187,7 @@
             return Promise.resolve();
         }
 
-        if (groupName === 'browse-runtime' || groupName === 'browse-view') {
+        if ((groupName === 'browse-runtime' || groupName === 'browse-view') && list.indexOf('js/bundles/browse.bundle.js') === -1) {
             var mainIndex = list.indexOf('js/main.js');
             var withoutMain = mainIndex >= 0
                 ? list.filter(function (file) { return file !== 'js/main.js'; })
@@ -302,5 +296,6 @@
     global.AppLazyLoader = global.AppLazyLoader || {};
     global.AppLazyLoader.ensureGroup = ensureGroup;
     global.AppLazyLoader.registerGroup = registerGroup;
+    global.AppLazyLoader.markProvided = markProvided;
     global.AppLazyLoader.getStatus = getStatus;
 })(typeof window !== 'undefined' ? window : this);

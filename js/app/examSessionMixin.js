@@ -87,6 +87,111 @@
     }
 
     const mixin = {
+        _isReadingLibraryExam(exam) {
+            if (!exam || typeof exam !== 'object') {
+                return false;
+            }
+
+            const examType = typeof exam.type === 'string'
+                ? exam.type.trim().toLowerCase()
+                : '';
+            if (examType === 'listening') {
+                return false;
+            }
+
+            const examId = typeof exam.id === 'string'
+                ? exam.id.trim().toLowerCase()
+                : '';
+            if (examId.startsWith('listening-')) {
+                return false;
+            }
+
+            return true;
+        },
+
+        _getUnifiedReadingManifestEntry(exam) {
+            if (!this._isReadingLibraryExam(exam) || !exam.id) {
+                return null;
+            }
+            const manifest = (typeof window !== 'undefined' && window.__READING_EXAM_MANIFEST__)
+                ? window.__READING_EXAM_MANIFEST__
+                : null;
+            const manifestEntry = manifest && exam.id ? manifest[exam.id] : null;
+            if (!manifestEntry || !(manifestEntry.dataKey || manifestEntry.examId)) {
+                return null;
+            }
+            return manifestEntry;
+        },
+
+        _isUnifiedReadingExam(exam) {
+            return !!this._getUnifiedReadingManifestEntry(exam);
+        },
+
+        _buildUnifiedReadingUrl(exam) {
+            const manifestEntry = this._getUnifiedReadingManifestEntry(exam);
+            if (!manifestEntry) {
+                return '';
+            }
+            const params = new URLSearchParams();
+            if (exam && exam.id) {
+                params.set('examId', String(exam.id));
+            }
+            const resolvedDataKey = manifestEntry.dataKey || manifestEntry.examId || exam?.id;
+            if (resolvedDataKey) {
+                params.set('dataKey', String(resolvedDataKey));
+            }
+            const query = params.toString();
+            const url = query
+                ? `assets/generated/reading-exams/reading-practice-unified.html?${query}`
+                : 'assets/generated/reading-exams/reading-practice-unified.html';
+            return typeof this._ensureAbsoluteUrl === 'function'
+                ? this._ensureAbsoluteUrl(url)
+                : url;
+        },
+
+        _buildReadingPdfUrl(exam) {
+            if (!this._isReadingLibraryExam(exam) || !exam || !exam.pdfFilename) {
+                return '';
+            }
+
+            const pdfUrl = (typeof window.buildResourcePath === 'function')
+                ? window.buildResourcePath(exam, 'pdf')
+                : ((exam.path || '').replace(/\\/g, '/').replace(/\/+\//g, '/') + (exam.pdfFilename || ''));
+
+            return typeof this._ensureAbsoluteUrl === 'function'
+                ? this._ensureAbsoluteUrl(pdfUrl)
+                : pdfUrl;
+        },
+
+        resolveReadingLaunchDescriptor(exam) {
+            if (!this._isReadingLibraryExam(exam)) {
+                return null;
+            }
+
+            const manifestEntry = this._getUnifiedReadingManifestEntry(exam);
+            if (manifestEntry) {
+                return {
+                    mode: 'unified_html',
+                    examId: exam.id,
+                    dataKey: manifestEntry.dataKey || manifestEntry.examId || exam.id,
+                    manifestEntry,
+                    url: this._buildUnifiedReadingUrl(exam)
+                };
+            }
+
+            const pdfUrl = this._buildReadingPdfUrl(exam);
+            if (!pdfUrl) {
+                return null;
+            }
+
+            return {
+                mode: 'pdf_manual',
+                examId: exam.id,
+                pdfUrl,
+                reviewReason: 'manual_mapping_needed'
+            };
+        },
+
         /**
           * 打开指定题目进行练习
           */
@@ -1656,6 +1761,7 @@
                 }
                 const isSuiteFlowPayload = Boolean(
                     (type === 'PRACTICE_COMPLETE'
+                        || type === 'REVIEW_NAVIGATE'
                         || type === 'SIMULATION_NAVIGATE'
                         || type === 'SIMULATION_SUBMIT'
                         || type === 'SESSION_READY')
@@ -3430,11 +3536,14 @@
                 }
 
                 // 立即验证保存是否成功
-                const verifyRecords = window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function'
-                    ? await window.PracticeCore.store.listPracticeRecords()
-                    : await storage.get('practice_records', []);
+                const verifyRecords = window.PracticeStore && typeof window.PracticeStore.list === 'function'
+                    ? await window.PracticeStore.list()
+                    : (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function'
+                        ? await window.PracticeCore.store.listPracticeRecords()
+                        : await storage.get('practice_records', []));
+                const practiceRecordId = String(practiceRecord.id);
                 const savedRecord = Array.isArray(verifyRecords)
-                    ? verifyRecords.find(r => r.id === practiceRecord.id)
+                    ? verifyRecords.find(r => r && String(r.id) === practiceRecordId)
                     : undefined;
 
                 if (savedRecord) {
