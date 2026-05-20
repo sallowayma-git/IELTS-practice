@@ -227,7 +227,7 @@ function createHarness(options = {}) {
     let source = fs.readFileSync(fullPath, 'utf8');
     source = source.replace(
         /\}\)\(typeof window !== 'undefined' \? window : globalThis\);\s*$/,
-        "global.__UNIFIED_READING_TEST_HOOKS__ = { state, captureDom, stopInitLoop, renderResults, sendReadingCoachQuery, ensureReadingCoachUi, buildReadingCoachRequestPayload, buildResults, buildReplayResults, compareNodePaths, buildHighlightId, normalizeHighlightRecord, normalizeHighlightRecords }; })(typeof window !== 'undefined' ? window : globalThis);"
+        "global.__UNIFIED_READING_TEST_HOOKS__ = { state, captureDom, stopInitLoop, renderResults, sendReadingCoachQuery, ensureReadingCoachUi, buildReadingCoachRequestPayload, buildResults, buildReplayResults, compareNodePaths, buildHighlightId, normalizeHighlightRecord, normalizeHighlightRecords, getPracticeMarkedQuestions, setPracticeMarkedQuestions }; })(typeof window !== 'undefined' ? window : globalThis);"
     );
     const context = vm.createContext(sandbox);
     vm.runInContext(source, context, { filename: 'js/runtime/unifiedReadingPage.js' });
@@ -244,7 +244,8 @@ function createHarness(options = {}) {
     return {
         hooks,
         postedMessages,
-        localStorage
+        localStorage,
+        sessionStorage
     };
 }
 
@@ -402,15 +403,34 @@ function testHighlightHelpers() {
     assert.ok(Array.isArray(builtResults.realData.highlights), 'realData 中也应同步输出 highlights');
 }
 
+function testMarkedQuestionsContractLivesInUnifiedPage() {
+    const harness = createHarness({ runtime: 'web' });
+    harness.hooks.state.dataKey = 'reading-p1';
+
+    harness.hooks.setPracticeMarkedQuestions(['Q1-anchor', '2', 'q2-target', null, '']);
+
+    assert.deepStrictEqual(
+        Array.from(harness.hooks.getPracticeMarkedQuestions()),
+        ['q1', 'q2'],
+        '统一阅读页应直接维护 marked questions 合同'
+    );
+    assert.strictEqual(
+        harness.sessionStorage.getItem('practice_marked_questions::reading-p1'),
+        JSON.stringify(['q1', 'q2']),
+        '统一阅读页应直接持久化 marked questions'
+    );
+}
+
 async function main() {
     try {
         await testCoachQueryViaElectronLocalApi();
         await testCoachQueryViaLocalApiSse();
         await testReviewPayloadUsesExplicitReviewWorkspaceOnly();
         testHighlightHelpers();
+        testMarkedQuestionsContractLivesInUnifiedPage();
         console.log(JSON.stringify({
             status: 'pass',
-            detail: 'UnifiedReadingPage 已覆盖阅读教练查询与高亮回放数据结构主链路'
+            detail: 'UnifiedReadingPage 已覆盖阅读教练查询、高亮回放与标记题目数据结构主链路'
         }, null, 2));
     } catch (error) {
         console.log(JSON.stringify({

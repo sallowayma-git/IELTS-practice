@@ -384,6 +384,52 @@ def _extract_registered_payload(path: Path) -> Optional[dict]:
     return payload if isinstance(payload, dict) else None
 
 
+def _check_generated_reading_js_syntax() -> Tuple[bool, dict]:
+    target_dirs = [
+        REPO_ROOT / "assets" / "generated" / "reading-exams",
+        REPO_ROOT / "assets" / "generated" / "reading-explanations",
+    ]
+    checked = 0
+    failures: List[dict] = []
+
+    for target_dir in target_dirs:
+        if not target_dir.exists():
+            failures.append({
+                "file": str(target_dir.relative_to(REPO_ROOT)),
+                "error": "directory_missing",
+            })
+            continue
+
+        for script_path in sorted(target_dir.glob("*.js")):
+            checked += 1
+            try:
+                completed = subprocess.run(
+                    ["node", "--check", str(script_path)],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+            except Exception as exc:  # pragma: no cover - defensive guard
+                failures.append({
+                    "file": str(script_path.relative_to(REPO_ROOT)),
+                    "error": str(exc),
+                })
+                continue
+
+            if completed.returncode != 0:
+                failures.append({
+                    "file": str(script_path.relative_to(REPO_ROOT)),
+                    "error": (completed.stderr or completed.stdout or "").strip()[-1200:],
+                })
+
+    return not failures, {
+        "checked": checked,
+        "failures": failures[:20],
+        "failureCount": len(failures),
+    }
+
+
 def _normalize_title_for_similarity(title: str) -> str:
     lowered = (title or "").strip().lower()
     lowered = re.sub(r"\s+", " ", lowered)
@@ -887,6 +933,10 @@ def run_checks() -> Tuple[List[dict], bool]:
         meta_passed, meta_detail = _check_metadata_field(metadata_path)
         results.append(_format_result(f"{metadata_path.name} 根目录元数据", meta_passed, meta_detail))
         all_passed &= meta_passed
+
+    generated_reading_js_passed, generated_reading_js_detail = _check_generated_reading_js_syntax()
+    results.append(_format_result("生成阅读 JS 语法门禁", generated_reading_js_passed, generated_reading_js_detail))
+    all_passed &= generated_reading_js_passed
 
     explanation_alignment_passed, explanation_alignment_detail = _check_reading_explanation_alignment()
     results.append(_format_result("阅读题目-解析一致性校验", explanation_alignment_passed, explanation_alignment_detail))
@@ -1605,35 +1655,6 @@ def run_checks() -> Tuple[List[dict], bool]:
         all_passed &= practice_core_app_state_sync_passed
     else:
         results.append(_format_result("PracticeCore app.state 同步测试", False, "测试脚本缺失"))
-        all_passed = False
-
-    practice_page_ui_test = REPO_ROOT / "developer" / "tests" / "js" / "practicePageUi.test.js"
-    if practice_page_ui_test.exists():
-        try:
-            completed_practice_page_ui = subprocess.run(
-                ["node", str(practice_page_ui_test)],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-        except subprocess.CalledProcessError as exc:
-            output_text = exc.stdout or exc.stderr or str(exc)
-            practice_page_ui_passed = False
-            practice_page_ui_detail = f"执行失败: {output_text.strip()}"
-        else:
-            raw_practice_page_ui_output = completed_practice_page_ui.stdout.strip() or completed_practice_page_ui.stderr.strip()
-            try:
-                practice_page_ui_payload = json.loads(raw_practice_page_ui_output or "{}")
-            except json.JSONDecodeError as parse_error:
-                practice_page_ui_passed = False
-                practice_page_ui_detail = f"输出解析失败: {parse_error}"
-            else:
-                practice_page_ui_passed = practice_page_ui_payload.get("status") == "pass"
-                practice_page_ui_detail = practice_page_ui_payload.get("detail", practice_page_ui_payload)
-        results.append(_format_result("练习页 UI 回归测试", practice_page_ui_passed, practice_page_ui_detail))
-        all_passed &= practice_page_ui_passed
-    else:
-        results.append(_format_result("练习页 UI 回归测试", False, "测试脚本缺失"))
         all_passed = False
 
     practice_page_enhancer_test = REPO_ROOT / "developer" / "tests" / "js" / "practicePageEnhancer.test.js"

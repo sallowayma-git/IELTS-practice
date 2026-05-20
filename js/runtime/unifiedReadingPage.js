@@ -112,7 +112,9 @@
         readingCoachTranscript: [],
         readingCoachUiReady: false,
         readingCoachOpen: false,
-        readingCoachFabDragSuppressUntil: 0
+        readingCoachFabDragSuppressUntil: 0,
+        markedQuestions: new Set(),
+        markedStorageKey: ''
     };
 
     const dom = {
@@ -240,9 +242,7 @@
     }
 
     function applyReplayMarkedQuestions(markedQuestions) {
-        if (typeof global.setPracticeMarkedQuestions === 'function') {
-            try { global.setPracticeMarkedQuestions(markedQuestions); } catch (_) {}
-        }
+        setPracticeMarkedQuestions(markedQuestions);
     }
 
     function buildSessionReadyPayload() {
@@ -769,8 +769,11 @@
         const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
         dom.nav.innerHTML = order.map((questionId) => {
             const status = navStatus.get(questionId) || '';
+            const marked = state.markedQuestions.has(normalizeQuestionId(questionId));
+            const classes = ['q-item', status, marked ? 'marked' : ''].filter(Boolean).join(' ');
+            const title = marked ? ' title="已标记（Shift+点击可取消）"' : '';
             const label = displayLabel(questionId);
-            return `<button class="q-item ${status}" data-question-id="${questionId}" type="button">${label}</button>`;
+            return `<button class="${classes}" data-question-id="${questionId}" type="button"${title}>${label}</button>`;
         }).join('');
     }
 
@@ -779,6 +782,71 @@
         const value = String(rawValue).trim().toLowerCase();
         const match = value.match(/q(\d+)/);
         return match ? `q${match[1]}` : null;
+    }
+
+    function normalizeMarkedQuestionValues(values) {
+        if (!Array.isArray(values)) {
+            return [];
+        }
+        return Array.from(new Set(values.map((value) => normalizeQuestionId(value)).filter(Boolean)));
+    }
+
+    function resolveMarkedStorageKey() {
+        if (state.markedStorageKey) {
+            return state.markedStorageKey;
+        }
+        const examId = String(state.dataKey || state.examId || 'unknown').trim() || 'unknown';
+        state.markedStorageKey = `practice_marked_questions::${examId}`;
+        return state.markedStorageKey;
+    }
+
+    function persistMarkedQuestions() {
+        if (!global.sessionStorage) {
+            return;
+        }
+        try {
+            global.sessionStorage.setItem(resolveMarkedStorageKey(), JSON.stringify(Array.from(state.markedQuestions)));
+        } catch (_) {
+            // ignore storage failures
+        }
+    }
+
+    function restoreMarkedQuestions() {
+        if (!global.sessionStorage) {
+            return;
+        }
+        let saved = null;
+        try {
+            saved = JSON.parse(global.sessionStorage.getItem(resolveMarkedStorageKey()) || 'null');
+        } catch (_) {
+            saved = null;
+        }
+        normalizeMarkedQuestionValues(saved).forEach((questionId) => state.markedQuestions.add(questionId));
+    }
+
+    function setPracticeMarkedQuestions(values) {
+        state.markedQuestions.clear();
+        normalizeMarkedQuestionValues(values).forEach((questionId) => state.markedQuestions.add(questionId));
+        persistMarkedQuestions();
+        buildQuestionNav();
+    }
+
+    function getPracticeMarkedQuestions() {
+        return Array.from(state.markedQuestions);
+    }
+
+    function toggleMarkedQuestion(questionId) {
+        const normalized = normalizeQuestionId(questionId);
+        if (!normalized) {
+            return;
+        }
+        if (state.markedQuestions.has(normalized)) {
+            state.markedQuestions.delete(normalized);
+        } else {
+            state.markedQuestions.add(normalized);
+        }
+        persistMarkedQuestions();
+        buildQuestionNav();
     }
 
     function isQuestionIdMatch(value, target) {
@@ -828,6 +896,11 @@
         const button = event.target.closest('.q-item[data-question-id]');
         if (!button) return;
         const questionId = button.dataset.questionId;
+        if (event.shiftKey) {
+            event.preventDefault();
+            toggleMarkedQuestion(questionId);
+            return;
+        }
         const target = findQuestionAnchor(questionId);
         if (target && typeof global.scrollToElement === 'function') {
             global.scrollToElement(target);
@@ -1077,6 +1150,7 @@
             return;
         }
         item.dataset.dragBound = '1';
+        item.setAttribute('draggable', 'true');
         item.addEventListener('dragstart', (event) => {
             const payload = buildDragPayload(item);
             if (!payload || !payload.value) {
@@ -1084,7 +1158,7 @@
                 return;
             }
             event.dataTransfer?.setData('text/plain', JSON.stringify(payload));
-            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.effectAllowed = 'copyMove';
             item.classList.add('dragging');
         });
         item.addEventListener('dragend', () => {
@@ -1161,15 +1235,73 @@
         updateNavStatuses();
     }
 
+    function bindDropTarget(target, onDrop) {
+        if (!target || target.dataset.dropBound === '1') {
+            return;
+        }
+        target.dataset.dropBound = '1';
+        target.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            if (event.dataTransfer) {
+                event.dataTransfer.dropEffect = 'move';
+            }
+            target.classList.add('drag-over');
+        });
+        target.addEventListener('dragleave', () => {
+            target.classList.remove('drag-over');
+        });
+        target.addEventListener('drop', (event) => {
+            event.preventDefault();
+            target.classList.remove('drag-over');
+            const payload = parseDragPayload(event.dataTransfer?.getData('text/plain'));
+            if (!payload || !payload.value) {
+                return;
+            }
+            onDrop(payload);
+        });
+    }
+
+    function getDragSources() {
+        return Array.from(document.querySelectorAll([
+            '.cardpool .card',
+            '.cardpool .drag-item',
+            '.option-pool .card',
+            '.option-pool .drag-item',
+            '.pool-items .drag-item',
+            '#word-options .draggable-word',
+            '#word-options .drag-item',
+            '.draggable-word',
+            '.drag-item'
+        ].join(', ')));
+    }
+
+    function getDragPools() {
+        return Array.from(document.querySelectorAll([
+            '.cardpool',
+            '.option-pool',
+            '.pool-items',
+            '#word-options'
+        ].join(', ')));
+    }
+
     function attachDragDrop() {
-        // practice-page-ui.js already manages drag boundaries and placing items.
-        // We only need to ensure the dropzones have the correct structure initialized.
         getDropzones().forEach((dropzone, index) => {
             if (!dropzone.dataset.dropzoneId) {
                 dropzone.dataset.dropzoneId = `dropzone-${index + 1}`;
             }
             ensureDropzoneHolder(dropzone);
             updateDropzoneState(dropzone);
+            bindDropTarget(dropzone, (payload) => {
+                handleDropOnDropzone(dropzone, payload);
+            });
+        });
+
+        getDragPools().forEach((pool) => {
+            bindDropTarget(pool, handleDropBackToPool);
+        });
+
+        getDragSources().forEach((item) => {
+            attachDraggableBehavior(item);
         });
     }
 
@@ -5241,9 +5373,7 @@
                 practiceMode: state.suiteSessionId ? 'suite' : 'single',
                 renderMode: 'unified-reading',
                 dataKey: state.dataKey,
-                markedQuestions: (typeof global.getPracticeMarkedQuestions === 'function')
-                    ? global.getPracticeMarkedQuestions()
-                    : [],
+                markedQuestions: getPracticeMarkedQuestions(),
                 highlights: results.highlights || [],
                 readingCoachSnapshot: results.readingCoachSnapshot || null,
                 readingCoachTranscript: results.readingCoachTranscript || []
@@ -5548,6 +5678,9 @@
         captureDom();
         const dataset = await ensureDataset();
         renderDataset(dataset);
+        restoreMarkedQuestions();
+        global.getPracticeMarkedQuestions = getPracticeMarkedQuestions;
+        global.setPracticeMarkedQuestions = setPracticeMarkedQuestions;
         buildQuestionNav();
         attachNavListeners();
         attachDragDrop();
