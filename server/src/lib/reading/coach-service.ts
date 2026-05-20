@@ -22,43 +22,23 @@ const {
 const {
     buildReadingChunks
 } = require('./chunks.js');
+const {
+    READING_ROUTES,
+    READING_CONTEXT_ROUTES,
+    READING_INTENTS,
+    READING_CHUNK_TYPE,
+    buildReadingCoachResult,
+    buildReadingTimings
+} = require('./contracts.js');
 const logger = require('../../../../electron/utils/logger.js');
 
 const QUERY_CACHE_TTL_MS = 5 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 45000;
 
-const ROUTES = Object.freeze({
-    UNRELATED_CHAT: 'unrelated_chat',
-    IELTS_GENERAL: 'ielts_general',
-    PAGE_GROUNDED: 'page_grounded'
-});
-
-const CONTEXT_ROUTES = Object.freeze({
-    TUTOR: 'tutor',
-    SELECTION: 'selection',
-    REVIEW: 'review',
-    FOLLOWUP: 'followup',
-    CLARIFY: 'clarify',
-    SIMILAR: 'similar'
-});
-
-const INTENTS = Object.freeze({
-    GROUNDED_QUESTION: 'grounded_question',
-    WHOLE_SET_OR_REVIEW: 'whole_set_or_review',
-    FOLLOWUP_REQUEST: 'followup_request',
-    SOCIAL_OR_SMALLTALK: 'social_or_smalltalk',
-    GENERAL_CHAT: 'general_chat',
-    SELECTION_TOOL_REQUEST: 'selection_tool_request',
-    REVIEW_COACH_REQUEST: 'review_coach_request',
-    CLARIFY: 'clarify'
-});
-
-const CHUNK_TYPE = Object.freeze({
-    PASSAGE: 'passage_paragraph',
-    QUESTION: 'question_item',
-    ANSWER_KEY: 'answer_key',
-    EXPLANATION: 'answer_explanation'
-});
+const ROUTES = READING_ROUTES;
+const CONTEXT_ROUTES = READING_CONTEXT_ROUTES;
+const INTENTS = READING_INTENTS;
+const CHUNK_TYPE = READING_CHUNK_TYPE;
 
 const SOCIAL_PATTERNS = [
     /^(你好|您好|hi|hello|hey|thanks|thank\s*you|bye|再见|在吗|谢谢)[\s,.!?，。！？]*$/i,
@@ -96,12 +76,6 @@ const SEARCH_STOPWORDS = new Set([
     '阅读', '题目', '题干', '答案', '解析', '段落', '问题', '一下', '一下子', '帮我'
 ]);
 
-const QUICK_ACTIONS = Object.freeze([
-    { id: 'hint', label: '给我提示' },
-    { id: 'explain', label: '解释这题' },
-    { id: 'review', label: '复盘错题' },
-    { id: 'similar', label: '推荐同类题' }
-]);
 const PASSAGE_CONTEXT_FALLBACK_LIMIT = 3;
 
 function isObject(value) {
@@ -169,13 +143,13 @@ class ReadingCoachService {
         const cached = this._getCache(cacheKey);
         if (cached) {
             emit('cache_hit', { route: cached.route, intent: cached.intent?.kind || '' });
+            const cachedContextDiagnostics = Object.assign({}, cached.contextDiagnostics || {}, { cacheHit: true });
             return Object.assign({}, cached, {
                 cacheHit: true,
                 generatedAt: nowIso(),
-                timings: Object.assign({}, cached.timings || {}, {
-                    total_ms: Date.now() - startedAt,
-                    cache_hit: true
-                })
+                contextDiagnostics: cachedContextDiagnostics,
+                retrievalDiagnostics: Object.assign({}, cached.retrievalDiagnostics || cachedContextDiagnostics, { cacheHit: true }),
+                timings: buildReadingTimings({ startedAt, retrievalMs: 0, cacheHit: true })
             });
         }
 
@@ -243,45 +217,20 @@ class ReadingCoachService {
             const citations = this._buildCitations(retrieval.finalChunks);
             const answerText = composeReadingCoachAnswer(parsed.answerSections, parsed.answer);
 
-            const result = {
-                coachVersion: 'v2',
+            const result = buildReadingCoachResult({
                 generatedAt: nowIso(),
-                route: routeDecision.route,
-                routeReason: routeDecision.reason,
+                routeDecision,
                 contextRoute,
                 intent,
                 answer: answerText,
-                answerSections: parsed.answerSections,
-                reviewOverall: parsed.reviewOverall,
-                reviewQuestionAnalyses: parsed.reviewQuestionAnalyses,
-                followUps: parsed.followUps,
-                confidence: parsed.confidence,
-                missingContext: uniqueList([...(retrieval.missingContext || []), ...(parsed.missingContext || [])]).slice(0, 6),
+                parsed,
+                retrieval,
                 citations,
-                usedQuestionNumbers: retrieval.usedQuestionNumbers,
-                usedParagraphLabels: retrieval.usedParagraphLabels,
-                quickActions: QUICK_ACTIONS.slice(),
-                responseKind: this._resolveResponseKind(routeDecision.route, intent),
-                contextDiagnostics: {
-                    chunkCount: retrieval.finalChunks.length,
-                    deterministicChunkCount: retrieval.sortedChunks.length,
-                    focusQuestionNumbers: retrieval.focusQuestionNumbers,
-                    focusParagraphLabels: retrieval.focusParagraphLabels
-                },
-                model_trace: {
-                    config_id: usedConfig?.id || null,
-                    provider: usedConfig?.provider || null,
-                    model: usedConfig?.default_model || null,
-                    provider_path: providerPath,
-                    latency_ms: Date.now() - startedAt
-                },
-                timings: {
-                    total_ms: Date.now() - startedAt,
-                    retrieval_ms: retrievalMs,
-                    generation_ms: Math.max(0, Date.now() - startedAt - retrievalMs),
-                    cache_hit: false
-                }
-            };
+                usedConfig,
+                providerPath,
+                startedAt,
+                retrievalMs
+            });
 
             this._setCache(cacheKey, result);
             emit('generation_complete', {
@@ -580,22 +529,6 @@ class ReadingCoachService {
             paragraphLabels: chunk.paragraphLabels,
             excerpt: String(chunk.content || '').slice(0, 220)
         }));
-    }
-
-    _resolveResponseKind(route, intent) {
-        if (route === ROUTES.UNRELATED_CHAT) {
-            return intent.kind === INTENTS.SOCIAL_OR_SMALLTALK ? 'social' : 'chat';
-        }
-        if (intent.kind === INTENTS.SELECTION_TOOL_REQUEST) {
-            return 'tool_result';
-        }
-        if (intent.kind === INTENTS.REVIEW_COACH_REQUEST || intent.kind === INTENTS.WHOLE_SET_OR_REVIEW) {
-            return 'review';
-        }
-        if (intent.kind === INTENTS.CLARIFY) {
-            return 'clarify';
-        }
-        return route === ROUTES.PAGE_GROUNDED ? 'grounded' : 'chat';
     }
 
     _normalizeError(error) {

@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import unquote, urlparse
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -85,6 +86,60 @@ def _parse_app_structure(index_path: Path) -> _AppStructureParser:
     parser.feed(index_path.read_text(encoding="utf-8"))
     parser.close()
     return parser
+
+
+class _ScriptSourceParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.sources: List[str] = []
+
+    def handle_starttag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]) -> None:  # pragma: no cover - HTMLParser API
+        if tag != "script":
+            return
+        attr_dict = {name: value for name, value in attrs}
+        src = attr_dict.get("src")
+        if src:
+            self.sources.append(src)
+
+
+def _check_local_script_sources(html_path: Path) -> Tuple[bool, dict]:
+    try:
+        parser = _ScriptSourceParser()
+        parser.feed(html_path.read_text(encoding="utf-8"))
+        parser.close()
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"无法解析 HTML：{exc}"}
+
+    missing: List[dict] = []
+    checked = 0
+    for source in parser.sources:
+        parsed = urlparse(source)
+        if parsed.scheme and parsed.scheme not in {"file"}:
+            continue
+        if source.startswith(("data:", "blob:", "javascript:")):
+            continue
+        raw_path = parsed.path if parsed.scheme == "file" else source.split("?", 1)[0].split("#", 1)[0]
+        if not raw_path:
+            continue
+        candidate = Path(unquote(raw_path))
+        if not candidate.is_absolute():
+            candidate = (html_path.parent / candidate).resolve()
+        checked += 1
+        if not candidate.exists():
+            try:
+                display_path = str(candidate.relative_to(REPO_ROOT))
+            except ValueError:
+                display_path = str(candidate)
+            missing.append({
+                "src": source,
+                "resolved": display_path,
+            })
+
+    return not missing, {
+        "checked": checked,
+        "missing": missing,
+        "missingCount": len(missing),
+    }
 
 
 def _load_interaction_targets(path: Path) -> Tuple[Optional[Dict[str, List[str]]], str]:
@@ -937,6 +992,11 @@ def run_checks() -> Tuple[List[dict], bool]:
     generated_reading_js_passed, generated_reading_js_detail = _check_generated_reading_js_syntax()
     results.append(_format_result("生成阅读 JS 语法门禁", generated_reading_js_passed, generated_reading_js_detail))
     all_passed &= generated_reading_js_passed
+
+    unified_reading_html = REPO_ROOT / "assets" / "generated" / "reading-exams" / "reading-practice-unified.html"
+    unified_scripts_passed, unified_scripts_detail = _check_local_script_sources(unified_reading_html)
+    results.append(_format_result("统一阅读页本地脚本引用门禁", unified_scripts_passed, unified_scripts_detail))
+    all_passed &= unified_scripts_passed
 
     explanation_alignment_passed, explanation_alignment_detail = _check_reading_explanation_alignment()
     results.append(_format_result("阅读题目-解析一致性校验", explanation_alignment_passed, explanation_alignment_detail))

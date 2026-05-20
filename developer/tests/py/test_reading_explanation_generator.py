@@ -102,7 +102,7 @@ class ReadingExplanationGeneratorTest(unittest.TestCase):
             {"label": "Paragraph 2", "text": "第二段讲第二条信息。"},
         ]
         response["questionExplanations"][0]["items"][0]["text"] = (
-            "题目：Statement one.\n题目翻译：陈述一。\n答案：TRUE\n解析：原文信息与题干一致。"
+            '题目：Statement one.\n题目翻译：陈述一。\n答案：TRUE\n解析：定位原文 "quoted evidence"，信息与题干一致。'
         )
         response["questionExplanations"][0]["items"][1]["text"] = (
             "题目：Statement two.\n题目翻译：陈述二。\n答案：FALSE\n解析：原文信息与题干相反。"
@@ -126,6 +126,9 @@ class ReadingExplanationGeneratorTest(unittest.TestCase):
         content = output_path.read_text(encoding="utf-8")
         self.assertIn("答案：TRUE", content)
         self.assertIn("题目翻译：陈述一。", content)
+        self.assertIn('\\"quoted evidence\\"', content)
+        syntax = subprocess.run(["node", "--check", str(output_path)], capture_output=True, text=True)
+        self.assertEqual(syntax.returncode, 0, syntax.stdout + syntax.stderr)
 
     def test_render_rejects_answer_mismatch(self) -> None:
         self.run_script("prepare", "sample-exam", "--work-dir", str(self.work_dir), "--write-template")

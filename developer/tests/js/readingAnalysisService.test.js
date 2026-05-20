@@ -31,36 +31,19 @@ const {
     buildCoachResponseFormat,
     normalizeReadingCoachModelResponse
 } = require(path.join(repoRoot, 'server/dist/lib/reading/prompt.js'));
+const {
+    READING_ROUTES,
+    READING_CONTEXT_ROUTES,
+    READING_INTENTS,
+    READING_CHUNK_TYPE,
+    resolveReadingResponseKind,
+    buildReadingRetrievalDiagnostics
+} = require(path.join(repoRoot, 'server/dist/lib/reading/contracts.js'));
 
-const ROUTES = Object.freeze({
-    UNRELATED_CHAT: 'unrelated_chat',
-    IELTS_GENERAL: 'ielts_general',
-    PAGE_GROUNDED: 'page_grounded'
-});
-const CONTEXT_ROUTES = Object.freeze({
-    TUTOR: 'tutor',
-    SELECTION: 'selection',
-    REVIEW: 'review',
-    FOLLOWUP: 'followup',
-    CLARIFY: 'clarify',
-    SIMILAR: 'similar'
-});
-const INTENTS = Object.freeze({
-    GROUNDED_QUESTION: 'grounded_question',
-    WHOLE_SET_OR_REVIEW: 'whole_set_or_review',
-    FOLLOWUP_REQUEST: 'followup_request',
-    SOCIAL_OR_SMALLTALK: 'social_or_smalltalk',
-    GENERAL_CHAT: 'general_chat',
-    SELECTION_TOOL_REQUEST: 'selection_tool_request',
-    REVIEW_COACH_REQUEST: 'review_coach_request',
-    CLARIFY: 'clarify'
-});
-const CHUNK_TYPE = Object.freeze({
-    PASSAGE: 'passage_paragraph',
-    QUESTION: 'question_item',
-    ANSWER_KEY: 'answer_key',
-    EXPLANATION: 'answer_explanation'
-});
+const ROUTES = READING_ROUTES;
+const CONTEXT_ROUTES = READING_CONTEXT_ROUTES;
+const INTENTS = READING_INTENTS;
+const CHUNK_TYPE = READING_CHUNK_TYPE;
 const ROUTER_FIXTURES = Object.freeze({
     socialPatterns: [/^(你好|您好|hi|hello|hey|thanks|thank\s*you|bye|再见|在吗|谢谢)[\s,.!?，。！？]*$/i],
     weatherTimePatterns: [/天气|下雨|气温|几点|日期|星期|what\s+time|what\s+day|weather/i],
@@ -110,10 +93,99 @@ async function testCoachQuerySuccessWithGroundedRetrieval() {
     assert.strictEqual(result.intent.kind, 'grounded_question', '应识别为 grounded_question');
     assert.ok(Array.isArray(result.citations) && result.citations.length > 0, '应返回检索引用');
     assert.ok(Array.isArray(result.followUps) && result.followUps.length > 0, '应返回 followUps');
+    assert.strictEqual(result.responseKind, resolveReadingResponseKind(result.route, result.intent), 'responseKind 必须由契约模块统一解析');
+    assert.deepStrictEqual(result.contextDiagnostics, result.retrievalDiagnostics, '旧 contextDiagnostics 和新 retrievalDiagnostics 必须保持兼容一致');
+    assert.ok(result.retrievalDiagnostics.finalChunkTypeCounts.passage_paragraph >= 1, '诊断必须按 chunkType 暴露检索构成');
+    assert.deepStrictEqual(result.retrievalDiagnostics.focusQuestionNumbers, ['1'], '诊断必须保留聚焦题号');
+    assert.strictEqual(result.timings.cache_hit, false, '首次响应不应标记缓存命中');
     const promptJoined = Array.isArray(capturedMessages)
         ? capturedMessages.map((item) => String(item?.content || '')).join('\n')
         : '';
     assert.ok(promptJoined.includes('JSON 字段必须为：answer, answerSections, followUps, confidence, missingContext'), '提示词应包含结构化约束');
+}
+
+async function testReadingContractsBuildStableDiagnostics() {
+    const diagnostics = buildReadingRetrievalDiagnostics({
+        route: ROUTES.PAGE_GROUNDED,
+        contextRoute: CONTEXT_ROUTES.TUTOR,
+        intent: { kind: INTENTS.GROUNDED_QUESTION },
+        retrieval: {
+            finalChunks: [
+                { chunkType: CHUNK_TYPE.PASSAGE, questionNumbers: [], paragraphLabels: ['A'] },
+                { chunkType: CHUNK_TYPE.QUESTION, questionNumbers: ['1'], paragraphLabels: [] },
+                { chunkType: CHUNK_TYPE.PASSAGE, questionNumbers: [], paragraphLabels: ['B'] }
+            ],
+            sortedChunks: [
+                { chunkType: CHUNK_TYPE.PASSAGE },
+                { chunkType: CHUNK_TYPE.QUESTION },
+                { chunkType: CHUNK_TYPE.ANSWER_KEY }
+            ],
+            focusQuestionNumbers: ['1', '1'],
+            focusParagraphLabels: ['A'],
+            usedQuestionNumbers: ['1'],
+            usedParagraphLabels: ['A', 'B'],
+            missingContext: ['缺少题号上下文：Q2'],
+            reviewTargets: []
+        }
+    });
+
+    assert.strictEqual(resolveReadingResponseKind(ROUTES.PAGE_GROUNDED, { kind: INTENTS.GROUNDED_QUESTION }), 'grounded', '页面题内问题必须映射为 grounded 响应');
+    assert.strictEqual(resolveReadingResponseKind(ROUTES.UNRELATED_CHAT, { kind: INTENTS.SOCIAL_OR_SMALLTALK }), 'social', '社交问候必须映射为 social 响应');
+    assert.strictEqual(resolveReadingResponseKind(ROUTES.PAGE_GROUNDED, { kind: INTENTS.WHOLE_SET_OR_REVIEW }), 'review', '整组复盘必须映射为 review 响应');
+    assert.strictEqual(diagnostics.chunkCount, 3, '诊断必须记录最终 chunk 数');
+    assert.strictEqual(diagnostics.deterministicChunkCount, 3, '诊断必须记录排序候选数');
+    assert.deepStrictEqual(diagnostics.finalChunkTypeCounts, {
+        passage_paragraph: 2,
+        question_item: 1
+    }, '诊断必须稳定统计最终 chunk 类型');
+    assert.deepStrictEqual(diagnostics.focusQuestionNumbers, ['1'], '诊断必须去重聚焦题号');
+    assert.deepStrictEqual(diagnostics.usedParagraphLabels, ['A', 'B'], '诊断必须保留已使用段落');
+    assert.deepStrictEqual(diagnostics.missingContext, ['缺少题号上下文：Q2'], '诊断必须保留上下文缺口');
+    assert.strictEqual(diagnostics.cacheHit, false, '默认诊断不应标记缓存命中');
+}
+
+async function testCoachCacheHitKeepsDiagnosticsContract() {
+    const service = new ReadingCoachService({});
+    let calls = 0;
+    service.providerOrchestrator = {
+        async streamCompletion(options = {}) {
+            calls += 1;
+            if (typeof options.onChunk === 'function') {
+                options.onChunk(JSON.stringify({
+                    answer: '缓存测试回答。',
+                    answerSections: [{ type: 'direct_answer', text: '缓存测试回答。' }],
+                    followUps: ['继续问这题'],
+                    confidence: 'medium',
+                    missingContext: []
+                }));
+            }
+            return {
+                usedConfig: { id: 1, provider: 'openai', default_model: 'gpt-test' },
+                providerPath: [{ provider: 'openai', model: 'gpt-test', status: 'success' }]
+            };
+        }
+    };
+
+    const payload = {
+        examId: 'p1-high-01',
+        query: '这道题怎么定位证据？',
+        action: 'chat',
+        surface: 'chat_widget',
+        promptKind: 'freeform',
+        focusQuestionNumbers: ['1'],
+        attemptContext: { submitted: true }
+    };
+    const first = await service.query(payload);
+    const second = await service.query(payload);
+
+    assert.strictEqual(calls, 1, '第二次相同查询必须命中缓存而不是再次请求模型');
+    assert.strictEqual(first.retrievalDiagnostics.cacheHit, false, '首次响应诊断不应命中缓存');
+    assert.strictEqual(second.cacheHit, true, '缓存响应必须设置顶层 cacheHit');
+    assert.strictEqual(second.timings.cache_hit, true, '缓存响应 timings 必须设置 cache_hit');
+    assert.strictEqual(second.contextDiagnostics.cacheHit, true, '缓存响应旧诊断字段必须设置 cacheHit');
+    assert.strictEqual(second.retrievalDiagnostics.cacheHit, true, '缓存响应新诊断字段必须设置 cacheHit');
+    assert.deepStrictEqual(second.retrievalDiagnostics.focusQuestionNumbers, first.retrievalDiagnostics.focusQuestionNumbers, '缓存响应不得丢失聚焦题号诊断');
+    assert.deepStrictEqual(second.contextDiagnostics.finalChunkTypeCounts, first.contextDiagnostics.finalChunkTypeCounts, '缓存响应不得丢失 chunk 类型统计');
 }
 
 async function testCoachReviewPromptCarriesMistakeContext() {
@@ -673,6 +745,8 @@ async function testAllGeneratedReadingQuestionChunksAreResolvable() {
 async function main() {
     try {
         await testCoachQuerySuccessWithGroundedRetrieval();
+        await testReadingContractsBuildStableDiagnostics();
+        await testCoachCacheHitKeepsDiagnosticsContract();
         await testCoachReviewPromptCarriesMistakeContext();
         await testCoachQueryInvalidPayloadThrows();
         await testCoachProviderFailureShouldThrow();

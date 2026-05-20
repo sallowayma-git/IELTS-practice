@@ -1,5 +1,5 @@
 import type { ServiceBundle } from '../../types/api.js'
-import type { ReadingAssistantQueryRequest } from '../../types/reading.js'
+import type { ReadingAssistantQueryRequest, ReadingAssistantQueryResponse } from '../../types/reading.js'
 
 export class ReadingAssistantService {
   private readonly readingCoachService: any
@@ -8,7 +8,7 @@ export class ReadingAssistantService {
     this.readingCoachService = services.readingCoachService
   }
 
-  async query(payload: ReadingAssistantQueryRequest, onEvent?: (event: Record<string, unknown>) => void) {
+  async query(payload: ReadingAssistantQueryRequest, onEvent?: (event: Record<string, unknown>) => void): Promise<ReadingAssistantQueryResponse> {
     return this.readingCoachService.query(payload, onEvent ? {
       onEvent: (event: Record<string, unknown>) => onEvent(event)
     } : {})

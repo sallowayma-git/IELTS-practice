@@ -73,6 +73,16 @@ class ConsoleEntry:
     timestamp: str
 
 
+@dataclass
+class NetworkFailureEntry:
+    page_title: str
+    url: str
+    method: str
+    resource_type: str
+    error_text: str
+    timestamp: str
+
+
 async def _ensure_app_ready(page: Page) -> None:
     """确保应用已准备就绪"""
     log_step("等待页面加载...")
@@ -698,6 +708,10 @@ async def _launch_chromium(p) -> Browser:
 
 def _collect_console(page: Page, store: List[ConsoleEntry]) -> None:
     """收集控制台消息"""
+    if getattr(page, "_suite_flow_console_collected", False):
+        return
+    setattr(page, "_suite_flow_console_collected", True)
+
     def _handler(msg: ConsoleMessage) -> None:
         store.append(ConsoleEntry(
             page_title=page.url,
@@ -707,6 +721,38 @@ def _collect_console(page: Page, store: List[ConsoleEntry]) -> None:
         ))
 
     page.on("console", _handler)
+
+
+def _collect_request_failures(page: Page, store: List[NetworkFailureEntry]) -> None:
+    if getattr(page, "_suite_flow_request_failure_collected", False):
+        return
+    setattr(page, "_suite_flow_request_failure_collected", True)
+
+    def _handler(request) -> None:
+        failure = request.failure or ""
+        if isinstance(failure, dict):
+            error_text = str(failure.get("errorText") or "")
+        else:
+            error_text = str(failure or "")
+        store.append(NetworkFailureEntry(
+            page_title=page.url,
+            url=request.url,
+            method=request.method,
+            resource_type=request.resource_type,
+            error_text=error_text,
+            timestamp=datetime.now().isoformat(),
+        ))
+
+    page.on("requestfailed", _handler)
+
+
+def _collect_page_diagnostics(
+    page: Page,
+    console_store: List[ConsoleEntry],
+    request_failure_store: List[NetworkFailureEntry],
+) -> None:
+    _collect_console(page, console_store)
+    _collect_request_failures(page, request_failure_store)
 
 
 async def _open_suite_popup(page: Page, start_button, mode: str):
@@ -837,6 +883,7 @@ async def run() -> None:
     """运行套题练习流程测试"""
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     console_log: List[ConsoleEntry] = []
+    request_failures: List[NetworkFailureEntry] = []
     start_time = datetime.now()
     test_passed = False
     popstate_back_guard_ok = False
@@ -862,10 +909,11 @@ async def run() -> None:
                 }"""
             )
 
-            context.on("page", lambda pg: _collect_console(pg, console_log))
+            context.on("page", lambda pg: _collect_page_diagnostics(pg, console_log, request_failures))
 
             log_step(f"导航到: {INDEX_URL}")
             page = await context.new_page()
+            _collect_page_diagnostics(page, console_log, request_failures)
             await page.goto(INDEX_URL)
             
             await _ensure_app_ready(page)
@@ -908,7 +956,7 @@ async def run() -> None:
 
             log_step("启动套题练习...")
             suite_page = await _open_suite_popup(page, start_button, "classic")
-            _collect_console(suite_page, console_log)
+            _collect_page_diagnostics(suite_page, console_log, request_failures)
             log_step("套题练习窗口已打开", "SUCCESS")
 
             await page.wait_for_function(
@@ -1048,7 +1096,7 @@ async def run() -> None:
             replay_page, replay_surface = await _open_replay_surface(page, context, record_id)
             replay_surface_used = replay_surface
             if replay_surface in {"popup", "new_page", "same_page"}:
-                _collect_console(replay_page, console_log)
+                _collect_page_diagnostics(replay_page, console_log, request_failures)
             await replay_page.wait_for_load_state("load")
 
             await replay_page.wait_for_function(
@@ -1213,7 +1261,7 @@ async def run() -> None:
                 "}"
             )
             manual_suite_page = await _open_suite_popup(page, start_button, "stationary")
-            _collect_console(manual_suite_page, console_log)
+            _collect_page_diagnostics(manual_suite_page, console_log, request_failures)
             await manual_suite_page.wait_for_load_state("load")
             await page.wait_for_function(
                 "() => !!(window.practiceConfig && window.practiceConfig.suite && window.practiceConfig.suite.autoAdvanceAfterSubmit === false)",
@@ -1379,6 +1427,17 @@ async def run() -> None:
                     "page": entry.page_title
                 }
                 for entry in console_log
+            ],
+            "requestFailures": [
+                {
+                    "url": entry.url,
+                    "method": entry.method,
+                    "resourceType": entry.resource_type,
+                    "errorText": entry.error_text,
+                    "timestamp": entry.timestamp,
+                    "page": entry.page_title
+                }
+                for entry in request_failures
             ]
         }
         
@@ -1407,6 +1466,11 @@ async def run() -> None:
                     log_step(f"  [{entry.type.upper()}] {entry.text}")
         else:
             log_step("无控制台消息捕获", "WARNING")
+
+        if request_failures:
+            log_step(f"请求失败数: {len(request_failures)}", "WARNING")
+            for entry in request_failures[:5]:
+                log_step(f"  [{entry.resource_type}] {entry.error_text} {entry.url}", "WARNING")
         
         log_step("=" * 80)
         if test_passed:

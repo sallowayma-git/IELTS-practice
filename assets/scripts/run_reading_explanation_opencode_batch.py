@@ -68,6 +68,23 @@ def is_file_blocking(path: str, scope: str) -> bool:
     return path in set(load_blocking_files(scope))
 
 
+def validate_generated_js(path: Path) -> List[str]:
+    if not path.exists():
+        return [f"render 未生成输出文件：{path}"]
+    completed = run(["node", "--check", str(path)], check=False)
+    if completed.returncode == 0:
+        return []
+    detail = "\n".join(
+        line for line in [completed.stdout.strip(), completed.stderr.strip()] if line
+    ).strip()
+    if len(detail) > 1200:
+        detail = detail[-1200:]
+    return [
+        "rendered JS syntax invalid; ensure all quoted text is serialized through JSON and escaped correctly.",
+        detail or f"node --check failed for {path}",
+    ]
+
+
 def extract_json_issues(text: str) -> List[str]:
     stripped = (text or "").strip()
     start = stripped.find("{")
@@ -176,6 +193,16 @@ def process_exam(exam_id: str, *, work_dir: Path, model: str, retries: int, tran
             ]
             print(f"[FAIL render] {exam_id} attempt={attempt}")
             print(render.stdout[-1200:])
+            continue
+
+        syntax_issues = validate_generated_js(output_path)
+        if syntax_issues:
+            restore_snapshot(snapshot_before_attempt)
+            feedback_issues = syntax_issues + [
+                f"语法校验失败；不要手写 JS 字符串，确保响应 JSON 中的引号可被 render 正确序列化。attempt={attempt}"
+            ]
+            print(f"[FAIL syntax] {exam_id} attempt={attempt}")
+            print("\n".join(syntax_issues)[-1200:])
             continue
 
         if output_path.exists() and not is_file_blocking(rel_output, scope):
