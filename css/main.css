@@ -5159,6 +5159,103 @@ body.no-scroll {
     display: none;
 }
 
+.library-loader-report {
+    margin-top: 18px;
+    padding: 16px;
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    background: #f8fafc;
+    color: #334155;
+}
+
+.library-loader-report[hidden] {
+    display: none;
+}
+
+.library-loader-report--success {
+    border-color: rgba(34, 197, 94, 0.3);
+    background: #f0fdf4;
+}
+
+.library-loader-report--empty,
+.library-loader-report--warning {
+    border-color: rgba(245, 158, 11, 0.32);
+    background: #fffbeb;
+}
+
+.library-loader-report--error {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: #fef2f2;
+}
+
+.library-loader-report__title {
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 10px;
+}
+
+.library-loader-report__message,
+.library-loader-report__note {
+    margin: 8px 0 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.library-loader-report__note {
+    color: #854d0e;
+}
+
+.library-loader-report-stats {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.library-loader-report-stat {
+    min-width: 0;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.library-loader-report-stat__label,
+.library-loader-report-stat__value {
+    display: block;
+}
+
+.library-loader-report-stat__label {
+    font-size: 0.78rem;
+    color: #64748b;
+}
+
+.library-loader-report-stat__value {
+    margin-top: 2px;
+    font-size: 1.1rem;
+    color: #0f172a;
+}
+
+.library-loader-report-reasons {
+    margin: 12px 0 0;
+    padding-left: 20px;
+    line-height: 1.6;
+}
+
+.library-loader-report-samples {
+    margin-top: 10px;
+    display: grid;
+    gap: 6px;
+}
+
+.library-loader-report-sample {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.7);
+    color: #475569;
+    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+}
+
 @media (max-width: 900px) {
     .library-loader-body {
         padding: 24px;
@@ -5166,6 +5263,10 @@ body.no-scroll {
 
     .library-loader-grid {
         grid-template-columns: 1fr;
+    }
+
+    .library-loader-report-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 

@@ -115,12 +115,16 @@ async function testDiscoversListeningHtmlAtAnyDepth() {
     assert.strictEqual(entry.audioFilename, 'audio.mp3');
     assert(entry.detectedBy.includes('config-answer-key'), '应记录答案配置识别信号');
     assert(entry.id.startsWith('custom-listening-'), '应生成稳定自定义听力 id');
+    assert.strictEqual(entry.runtimeResourceMode, 'session-blob', '外部导入题源应标记当前会话资源模式');
 
     const runtimeUrl = discovery.resolveRuntimeResource(entry, 'html');
     assert(runtimeUrl.startsWith('blob:library-discovery-test/'), '当前会话应注册可打开的运行时 HTML URL');
     const htmlBlob = objectUrlPayloads.find((payload) => payload.url === runtimeUrl)?.value;
     assert(htmlBlob && Array.isArray(htmlBlob.parts), '运行时 HTML 应来自重写后的 Blob');
     assert(String(htmlBlob.parts[0]).includes('blob:library-discovery-test/'), 'HTML 内相对音频引用应被重写为 Blob URL');
+    assert.strictEqual(result.report.accepted, 1, '报告应包含识别题目数量');
+    assert.strictEqual(result.report.runtime.html, 1, '报告应包含运行时 HTML 资源数量');
+    assert(result.report.warnings.includes('file-picker-session-resources'), '报告应提示 file picker 会话资源边界');
 
     recordResult('任意深层听力 HTML 内容识别', true, {
         entry,
@@ -139,6 +143,28 @@ async function testRejectsUnrelatedHtml() {
     assert.strictEqual(result.rejected[0].reason, 'insufficient-listening-signals');
 
     recordResult('普通 HTML 不误收', true, result.stats);
+}
+
+async function testRejectsAudioPageWithoutAnswerPath() {
+    const { discovery } = createHarness();
+    const result = await discovery.discover([
+        makeFile('Teacher Pack/audio-only/ielts-listening-intro.html', `<!doctype html>
+<html>
+<head><title>IELTS Listening Practice - Audio Intro</title></head>
+<body>
+  <audio src="intro.mp3"></audio>
+  <section>Questions 1-10</section>
+</body>
+</html>`),
+        makeFile('Teacher Pack/audio-only/intro.mp3', '', { type: 'audio/mpeg' })
+    ], { type: 'listening', registerRuntime: false });
+
+    assert.strictEqual(result.entries.length, 0, '没有答案/评分链路的音频页不应进入听力题库');
+    assert.strictEqual(result.rejected.length, 1, '伪听力页应进入拒绝报告');
+    assert.strictEqual(result.rejected[0].reason, 'missing-answer-or-scoring-path');
+    assert.strictEqual(result.report.reasonCounts['missing-answer-or-scoring-path'], 1);
+
+    recordResult('伪听力 HTML 缺少答案链路时拒绝', true, result.report);
 }
 
 async function testReadingImportRejectsListeningHtml() {
@@ -206,6 +232,7 @@ async function main() {
     try {
         await testDiscoversListeningHtmlAtAnyDepth();
         await testRejectsUnrelatedHtml();
+        await testRejectsAudioPageWithoutAnswerPath();
         await testReadingImportRejectsListeningHtml();
         await testIncrementalMergeDedupesByImportKey();
 

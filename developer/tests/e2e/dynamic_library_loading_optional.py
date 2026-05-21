@@ -115,11 +115,13 @@ async def run_dynamic_import(page: Page) -> dict[str, Any]:
             const files = [
                 makeFile('Teacher Pack/loose/nested/arbitrary-listening.html', html, 'text/html'),
                 makeFile('Teacher Pack/loose/nested/audio.mp3', 'fake audio bytes', 'audio/mpeg'),
+                makeFile('Teacher Pack/audio-only/ielts-listening-intro.html', '<!doctype html><title>IELTS Listening Practice - Audio Only</title><audio src="intro.mp3"></audio><section>Questions 1-10</section>', 'text/html'),
+                makeFile('Teacher Pack/audio-only/intro.mp3', 'fake intro bytes', 'audio/mpeg'),
                 makeFile('Teacher Pack/loose/nested/readme.html', '<!doctype html><title>plain page</title>', 'text/html')
             ];
 
             const beforeActive = await window.storage.get('active_exam_index_key', 'exam_index');
-            await window.handleLibraryUpload({ type: 'listening', mode: 'full' }, files);
+            const fullReport = await window.handleLibraryUpload({ type: 'listening', mode: 'full' }, files);
             const activeKey = await window.storage.get('active_exam_index_key', '');
             const configs = await window.storage.get('exam_index_configurations', []);
             const dataset = await window.storage.get(activeKey, []);
@@ -138,11 +140,13 @@ async def run_dynamic_import(page: Page) -> dict[str, Any]:
                 : null;
 
             window.prompt = () => 'optional-dup';
-            await window.handleLibraryUpload({ type: 'listening', mode: 'incremental' }, files);
+            const incrementalReport = await window.handleLibraryUpload({ type: 'listening', mode: 'incremental' }, files);
             const afterDataset = await window.storage.get(activeKey, []);
             const afterCustomRows = Array.isArray(afterDataset)
                 ? afterDataset.filter(row => row && row.type === 'listening' && row.sourceKind === 'file-picker')
                 : [];
+            const reportHost = document.createElement('div');
+            window.renderLibraryUploadReport(fullReport, reportHost);
 
             return {
                 beforeActive,
@@ -152,6 +156,9 @@ async def run_dynamic_import(page: Page) -> dict[str, Any]:
                 customRows,
                 builtUrl,
                 customOverview,
+                fullReport,
+                incrementalReport,
+                renderedReportText: reportHost.textContent || '',
                 afterCustomCount: afterCustomRows.length,
                 afterDatasetCount: Array.isArray(afterDataset) ? afterDataset.length : -1
             };
@@ -191,6 +198,18 @@ async def run() -> int:
             assert str(result.get("builtUrl") or "").startswith("blob:"), f"外部上传题源未使用运行时 Blob URL: {result.get('builtUrl')}"
             assert (result.get("customOverview") or {}).get("total") == 1, "Custom 听力类别未暴露到总览统计"
             assert result.get("afterCustomCount") == 1, "增量导入同一文件应去重/更新，不应重复追加"
+            full_report = result.get("fullReport") or {}
+            incremental_report = result.get("incrementalReport") or {}
+            assert full_report.get("status") == "success", f"全量导入报告状态错误: {full_report}"
+            assert full_report.get("accepted") == 1, f"全量报告识别数量错误: {full_report}"
+            assert (full_report.get("runtime") or {}).get("html") == 1, f"全量报告缺少运行时 HTML 资源: {full_report}"
+            assert "file-picker-session-resources" in (full_report.get("warnings") or []), "全量报告缺少 file picker 会话资源提示"
+            assert (full_report.get("reasonCounts") or {}).get("missing-answer-or-scoring-path") == 1, f"全量报告缺少伪听力拒绝原因: {full_report}"
+            assert "index" not in (full_report.get("merge") or {}), "导入报告不应携带完整索引"
+            assert (incremental_report.get("merge") or {}).get("updated") == 1, f"增量导入应更新同一 importKey: {incremental_report}"
+            rendered_text = result.get("renderedReportText") or ""
+            assert "导入完成" in rendered_text and "缺少答案或评分链路" in rendered_text, f"导入报告 UI 未展示关键结果: {rendered_text}"
+            assert "当前会话 Blob URL" in rendered_text, f"导入报告 UI 未展示 file:// 会话边界: {rendered_text}"
             report["checks"]["dynamicImport"] = result
             report["status"] = "pass"
             return 0
