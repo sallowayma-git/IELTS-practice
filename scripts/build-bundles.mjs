@@ -31,6 +31,8 @@ const bundles = {
         'js/core/practiceStore.js',
         'js/core/resourceCore.js',
         'assets/generated/reading-exams/manifest.js',
+        'assets/generated/listening-exams/manifest.js',
+        'assets/generated/listening-exams/listening-index.compat.js',
         'js/utils/stateSerializer.js',
         'js/utils/simpleStorageWrapper.js',
         'js/app/state-service.js',
@@ -101,6 +103,11 @@ const bundles = {
         'js/utils/answerMatchCore.js',
         'js/app/spellingErrorCollector.js',
         'js/practice-page-enhancer.js'
+    ],
+    'js/bundles/listening-record-bridge.bundle.js': [
+        'js/utils/answerMatchCore.js',
+        'js/app/spellingErrorCollector.js',
+        'js/listeningRecordBridge.js'
     ],
     'js/bundles/more.bundle.js': [
         'assets/wordlists/ielts_core.bundle.js',

@@ -55,12 +55,12 @@ except ModuleNotFoundError:
 def log_step(message: str, level: str = "INFO") -> None:
     timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
     prefix = {
-        "INFO": "ℹ️",
-        "SUCCESS": "✅",
-        "WARNING": "⚠️",
-        "ERROR": "❌",
-        "DEBUG": "🔍",
-    }.get(level, "•")
+        "INFO": "[INFO]",
+        "SUCCESS": "[PASS]",
+        "WARNING": "[WARN]",
+        "ERROR": "[FAIL]",
+        "DEBUG": "[DEBUG]",
+    }.get(level, "[INFO]")
     print(f"[{timestamp}] {prefix} {message}")
 
 
@@ -105,6 +105,8 @@ def _run_cmd_json(cmd: Sequence[str], cwd: Path = REPO_ROOT) -> Dict[str, Any]:
         cwd=str(cwd),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     if completed.returncode != 0:
@@ -125,6 +127,8 @@ def _run_git_changed_exam_ids() -> Set[str]:
         cwd=str(REPO_ROOT),
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     if completed.returncode != 0:

@@ -15,14 +15,34 @@ js/bundles/
 /ReadingPractice/
 
 
-# ListeningPractice 资源体积大，默认忽略；仅放行 100 P1 / 100 P4 的 HTML 便于维护与回归
+# ListeningPractice 标准运行题源：纳入 P1-P4，继续排除 legacy/vip 资源
 /ListeningPractice/**
-!/ListeningPractice/100 P1/
-!/ListeningPractice/100 P4/
-!/ListeningPractice/100 P1/**/
-!/ListeningPractice/100 P4/**/
-!/ListeningPractice/100 P1/**/*.html
-!/ListeningPractice/100 P4/**/*.html
+!/ListeningPractice/
+!/ListeningPractice/P1/
+!/ListeningPractice/P2/
+!/ListeningPractice/P3/
+!/ListeningPractice/P4/
+!/ListeningPractice/P1/**
+!/ListeningPractice/P2/**
+!/ListeningPractice/P3/**
+!/ListeningPractice/P4/**
+/ListeningPractice/P1/**/*.MOV
+/ListeningPractice/P2/**/*.MOV
+/ListeningPractice/P3/**/*.MOV
+/ListeningPractice/P4/**/*.MOV
+/ListeningPractice/P1/**/*.mov
+/ListeningPractice/P2/**/*.mov
+/ListeningPractice/P3/**/*.mov
+/ListeningPractice/P4/**/*.mov
+/ListeningPractice/P1/**/*.MP4
+/ListeningPractice/P2/**/*.MP4
+/ListeningPractice/P3/**/*.MP4
+/ListeningPractice/P4/**/*.MP4
+/ListeningPractice/P1/**/*.mp4
+/ListeningPractice/P2/**/*.mp4
+/ListeningPractice/P3/**/*.mp4
+/ListeningPractice/P4/**/*.mp4
+/ListeningPractice/vip/
 /睡着过项目组(9.4)[134篇]/
 /IELTS/
 /.claude/
@@ -38,6 +58,7 @@ package-lock.json
 # 忽略可能的系统文件
 .DS_Store
 Thumbs.db
+~$*
 .claude/settings.local.json
 
 # 使用通配符忽略特殊命名的目录

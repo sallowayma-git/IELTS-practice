@@ -601,6 +601,28 @@ class PracticeRecorder {
         return String(value);
     }
 
+    normalizeAnswerValueList(value) {
+        const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
+        if (coreContracts && typeof coreContracts.normalizeAnswerValueList === 'function') {
+            return coreContracts.normalizeAnswerValueList(value);
+        }
+        if (AnswerSanitizer && typeof AnswerSanitizer.normalizeValueList === 'function') {
+            return AnswerSanitizer.normalizeValueList(value);
+        }
+        const values = Array.isArray(value) ? value : (value === undefined || value === null ? [] : [value]);
+        const normalized = [];
+        values.forEach((item) => {
+            const text = this.normalizeAnswerValue(item);
+            if (!text) {
+                return;
+            }
+            if (!normalized.some(existing => existing.toLowerCase() === text.toLowerCase())) {
+                normalized.push(text);
+            }
+        });
+        return normalized;
+    }
+
     normalizeAnswerMap(rawAnswers = {}) {
         const coreContracts = window.PracticeCore && window.PracticeCore.contracts;
         if (coreContracts && typeof coreContracts.normalizeAnswerMap === 'function') {
@@ -760,6 +782,14 @@ class PracticeRecorder {
                 correctAnswer,
                 isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
             };
+            const acceptedAnswers = this.normalizeAnswerValueList(entry.acceptedAnswers);
+            if (acceptedAnswers.length) {
+                normalized[questionId].acceptedAnswers = acceptedAnswers;
+            }
+            const canonicalAnswer = this.normalizeAnswerValue(entry.canonicalAnswer);
+            if (canonicalAnswer) {
+                normalized[questionId].canonicalAnswer = canonicalAnswer;
+            }
         });
         return normalized;
     }

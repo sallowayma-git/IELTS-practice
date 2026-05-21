@@ -84,7 +84,16 @@ zip -r "${ZIP_PATH}" \
     js/bundles/ \
     assets/ \
     ReadingPractice/ \
+    ListeningPractice/P1/ \
+    ListeningPractice/P2/ \
+    ListeningPractice/P3/ \
+    ListeningPractice/P4/ \
     -x "*.DS_Store" \
+       '~$*' \
+       "*.MOV" \
+       "*.mov" \
+       "*.MP4" \
+       "*.mp4" \
        "*.md" \
        "*.py" \
        "assets/developer/*" \
@@ -133,6 +142,12 @@ require_entry "assets/vendor/three.min.js"
 require_entry "assets/scripts/complete-exam-data.js"
 require_entry "assets/generated/reading-exams/manifest.js"
 require_entry "assets/generated/reading-exams/reading-practice-unified.html"
+require_entry "assets/generated/listening-exams/manifest.js"
+require_entry "assets/generated/listening-exams/listening-index.compat.js"
+require_entry "ListeningPractice/P1/"
+require_entry "ListeningPractice/P2/"
+require_entry "ListeningPractice/P3/"
+require_entry "ListeningPractice/P4/"
 require_entry "js/bundles/runtime-entry.bundle.js"
 require_entry "js/bundles/core-foundation.bundle.js"
 require_entry "js/bundles/ui-shell.bundle.js"
@@ -146,9 +161,12 @@ require_entry "js/bundles/more.bundle.js"
 require_entry "js/bundles/theme.bundle.js"
 require_entry "js/bundles/reading-page.bundle.js"
 require_entry "js/bundles/practice-page-enhancer.bundle.js"
+require_entry "js/bundles/listening-record-bridge.bundle.js"
 
 reject_entry_prefix "templates/"
-reject_entry_prefix "ListeningPractice/"
+reject_entry_prefix "ListeningPractice/vip/"
+reject_entry_pattern '(^|/)~\$[^/]*$'
+reject_entry_pattern '^ListeningPractice/.*\.(MOV|mov|MP4|mp4)$'
 reject_entry_pattern '^assets/scripts/.*\.py$'
 reject_entry_pattern '^js/(app|core|data|runtime|services|utils|components|presentation|views)/'
 

@@ -35,6 +35,27 @@ describe('AnswerSanitizer.sanitizeComparisonMap', () => {
       isCorrect: true
     });
   });
+
+  it('preserves accepted answers and canonical answer for listening spelling review', () => {
+    const result = sanitizer.sanitizeComparisonMap({
+      q7: {
+        userAnswer: 'acommodation',
+        correctAnswer: 'accommodation / lodging',
+        acceptedAnswers: ['accommodation', { text: 'lodging' }, 'ACCOMMODATION'],
+        canonicalAnswer: { value: 'accommodation' },
+        isCorrect: false
+      }
+    });
+
+    assert.deepStrictEqual(result.q7, {
+      questionId: 'q7',
+      userAnswer: 'acommodation',
+      correctAnswer: 'accommodation / lodging',
+      isCorrect: false,
+      acceptedAnswers: ['accommodation', 'lodging'],
+      canonicalAnswer: 'accommodation'
+    });
+  });
 });
 
 function describe(name, fn) {
