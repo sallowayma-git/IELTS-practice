@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import sys
+import zipfile
 from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -353,6 +354,107 @@ def _check_index_snapshot_script_sync(index_path: Path, snapshot_path: Path) -> 
         "onlyInSnapshot": only_in_snapshot,
     }
     return passed, detail
+
+
+def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
+    dist_dir = REPO_ROOT / "dist"
+    if not dist_dir.exists():
+        return True, {"skipped": True, "reason": "dist 目录缺失，跳过已生成 zip 内容检查"}
+
+    candidates = sorted(
+        dist_dir.glob("ielts-practice-*.zip"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if not candidates:
+        return True, {"skipped": True, "reason": "未找到 ielts-practice-*.zip，跳过已生成 zip 内容检查"}
+
+    archive_path = candidates[0]
+    try:
+        with zipfile.ZipFile(archive_path, "r") as archive:
+            names = [name.rstrip("/") for name in archive.namelist()]
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取压缩包失败：{exc}", "zip": str(archive_path.relative_to(REPO_ROOT))}
+
+    name_set = set(names)
+    bundled_scripts = sorted(
+        name for name in name_set
+        if name.startswith("js/bundles/") and name.endswith(".bundle.js")
+    )
+    expected_bundles = sorted([
+        "js/bundles/runtime-entry.bundle.js",
+        "js/bundles/core-foundation.bundle.js",
+        "js/bundles/ui-shell.bundle.js",
+        "js/bundles/legacy-app.bundle.js",
+        "js/bundles/browse.bundle.js",
+        "js/bundles/practice.bundle.js",
+        "js/bundles/session.bundle.js",
+        "js/bundles/settings.bundle.js",
+        "js/bundles/diagnostics.bundle.js",
+        "js/bundles/more.bundle.js",
+        "js/bundles/theme.bundle.js",
+        "js/bundles/reading-page.bundle.js",
+        "js/bundles/practice-page-enhancer.bundle.js",
+    ])
+    missing_bundles = sorted(set(expected_bundles) - set(bundled_scripts))
+
+    forbidden_templates = sorted([name for name in name_set if name == "templates" or name.startswith("templates/")])
+    forbidden_listening = sorted([name for name in name_set if name == "ListeningPractice" or name.startswith("ListeningPractice/")])
+    forbidden_source_js = sorted([
+        name for name in name_set
+        if re.match(r"^js/(app|core|data|runtime|services|utils|components|presentation|views)/", name)
+    ])
+    forbidden_assets_py = sorted([
+        name for name in name_set
+        if name.startswith("assets/scripts/") and name.endswith(".py")
+    ])
+
+    passed = (
+        not missing_bundles
+        and not forbidden_templates
+        and not forbidden_listening
+        and not forbidden_source_js
+        and not forbidden_assets_py
+    )
+    detail = {
+        "zip": str(archive_path.relative_to(REPO_ROOT)).replace("\\", "/"),
+        "bundleCount": len(bundled_scripts),
+        "missingBundles": missing_bundles,
+        "forbiddenTemplates": forbidden_templates,
+        "forbiddenListeningPractice": forbidden_listening,
+        "forbiddenSourceJs": forbidden_source_js[:20],
+        "forbiddenAssetScriptsPy": forbidden_assets_py,
+    }
+    return passed, detail
+
+
+def _check_release_script_runtime_guards(release_script: Path) -> Tuple[bool, dict]:
+    try:
+        source = release_script.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取失败：{exc}"}
+
+    required_snippets = [
+        'require_entry "js/bundles/runtime-entry.bundle.js"',
+        'require_entry "js/bundles/core-foundation.bundle.js"',
+        'require_entry "js/bundles/ui-shell.bundle.js"',
+        'require_entry "js/bundles/legacy-app.bundle.js"',
+        'require_entry "js/bundles/browse.bundle.js"',
+        'require_entry "js/bundles/practice.bundle.js"',
+        'require_entry "js/bundles/session.bundle.js"',
+        'require_entry "js/bundles/settings.bundle.js"',
+        'require_entry "js/bundles/diagnostics.bundle.js"',
+        'require_entry "js/bundles/more.bundle.js"',
+        'require_entry "js/bundles/theme.bundle.js"',
+        'require_entry "js/bundles/reading-page.bundle.js"',
+        'require_entry "js/bundles/practice-page-enhancer.bundle.js"',
+        'reject_entry_prefix "templates/"',
+        'reject_entry_prefix "ListeningPractice/"',
+        "reject_entry_pattern '^assets/scripts/.*\\.py$'",
+        "reject_entry_pattern '^js/(app|core|data|runtime|services|utils|components|presentation|views)/'",
+    ]
+    missing = [snippet for snippet in required_snippets if snippet not in source]
+    return not missing, {"missing": missing}
 
 
 def _check_main_entry_on_demand(main_entry: Path) -> Tuple[bool, str]:
@@ -917,6 +1019,12 @@ def run_checks() -> Tuple[List[dict], bool]:
     build_ref_passed, build_ref_detail = _check_build_bundles_no_deleted_refs(build_script)
     results.append(_format_result("build-bundles 删除脚本引用守卫", build_ref_passed, build_ref_detail))
     all_passed &= build_ref_passed
+    release_script_passed, release_script_detail = _check_release_script_runtime_guards(REPO_ROOT / "developer" / "release.sh")
+    results.append(_format_result("Release 脚本运行时守卫", release_script_passed, release_script_detail))
+    all_passed &= release_script_passed
+    release_zip_passed, release_zip_detail = _check_release_zip_runtime_payload()
+    results.append(_format_result("Release ZIP 运行时内容守卫", release_zip_passed, release_zip_detail))
+    all_passed &= release_zip_passed
 
     # Static regression harnesses should start with a doctype for consistent rendering
     static_html_files = sorted((REPO_ROOT / "developer" / "tests").glob("*.html"))
