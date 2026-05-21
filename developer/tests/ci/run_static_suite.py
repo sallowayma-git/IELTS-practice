@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
 
 class _HTMLDoctypeParser(HTMLParser):
@@ -395,11 +396,24 @@ def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
         "js/bundles/theme.bundle.js",
         "js/bundles/reading-page.bundle.js",
         "js/bundles/practice-page-enhancer.bundle.js",
+        "js/bundles/listening-record-bridge.bundle.js",
     ])
     missing_bundles = sorted(set(expected_bundles) - set(bundled_scripts))
 
     forbidden_templates = sorted([name for name in name_set if name == "templates" or name.startswith("templates/")])
-    forbidden_listening = sorted([name for name in name_set if name == "ListeningPractice" or name.startswith("ListeningPractice/")])
+    forbidden_listening = sorted([
+        name for name in name_set
+        if name == "ListeningPractice/vip" or name.startswith("ListeningPractice/vip/")
+    ])
+    unexpected_listening_roots = sorted([
+        name for name in name_set
+        if name.startswith("ListeningPractice/")
+        and not any(name == f"ListeningPractice/{part}" or name.startswith(f"ListeningPractice/{part}/") for part in ("P1", "P2", "P3", "P4", "vip"))
+    ])
+    missing_listening_parts = sorted([
+        part for part in ("P1", "P2", "P3", "P4")
+        if not any(name == f"ListeningPractice/{part}" or name.startswith(f"ListeningPractice/{part}/") for name in name_set)
+    ])
     forbidden_source_js = sorted([
         name for name in name_set
         if re.match(r"^js/(app|core|data|runtime|services|utils|components|presentation|views)/", name)
@@ -408,13 +422,25 @@ def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
         name for name in name_set
         if name.startswith("assets/scripts/") and name.endswith(".py")
     ])
+    forbidden_listening_video = sorted([
+        name for name in name_set
+        if name.startswith("ListeningPractice/") and re.search(r"\.(MOV|mov|MP4|mp4)$", name)
+    ])
+    forbidden_temp_office = sorted([
+        name for name in name_set
+        if re.search(r"(^|/)~\$[^/]*$", name)
+    ])
 
     passed = (
         not missing_bundles
         and not forbidden_templates
         and not forbidden_listening
+        and not unexpected_listening_roots
+        and not missing_listening_parts
         and not forbidden_source_js
         and not forbidden_assets_py
+        and not forbidden_listening_video
+        and not forbidden_temp_office
     )
     detail = {
         "zip": str(archive_path.relative_to(REPO_ROOT)).replace("\\", "/"),
@@ -422,8 +448,12 @@ def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
         "missingBundles": missing_bundles,
         "forbiddenTemplates": forbidden_templates,
         "forbiddenListeningPractice": forbidden_listening,
+        "unexpectedListeningRoots": unexpected_listening_roots,
+        "missingListeningParts": missing_listening_parts,
         "forbiddenSourceJs": forbidden_source_js[:20],
         "forbiddenAssetScriptsPy": forbidden_assets_py,
+        "forbiddenListeningVideo": forbidden_listening_video,
+        "forbiddenTempOfficeFiles": forbidden_temp_office,
     }
     return passed, detail
 
@@ -448,13 +478,120 @@ def _check_release_script_runtime_guards(release_script: Path) -> Tuple[bool, di
         'require_entry "js/bundles/theme.bundle.js"',
         'require_entry "js/bundles/reading-page.bundle.js"',
         'require_entry "js/bundles/practice-page-enhancer.bundle.js"',
+        'require_entry "js/bundles/listening-record-bridge.bundle.js"',
+        'require_entry "assets/generated/listening-exams/manifest.js"',
+        'require_entry "assets/generated/listening-exams/listening-index.compat.js"',
+        'require_entry "ListeningPractice/P1/"',
+        'require_entry "ListeningPractice/P2/"',
+        'require_entry "ListeningPractice/P3/"',
+        'require_entry "ListeningPractice/P4/"',
         'reject_entry_prefix "templates/"',
-        'reject_entry_prefix "ListeningPractice/"',
+        'reject_entry_prefix "ListeningPractice/vip/"',
+        "reject_entry_pattern '(^|/)~\\$[^/]*$'",
+        "reject_entry_pattern '^ListeningPractice/.*\\.(MOV|mov|MP4|mp4)$'",
         "reject_entry_pattern '^assets/scripts/.*\\.py$'",
         "reject_entry_pattern '^js/(app|core|data|runtime|services|utils|components|presentation|views)/'",
     ]
     missing = [snippet for snippet in required_snippets if snippet not in source]
     return not missing, {"missing": missing}
+
+
+def _extract_js_json_assignment(source: str, marker: str, end_marker: str) -> Any:
+    start = source.find(marker)
+    if start < 0:
+        raise ValueError(f"missing marker: {marker}")
+    start += len(marker)
+    end = source.find(end_marker, start)
+    if end < 0:
+        raise ValueError(f"missing end marker after: {marker}")
+    return json.loads(source[start:end].strip())
+
+
+def _check_listening_generated_assets(index_path: Path, manifest_path: Path) -> Tuple[bool, dict]:
+    if not index_path.exists():
+        return False, {"error": "listening-index.compat.js 缺失"}
+    if not manifest_path.exists():
+        return False, {"error": "manifest.js 缺失"}
+
+    try:
+        index_source = index_path.read_text(encoding="utf-8")
+        manifest_source = manifest_path.read_text(encoding="utf-8")
+        index_entries = _extract_js_json_assignment(
+            index_source,
+            "global.listeningExamIndex = ",
+            ";\n    global.listeningExamIndex.pathRoot",
+        )
+        manifest = _extract_js_json_assignment(
+            manifest_source,
+            "global.__LISTENING_EXAM_MANIFEST__ = ",
+            ";\n})(typeof window",
+        )
+    except Exception as exc:
+        return False, {"error": f"解析失败：{exc}"}
+
+    if not isinstance(index_entries, list) or not isinstance(manifest, dict):
+        return False, {
+            "error": "听力索引结构错误",
+            "indexType": type(index_entries).__name__,
+            "manifestType": type(manifest).__name__,
+        }
+
+    ids: List[str] = []
+    duplicate_ids: List[str] = []
+    seen: set[str] = set()
+    bad_paths: List[str] = []
+    missing_html: List[str] = []
+    missing_audio: List[str] = []
+    for entry in index_entries:
+        if not isinstance(entry, dict):
+            bad_paths.append("<non-object-entry>")
+            continue
+        exam_id = str(entry.get("examId") or entry.get("id") or "")
+        if exam_id in seen:
+            duplicate_ids.append(exam_id)
+        seen.add(exam_id)
+        ids.append(exam_id)
+
+        rel_path = str(entry.get("path") or "")
+        filename = str(entry.get("filename") or "")
+        audio = str(entry.get("audioFilename") or "")
+        if (
+            rel_path.startswith("ListeningPractice/")
+            or not any(rel_path.startswith(f"{part}/") for part in ("P1", "P2", "P3", "P4"))
+            or "/vip/" in f"/{rel_path}"
+        ):
+            bad_paths.append(f"{exam_id}:{rel_path}")
+        if filename and not (REPO_ROOT / "ListeningPractice" / rel_path / filename).exists():
+            missing_html.append(f"{rel_path}{filename}")
+        if audio and not (REPO_ROOT / "ListeningPractice" / rel_path / audio).exists():
+            missing_audio.append(f"{rel_path}{audio}")
+
+    manifest_ids = set(manifest.keys())
+    index_ids = set(ids)
+    missing_in_manifest = sorted(index_ids - manifest_ids)
+    missing_in_index = sorted(manifest_ids - index_ids)
+    path_root_ok = "global.listeningExamIndex.pathRoot = 'ListeningPractice/';" in index_source
+
+    passed = (
+        len(index_entries) > 0
+        and not duplicate_ids
+        and not bad_paths
+        and not missing_html
+        and not missing_in_manifest
+        and not missing_in_index
+        and path_root_ok
+    )
+    return passed, {
+        "indexCount": len(index_entries),
+        "manifestCount": len(manifest),
+        "duplicateIds": duplicate_ids[:20],
+        "badPaths": bad_paths[:20],
+        "missingHtml": missing_html[:20],
+        "missingAudio": missing_audio[:20],
+        "missingInManifest": missing_in_manifest[:20],
+        "missingInIndex": missing_in_index[:20],
+        "pathRootOk": path_root_ok,
+    }
 
 
 def _check_main_entry_on_demand(main_entry: Path) -> Tuple[bool, str]:
@@ -1283,6 +1420,13 @@ def run_checks() -> Tuple[List[dict], bool]:
     results.append(_format_result("path-map.json 路径映射", path_map_passed, path_map_detail))
     all_passed &= path_map_passed
 
+    listening_assets_passed, listening_assets_detail = _check_listening_generated_assets(
+        REPO_ROOT / "assets" / "generated" / "listening-exams" / "listening-index.compat.js",
+        REPO_ROOT / "assets" / "generated" / "listening-exams" / "manifest.js",
+    )
+    results.append(_format_result("Listening generated 索引结构", listening_assets_passed, listening_assets_detail))
+    all_passed &= listening_assets_passed
+
     lazy_loader_path = REPO_ROOT / "js" / "runtime" / "lazyLoader.js"
     if lazy_loader_path.exists():
         lazy_loader_source = lazy_loader_path.read_text(encoding="utf-8")
@@ -1684,6 +1828,36 @@ def run_checks() -> Tuple[List[dict], bool]:
         all_passed &= practice_recorder_passed
     else:
         results.append(_format_result("PracticeRecorder 单元测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    vocab_store_test = REPO_ROOT / "developer" / "tests" / "js" / "vocabStore.test.js"
+    if vocab_store_test.exists():
+        try:
+            completed_vocab_store = subprocess.run(
+                ["node", str(vocab_store_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8"
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            vocab_store_passed = False
+            vocab_store_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_vocab_store_output = (completed_vocab_store.stdout or "").strip() or (completed_vocab_store.stderr or "").strip()
+            try:
+                vocab_store_payload = json.loads(raw_vocab_store_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                vocab_store_passed = False
+                vocab_store_detail = f"输出解析失败: {parse_error}"
+            else:
+                vocab_store_passed = vocab_store_payload.get("status") == "pass"
+                vocab_store_detail = vocab_store_payload.get("detail", vocab_store_payload)
+        results.append(_format_result("VocabStore 错词释义补全测试", vocab_store_passed, vocab_store_detail))
+        all_passed &= vocab_store_passed
+    else:
+        results.append(_format_result("VocabStore 错词释义补全测试", False, "测试脚本缺失"))
         all_passed = False
 
     resource_core_test = REPO_ROOT / "developer" / "tests" / "js" / "resourceCore.test.js"

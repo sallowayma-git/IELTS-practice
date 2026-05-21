@@ -2,7 +2,7 @@
     'use strict';
 
     const READING_CATEGORIES = ['P1', 'P2', 'P3'];
-    const LISTENING_CATEGORIES = ['P3', 'P4'];
+    const LISTENING_CATEGORIES = ['P1', 'P2', 'P3', 'P4'];
 
     // 新增：100 P1 和 100 P4 特殊分类
     const SPECIAL_LISTENING_CATEGORIES = [

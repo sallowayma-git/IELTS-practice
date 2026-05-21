@@ -202,10 +202,42 @@ const mockMixin = {
                 
                 if (errorMap.has(key)) {
                     const existing = errorMap.get(key);
+                    const existingTimestamp = Number(existing.timestamp) || 0;
+                    const incomingTimestamp = Number(error.timestamp) || 0;
                     existing.errorCount = (existing.errorCount || 1) + 1;
-                    existing.timestamp = Math.max(existing.timestamp || 0, error.timestamp || 0);
+
+                    if (incomingTimestamp >= existingTimestamp) {
+                        existing.userInput = error.userInput;
+                        existing.questionId = error.questionId || existing.questionId;
+                        existing.suiteId = error.suiteId || result.suiteId || existing.suiteId;
+                        existing.examId = error.examId || result.examId || existing.examId;
+                        existing.acceptedAnswers = Array.isArray(error.acceptedAnswers)
+                            ? error.acceptedAnswers.slice()
+                            : existing.acceptedAnswers;
+                        existing.canonicalAnswer = error.canonicalAnswer || existing.canonicalAnswer;
+                        existing.reasonCode = error.reasonCode || existing.reasonCode;
+                        existing.confidence = typeof error.confidence === 'number' ? error.confidence : existing.confidence;
+                        existing.tokenIndex = Number.isFinite(error.tokenIndex) ? error.tokenIndex : existing.tokenIndex;
+                        existing.metadata = error.metadata || existing.metadata;
+                    }
+                    existing.timestamp = Math.max(existingTimestamp, incomingTimestamp);
                 } else {
-                    errorMap.set(key, { ...error });
+                    errorMap.set(key, {
+                        word: error.word,
+                        userInput: error.userInput,
+                        questionId: error.questionId,
+                        suiteId: error.suiteId || result.suiteId,
+                        examId: error.examId || result.examId,
+                        timestamp: error.timestamp || Date.now(),
+                        errorCount: error.errorCount || 1,
+                        source: error.source || this._detectMultiSuiteSource(result.examId),
+                        acceptedAnswers: Array.isArray(error.acceptedAnswers) ? error.acceptedAnswers.slice() : undefined,
+                        canonicalAnswer: error.canonicalAnswer,
+                        reasonCode: error.reasonCode,
+                        confidence: typeof error.confidence === 'number' ? error.confidence : undefined,
+                        tokenIndex: Number.isFinite(error.tokenIndex) ? error.tokenIndex : undefined,
+                        metadata: error.metadata
+                    });
                 }
             });
         });
@@ -292,6 +324,60 @@ async function runTests() {
         assert.strictEqual(aggregatedErrors[0].userInput, 'answer2', '用户输入应该是answer2');
         
         results.push({ name: '拼写错误聚合', status: 'pass' });
+
+        // 测试5b: 重复错词保留最新输入和听力候选答案元数据
+        console.log('测试5b: 重复错词保留最新输入和听力候选答案元数据');
+        const duplicateSpellingErrors = mockMixin.aggregateSpellingErrors([
+            {
+                suiteId: 'set1',
+                examId: testData.examId,
+                spellingErrors: [{
+                    word: 'accommodation',
+                    userInput: 'accomodation',
+                    questionId: 'q1',
+                    suiteId: 'set1',
+                    examId: testData.examId,
+                    timestamp: 1000,
+                    errorCount: 1,
+                    source: 'p1',
+                    acceptedAnswers: ['accommodation', 'lodging'],
+                    canonicalAnswer: 'accommodation',
+                    reasonCode: 'edit',
+                    confidence: 0.92,
+                    tokenIndex: 0,
+                    metadata: { comparisonMode: 'single-token' }
+                }]
+            },
+            {
+                suiteId: 'set2',
+                examId: testData.examId,
+                spellingErrors: [{
+                    word: 'accommodation',
+                    userInput: 'acommodation',
+                    questionId: 'q9',
+                    suiteId: 'set2',
+                    examId: testData.examId,
+                    timestamp: 2000,
+                    errorCount: 1,
+                    source: 'p1',
+                    acceptedAnswers: ['accommodation', 'hotel room'],
+                    canonicalAnswer: 'accommodation',
+                    reasonCode: 'edit',
+                    confidence: 0.95,
+                    tokenIndex: 1,
+                    metadata: { comparisonMode: 'phrase-token' }
+                }]
+            }
+        ]);
+
+        assert.strictEqual(duplicateSpellingErrors.length, 1, '重复错词应该合并');
+        assert.strictEqual(duplicateSpellingErrors[0].errorCount, 2, '错误次数应该累加');
+        assert.strictEqual(duplicateSpellingErrors[0].userInput, 'acommodation', '应该保留最新用户输入');
+        assert.strictEqual(duplicateSpellingErrors[0].questionId, 'q9', '应该保留最新题号');
+        assert.deepStrictEqual(duplicateSpellingErrors[0].acceptedAnswers, ['accommodation', 'hotel room']);
+        assert.strictEqual(duplicateSpellingErrors[0].metadata.comparisonMode, 'phrase-token');
+
+        results.push({ name: '重复错词保留最新输入和候选答案元数据', status: 'pass' });
         
         // 测试6: 记录保存
         console.log('测试6: 记录保存');

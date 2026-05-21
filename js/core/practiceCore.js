@@ -197,6 +197,25 @@
         return String(value).trim();
     }
 
+    function normalizeAnswerValueList(value) {
+        const sanitizer = global.AnswerSanitizer;
+        if (sanitizer && typeof sanitizer.normalizeValueList === 'function') {
+            return sanitizer.normalizeValueList(value);
+        }
+        const values = Array.isArray(value) ? value : (value === undefined || value === null ? [] : [value]);
+        const normalized = [];
+        values.forEach((item) => {
+            const text = normalizeAnswerValue(item);
+            if (!text) {
+                return;
+            }
+            if (!normalized.some((existing) => existing.toLowerCase() === text.toLowerCase())) {
+                normalized.push(text);
+            }
+        });
+        return normalized;
+    }
+
     function isNoiseKey(key) {
         if (!key) return true;
 
@@ -298,6 +317,14 @@
                 correctAnswer,
                 isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
             };
+            const acceptedAnswers = normalizeAnswerValueList(entry.acceptedAnswers);
+            if (acceptedAnswers.length) {
+                normalized[questionId].acceptedAnswers = acceptedAnswers;
+            }
+            const canonicalAnswer = normalizeAnswerValue(entry.canonicalAnswer);
+            if (canonicalAnswer) {
+                normalized[questionId].canonicalAnswer = canonicalAnswer;
+            }
         });
 
         return normalized;
@@ -1203,6 +1230,7 @@
         resolveRecordDate,
         inferExamId,
         normalizeAnswerValue,
+        normalizeAnswerValueList,
         isNoiseKey,
         normalizeAnswerMap,
         normalizeAnswerComparison,

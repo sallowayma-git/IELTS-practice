@@ -100,6 +100,29 @@ async function testCompletionIngestion(PracticeCore) {
     recordResult('PracticeCore 完成负载入站', true, { id: record.id, metadata: record.metadata });
 }
 
+async function testAnswerComparisonKeepsListeningCandidates(PracticeCore) {
+    const comparison = PracticeCore.contracts.normalizeAnswerComparison({
+        q12: {
+            userAnswer: { value: 'acommodation' },
+            correctAnswer: 'accommodation / lodging',
+            acceptedAnswers: ['accommodation', { text: 'lodging' }, 'ACCOMMODATION'],
+            canonicalAnswer: { label: 'accommodation' },
+            isCorrect: false
+        }
+    });
+    const q12 = JSON.parse(JSON.stringify(comparison.q12));
+
+    assert.deepStrictEqual(q12, {
+        questionId: 'q12',
+        userAnswer: 'acommodation',
+        correctAnswer: 'accommodation / lodging',
+        isCorrect: false,
+        acceptedAnswers: ['accommodation', 'lodging'],
+        canonicalAnswer: 'accommodation'
+    });
+    recordResult('PracticeCore 答案比较保留听力候选答案', true, q12);
+}
+
 async function testStoreWritePath(PracticeCore, practiceState, metaState) {
     const first = await PracticeCore.store.savePracticeRecord({
         id: 'record-reading-p1',
@@ -176,6 +199,7 @@ async function main() {
     try {
         await testProtocolNormalization(PracticeCore);
         await testCompletionIngestion(PracticeCore);
+        await testAnswerComparisonKeepsListeningCandidates(PracticeCore);
         await testStoreWritePath(PracticeCore, practiceState, metaState);
 
         const summary = {

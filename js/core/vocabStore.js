@@ -133,6 +133,7 @@
         const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : generateId(baseWord);
         const example = typeof entry.example === 'string' ? entry.example.trim() : '';
         const note = typeof entry.note === 'string' ? entry.note.trim() : '';
+        const source = typeof entry.source === 'string' ? entry.source.trim() : '';
         const freq = typeof entry.freq === 'number' && Number.isFinite(entry.freq) ? Math.min(1, Math.max(0, entry.freq)) : null;
         
         // SM-2 字段
@@ -191,7 +192,60 @@
         if (freq !== null) {
             record.freq = freq;
         }
+        if (source) {
+            record.source = source;
+        }
         return record;
+    }
+
+    function normalizeLexiconLookupKey(word) {
+        return String(word || '').trim().toLowerCase().replace(/[^a-z'-]+/g, '');
+    }
+
+    function isSpellingFallbackMeaning(meaning) {
+        return typeof meaning === 'string' && meaning.trim().startsWith('你曾拼写为:');
+    }
+
+    function isUsableLexiconEntry(entry) {
+        return entry
+            && typeof entry === 'object'
+            && typeof entry.word === 'string'
+            && entry.word.trim()
+            && typeof entry.meaning === 'string'
+            && entry.meaning.trim()
+            && !isSpellingFallbackMeaning(entry.meaning);
+    }
+
+    function findLexiconEntry(word) {
+        const key = normalizeLexiconLookupKey(word);
+        if (!key) {
+            return null;
+        }
+
+        const embedded = window.__EMBEDDED_WORDLISTS__;
+        const embeddedCore = embedded && Array.isArray(embedded.ielts_core)
+            ? embedded.ielts_core
+            : [];
+        const cacheDefault = state.listCache.get(DEFAULT_LIST_ID);
+        const cachedWords = cacheDefault && cacheDefault.data && Array.isArray(cacheDefault.data.words)
+            ? cacheDefault.data.words
+            : [];
+        const sources = [embeddedCore, cachedWords, state.words];
+
+        for (const source of sources) {
+            if (!Array.isArray(source) || !source.length) {
+                continue;
+            }
+            const found = source.find((entry) => (
+                isUsableLexiconEntry(entry)
+                && normalizeLexiconLookupKey(entry.word) === key
+            ));
+            if (found) {
+                return found;
+            }
+        }
+
+        return null;
     }
 
     function rebuildIndex() {
@@ -622,25 +676,34 @@
             return null;
         }
 
-        // 生成含义：显示用户的错误拼写和题目来源
         const userInput = error.userInput || '(未记录)';
         const examId = error.examId || '';
         const questionId = error.questionId || '';
         const errorCount = error.errorCount || 1;
-        
-        let meaning = `你曾拼写为: ${userInput}`;
+
+        const lexiconEntry = findLexiconEntry(word);
+        let spellingNote = `你曾拼写为: ${userInput}`;
         if (errorCount > 1) {
-            meaning += ` (错误${errorCount}次)`;
+            spellingNote += ` (错误${errorCount}次)`;
         }
         
-        // 生成例句：显示题目来源
-        let example = '';
+        const sourceParts = [];
         if (examId) {
-            example = `来源: ${examId}`;
-            if (questionId) {
-                example += ` - 题目 ${questionId}`;
-            }
+            sourceParts.push(`来源: ${examId}`);
         }
+        if (questionId) {
+            sourceParts.push(`题目 ${questionId}`);
+        }
+        const sourceNote = sourceParts.join(' - ');
+        const note = [spellingNote, sourceNote].filter(Boolean).join('；');
+
+        const fallbackMeaning = spellingNote;
+        const meaning = lexiconEntry && typeof lexiconEntry.meaning === 'string' && lexiconEntry.meaning.trim()
+            ? lexiconEntry.meaning.trim()
+            : fallbackMeaning;
+        const example = lexiconEntry && typeof lexiconEntry.example === 'string' && lexiconEntry.example.trim()
+            ? lexiconEntry.example.trim()
+            : sourceNote;
 
         // 生成ID
         const id = generateId(word);
@@ -659,7 +722,7 @@
             word,
             meaning,
             example,
-            note: '',
+            note,
             source,
             // 新词，没有复习记录
             easeFactor: null,

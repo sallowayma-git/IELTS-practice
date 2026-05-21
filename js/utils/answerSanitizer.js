@@ -73,6 +73,21 @@
         return true;
     }
 
+    function normalizeValueList(value) {
+        var values = Array.isArray(value) ? value : (value === null || value === undefined ? [] : [value]);
+        var normalized = [];
+        values.forEach(function (item) {
+            var text = normalizeValue(item);
+            if (!hasMeaningfulValue(text)) {
+                return;
+            }
+            if (!normalized.some(function (existing) { return existing.toLowerCase() === text.toLowerCase(); })) {
+                normalized.push(text);
+            }
+        });
+        return normalized;
+    }
+
     function sanitizeComparisonMap(comparisonMap) {
         if (!comparisonMap || typeof comparisonMap !== 'object') {
             return {};
@@ -96,6 +111,14 @@
                 correctAnswer: normalizedCorrect,
                 isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
             };
+            var acceptedAnswers = normalizeValueList(entry.acceptedAnswers);
+            if (acceptedAnswers.length) {
+                sanitized[key].acceptedAnswers = acceptedAnswers;
+            }
+            var canonicalAnswer = normalizeValue(entry.canonicalAnswer);
+            if (hasMeaningfulValue(canonicalAnswer)) {
+                sanitized[key].canonicalAnswer = canonicalAnswer;
+            }
         });
         return sanitized;
     }
@@ -103,6 +126,7 @@
     var api = {
         normalizeValue: normalizeValue,
         hasMeaningfulValue: hasMeaningfulValue,
+        normalizeValueList: normalizeValueList,
         sanitizeComparisonMap: sanitizeComparisonMap
     };
 

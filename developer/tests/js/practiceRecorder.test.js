@@ -80,6 +80,30 @@ async function testManualStatsFailureDoesNotBreakFallbackSave(PracticeRecorder) 
     recordResult('统计失败不反杀降级保存', { savedRecordId: saved.id });
 }
 
+async function testFallbackAnswerComparisonKeepsListeningCandidates(PracticeRecorder) {
+    const recorder = Object.create(PracticeRecorder.prototype);
+    const comparison = recorder.normalizeAnswerComparison({
+        q12: {
+            userAnswer: { value: 'acommodation' },
+            correctAnswer: 'accommodation / lodging',
+            acceptedAnswers: ['accommodation', { text: 'lodging' }, 'ACCOMMODATION'],
+            canonicalAnswer: { label: 'accommodation' },
+            isCorrect: false
+        }
+    });
+    const q12 = JSON.parse(JSON.stringify(comparison.q12));
+
+    assert.deepStrictEqual(q12, {
+        questionId: 'q12',
+        userAnswer: 'acommodation',
+        correctAnswer: 'accommodation / lodging',
+        isCorrect: false,
+        acceptedAnswers: ['accommodation', 'lodging'],
+        canonicalAnswer: 'accommodation'
+    });
+    recordResult('降级答案比较保留听力候选答案', q12);
+}
+
 async function main() {
     const quietConsole = {
         log() {},
@@ -112,6 +136,7 @@ async function main() {
 
     try {
         await testManualStatsFailureDoesNotBreakFallbackSave(PracticeRecorder);
+        await testFallbackAnswerComparisonKeepsListeningCandidates(PracticeRecorder);
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,

@@ -1467,13 +1467,26 @@
                     if (errorMap.has(key)) {
                         // 更新已存在的错误记录
                         const existing = errorMap.get(key);
+                        const existingTimestamp = Number(existing.timestamp) || 0;
+                        const incomingTimestamp = Number(error.timestamp) || 0;
                         existing.errorCount = (existing.errorCount || 1) + 1;
-                        existing.timestamp = Math.max(existing.timestamp || 0, error.timestamp || 0);
-                        
+
                         // 保留最新的用户输入
-                        if (error.timestamp > (existing.timestamp || 0)) {
+                        if (incomingTimestamp >= existingTimestamp) {
                             existing.userInput = error.userInput;
+                            existing.questionId = error.questionId || existing.questionId;
+                            existing.suiteId = error.suiteId || result.suiteId || existing.suiteId;
+                            existing.examId = error.examId || result.examId || existing.examId;
+                            existing.acceptedAnswers = Array.isArray(error.acceptedAnswers)
+                                ? error.acceptedAnswers.slice()
+                                : existing.acceptedAnswers;
+                            existing.canonicalAnswer = error.canonicalAnswer || existing.canonicalAnswer;
+                            existing.reasonCode = error.reasonCode || existing.reasonCode;
+                            existing.confidence = typeof error.confidence === 'number' ? error.confidence : existing.confidence;
+                            existing.tokenIndex = Number.isFinite(error.tokenIndex) ? error.tokenIndex : existing.tokenIndex;
+                            existing.metadata = error.metadata || existing.metadata;
                         }
+                        existing.timestamp = Math.max(existingTimestamp, incomingTimestamp);
                     } else {
                         // 添加新的错误记录
                         errorMap.set(key, {
@@ -1484,7 +1497,13 @@
                             examId: error.examId || result.examId,
                             timestamp: error.timestamp || Date.now(),
                             errorCount: error.errorCount || 1,
-                            source: error.source || this._detectMultiSuiteSource(result.examId)
+                            source: error.source || this._detectMultiSuiteSource(result.examId),
+                            acceptedAnswers: Array.isArray(error.acceptedAnswers) ? error.acceptedAnswers.slice() : undefined,
+                            canonicalAnswer: error.canonicalAnswer,
+                            reasonCode: error.reasonCode,
+                            confidence: typeof error.confidence === 'number' ? error.confidence : undefined,
+                            tokenIndex: Number.isFinite(error.tokenIndex) ? error.tokenIndex : undefined,
+                            metadata: error.metadata
                         });
                     }
                 });

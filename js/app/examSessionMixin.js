@@ -2,6 +2,7 @@
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/bundles/practice-page-enhancer.bundle.js';
+    const LISTENING_RECORD_BRIDGE_SCRIPT_PATH = './js/bundles/listening-record-bridge.bundle.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
 
     async function getActiveExamIndexSnapshot() {
@@ -105,6 +106,141 @@
             }
 
             return true;
+        },
+
+        _isListeningLibraryExam(exam) {
+            if (!exam || typeof exam !== 'object') {
+                return false;
+            }
+            const examType = typeof exam.type === 'string'
+                ? exam.type.trim().toLowerCase()
+                : '';
+            if (examType === 'listening') {
+                return true;
+            }
+            const examId = typeof exam.id === 'string'
+                ? exam.id.trim().toLowerCase()
+                : '';
+            if (examId.startsWith('listening-')) {
+                return true;
+            }
+            const path = typeof exam.path === 'string'
+                ? exam.path.replace(/\\/g, '/').toLowerCase()
+                : '';
+            return path.includes('listeningpractice/') || /^p[1-4]\//.test(path);
+        },
+
+        _normalizeCompletionQuestionKey(rawKey, fallbackIndex = 0) {
+            const raw = String(rawKey ?? '').replace(/\s+/g, ' ').trim();
+            const fallback = `q${Number(fallbackIndex) + 1}`;
+            if (!raw) {
+                return fallback;
+            }
+            const cleaned = raw.replace(/^questions?\s*/i, '').replace(/^q\s*/i, '');
+            const match = cleaned.match(/(\d{1,3})(?:\s*[-–—_]\s*(\d{1,3}))?/);
+            if (match) {
+                return match[2] ? `q${match[1]}-${match[2]}` : `q${match[1]}`;
+            }
+            return /^q/i.test(cleaned) ? cleaned.replace(/^Q/, 'q') : `q${cleaned}`;
+        },
+
+        _normalizeCompletionAnswerValue(value) {
+            if (value === null || value === undefined) {
+                return '';
+            }
+            if (Array.isArray(value)) {
+                return value.map((item) => this._normalizeCompletionAnswerValue(item)).filter(Boolean).join(', ');
+            }
+            return String(value).replace(/\s+/g, ' ').trim();
+        },
+
+        _normalizeCompletionAcceptedAnswers(value) {
+            const values = Array.isArray(value) ? value : [];
+            const normalized = [];
+            values.forEach((item) => {
+                const text = this._normalizeCompletionAnswerValue(item);
+                if (!text) {
+                    return;
+                }
+                if (!normalized.some(existing => existing.toLowerCase() === text.toLowerCase())) {
+                    normalized.push(text);
+                }
+            });
+            return normalized;
+        },
+
+        _buildCompletionComparisonFromDetails(details) {
+            if (!details || typeof details !== 'object') {
+                return {};
+            }
+
+            const entries = Array.isArray(details)
+                ? details.map((detail, index) => [index, detail])
+                : Object.entries(details);
+            const comparison = {};
+
+            entries.forEach(([rawKey, detail], index) => {
+                if (!detail || typeof detail !== 'object') {
+                    return;
+                }
+                const questionId = this._normalizeCompletionQuestionKey(
+                    detail.questionId ?? detail.question ?? detail.id ?? rawKey,
+                    index
+                );
+                const userAnswer = this._normalizeCompletionAnswerValue(
+                    detail.userAnswer ?? detail.user ?? detail.answer ?? detail.value
+                );
+                const correctAnswer = this._normalizeCompletionAnswerValue(
+                    detail.correctAnswer ?? detail.correct ?? detail.expected ?? detail.answerKey
+                );
+                if (!userAnswer && !correctAnswer) {
+                    return;
+                }
+                const acceptedAnswers = this._normalizeCompletionAcceptedAnswers(detail.acceptedAnswers);
+                const canonicalAnswer = this._normalizeCompletionAnswerValue(detail.canonicalAnswer)
+                    || acceptedAnswers[0]
+                    || correctAnswer;
+                comparison[questionId] = {
+                    questionId,
+                    userAnswer,
+                    correctAnswer,
+                    acceptedAnswers: acceptedAnswers.length ? acceptedAnswers : undefined,
+                    canonicalAnswer,
+                    isCorrect: typeof detail.isCorrect === 'boolean' ? detail.isCorrect : null
+                };
+            });
+
+            return comparison;
+        },
+
+        _resolveCompletionAnswerComparison(data) {
+            if (!data || typeof data !== 'object') {
+                return null;
+            }
+
+            const direct = data.answerComparison || data.realData?.answerComparison;
+            if (direct && typeof direct === 'object' && Object.keys(direct).length > 0) {
+                return direct;
+            }
+
+            const detailSources = [
+                data.answerDetails,
+                data.details,
+                data.scoreInfo?.details,
+                data.realData?.scoreInfo?.details
+            ];
+            for (const details of detailSources) {
+                const comparison = this._buildCompletionComparisonFromDetails(details);
+                if (Object.keys(comparison).length > 0) {
+                    data.answerComparison = comparison;
+                    if (data.realData && typeof data.realData === 'object') {
+                        data.realData.answerComparison = comparison;
+                    }
+                    return comparison;
+                }
+            }
+
+            return null;
         },
 
         _getUnifiedReadingManifestEntry(exam) {
@@ -851,10 +987,20 @@
                 return;
             }
 
+            const isListeningExam = typeof this._isListeningLibraryExam === 'function'
+                ? this._isListeningLibraryExam(exam)
+                : false;
+            const bridgeScriptPath = isListeningExam
+                ? LISTENING_RECORD_BRIDGE_SCRIPT_PATH
+                : PRACTICE_ENHANCER_SCRIPT_PATH;
+            const bridgeDatasetKey = isListeningExam
+                ? 'listeningRecordBridge'
+                : 'practiceEnhancer';
+
             const ensureScriptUrl = () => {
-                const resolved = this._ensureAbsoluteUrl(PRACTICE_ENHANCER_SCRIPT_PATH);
+                const resolved = this._ensureAbsoluteUrl(bridgeScriptPath);
                 if (!resolved) {
-                    return PRACTICE_ENHANCER_SCRIPT_PATH;
+                    return bridgeScriptPath;
                 }
                 if (!PRACTICE_ENHANCER_BUILD_ID) {
                     return resolved;
@@ -870,7 +1016,10 @@
                         return;
                     }
 
-                    if (examWindow.practicePageEnhancer && typeof examWindow.practicePageEnhancer.initialize === 'function') {
+                    const bridgeReady = isListeningExam
+                        ? (examWindow.__listeningBridgeGetState || examWindow.__listeningBridgeComplete)
+                        : (examWindow.practicePageEnhancer && typeof examWindow.practicePageEnhancer.initialize === 'function');
+                    if (bridgeReady) {
                         this.initializePracticeSession(examWindow, examId);
                         return;
                     }
@@ -896,20 +1045,23 @@
                     } catch (_) { }
 
                     const host = doc.head || doc.body;
-                    const existingEnhancerScript = host.querySelector('script[data-practice-enhancer="true"]');
+                    const existingEnhancerScript = host.querySelector(`script[data-${bridgeDatasetKey.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}="true"]`);
                     if (existingEnhancerScript) {
                         return;
                     }
                     let enhancerInjected = false;
                     const appendEnhancer = () => {
-                        if (enhancerInjected || (examWindow.practicePageEnhancer && typeof examWindow.practicePageEnhancer.initialize === 'function')) {
+                        const alreadyReady = isListeningExam
+                            ? (examWindow.__listeningBridgeGetState || examWindow.__listeningBridgeComplete)
+                            : (examWindow.practicePageEnhancer && typeof examWindow.practicePageEnhancer.initialize === 'function');
+                        if (enhancerInjected || alreadyReady) {
                             return;
                         }
                         enhancerInjected = true;
                         const scriptEl = doc.createElement('script');
                         scriptEl.type = 'text/javascript';
                         scriptEl.defer = true;
-                        scriptEl.dataset.practiceEnhancer = 'true';
+                        scriptEl.dataset[bridgeDatasetKey] = 'true';
                         scriptEl.src = ensureScriptUrl();
 
                         scriptEl.onload = () => {
@@ -923,9 +1075,11 @@
                         };
 
                         scriptEl.onerror = (loadError) => {
-                            console.warn('[DataInjection] 加载增强器失败，回退到内联脚本:', loadError);
+                            console.warn('[DataInjection] 加载增强器失败:', loadError);
                             scriptEl.remove();
-                            this.injectInlineScript(examWindow, examId);
+                            if (!isListeningExam) {
+                                this.injectInlineScript(examWindow, examId);
+                            }
                         };
 
                         host.appendChild(scriptEl);
@@ -934,7 +1088,9 @@
                     appendEnhancer();
                 } catch (error) {
                     console.error('[DataInjection] 注入增强器脚本时出错:', error);
-                    this.injectInlineScript(examWindow, examId);
+                    if (!isListeningExam) {
+                        this.injectInlineScript(examWindow, examId);
+                    }
                 }
             };
 
@@ -1482,6 +1638,7 @@
                     'SESSION_READY',
                     'PROGRESS_UPDATE',
                     'PRACTICE_COMPLETE',
+                    'PRACTICE_RESULT',
                     'ERROR_OCCURRED',
                     'REQUEST_INIT',
                     'SUITE_CLOSE_ATTEMPT',
@@ -1640,7 +1797,7 @@
 
                 // 放宽消息源过滤，兼容 inline_collector 与 practice_page
                 const src = normalized.sourceTag || '';
-                const allowedSources = new Set(['practice_page', 'inline_collector', 'suite_placeholder']);
+                const allowedSources = new Set(['practice_page', 'inline_collector', 'suite_placeholder', 'listening_record_bridge']);
                 if (src && !allowedSources.has(src)) {
                     return; // 非预期来源的消息忽略
                 }
@@ -1674,6 +1831,7 @@
                 }
                 const isSuiteFlowPayload = Boolean(
                     (type === 'PRACTICE_COMPLETE'
+                        || type === 'PRACTICE_RESULT'
                         || type === 'REVIEW_NAVIGATE'
                         || type === 'SIMULATION_NAVIGATE'
                         || type === 'SIMULATION_SUBMIT'
@@ -1710,7 +1868,7 @@
                             windowInfo.expectedSessionId = payloadSessionId;
                         }
                     }
-                } else if (type === 'PRACTICE_COMPLETE') {
+                } else if (type === 'PRACTICE_COMPLETE' || type === 'PRACTICE_RESULT') {
                     if (!expectedSessionId) {
                         return;
                     }
@@ -1757,6 +1915,7 @@
                         this.handleProgressUpdate(examId, data);
                         break;
                     case 'PRACTICE_COMPLETE':
+                    case 'PRACTICE_RESULT':
                         if (windowInfo && windowInfo.reviewMode) {
                             console.info('[ReviewReplay] 回顾模式忽略 PRACTICE_COMPLETE:', examId);
                             break;
@@ -3055,7 +3214,9 @@
             try {
                 const collector = window.spellingErrorCollector;
                 const hasExisting = Array.isArray(data?.spellingErrors) && data.spellingErrors.length > 0;
-                const comparison = data?.answerComparison || data?.realData?.answerComparison || null;
+                const comparison = typeof this._resolveCompletionAnswerComparison === 'function'
+                    ? this._resolveCompletionAnswerComparison(data)
+                    : (data?.answerComparison || data?.realData?.answerComparison || null);
 
                 if (!hasExisting && collector && typeof collector.detectErrors === 'function' && comparison && typeof comparison === 'object') {
                     const examIdForDetect = data?.examId || examId;
@@ -3110,27 +3271,24 @@
                 }
             }
 
-            const recorderAvailable = this.components
-                && this.components.practiceRecorder
-                && typeof this.components.practiceRecorder.savePracticeRecord === 'function';
+            const recorder = this.components && this.components.practiceRecorder;
+            const completionData = suiteHandlerDeclined
+                ? Object.assign({}, data, {
+                    allowStandaloneSave: true,
+                    metadata: Object.assign({}, data?.metadata || {}, { allowStandaloneSave: true, suiteFallback: true })
+                })
+                : data;
 
             try {
-                if (recorderAvailable) {
+                if (recorder && typeof recorder.handleSessionCompleted === 'function') {
                     try {
-                        const normalizedData = suiteHandlerDeclined
-                            ? Object.assign({}, data, {
-                                allowStandaloneSave: true,
-                                metadata: Object.assign({}, data?.metadata || {}, { allowStandaloneSave: true, suiteFallback: true })
-                            })
-                            : data;
-                        await this.components.practiceRecorder.savePracticeRecord(normalizedData);
+                        await recorder.handleSessionCompleted(completionData);
                     } catch (recErr) {
-                        console.warn('[DataCollection] PracticeRecorder 保存失败，改用降级存储:', recErr);
-                        await this.saveRealPracticeData(examId, data, { savingAsFallback: true });
+                        console.warn('[DataCollection] PracticeRecorder 完成事件处理失败，改用降级存储:', recErr);
+                        await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true });
                     }
                 } else {
-                    // 直接保存真实数据（采用旧版本的简单方式）
-                    await this.saveRealPracticeData(examId, data, { savingAsFallback: true });
+                    await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true });
                 }
 
                 // 刷新内存中的练习记录，确保无需手动刷新即可看到

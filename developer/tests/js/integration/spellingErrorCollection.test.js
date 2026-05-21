@@ -113,6 +113,27 @@ async function runTests() {
         assert.ok(errorWords.includes('receive'), '应该包含receive');
         
         results.push({ name: '错误检测', status: 'pass' });
+
+        // 测试1b: 听力候选答案和短语错词字段
+        console.log('测试1b: 听力候选答案和短语错词字段');
+        const candidateErrors = collector.detectErrors({
+            q20: {
+                userAnswer: 'green gardon',
+                correctAnswer: 'green garden',
+                acceptedAnswers: ['green garden', 'green gardens'],
+                canonicalAnswer: 'green garden',
+                isCorrect: false
+            }
+        }, 'set-candidate', testData.examId);
+
+        assert.strictEqual(candidateErrors.length, 1, '应该检测短语中的单个拼写错误');
+        assert.strictEqual(candidateErrors[0].word, 'garden', '应该抓取正确 token');
+        assert.strictEqual(candidateErrors[0].userInput, 'gardon', '应该记录用户错拼 token');
+        assert.deepStrictEqual(candidateErrors[0].acceptedAnswers, ['green garden', 'green gardens']);
+        assert.strictEqual(candidateErrors[0].canonicalAnswer, 'green garden');
+        assert.strictEqual(candidateErrors[0].metadata.comparisonMode, 'phrase-token');
+
+        results.push({ name: '听力候选答案和短语错词字段', status: 'pass' });
         
         // 测试2: 单词过滤
         console.log('测试2: 单词过滤');
@@ -269,6 +290,18 @@ async function runTests() {
         assert.strictEqual(p1ListAfter.words.length, 0, 'P1词表应该仍然为空');
         
         results.push({ name: 'P4词表独立性', status: 'pass' });
+
+        // 测试13: 候选答案字段保存到错词词表
+        console.log('测试13: 候选答案字段保存到错词词表');
+        await collector.saveErrors(candidateErrors);
+        const p1CandidateList = await collector.loadVocabList('p1');
+        const savedGarden = p1CandidateList.words.find(w => w.word === 'garden');
+        assert.ok(savedGarden, '应该保存短语 token 错词');
+        assert.deepStrictEqual(savedGarden.acceptedAnswers, ['green garden', 'green gardens']);
+        assert.strictEqual(savedGarden.canonicalAnswer, 'green garden');
+        assert.strictEqual(savedGarden.reasonCode, candidateErrors[0].reasonCode);
+
+        results.push({ name: '候选答案字段保存到错词词表', status: 'pass' });
         
     } catch (error) {
         results.push({

@@ -9,7 +9,8 @@
 
     function registerDefaultManifest() {
         manifest['exam-data'] = [
-            'assets/scripts/complete-exam-data.js'
+            'assets/scripts/complete-exam-data.js',
+            'assets/generated/listening-exams/listening-index.compat.js'
         ];
 
         manifest['state-core'] = [
