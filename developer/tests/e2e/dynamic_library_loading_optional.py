@@ -141,9 +141,15 @@ async def run_dynamic_import(page: Page) -> dict[str, Any]:
 
             window.prompt = () => 'optional-dup';
             const incrementalReport = await window.handleLibraryUpload({ type: 'listening', mode: 'incremental' }, files);
-            const afterDataset = await window.storage.get(activeKey, []);
+            const incrementalActiveKey = await window.storage.get('active_exam_index_key', '');
+            const configsAfterIncremental = await window.storage.get('exam_index_configurations', []);
+            const afterDataset = await window.storage.get(incrementalActiveKey, []);
+            const fullDatasetAfterIncremental = await window.storage.get(activeKey, []);
             const afterCustomRows = Array.isArray(afterDataset)
                 ? afterDataset.filter(row => row && row.type === 'listening' && row.sourceKind === 'file-picker')
+                : [];
+            const fullConfigCustomRows = Array.isArray(fullDatasetAfterIncremental)
+                ? fullDatasetAfterIncremental.filter(row => row && row.type === 'listening' && row.sourceKind === 'file-picker')
                 : [];
             const reportHost = document.createElement('div');
             window.renderLibraryUploadReport(fullReport, reportHost);
@@ -151,7 +157,9 @@ async def run_dynamic_import(page: Page) -> dict[str, Any]:
             return {
                 beforeActive,
                 activeKey,
+                incrementalActiveKey,
                 configCount: Array.isArray(configs) ? configs.length : -1,
+                configCountAfterIncremental: Array.isArray(configsAfterIncremental) ? configsAfterIncremental.length : -1,
                 datasetCount: Array.isArray(dataset) ? dataset.length : -1,
                 customRows,
                 builtUrl,
@@ -160,6 +168,7 @@ async def run_dynamic_import(page: Page) -> dict[str, Any]:
                 incrementalReport,
                 renderedReportText: reportHost.textContent || '',
                 afterCustomCount: afterCustomRows.length,
+                fullConfigCustomCountAfterIncremental: fullConfigCustomRows.length,
                 afterDatasetCount: Array.isArray(afterDataset) ? afterDataset.length : -1
             };
         }
@@ -197,7 +206,10 @@ async def run() -> int:
             assert "config-answer-key" in (custom.get("detectedBy") or []), "缺少内容识别信号"
             assert str(result.get("builtUrl") or "").startswith("blob:"), f"外部上传题源未使用运行时 Blob URL: {result.get('builtUrl')}"
             assert (result.get("customOverview") or {}).get("total") == 1, "Custom 听力类别未暴露到总览统计"
+            assert result.get("incrementalActiveKey") and result.get("incrementalActiveKey") != result.get("activeKey"), "增量导入应创建并激活新的配置快照"
+            assert result.get("configCountAfterIncremental", 0) >= result.get("configCount", 0) + 1, "增量导入未追加新的配置记录"
             assert result.get("afterCustomCount") == 1, "增量导入同一文件应去重/更新，不应重复追加"
+            assert result.get("fullConfigCustomCountAfterIncremental") == 1, "增量导入不应污染全量导入生成的旧配置"
             full_report = result.get("fullReport") or {}
             incremental_report = result.get("incrementalReport") or {}
             assert full_report.get("status") == "success", f"全量导入报告状态错误: {full_report}"

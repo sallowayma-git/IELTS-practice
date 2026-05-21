@@ -3042,6 +3042,29 @@ async function debugCompareActiveIndexWithDefault() {
 }
 
 function renderLibraryConfigFallback(container, configs, options) {
+    const formatConfigMeta = (config) => {
+        const counts = config && config.counts && typeof config.counts === 'object' ? config.counts : {};
+        const total = Number.isFinite(Number(config && config.examCount)) ? Number(config.examCount) : (Number(counts.total) || 0);
+        const parts = [];
+        try {
+            parts.push(new Date(config.timestamp).toLocaleString());
+        } catch (_) {
+            parts.push('未知时间');
+        }
+        parts.push(total + ' 个题目');
+        if (Number.isFinite(Number(counts.reading)) || Number.isFinite(Number(counts.listening))) {
+            parts.push('阅读 ' + (Number(counts.reading) || 0));
+            parts.push('听力 ' + (Number(counts.listening) || 0));
+        }
+        const lastImport = config && config.lastImport && typeof config.lastImport === 'object' ? config.lastImport : null;
+        if (lastImport && (lastImport.type || lastImport.mode)) {
+            const typeLabel = lastImport.type === 'reading' ? '阅读' : (lastImport.type === 'listening' ? '听力' : '题库');
+            const modeLabel = lastImport.mode === 'incremental' ? '增量' : (lastImport.mode === 'full' ? '全量' : '导入');
+            parts.push(typeLabel + modeLabel);
+        }
+        return parts.join(' · ');
+    };
+
     const hostClass = 'library-config-list';
     let host = container.querySelector('.' + hostClass);
     if (!host) {
@@ -3088,11 +3111,7 @@ function renderLibraryConfigFallback(container, configs, options) {
 
         const meta = document.createElement('div');
         meta.className = 'library-config-panel__meta';
-        try {
-            meta.textContent = new Date(config.timestamp).toLocaleString() + ' · ' + (config.examCount || 0) + ' 个题目';
-        } catch (_) {
-            meta.textContent = (config.examCount || 0) + ' 个题目';
-        }
+        meta.textContent = formatConfigMeta(config);
         info.appendChild(meta);
 
         const actions = document.createElement('div');

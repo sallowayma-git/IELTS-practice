@@ -368,6 +368,30 @@
         let type = normalizeExamType(record.type || record.examType || metadata.examType);
         let title = record.title || record.examTitle || metadata.examTitle || metadata.title || null;
 
+        if ((!category || category === 'all' || category === 'Unknown') && title) {
+            const embedded = normalizeCategoryKey(title);
+            if (embedded !== 'all') {
+                category = embedded;
+            }
+        }
+
+        if (type === 'all') {
+            const sourceText = [
+                record.type,
+                record.examType,
+                metadata.type,
+                metadata.examType,
+                record.source,
+                metadata.source,
+                record.practiceType,
+                metadata.practiceType
+            ].filter(Boolean).join(' ');
+            const inferredType = normalizeExamType(sourceText);
+            if (inferredType !== 'all') {
+                type = inferredType;
+            }
+        }
+
         if (category === 'all' || category === 'Unknown' || !title || type === 'all') {
             const list = Array.isArray(examIndex) ? examIndex : [];
             let entry = null;

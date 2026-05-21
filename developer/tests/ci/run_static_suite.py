@@ -1905,6 +1905,36 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("LibraryDiscovery 动态题库识别测试", False, "测试脚本缺失"))
         all_passed = False
 
+    library_manager_import_test = REPO_ROOT / "developer" / "tests" / "js" / "libraryManagerImportConfig.test.js"
+    if library_manager_import_test.exists():
+        library_manager_import_passed, library_manager_import_detail = _run_json_subprocess(
+            ["node", str(library_manager_import_test)],
+            timeout=30,
+        )
+        if library_manager_import_passed:
+            library_manager_import_passed = library_manager_import_detail.get("status") == "pass"
+            library_manager_import_detail = library_manager_import_detail.get("detail", library_manager_import_detail)
+        results.append(_format_result("LibraryManager 导入配置隔离测试", library_manager_import_passed, library_manager_import_detail))
+        all_passed &= library_manager_import_passed
+    else:
+        results.append(_format_result("LibraryManager 导入配置隔离测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    browse_preferences_records_test = REPO_ROOT / "developer" / "tests" / "js" / "browsePreferencesRecords.test.js"
+    if browse_preferences_records_test.exists():
+        browse_preferences_records_passed, browse_preferences_records_detail = _run_json_subprocess(
+            ["node", str(browse_preferences_records_test)],
+            timeout=30,
+        )
+        if browse_preferences_records_passed:
+            browse_preferences_records_passed = browse_preferences_records_detail.get("status") == "pass"
+            browse_preferences_records_detail = browse_preferences_records_detail.get("detail", browse_preferences_records_detail)
+        results.append(_format_result("BrowsePreferences 历史记录锚点测试", browse_preferences_records_passed, browse_preferences_records_detail))
+        all_passed &= browse_preferences_records_passed
+    else:
+        results.append(_format_result("BrowsePreferences 历史记录锚点测试", False, "测试脚本缺失"))
+        all_passed = False
+
     overview_stats_test = REPO_ROOT / "developer" / "tests" / "js" / "overviewStats.test.js"
     if overview_stats_test.exists():
         overview_stats_passed, overview_stats_detail = _run_json_subprocess(

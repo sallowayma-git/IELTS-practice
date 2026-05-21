@@ -1089,6 +1089,7 @@
         return create('div', {
           className: 'library-loader-card library-loader-card--' + type
         }, [
+          create('div', { className: 'library-loader-card-kicker' }, type === 'reading' ? 'READING' : 'LISTENING'),
           create('h3', { className: 'library-loader-card-title' }, title),
           create('p', { className: 'library-loader-card-description' }, description),
           create('div', { className: 'library-loader-actions' }, [
@@ -1100,7 +1101,7 @@
                 libraryAction: 'trigger-input',
                 libraryTarget: prefix + '-full-input'
               }
-            }, '全量重载'),
+            }, '创建全量配置'),
             create('button', {
               type: 'button',
               className: 'btn btn-secondary library-loader-secondary',
@@ -1109,7 +1110,7 @@
                 libraryAction: 'trigger-input',
                 libraryTarget: prefix + '-inc-input'
               }
-            }, '增量更新')
+            }, '创建增量配置')
           ]),
           create('input', {
             type: 'file',
@@ -1151,7 +1152,10 @@
       });
 
       var header = create('div', { className: 'modal-header library-loader-header' }, [
-        create('h2', { className: 'modal-title', id: 'library-loader-title' }, '📚 加载题库'),
+        create('div', { className: 'library-loader-title-group' }, [
+          create('div', { className: 'library-loader-eyebrow' }, 'LIBRARY IMPORT'),
+          create('h2', { className: 'modal-title', id: 'library-loader-title' }, '加载题库')
+        ]),
         create('button', {
           type: 'button',
           className: 'modal-close library-loader-close',
@@ -1162,14 +1166,14 @@
 
       var body = create('div', { className: 'modal-body library-loader-body' }, [
         create('div', { className: 'library-loader-grid' }, [
-          createLoaderCard('reading', '📖 阅读题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF的根文件夹。', '💡 推荐结构：任意根目录/分类目录/题目目录/HTML 或 PDF'),
-          createLoaderCard('listening', '🎧 听力题库加载', '支持全量重载与增量更新。请上传包含听力HTML和音频的任意根文件夹。', '💡 系统会递归识别任意层级的听力题源，不要求 P1/P2/P3/P4 固定目录。')
+          createLoaderCard('reading', '阅读题库', '从所选文件夹递归识别 HTML/PDF 题源。', '全量只替换阅读索引；增量只追加或更新新阅读题。'),
+          createLoaderCard('listening', '听力题库', '从任意层级识别带答案链路的听力 HTML 和音频。', '全量只替换听力索引；增量只追加或更新新听力题。')
         ]),
         create('div', { className: 'library-loader-instructions' }, [
-          create('div', { className: 'library-loader-instructions-title' }, '📋 操作说明'),
+          create('div', { className: 'library-loader-instructions-title' }, '配置隔离'),
           create('ul', { className: 'library-loader-instructions-list' }, [
-            create('li', null, '全量重载会替换当前配置中对应类型（阅读/听力）的全部索引，并保留另一类型原有数据。'),
-            create('li', null, '增量更新会将新文件生成的新索引追加到当前配置。若当前为默认配置，则会自动复制为新配置后再追加，确保默认配置不被影响。')
+            create('li', null, '每次导入都会创建新的题库配置，旧配置和练习记录保持不动。'),
+            create('li', null, '阅读与听力索引独立更新，另一类型从当前配置继承。')
           ])
         ]),
         create('div', {
@@ -1527,15 +1531,7 @@
         });
       }
 
-      var label = '';
-      if (mode === 'incremental') {
-        try {
-          label = prompt('为此次增量更新输入一个文件夹标签', '增量-' + new Date().toISOString().slice(0, 10)) || '';
-        } catch (_) { }
-        if (label) {
-          window.showMessage && window.showMessage('使用标签: ' + label, 'info');
-        }
-      }
+      var label = mode === 'incremental' ? ('增量-' + new Date().toISOString().slice(0, 10)) : '';
 
       window.showMessage && window.showMessage('正在递归扫描文件并识别题源...', 'info');
       var discoveryResult;
@@ -1563,6 +1559,34 @@
           status: 'empty',
           message: hint
         });
+      }
+
+      var manager = window.LibraryManager && typeof window.LibraryManager.getInstance === 'function'
+        ? window.LibraryManager.getInstance()
+        : null;
+      if (manager && typeof manager.createImportedLibraryConfiguration === 'function') {
+        try {
+          var created = await manager.createImportedLibraryConfiguration({
+            type: type,
+            mode: mode,
+            additions: additions,
+            label: label,
+            discoveryResult: discoveryResult,
+            activate: true
+          });
+          window.showMessage && window.showMessage('新的题库配置已创建并激活：识别 ' + additions.length + ' 个题目', 'success');
+          return _fallbackBuildUploadReport(discoveryResult, {
+            status: 'success',
+            mode: mode,
+            configKey: created.key,
+            configName: created.name,
+            counts: created.counts,
+            merge: created.merge,
+            message: '新的题库配置已创建并激活'
+          });
+        } catch (managerError) {
+          console.warn('[Fallback] LibraryManager 导入配置创建失败，使用旧降级路径:', managerError);
+        }
       }
 
       var activeKey = await _fallbackGetActiveLibraryKey();
@@ -1645,51 +1669,22 @@
         }
       }
 
-      var isDefault = activeKey === 'exam_index';
-      var targetKeyInc = activeKey;
-      var configNameInc = '';
-      if (isDefault) {
-        targetKeyInc = 'exam_index_' + Date.now();
-        configNameInc = (type === 'reading' ? '阅读' : '听力') + '增量-' + new Date().toLocaleString();
-        try {
-          await saveAndApply(targetKeyInc, configNameInc, true);
-          window.showMessage && window.showMessage('已从默认题库复制并创建增量配置：新增/更新 ' + additions.length + ' 个题目', 'success');
-          return _fallbackBuildUploadReport(discoveryResult, {
-            status: 'success',
-            mode: mode,
-            configKey: targetKeyInc,
-            configName: configNameInc,
-            merge: mergeResult,
-            message: '已从默认题库复制并创建增量配置'
-          });
-        } catch (incApplyErr) {
-          console.warn('[Fallback] 应用增量题库失败，尝试刷新页面', incApplyErr);
-          window.showMessage && window.showMessage('增量题库已保存，正在刷新界面...', 'warning');
-          setTimeout(function () { try { location.reload(); } catch (_) { } }, 800);
-          return _fallbackBuildUploadReport(discoveryResult, {
-            status: 'warning',
-            mode: mode,
-            configKey: targetKeyInc,
-            configName: configNameInc,
-            merge: mergeResult,
-            message: '增量题库已保存，界面刷新后生效'
-          });
-        }
-      }
-
-      await saveAndApply(targetKeyInc, (type === 'reading' ? '阅读' : '听力') + '增量-' + new Date().toLocaleString(), false);
+      var targetKeyInc = 'exam_index_' + Date.now();
+      var configNameInc = (type === 'reading' ? '阅读' : '听力') + '增量-' + new Date().toLocaleString();
+      await saveAndApply(targetKeyInc, configNameInc, false);
       await _fallbackApplyLibraryConfig(targetKeyInc, newIndex, { setActive: true, skipConfigRefresh: false });
       try { if (typeof window.updateOverview === 'function') window.updateOverview(); } catch (_) { }
       if (document.getElementById('browse-view') && document.getElementById('browse-view').classList.contains('active') && typeof window.loadExamList === 'function') {
         try { window.loadExamList(); } catch (_) { }
       }
-      window.showMessage && window.showMessage('索引已更新：新增/更新 ' + additions.length + ' 个题目', 'success');
+      window.showMessage && window.showMessage('新的增量题库配置已创建并激活：新增/更新 ' + additions.length + ' 个题目', 'success');
       return _fallbackBuildUploadReport(discoveryResult, {
         status: 'success',
         mode: mode,
         configKey: targetKeyInc,
+        configName: configNameInc,
         merge: mergeResult,
-        message: '索引已更新'
+        message: '新的增量题库配置已创建并激活'
       });
     };
   }

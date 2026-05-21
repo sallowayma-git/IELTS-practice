@@ -1547,7 +1547,7 @@
 
         info.appendChild(this._createElement('div', null, titleChildren));
 
-        var metaText = this._formatTimestamp(config.timestamp) + ' · ' + (config.examCount || 0) + ' 个题目';
+        var metaText = this._formatConfigMeta(config);
         info.appendChild(this._createElement('div', { className: this.classNames.meta }, metaText));
 
         var actions = this._createElement('div', { className: this.classNames.actions });
@@ -1757,6 +1757,24 @@
         } catch (error) {
             return '未知时间';
         }
+    };
+
+    LibraryConfigView.prototype._formatConfigMeta = function _formatConfigMeta(config) {
+        config = config || {};
+        var counts = config.counts && typeof config.counts === 'object' ? config.counts : {};
+        var total = Number.isFinite(Number(config.examCount)) ? Number(config.examCount) : (Number(counts.total) || 0);
+        var parts = [this._formatTimestamp(config.timestamp), total + ' 个题目'];
+        if (Number.isFinite(Number(counts.reading)) || Number.isFinite(Number(counts.listening))) {
+            parts.push('阅读 ' + (Number(counts.reading) || 0));
+            parts.push('听力 ' + (Number(counts.listening) || 0));
+        }
+        var lastImport = config.lastImport && typeof config.lastImport === 'object' ? config.lastImport : null;
+        if (lastImport && (lastImport.type || lastImport.mode)) {
+            var typeLabel = lastImport.type === 'reading' ? '阅读' : (lastImport.type === 'listening' ? '听力' : '题库');
+            var modeLabel = lastImport.mode === 'incremental' ? '增量' : (lastImport.mode === 'full' ? '全量' : '导入');
+            parts.push(typeLabel + modeLabel);
+        }
+        return parts.join(' · ');
     };
 
     global.PracticeStats = PracticeStats;
