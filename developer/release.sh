@@ -30,10 +30,26 @@ elif command -v git &> /dev/null && git rev-parse --git-dir &> /dev/null; then
 else
     VERSION="snapshot"
 fi
+VERSION="$(printf '%s' "${VERSION}" | sed 's#[^A-Za-z0-9._-]#-#g')"
 
 DIST_DIR="dist"
 ZIP_NAME="ielts-practice-${VERSION}.zip"
 ZIP_PATH="${DIST_DIR}/${ZIP_NAME}"
+
+if ! command -v node >/dev/null 2>&1; then
+    echo "ERROR: node is required to build release bundles."
+    exit 1
+fi
+
+if ! command -v zip >/dev/null 2>&1; then
+    echo "ERROR: zip is required to create the release archive."
+    exit 1
+fi
+
+if ! command -v zipinfo >/dev/null 2>&1; then
+    echo "ERROR: zipinfo is required to verify the release archive."
+    exit 1
+fi
 
 echo "============================================"
 echo " IELTS Practice App — Release Builder"
@@ -70,11 +86,73 @@ zip -r "${ZIP_PATH}" \
     ReadingPractice/ \
     -x "*.DS_Store" \
        "*.md" \
+       "*.py" \
        "assets/developer/*" \
        ".git/*" \
        ".gitignore" \
        ".claude/*" \
        "node_modules/*"
+
+ZIP_LIST="$(mktemp)"
+zipinfo -1 "${ZIP_PATH}" > "${ZIP_LIST}"
+
+require_entry() {
+    local entry="$1"
+    if ! grep -Fxq "${entry}" "${ZIP_LIST}"; then
+        echo "ERROR: release zip missing required entry: ${entry}"
+        rm -f "${ZIP_LIST}"
+        exit 1
+    fi
+}
+
+reject_entry_prefix() {
+    local prefix="$1"
+    if grep -q "^${prefix}" "${ZIP_LIST}"; then
+        echo "ERROR: release zip contains forbidden path prefix: ${prefix}"
+        grep "^${prefix}" "${ZIP_LIST}" | head -20
+        rm -f "${ZIP_LIST}"
+        exit 1
+    fi
+}
+
+reject_entry_pattern() {
+    local pattern="$1"
+    if grep -Eq "${pattern}" "${ZIP_LIST}"; then
+        echo "ERROR: release zip contains forbidden entries matching: ${pattern}"
+        grep -E "${pattern}" "${ZIP_LIST}" | head -20
+        rm -f "${ZIP_LIST}"
+        exit 1
+    fi
+}
+
+require_entry "index.html"
+require_entry "css/main.css"
+require_entry "css/heroui-bridge.css"
+require_entry "css/onboarding.css"
+require_entry "assets/vendor/three.min.js"
+require_entry "assets/scripts/complete-exam-data.js"
+require_entry "assets/generated/reading-exams/manifest.js"
+require_entry "assets/generated/reading-exams/reading-practice-unified.html"
+require_entry "js/bundles/runtime-entry.bundle.js"
+require_entry "js/bundles/core-foundation.bundle.js"
+require_entry "js/bundles/ui-shell.bundle.js"
+require_entry "js/bundles/legacy-app.bundle.js"
+require_entry "js/bundles/browse.bundle.js"
+require_entry "js/bundles/practice.bundle.js"
+require_entry "js/bundles/session.bundle.js"
+require_entry "js/bundles/settings.bundle.js"
+require_entry "js/bundles/diagnostics.bundle.js"
+require_entry "js/bundles/more.bundle.js"
+require_entry "js/bundles/theme.bundle.js"
+require_entry "js/bundles/reading-page.bundle.js"
+require_entry "js/bundles/practice-page-enhancer.bundle.js"
+
+reject_entry_prefix "templates/"
+reject_entry_prefix "ListeningPractice/"
+reject_entry_pattern '^assets/scripts/.*\.py$'
+reject_entry_pattern '^js/(app|core|data|runtime|services|utils|components|presentation|views)/'
+
+rm -f "${ZIP_LIST}"
 
 echo ""
 echo "============================================"

@@ -89,6 +89,19 @@ const bundles = {
     'js/bundles/session.bundle.js': [
         'js/app/suitePracticeMixin.js'
     ],
+    'js/bundles/reading-page.bundle.js': [
+        'js/runtime/readingExamRegistry.js',
+        'js/runtime/readingExplanationRegistry.js',
+        'js/runtime/readingHighlightShared.js',
+        'js/utils/answerMatchCore.js',
+        'js/runtime/unifiedReadingPage.js'
+    ],
+    'js/bundles/practice-page-enhancer.bundle.js': [
+        'js/utils/suiteBackGuard.js',
+        'js/utils/answerMatchCore.js',
+        'js/app/spellingErrorCollector.js',
+        'js/practice-page-enhancer.js'
+    ],
     'js/bundles/more.bundle.js': [
         'assets/wordlists/ielts_core.bundle.js',
         'js/utils/vocabDataIO.js',
