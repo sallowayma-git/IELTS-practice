@@ -231,6 +231,19 @@
         return derived;
     }
 
+    async function deletePathMapForConfiguration(key) {
+        if (!key || !global.storage || typeof global.storage.remove !== 'function') {
+            return false;
+        }
+        try {
+            await global.storage.remove(getPathMapStorageKey(key));
+            return true;
+        } catch (error) {
+            console.warn('[ResourceCore] 删除路径映射失败:', error);
+            return false;
+        }
+    }
+
     async function refreshPathMap() {
         if (!global.storage || typeof global.storage.get !== 'function') {
             return setActivePathMap(getPathMap());
@@ -630,6 +643,7 @@
         setActivePathMap,
         loadPathMapForConfiguration,
         savePathMapForConfiguration,
+        deletePathMapForConfiguration,
         refreshPathMap,
         getBasePrefix,
         setBasePrefix,

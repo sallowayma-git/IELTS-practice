@@ -176,6 +176,84 @@ async def run_dynamic_import(page: Page) -> dict[str, Any]:
     )
 
 
+async def delete_inactive_config_via_ui(page: Page, config_key: str) -> dict[str, Any]:
+    before = await page.evaluate(
+        """
+        async (configKey) => {
+            const oldHost = document.getElementById('dynamic-library-delete-test-host');
+            if (oldHost) oldHost.remove();
+            const host = document.createElement('div');
+            host.id = 'dynamic-library-delete-test-host';
+            host.style.position = 'fixed';
+            host.style.left = '24px';
+            host.style.top = '24px';
+            host.style.width = '720px';
+            host.style.maxWidth = 'calc(100vw - 48px)';
+            host.style.zIndex = '3500';
+            document.body.appendChild(host);
+            const sentinelRecords = [{
+                id: 'library-delete-sentinel',
+                examId: 'reading-a',
+                title: 'Sentinel Record',
+                metadata: { examType: 'reading', category: 'P1' }
+            }];
+            await window.storage.set('practice_records', sentinelRecords);
+            await window.renderLibraryConfigList({
+                allowDelete: true,
+                containerId: 'dynamic-library-delete-test-host'
+            });
+            const dataset = await window.storage.get(configKey, null);
+            const pathMap = await window.storage.get('exam_path_map__' + configKey, null);
+            return {
+                activeKey: await window.storage.get('active_exam_index_key', ''),
+                datasetExists: Array.isArray(dataset),
+                pathMapExists: !!pathMap,
+                records: await window.storage.get('practice_records', [])
+            };
+        }
+        """,
+        config_key,
+    )
+
+    delete_button = page.locator(
+        f'#dynamic-library-delete-test-host .library-config-panel [data-config-action="delete"][data-config-key="{config_key}"]'
+    ).first
+    await delete_button.click()
+    confirm_overlay = page.locator(".library-config-confirm-overlay")
+    await confirm_overlay.wait_for(state="visible", timeout=5000)
+    confirm_text = await confirm_overlay.inner_text()
+    await page.locator('.library-config-confirm-overlay [data-confirm-action="confirm"]').click()
+    await page.wait_for_function(
+        "configKey => window.storage.get(configKey, null).then(value => value === null)",
+        arg=config_key,
+        timeout=10000,
+    )
+    await confirm_overlay.wait_for(state="detached", timeout=5000)
+
+    after = await page.evaluate(
+        """
+        async (configKey) => {
+            const configs = await window.storage.get('exam_index_configurations', []);
+            return {
+                activeKey: await window.storage.get('active_exam_index_key', ''),
+                dataset: await window.storage.get(configKey, null),
+                pathMap: await window.storage.get('exam_path_map__' + configKey, null),
+                configStillListed: Array.isArray(configs) && configs.some(cfg => cfg && cfg.key === configKey),
+                records: await window.storage.get('practice_records', []),
+                panelText: (document.querySelector('#dynamic-library-delete-test-host .library-config-panel') || {}).textContent || ''
+            };
+        }
+        """,
+        config_key,
+    )
+
+    return {
+        "before": before,
+        "after": after,
+        "confirmText": confirm_text,
+    }
+
+
 async def run() -> int:
     console_log: List[ConsoleEntry] = []
     report: dict[str, Any] = {
@@ -197,6 +275,7 @@ async def run() -> int:
             await dismiss_overlays(page)
 
             result = await run_dynamic_import(page)
+            delete_result = await delete_inactive_config_via_ui(page, result.get("activeKey") or "")
             custom_rows = result.get("customRows") or []
             assert result.get("activeKey") and result.get("activeKey") != "exam_index", "全量导入未创建新的自定义题库配置"
             assert len(custom_rows) == 1, f"应只识别一个有效听力 HTML，实际: {len(custom_rows)}"
@@ -222,7 +301,16 @@ async def run() -> int:
             rendered_text = result.get("renderedReportText") or ""
             assert "导入完成" in rendered_text and "缺少答案或评分链路" in rendered_text, f"导入报告 UI 未展示关键结果: {rendered_text}"
             assert "当前会话 Blob URL" in rendered_text, f"导入报告 UI 未展示 file:// 会话边界: {rendered_text}"
+            assert (delete_result.get("before") or {}).get("datasetExists") is True, f"删除前旧配置数据集不存在: {delete_result}"
+            assert (delete_result.get("before") or {}).get("pathMapExists") is True, f"删除前旧配置 path map 不存在: {delete_result}"
+            assert "删除题库配置" in (delete_result.get("confirmText") or ""), f"删除配置未出现项目内确认层: {delete_result}"
+            assert (delete_result.get("after") or {}).get("dataset") is None, f"删除后配置数据集仍残留: {delete_result}"
+            assert (delete_result.get("after") or {}).get("pathMap") is None, f"删除后 path map 仍残留: {delete_result}"
+            assert (delete_result.get("after") or {}).get("configStillListed") is False, f"删除后配置列表仍残留: {delete_result}"
+            assert (delete_result.get("after") or {}).get("activeKey") == result.get("incrementalActiveKey"), f"删除非活动配置不应改变当前配置: {delete_result}"
+            assert (delete_result.get("after") or {}).get("records") == (delete_result.get("before") or {}).get("records"), f"删除题库配置不应改写练习记录: {delete_result}"
             report["checks"]["dynamicImport"] = result
+            report["checks"]["configDelete"] = delete_result
             report["status"] = "pass"
             return 0
         except Exception as error:

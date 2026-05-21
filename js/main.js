@@ -2510,6 +2510,94 @@ if (typeof window !== 'undefined') {
     window.showMessage = showMessage;
 }
 
+function requestLibraryConfigDeleteConfirmation(configLabel) {
+    if (typeof document === 'undefined' || !document.body) {
+        return Promise.resolve(false);
+    }
+
+    return new Promise((resolve) => {
+        const existing = document.querySelector('.library-config-confirm-overlay');
+        if (existing) {
+            existing.remove();
+        }
+
+        const overlay = document.createElement('div');
+        overlay.className = 'library-config-confirm-overlay';
+        overlay.setAttribute('role', 'presentation');
+
+        const dialog = document.createElement('div');
+        dialog.className = 'library-config-confirm-dialog';
+        dialog.setAttribute('role', 'dialog');
+        dialog.setAttribute('aria-modal', 'true');
+        dialog.setAttribute('aria-labelledby', 'library-config-confirm-title');
+
+        const title = document.createElement('h3');
+        title.id = 'library-config-confirm-title';
+        title.className = 'library-config-confirm-title';
+        title.textContent = '删除题库配置';
+
+        const body = document.createElement('p');
+        body.className = 'library-config-confirm-body';
+        body.textContent = `将删除配置“${configLabel || '未命名题库'}”及其题库路径映射。练习记录不会被删除。`;
+
+        const actions = document.createElement('div');
+        actions.className = 'library-config-confirm-actions';
+
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'btn btn-secondary';
+        cancel.dataset.confirmAction = 'cancel';
+        cancel.textContent = '取消';
+
+        const confirm = document.createElement('button');
+        confirm.type = 'button';
+        confirm.className = 'btn btn-warning';
+        confirm.dataset.confirmAction = 'confirm';
+        confirm.textContent = '删除';
+
+        actions.appendChild(cancel);
+        actions.appendChild(confirm);
+        dialog.appendChild(title);
+        dialog.appendChild(body);
+        dialog.appendChild(actions);
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+
+        let settled = false;
+        const finish = (value) => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            overlay.removeEventListener('click', onClick);
+            document.removeEventListener('keydown', onKeydown);
+            overlay.remove();
+            resolve(value);
+        };
+        const onClick = (event) => {
+            const target = event.target && event.target.closest ? event.target.closest('[data-confirm-action]') : null;
+            if (target) {
+                finish(target.dataset.confirmAction === 'confirm');
+                return;
+            }
+            if (event.target === overlay) {
+                finish(false);
+            }
+        };
+        const onKeydown = (event) => {
+            if (event.key === 'Escape') {
+                finish(false);
+            }
+        };
+
+        overlay.addEventListener('click', onClick);
+        document.addEventListener('keydown', onKeydown);
+        setTimeout(() => {
+            try { cancel.focus(); } catch (_) { }
+        }, 0);
+    });
+}
+
 // Other functions from the original file (simplified or kept as is)
 async function getActiveLibraryConfigurationKey() {
     const manager = await ensureLibraryManagerReady();
@@ -2991,6 +3079,14 @@ async function applyLibraryConfiguration(key, dataset, options = {}) {
     return false;
 }
 
+async function deleteLibraryConfiguration(key) {
+    const manager = await ensureLibraryManagerReady();
+    if (manager && typeof manager.deleteLibraryConfiguration === 'function') {
+        return await manager.deleteLibraryConfiguration(key);
+    }
+    return { deleted: false, reason: 'manager-unavailable' };
+}
+
 async function debugCompareActiveIndexWithDefault() {
     try {
         const activeKey = await getActiveLibraryConfigurationKey();
@@ -3319,29 +3415,54 @@ async function deleteLibraryConfig(configKey) {
     } catch (error) {
         console.warn('[LibraryConfig] 无法读取当前题库配置', error);
     }
-    if (confirm('确定要删除这个题库配置吗？此操作不可恢复。')) {
-        let configs = await getLibraryConfigurations();
-        configs = Array.isArray(configs)
-            ? configs.filter((config) => {
-                if (!config) {
+
+    let configLabel = key;
+    try {
+        const configs = await getLibraryConfigurations();
+        const config = Array.isArray(configs)
+            ? configs.find((item) => {
+                if (!item) {
                     return false;
                 }
-                if (typeof config === 'string') {
-                    return config.trim() !== key;
+                if (typeof item === 'string') {
+                    return item.trim() === key;
                 }
-                const cfgKey = typeof config.key === 'string' ? config.key.trim() : '';
-                return cfgKey && cfgKey !== key;
+                return typeof item.key === 'string' && item.key.trim() === key;
             })
-            : [];
-        await storage.set('exam_index_configurations', configs);
-        try {
-            await storage.remove(key);
-        } catch (error) {
-            console.warn('[LibraryConfig] 删除题库数据失败', error);
+            : null;
+        if (config && typeof config === 'object' && config.name) {
+            configLabel = config.name;
+        }
+    } catch (error) {
+        console.warn('[LibraryConfig] 无法读取题库配置名称', error);
+    }
+
+    const confirmed = await requestLibraryConfigDeleteConfirmation(configLabel);
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        const result = await deleteLibraryConfiguration(key);
+        if (result && result.deleted) {
+            showMessage('题库配置已删除，练习记录已保留', 'success');
+            await renderLibraryConfigList({ silentEmpty: true });
+            return;
         }
 
-        showMessage('题库配置已删除', 'success');
-        await renderLibraryConfigList({ silentEmpty: true });
+        const reason = result && result.reason;
+        if (reason === 'default-config') {
+            showMessage('默认题库不可删除', 'warning');
+        } else if (reason === 'active-config') {
+            showMessage('当前正在使用此题库，请先切换到其他配置', 'warning');
+        } else if (reason === 'not-found') {
+            showMessage('未找到这个题库配置', 'warning');
+        } else {
+            showMessage('题库配置删除失败', 'error');
+        }
+    } catch (error) {
+        console.warn('[LibraryConfig] 删除题库配置失败', error);
+        showMessage('题库配置删除失败：' + (error && error.message ? error.message : '未知错误'), 'error');
     }
 }
 

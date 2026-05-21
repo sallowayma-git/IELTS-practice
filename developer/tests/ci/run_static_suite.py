@@ -1392,6 +1392,10 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("switchLibraryConfig 禁止 confirm", switch_passed, switch_detail))
         all_passed &= switch_passed
 
+        delete_confirm_passed, delete_confirm_detail = _check_js_body_forbidden(main_js_source, "deleteLibraryConfig", "confirm(")
+        results.append(_format_result("deleteLibraryConfig 禁止原生 confirm", delete_confirm_passed, delete_confirm_detail))
+        all_passed &= delete_confirm_passed
+
         shim_passed, shim_detail = _check_window_load_library_shim(main_js_source)
         results.append(_format_result("loadLibrary 全局 shim 防递归", shim_passed, shim_detail))
         all_passed &= shim_passed

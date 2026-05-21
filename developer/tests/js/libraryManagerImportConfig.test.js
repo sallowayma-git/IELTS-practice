@@ -303,12 +303,70 @@ async function testSwitchConfigurationDoesNotTouchPracticeRecords() {
     recordResult('切换题库配置不触碰练习记录', { activeKey: 'alt_config' });
 }
 
+async function testDeleteInactiveConfigurationCleansDatasetAndPathMap() {
+    const seed = baseSeed();
+    seed.storage.delete_me = [{
+        id: 'delete-me-listening',
+        examId: 'delete-me-listening',
+        type: 'listening',
+        title: 'Delete Me Listening',
+        category: 'P2',
+        path: 'DeleteMe/',
+        filename: 'delete.html'
+    }];
+    seed.storage['exam_path_map__delete_me'] = {
+        reading: { root: 'ReadingCustom/', exceptions: {} },
+        listening: { root: 'DeleteMe/', exceptions: {} }
+    };
+    seed.storage.exam_index_configurations.push({ name: 'Delete Me', key: 'delete_me', examCount: 1, timestamp: 3 });
+
+    const { window } = createHarness(seed);
+    const manager = window.LibraryManager.getInstance();
+    const before = await window.storage.get('practice_records');
+    const result = await manager.deleteLibraryConfiguration('delete_me');
+
+    assert.strictEqual(result.deleted, true, '非活动自定义配置应允许删除');
+    assert.strictEqual(await window.storage.get('delete_me', null), null, '删除配置时必须删除对应题库数据集');
+    assert.strictEqual(await window.storage.get('exam_path_map__delete_me', null), null, '删除配置时必须清理对应 path map');
+    const configs = await window.storage.get('exam_index_configurations', []);
+    assert(!configs.some((config) => config && config.key === 'delete_me'), '配置列表中不应残留已删除配置');
+    assert.deepStrictEqual(await window.storage.get('practice_records'), before, '删除题库配置不能删除练习记录');
+    assert.strictEqual(await window.storage.get('active_exam_index_key'), 'custom_active', '删除非活动配置不能改变当前活动配置');
+
+    recordResult('删除非活动配置会清理数据集和 path map 且保留练习记录', { key: 'delete_me' });
+}
+
+async function testDeleteConfigurationGuardsDefaultAndActive() {
+    const seed = baseSeed();
+    const { window } = createHarness(seed);
+    const manager = window.LibraryManager.getInstance();
+    const beforeConfigs = await window.storage.get('exam_index_configurations');
+    const beforeRecords = await window.storage.get('practice_records');
+
+    const defaultResult = await manager.deleteLibraryConfiguration('exam_index');
+    const activeResult = await manager.deleteLibraryConfiguration('custom_active');
+
+    assert.strictEqual(defaultResult.deleted, false, '默认配置不能删除');
+    assert.strictEqual(defaultResult.reason, 'default-config', '默认配置删除应返回明确原因');
+    assert.strictEqual(activeResult.deleted, false, '当前活动配置不能删除');
+    assert.strictEqual(activeResult.reason, 'active-config', '活动配置删除应返回明确原因');
+    assert.deepStrictEqual(await window.storage.get('exam_index_configurations'), beforeConfigs, '受保护配置删除不应改写配置列表');
+    assert.deepStrictEqual(await window.storage.get('practice_records'), beforeRecords, '受保护配置删除不应改写练习记录');
+
+    recordResult('删除配置保护默认和当前活动配置', {
+        defaultReason: defaultResult.reason,
+        activeReason: activeResult.reason
+    });
+}
+
 async function main() {
     try {
         await testFullListeningCreatesSnapshotAndKeepsReading();
         await testFullReadingCreatesSnapshotAndKeepsListening();
         await testIncrementalCreatesSnapshotAndDedupes();
         await testSwitchConfigurationDoesNotTouchPracticeRecords();
+        await testDeleteInactiveConfigurationCleansDatasetAndPathMap();
+        await testDeleteConfigurationGuardsDefaultAndActive();
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,
