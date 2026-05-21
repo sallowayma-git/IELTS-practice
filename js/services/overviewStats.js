@@ -26,6 +26,24 @@
         return map;
     }
 
+    function normalizeCustomCategory(category) {
+        const value = String(category || '').trim();
+        return value || 'Custom';
+    }
+
+    function incrementCategory(map, category, type, extra = {}) {
+        const key = normalizeCustomCategory(category);
+        if (!map.has(key)) {
+            map.set(key, Object.assign({
+                category: key,
+                type,
+                total: 0,
+                custom: true
+            }, extra));
+        }
+        map.get(key).total += 1;
+    }
+
     function calculate(exams) {
         const normalized = normalizeExams(exams);
         const reading = createCategoryMap(READING_CATEGORIES, 'reading');
@@ -77,6 +95,7 @@
                     if (listening.has(category)) {
                         listening.get(category).total += 1;
                     } else {
+                        incrementCategory(listening, category, 'listening');
                         listeningUnknownEntries.push(exam);
                     }
                 }

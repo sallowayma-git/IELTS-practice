@@ -1069,7 +1069,7 @@
       var body = create('div', { className: 'modal-body library-loader-body' }, [
         create('div', { className: 'library-loader-grid' }, [
           createLoaderCard('reading', '📖 阅读题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF的根文件夹。', '💡 推荐结构：任意根目录/分类目录/题目目录/HTML 或 PDF'),
-          createLoaderCard('listening', '🎧 听力题库加载', '支持全量重载与增量更新。请上传包含题目HTML/PDF/音频的根文件夹。', '💡 建议路径：ListeningPractice/P3 或 ListeningPractice/P4')
+          createLoaderCard('listening', '🎧 听力题库加载', '支持全量重载与增量更新。请上传包含听力HTML和音频的任意根文件夹。', '💡 系统会递归识别任意层级的听力题源，不要求 P1/P2/P3/P4 固定目录。')
         ]),
         create('div', { className: 'library-loader-instructions' }, [
           create('div', { className: 'library-loader-instructions-title' }, '📋 操作说明'),
@@ -1265,102 +1265,86 @@
       return true;
     }
 
-    function _fallbackDetectFolderPlacement(files, type) {
-      var paths = files
-        .map(function (f) { return (f && (f.webkitRelativePath || f.name) || '').replace(/\\/g, '/'); })
-        .filter(Boolean);
-      if (!paths.length) {
-        return false;
-      }
-
-      var hasQuestionFile = files.some(function (file) {
-        var name = file && file.name ? String(file.name).toLowerCase() : '';
-        return /\.html?$/.test(name) || /\.pdf$/.test(name);
-      });
-      if (!hasQuestionFile) {
-        return false;
-      }
-
+    function _fallbackDefaultPathRoot(type) {
       if (type === 'reading') {
-        // Reading 目录命名不应被硬编码限制，只要包含可识别题目文件即视为有效。
-        return true;
+        return '睡着过项目组/2. 所有文章(11.20)[192篇]/';
       }
-
-      // Listening 推荐包含 P3/P4，但不再强依赖固定父目录名（例如 ListeningPractice）。
-      return paths.some(function (p) { return /(^|\/)(P3|P4)(\/|$)/i.test(p); }) || hasQuestionFile;
+      return 'ListeningPractice/';
     }
 
-    async function _fallbackBuildIndexFromFiles(files, type, label) {
-      var byDir = new Map();
+    function _fallbackHasProtocol(value) {
+      return /^(?:[a-z]+:)?\/\//i.test(String(value || '')) || /^[A-Za-z]:\\/.test(String(value || ''));
+    }
 
-      function normalizeUploadDir(rawDir) {
-        return String(rawDir || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+    function _fallbackNormalizeSlashPath(value) {
+      return String(value || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/{2,}/g, '/');
+    }
+
+    function _fallbackAbsolutizeDefaultExamPath(exam) {
+      if (!exam || typeof exam !== 'object') {
+        return exam;
+      }
+      var next = Object.assign({}, exam);
+      var type = next.type === 'reading' ? 'reading' : (next.type === 'listening' ? 'listening' : '');
+      var path = _fallbackNormalizeSlashPath(next.path || '');
+      if (!type || !path || _fallbackHasProtocol(path) || next.sourceKind === 'file-picker') {
+        return next;
       }
 
-      function normalizeListeningDir(rawDir) {
-        var normalized = normalizeUploadDir(rawDir);
-        if (!normalized) return '';
-
-        var segments = normalized.split('/').filter(Boolean);
-        if (!segments.length) return normalized;
-
-        // Prefer stable semantic anchors from the scanned folder tree.
-        var anchorPatterns = [
-          /^listeningpractice$/i,
-          /^p[1-4]$/i,
-          /^vip$/i
-        ];
-        var anchorIndex = -1;
-        for (var i = 0; i < segments.length; i++) {
-          if (anchorPatterns.some(function (re) { return re.test(segments[i]); })) {
-            anchorIndex = i;
-            break;
-          }
+      var root = _fallbackDefaultPathRoot(type);
+      var normalizedRoot = _fallbackNormalizeSlashPath(root);
+      if (normalizedRoot && !path.toLowerCase().startsWith(normalizedRoot.toLowerCase())) {
+        if (type === 'listening' && /^P[1-4]\//i.test(path)) {
+          next.path = normalizedRoot.replace(/\/+$/, '') + '/' + path;
         }
-        if (anchorIndex >= 0) {
-          return segments.slice(anchorIndex).join('/');
-        }
-        return normalized;
+      }
+      return next;
+    }
+
+    function _fallbackNormalizeIndexForCustomConfig(index) {
+      return Array.isArray(index)
+        ? index.map(_fallbackAbsolutizeDefaultExamPath)
+        : [];
+    }
+
+    function _fallbackMergeLibraryEntries(currentIndex, additions, type, mode) {
+      var discovery = window.LibraryDiscovery;
+      if (discovery && typeof discovery.mergeExamIndexes === 'function') {
+        return discovery.mergeExamIndexes(currentIndex, additions, { type: type, mode: mode });
       }
 
-      files.forEach(function (f) {
-        var rel = (f.webkitRelativePath || f.name || '').replace(/\\/g, '/');
-        var parts = rel.split('/');
-        if (parts.length < 2) return;
-        var dir = parts.slice(0, parts.length - 1).join('/');
-        if (!byDir.has(dir)) byDir.set(dir, []);
-        byDir.get(dir).push(f);
+      var current = Array.isArray(currentIndex) ? currentIndex.slice() : [];
+      var incoming = Array.isArray(additions) ? additions.slice() : [];
+      var base = mode === 'full'
+        ? current.filter(function (exam) { return !exam || exam.type !== type; })
+        : current;
+      var seen = new Set(base.map(function (exam) {
+        return String((exam && (exam.importKey || ((exam.path || '') + '|' + (exam.filename || '') + '|' + (exam.title || '')))) || '').toLowerCase();
+      }));
+      var added = 0;
+      incoming.forEach(function (exam) {
+        var key = String((exam && (exam.importKey || ((exam.path || '') + '|' + (exam.filename || '') + '|' + (exam.title || '')))) || '').toLowerCase();
+        if (key && seen.has(key)) {
+          return;
+        }
+        if (key) {
+          seen.add(key);
+        }
+        base.push(exam);
+        added += 1;
       });
+      return { index: base, added: added, updated: 0, skipped: incoming.length - added };
+    }
 
-      var entries = [];
-      var idx = 0;
-      byDir.forEach(function (fs, dir) {
-        var html = fs.find(function (x) { return x.name.toLowerCase().endsWith('.html'); });
-        var pdf = fs.find(function (x) { return x.name.toLowerCase().endsWith('.pdf'); });
-        if (!html && !pdf) return;
-        var dirName = dir.split('/').pop();
-        var title = dirName.replace(/^\d+\.\s*/, '');
-        var category = 'P1';
-        var m = dir.match(/\b(P1|P2|P3|P4)\b/);
-        if (m) category = m[1];
-        var normalizedDir = type === 'listening'
-          ? normalizeListeningDir(dir)
-          : normalizeUploadDir(dir);
-        if (!normalizedDir) return;
-        var basePath = normalizedDir + '/';
-        var id = 'custom_' + type + '_' + Date.now() + '_' + (idx++);
-        entries.push({
-          id: id,
-          title: label ? '[' + label + '] ' + title : title,
-          category: category,
-          type: type,
-          path: basePath,
-          filename: html ? html.name : undefined,
-          pdfFilename: pdf ? pdf.name : undefined,
-          hasHtml: !!html
-        });
+    async function _fallbackDiscoverLibraryEntries(files, type, label) {
+      if (!window.LibraryDiscovery || typeof window.LibraryDiscovery.discover !== 'function') {
+        throw new Error('LibraryDiscovery 未加载，无法进行内容识别导入');
+      }
+      return window.LibraryDiscovery.discover(files, {
+        type: type,
+        label: label,
+        registerRuntime: true
       });
-      return entries;
     }
 
     async function _fallbackResolveDefault(type) {
@@ -1402,18 +1386,27 @@
         if (label) {
           window.showMessage && window.showMessage('使用标签: ' + label, 'info');
         }
-        if (!_fallbackDetectFolderPlacement(files, type)) {
-          var proceed = typeof confirm === 'function'
-            ? confirm('检测到文件夹结构与推荐示例不一致。\n阅读: 任意根目录/分类目录/题目目录\n听力: 任意根目录下包含 P3 或 P4 子目录\n是否继续?')
-            : true;
-          if (!proceed) return;
-        }
       }
 
-      window.showMessage && window.showMessage('正在解析文件并构建索引...', 'info');
-      var additions = await _fallbackBuildIndexFromFiles(files, type, label);
+      window.showMessage && window.showMessage('正在递归扫描文件并识别题源...', 'info');
+      var discoveryResult;
+      try {
+        discoveryResult = await _fallbackDiscoverLibraryEntries(files, type, label);
+      } catch (error) {
+        console.error('[Fallback] 题库内容识别失败:', error);
+        window.showMessage && window.showMessage('题库识别失败：' + (error && error.message ? error.message : '未知错误'), 'error');
+        return;
+      }
+
+      var additions = discoveryResult && Array.isArray(discoveryResult.entries)
+        ? discoveryResult.entries
+        : [];
       if (!Array.isArray(additions) || additions.length === 0) {
-        window.showMessage && window.showMessage('从所选文件中未检测到任何题目', 'warning');
+        var rejectedCount = discoveryResult && discoveryResult.stats ? discoveryResult.stats.rejected : 0;
+        var hint = type === 'listening'
+          ? '未检测到有效听力HTML：需要包含答案配置、finishTest/评分逻辑、音频或 IELTS Listening 特征。'
+          : '从所选文件中未检测到任何阅读题目。';
+        window.showMessage && window.showMessage(hint + (rejectedCount ? ' 已排除 ' + rejectedCount + ' 个候选文件。' : ''), 'warning');
         return;
       }
 
@@ -1428,43 +1421,52 @@
         } catch (_) { }
       }
       if (!Array.isArray(currentIndex)) currentIndex = [];
+      currentIndex = _fallbackNormalizeIndexForCustomConfig(currentIndex);
 
+      var mergeResult;
       var newIndex;
       if (mode === 'full') {
-        var others = currentIndex.filter(function (e) { return e && e.type !== type; });
-        newIndex = others.concat(additions);
+        mergeResult = _fallbackMergeLibraryEntries(currentIndex, additions, type, 'full');
+        newIndex = mergeResult.index;
         var otherType = type === 'reading' ? 'listening' : 'reading';
         if (!newIndex.some(function (e) { return e && e.type === otherType; })) {
           var fallbackOthers = await _fallbackResolveDefault(otherType);
-          newIndex = newIndex.concat(Array.isArray(fallbackOthers) ? fallbackOthers : []);
+          newIndex = newIndex.concat(_fallbackNormalizeIndexForCustomConfig(Array.isArray(fallbackOthers) ? fallbackOthers : []));
         }
       } else {
-        var existingKeys = new Set(currentIndex.map(function (e) { return (e.path || '') + '|' + (e.filename || '') + '|' + e.title; }));
-        var dedupAdd = additions.filter(function (e) { return !existingKeys.has((e.path || '') + '|' + (e.filename || '') + '|' + e.title); });
-        newIndex = currentIndex.concat(dedupAdd);
+        mergeResult = _fallbackMergeLibraryEntries(currentIndex, additions, type, 'incremental');
+        newIndex = mergeResult.index;
       }
+      newIndex = _fallbackNormalizeIndexForCustomConfig(newIndex);
       if (typeof window.assignExamSequenceNumbers === 'function') {
         try { window.assignExamSequenceNumbers(newIndex); } catch (_) { }
       }
 
-      if (mode === 'full') {
-        var targetKey = 'exam_index_' + Date.now();
-        var configName = (type === 'reading' ? '阅读' : '听力') + '全量-' + new Date().toLocaleString();
+      var saveAndApply = async function (targetKey, configName, shouldApply) {
         await _fallbackSaveIndexForKey(targetKey, newIndex);
-        var fullPathFallback = (typeof window.loadPathMapForConfiguration === 'function')
+        var pathFallback = (typeof window.loadPathMapForConfiguration === 'function')
           ? await window.loadPathMapForConfiguration(targetKey)
           : null;
-        var fullDerivedMap = (typeof window.derivePathMapFromIndex === 'function')
-          ? window.derivePathMapFromIndex(newIndex, fullPathFallback)
-          : fullPathFallback;
+        var pathMap = (typeof window.derivePathMapFromIndex === 'function')
+          ? window.derivePathMapFromIndex(newIndex, pathFallback)
+          : pathFallback;
         if (typeof window.savePathMapForConfiguration === 'function') {
-          await window.savePathMapForConfiguration(targetKey, newIndex, { overrideMap: fullDerivedMap, setActive: true });
+          await window.savePathMapForConfiguration(targetKey, newIndex, { overrideMap: pathMap, setActive: true });
         }
         await _fallbackSaveLibraryConfiguration(configName, targetKey, newIndex.length);
         await _fallbackSetActiveLibraryKey(targetKey);
+        if (shouldApply !== false) {
+          return _fallbackApplyLibraryConfig(targetKey, newIndex, { setActive: true, skipConfigRefresh: false });
+        }
+        return true;
+      };
+
+      if (mode === 'full') {
+        var targetKey = 'exam_index_' + Date.now();
+        var configName = (type === 'reading' ? '阅读' : '听力') + '全量-' + new Date().toLocaleString();
         try {
-          await _fallbackApplyLibraryConfig(targetKey, newIndex, { setActive: true, skipConfigRefresh: false });
-          window.showMessage && window.showMessage('新的题库配置已创建并激活', 'success');
+          await saveAndApply(targetKey, configName, true);
+          window.showMessage && window.showMessage('新的题库配置已创建并激活：识别 ' + additions.length + ' 个题目', 'success');
         } catch (applyErr) {
           console.warn('[Fallback] 应用新题库失败，尝试刷新页面', applyErr);
           window.showMessage && window.showMessage('新的题库已保存，正在刷新界面...', 'warning');
@@ -1479,44 +1481,24 @@
       if (isDefault) {
         targetKeyInc = 'exam_index_' + Date.now();
         configNameInc = (type === 'reading' ? '阅读' : '听力') + '增量-' + new Date().toLocaleString();
-        await _fallbackSaveIndexForKey(targetKeyInc, newIndex);
-        var incFallback = (typeof window.loadPathMapForConfiguration === 'function')
-          ? await window.loadPathMapForConfiguration(targetKeyInc)
-          : null;
-        var derivedMap = (typeof window.derivePathMapFromIndex === 'function')
-          ? window.derivePathMapFromIndex(newIndex, incFallback)
-          : incFallback;
-        if (typeof window.savePathMapForConfiguration === 'function') {
-          await window.savePathMapForConfiguration(targetKeyInc, newIndex, { overrideMap: derivedMap, setActive: true });
+        try {
+          await saveAndApply(targetKeyInc, configNameInc, true);
+          window.showMessage && window.showMessage('已从默认题库复制并创建增量配置：新增/更新 ' + additions.length + ' 个题目', 'success');
+        } catch (incApplyErr) {
+          console.warn('[Fallback] 应用增量题库失败，尝试刷新页面', incApplyErr);
+          window.showMessage && window.showMessage('增量题库已保存，正在刷新界面...', 'warning');
+          setTimeout(function () { try { location.reload(); } catch (_) { } }, 800);
         }
-        await _fallbackSaveLibraryConfiguration(configNameInc, targetKeyInc, newIndex.length);
-        await _fallbackSetActiveLibraryKey(targetKeyInc);
-        window.showMessage && window.showMessage('新的题库配置已创建并激活；正在重新加载...', 'success');
-        setTimeout(function () { try { location.reload(); } catch (_) { } }, 800);
         return;
       }
 
-      await _fallbackSaveIndexForKey(targetKeyInc, newIndex);
-      var targetPathFallback = (typeof window.loadPathMapForConfiguration === 'function')
-        ? await window.loadPathMapForConfiguration(targetKeyInc)
-        : null;
-      var incrementalMap = (typeof window.derivePathMapFromIndex === 'function')
-        ? window.derivePathMapFromIndex(newIndex, targetPathFallback)
-        : targetPathFallback;
-      if (typeof window.savePathMapForConfiguration === 'function') {
-        await window.savePathMapForConfiguration(targetKeyInc, newIndex, { overrideMap: incrementalMap, setActive: true });
-      }
-      await _fallbackSaveLibraryConfiguration((type === 'reading' ? '阅读' : '听力') + '增量-' + new Date().toLocaleString(), targetKeyInc, newIndex.length);
-      if (typeof window.setExamIndexState === 'function') {
-        window.setExamIndexState(newIndex);
-      } else {
-        try { window.examIndex = Array.isArray(newIndex) ? newIndex.slice() : []; } catch (_) { }
-      }
+      await saveAndApply(targetKeyInc, (type === 'reading' ? '阅读' : '听力') + '增量-' + new Date().toLocaleString(), false);
+      await _fallbackApplyLibraryConfig(targetKeyInc, newIndex, { setActive: true, skipConfigRefresh: false });
       try { if (typeof window.updateOverview === 'function') window.updateOverview(); } catch (_) { }
       if (document.getElementById('browse-view') && document.getElementById('browse-view').classList.contains('active') && typeof window.loadExamList === 'function') {
         try { window.loadExamList(); } catch (_) { }
       }
-      window.showMessage && window.showMessage('索引已更新；正在刷新界面...', 'success');
+      window.showMessage && window.showMessage('索引已更新：新增/更新 ' + additions.length + ' 个题目', 'success');
     };
   }
 
