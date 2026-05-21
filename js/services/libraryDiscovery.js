@@ -165,6 +165,12 @@
         });
     }
 
+    function hasAnySignal(signals, names) {
+        return names.some(function (name) {
+            return signals.indexOf(name) !== -1;
+        });
+    }
+
     function scoreListeningHtml(html, path, nearbyRecords) {
         const source = String(html || '');
         const haystack = `${path || ''}\n${source}`;
@@ -192,13 +198,46 @@
             signals.push('reading-negative');
         }
 
+        const hasAnswerPath = hasAnySignal(signals, ['config-answer-key', 'finish-test', 'bridge-or-tracker'])
+            && hasAnySignal(signals, ['config-answer-key', 'review-or-score', 'bridge-or-tracker']);
+        const hasListeningShell = hasAnySignal(signals, ['audio-ui', 'nearby-audio', 'ielts-listening-title'])
+            && hasAnySignal(signals, ['question-layout', 'review-or-score', 'config-answer-key']);
+        const hasReadingConflict = signals.indexOf('reading-negative') !== -1;
+        let reason = 'listening-html-signals';
+        if (hasReadingConflict) {
+            reason = 'looks-like-reading';
+        } else if (score < LISTENING_THRESHOLD) {
+            reason = 'insufficient-listening-signals';
+        } else if (!hasAnswerPath) {
+            reason = 'missing-answer-or-scoring-path';
+        } else if (!hasListeningShell) {
+            reason = 'missing-listening-page-signals';
+        }
+        const accepted = !hasReadingConflict
+            && hasAnswerPath
+            && hasListeningShell
+            && score >= LISTENING_THRESHOLD;
+
         return {
-            accepted: score >= LISTENING_THRESHOLD,
+            accepted,
             score,
             signals,
-            reason: score >= LISTENING_THRESHOLD ? 'listening-html-signals' : 'insufficient-listening-signals',
+            reason: accepted ? 'listening-html-signals' : reason,
             sample: lower.slice(0, 120)
         };
+    }
+
+    function isListeningLikeDetection(detection) {
+        if (!detection || !Array.isArray(detection.signals)) {
+            return false;
+        }
+        const signals = detection.signals;
+        if (signals.indexOf('reading-negative') !== -1) {
+            return false;
+        }
+        const hasShell = hasAnySignal(signals, ['audio-ui', 'nearby-audio', 'ielts-listening-title']);
+        const hasQuestions = hasAnySignal(signals, ['question-layout', 'review-or-score', 'config-answer-key', 'finish-test']);
+        return detection.accepted || (hasShell && hasQuestions && Number(detection.score) >= LISTENING_THRESHOLD);
     }
 
     function isPdfRecord(record) {
@@ -348,8 +387,13 @@
             candidates.forEach(function (record) {
                 if (record.kind === 'html') {
                     const listening = scoreListeningHtml(record.text, record.path, records);
-                    if (listening.accepted) {
-                        rejected.push({ path: record.path, reason: 'looks-like-listening', score: listening.score });
+                    if (isListeningLikeDetection(listening)) {
+                        rejected.push({
+                            path: record.path,
+                            reason: 'looks-like-listening',
+                            score: listening.score,
+                            signals: listening.signals
+                        });
                         return;
                     }
                     record.detection = { score: 1, signals: ['html-or-pdf'] };
@@ -435,8 +479,9 @@
     }
 
     function registerRuntimeResources(entries, records) {
+        const stats = { registered: 0, html: 0, pdf: 0, audio: 0 };
         if (!Array.isArray(entries) || !Array.isArray(records) || !entries.length) {
-            return;
+            return stats;
         }
         const recordsByPath = new Map(records.map(function (record) { return [record.path, record]; }));
         const groups = groupByDir(records);
@@ -488,8 +533,15 @@
             if (runtime.html || runtime.pdf || runtime.audio) {
                 runtimeResources.set(entry.importKey || entry.id, runtime);
                 runtimeResources.set(entry.id, runtime);
+                entry.runtimeResourceMode = 'session-blob';
+                entry.runtimeResources = Object.keys(runtime);
+                stats.registered += 1;
+                if (runtime.html) stats.html += 1;
+                if (runtime.pdf) stats.pdf += 1;
+                if (runtime.audio) stats.audio += 1;
             }
         });
+        return stats;
     }
 
     function resolveRuntimeResource(exam, kind) {
@@ -565,6 +617,43 @@
         return { index: base, added, updated, skipped: Math.max(0, incoming.length - added - updated) };
     }
 
+    function countByReason(rejected) {
+        return (Array.isArray(rejected) ? rejected : []).reduce(function (acc, item) {
+            const reason = item && item.reason ? item.reason : 'unknown';
+            acc[reason] = (acc[reason] || 0) + 1;
+            return acc;
+        }, {});
+    }
+
+    function buildDiscoveryReport(type, result, records, runtime) {
+        const entries = Array.isArray(result && result.entries) ? result.entries : [];
+        const rejected = Array.isArray(result && result.rejected) ? result.rejected : [];
+        const fileRecords = Array.isArray(records) ? records : [];
+        const runtimeStats = runtime || { registered: 0, html: 0, pdf: 0, audio: 0 };
+        return {
+            type,
+            accepted: entries.length,
+            rejected: rejected.length,
+            files: fileRecords.length,
+            html: fileRecords.filter(function (record) { return record.kind === 'html'; }).length,
+            pdf: fileRecords.filter(function (record) { return record.kind === 'pdf'; }).length,
+            audio: fileRecords.filter(isAudioRecord).length,
+            runtime: runtimeStats,
+            reasonCounts: countByReason(rejected),
+            rejectedSamples: rejected.slice(0, 8).map(function (item) {
+                return {
+                    path: item.path,
+                    reason: item.reason,
+                    score: item.score,
+                    signals: Array.isArray(item.signals) ? item.signals.slice(0, 8) : []
+                };
+            }),
+            warnings: runtimeStats.html > 0
+                ? ['file-picker-session-resources']
+                : []
+        };
+    }
+
     async function discover(files, options) {
         const opts = options || {};
         const type = opts.type === 'reading' ? 'reading' : 'listening';
@@ -573,12 +662,16 @@
         const result = type === 'reading'
             ? discoverReadingEntries(groups, opts)
             : discoverListeningEntries(groups, opts);
+        let runtime = { registered: 0, html: 0, pdf: 0, audio: 0 };
         if (opts.registerRuntime !== false) {
-            registerRuntimeResources(result.entries, records);
+            runtime = registerRuntimeResources(result.entries, records);
         }
+        const report = buildDiscoveryReport(type, result, records, runtime);
         return {
             entries: result.entries,
             rejected: result.rejected,
+            runtime,
+            report,
             stats: {
                 files: records.length,
                 html: records.filter(function (record) { return record.kind === 'html'; }).length,
@@ -615,7 +708,8 @@
             inferCategory,
             inferFrequency,
             hashString,
-            slugify
+            slugify,
+            isListeningLikeDetection
         }
     };
 })(typeof window !== 'undefined' ? window : globalThis);
