@@ -47,6 +47,10 @@ function createResourceCoreHarness() {
             async set(key, value) {
                 storageState.set(key, JSON.parse(JSON.stringify(value)));
                 return true;
+            },
+            async remove(key) {
+                storageState.delete(key);
+                return true;
             }
         },
         location: {
@@ -238,7 +242,22 @@ function testRuntimeResourceTakesPrecedence(context, ResourceCore) {
     });
 }
 
-function main() {
+async function testDeletePathMapForConfiguration(context, ResourceCore) {
+    const key = ResourceCore.getPathMapStorageKey('custom_config');
+    await context.window.storage.set(key, {
+        reading: { root: 'ReadingCustom/', exceptions: {} },
+        listening: { root: 'ListeningCustom/', exceptions: {} }
+    });
+
+    const deleted = await ResourceCore.deletePathMapForConfiguration('custom_config');
+
+    assert.strictEqual(deleted, true, '删除 path map 应返回 true');
+    assert.strictEqual(await context.window.storage.get(key, null), null, '删除配置时 path map 存储键必须被移除');
+
+    recordResult('ResourceCore 删除指定配置 path map', true, { key });
+}
+
+async function main() {
     const context = createResourceCoreHarness();
     loadScript('js/core/resourceCore.js', context);
     const ResourceCore = context.window.ResourceCore;
@@ -249,6 +268,7 @@ function main() {
         testDefaultRootStillWorks(ResourceCore);
         testExplicitEmptyRootDoesNotFallback(ResourceCore);
         testRuntimeResourceTakesPrecedence(context, ResourceCore);
+        await testDeletePathMapForConfiguration(context, ResourceCore);
 
         console.log(JSON.stringify({
             status: 'pass',

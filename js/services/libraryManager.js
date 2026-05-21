@@ -86,6 +86,12 @@
                 : null;
         }
 
+        async deletePathMapForConfiguration(key) {
+            return this.resourceCore && typeof this.resourceCore.deletePathMapForConfiguration === 'function'
+                ? this.resourceCore.deletePathMapForConfiguration(key)
+                : false;
+        }
+
         setActivePathMap(map) {
             return this.resourceCore && typeof this.resourceCore.setActivePathMap === 'function'
                 ? this.resourceCore.setActivePathMap(map)
@@ -631,6 +637,71 @@
             return true;
         }
 
+        async deleteLibraryConfiguration(key) {
+            const configKey = typeof key === 'string' ? key.trim() : '';
+            if (!configKey) {
+                return { deleted: false, reason: 'invalid-key' };
+            }
+            if (configKey === 'exam_index') {
+                return { deleted: false, reason: 'default-config' };
+            }
+
+            const activeKey = await this.getActiveLibraryConfigurationKey();
+            if (activeKey === configKey) {
+                return { deleted: false, reason: 'active-config' };
+            }
+
+            let configs = await this.getLibraryConfigurations();
+            configs = Array.isArray(configs) ? configs : [];
+            let found = false;
+            const nextConfigs = [];
+
+            configs.forEach((config) => {
+                if (!config) {
+                    return;
+                }
+                if (typeof config === 'string') {
+                    const itemKey = config.trim();
+                    if (!itemKey) {
+                        return;
+                    }
+                    if (itemKey === configKey) {
+                        found = true;
+                        return;
+                    }
+                    nextConfigs.push(config);
+                    return;
+                }
+
+                const itemKey = typeof config.key === 'string' ? config.key.trim() : '';
+                if (!itemKey) {
+                    return;
+                }
+                if (itemKey === configKey) {
+                    found = true;
+                    return;
+                }
+                nextConfigs.push(config);
+            });
+
+            if (!found) {
+                return { deleted: false, reason: 'not-found' };
+            }
+
+            if (!global.storage || typeof global.storage.remove !== 'function') {
+                return { deleted: false, reason: 'storage-remove-unavailable' };
+            }
+            await global.storage.remove(configKey);
+            await this.deletePathMapForConfiguration(configKey);
+            await global.storage.set('exam_index_configurations', nextConfigs);
+
+            return {
+                deleted: true,
+                key: configKey,
+                remaining: nextConfigs.length
+            };
+        }
+
         async loadLibrary(keyOrForceReload) {
             if (keyOrForceReload === 'default' || keyOrForceReload === 'exam_index') {
                 return this.loadActiveLibrary(true);
@@ -684,6 +755,9 @@
         },
         createImportedLibraryConfiguration(options) {
             return getInstance().createImportedLibraryConfiguration(options);
+        },
+        deleteLibraryConfiguration(key) {
+            return getInstance().deleteLibraryConfiguration(key);
         },
     };
 
