@@ -1890,6 +1890,36 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("ResourceCore 单元测试", False, "测试脚本缺失"))
         all_passed = False
 
+    library_discovery_test = REPO_ROOT / "developer" / "tests" / "js" / "libraryDiscovery.test.js"
+    if library_discovery_test.exists():
+        library_discovery_passed, library_discovery_detail = _run_json_subprocess(
+            ["node", str(library_discovery_test)],
+            timeout=30,
+        )
+        if library_discovery_passed:
+            library_discovery_passed = library_discovery_detail.get("status") == "pass"
+            library_discovery_detail = library_discovery_detail.get("detail", library_discovery_detail)
+        results.append(_format_result("LibraryDiscovery 动态题库识别测试", library_discovery_passed, library_discovery_detail))
+        all_passed &= library_discovery_passed
+    else:
+        results.append(_format_result("LibraryDiscovery 动态题库识别测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    overview_stats_test = REPO_ROOT / "developer" / "tests" / "js" / "overviewStats.test.js"
+    if overview_stats_test.exists():
+        overview_stats_passed, overview_stats_detail = _run_json_subprocess(
+            ["node", str(overview_stats_test)],
+            timeout=30,
+        )
+        if overview_stats_passed:
+            overview_stats_passed = overview_stats_detail.get("status") == "pass"
+            overview_stats_detail = overview_stats_detail.get("detail", overview_stats_detail)
+        results.append(_format_result("OverviewStats 自定义听力入口测试", overview_stats_passed, overview_stats_detail))
+        all_passed &= overview_stats_passed
+    else:
+        results.append(_format_result("OverviewStats 自定义听力入口测试", False, "测试脚本缺失"))
+        all_passed = False
+
     on_demand_entry_test = REPO_ROOT / "developer" / "tests" / "js" / "onDemandEntrypoints.test.js"
     if on_demand_entry_test.exists():
         try:

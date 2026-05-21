@@ -51,7 +51,8 @@ function createResourceCoreHarness() {
         },
         location: {
             href: 'file:///Users/test/index.html'
-        }
+        },
+        LibraryDiscovery: null
     };
 
     const sandbox = {
@@ -172,6 +173,71 @@ function testDefaultRootStillWorks(ResourceCore) {
     });
 }
 
+function testExplicitEmptyRootDoesNotFallback(ResourceCore) {
+    ResourceCore.setBasePrefix('./');
+    ResourceCore.setActivePathMap({
+        reading: { root: '', exceptions: {} },
+        listening: { root: '', exceptions: {} }
+    });
+
+    const exam = {
+        type: 'listening',
+        path: 'Teacher Pack/deep/set-1',
+        filename: 'custom.html'
+    };
+
+    assert.strictEqual(
+        ResourceCore.resolveExamBasePath(exam),
+        'Teacher Pack/deep/set-1/',
+        '显式空 root 代表自定义路径已自带根目录，不能回退拼接 ListeningPractice'
+    );
+    assert.strictEqual(
+        ResourceCore.buildResourcePath(exam, 'html'),
+        './Teacher%20Pack/deep/set-1/custom.html',
+        '显式空 root 应按题库索引路径直接构建资源'
+    );
+
+    recordResult('ResourceCore 显式空 root 不回退默认根', true, {
+        path: ResourceCore.buildResourcePath(exam, 'html')
+    });
+}
+
+function testRuntimeResourceTakesPrecedence(context, ResourceCore) {
+    ResourceCore.setBasePrefix('./');
+    ResourceCore.setActivePathMap(ResourceCore.DEFAULT_PATH_MAP);
+    context.window.LibraryDiscovery = {
+        resolveRuntimeResource(exam, kind) {
+            if (exam && exam.importKey === 'listening:external/deep/custom.html' && kind === 'html') {
+                return 'blob:test-runtime/custom-html';
+            }
+            return '';
+        }
+    };
+
+    const exam = {
+        id: 'custom-listening',
+        importKey: 'listening:external/deep/custom.html',
+        type: 'listening',
+        path: 'External/deep/',
+        filename: 'custom.html'
+    };
+
+    assert.strictEqual(
+        ResourceCore.buildResourcePath(exam, 'html'),
+        'blob:test-runtime/custom-html',
+        '运行时 File/Blob URL 应优先于持久化相对路径'
+    );
+    assert.strictEqual(
+        ResourceCore.getResourceAttempts(exam, 'html')[0].label,
+        'runtime',
+        '资源探测应优先尝试运行时 URL'
+    );
+
+    recordResult('ResourceCore 运行时 URL 优先', true, {
+        path: ResourceCore.buildResourcePath(exam, 'html')
+    });
+}
+
 function main() {
     const context = createResourceCoreHarness();
     loadScript('js/core/resourceCore.js', context);
@@ -181,6 +247,8 @@ function main() {
         testCustomLibraryRootPreserved(ResourceCore);
         testMappedRootStillPrependsRelativePaths(ResourceCore);
         testDefaultRootStillWorks(ResourceCore);
+        testExplicitEmptyRootDoesNotFallback(ResourceCore);
+        testRuntimeResourceTakesPrecedence(context, ResourceCore);
 
         console.log(JSON.stringify({
             status: 'pass',

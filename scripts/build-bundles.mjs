@@ -36,6 +36,7 @@ const bundles = {
         'js/utils/stateSerializer.js',
         'js/utils/simpleStorageWrapper.js',
         'js/app/state-service.js',
+        'js/services/libraryDiscovery.js',
         'js/services/libraryManager.js'
     ],
     'js/bundles/ui-shell.bundle.js': [

@@ -84,11 +84,16 @@
 
     function normalizePathMap(map, fallback = DEFAULT_PATH_MAP) {
         const base = clonePathMap(fallback);
+        const source = map && typeof map === 'object' ? map : {};
         const incoming = clonePathMap(map);
-        if (incoming.reading.root) {
+        if (source.reading && Object.prototype.hasOwnProperty.call(source.reading, 'root')) {
+            base.reading.root = normalizePathRoot(source.reading.root);
+        } else if (incoming.reading.root) {
             base.reading.root = normalizePathRoot(incoming.reading.root);
         }
-        if (incoming.listening.root) {
+        if (source.listening && Object.prototype.hasOwnProperty.call(source.listening, 'root')) {
+            base.listening.root = normalizePathRoot(source.listening.root);
+        } else if (incoming.listening.root) {
             base.listening.root = normalizePathRoot(incoming.listening.root);
         }
         if (Object.keys(incoming.reading.exceptions).length) {
@@ -418,7 +423,10 @@
             const type = exam && exam.type;
             const mapped = type && pathMap[type] ? pathMap[type] : {};
             const fallback = type && DEFAULT_PATH_MAP[type] ? DEFAULT_PATH_MAP[type] : {};
-            const root = mergeRootWithFallback(mapped.root, fallback.root);
+            const hasExplicitRoot = mapped && Object.prototype.hasOwnProperty.call(mapped, 'root');
+            const root = hasExplicitRoot
+                ? normalizePathRoot(mapped.root)
+                : mergeRootWithFallback(mapped.root, fallback.root);
             const normalizedRoot = root.replace(/\\/g, '/');
             if (normalizedRoot) {
                 if (normalizedRelative && normalizedRelative.startsWith(normalizedRoot)) {
@@ -456,6 +464,15 @@
             return '';
         }
         const resourceKind = kind === 'pdf' ? 'pdf' : 'html';
+        try {
+            if (global.LibraryDiscovery && typeof global.LibraryDiscovery.resolveRuntimeResource === 'function') {
+                const runtimeUrl = global.LibraryDiscovery.resolveRuntimeResource(exam, resourceKind);
+                if (runtimeUrl) {
+                    return runtimeUrl;
+                }
+            }
+        } catch (_) { }
+
         const rawName = resourceKind === 'pdf' ? exam.pdfFilename : exam.filename;
         const file = sanitizeFilename(rawName, resourceKind);
         const basePath = resolveExamBasePath(exam);
@@ -505,6 +522,12 @@
             seen.add(path);
             attempts.push({ label, path });
         };
+
+        try {
+            if (global.LibraryDiscovery && typeof global.LibraryDiscovery.resolveRuntimeResource === 'function') {
+                addAttempt('runtime', global.LibraryDiscovery.resolveRuntimeResource(exam, kind === 'pdf' ? 'pdf' : 'html'));
+            }
+        } catch (_) { }
 
         addAttempt('map', buildResourcePath(exam, kind));
 
