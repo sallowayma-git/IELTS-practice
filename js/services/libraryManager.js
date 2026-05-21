@@ -9,6 +9,30 @@
         return Array.isArray(value) ? value.slice() : [];
     }
 
+    function normalizeSlashPath(value) {
+        return String(value || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/{2,}/g, '/');
+    }
+
+    function hasProtocolPath(value) {
+        return /^(?:[a-z]+:)?\/\//i.test(String(value || '')) || /^[A-Za-z]:\\/.test(String(value || ''));
+    }
+
+    function countIndexTypes(index) {
+        const counts = { total: 0, reading: 0, listening: 0 };
+        (Array.isArray(index) ? index : []).forEach((exam) => {
+            if (!exam || typeof exam !== 'object') {
+                return;
+            }
+            counts.total += 1;
+            if (exam.type === 'reading') {
+                counts.reading += 1;
+            } else if (exam.type === 'listening') {
+                counts.listening += 1;
+            }
+        });
+        return counts;
+    }
+
     class LibraryManager {
         constructor(options = {}) {
             this.options = options || {};
@@ -84,16 +108,17 @@
             return global.storage.get('exam_index_configurations', []);
         }
 
-        async saveLibraryConfiguration(name, key, examCount) {
+        async saveLibraryConfiguration(name, key, examCount, metadata = {}) {
             try {
                 let configs = await global.storage.get('exam_index_configurations', []);
                 if (!Array.isArray(configs)) {
                     configs = [];
                 }
-                const entry = { name, key, examCount, timestamp: Date.now() };
+                const safeMetadata = metadata && typeof metadata === 'object' ? metadata : {};
+                const entry = Object.assign({}, safeMetadata, { name, key, examCount, timestamp: Date.now() });
                 const existingIndex = configs.findIndex((item) => item && item.key === key);
                 if (existingIndex >= 0) {
-                    configs[existingIndex] = entry;
+                    configs[existingIndex] = Object.assign({}, configs[existingIndex], entry);
                 } else {
                     configs.push(entry);
                 }
@@ -129,6 +154,38 @@
                 }
             } catch (_) { }
             return defaultRoot;
+        }
+
+        defaultPathRoot(type) {
+            return type === 'reading'
+                ? '睡着过项目组/2. 所有文章(11.20)[192篇]/'
+                : 'ListeningPractice/';
+        }
+
+        absolutizeDefaultExamPath(exam) {
+            if (!exam || typeof exam !== 'object') {
+                return exam;
+            }
+            const next = Object.assign({}, exam);
+            const type = next.type === 'reading' ? 'reading' : (next.type === 'listening' ? 'listening' : '');
+            const path = normalizeSlashPath(next.path || '');
+            if (!type || !path || hasProtocolPath(path) || next.sourceKind === 'file-picker') {
+                return next;
+            }
+
+            const root = normalizeSlashPath(this.defaultPathRoot(type)).replace(/\/+$/, '');
+            if (root && !path.toLowerCase().startsWith((root + '/').toLowerCase())) {
+                if (type === 'listening' && /^P[1-4]\//i.test(path)) {
+                    next.path = root + '/' + path;
+                }
+            }
+            return next;
+        }
+
+        normalizeIndexForCustomConfig(index) {
+            return Array.isArray(index)
+                ? index.map((exam) => this.absolutizeDefaultExamPath(exam))
+                : [];
         }
 
         finishLibraryLoading(startTime) {
@@ -308,6 +365,209 @@
             }
         }
 
+        resolveDefaultTypeIndex(type) {
+            if (type === 'reading' && Array.isArray(global.completeExamIndex)) {
+                return this.normalizeIndexForCustomConfig(
+                    global.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
+                );
+            }
+            if (type === 'listening' && Array.isArray(global.listeningExamIndex)) {
+                return this.normalizeIndexForCustomConfig(
+                    global.listeningExamIndex.map((exam) => Object.assign({}, exam, { type: 'listening' }))
+                );
+            }
+            return [];
+        }
+
+        async resolveBaseLibraryIndex(activeKey) {
+            let currentIndex = [];
+            const key = typeof activeKey === 'string' && activeKey.trim() ? activeKey.trim() : 'exam_index';
+            try {
+                currentIndex = await this.fetchLibraryDataset(key);
+            } catch (_) {
+                currentIndex = [];
+            }
+            if (!Array.isArray(currentIndex) || currentIndex.length === 0) {
+                try {
+                    currentIndex = global.getExamIndexState ? global.getExamIndexState() : [];
+                } catch (_) {
+                    currentIndex = [];
+                }
+            }
+            if ((!Array.isArray(currentIndex) || currentIndex.length === 0) && key === 'exam_index') {
+                const reading = this.resolveDefaultTypeIndex('reading');
+                const listening = this.resolveDefaultTypeIndex('listening');
+                currentIndex = reading.concat(listening);
+            }
+            return this.normalizeIndexForCustomConfig(currentIndex);
+        }
+
+        async buildImportBaseIndex(activeKey, type, mode) {
+            const base = await this.resolveBaseLibraryIndex(activeKey);
+            const otherType = type === 'reading' ? 'listening' : 'reading';
+            let next = base.slice();
+
+            if (!next.some((exam) => exam && exam.type === otherType)) {
+                next = next.concat(this.resolveDefaultTypeIndex(otherType));
+            }
+
+            if (mode === 'incremental' && !next.some((exam) => exam && exam.type === type)) {
+                next = next.concat(this.resolveDefaultTypeIndex(type));
+            }
+
+            return this.normalizeIndexForCustomConfig(next);
+        }
+
+        async buildUniqueImportedConfigKey(prefix = 'exam_index') {
+            let configs = [];
+            try {
+                configs = await this.getLibraryConfigurations();
+            } catch (_) {
+                configs = [];
+            }
+            const used = new Set((Array.isArray(configs) ? configs : []).map((config) => {
+                if (typeof config === 'string') {
+                    return config.trim();
+                }
+                return config && typeof config.key === 'string' ? config.key.trim() : '';
+            }).filter(Boolean));
+            const now = Date.now();
+            for (let index = 0; index < 100; index += 1) {
+                const key = index === 0 ? `${prefix}_${now}` : `${prefix}_${now}_${index}`;
+                if (used.has(key)) {
+                    continue;
+                }
+                try {
+                    const stored = global.storage && typeof global.storage.get === 'function'
+                        ? await global.storage.get(key)
+                        : null;
+                    if (!stored) {
+                        return key;
+                    }
+                } catch (_) {
+                    return key;
+                }
+            }
+            return `${prefix}_${now}_${Math.random().toString(36).slice(2, 8)}`;
+        }
+
+        buildImportedConfigName(type, mode, label) {
+            const typeLabel = type === 'reading' ? '阅读' : '听力';
+            const modeLabel = mode === 'incremental' ? '增量' : '全量';
+            const suffix = label && String(label).trim()
+                ? ` · ${String(label).trim()}`
+                : '';
+            return `${typeLabel}${modeLabel}${suffix}-${new Date().toLocaleString()}`;
+        }
+
+        mergeLibraryEntries(currentIndex, additions, type, mode) {
+            const discovery = global.LibraryDiscovery;
+            if (discovery && typeof discovery.mergeExamIndexes === 'function') {
+                return discovery.mergeExamIndexes(currentIndex, additions, { type, mode });
+            }
+            const base = Array.isArray(currentIndex) ? currentIndex.slice() : [];
+            const incoming = Array.isArray(additions) ? additions.slice() : [];
+            const targetBase = mode === 'full'
+                ? base.filter((exam) => !exam || exam.type !== type)
+                : base;
+            const keys = new Map();
+            const makeKey = (exam) => String(
+                (exam && (exam.importKey || exam.sourcePath || [exam.type, exam.path, exam.filename, exam.title].join('|'))) || ''
+            ).toLowerCase();
+            targetBase.forEach((exam, index) => {
+                const key = makeKey(exam);
+                if (key) {
+                    keys.set(key, index);
+                }
+            });
+            let added = 0;
+            let updated = 0;
+            incoming.forEach((exam) => {
+                const key = makeKey(exam);
+                if (key && keys.has(key)) {
+                    targetBase[keys.get(key)] = exam;
+                    updated += 1;
+                    return;
+                }
+                if (key) {
+                    keys.set(key, targetBase.length);
+                }
+                targetBase.push(exam);
+                added += 1;
+            });
+            return { index: targetBase, added, updated, skipped: Math.max(0, incoming.length - added - updated) };
+        }
+
+        async createImportedLibraryConfiguration(options = {}) {
+            const type = options.type === 'reading' ? 'reading' : (options.type === 'listening' ? 'listening' : '');
+            const mode = options.mode === 'incremental' ? 'incremental' : 'full';
+            const additions = Array.isArray(options.additions) ? options.additions.slice() : [];
+            if (!type) {
+                throw new Error('未知的题库类型');
+            }
+            if (!additions.length) {
+                throw new Error('没有可导入的题源');
+            }
+
+            const activeKey = await this.getActiveLibraryConfigurationKey();
+            const baseIndex = await this.buildImportBaseIndex(activeKey, type, mode);
+            const mergeResult = this.mergeLibraryEntries(baseIndex, additions, type, mode);
+            const newIndex = this.normalizeIndexForCustomConfig(mergeResult.index);
+            if (typeof global.assignExamSequenceNumbers === 'function') {
+                try { global.assignExamSequenceNumbers(newIndex); } catch (_) { }
+            }
+
+            const key = options.key || await this.buildUniqueImportedConfigKey('exam_index');
+            const name = options.name || this.buildImportedConfigName(type, mode, options.label);
+            const counts = countIndexTypes(newIndex);
+            const sourceReport = options.discoveryResult && options.discoveryResult.report
+                ? options.discoveryResult.report
+                : null;
+            const metadata = {
+                counts,
+                sourceType: 'file-picker',
+                lastImport: {
+                    type,
+                    mode,
+                    accepted: additions.length,
+                    rejected: sourceReport ? Number(sourceReport.rejected) || 0 : 0,
+                    createdFrom: activeKey || 'exam_index',
+                    label: options.label || '',
+                    timestamp: Date.now()
+                }
+            };
+
+            await global.storage.set(key, newIndex);
+            const pathFallback = await this.loadPathMapForConfiguration(activeKey || 'exam_index');
+            const pathMap = this.resourceCore && typeof this.resourceCore.derivePathMapFromIndex === 'function'
+                ? this.resourceCore.derivePathMapFromIndex(newIndex, pathFallback || this.DEFAULT_PATH_MAP)
+                : (pathFallback || null);
+            await this.savePathMapForConfiguration(key, newIndex, {
+                overrideMap: pathMap,
+                setActive: options.activate !== false
+            });
+            await this.saveLibraryConfiguration(name, key, newIndex.length, metadata);
+
+            let applied = true;
+            if (options.activate !== false) {
+                applied = await this.applyLibraryConfiguration(key, newIndex, { skipConfigRefresh: false });
+            }
+
+            return {
+                key,
+                name,
+                index: newIndex,
+                counts,
+                merge: {
+                    added: Number(mergeResult.added) || 0,
+                    updated: Number(mergeResult.updated) || 0,
+                    skipped: Number(mergeResult.skipped) || 0
+                },
+                activeKey,
+                applied
+            };
+        }
+
         async applyLibraryConfiguration(key, dataset, options = {}) {
             const exams = Array.isArray(dataset) ? dataset.slice() : await this.fetchLibraryDataset(key);
             if (!Array.isArray(exams) || exams.length === 0) {
@@ -421,6 +681,9 @@
         },
         buildOverridePathMap(metadata, fallback) {
             return getInstance().buildOverridePathMap(metadata, fallback);
+        },
+        createImportedLibraryConfiguration(options) {
+            return getInstance().createImportedLibraryConfiguration(options);
         },
     };
 
