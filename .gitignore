@@ -15,34 +15,8 @@ js/bundles/
 /ReadingPractice/
 
 
-# ListeningPractice 标准运行题源：纳入 P1-P4，继续排除 legacy/vip 资源
-/ListeningPractice/**
-!/ListeningPractice/
-!/ListeningPractice/P1/
-!/ListeningPractice/P2/
-!/ListeningPractice/P3/
-!/ListeningPractice/P4/
-!/ListeningPractice/P1/**
-!/ListeningPractice/P2/**
-!/ListeningPractice/P3/**
-!/ListeningPractice/P4/**
-/ListeningPractice/P1/**/*.MOV
-/ListeningPractice/P2/**/*.MOV
-/ListeningPractice/P3/**/*.MOV
-/ListeningPractice/P4/**/*.MOV
-/ListeningPractice/P1/**/*.mov
-/ListeningPractice/P2/**/*.mov
-/ListeningPractice/P3/**/*.mov
-/ListeningPractice/P4/**/*.mov
-/ListeningPractice/P1/**/*.MP4
-/ListeningPractice/P2/**/*.MP4
-/ListeningPractice/P3/**/*.MP4
-/ListeningPractice/P4/**/*.MP4
-/ListeningPractice/P1/**/*.mp4
-/ListeningPractice/P2/**/*.mp4
-/ListeningPractice/P3/**/*.mp4
-/ListeningPractice/P4/**/*.mp4
-/ListeningPractice/vip/
+# ListeningPractice 题源仅允许本地存在，禁止纳入 Git
+/ListeningPractice/
 /睡着过项目组(9.4)[134篇]/
 /IELTS/
 /.claude/
