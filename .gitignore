@@ -10,14 +10,8 @@
 /ReadingPractice/
 
 
-# ListeningPractice 资源体积大，默认忽略；仅放行 100 P1 / 100 P4 的 HTML 便于维护与回归
-/ListeningPractice/**
-!/ListeningPractice/100 P1/
-!/ListeningPractice/100 P4/
-!/ListeningPractice/100 P1/**/
-!/ListeningPractice/100 P4/**/
-!/ListeningPractice/100 P1/**/*.html
-!/ListeningPractice/100 P4/**/*.html
+# ListeningPractice 题源仅允许本地存在，禁止纳入 Git
+/ListeningPractice/
 /睡着过项目组(9.4)[134篇]/
 /IELTS/
 /.claude/
