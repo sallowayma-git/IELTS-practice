@@ -909,6 +909,20 @@ class ScoreStorage {
         const normalizedComparison = comparisonSource && typeof comparisonSource === 'object'
             ? this.clonePlainObject(comparisonSource)
             : null;
+        const highlights = Array.isArray(recordData.highlights)
+            ? recordData.highlights.slice()
+            : (Array.isArray(recordData.rawData?.highlights)
+                ? recordData.rawData.highlights.slice()
+                : (Array.isArray(recordData.realData?.highlights)
+                    ? recordData.realData.highlights.slice()
+                    : []));
+        const scrollY = Number.isFinite(Number(recordData.scrollY))
+            ? Number(recordData.scrollY)
+            : (Number.isFinite(Number(recordData.rawData?.scrollY))
+                ? Number(recordData.rawData.scrollY)
+                : (Number.isFinite(Number(recordData.realData?.scrollY))
+                    ? Number(recordData.realData.scrollY)
+                    : 0));
 
         return {
             // 基础信息
@@ -943,6 +957,8 @@ class ScoreStorage {
             suiteMode: Boolean(recordData.suiteMode || (frequency && frequency.toLowerCase() === 'suite')),
             suiteSessionId,
             suiteEntries: normalizedSuiteEntries,
+            highlights,
+            scrollY,
             scoreInfo: recordData.scoreInfo
                 ? Object.assign({}, recordData.scoreInfo, {
                     details: recordData.scoreInfo.details || detailSource || null
@@ -957,7 +973,9 @@ class ScoreStorage {
                     }),
                     answerComparison: recordData.realData.answerComparison
                         ? this.clonePlainObject(recordData.realData.answerComparison)
-                        : (normalizedComparison || null)
+                        : (normalizedComparison || null),
+                    highlights,
+                    scrollY
                 })
                 : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
             answerComparison: normalizedComparison,

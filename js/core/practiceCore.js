@@ -703,6 +703,20 @@
         const normalizedComparison = comparisonSource && typeof comparisonSource === 'object'
             ? clonePlainObject(comparisonSource)
             : null;
+        const highlights = Array.isArray(recordData.highlights)
+            ? recordData.highlights.slice()
+            : (Array.isArray(recordData.rawData && recordData.rawData.highlights)
+                ? recordData.rawData.highlights.slice()
+                : (Array.isArray(recordData.realData && recordData.realData.highlights)
+                    ? recordData.realData.highlights.slice()
+                    : []));
+        const scrollY = Number.isFinite(Number(recordData.scrollY))
+            ? Number(recordData.scrollY)
+            : (Number.isFinite(Number(recordData.rawData && recordData.rawData.scrollY))
+                ? Number(recordData.rawData.scrollY)
+                : (Number.isFinite(Number(recordData.realData && recordData.realData.scrollY))
+                    ? Number(recordData.realData.scrollY)
+                    : 0));
         const generateRecordId = typeof options.generateRecordId === 'function'
             ? options.generateRecordId
             : defaultGenerateRecordId;
@@ -731,6 +745,8 @@
             suiteMode: Boolean(recordData.suiteMode || ((recordData.frequency || metadata.frequency || '').toLowerCase() === 'suite')),
             suiteSessionId: recordData.suiteSessionId || (metadata && metadata.suiteSessionId) || null,
             suiteEntries: normalizedSuiteEntries,
+            highlights,
+            scrollY,
             scoreInfo: recordData.scoreInfo
                 ? Object.assign({}, recordData.scoreInfo, {
                     details: recordData.scoreInfo.details || detailSource || null
@@ -745,7 +761,9 @@
                     }),
                     answerComparison: (recordData.realData && recordData.realData.answerComparison)
                         ? clonePlainObject(recordData.realData.answerComparison)
-                        : (normalizedComparison || null)
+                        : (normalizedComparison || null),
+                    highlights,
+                    scrollY
                 })
                 : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
             answerComparison: normalizedComparison,
@@ -994,6 +1012,12 @@
             suiteMode: Boolean(rawPayload.suiteMode || (String(rawPayload.practiceMode || metadata.practiceMode || '').toLowerCase() === 'suite')),
             suiteSessionId,
             suiteEntries,
+            highlights: Array.isArray(rawPayload.highlights)
+                ? rawPayload.highlights.slice()
+                : (Array.isArray(rawPayload.realData && rawPayload.realData.highlights) ? rawPayload.realData.highlights.slice() : []),
+            scrollY: Number.isFinite(Number(rawPayload.scrollY))
+                ? Number(rawPayload.scrollY)
+                : (Number.isFinite(Number(rawPayload.realData && rawPayload.realData.scrollY)) ? Number(rawPayload.realData.scrollY) : 0),
             scoreInfo: Object.assign({}, scoreInfo, {
                 correct: correctAnswers,
                 total: totalQuestions,
@@ -1017,7 +1041,13 @@
                 interactions: rawPayload.interactions || [],
                 isRealData: true,
                 source: scoreInfo.source || rawPayload.pageType || rawPayload.source || 'practice_page',
-                sessionId: rawPayload.sessionId || sessionContext.sessionId || null
+                sessionId: rawPayload.sessionId || sessionContext.sessionId || null,
+                highlights: Array.isArray(rawPayload.highlights)
+                    ? rawPayload.highlights.slice()
+                    : (Array.isArray(rawPayload.realData && rawPayload.realData.highlights) ? rawPayload.realData.highlights.slice() : []),
+                scrollY: Number.isFinite(Number(rawPayload.scrollY))
+                    ? Number(rawPayload.scrollY)
+                    : (Number.isFinite(Number(rawPayload.realData && rawPayload.realData.scrollY)) ? Number(rawPayload.realData.scrollY) : 0)
             })
         }, options);
     }

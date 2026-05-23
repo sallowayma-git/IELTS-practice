@@ -172,6 +172,45 @@ async function run() {
         throw new Error('mixin 加载失败');
     }
 
+    // Case 0: 单题历史回顾必须从记录根层或 realData 回灌高亮
+    {
+        const app = createApp(windowStub);
+        const rootHighlights = [{ id: 'hl-root', scope: 'left', text: 'root highlight' }];
+        const realDataHighlights = [{ id: 'hl-real', scope: 'groups', text: 'realData highlight' }];
+
+        const rootEntry = app._buildReviewReplayEntriesFromRecord({
+            examId: 'reading-p1',
+            title: 'Single P1',
+            answers: { q1: 'A' },
+            correctAnswerMap: { q1: 'A' },
+            answerComparison: { q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+            highlights: rootHighlights,
+            scrollY: 120,
+            metadata: { examId: 'reading-p1', examTitle: 'Single P1' }
+        })[0];
+
+        assert.deepStrictEqual(plain(rootEntry.highlights), rootHighlights, '单题根层 highlights 必须进入 replay entry');
+        assert.strictEqual(rootEntry.scrollY, 120, '单题根层 scrollY 必须进入 replay entry');
+
+        const legacyEntry = app._buildReviewReplayEntriesFromRecord({
+            examId: 'reading-p2',
+            title: 'Single P2',
+            answers: { q1: 'B' },
+            correctAnswerMap: { q1: 'B' },
+            answerComparison: { q1: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true } },
+            scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+            realData: {
+                highlights: realDataHighlights,
+                scrollY: 240
+            },
+            metadata: { examId: 'reading-p2', examTitle: 'Single P2' }
+        })[0];
+
+        assert.deepStrictEqual(plain(legacyEntry.highlights), realDataHighlights, '单题 legacy realData.highlights 必须进入 replay entry');
+        assert.strictEqual(legacyEntry.scrollY, 240, '单题 legacy realData.scrollY 必须进入 replay entry');
+    }
+
     // Case 1: P1 提交后自动跳转 P2，发送 SIMULATION_CONTEXT
     {
         const app = createApp(windowStub);

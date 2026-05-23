@@ -2688,10 +2688,18 @@
                 const scoreInfo = this._deriveReplayScoreInfo(entry.scoreInfo || entry.realData?.scoreInfo || record.scoreInfo || record.realData?.scoreInfo, comparison);
                 const highlights = Array.isArray(entry.highlights)
                     ? entry.highlights.slice()
-                    : (Array.isArray(entry.rawData?.highlights) ? entry.rawData.highlights.slice() : []);
+                    : (Array.isArray(entry.rawData?.highlights)
+                        ? entry.rawData.highlights.slice()
+                        : (Array.isArray(entry.realData?.highlights)
+                            ? entry.realData.highlights.slice()
+                            : (Array.isArray(record.realData?.highlights) ? record.realData.highlights.slice() : [])));
                 const scrollY = Number.isFinite(Number(entry.scrollY))
                     ? Number(entry.scrollY)
-                    : (Number.isFinite(Number(entry.rawData?.scrollY)) ? Number(entry.rawData.scrollY) : 0);
+                    : (Number.isFinite(Number(entry.rawData?.scrollY))
+                        ? Number(entry.rawData.scrollY)
+                        : (Number.isFinite(Number(entry.realData?.scrollY))
+                            ? Number(entry.realData.scrollY)
+                            : (Number.isFinite(Number(record.realData?.scrollY)) ? Number(record.realData.scrollY) : 0)));
                 const mergedMetadata = Object.assign({}, recordMetadata, entryMetadata, {
                     examId: entryExamId
                 });

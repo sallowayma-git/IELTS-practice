@@ -461,6 +461,12 @@ class PracticeRecorder {
                 ? Math.round((new Date(payload.endTime) - new Date(payload.startTime)) / 1000)
                 : 0
         );
+        const highlights = Array.isArray(payload.highlights)
+            ? payload.highlights.slice()
+            : (Array.isArray(payload.realData?.highlights) ? payload.realData.highlights.slice() : []);
+        const scrollY = Number.isFinite(Number(payload.scrollY))
+            ? Number(payload.scrollY)
+            : (Number.isFinite(Number(payload.realData?.scrollY)) ? Number(payload.realData.scrollY) : 0);
 
         const examId = payload.examId || payload.metadata?.examId || payload.originalExamId || payload.derivedExamId || null;
         if (!examId) {
@@ -485,6 +491,8 @@ class PracticeRecorder {
                 correctAnswerMap,
                 answerDetails,
                 answerComparison: normalizedComparison,
+                highlights,
+                scrollY,
                 questionTypePerformance: payload.questionTypePerformance || {},
                 interactions: payload.interactions || [],
                 startTime: payload.startTime || null,
@@ -495,6 +503,8 @@ class PracticeRecorder {
                     answers: answerMap,
                     correctAnswers: correctAnswerMap,
                     answerComparison: normalizedComparison,
+                    highlights,
+                    scrollY,
                     scoreInfo: Object.assign({}, scoreInfo, { details: answerDetails })
                 })
             }
@@ -1172,6 +1182,20 @@ class PracticeRecorder {
         if (normalizedComparison && Object.keys(normalizedComparison).length > 0) {
             practiceRecord.answerComparison = normalizedComparison;
             practiceRecord.realData.answerComparison = normalizedComparison;
+        }
+        if (Array.isArray(results?.highlights) && results.highlights.length > 0) {
+            practiceRecord.highlights = results.highlights.slice();
+            practiceRecord.realData.highlights = results.highlights.slice();
+        } else if (Array.isArray(results?.realData?.highlights) && results.realData.highlights.length > 0) {
+            practiceRecord.highlights = results.realData.highlights.slice();
+            practiceRecord.realData.highlights = results.realData.highlights.slice();
+        }
+        const resolvedScrollY = Number.isFinite(Number(results?.scrollY))
+            ? Number(results.scrollY)
+            : (Number.isFinite(Number(results?.realData?.scrollY)) ? Number(results.realData.scrollY) : null);
+        if (resolvedScrollY !== null) {
+            practiceRecord.scrollY = resolvedScrollY;
+            practiceRecord.realData.scrollY = resolvedScrollY;
         }
 
         const allowSuiteStandaloneSave = payload?.allowStandaloneSave
