@@ -29,6 +29,14 @@
         return core;
     }
 
+    function getAnswerSanitizer() {
+        const sanitizer = global.AnswerSanitizer;
+        if (!sanitizer || typeof sanitizer !== 'object') {
+            return null;
+        }
+        return sanitizer;
+    }
+
     const state = {
         examId: null,
         dataKey: null,
@@ -71,7 +79,10 @@
     const dom = {
         title: null,
         subtitle: null,
+        shell: null,
         left: null,
+        right: null,
+        divider: null,
         groups: null,
         results: null,
         nav: null,
@@ -454,7 +465,10 @@
     function captureDom() {
         dom.title = document.getElementById('exam-title');
         dom.subtitle = document.getElementById('exam-subtitle');
+        dom.shell = document.querySelector('.shell');
         dom.left = document.getElementById('left');
+        dom.right = document.getElementById('right');
+        dom.divider = document.getElementById('divider');
         dom.groups = document.getElementById('question-groups');
         dom.results = document.getElementById('results');
         dom.nav = document.getElementById('question-nav');
@@ -668,7 +682,6 @@
     }
 
     function createGroupMarkup(group) {
-        const lead = group.leadHtml ? `<div class="unified-group__lead">${group.leadHtml}</div>` : '';
         const questionIds = Array.isArray(group.questionIds) ? group.questionIds.join(',') : '';
         const allowOptionReuseFlag = resolveAllowOptionReuse(group);
         const allowOptionReuse = typeof allowOptionReuseFlag === 'boolean'
@@ -676,7 +689,6 @@
             : '';
         return `
             <section class="unified-group" data-group-id="${group.groupId}" data-question-ids="${questionIds}"${allowOptionReuse}>
-                ${lead}
                 ${group.bodyHtml || ''}
             </section>
         `;
@@ -776,11 +788,316 @@
         }).join('');
     }
 
+    function attachPaneResizer() {
+        const shell = dom.shell;
+        const divider = dom.divider;
+        const leftPane = dom.left;
+        const rightPane = dom.right;
+        if (!shell || !divider || !leftPane || !rightPane || divider.dataset.resizeBound === '1') {
+            return;
+        }
+        divider.dataset.resizeBound = '1';
+
+        const baseMinLeft = 280;
+        const baseMinRight = 320;
+        const minPane = 220;
+
+        const isResizableLayout = () => {
+            const dividerStyle = global.getComputedStyle ? global.getComputedStyle(divider) : null;
+            const shellStyle = global.getComputedStyle ? global.getComputedStyle(shell) : null;
+            return !!(
+                dividerStyle
+                && shellStyle
+                && dividerStyle.display !== 'none'
+                && shellStyle.display === 'grid'
+            );
+        };
+
+        const resolveConstraints = () => {
+            const shellRect = shell.getBoundingClientRect();
+            const dividerRect = divider.getBoundingClientRect();
+            const dividerWidth = Math.max(1, Math.round(dividerRect.width || 10));
+            const contentWidth = Math.max(0, Math.round(shellRect.width - dividerWidth));
+            let minLeft = baseMinLeft;
+            let minRight = baseMinRight;
+            if (contentWidth < minLeft + minRight) {
+                minLeft = Math.max(minPane, Math.floor(contentWidth * 0.42));
+                minRight = Math.max(0, contentWidth - minLeft);
+            }
+            return {
+                shellRect,
+                contentWidth,
+                minLeft,
+                minRight,
+                minWidth: minLeft,
+                maxWidth: Math.max(minLeft, contentWidth - minRight)
+            };
+        };
+
+        const setDividerA11y = (leftWidth, constraints) => {
+            const contentWidth = constraints.contentWidth || 1;
+            const percent = Math.round((leftWidth / contentWidth) * 100);
+            const clampedPercent = Math.max(0, Math.min(100, percent));
+            divider.setAttribute('aria-valuenow', String(clampedPercent));
+            divider.setAttribute('aria-valuetext', `原文 ${clampedPercent}%`);
+        };
+
+        const applyPaneWidth = (leftWidth) => {
+            if (!isResizableLayout()) {
+                return;
+            }
+            const constraints = resolveConstraints();
+            const clamped = Math.max(
+                constraints.minWidth,
+                Math.min(constraints.maxWidth, Math.round(leftWidth))
+            );
+            shell.style.setProperty('--reading-left-pane-width', `${clamped}px`);
+            setDividerA11y(clamped, constraints);
+        };
+
+        const applyPointerPosition = (clientX) => {
+            const constraints = resolveConstraints();
+            applyPaneWidth(clientX - constraints.shellRect.left);
+        };
+
+        let dragging = false;
+
+        function handlePointerMove(event) {
+            if (!dragging || !event) {
+                return;
+            }
+            event.preventDefault();
+            applyPointerPosition(event.clientX);
+        }
+
+        function stopDragging(event) {
+            if (!dragging) {
+                return;
+            }
+            dragging = false;
+            divider.classList.remove('is-dragging');
+            document.body.classList.remove('reading-pane-resizing');
+            document.removeEventListener('pointermove', handlePointerMove);
+            document.removeEventListener('pointerup', stopDragging);
+            document.removeEventListener('pointercancel', stopDragging);
+            try {
+                if (event && typeof divider.releasePointerCapture === 'function') {
+                    divider.releasePointerCapture(event.pointerId);
+                }
+            } catch (_) {
+                // Pointer capture may already be released by the browser.
+            }
+        }
+
+        divider.addEventListener('pointerdown', (event) => {
+            if (
+                !isResizableLayout()
+                || !event
+                || (Number.isFinite(Number(event.button)) && event.button > 0)
+            ) {
+                return;
+            }
+            event.preventDefault();
+            dragging = true;
+            divider.classList.add('is-dragging');
+            document.body.classList.add('reading-pane-resizing');
+            try {
+                if (typeof divider.setPointerCapture === 'function') {
+                    divider.setPointerCapture(event.pointerId);
+                }
+            } catch (_) {
+                // Pointer capture is progressive enhancement.
+            }
+            document.addEventListener('pointermove', handlePointerMove);
+            document.addEventListener('pointerup', stopDragging);
+            document.addEventListener('pointercancel', stopDragging);
+            applyPointerPosition(event.clientX);
+        });
+
+        divider.addEventListener('keydown', (event) => {
+            if (!isResizableLayout()) {
+                return;
+            }
+            const currentWidth = leftPane.getBoundingClientRect().width;
+            const step = event.shiftKey ? 80 : 32;
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                applyPaneWidth(currentWidth - step);
+            } else if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                applyPaneWidth(currentWidth + step);
+            } else if (event.key === 'Home') {
+                event.preventDefault();
+                applyPaneWidth(resolveConstraints().contentWidth * 0.36);
+            } else if (event.key === 'End') {
+                event.preventDefault();
+                applyPaneWidth(resolveConstraints().contentWidth * 0.64);
+            }
+        });
+
+        global.addEventListener('resize', () => {
+            if (isResizableLayout()) {
+                applyPaneWidth(leftPane.getBoundingClientRect().width);
+            }
+        });
+
+        applyPaneWidth(leftPane.getBoundingClientRect().width || shell.getBoundingClientRect().width * 0.5);
+    }
+
     function normalizeQuestionId(rawValue) {
         if (!rawValue) return null;
         const value = String(rawValue).trim().toLowerCase();
         const match = value.match(/q(\d+)/);
         return match ? `q${match[1]}` : null;
+    }
+
+    const READING_QUESTION_TYPE_NAMES = {
+        'heading-matching': true,
+        'true-false-not-given': true,
+        'yes-no-not-given': true,
+        'multiple-choice': true,
+        'summary-completion': true,
+        'sentence-completion': true,
+        'short-answer': true,
+        'diagram-labelling': true,
+        'flow-chart': true,
+        'table-completion': true,
+        'matching-information': true,
+        'matching-features': true,
+        'matching-people-ideas': true,
+        other: true
+    };
+
+    const READING_QUESTION_TYPE_ALIASES = {
+        headingmatching: 'heading-matching',
+        headingsmatching: 'heading-matching',
+        matchingheadings: 'heading-matching',
+        listofheadings: 'heading-matching',
+        truefalsenotgiven: 'true-false-not-given',
+        tfng: 'true-false-not-given',
+        yesnonotgiven: 'yes-no-not-given',
+        ynng: 'yes-no-not-given',
+        multiplechoice: 'multiple-choice',
+        mcq: 'multiple-choice',
+        summarycompletion: 'summary-completion',
+        sentencecompletion: 'sentence-completion',
+        shortanswer: 'short-answer',
+        shortanswerquestions: 'short-answer',
+        diagramlabelling: 'diagram-labelling',
+        diagramlabeling: 'diagram-labelling',
+        flowchart: 'flow-chart',
+        flowchartcompletion: 'flow-chart',
+        tablecompletion: 'table-completion',
+        matchinginformation: 'matching-information',
+        matchingfeatures: 'matching-features',
+        matchingpeopleideas: 'matching-people-ideas',
+        matchingpeople: 'matching-people-ideas',
+        matchingnames: 'matching-people-ideas',
+        matching: 'matching-features',
+        general: 'other',
+        unknown: 'other',
+        other: 'other'
+    };
+
+    function normalizeQuestionTypeToken(value) {
+        return String(value || '')
+            .trim()
+            .toLowerCase()
+            .replace(/&/g, 'and')
+            .replace(/[_\s]+/g, '-')
+            .replace(/[^a-z0-9-]/g, '');
+    }
+
+    function normalizeReadingQuestionType(value) {
+        const token = normalizeQuestionTypeToken(value);
+        if (!token) {
+            return 'other';
+        }
+        if (READING_QUESTION_TYPE_NAMES[token]) {
+            return token;
+        }
+        const compact = token.replace(/-/g, '');
+        return READING_QUESTION_TYPE_ALIASES[compact] || READING_QUESTION_TYPE_ALIASES[token] || 'other';
+    }
+
+    function textFromHtml(value) {
+        return String(value || '')
+            .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+            .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+    }
+
+    function inferReadingQuestionTypeFromGroup(group) {
+        group = group || {};
+        const explicitType = normalizeReadingQuestionType(group.questionType || group.kind || group.type);
+        if (explicitType !== 'other') {
+            return explicitType;
+        }
+        const text = textFromHtml([group.leadHtml, group.bodyHtml, group.html, group.title].join(' '));
+        if (/which paragraph contains|paragraph contains the following information|contains the following information/.test(text)) {
+            return 'matching-information';
+        }
+        if (/list of headings|choose the correct heading|match.*heading|headings/.test(text)) {
+            return 'heading-matching';
+        }
+        if (/true\s+if|false\s+if|not given/.test(text) && /true/.test(text) && /false/.test(text)) {
+            return 'true-false-not-given';
+        }
+        if (/yes\s+if|no\s+if|not given/.test(text) && /yes/.test(text) && /no/.test(text)) {
+            return 'yes-no-not-given';
+        }
+        if (/choose the correct letter|choose the correct answer|multiple choice/.test(text)) {
+            return 'multiple-choice';
+        }
+        if (/complete the summary|summary below/.test(text)) {
+            return 'summary-completion';
+        }
+        if (/complete each sentence|complete the sentences|sentence endings|correct ending/.test(text)) {
+            return 'sentence-completion';
+        }
+        if (/complete the table|table below/.test(text)) {
+            return 'table-completion';
+        }
+        if (/flow[- ]?chart|flow chart/.test(text)) {
+            return 'flow-chart';
+        }
+        if (/diagram|label the diagram|labelling|labeling|map below/.test(text)) {
+            return 'diagram-labelling';
+        }
+        if (/answer the questions|short answer/.test(text)) {
+            return 'short-answer';
+        }
+        if (/look at the following people|list of people|match each person|match each statement with the correct person|list of ideas/.test(text)) {
+            return 'matching-people-ideas';
+        }
+        if (/match each|match the following|classify the following|list of (points|features|options|events)/.test(text)) {
+            return 'matching-features';
+        }
+        return explicitType;
+    }
+
+    function addQuestionTypeMapEntry(map, questionId, type) {
+        const normalizedId = normalizeQuestionId(questionId);
+        if (!normalizedId || !type) {
+            return;
+        }
+        map[normalizedId] = type;
+        map[String(questionId).trim().toLowerCase()] = type;
+    }
+
+    function buildQuestionTypeMap(dataset = state.dataset) {
+        const map = {};
+        const groups = Array.isArray(dataset?.questionGroups) ? dataset.questionGroups : [];
+        groups.forEach((group) => {
+            const type = inferReadingQuestionTypeFromGroup(group);
+            const questionIds = Array.isArray(group?.questionIds) ? group.questionIds : [];
+            questionIds.forEach((questionId) => addQuestionTypeMapEntry(map, questionId, type));
+        });
+        return map;
     }
 
     function isQuestionIdMatch(value, target) {
@@ -1329,11 +1646,85 @@
         return Array.from(items).map((item) => normalizeDragValue(item)).filter(Boolean).join(', ');
     }
 
+    function getObjectAnswerField(value, keys) {
+        if (!value || typeof value !== 'object') {
+            return '';
+        }
+        for (let index = 0; index < keys.length; index += 1) {
+            const key = keys[index];
+            if (!Object.prototype.hasOwnProperty.call(value, key)) {
+                continue;
+            }
+            const fieldValue = value[key];
+            if (fieldValue == null || typeof fieldValue === 'object') {
+                continue;
+            }
+            const text = String(fieldValue).trim();
+            if (text) {
+                return text;
+            }
+        }
+        return '';
+    }
+
+    function normalizeAnswerForReplay(value, mode = 'value') {
+        const sanitizer = getAnswerSanitizer();
+        if (Array.isArray(value)) {
+            return value
+                .map((item) => normalizeAnswerForReplay(item, mode))
+                .filter(Boolean)
+                .join(', ');
+        }
+        if (value && typeof value === 'object') {
+            const valueKeys = ['value', 'answerValue', 'key', 'option', 'heading', 'word', 'answer', 'text', 'label', 'answerLabel', 'content'];
+            const labelKeys = ['label', 'answerLabel', 'text', 'content', 'value', 'answerValue', 'key', 'option', 'heading', 'word', 'answer'];
+            const extracted = getObjectAnswerField(value, mode === 'label' ? labelKeys : valueKeys);
+            if (extracted) {
+                return extracted;
+            }
+            if (sanitizer && typeof sanitizer.normalizeValue === 'function') {
+                return sanitizer.normalizeValue(value);
+            }
+            return '';
+        }
+        if (sanitizer && typeof sanitizer.normalizeValue === 'function') {
+            return sanitizer.normalizeValue(value);
+        }
+        const text = String(value == null ? '' : value).trim();
+        return /^\[object\s/i.test(text) ? '' : text;
+    }
+
+    function displayAnswerValue(value, fallback = '未作答') {
+        const text = normalizeAnswerForReplay(value, 'label');
+        return text || fallback;
+    }
+
+    function normalizeAnswerForCompare(value) {
+        if (Array.isArray(value)) {
+            return value.map((item) => normalizeAnswerForCompare(item)).filter((item) => item !== '');
+        }
+        if (value && typeof value === 'object') {
+            return normalizeAnswerForReplay(value, 'value');
+        }
+        return normalizeAnswerForReplay(value, 'value');
+    }
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function splitAnswerTokens(rawValue) {
         if (Array.isArray(rawValue)) {
-            return rawValue.map((item) => String(item == null ? '' : item).trim()).filter(Boolean);
+            return rawValue
+                .flatMap((item) => splitAnswerTokens(item))
+                .filter(Boolean);
         }
-        const text = String(rawValue == null ? '' : rawValue).trim();
+        const text = normalizeAnswerForReplay(rawValue, 'value');
         if (!text) return [];
         if (text.includes(',')) {
             return text.split(',').map((item) => String(item || '').trim()).filter(Boolean);
@@ -1407,7 +1798,8 @@
             clearDropzone(dropzone);
             return true;
         }
-        setDropzoneAnswer(dropzone, value, value);
+        const label = normalizeAnswerForReplay(rawValue, 'label') || value;
+        setDropzoneAnswer(dropzone, value, label);
         return true;
     }
 
@@ -1479,23 +1871,19 @@
     }
 
     function normalizeAnswerValue(value) {
-        const core = getAnswerMatchCore();
         if (Array.isArray(value)) {
-            if (core && typeof core.splitAnswerTokens === 'function') {
-                return core.splitAnswerTokens(value);
-            }
-            return value.map((entry) => canonicalizeAnswerToken(entry)).filter(Boolean);
+            return splitAnswerTokens(value);
         }
         if (value == null) return '';
         return canonicalizeAnswerToken(value);
     }
 
     function canonicalizeAnswerToken(value) {
+        value = normalizeAnswerForReplay(value, 'value');
         const core = getAnswerMatchCore();
         if (core && typeof core.normalizeToken === 'function') {
             return core.normalizeToken(value);
         }
-        if (value == null) return '';
         const cleaned = String(value)
             .replace(/[“”]/g, '"')
             .replace(/[‘’]/g, "'")
@@ -1520,8 +1908,10 @@
 
     function compareAnswers(userAnswer, correctAnswer) {
         const core = getAnswerMatchCore();
+        const normalizedUserAnswer = normalizeAnswerForCompare(userAnswer);
+        const normalizedCorrectAnswer = normalizeAnswerForCompare(correctAnswer);
         if (core && typeof core.compareAnswers === 'function') {
-            return core.compareAnswers(userAnswer, correctAnswer) === true;
+            return core.compareAnswers(normalizedUserAnswer, normalizedCorrectAnswer) === true;
         }
         const toTokens = (value) => {
             const source = Array.isArray(value) ? value : splitAnswerTokens(value);
@@ -1529,8 +1919,8 @@
                 source.map((entry) => canonicalizeAnswerToken(entry)).filter(Boolean)
             ));
         };
-        const actualTokens = toTokens(userAnswer);
-        const expectedTokens = toTokens(correctAnswer);
+        const actualTokens = toTokens(normalizedUserAnswer);
+        const expectedTokens = toTokens(normalizedCorrectAnswer);
         if (!actualTokens.length && !expectedTokens.length) {
             return null;
         }
@@ -1575,13 +1965,15 @@
     function hasAnswer(questionId) {
         const answers = collectAnswers();
         const value = answers[questionId];
-        return Array.isArray(value) ? value.some(Boolean) : !!String(value || '').trim();
+        return splitAnswerTokens(value).length > 0;
     }
 
     function buildResults() {
         const answers = collectAnswers();
         const answerKey = state.dataset?.answerKey || {};
         const questionOrder = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : Object.keys(answerKey);
+        const questionTypeMap = buildQuestionTypeMap();
+        const questionTypePerformance = {};
         const answerComparison = {};
         const details = {};
         let correctCount = 0;
@@ -1592,22 +1984,40 @@
             const correctAnswer = answerKey[questionId];
             const isCorrect = compareAnswers(userAnswer, correctAnswer);
             const weight = questionWeight(correctAnswer);
+            const normalizedQuestionId = normalizeQuestionId(questionId) || questionId;
+            const questionType = questionTypeMap[normalizedQuestionId] || 'other';
+            if (!questionTypePerformance[questionType]) {
+                questionTypePerformance[questionType] = {
+                    total: 0,
+                    correct: 0,
+                    accuracy: 0
+                };
+            }
             totalQuestions += weight;
+            questionTypePerformance[questionType].total += weight;
             if (isCorrect) {
                 correctCount += weight;
+                questionTypePerformance[questionType].correct += weight;
             }
             answerComparison[questionId] = {
                 questionId,
                 userAnswer,
                 correctAnswer,
-                isCorrect
+                isCorrect,
+                questionType
             };
             details[questionId] = {
                 questionId,
                 userAnswer,
                 correctAnswer,
-                isCorrect
+                isCorrect,
+                questionType
             };
+        });
+
+        Object.keys(questionTypePerformance).forEach((type) => {
+            const performance = questionTypePerformance[type];
+            performance.accuracy = performance.total > 0 ? performance.correct / performance.total : 0;
         });
 
         const accuracy = totalQuestions > 0 ? correctCount / totalQuestions : 0;
@@ -1615,6 +2025,8 @@
             answers,
             answerComparison,
             correctAnswers: answerKey,
+            questionTypeMap,
+            questionTypePerformance,
             scoreInfo: {
                 correct: correctCount,
                 total: totalQuestions,
@@ -1630,9 +2042,9 @@
     function renderResults(results) {
         if (!dom.results) return;
         const rows = Object.values(results.answerComparison).map((entry) => {
-            const label = displayLabel(entry.questionId);
-            const userAnswer = Array.isArray(entry.userAnswer) ? entry.userAnswer.join(', ') : (entry.userAnswer || '未作答');
-            const correctAnswer = Array.isArray(entry.correctAnswer) ? entry.correctAnswer.join(', ') : entry.correctAnswer;
+            const label = escapeHtml(displayLabel(entry.questionId));
+            const userAnswer = escapeHtml(displayAnswerValue(entry.userAnswer));
+            const correctAnswer = escapeHtml(displayAnswerValue(entry.correctAnswer, ''));
             const status = entry.isCorrect ? '✓' : '✗';
             return `
                 <tr>
@@ -1768,9 +2180,7 @@
                 `question${normalizedId.replace(/^q/i, '')}`
             ])).filter(Boolean);
 
-            const valueList = Array.isArray(rawValue)
-                ? rawValue.map((item) => String(item).trim()).filter(Boolean)
-                : String(rawValue == null ? '' : rawValue).split(',').map((item) => item.trim()).filter(Boolean);
+            const valueList = splitAnswerTokens(rawValue);
             const firstValue = valueList[0] || '';
 
             aliases.forEach((alias) => {
@@ -2429,14 +2839,14 @@
                 // Text input
                 const textInput = document.querySelector(`input[data-question-id="${escapedId}"], input#${escapedId}`);
                 if (textInput && textInput.type !== 'radio' && textInput.type !== 'checkbox') {
-                    textInput.value = Array.isArray(value) ? value.join(', ') : (value || '');
+                    textInput.value = displayAnswerValue(value, '');
                     return;
                 }
                 const namedTextFields = Array.from(
                     document.querySelectorAll(`input[name="${escapedId}"], textarea[name="${escapedId}"]`)
                 ).filter((field) => field.type !== 'radio' && field.type !== 'checkbox');
                 if (namedTextFields.length) {
-                    const normalizedTextValue = Array.isArray(value) ? value.join(', ') : (value || '');
+                    const normalizedTextValue = displayAnswerValue(value, '');
                     namedTextFields.forEach((field) => {
                         field.value = normalizedTextValue;
                     });
@@ -2946,6 +3356,7 @@
         buildQuestionNav();
         attachNavListeners();
         attachDragDrop();
+        attachPaneResizer();
 
         // Ensure drag items can return home when replaced or discarded
         function initDragPools() {

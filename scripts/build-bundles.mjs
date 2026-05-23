@@ -95,6 +95,7 @@ const bundles = {
         'js/runtime/readingExamRegistry.js',
         'js/runtime/readingExplanationRegistry.js',
         'js/runtime/readingHighlightShared.js',
+        'js/utils/answerSanitizer.js',
         'js/utils/answerMatchCore.js',
         'js/runtime/unifiedReadingPage.js'
     ],

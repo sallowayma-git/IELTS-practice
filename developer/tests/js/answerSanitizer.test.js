@@ -12,6 +12,9 @@ const sanitizer = require(path.resolve(__dirname, '../../../js/utils/answerSanit
 describe('AnswerSanitizer.normalizeValue', () => {
   it('extracts preferred fields from objects', () => {
     assert.strictEqual(sanitizer.normalizeValue({ value: '  Test ' }), 'Test');
+    assert.strictEqual(sanitizer.normalizeValue({ answerValue: ' B ', label: 'Japan' }), 'B');
+    assert.strictEqual(sanitizer.normalizeValue({ heading: ' vi ' }), 'vi');
+    assert.strictEqual(sanitizer.normalizeValue({ key: 'C', text: 'choice C' }), 'C');
     assert.strictEqual(sanitizer.normalizeValue({ text: 'Hello' }), 'Hello');
   });
 
