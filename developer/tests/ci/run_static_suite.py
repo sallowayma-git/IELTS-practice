@@ -233,6 +233,36 @@ def _check_build_bundles_no_deleted_refs(build_script: Path) -> Tuple[bool, dict
         "staleRefs": stale_refs,
     }
 
+def _check_optional_listening_assets_not_bundled(build_script: Path, core_bundle: Path) -> Tuple[bool, dict]:
+    try:
+        build_source = build_script.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取 build-bundles 失败：{exc}"}
+
+    forbidden_inputs = [
+        "assets/generated/listening-exams/manifest.js",
+        "assets/generated/listening-exams/listening-index.compat.js",
+    ]
+    build_hits = sorted([item for item in forbidden_inputs if item in build_source])
+    bundle_hits: List[str] = []
+    if core_bundle.exists():
+        try:
+            core_source = core_bundle.read_text(encoding="utf-8")
+        except Exception as exc:  # pragma: no cover - defensive guard
+            return False, {"error": f"读取 core-foundation bundle 失败：{exc}"}
+        bundle_forbidden = [
+            "global.__LISTENING_EXAM_MANIFEST__ = ",
+            "global.listeningExamIndex = [",
+            "assets/generated/listening-exams/listening-index.compat.js",
+        ]
+        bundle_hits = sorted([item for item in bundle_forbidden if item in core_source])
+
+    passed = not build_hits and not bundle_hits
+    return passed, {
+        "forbiddenBuildInputs": build_hits,
+        "forbiddenCoreBundlePayloads": bundle_hits,
+    }
+
 
 def _extract_snapshot_html(snapshot_path: Path) -> Tuple[Optional[str], str]:
     if not snapshot_path.exists():
@@ -333,6 +363,28 @@ def _check_index_no_inline_runtime(index_path: Path) -> Tuple[bool, dict]:
     }
 
 
+def _check_index_listening_filter_initially_hidden(index_path: Path) -> Tuple[bool, dict]:
+    try:
+        source = index_path.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"读取失败：{exc}"}
+
+    match = re.search(
+        r"<button\b(?=[^>]*\bdata-filter-type\s*=\s*['\"]listening['\"])([^>]*)>",
+        source,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return True, {"listeningFilterButton": "not-present"}
+
+    attrs = match.group(1) or ""
+    hidden = bool(re.search(r"(^|\s)hidden(\s|=|$)", attrs, re.IGNORECASE))
+    return hidden, {
+        "listeningFilterButton": "present",
+        "hidden": hidden,
+    }
+
+
 def _check_index_snapshot_script_sync(index_path: Path, snapshot_path: Path) -> Tuple[bool, dict]:
     try:
         index_source = index_path.read_text(encoding="utf-8")
@@ -410,10 +462,35 @@ def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
         if name.startswith("ListeningPractice/")
         and not any(name == f"ListeningPractice/{part}" or name.startswith(f"ListeningPractice/{part}/") for part in ("P1", "P2", "P3", "P4", "vip"))
     ])
-    missing_listening_parts = sorted([
+    listening_parts_present = sorted([
         part for part in ("P1", "P2", "P3", "P4")
-        if not any(name == f"ListeningPractice/{part}" or name.startswith(f"ListeningPractice/{part}/") for name in name_set)
+        if any(name == f"ListeningPractice/{part}" or name.startswith(f"ListeningPractice/{part}/") for name in name_set)
     ])
+    optional_listening_generated = sorted([
+        name for name in name_set
+        if name == "assets/generated/listening-exams" or name.startswith("assets/generated/listening-exams/")
+    ])
+    optional_listening_generated_files = sorted([
+        name for name in optional_listening_generated
+        if name != "assets/generated/listening-exams"
+    ])
+    expected_optional_generated = {
+        "assets/generated/listening-exams/manifest.js",
+        "assets/generated/listening-exams/listening-index.compat.js",
+    }
+    optional_generated_present = set(optional_listening_generated_files)
+    has_optional_listening_payload = bool(listening_parts_present)
+    forbidden_default_listening_generated = (
+        optional_listening_generated
+        if not has_optional_listening_payload
+        else []
+    )
+    missing_optional_listening_generated = sorted(
+        expected_optional_generated - optional_generated_present
+    ) if has_optional_listening_payload else []
+    unexpected_optional_listening_generated = sorted(
+        optional_generated_present - expected_optional_generated
+    ) if has_optional_listening_payload else []
     forbidden_source_js = sorted([
         name for name in name_set
         if re.match(r"^js/(app|core|data|runtime|services|utils|components|presentation|views)/", name)
@@ -436,7 +513,9 @@ def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
         and not forbidden_templates
         and not forbidden_listening
         and not unexpected_listening_roots
-        and not missing_listening_parts
+        and not forbidden_default_listening_generated
+        and not missing_optional_listening_generated
+        and not unexpected_optional_listening_generated
         and not forbidden_source_js
         and not forbidden_assets_py
         and not forbidden_listening_video
@@ -449,7 +528,12 @@ def _check_release_zip_runtime_payload() -> Tuple[bool, dict]:
         "forbiddenTemplates": forbidden_templates,
         "forbiddenListeningPractice": forbidden_listening,
         "unexpectedListeningRoots": unexpected_listening_roots,
-        "missingListeningParts": missing_listening_parts,
+        "optionalListeningPartsPresent": listening_parts_present,
+        "optionalListeningGeneratedAssets": optional_listening_generated,
+        "optionalListeningGeneratedFiles": optional_listening_generated_files,
+        "forbiddenDefaultListeningGeneratedAssets": forbidden_default_listening_generated,
+        "missingOptionalListeningGeneratedAssets": missing_optional_listening_generated,
+        "unexpectedOptionalListeningGeneratedAssets": unexpected_optional_listening_generated,
         "forbiddenSourceJs": forbidden_source_js[:20],
         "forbiddenAssetScriptsPy": forbidden_assets_py,
         "forbiddenListeningVideo": forbidden_listening_video,
@@ -479,12 +563,12 @@ def _check_release_script_runtime_guards(release_script: Path) -> Tuple[bool, di
         'require_entry "js/bundles/reading-page.bundle.js"',
         'require_entry "js/bundles/practice-page-enhancer.bundle.js"',
         'require_entry "js/bundles/listening-record-bridge.bundle.js"',
-        'require_entry "assets/generated/listening-exams/manifest.js"',
-        'require_entry "assets/generated/listening-exams/listening-index.compat.js"',
-        'require_entry "ListeningPractice/P1/"',
-        'require_entry "ListeningPractice/P2/"',
-        'require_entry "ListeningPractice/P3/"',
-        'require_entry "ListeningPractice/P4/"',
+        'LISTENING_EXCLUDE_PATTERNS=("assets/generated/listening-exams/" "assets/generated/listening-exams/*" "ListeningPractice/" "ListeningPractice/*")',
+        'if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ]; then',
+        'INCLUDE_LOCAL_LISTENING=1 requires both assets/generated/listening-exams/manifest.js and listening-index.compat.js',
+        'if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ] && [ -f "assets/generated/listening-exams/manifest.js" ]; then',
+        'reject_entry_prefix "assets/generated/listening-exams/"',
+        'if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ] && [ -d "ListeningPractice" ]; then',
         'reject_entry_prefix "templates/"',
         'reject_entry_prefix "ListeningPractice/vip/"',
         "reject_entry_pattern '(^|/)~\\$[^/]*$'",
@@ -508,6 +592,11 @@ def _extract_js_json_assignment(source: str, marker: str, end_marker: str) -> An
 
 
 def _check_listening_generated_assets(index_path: Path, manifest_path: Path) -> Tuple[bool, dict]:
+    if not index_path.exists() and not manifest_path.exists():
+        return True, {
+            "optional": True,
+            "reason": "内置听力 manifest/index 未放置，默认隐藏内置听力入口",
+        }
     if not index_path.exists():
         return False, {"error": "listening-index.compat.js 缺失"}
     if not manifest_path.exists():
@@ -591,6 +680,93 @@ def _check_listening_generated_assets(index_path: Path, manifest_path: Path) -> 
         "missingInManifest": missing_in_manifest[:20],
         "missingInIndex": missing_in_index[:20],
         "pathRootOk": path_root_ok,
+    }
+
+
+def _check_listening_static_bridge_coverage() -> Tuple[bool, dict]:
+    listening_root = REPO_ROOT / "ListeningPractice"
+    if not listening_root.exists():
+        return True, {
+            "skipped": True,
+            "reason": "ListeningPractice 本地题源目录未放置，跳过静态 bridge 覆盖校验",
+        }
+    parts = ("P1", "P2", "P3", "P4")
+    bridge_name = "listening-record-bridge.bundle.js"
+    bridge_target = (REPO_ROOT / "js" / "bundles" / bridge_name).resolve()
+
+    html_files: List[Path] = []
+    by_part: Dict[str, int] = {}
+    for part in parts:
+        part_root = listening_root / part
+        part_files = sorted(part_root.rglob("*.html")) if part_root.exists() else []
+        by_part[part] = len(part_files)
+        html_files.extend(part_files)
+
+    missing_bridge: List[str] = []
+    duplicate_bridge: List[str] = []
+    missing_marker: List[str] = []
+    bad_bridge_path: List[str] = []
+    legacy_enhancer: List[str] = []
+    bridge_after_body: List[str] = []
+
+    bridge_script_pattern = re.compile(
+        r"<script\b(?=[^>]*\bsrc\s*=\s*['\"]([^'\"]*"
+        + re.escape(bridge_name)
+        + r"[^'\"]*)['\"])([^>]*)>",
+        re.IGNORECASE,
+    )
+
+    for html_path in html_files:
+        rel_html = str(html_path.relative_to(REPO_ROOT)).replace("\\", "/")
+        try:
+            source = html_path.read_text(encoding="utf-8")
+        except Exception as exc:  # pragma: no cover - defensive guard
+            missing_bridge.append(f"{rel_html}:读取失败:{exc}")
+            continue
+
+        if "practice-page-enhancer.js" in source:
+            legacy_enhancer.append(rel_html)
+
+        bridge_matches = list(bridge_script_pattern.finditer(source))
+        if not bridge_matches:
+            missing_bridge.append(rel_html)
+            continue
+        if len(bridge_matches) > 1:
+            duplicate_bridge.append(rel_html)
+
+        first_match = bridge_matches[0]
+        script_src = first_match.group(1)
+        script_attrs = first_match.group(0)
+        if not re.search(r"\bdata-listening-record-bridge\s*=\s*['\"]true['\"]", script_attrs, re.IGNORECASE):
+            missing_marker.append(rel_html)
+
+        clean_src = script_src.split("?", 1)[0].split("#", 1)[0]
+        resolved_src = (html_path.parent / clean_src).resolve()
+        if resolved_src != bridge_target:
+            bad_bridge_path.append(f"{rel_html}:{script_src}")
+
+        body_index = source.lower().rfind("</body>")
+        if body_index >= 0 and first_match.start() > body_index:
+            bridge_after_body.append(rel_html)
+
+    passed = (
+        len(html_files) > 0
+        and not missing_bridge
+        and not duplicate_bridge
+        and not missing_marker
+        and not bad_bridge_path
+        and not legacy_enhancer
+        and not bridge_after_body
+    )
+    return passed, {
+        "htmlCount": len(html_files),
+        "byPart": by_part,
+        "missingBridge": missing_bridge[:20],
+        "duplicateBridge": duplicate_bridge[:20],
+        "missingMarker": missing_marker[:20],
+        "badBridgePath": bad_bridge_path[:20],
+        "legacyPracticeEnhancer": legacy_enhancer[:20],
+        "bridgeAfterBody": bridge_after_body[:20],
     }
 
 
@@ -997,6 +1173,8 @@ def _check_reading_explanation_alignment() -> Tuple[bool, dict]:
 
     exam_payloads: Dict[str, dict] = {}
     explanation_payloads: Dict[str, dict] = {}
+    manifest_missing_scripts: List[str] = []
+    manifest_unregistered_scripts: List[str] = []
 
     for exam_file in sorted(exams_dir.glob("*.js")):
         payload = _extract_registered_payload(exam_file)
@@ -1013,6 +1191,34 @@ def _check_reading_explanation_alignment() -> Tuple[bool, dict]:
         exam_id = str(payload.get("examId") or "").strip()
         if exam_id:
             explanation_payloads[exam_id] = payload
+
+    manifest_path = explanations_dir / "manifest.js"
+    try:
+        manifest = _extract_js_json_assignment(
+            manifest_path.read_text(encoding="utf-8"),
+            "global.__READING_EXPLANATION_MANIFEST__ = ",
+            ";\n})(typeof window",
+        )
+    except Exception as exc:
+        return False, {"error": f"解析 reading-explanations manifest 失败：{exc}"}
+
+    if not isinstance(manifest, dict):
+        return False, {"error": "reading-explanations manifest 结构错误"}
+
+    for exam_id, entry in manifest.items():
+        if not isinstance(entry, dict):
+            manifest_unregistered_scripts.append(f"{exam_id}:<non-object-entry>")
+            continue
+        script = str(entry.get("script") or "").strip()
+        if not script:
+            manifest_missing_scripts.append(f"{exam_id}:<empty-script>")
+            continue
+        script_path = (explanations_dir / script).resolve()
+        if not script_path.exists():
+            manifest_missing_scripts.append(f"{exam_id}:{script}")
+            continue
+        if str(entry.get("examId") or exam_id).strip() not in explanation_payloads:
+            manifest_unregistered_scripts.append(f"{exam_id}:{script}")
 
     missing_explanations = sorted([exam_id for exam_id in exam_payloads.keys() if exam_id not in explanation_payloads])
     mismatches: List[dict] = []
@@ -1063,10 +1269,13 @@ def _check_reading_explanation_alignment() -> Tuple[bool, dict]:
                     },
                 })
 
-    passed = not mismatches
+    passed = not mismatches and not manifest_missing_scripts and not manifest_unregistered_scripts
     detail = {
         "examCount": len(exam_payloads),
         "explanationCount": len(explanation_payloads),
+        "manifestCount": len(manifest),
+        "manifestMissingScripts": manifest_missing_scripts[:20],
+        "manifestUnregisteredScripts": manifest_unregistered_scripts[:20],
         "missingExplanations": len(missing_explanations),
         "mismatchCount": len(mismatches),
         "mismatches": mismatches[:20],
@@ -1143,6 +1352,10 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("index.html 禁止内联运行时", inline_runtime_passed, inline_runtime_detail))
         all_passed &= inline_runtime_passed
 
+        listening_filter_hidden_passed, listening_filter_hidden_detail = _check_index_listening_filter_initially_hidden(index_file)
+        results.append(_format_result("index.html 听力入口初始隐藏守卫", listening_filter_hidden_passed, listening_filter_hidden_detail))
+        all_passed &= listening_filter_hidden_passed
+
         css_convergence_passed, css_convergence_detail = _check_index_css_convergence(index_file)
         results.append(_format_result("index.html CSS 收敛守卫", css_convergence_passed, css_convergence_detail))
         all_passed &= css_convergence_passed
@@ -1156,6 +1369,12 @@ def run_checks() -> Tuple[List[dict], bool]:
     build_ref_passed, build_ref_detail = _check_build_bundles_no_deleted_refs(build_script)
     results.append(_format_result("build-bundles 删除脚本引用守卫", build_ref_passed, build_ref_detail))
     all_passed &= build_ref_passed
+    optional_listening_bundle_passed, optional_listening_bundle_detail = _check_optional_listening_assets_not_bundled(
+        build_script,
+        REPO_ROOT / "js" / "bundles" / "core-foundation.bundle.js",
+    )
+    results.append(_format_result("内置听力索引禁止硬打包守卫", optional_listening_bundle_passed, optional_listening_bundle_detail))
+    all_passed &= optional_listening_bundle_passed
     release_script_passed, release_script_detail = _check_release_script_runtime_guards(REPO_ROOT / "developer" / "release.sh")
     results.append(_format_result("Release 脚本运行时守卫", release_script_passed, release_script_detail))
     all_passed &= release_script_passed
@@ -1430,6 +1649,10 @@ def run_checks() -> Tuple[List[dict], bool]:
     )
     results.append(_format_result("Listening generated 索引结构", listening_assets_passed, listening_assets_detail))
     all_passed &= listening_assets_passed
+
+    listening_bridge_passed, listening_bridge_detail = _check_listening_static_bridge_coverage()
+    results.append(_format_result("Listening 静态 bridge 覆盖守卫", listening_bridge_passed, listening_bridge_detail))
+    all_passed &= listening_bridge_passed
 
     lazy_loader_path = REPO_ROOT / "js" / "runtime" / "lazyLoader.js"
     if lazy_loader_path.exists():
@@ -1922,6 +2145,29 @@ def run_checks() -> Tuple[List[dict], bool]:
         all_passed &= library_manager_import_passed
     else:
         results.append(_format_result("LibraryManager 导入配置隔离测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    browse_controller_test = REPO_ROOT / "developer" / "tests" / "js" / "browseController.test.js"
+    if browse_controller_test.exists():
+        try:
+            subprocess.run(
+                ["node", str(browse_controller_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                encoding="utf-8",
+            )
+            browse_controller_passed = True
+            browse_controller_detail = "BrowseController 测试通过"
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            browse_controller_passed = False
+            browse_controller_detail = f"执行失败: {output_text.strip()}"
+        results.append(_format_result("BrowseController 听力入口可用性测试", browse_controller_passed, browse_controller_detail))
+        all_passed &= browse_controller_passed
+    else:
+        results.append(_format_result("BrowseController 听力入口可用性测试", False, "测试脚本缺失"))
         all_passed = False
 
     browse_preferences_records_test = REPO_ROOT / "developer" / "tests" / "js" / "browsePreferencesRecords.test.js"

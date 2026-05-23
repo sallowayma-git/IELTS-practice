@@ -40,6 +40,31 @@ global.console = {
     info: () => {}
 };
 
+global.__EMBEDDED_WORDLISTS__ = {
+    ielts_core: [
+        {
+            word: 'accommodation',
+            meaning: 'n. 住宿',
+            example: 'The hotel provides comfortable accommodation.'
+        },
+        {
+            word: 'receive',
+            meaning: 'v. 收到；接收',
+            example: 'Students receive feedback after the test.'
+        },
+        {
+            word: 'environment',
+            meaning: 'n. 环境',
+            example: 'The environment affects learning.'
+        },
+        {
+            word: 'garden',
+            meaning: 'n. 花园；庭院',
+            example: 'The garden is quiet.'
+        }
+    ]
+};
+
 // Mock存储系统
 const mockStorage = new Map();
 global.storage = {
@@ -185,8 +210,22 @@ async function runTests() {
         const p1List = await collector.loadVocabList('p1');
         assert.ok(p1List, 'P1词表应该存在');
         assert.strictEqual(p1List.words.length, 2, 'P1词表应该有2个单词');
+        const savedAccommodationInitial = p1List.words.find(
+            w => w.word.toLowerCase() === 'accommodation'
+        );
+        assert.ok(savedAccommodationInitial, '应该保存accommodation');
+        assert.strictEqual(savedAccommodationInitial.meaning, 'n. 住宿', '错词落库时应该补全核心词库中文释义');
+        assert.strictEqual(savedAccommodationInitial.example, 'The hotel provides comfortable accommodation.');
+        assert.ok(savedAccommodationInitial.note.includes('你曾拼写为: accomodation'), '错拼信息应该进入note而不是meaning');
+        assert.strictEqual(savedAccommodationInitial.source, 'p1');
+        assert.strictEqual(savedAccommodationInitial.interval, 1, '错词应带默认间隔字段');
+        assert.strictEqual(savedAccommodationInitial.repetitions, 0, '错词应带默认重复字段');
+        assert.strictEqual(savedAccommodationInitial.intraCycles, 0, '错词应带轮内循环字段');
+        assert.strictEqual(savedAccommodationInitial.correctCount, 0, '错词应带正确次数字段');
+        assert.strictEqual(savedAccommodationInitial.lastReviewed, null, '新错词不应伪造复习时间');
+        assert.strictEqual(savedAccommodationInitial.nextReview, null, '新错词应作为新词进入背诵队列');
         
-        results.push({ name: '词表保存', status: 'pass' });
+        results.push({ name: '词表保存并补全背诵字段', status: 'pass' });
         
         // 测试6: 重复单词处理
         console.log('测试6: 重复单词处理');

@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>考试总览系统</title>
+        <title>IELTS Atlas</title>
         <link
             rel="icon"
             type="image/svg+xml"
@@ -19,7 +19,7 @@
             <div class="boot-panel">
                 <div class="boot-logo">SHUI · IELTS</div>
                 <p class="boot-status" id="boot-status-text">
-                    正在唤醒考试总览系统...
+                    正在唤醒 IELTS Atlas...
                 </p>
                 <div class="boot-progress">
                     <span
@@ -42,17 +42,27 @@
 
         <div class="container hero-shell">
             <div class="hero-header">
-                <h1 style="width: 100%">
-                    📚 考试总览系统
-                    <span
-                        style="
-                            font-size: 0.35em;
-                            opacity: 0.6;
-                            font-weight: normal;
-                            margin-left: 12px;
-                            vertical-align: middle;
-                            display: inline-block;
-                        "
+                <h1 class="hero-brand-title" aria-label="IELTS Atlas">
+                    <span class="hero-brand-mark" aria-hidden="true">
+                        <svg
+                            viewBox="0 0 24 24"
+                            width="1em"
+                            height="1em"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.75"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path d="M4.5 20V8.2a2.7 2.7 0 0 1 2.7-2.7H10"></path>
+                            <path d="M19.5 20V8.2a2.7 2.7 0 0 0-2.7-2.7H14"></path>
+                            <path d="M7.2 16.8H10a2 2 0 0 1 2 2V6.5a2 2 0 0 0-2-2H7.2a2.7 2.7 0 0 0-2.7 2.7v11.6a2 2 0 0 1 2-2Z"></path>
+                            <path d="M16.8 16.8H14a2 2 0 0 0-2 2V6.5a2 2 0 0 1 2-2h2.8a2.7 2.7 0 0 1 2.7 2.7v11.6a2 2 0 0 0-2-2Z"></path>
+                            <path d="M9 9.5h1.3M13.7 9.5H15"></path>
+                        </svg>
+                    </span>
+                    <span class="hero-brand-text">IELTS Atlas</span>
+                    <span class="hero-brand-subtitle"
                         >项目仅授权ZYZ Reading Walks
                         提供分发，小红书号：276752989</span
                     >
@@ -215,6 +225,7 @@
                             class="shui-segmented-btn"
                             type="button"
                             aria-pressed="false"
+                            hidden
                             data-filter-type="listening"
                             data-index-action="filter-exams"
                             data-action-value="listening"
@@ -258,6 +269,42 @@
                                 </svg>
                             </button>
                         </div>
+                        <div
+                            class="browse-frequency-filter"
+                            id="browse-frequency-filter-buttons"
+                            aria-label="频率筛选"
+                        >
+                            <button
+                                class="browse-frequency-chip"
+                                type="button"
+                                aria-pressed="false"
+                                data-frequency-filter="high"
+                                data-index-action="filter-frequency"
+                                data-action-value="high"
+                            >
+                                高频
+                            </button>
+                            <button
+                                class="browse-frequency-chip"
+                                type="button"
+                                aria-pressed="false"
+                                data-frequency-filter="medium"
+                                data-index-action="filter-frequency"
+                                data-action-value="medium"
+                            >
+                                中频
+                            </button>
+                            <button
+                                class="browse-frequency-chip"
+                                type="button"
+                                aria-pressed="false"
+                                data-frequency-filter="low"
+                                data-index-action="filter-frequency"
+                                data-action-value="low"
+                            >
+                                低频
+                            </button>
+                        </div>
                         <div class="browse-sort-wrapper">
                             <select
                                 id="browse-sort-select"
@@ -299,32 +346,211 @@
 
             <!-- 练习记录页面 -->
             <div id="practice-view" class="view hero-panel hero-section">
-                <div class="hero-panel__header">
-                    <h2 class="hero-panel__title" style="margin: 0;">📝 练习记录</h2>
+                <div class="hero-panel__header practice-view__header">
+                    <div class="practice-view__title-row">
+                        <h2 class="hero-panel__title" style="margin: 0;">📝 练习记录</h2>
+                        <button
+                            id="practice-summary-toggle"
+                            class="practice-summary-toggle"
+                            type="button"
+                            data-index-action="toggle-practice-summary"
+                            aria-controls="practice-summary-region"
+                            aria-expanded="true"
+                            aria-label="折叠练习统计卡片"
+                        >
+                            <span class="practice-summary-toggle__glyph" aria-hidden="true"></span>
+                        </button>
+                    </div>
                 </div>
 
-                <div class="practice-stats hero-grid hero-grid--stats">
-                    <div class="hero-card hero-card--stat">
-                        <div class="hero-card__label">已练习题目</div>
-                        <div class="hero-card__value" id="total-practiced">
-                            0
+                <div id="practice-summary-region" class="practice-summary-region">
+                    <div class="practice-stats hero-grid hero-grid--stats">
+                        <div class="hero-card hero-card--stat">
+                            <div class="hero-card__label">已练习题目</div>
+                            <div class="hero-card__value" id="total-practiced">
+                                0
+                            </div>
+                            <div class="hero-card__meta">累计巩固练习</div>
                         </div>
-                        <div class="hero-card__meta">累计巩固练习</div>
+                        <div class="hero-card hero-card--stat">
+                            <div class="hero-card__label">平均正确率</div>
+                            <div class="hero-card__value" id="avg-score">0%</div>
+                            <div class="hero-card__meta">近期待练表现</div>
+                        </div>
+                        <div class="hero-card hero-card--stat">
+                            <div class="hero-card__label">学习时长(分钟)</div>
+                            <div class="hero-card__value" id="study-time">0</div>
+                            <div class="hero-card__meta">聚焦沉浸时长</div>
+                        </div>
+                        <div class="hero-card hero-card--stat">
+                            <div class="hero-card__label">连续学习天数</div>
+                            <div class="hero-card__value" id="streak-days">0</div>
+                            <div class="hero-card__meta">坚持天数</div>
+                        </div>
                     </div>
-                    <div class="hero-card hero-card--stat">
-                        <div class="hero-card__label">平均正确率</div>
-                        <div class="hero-card__value" id="avg-score">0%</div>
-                        <div class="hero-card__meta">近期待练表现</div>
-                    </div>
-                    <div class="hero-card hero-card--stat">
-                        <div class="hero-card__label">学习时长(分钟)</div>
-                        <div class="hero-card__value" id="study-time">0</div>
-                        <div class="hero-card__meta">聚焦沉浸时长</div>
-                    </div>
-                    <div class="hero-card hero-card--stat">
-                        <div class="hero-card__label">连续学习天数</div>
-                        <div class="hero-card__value" id="streak-days">0</div>
-                        <div class="hero-card__meta">坚持天数</div>
+
+                    <div class="practice-insights-grid">
+                        <section
+                            id="practice-trend-card"
+                            class="practice-trend-card"
+                            role="button"
+                            tabindex="0"
+                            aria-label="打开练习趋势筛选范围"
+                            aria-pressed="false"
+                        >
+                            <div class="practice-trend-card__rotor">
+                                <div class="practice-trend-card__face practice-trend-card__front">
+                                    <div class="practice-trend-card__header">
+                                        <div class="practice-trend-card__title-line">
+                                            <div>
+                                                <p class="practice-trend-card__eyebrow">Trend</p>
+                                                <h3 class="practice-trend-card__title">练习趋势</h3>
+                                            </div>
+                                            <div class="practice-trend-card__metrics">
+                                                <div>
+                                                    <span class="practice-trend-card__metric-value" id="practice-trend-count">0</span>
+                                                    <span class="practice-trend-card__metric-label">记录</span>
+                                                </div>
+                                                <div>
+                                                    <span class="practice-trend-card__metric-value" id="practice-trend-average">0%</span>
+                                                    <span class="practice-trend-card__metric-label">均值</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="practice-trend-card__range" id="practice-trend-range-label">
+                                            最近十次
+                                        </div>
+                                    </div>
+                                    <div class="practice-trend-chart-shell">
+                                        <canvas id="practice-trend-canvas" aria-hidden="true"></canvas>
+                                        <div id="practice-trend-empty" class="practice-trend-empty">
+                                            暂无趋势数据
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="practice-trend-card__face practice-trend-card__back">
+                                    <div class="practice-trend-card__header">
+                                        <div>
+                                            <p class="practice-trend-card__eyebrow">Range</p>
+                                            <h3 class="practice-trend-card__title">筛选范围</h3>
+                                        </div>
+                                    </div>
+                                    <div class="practice-trend-options" aria-label="练习趋势筛选范围">
+                                        <button
+                                            class="practice-trend-option active"
+                                            type="button"
+                                            data-practice-trend-range="recent10"
+                                            aria-pressed="true"
+                                        >
+                                            最近十次
+                                        </button>
+                                        <button
+                                            class="practice-trend-option"
+                                            type="button"
+                                            data-practice-trend-range="last7d"
+                                            aria-pressed="false"
+                                        >
+                                            最近七天
+                                        </button>
+                                        <button
+                                            class="practice-trend-option"
+                                            type="button"
+                                            data-practice-trend-range="last30d"
+                                            aria-pressed="false"
+                                        >
+                                            最近一月
+                                        </button>
+                                        <button
+                                            class="practice-trend-option"
+                                            type="button"
+                                            data-practice-trend-range="recent20"
+                                            aria-pressed="false"
+                                        >
+                                            最近20次
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                        <section
+                            id="practice-custom-card"
+                            class="practice-custom-card"
+                            role="button"
+                            tabindex="0"
+                            aria-label="打开自定义练习组件选择"
+                            aria-pressed="false"
+                        >
+                            <div class="practice-custom-card__rotor">
+                                <div class="practice-trend-card__face practice-custom-card__front">
+                                    <div class="practice-trend-card__header">
+                                        <div>
+                                            <p class="practice-trend-card__eyebrow">Focus</p>
+                                            <h3 class="practice-trend-card__title">中高频余量</h3>
+                                        </div>
+                                        <div
+                                            class="practice-trend-card__range"
+                                            id="practice-custom-widget-label"
+                                        >
+                                            自定义
+                                        </div>
+                                    </div>
+                                    <div class="priority-progress-stack" aria-label="中高频练习进度">
+                                        <div class="priority-progress priority-progress--high">
+                                            <div class="priority-progress__head">
+                                                <span>高频</span>
+                                                <strong id="practice-priority-high-count">0/0</strong>
+                                            </div>
+                                            <div class="priority-progress__track" aria-hidden="true">
+                                                <span
+                                                    class="priority-progress__fill"
+                                                    id="practice-priority-high-fill"
+                                                ></span>
+                                            </div>
+                                        </div>
+                                        <div class="priority-progress priority-progress--medium">
+                                            <div class="priority-progress__head">
+                                                <span>中频</span>
+                                                <strong id="practice-priority-medium-count">0/0</strong>
+                                            </div>
+                                            <div class="priority-progress__track" aria-hidden="true">
+                                                <span
+                                                    class="priority-progress__fill"
+                                                    id="practice-priority-medium-fill"
+                                                ></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="priority-accuracy" aria-label="中高频正确率">
+                                        <div class="priority-accuracy__orb priority-accuracy__orb--high">
+                                            <span id="practice-priority-high-accuracy">0%</span>
+                                            <small>高频正确率</small>
+                                        </div>
+                                        <div class="priority-accuracy__orb priority-accuracy__orb--medium">
+                                            <span id="practice-priority-medium-accuracy">0%</span>
+                                            <small>中频正确率</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="practice-trend-card__face practice-trend-card__back practice-custom-card__back">
+                                    <div class="practice-trend-card__header">
+                                        <div>
+                                            <p class="practice-trend-card__eyebrow">Widgets</p>
+                                            <h3 class="practice-trend-card__title">自定义组件</h3>
+                                        </div>
+                                    </div>
+                                    <div class="practice-custom-options" aria-label="自定义练习组件">
+                                        <button
+                                            class="practice-custom-option active"
+                                            type="button"
+                                            data-practice-widget="priority"
+                                            aria-pressed="true"
+                                        >
+                                            中高频余量
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
                     </div>
                 </div>
 
@@ -940,7 +1166,7 @@
 
         <!-- 成就系统模态框 -->
         <div id="achievements-modal" class="theme-modal">
-            <div class="theme-modal-content" style="max-width: 600px">
+            <div class="theme-modal-content achievements-modal-content">
                 <div class="theme-modal-header">
                     <h3>🏆 我的成就</h3>
                     <button

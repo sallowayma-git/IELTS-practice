@@ -850,6 +850,337 @@ async function run() {
         assert.strictEqual(session.results.length, 0, '错篇提交不得写入 session.results');
     }
 
+    // Case 9: 听力桥的临时 examId/sessionId 不得阻断父应用当前题源落库
+    {
+        const app = createApp(windowStub);
+        const examWindow = createStubWindow('custom-listening-window');
+        const examId = 'custom-listening-teacher-pack';
+        const expectedSessionId = 'custom-listening-teacher-pack_expected';
+        let captured = null;
+
+        app.handlePracticeComplete = async (handledExamId, data) => {
+            captured = { examId: handledExamId, data };
+        };
+
+        app.setupExamWindowCommunication(examWindow, examId, {
+            id: examId,
+            title: 'Teacher Pack Listening',
+            type: 'listening'
+        });
+
+        const info = app.ensureExamWindowSession(examId, examWindow);
+        info.expectedSessionId = expectedSessionId;
+        app.examWindows.set(examId, info);
+
+        const handler = app.messageHandlers.get(examId);
+        assert.strictEqual(typeof handler, 'function', '听力题源应注册 message handler');
+
+        await handler({
+            source: examWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'PRACTICE_COMPLETE',
+                source: 'listening_record_bridge',
+                data: {
+                    source: 'listening_record_bridge',
+                    examId: 'listening-unknown',
+                    sessionId: 'listening-unknown_123',
+                    practiceType: 'listening',
+                    pageType: 'listening',
+                    answers: { q1: 'acommodation' },
+                    correctAnswers: { q1: 'accommodation' },
+                    answerComparison: {
+                        q1: { userAnswer: 'acommodation', correctAnswer: 'accommodation', isCorrect: false }
+                    },
+                    scoreInfo: { correct: 0, total: 1, accuracy: 0, percentage: 0, source: 'listening_record_bridge' }
+                }
+            }
+        });
+
+        assert(captured, '听力桥 PRACTICE_COMPLETE 不应被临时 examId/sessionId 静默丢弃');
+        assert.strictEqual(captured.examId, examId, '父应用应使用当前打开的题源 examId');
+        assert.strictEqual(captured.data.examId, examId, 'payload examId 应被纠正为父应用题源');
+        assert.strictEqual(captured.data.sessionId, expectedSessionId, 'payload sessionId 应被纠正为父应用会话');
+    }
+
+    // Case 10: 任意目录听力完成后必须进入 PracticeRecorder，并保存错词
+    {
+        const app = createApp(windowStub);
+        const examId = 'custom-listening-arbitrary-folder';
+        const savedCompletions = [];
+        const savedErrors = [];
+        let status = null;
+
+        app.components.practiceRecorder = {
+            handleSessionCompleted: async (payload) => {
+                savedCompletions.push(payload);
+                return { id: 'record-custom-listening', examId };
+            }
+        };
+        app.updateExamStatus = (handledExamId, nextStatus) => {
+            status = { examId: handledExamId, status: nextStatus };
+        };
+        app.showRealCompletionNotification = () => {};
+        app.cleanupExamSession = async () => {};
+        app.setState = () => {};
+
+        const previousCollector = windowStub.spellingErrorCollector;
+        windowStub.spellingErrorCollector = {
+            detectSource: () => 'other',
+            detectErrors: () => [{
+                word: 'accommodation',
+                userInput: 'acommodation',
+                questionId: 'q1',
+                suiteId: null,
+                examId,
+                timestamp: 1710000000000,
+                errorCount: 1,
+                source: 'other'
+            }],
+            saveErrors: async (errors) => {
+                savedErrors.push(...errors);
+                return true;
+            }
+        };
+
+        await app.handlePracticeComplete(examId, {
+            examId,
+            sessionId: `${examId}_session`,
+            practiceType: 'listening',
+            pageType: 'listening',
+            answers: { q1: 'acommodation' },
+            correctAnswers: { q1: 'accommodation' },
+            answerComparison: {
+                q1: { userAnswer: 'acommodation', correctAnswer: 'accommodation', isCorrect: false }
+            },
+            scoreInfo: { correct: 0, total: 1, accuracy: 0, percentage: 0, source: 'listening_record_bridge' }
+        });
+
+        windowStub.spellingErrorCollector = previousCollector;
+
+        assert.strictEqual(savedCompletions.length, 1, '听力完成应调用 PracticeRecorder 落库');
+        assert.strictEqual(savedCompletions[0].examId, examId, '落库 payload 应保留当前听力 examId');
+        assert.strictEqual(savedErrors.length, 1, '任意目录听力错词应保存到词表链路');
+        assert.strictEqual(savedErrors[0].word, 'accommodation', '错词应来自 answerComparison');
+        assert.deepStrictEqual(status, { examId, status: 'completed' }, '完成后应更新题源状态');
+    }
+
+    // Case 10b: 听力桥自带错词也必须归一到父页面当前题源，不能写入临时 listening-unknown
+    {
+        const app = createApp(windowStub);
+        const examId = 'listening-p1-normalized-errors';
+        const savedErrors = [];
+
+        app.components.practiceRecorder = {
+            handleSessionCompleted: async () => ({ id: 'record-normalized-errors', examId })
+        };
+        app.updateExamStatus = () => {};
+        app.showRealCompletionNotification = () => {};
+        app.cleanupExamSession = async () => {};
+        app.setState = () => {};
+
+        const previousCollector = windowStub.spellingErrorCollector;
+        windowStub.spellingErrorCollector = {
+            detectSource: () => 'p1',
+            detectErrors: () => [],
+            saveErrors: async (errors) => {
+                savedErrors.push(...errors);
+                return true;
+            }
+        };
+
+        await app.handlePracticeComplete(examId, {
+            examId,
+            sessionId: `${examId}_session`,
+            practiceType: 'listening',
+            pageType: 'listening',
+            answers: { q1: 'acommodation' },
+            correctAnswers: { q1: 'accommodation' },
+            answerComparison: {
+                q1: { userAnswer: 'acommodation', correctAnswer: 'accommodation', isCorrect: false }
+            },
+            scoreInfo: { correct: 0, total: 1, accuracy: 0, percentage: 0, source: 'listening_record_bridge' },
+            spellingErrors: [{
+                word: 'accommodation',
+                userInput: 'acommodation',
+                questionId: 'q1',
+                suiteId: null,
+                examId: 'listening-unknown',
+                timestamp: 1710000000000,
+                errorCount: 1,
+                source: 'other'
+            }]
+        });
+
+        windowStub.spellingErrorCollector = previousCollector;
+
+        assert.strictEqual(savedErrors.length, 1, '听力桥自带错词应继续保存');
+        assert.strictEqual(savedErrors[0].examId, examId, '错词 examId 必须归一到父页面题源');
+        assert.strictEqual(savedErrors[0].source, 'p1', 'P1 听力错词 source 必须归一，避免写到 other 词表');
+    }
+
+    // Case 11: 听力桥 bootstrap ready 不得提前结束父子握手
+    {
+        const app = createApp(windowStub);
+        const examWindow = createStubWindow('custom-listening-handshake-window');
+        const examId = 'custom-listening-handshake';
+        const expectedSessionId = 'custom-listening-handshake_expected';
+
+        app.setupExamWindowCommunication(examWindow, examId, {
+            id: examId,
+            title: 'Handshake Listening',
+            type: 'listening'
+        });
+
+        const info = app.ensureExamWindowSession(examId, examWindow);
+        info.expectedSessionId = expectedSessionId;
+        app.examWindows.set(examId, info);
+        examWindow._messages.length = 0;
+
+        const timer = setInterval(() => {}, 10000);
+        app._handshakeTimers = new Map([[examId, timer]]);
+
+        const handler = app.messageHandlers.get(examId);
+        assert.strictEqual(typeof handler, 'function', '听力题源应注册 message handler');
+
+        try {
+            await handler({
+                source: examWindow,
+                origin: 'http://localhost',
+                data: {
+                    type: 'SESSION_READY',
+                    source: 'listening_record_bridge',
+                    data: {
+                        source: 'listening_record_bridge',
+                        examId: 'listening-unknown',
+                        sessionId: 'listening-unknown_123',
+                        pageType: 'listening',
+                        type: 'listening',
+                        initialized: false
+                    }
+                }
+            });
+
+            const preInitInfo = app.examWindows.get(examId);
+            assert.strictEqual(app._handshakeTimers.has(examId), true, 'pre-init ready 不得停止 INIT 重试');
+            assert.strictEqual(preInitInfo.dataCollectorReady, undefined, 'pre-init ready 不得标记 collector ready');
+            assert(examWindow._messages.some(message => message && message.type === 'INIT_SESSION'), 'pre-init ready 后应补发 INIT_SESSION');
+
+            await handler({
+                source: examWindow,
+                origin: 'http://localhost',
+                data: {
+                    type: 'SESSION_READY',
+                    source: 'listening_record_bridge',
+                    data: {
+                        source: 'listening_record_bridge',
+                        examId,
+                        sessionId: expectedSessionId,
+                        pageType: 'listening',
+                        type: 'listening',
+                        initialized: true
+                    }
+                }
+            });
+
+            assert.strictEqual(app._handshakeTimers.has(examId), false, 'initialized ready 才能停止 INIT 重试');
+            assert.strictEqual(app.examWindows.get(examId).dataCollectorReady, true, 'initialized ready 应标记 collector ready');
+        } finally {
+            clearInterval(timer);
+        }
+    }
+
+    // Case 12: 听力完成早于 initialized ready 时，也必须先补建 recorder session 再落库
+    {
+        const app = createApp(windowStub);
+        const examWindow = createStubWindow('custom-listening-complete-first-window');
+        const examId = 'custom-listening-complete-first';
+        const expectedSessionId = 'custom-listening-complete-first_expected';
+        const calls = [];
+        let status = null;
+
+        app.components.practiceRecorder = {
+            activeSessions: new Map(),
+            startPracticeSession(handledExamId, examData) {
+                calls.push({ type: 'startPracticeSession', examId: handledExamId, examData });
+                this.activeSessions.set(handledExamId, {
+                    examId: handledExamId,
+                    sessionId: `${handledExamId}_generated`,
+                    metadata: {},
+                    progress: { totalQuestions: examData.totalQuestions || 0 },
+                    answers: {}
+                });
+                return this.activeSessions.get(handledExamId);
+            },
+            handleSessionStarted(payload) {
+                calls.push({ type: 'handleSessionStarted', payload });
+                assert(this.activeSessions.has(payload.examId), '补建 session 必须先于 handleSessionStarted');
+                const session = this.activeSessions.get(payload.examId);
+                session.sessionId = payload.sessionId;
+                session.metadata = { ...session.metadata, ...payload.metadata };
+                this.activeSessions.set(payload.examId, session);
+            },
+            async handleSessionCompleted(payload) {
+                calls.push({ type: 'handleSessionCompleted', payload });
+                assert(this.activeSessions.has(payload.examId), '真实 recorder 没有 active session 会拒绝落库');
+                const session = this.activeSessions.get(payload.examId);
+                assert.strictEqual(session.sessionId, payload.sessionId, '完成 payload 必须使用父页面 expectedSessionId');
+                return { id: `record_${payload.sessionId}`, examId: payload.examId, sessionId: payload.sessionId };
+            }
+        };
+        app.updateExamStatus = (handledExamId, nextStatus) => {
+            status = { examId: handledExamId, status: nextStatus };
+        };
+        app.showRealCompletionNotification = () => {};
+        app.cleanupExamSession = async () => {};
+        app.setState = () => {};
+
+        app.setupExamWindowCommunication(examWindow, examId, {
+            id: examId,
+            title: 'Complete First Listening',
+            type: 'listening'
+        });
+
+        const info = app.ensureExamWindowSession(examId, examWindow);
+        info.expectedSessionId = expectedSessionId;
+        app.examWindows.set(examId, info);
+
+        const handler = app.messageHandlers.get(examId);
+        assert.strictEqual(typeof handler, 'function', '听力题源应注册 message handler');
+
+        await handler({
+            source: examWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'PRACTICE_COMPLETE',
+                source: 'listening_record_bridge',
+                data: {
+                    source: 'listening_record_bridge',
+                    examId: 'listening-unknown',
+                    sessionId: 'listening-unknown_early',
+                    practiceType: 'listening',
+                    pageType: 'listening',
+                    title: 'Complete First Listening',
+                    answers: { q1: 'acommodation' },
+                    correctAnswers: { q1: 'accommodation' },
+                    answerComparison: {
+                        q1: { userAnswer: 'acommodation', correctAnswer: 'accommodation', isCorrect: false }
+                    },
+                    scoreInfo: { correct: 0, total: 1, accuracy: 0, percentage: 0, source: 'listening_record_bridge' }
+                }
+            }
+        });
+
+        assert.deepStrictEqual(
+            calls.map(call => call.type),
+            ['startPracticeSession', 'handleSessionStarted', 'handleSessionCompleted'],
+            'complete-before-ready 必须先建会话、再同步 sessionId、最后落库'
+        );
+        assert.strictEqual(calls[2].payload.examId, examId, '完成 payload examId 应被纠正为父页面当前题源');
+        assert.strictEqual(calls[2].payload.sessionId, expectedSessionId, '完成 payload sessionId 应被纠正为父页面会话');
+        assert.deepStrictEqual(status, { examId, status: 'completed' }, '完成后应更新题源状态');
+    }
+
     process.stdout.write(JSON.stringify({ status: 'pass', detail: 'simulation mode regression cases passed' }));
 }
 

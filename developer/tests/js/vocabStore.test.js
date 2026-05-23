@@ -121,9 +121,84 @@ async function testSpellingErrorFallsBackWhenLexiconMissing() {
     await vocabStore.init();
     const list = await vocabStore.loadList('spelling-errors-p4');
     assert.strictEqual(list.words.length, 1, '应该加载1个错词');
-    assert.strictEqual(list.words[0].meaning, '你曾拼写为: specializedd', '词库缺失时应该回退到错拼提示');
+    assert.strictEqual(list.words[0].meaning, '暂无中文释义', '词库缺失时不应该把错拼提示伪装成释义');
+    assert.ok(list.words[0].note.includes('你曾拼写为: specializedd'), '错拼信息应该进入note');
     assert.ok(list.words[0].note.includes('来源: listening-p4-demo'), '来源信息应该进入note');
     assert.strictEqual(list.words[0].source, 'P4 听力练习');
+}
+
+async function testSpellingErrorPreservesStoredMeaningAndMetadata() {
+    const vocabStore = loadVocabStore({
+        embeddedWords: [],
+        storageSeed: {
+            vocab_list_master_errors: JSON.stringify([{
+                id: 'spelling-all-garden',
+                word: 'garden',
+                meaning: 'n. 花园；庭院',
+                example: 'The garden is quiet.',
+                userInput: 'gardon',
+                questionId: 'q20',
+                examId: 'listening-p1-demo',
+                timestamp: 1710000000000,
+                errorCount: 3,
+                source: 'p1',
+                acceptedAnswers: ['green garden', 'green gardens'],
+                canonicalAnswer: 'green garden',
+                reasonCode: 'edit'
+            }])
+        }
+    });
+
+    await vocabStore.init();
+    const list = await vocabStore.loadList('spelling-errors-master');
+    assert.strictEqual(list.words.length, 1, '应该加载数组形态的错词词表');
+    const word = list.words[0];
+    assert.strictEqual(word.word, 'garden');
+    assert.strictEqual(word.meaning, 'n. 花园；庭院', '已补全的中文释义不应被覆盖');
+    assert.strictEqual(word.example, 'The garden is quiet.');
+    assert.strictEqual(word.userInput, 'gardon', '错拼元数据应该保留');
+    assert.strictEqual(word.errorCount, 3, '错误次数应该保留');
+    assert.deepStrictEqual(word.acceptedAnswers, ['green garden', 'green gardens']);
+    assert.strictEqual(word.canonicalAnswer, 'green garden');
+    assert.strictEqual(word.reasonCode, 'edit');
+    assert.ok(word.note.includes('你曾拼写为: gardon'), '错拼信息应该进入note');
+    assert.strictEqual(word.source, 'P1 听力练习');
+}
+
+async function testSpellingErrorMetadataSurvivesStudyUpdates() {
+    const vocabStore = loadVocabStore({
+        embeddedWords: [],
+        storageSeed: {
+            vocab_list_master_errors: JSON.stringify([{
+                id: 'spelling-all-garden',
+                word: 'garden',
+                meaning: 'n. 花园；庭院',
+                userInput: 'gardon',
+                questionId: 'q20',
+                examId: 'listening-p1-demo',
+                timestamp: 1710000000000,
+                errorCount: 3,
+                source: 'p1',
+                acceptedAnswers: ['green garden'],
+                canonicalAnswer: 'green garden'
+            }])
+        }
+    });
+
+    await vocabStore.init();
+    const list = await vocabStore.loadList('spelling-errors-master');
+    const switched = await vocabStore.setActiveList(list);
+    assert.strictEqual(switched, true, '应该能切换到综合错词词表');
+
+    const [initial] = vocabStore.getWords();
+    await vocabStore.updateWord(initial.id, { note: 'new memory note', correctCount: 1 });
+    const [updated] = vocabStore.getWords();
+    assert.strictEqual(updated.note, 'new memory note');
+    assert.strictEqual(updated.correctCount, 1);
+    assert.strictEqual(updated.userInput, 'gardon', '背诵更新不应该洗掉错拼元数据');
+    assert.strictEqual(updated.errorCount, 3, '背诵更新不应该洗掉错误次数');
+    assert.deepStrictEqual(updated.acceptedAnswers, ['green garden']);
+    assert.strictEqual(updated.canonicalAnswer, 'green garden');
 }
 
 async function main() {
@@ -132,7 +207,11 @@ async function main() {
         await testSpellingErrorUsesEmbeddedLexiconMeaning();
         results.push({ name: '错词优先使用核心词库释义', status: 'pass' });
         await testSpellingErrorFallsBackWhenLexiconMissing();
-        results.push({ name: '词库缺失时错词回退提示', status: 'pass' });
+        results.push({ name: '词库缺失时错词使用明确占位释义', status: 'pass' });
+        await testSpellingErrorPreservesStoredMeaningAndMetadata();
+        results.push({ name: '错词保留已补全释义和元数据', status: 'pass' });
+        await testSpellingErrorMetadataSurvivesStudyUpdates();
+        results.push({ name: '背诵更新保留错词业务元数据', status: 'pass' });
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,

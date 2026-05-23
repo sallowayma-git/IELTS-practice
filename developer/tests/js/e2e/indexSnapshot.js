@@ -260,6 +260,42 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                                 </svg>
                             </button>
                         </div>
+                        <div
+                            class="browse-frequency-filter"
+                            id="browse-frequency-filter-buttons"
+                            aria-label="频率筛选"
+                        >
+                            <button
+                                class="browse-frequency-chip"
+                                type="button"
+                                aria-pressed="false"
+                                data-frequency-filter="high"
+                                data-index-action="filter-frequency"
+                                data-action-value="high"
+                            >
+                                高频
+                            </button>
+                            <button
+                                class="browse-frequency-chip"
+                                type="button"
+                                aria-pressed="false"
+                                data-frequency-filter="medium"
+                                data-index-action="filter-frequency"
+                                data-action-value="medium"
+                            >
+                                中频
+                            </button>
+                            <button
+                                class="browse-frequency-chip"
+                                type="button"
+                                aria-pressed="false"
+                                data-frequency-filter="low"
+                                data-index-action="filter-frequency"
+                                data-action-value="low"
+                            >
+                                低频
+                            </button>
+                        </div>
                         <div class="browse-sort-wrapper">
                             <select
                                 id="browse-sort-select"

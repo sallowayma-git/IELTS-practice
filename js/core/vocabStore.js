@@ -195,6 +195,25 @@
         if (source) {
             record.source = source;
         }
+        [
+            'userInput',
+            'questionId',
+            'suiteId',
+            'examId',
+            'errorCount',
+            'timestamp',
+            'acceptedAnswers',
+            'canonicalAnswer',
+            'reasonCode',
+            'confidence',
+            'tokenIndex',
+            'metadata',
+            'spellingNote'
+        ].forEach((key) => {
+            if (entry[key] !== undefined) {
+                record[key] = entry[key];
+            }
+        });
         return record;
     }
 
@@ -342,7 +361,7 @@
 
     function normalizeListEntry(entry, listId) {
         if (isSpellingErrorList(listId)) {
-            return convertSpellingErrorToWord(entry) || normalizeWordRecord(entry);
+            return convertSpellingErrorToWord(entry, listId) || normalizeWordRecord(entry);
         }
         return normalizeWordRecord(entry);
     }
@@ -663,7 +682,23 @@
         return fresh.slice(0, target).map((word) => ({ ...word }));
     }
 
-    function convertSpellingErrorToWord(error) {
+    function sourceForSpellingList(errorSource, listId) {
+        if (errorSource === 'p1' || listId === 'spelling-errors-p1') {
+            return 'P1 听力练习';
+        }
+        if (errorSource === 'p4' || listId === 'spelling-errors-p4') {
+            return 'P4 听力练习';
+        }
+        if (errorSource === 'all' || errorSource === 'master' || listId === 'spelling-errors-master') {
+            return '综合练习';
+        }
+        if (typeof errorSource === 'string' && errorSource.trim()) {
+            return errorSource.trim();
+        }
+        return '听力练习';
+    }
+
+    function convertSpellingErrorToWord(error, listId) {
         if (!error || typeof error !== 'object') {
             return null;
         }
@@ -697,41 +732,42 @@
         const sourceNote = sourceParts.join(' - ');
         const note = [spellingNote, sourceNote].filter(Boolean).join('；');
 
-        const fallbackMeaning = spellingNote;
+        const existingMeaning = typeof error.meaning === 'string' && error.meaning.trim() && !isSpellingFallbackMeaning(error.meaning)
+            ? error.meaning.trim()
+            : '';
+        const fallbackMeaning = '暂无中文释义';
         const meaning = lexiconEntry && typeof lexiconEntry.meaning === 'string' && lexiconEntry.meaning.trim()
             ? lexiconEntry.meaning.trim()
-            : fallbackMeaning;
+            : (existingMeaning || fallbackMeaning);
         const example = lexiconEntry && typeof lexiconEntry.example === 'string' && lexiconEntry.example.trim()
             ? lexiconEntry.example.trim()
-            : sourceNote;
+            : (error.example || sourceNote);
 
         // 生成ID
-        const id = generateId(word);
-
-        // 生成来源标签
-        const sourceLabels = {
-            'p1': 'P1 听力练习',
-            'p4': 'P4 听力练习',
-            'all': '综合练习',
-            'other': '听力练习'
-        };
-        const source = sourceLabels[error.source] || '听力练习';
+        const id = typeof error.id === 'string' && error.id.trim() ? error.id.trim() : generateId(word);
+        const source = sourceForSpellingList(error.source, listId);
 
         return normalizeWordRecord({
+            ...error,
             id,
             word,
             meaning,
             example,
             note,
             source,
+            userInput,
+            examId,
+            questionId,
+            errorCount,
+            spellingNote,
             // 新词，没有复习记录
-            easeFactor: null,
-            interval: 1,
-            repetitions: 0,
-            intraCycles: 0,
-            correctCount: 0,
-            lastReviewed: null,
-            nextReview: null,
+            easeFactor: error.easeFactor ?? null,
+            interval: error.interval ?? 1,
+            repetitions: error.repetitions ?? 0,
+            intraCycles: error.intraCycles ?? 0,
+            correctCount: error.correctCount ?? 0,
+            lastReviewed: error.lastReviewed ?? null,
+            nextReview: error.nextReview ?? null,
             createdAt: error.timestamp ? new Date(error.timestamp).toISOString() : getNow(),
             updatedAt: getNow()
         });

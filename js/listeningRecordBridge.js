@@ -10,7 +10,9 @@
     startTime: Date.now(),
     initialized: false,
     completed: false,
-    parentWindow: null
+    parentWindow: null,
+    initRequestTimer: null,
+    initRequestAttempts: 0
   };
 
   function log() {
@@ -39,13 +41,78 @@
     var pw = state.parentWindow || findParentWindow();
     if (!pw) {
       warn('无法 send message — no parent window');
-      return;
+      return false;
     }
     try {
       pw.postMessage({ type: type, data: data || {}, source: 'listening_record_bridge', timestamp: Date.now() }, '*');
+      return true;
     } catch (e) {
       warn('postMessage failed:', e);
+      return false;
     }
+  }
+
+  function buildSessionReadyPayload(status) {
+    return {
+      sessionId: state.sessionId,
+      examId: state.examId,
+      suiteSessionId: state.suiteSessionId,
+      status: status || (state.initialized ? 'ready' : 'bootstrapped'),
+      initialized: !!state.initialized,
+      readyState: state.initialized ? 'initialized' : 'bootstrapped',
+      pageType: 'listening',
+      type: 'listening',
+      url: window.location && window.location.href || '',
+      title: window.document && window.document.title || '',
+      source: 'listening_record_bridge',
+      protocolVersion: 2
+    };
+  }
+
+  function sendSessionReady(status) {
+    return sendMessage('SESSION_READY', buildSessionReadyPayload(status));
+  }
+
+  function sendInitRequest(reason) {
+    return sendMessage('REQUEST_INIT', {
+      sessionId: state.sessionId,
+      examId: state.examId,
+      suiteSessionId: state.suiteSessionId,
+      reason: reason || 'init_required',
+      initialized: !!state.initialized,
+      pageType: 'listening',
+      type: 'listening',
+      source: 'listening_record_bridge',
+      protocolVersion: 2
+    });
+  }
+
+  function stopInitRequestLoop() {
+    if (state.initRequestTimer) {
+      clearInterval(state.initRequestTimer);
+      state.initRequestTimer = null;
+    }
+  }
+
+  function startInitRequestLoop() {
+    if (state.initialized || state.initRequestTimer) return;
+    if (!state.parentWindow && !findParentWindow()) return;
+
+    state.initRequestAttempts = 0;
+    var tick = function () {
+      if (state.initialized) {
+        stopInitRequestLoop();
+        return;
+      }
+      state.initRequestAttempts++;
+      sendInitRequest(state.initRequestAttempts === 1 ? 'bootstrap' : 'retry');
+      if (state.initRequestAttempts >= 20) {
+        stopInitRequestLoop();
+      }
+    };
+
+    tick();
+    state.initRequestTimer = setInterval(tick, 500);
   }
 
   function cssAttr(s) {
@@ -152,6 +219,10 @@
   function normalizeQuestionLabel(rawQuestion, fallbackIndex) {
     var raw = String(rawQuestion != null ? rawQuestion : '').replace(/\s+/g, ' ').trim();
     if (!raw) return String((fallbackIndex || 0) + 1);
+    var explicitKey = raw.match(/[（(]\s*(q?\d{1,3}(?:\s*[-–—_]\s*\d{1,3})?)\s*[）)]/i);
+    if (explicitKey) {
+      return explicitKey[1].replace(/\s+/g, '').replace(/^Q/, 'q');
+    }
     raw = raw.replace(/^questions?\s*/i, '').replace(/^q\s*/i, '');
     var range = raw.match(/(\d{1,3})(?:\s*[-–—_]\s*(\d{1,3}))?/);
     if (range) {
@@ -181,7 +252,7 @@
     options = options || {};
     var rows = Array.prototype.slice.call(doc.querySelectorAll(selector));
     var validRows = rows.filter(function (row) {
-      return row.querySelectorAll('td').length >= 4;
+      return row.querySelectorAll('td').length >= 3;
     });
     if (!validRows.length) return [];
 
@@ -190,12 +261,12 @@
       var question = getText(cells[0]);
       var userAnswer = cleanAnswer(getText(cells[1]));
       var correctAnswer = cleanAnswer(getText(cells[2]));
-      var resultCell = cells[3];
+      var resultCell = cells.length >= 4 ? cells[3] : null;
       var resultText = getText(resultCell);
       var resultClass = String(resultCell && resultCell.className || '');
       var sameAnswer = !!userAnswer && normalizeComparableAnswer(userAnswer) === normalizeComparableAnswer(correctAnswer);
       var isCorrect = sameAnswer;
-      if (!isCorrect && options.checker) {
+      if (!isCorrect && resultCell && options.checker) {
         isCorrect = options.checker(resultText, resultClass, resultCell);
       }
       return makeDetail(question, userAnswer, correctAnswer, isCorrect, normalizeAcceptedAnswers(correctAnswer, 'text'));
@@ -353,9 +424,17 @@
     var rawSourceName = String(sourceKey || '');
     var sourceInputs = rawSourceName ? Array.prototype.slice.call(doc.querySelectorAll('[name="' + cssAttr(rawSourceName) + '"]')) : [];
     var directInputs = Array.prototype.slice.call(doc.querySelectorAll('[name="' + cssAttr(directName) + '"]'));
+    var sourceDataInputs = rawSourceName ? Array.prototype.slice.call(doc.querySelectorAll('[data-q="' + cssAttr(rawSourceName) + '"]')) : [];
+    var questionDataInputs = question ? Array.prototype.slice.call(doc.querySelectorAll('[data-q="' + cssAttr(question) + '"], [data-q="' + cssAttr(directName) + '"]')) : [];
     var multipleName = (question === '11' || question === '12') ? 'q11_12' : '';
     var multipleInputs = multipleName ? Array.prototype.slice.call(doc.querySelectorAll('[name="' + cssAttr(multipleName) + '"]')) : [];
-    var inputs = sourceInputs.length ? sourceInputs : (directInputs.length ? directInputs : multipleInputs);
+    var inputs = sourceInputs.length
+      ? sourceInputs
+      : (directInputs.length
+        ? directInputs
+        : (sourceDataInputs.length
+          ? sourceDataInputs
+          : (questionDataInputs.length ? questionDataInputs : multipleInputs)));
     if (!inputs.length) return '';
 
     var first = inputs[0];
@@ -633,10 +712,7 @@
     try {
       var collector = window.spellingErrorCollector;
       if (collector && typeof collector.detectErrors === 'function') {
-        var src = detectSource(state.examId);
-        if (src === 'p1' || src === 'p4') {
-          spellingErrors = collector.detectErrors(answerComparison, state.suiteSessionId, state.examId);
-        }
+        spellingErrors = collector.detectErrors(answerComparison, state.suiteSessionId, state.examId);
       }
     } catch (e) {
       warn('spelling error detection failed:', e);
@@ -681,7 +757,7 @@
     options = options || {};
     if (state.completed) {
       log('already completed, skipping');
-      return;
+      return true;
     }
     state.completed = true;
 
@@ -697,16 +773,43 @@
     if (!details.length) {
       warn('no details extracted, cannot complete');
       state.completed = false;
-      return;
+      return false;
     }
 
     var payload = buildBridgePayload(details);
     log('sending PRACTICE_COMPLETE, correct=' + payload.scoreInfo.correct + '/' + payload.scoreInfo.total);
+    if (!state.initialized) {
+      sendInitRequest('complete_before_init');
+    }
     sendMessage('PRACTICE_COMPLETE', payload);
+    clearCompletionRetryTimers();
+    return true;
   }
 
   var completionDebounceTimer = null;
   var completionDebounceOptions = null;
+  var completionRetryTimers = [];
+  function clearCompletionRetryTimers() {
+    for (var i = 0; i < completionRetryTimers.length; i++) {
+      clearTimeout(completionRetryTimers[i]);
+    }
+    completionRetryTimers = [];
+  }
+
+  function scheduleCompletionRetries(options) {
+    clearCompletionRetryTimers();
+    var retryDelays = [400, 1200, 2500];
+    for (var i = 0; i < retryDelays.length; i++) {
+      (function (delay) {
+        completionRetryTimers.push(setTimeout(function () {
+          if (!state.completed) {
+            onComplete(options || {});
+          }
+        }, delay));
+      })(retryDelays[i]);
+    }
+  }
+
   function debouncedOnComplete(delay, options) {
     if (state.completed) return;
     if (completionDebounceTimer) clearTimeout(completionDebounceTimer);
@@ -715,7 +818,9 @@
       completionDebounceTimer = null;
       var runOptions = completionDebounceOptions || {};
       completionDebounceOptions = null;
-      onComplete(runOptions);
+      if (!onComplete(runOptions)) {
+        scheduleCompletionRetries(runOptions);
+      }
     }, delay || 300);
   }
 
@@ -768,6 +873,12 @@
   }
 
   function areCoreFinishHooksReady() {
+    var hasHookTarget = !!(
+      window.App
+      || typeof window.finishTest === 'function'
+      || typeof window.gradeAnswers === 'function'
+    );
+    if (!hasHookTarget) return false;
     var appReady = !window.App || !!window.App.__listeningBridgeHooked;
     var finishReady = (typeof window.finishTest !== 'function') || !!window.finishTest._bridgeOriginal;
     var gradeReady = (typeof window.gradeAnswers !== 'function') || !!window.gradeAnswers._bridgeOriginal;
@@ -788,9 +899,58 @@
 
   function hookButtonFinish() {
     var doc = window.document;
+    if (doc.__listeningBridgeFinishDelegated) return;
+    doc.__listeningBridgeFinishDelegated = true;
+    var finishPattern = /\b(?:finish|submit|check(?:\s+answers?)?|review|grade|score)\b|完成|提交|交卷|查看答案|批改|评分/i;
+    var actionNamePattern = /(?:^|[\s_-])(?:finish|submit|check|review|grade)(?:[\s_-]|$)|(?:finish|submit|check|review|grade)[\s_-]*(?:btn|button)|(?:btn|button)[\s_-]*(?:finish|submit|check|review|grade)/i;
+
+    function readAttr(node, name) {
+      if (!node || typeof node.getAttribute !== 'function') return '';
+      return String(node.getAttribute(name) || '');
+    }
+
+    function isActionCandidate(node) {
+      if (!node || node === doc || node === doc.documentElement) return false;
+      var tag = String(node.tagName || '').toLowerCase();
+      if (tag === 'button' || tag === 'a') return true;
+      if (tag === 'input' && /^(?:button|submit)$/i.test(String(node.type || ''))) return true;
+      if (String(readAttr(node, 'role')).toLowerCase() === 'button') return true;
+      if (readAttr(node, 'onclick') || typeof node.onclick === 'function') return true;
+      if (readAttr(node, 'data-action') || readAttr(node, 'data-submit') || readAttr(node, 'data-testid')) return true;
+      return actionNamePattern.test([node.id, node.className, node.name].map(function (value) {
+        return String(value || '');
+      }).join(' '));
+    }
+
+    function isFinishLikeElement(el) {
+      var node = el;
+      while (node && node !== doc && node !== doc.documentElement) {
+        if (isActionCandidate(node)) {
+          var haystack = [
+            node.id,
+            node.className,
+            node.name,
+            node.value,
+            readAttr(node, 'data-action'),
+            readAttr(node, 'data-submit'),
+            readAttr(node, 'data-testid'),
+            readAttr(node, 'aria-label'),
+            readAttr(node, 'title'),
+            readAttr(node, 'onclick'),
+            getText(node)
+          ].map(function (value) { return String(value || ''); }).join(' ');
+          if (finishPattern.test(haystack)) {
+            return node;
+          }
+        }
+        node = node.parentNode;
+      }
+      return null;
+    }
+
     var buttonSelectors = [
-      '.finish-btn', '#finish-btn', '[data-action="finish"]',
-      '.submit-btn', '#submit-btn', '[data-action="submit"]',
+      '.finish-btn', '#finish-btn', '#finishBtn', '[data-action="finish"]',
+      '.submit-btn', '#submit-btn', '#submitBtn', '[data-action="submit"]',
       '.check-btn', '#check-btn', '[data-action="check"]',
       '.review-btn', '#review-btn', '[data-action="review"]',
       'button.finish', 'button.submit', 'button.check-answers'
@@ -804,6 +964,40 @@
         });
       }
     }
+
+    function formHasFinishControl(form) {
+      if (!form || typeof form.querySelectorAll !== 'function') return false;
+      var controls = form.querySelectorAll('button, input[type="submit"], input[type="button"], a, [role="button"], [onclick], [data-action], [data-submit]');
+      for (var i = 0; i < controls.length; i++) {
+        if (isFinishLikeElement(controls[i])) return true;
+      }
+      return false;
+    }
+
+    function queueFinishCompletion(event) {
+      if (isFinishLikeElement(event && event.target)) {
+        debouncedOnComplete(800, { allowGenerated: true });
+      }
+    }
+
+    doc.addEventListener('click', queueFinishCompletion, true);
+    doc.addEventListener('pointerup', queueFinishCompletion, true);
+    doc.addEventListener('touchend', queueFinishCompletion, true);
+    doc.addEventListener('submit', function (event) {
+      var submitter = event && event.submitter;
+      var form = event && event.target;
+      if (isFinishLikeElement(submitter) || isFinishLikeElement(form) || formHasFinishControl(form)) {
+        debouncedOnComplete(500, { allowGenerated: true });
+      }
+    }, true);
+    doc.addEventListener('keydown', function (event) {
+      var key = event && (event.key || event.code);
+      if (key !== 'Enter' && key !== ' ' && key !== 'Space' && key !== 'Spacebar') return;
+      var target = (event && event.target) || doc.activeElement;
+      if (isFinishLikeElement(target)) {
+        debouncedOnComplete(500, { allowGenerated: true });
+      }
+    }, true);
   }
 
   function hookMutationObserver() {
@@ -829,19 +1023,18 @@
 
       if (type === 'INIT_SESSION' || type === 'init_exam_session') {
         var payload = data.data || data;
+        if (event.source && event.source !== window && typeof event.source.postMessage === 'function') {
+          state.parentWindow = event.source;
+        }
         state.sessionId = payload.sessionId || state.sessionId || (state.examId + '_' + Date.now());
         state.examId = payload.examId || state.examId;
         state.suiteSessionId = payload.suiteSessionId || state.suiteSessionId || null;
         state.startTime = toTimestampMs(payload.startTime, toTimestampMs(state.startTime, Date.now()));
         state.initialized = true;
+        stopInitRequestLoop();
 
         log('INIT_SESSION received — examId=' + state.examId + ' sessionId=' + state.sessionId);
-        sendMessage('SESSION_READY', {
-          sessionId: state.sessionId,
-          examId: state.examId,
-          status: 'ready',
-          source: 'listening_record_bridge'
-        });
+        sendSessionReady('ready');
       }
     });
   }
@@ -892,12 +1085,8 @@
       window.document.addEventListener('DOMContentLoaded', hookMutationObserver);
     }
 
-    sendMessage('SESSION_READY', {
-      sessionId: state.sessionId,
-      examId: state.examId,
-      status: 'ready',
-      source: 'listening_record_bridge'
-    });
+    sendSessionReady('bootstrapped');
+    startInitRequestLoop();
   }
 
   window.__listeningBridgeComplete = onComplete;

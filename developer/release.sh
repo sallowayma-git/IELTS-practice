@@ -76,6 +76,21 @@ echo "[2/2] Creating distribution zip..."
 rm -rf "${DIST_DIR}"
 mkdir -p "${DIST_DIR}"
 
+LISTENING_ZIP_INPUTS=()
+LISTENING_EXCLUDE_PATTERNS=("assets/generated/listening-exams/" "assets/generated/listening-exams/*" "ListeningPractice/" "ListeningPractice/*")
+if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ]; then
+    if [ ! -f "assets/generated/listening-exams/manifest.js" ] || [ ! -f "assets/generated/listening-exams/listening-index.compat.js" ]; then
+        echo "ERROR: INCLUDE_LOCAL_LISTENING=1 requires both assets/generated/listening-exams/manifest.js and listening-index.compat.js"
+        exit 1
+    fi
+    LISTENING_EXCLUDE_PATTERNS=()
+    for part in P1 P2 P3 P4; do
+        if [ -d "ListeningPractice/${part}" ]; then
+            LISTENING_ZIP_INPUTS+=("ListeningPractice/${part}/")
+        fi
+    done
+fi
+
 # 打包：只包含用户运行时需要的文件
 # js/bundles/ 包含了所有 JS 逻辑，js/app/ js/core/ 等源文件不进入分发包
 zip -r "${ZIP_PATH}" \
@@ -84,10 +99,7 @@ zip -r "${ZIP_PATH}" \
     js/bundles/ \
     assets/ \
     ReadingPractice/ \
-    ListeningPractice/P1/ \
-    ListeningPractice/P2/ \
-    ListeningPractice/P3/ \
-    ListeningPractice/P4/ \
+    "${LISTENING_ZIP_INPUTS[@]}" \
     -x "*.DS_Store" \
        '~$*' \
        "*.MOV" \
@@ -100,7 +112,8 @@ zip -r "${ZIP_PATH}" \
        ".git/*" \
        ".gitignore" \
        ".claude/*" \
-       "node_modules/*"
+       "node_modules/*" \
+       "${LISTENING_EXCLUDE_PATTERNS[@]}"
 
 ZIP_LIST="$(mktemp)"
 zipinfo -1 "${ZIP_PATH}" > "${ZIP_LIST}"
@@ -142,12 +155,6 @@ require_entry "assets/vendor/three.min.js"
 require_entry "assets/scripts/complete-exam-data.js"
 require_entry "assets/generated/reading-exams/manifest.js"
 require_entry "assets/generated/reading-exams/reading-practice-unified.html"
-require_entry "assets/generated/listening-exams/manifest.js"
-require_entry "assets/generated/listening-exams/listening-index.compat.js"
-require_entry "ListeningPractice/P1/"
-require_entry "ListeningPractice/P2/"
-require_entry "ListeningPractice/P3/"
-require_entry "ListeningPractice/P4/"
 require_entry "js/bundles/runtime-entry.bundle.js"
 require_entry "js/bundles/core-foundation.bundle.js"
 require_entry "js/bundles/ui-shell.bundle.js"
@@ -162,6 +169,21 @@ require_entry "js/bundles/theme.bundle.js"
 require_entry "js/bundles/reading-page.bundle.js"
 require_entry "js/bundles/practice-page-enhancer.bundle.js"
 require_entry "js/bundles/listening-record-bridge.bundle.js"
+
+if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ] && [ -f "assets/generated/listening-exams/manifest.js" ]; then
+    require_entry "assets/generated/listening-exams/manifest.js"
+    require_entry "assets/generated/listening-exams/listening-index.compat.js"
+else
+    reject_entry_prefix "assets/generated/listening-exams/"
+fi
+
+if [ "${INCLUDE_LOCAL_LISTENING:-0}" = "1" ] && [ -d "ListeningPractice" ]; then
+    for part in P1 P2 P3 P4; do
+        if [ -d "ListeningPractice/${part}" ]; then
+            require_entry "ListeningPractice/${part}/"
+        fi
+    done
+fi
 
 reject_entry_prefix "templates/"
 reject_entry_prefix "ListeningPractice/vip/"

@@ -59,6 +59,10 @@ function createHarness(seed = {}) {
         },
         completeExamIndex: clone(seed.completeExamIndex || []),
         listeningExamIndex: clone(seed.listeningExamIndex || []),
+        __LISTENING_EXAM_MANIFEST__: clone(seed.listeningManifest),
+        __defaultListeningLibraryAvailable: typeof seed.defaultListeningAvailable === 'boolean'
+            ? seed.defaultListeningAvailable
+            : undefined,
         getExamIndexState() {
             return clone(appState.examIndex);
         },
@@ -82,6 +86,11 @@ function createHarness(seed = {}) {
         showMessage() {},
         dispatchEvent() {}
     };
+    if (seed.ensureExamDataScriptsRejects) {
+        windowStub.ensureExamDataScripts = async function ensureExamDataScripts() {
+            throw new Error('simulated optional listening load failure');
+        };
+    }
 
     const sandbox = {
         window: windowStub,
@@ -359,6 +368,119 @@ async function testDeleteConfigurationGuardsDefaultAndActive() {
     });
 }
 
+async function testDefaultLibrarySkipsListeningWithoutManifest() {
+    const readingDefault = {
+        id: 'default-reading',
+        examId: 'default-reading',
+        type: 'reading',
+        title: 'Default Reading',
+        category: 'P1',
+        path: 'Reading/default/',
+        filename: 'reading.html'
+    };
+    const listeningDefault = {
+        id: 'default-listening',
+        examId: 'default-listening',
+        type: 'listening',
+        title: 'Default Listening',
+        category: 'P1',
+        path: 'P1/default/',
+        filename: 'listening.html'
+    };
+    const { window } = createHarness({
+        storage: { active_exam_index_key: 'exam_index' },
+        completeExamIndex: [readingDefault],
+        listeningExamIndex: [listeningDefault],
+        defaultListeningAvailable: false
+    });
+    const manager = window.LibraryManager.getInstance();
+    const loaded = await manager.loadActiveLibrary(true);
+
+    assert(loaded.some((exam) => exam.id === 'default-reading'), '默认阅读必须继续加载');
+    assert(!loaded.some((exam) => exam.type === 'listening'), 'manifest 缺失时默认听力不能进入题库');
+    assert.strictEqual(window.LibraryManager.isBuiltInListeningLibraryAvailable(), false, '内置听力可用性应为 false');
+
+    recordResult('manifest 缺失时默认题库跳过内置听力', { loadedCount: loaded.length });
+}
+
+async function testDefaultLibraryKeepsListeningWithManifest() {
+    const readingDefault = {
+        id: 'default-reading',
+        examId: 'default-reading',
+        type: 'reading',
+        title: 'Default Reading',
+        category: 'P1',
+        path: 'Reading/default/',
+        filename: 'reading.html'
+    };
+    const listeningDefault = {
+        id: 'default-listening',
+        examId: 'default-listening',
+        type: 'listening',
+        title: 'Default Listening',
+        category: 'P2',
+        path: 'P2/default/',
+        filename: 'listening.html'
+    };
+    const { window } = createHarness({
+        storage: { active_exam_index_key: 'exam_index' },
+        completeExamIndex: [readingDefault],
+        listeningExamIndex: [listeningDefault],
+        listeningManifest: { 'default-listening': { examId: 'default-listening' } },
+        defaultListeningAvailable: true
+    });
+    const manager = window.LibraryManager.getInstance();
+    const loaded = await manager.loadActiveLibrary(true);
+
+    assert(loaded.some((exam) => exam.id === 'default-reading'), '默认阅读必须加载');
+    assert(loaded.some((exam) => exam.id === 'default-listening'), 'manifest 存在时默认听力应进入题库');
+    assert.strictEqual(window.LibraryManager.isBuiltInListeningLibraryAvailable(), true, '内置听力可用性应为 true');
+
+    recordResult('manifest 存在时默认题库加载内置听力', { loadedCount: loaded.length });
+}
+
+async function testFullReadingDoesNotReAddDefaultListeningWhenManifestMissing() {
+    const readingNew = {
+        id: 'reading-new-default',
+        examId: 'reading-new-default',
+        type: 'reading',
+        title: 'Reading New Default',
+        category: 'P2',
+        path: 'Drop/reading-default/',
+        filename: 'reading.html',
+        importKey: 'reading:drop/reading-default.html'
+    };
+    const defaultListening = {
+        id: 'default-listening-hidden',
+        examId: 'default-listening-hidden',
+        type: 'listening',
+        title: 'Hidden Default Listening',
+        category: 'P3',
+        path: 'P3/hidden/',
+        filename: 'hidden.html'
+    };
+    const { window } = createHarness({
+        storage: { active_exam_index_key: 'exam_index', exam_index: [] },
+        completeExamIndex: [],
+        listeningExamIndex: [defaultListening],
+        defaultListeningAvailable: false
+    });
+    const manager = window.LibraryManager.getInstance();
+    const created = await manager.createImportedLibraryConfiguration({
+        type: 'reading',
+        mode: 'full',
+        additions: [readingNew],
+        activate: true
+    });
+    const next = await window.storage.get(created.key);
+
+    assert(next.some((exam) => exam.id === 'reading-new-default'), '阅读导入应保存新阅读');
+    assert(!next.some((exam) => exam.id === 'default-listening-hidden'), 'manifest 缺失时阅读全量导入不能补回默认听力');
+    assert.strictEqual(created.counts.listening, 0, '导入配置听力数量应为 0');
+
+    recordResult('阅读全量导入不会补回缺 manifest 的默认听力', { key: created.key, counts: created.counts });
+}
+
 async function main() {
     try {
         await testFullListeningCreatesSnapshotAndKeepsReading();
@@ -367,6 +489,9 @@ async function main() {
         await testSwitchConfigurationDoesNotTouchPracticeRecords();
         await testDeleteInactiveConfigurationCleansDatasetAndPathMap();
         await testDeleteConfigurationGuardsDefaultAndActive();
+        await testDefaultLibrarySkipsListeningWithoutManifest();
+        await testDefaultLibraryKeepsListeningWithManifest();
+        await testFullReadingDoesNotReAddDefaultListeningWhenManifestMissing();
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,

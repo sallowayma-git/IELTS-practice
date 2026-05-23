@@ -31,8 +31,6 @@ const bundles = {
         'js/core/practiceStore.js',
         'js/core/resourceCore.js',
         'assets/generated/reading-exams/manifest.js',
-        'assets/generated/listening-exams/manifest.js',
-        'assets/generated/listening-exams/listening-index.compat.js',
         'js/utils/stateSerializer.js',
         'js/utils/simpleStorageWrapper.js',
         'js/app/state-service.js',
@@ -44,6 +42,7 @@ const bundles = {
         'js/services/overviewStats.js',
         'js/views/overviewView.js',
         'js/presentation/navigation-controller.js',
+        'js/presentation/message-center.js',
         'js/app/main-entry.js',
         'js/presentation/indexInteractions.js',
         'js/presentation/emojiIconizer.js'
@@ -57,9 +56,9 @@ const bundles = {
     'js/bundles/browse.bundle.js': [
         'js/views/legacyViewBundle.js',
         'js/app/examActions.js',
+        'js/app/spellingErrorCollector.js',
         'js/app/examSessionMixin.js',
         'js/app/browseController.js',
-        'js/presentation/message-center.js',
         'js/components/PDFHandler.js',
         'js/components/BrowseStateManager.js',
         'js/utils/suiteBackGuard.js',

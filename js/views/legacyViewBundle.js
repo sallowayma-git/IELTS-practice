@@ -38,11 +38,15 @@
             return 0;
         }
         var candidates = [
-            record.date, record.endTime, record.timestamp, record.createdAt, record.updatedAt,
-            record.completedAt
+            record.date, record.startTime, record.endTime, record.timestamp, record.createdAt, record.updatedAt,
+            record.completedAt, record.startedAt
         ];
         var rd = record.realData || {};
-        candidates.push(rd.date, rd.endTime, rd.timestamp);
+        var metadata = record.metadata || {};
+        candidates.push(
+            rd.date, rd.startTime, rd.endTime, rd.timestamp, rd.createdAt, rd.completedAt,
+            metadata.startedAt, metadata.completedAt, metadata.createdAt
+        );
 
         var maxTs = 0;
         for (var i = 0; i < candidates.length; i += 1) {
@@ -284,6 +288,943 @@
             return '0';
         }
         return Math.round(minutes).toString();
+    }
+
+    // --- Practice trend renderer ---
+    var practiceTrendRanges = [
+        { key: 'recent10', label: '最近十次', mode: 'count', value: 10 },
+        { key: 'last7d', label: '最近七天', mode: 'days', value: 7 },
+        { key: 'last30d', label: '最近一月', mode: 'days', value: 30 },
+        { key: 'recent20', label: '最近20次', mode: 'count', value: 20 }
+    ];
+    var practiceTrendRangeByKey = practiceTrendRanges.reduce(function buildRangeMap(map, range) {
+        map[range.key] = range;
+        return map;
+    }, {});
+
+    function PracticeTrendRenderer(options) {
+        options = options || {};
+        this.ids = {
+            card: options.cardId || 'practice-trend-card',
+            canvas: options.canvasId || 'practice-trend-canvas',
+            empty: options.emptyId || 'practice-trend-empty',
+            rangeLabel: options.rangeLabelId || 'practice-trend-range-label',
+            count: options.countId || 'practice-trend-count',
+            average: options.averageId || 'practice-trend-average'
+        };
+        this.rangeKey = options.defaultRange || 'recent10';
+        this.records = [];
+        this.bound = false;
+        this.resizeHandler = null;
+    }
+
+    PracticeTrendRenderer.ranges = practiceTrendRanges.slice();
+
+    PracticeTrendRenderer.prototype.update = function update(records) {
+        this.records = Array.isArray(records) ? records.slice() : [];
+        this._ensureInteractions();
+        this.render();
+    };
+
+    PracticeTrendRenderer.prototype.render = function render() {
+        if (typeof document === 'undefined') {
+            return;
+        }
+        var card = this._getElement('card');
+        var canvas = this._getElement('canvas');
+        if (!card || !canvas || !canvas.getContext) {
+            return;
+        }
+
+        var range = practiceTrendRangeByKey[this.rangeKey] || practiceTrendRangeByKey.recent10;
+        var points = this._selectPoints(range);
+        this._setText('rangeLabel', range.label);
+        this._setText('count', String(points.length));
+        this._setText('average', this._formatAverage(points));
+        this._syncOptionState();
+
+        if (points.length === 0) {
+            card.classList.add('is-empty');
+            this._drawEmpty(canvas);
+            return;
+        }
+        card.classList.remove('is-empty');
+        this._drawChart(canvas, points);
+    };
+
+    PracticeTrendRenderer.prototype.flipToBack = function flipToBack() {
+        var card = this._getElement('card');
+        if (!card) {
+            return;
+        }
+        card.classList.add('is-flipped');
+        card.setAttribute('aria-pressed', 'true');
+        card.setAttribute('aria-label', '关闭练习趋势筛选范围');
+    };
+
+    PracticeTrendRenderer.prototype.flipToFront = function flipToFront() {
+        var card = this._getElement('card');
+        if (!card) {
+            return;
+        }
+        card.classList.remove('is-flipped');
+        card.setAttribute('aria-pressed', 'false');
+        card.setAttribute('aria-label', '打开练习趋势筛选范围');
+    };
+
+    PracticeTrendRenderer.prototype.setRange = function setRange(rangeKey) {
+        if (!practiceTrendRangeByKey[rangeKey]) {
+            return;
+        }
+        this.rangeKey = rangeKey;
+        this.render();
+        this.flipToFront();
+    };
+
+    PracticeTrendRenderer.prototype._ensureInteractions = function _ensureInteractions() {
+        if (this.bound || typeof document === 'undefined') {
+            return;
+        }
+        var card = this._getElement('card');
+        if (!card) {
+            return;
+        }
+        this.bound = true;
+        var self = this;
+
+        card.addEventListener('click', function onTrendCardClick(event) {
+            var option = event.target && event.target.closest
+                ? event.target.closest('[data-practice-trend-range]')
+                : null;
+            if (option) {
+                event.preventDefault();
+                event.stopPropagation();
+                self.setRange(option.dataset.practiceTrendRange);
+                return;
+            }
+            if (card.classList.contains('is-flipped')) {
+                self.flipToFront();
+            } else {
+                self.flipToBack();
+            }
+        });
+
+        card.addEventListener('keydown', function onTrendCardKeydown(event) {
+            var key = event.key || '';
+            if (key !== 'Enter' && key !== ' ') {
+                return;
+            }
+            var option = event.target && event.target.closest
+                ? event.target.closest('[data-practice-trend-range]')
+                : null;
+            event.preventDefault();
+            if (option) {
+                self.setRange(option.dataset.practiceTrendRange);
+                return;
+            }
+            if (card.classList.contains('is-flipped')) {
+                self.flipToFront();
+            } else {
+                self.flipToBack();
+            }
+        });
+
+        this.resizeHandler = function onTrendResize() {
+            self.render();
+        };
+        if (typeof window !== 'undefined') {
+            window.addEventListener('resize', this.resizeHandler);
+        }
+    };
+
+    PracticeTrendRenderer.prototype._selectPoints = function _selectPoints(range) {
+        var points = this.records
+            .map(function mapRecord(record, index) {
+                var timestamp = getRecordTimestamp(record);
+                var value = normalizePracticeTrendPercentage(record);
+                if (!Number.isFinite(value)) {
+                    return null;
+                }
+                return {
+                    timestamp: timestamp,
+                    order: index,
+                    value: Math.max(0, Math.min(100, value))
+                };
+            })
+            .filter(Boolean)
+            .sort(function sortPoints(a, b) {
+                if (a.timestamp !== b.timestamp) {
+                    return a.timestamp - b.timestamp;
+                }
+                return a.order - b.order;
+            });
+
+        if (!range || points.length === 0) {
+            return points;
+        }
+
+        if (range.mode === 'count') {
+            return points.slice(-range.value);
+        }
+
+        if (range.mode === 'days') {
+            var latestTimestamp = points.reduce(function findLatest(max, point) {
+                return point.timestamp > max ? point.timestamp : max;
+            }, 0);
+            var now = Date.now();
+            var anchor = latestTimestamp > 0 ? Math.max(now, latestTimestamp) : now;
+            var cutoff = anchor - range.value * 24 * 60 * 60 * 1000;
+            return points.filter(function inWindow(point) {
+                return point.timestamp > 0 && point.timestamp >= cutoff;
+            });
+        }
+
+        return points;
+    };
+
+    PracticeTrendRenderer.prototype._drawEmpty = function _drawEmpty(canvas) {
+        var ctx = preparePracticeTrendCanvas(canvas);
+        if (!ctx) {
+            return;
+        }
+        var palette = getPracticeTrendPalette(canvas);
+        var width = canvas.__practiceTrendCssWidth || canvas.clientWidth || 320;
+        var height = canvas.__practiceTrendCssHeight || canvas.clientHeight || 180;
+        ctx.clearRect(0, 0, width, height);
+        drawPracticeTrendGrid(ctx, width, height, palette);
+    };
+
+    PracticeTrendRenderer.prototype._drawChart = function _drawChart(canvas, points) {
+        var ctx = preparePracticeTrendCanvas(canvas);
+        if (!ctx) {
+            return;
+        }
+        var palette = getPracticeTrendPalette(canvas);
+        var width = canvas.__practiceTrendCssWidth || canvas.clientWidth || 320;
+        var height = canvas.__practiceTrendCssHeight || canvas.clientHeight || 180;
+        ctx.clearRect(0, 0, width, height);
+        drawPracticeTrendGrid(ctx, width, height, palette);
+
+        var inset = { left: 18, right: 18, top: 16, bottom: 22 };
+        var usableWidth = Math.max(1, width - inset.left - inset.right);
+        var usableHeight = Math.max(1, height - inset.top - inset.bottom);
+        var values = points.map(function valueOf(point) { return point.value; });
+        var minValue = Math.min.apply(Math, values);
+        var maxValue = Math.max.apply(Math, values);
+        var spread = Math.max(8, maxValue - minValue);
+        var floor = Math.max(0, minValue - spread * 0.28);
+        var ceiling = Math.min(100, maxValue + spread * 0.28);
+        if (ceiling - floor < 12) {
+            var mid = (ceiling + floor) / 2;
+            floor = Math.max(0, mid - 6);
+            ceiling = Math.min(100, mid + 6);
+        }
+        if (ceiling <= floor) {
+            ceiling = floor + 1;
+        }
+
+        var coords = points.map(function toCoord(point, index) {
+            var x = points.length === 1
+                ? inset.left + usableWidth / 2
+                : inset.left + usableWidth * (index / (points.length - 1));
+            var y = inset.top + usableHeight * (1 - (point.value - floor) / (ceiling - floor));
+            return { x: x, y: y, value: point.value };
+        });
+
+        drawPracticeTrendFill(ctx, coords, height - inset.bottom, palette);
+        drawPracticeTrendLine(ctx, coords, palette);
+        drawPracticeTrendPoints(ctx, coords, palette);
+    };
+
+    PracticeTrendRenderer.prototype._formatAverage = function _formatAverage(points) {
+        if (!Array.isArray(points) || points.length === 0) {
+            return '0%';
+        }
+        var total = points.reduce(function sum(acc, point) {
+            return acc + point.value;
+        }, 0);
+        return Math.round(total / points.length) + '%';
+    };
+
+    PracticeTrendRenderer.prototype._syncOptionState = function _syncOptionState() {
+        var card = this._getElement('card');
+        if (!card || !card.querySelectorAll) {
+            return;
+        }
+        var buttons = card.querySelectorAll('[data-practice-trend-range]');
+        for (var i = 0; i < buttons.length; i += 1) {
+            var button = buttons[i];
+            var active = button.dataset.practiceTrendRange === this.rangeKey;
+            button.classList.toggle('active', active);
+            button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        }
+    };
+
+    PracticeTrendRenderer.prototype._getElement = function _getElement(key) {
+        var id = this.ids[key];
+        return id ? document.getElementById(id) : null;
+    };
+
+    PracticeTrendRenderer.prototype._setText = function _setText(key, value) {
+        var element = this._getElement(key);
+        if (element) {
+            element.textContent = value;
+        }
+    };
+
+    // --- Practice custom priority renderer ---
+    function PracticePriorityRenderer(options) {
+        options = options || {};
+        this.ids = {
+            card: options.cardId || 'practice-custom-card',
+            widgetLabel: options.widgetLabelId || 'practice-custom-widget-label',
+            highCount: options.highCountId || 'practice-priority-high-count',
+            mediumCount: options.mediumCountId || 'practice-priority-medium-count',
+            highFill: options.highFillId || 'practice-priority-high-fill',
+            mediumFill: options.mediumFillId || 'practice-priority-medium-fill',
+            highAccuracy: options.highAccuracyId || 'practice-priority-high-accuracy',
+            mediumAccuracy: options.mediumAccuracyId || 'practice-priority-medium-accuracy'
+        };
+        this.records = [];
+        this.exams = [];
+        this.examType = 'all';
+        this.bound = false;
+    }
+
+    PracticePriorityRenderer.prototype.update = function update(records, exams, options) {
+        options = options || {};
+        this.records = Array.isArray(records) ? records.slice() : [];
+        this.exams = Array.isArray(exams) ? exams.slice() : [];
+        this.examType = options.examType || 'all';
+        this._ensureInteractions();
+        this.render();
+    };
+
+    PracticePriorityRenderer.prototype.render = function render() {
+        if (typeof document === 'undefined') {
+            return;
+        }
+        var card = this._getElement('card');
+        if (!card) {
+            return;
+        }
+        var stats = calculatePriorityPracticeStats(this.records, this.exams, this.examType);
+        this._setText('widgetLabel', '自定义');
+        this._renderGroup('high', stats.high);
+        this._renderGroup('medium', stats.medium);
+        this._syncOptionState();
+    };
+
+    PracticePriorityRenderer.prototype.flipToBack = function flipToBack() {
+        var card = this._getElement('card');
+        if (!card) {
+            return;
+        }
+        card.classList.add('is-flipped');
+        card.setAttribute('aria-pressed', 'true');
+        card.setAttribute('aria-label', '关闭自定义练习组件选择');
+    };
+
+    PracticePriorityRenderer.prototype.flipToFront = function flipToFront() {
+        var card = this._getElement('card');
+        if (!card) {
+            return;
+        }
+        card.classList.remove('is-flipped');
+        card.setAttribute('aria-pressed', 'false');
+        card.setAttribute('aria-label', '打开自定义练习组件选择');
+    };
+
+    PracticePriorityRenderer.prototype._renderGroup = function _renderGroup(key, stats) {
+        stats = stats || { done: 0, total: 0, accuracy: 0 };
+        var done = Math.max(0, Number(stats.done) || 0);
+        var total = Math.max(0, Number(stats.total) || 0);
+        var pct = total > 0 ? Math.max(0, Math.min(100, done / total * 100)) : 0;
+        var accuracy = Math.max(0, Math.min(100, Number(stats.accuracy) || 0));
+        this._setText(key + 'Count', done + '/' + total);
+        this._setText(key + 'Accuracy', Math.round(accuracy) + '%');
+        this._setProgress(key + 'Fill', pct);
+        this._setAccuracyLevel(key + 'Accuracy', accuracy);
+    };
+
+    PracticePriorityRenderer.prototype._ensureInteractions = function _ensureInteractions() {
+        if (this.bound || typeof document === 'undefined') {
+            return;
+        }
+        var card = this._getElement('card');
+        if (!card) {
+            return;
+        }
+        this.bound = true;
+        var self = this;
+
+        card.addEventListener('click', function onPriorityCardClick(event) {
+            var option = event.target && event.target.closest
+                ? event.target.closest('[data-practice-widget]')
+                : null;
+            if (option) {
+                event.preventDefault();
+                event.stopPropagation();
+                self.flipToFront();
+                return;
+            }
+            if (card.classList.contains('is-flipped')) {
+                self.flipToFront();
+            } else {
+                self.flipToBack();
+            }
+        });
+
+        card.addEventListener('keydown', function onPriorityCardKeydown(event) {
+            var key = event.key || '';
+            if (key !== 'Enter' && key !== ' ') {
+                return;
+            }
+            event.preventDefault();
+            var option = event.target && event.target.closest
+                ? event.target.closest('[data-practice-widget]')
+                : null;
+            if (option) {
+                self.flipToFront();
+                return;
+            }
+            if (card.classList.contains('is-flipped')) {
+                self.flipToFront();
+            } else {
+                self.flipToBack();
+            }
+        });
+    };
+
+    PracticePriorityRenderer.prototype._syncOptionState = function _syncOptionState() {
+        var card = this._getElement('card');
+        if (!card || !card.querySelectorAll) {
+            return;
+        }
+        var buttons = card.querySelectorAll('[data-practice-widget]');
+        for (var i = 0; i < buttons.length; i += 1) {
+            buttons[i].classList.add('active');
+            buttons[i].setAttribute('aria-pressed', 'true');
+        }
+    };
+
+    PracticePriorityRenderer.prototype._getElement = function _getElement(key) {
+        var id = this.ids[key];
+        return id ? document.getElementById(id) : null;
+    };
+
+    PracticePriorityRenderer.prototype._setText = function _setText(key, value) {
+        var element = this._getElement(key);
+        if (element) {
+            element.textContent = value;
+        }
+    };
+
+    PracticePriorityRenderer.prototype._setProgress = function _setProgress(key, value) {
+        var element = this._getElement(key);
+        if (element && element.style) {
+            element.style.setProperty('--priority-progress-value', Math.round(value) + '%');
+        }
+    };
+
+    PracticePriorityRenderer.prototype._setAccuracyLevel = function _setAccuracyLevel(key, value) {
+        var element = this._getElement(key);
+        var orb = element && element.closest ? element.closest('.priority-accuracy__orb') : null;
+        if (orb && orb.style) {
+            var bounded = Math.max(0, Math.min(100, Number(value) || 0));
+            var hue = Math.round(4 + (bounded / 100) * 128);
+            orb.style.setProperty('--priority-accuracy-level', Math.round(bounded) + '%');
+            orb.style.setProperty('--priority-accuracy-color', 'hsla(' + hue + ', 68%, 70%, 0.34)');
+        }
+    };
+
+    function calculatePriorityPracticeStats(records, exams, examType) {
+        var groups = {
+            high: createPriorityBucket(),
+            medium: createPriorityBucket()
+        };
+        var eligibleExams = ensureArray(exams).filter(function filterExam(exam) {
+            if (!exam) {
+                return false;
+            }
+            if (examType && examType !== 'all' && normalizeTypeValue(exam.type) !== normalizeTypeValue(examType)) {
+                return false;
+            }
+            return Boolean(normalizePriorityFrequency(exam.frequency || (exam.metadata && exam.metadata.frequency)));
+        });
+        var examByKey = {};
+
+        eligibleExams.forEach(function indexExam(exam) {
+            var priority = normalizePriorityFrequency(exam.frequency || (exam.metadata && exam.metadata.frequency));
+            if (!groups[priority]) {
+                return;
+            }
+            var identity = getPracticeEntityIdentity(exam);
+            if (!identity || groups[priority].totalIds.has(identity)) {
+                return;
+            }
+            groups[priority].totalIds.add(identity);
+            addExamLookupKeys(examByKey, exam, priority);
+        });
+
+        ensureArray(records).forEach(function collectRecord(record) {
+            if (!record) {
+                return;
+            }
+            var match = resolvePriorityRecordMatch(record, examByKey, eligibleExams);
+            var priority = match.priority || normalizePriorityFrequency(
+                record.frequency ||
+                (record.metadata && record.metadata.frequency) ||
+                (record.realData && record.realData.frequency)
+            );
+            if (!groups[priority]) {
+                return;
+            }
+            var identity = match.identity || getPracticeRecordEntityIdentity(record);
+            if (identity) {
+                groups[priority].doneIds.add(identity);
+            }
+            var accuracy = normalizePracticeTrendPercentage(record);
+            if (Number.isFinite(accuracy)) {
+                groups[priority].accuracyValues.push(Math.max(0, Math.min(100, accuracy)));
+            }
+        });
+
+        return {
+            high: summarizePriorityBucket(groups.high),
+            medium: summarizePriorityBucket(groups.medium)
+        };
+    }
+
+    function createPriorityBucket() {
+        return {
+            totalIds: new Set(),
+            doneIds: new Set(),
+            accuracyValues: []
+        };
+    }
+
+    function summarizePriorityBucket(bucket) {
+        var total = bucket.totalIds.size;
+        var done = bucket.doneIds.size;
+        done = total > 0 ? Math.min(done, total) : 0;
+        var accuracy = 0;
+        if (bucket.accuracyValues.length) {
+            accuracy = bucket.accuracyValues.reduce(function sum(acc, value) {
+                return acc + value;
+            }, 0) / bucket.accuracyValues.length;
+        }
+        return {
+            done: done,
+            total: total,
+            accuracy: accuracy
+        };
+    }
+
+    function normalizePriorityFrequency(value) {
+        var raw = String(value || '').trim().toLowerCase();
+        if (!raw) {
+            return '';
+        }
+        var compact = raw.replace(/[\s_-]+/g, '');
+        if (raw.indexOf('非高频') !== -1 || compact === 'low' || compact === 'nonhigh' || compact === 'unknown') {
+            return '';
+        }
+        if (raw.indexOf('次高频') !== -1 || raw.indexOf('中频') !== -1) {
+            return 'medium';
+        }
+        if (compact === 'medium' || compact === 'mid' || compact === 'mediumfrequency') {
+            return 'medium';
+        }
+        if (raw.indexOf('高频') !== -1) {
+            return 'high';
+        }
+        if (compact === 'high' || compact === 'ultrahigh' || compact === 'veryhigh' || compact === 'highfrequency') {
+            return 'high';
+        }
+        return '';
+    }
+
+    function getPracticeEntityIdentity(item) {
+        if (!item) {
+            return '';
+        }
+        var metadata = item.metadata || {};
+        var realData = item.realData || {};
+        var candidates = [
+            item.id,
+            item.examId,
+            item.dataKey,
+            item.title,
+            item.examTitle,
+            metadata.examId,
+            metadata.examTitle,
+            realData.examId,
+            realData.title,
+            item.path,
+            item.resourcePath,
+            item.sourcePath,
+            realData.path,
+            realData.examPath
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var value = candidates[i];
+            if (value != null && String(value).trim()) {
+                return String(value).trim().toLowerCase();
+            }
+        }
+        return '';
+    }
+
+    function getPracticeRecordEntityIdentity(record) {
+        if (!record) {
+            return '';
+        }
+        var metadata = record.metadata || {};
+        var realData = record.realData || {};
+        var candidates = [
+            record.examId,
+            record.title,
+            record.examTitle,
+            metadata.examId,
+            metadata.examTitle,
+            realData.examId,
+            realData.title,
+            record.path,
+            record.examPath,
+            realData.path,
+            realData.examPath,
+            record.filename,
+            record.examFile,
+            realData.filename,
+            realData.examFile
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var value = candidates[i];
+            if (value != null && String(value).trim()) {
+                return String(value).trim().toLowerCase();
+            }
+        }
+        return '';
+    }
+
+    function addExamLookupKeys(map, exam, priority) {
+        var keys = [
+            exam.id,
+            exam.examId,
+            exam.dataKey,
+            exam.title,
+            exam.path,
+            exam.resourcePath,
+            exam.sourcePath,
+            exam.filename,
+            exam.pdfFilename
+        ];
+        var identity = getPracticeEntityIdentity(exam);
+        keys.forEach(function addKey(key) {
+            var normalized = normalizePriorityLookupKey(key);
+            if (normalized) {
+                map[normalized] = {
+                    priority: priority,
+                    identity: identity
+                };
+            }
+        });
+    }
+
+    function resolvePriorityRecordMatch(record, map, exams) {
+        var metadata = record.metadata || {};
+        var realData = record.realData || {};
+        var keys = [
+            record.examId,
+            record.title,
+            record.examTitle,
+            metadata.examId,
+            metadata.examTitle,
+            realData.examId,
+            realData.title,
+            record.path,
+            record.examPath,
+            realData.path,
+            realData.examPath,
+            record.filename,
+            record.examFile,
+            realData.filename,
+            realData.examFile
+        ];
+        for (var i = 0; i < keys.length; i += 1) {
+            var normalized = normalizePriorityLookupKey(keys[i]);
+            if (normalized && map[normalized]) {
+                return map[normalized];
+            }
+        }
+        for (var j = 0; j < exams.length; j += 1) {
+            var exam = exams[j];
+            if (recordMatchesExam(exam, record)) {
+                return {
+                    priority: normalizePriorityFrequency(exam.frequency || (exam.metadata && exam.metadata.frequency)),
+                    identity: getPracticeEntityIdentity(exam)
+                };
+            }
+        }
+        return {};
+    }
+
+    function normalizePriorityLookupKey(value) {
+        if (value == null) {
+            return '';
+        }
+        return String(value).replace(/\\/g, '/').trim().toLowerCase();
+    }
+
+    function normalizePracticeTrendPercentage(record) {
+        if (!record || typeof record !== 'object') {
+            return NaN;
+        }
+        var rd = record.realData && typeof record.realData === 'object' ? record.realData : {};
+        var scoreInfo = record.scoreInfo && typeof record.scoreInfo === 'object'
+            ? record.scoreInfo
+            : (rd.scoreInfo && typeof rd.scoreInfo === 'object' ? rd.scoreInfo : {});
+        var candidates = [
+            record.percentage,
+            rd.percentage,
+            record.accuracy != null ? Number(record.accuracy) * 100 : undefined,
+            rd.accuracy != null ? Number(rd.accuracy) * 100 : undefined,
+            scoreInfo.percentage,
+            scoreInfo.accuracy != null ? Number(scoreInfo.accuracy) * 100 : undefined
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var value = Number(candidates[i]);
+            if (Number.isFinite(value)) {
+                return value;
+            }
+        }
+        var correct = Number.isFinite(Number(record.correctAnswers))
+            ? Number(record.correctAnswers)
+            : (Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : Number(record.score));
+        var total = Number.isFinite(Number(record.totalQuestions))
+            ? Number(record.totalQuestions)
+            : (Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : Number(record.total));
+        if (Number.isFinite(correct) && Number.isFinite(total) && total > 0) {
+            return correct / total * 100;
+        }
+        return NaN;
+    }
+
+    function preparePracticeTrendCanvas(canvas) {
+        var rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
+        var cssWidth = Math.max(1, Math.round(rect && rect.width ? rect.width : (canvas.clientWidth || 320)));
+        var cssHeight = Math.max(1, Math.round(rect && rect.height ? rect.height : (canvas.clientHeight || 180)));
+        var ratio = typeof window !== 'undefined' && window.devicePixelRatio ? Math.min(window.devicePixelRatio, 2) : 1;
+        if (canvas.width !== Math.round(cssWidth * ratio) || canvas.height !== Math.round(cssHeight * ratio)) {
+            canvas.width = Math.round(cssWidth * ratio);
+            canvas.height = Math.round(cssHeight * ratio);
+        }
+        canvas.__practiceTrendCssWidth = cssWidth;
+        canvas.__practiceTrendCssHeight = cssHeight;
+        var ctx = canvas.getContext('2d');
+        if (!ctx) {
+            return null;
+        }
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        return ctx;
+    }
+
+    function getPracticeTrendPalette(canvas) {
+        var host = canvas && canvas.closest ? canvas.closest('.practice-trend-card') : null;
+        var computed = host && typeof window !== 'undefined' && window.getComputedStyle
+            ? window.getComputedStyle(host)
+            : null;
+        var fallback = {
+            start: '#667eea',
+            mid: '#6accc7',
+            end: '#764ba2',
+            point: '#667eea',
+            shadow: 'rgba(102, 126, 234, 0.28)',
+            fillStart: 'rgba(102, 126, 234, 0.24)',
+            fillMid: 'rgba(106, 204, 199, 0.15)',
+            fillEnd: 'rgba(255, 255, 255, 0.02)',
+            grid: 'rgba(15, 23, 42, 0.08)'
+        };
+        if (!computed) {
+            return fallback;
+        }
+        var start = resolvePracticeTrendColor(computed, '--practice-trend-line-start', fallback.start);
+        var mid = resolvePracticeTrendColor(computed, '--practice-trend-line-mid', fallback.mid);
+        var end = resolvePracticeTrendColor(computed, '--practice-trend-line-end', fallback.end);
+        var point = resolvePracticeTrendColor(computed, '--practice-trend-point', start);
+        return {
+            start: start,
+            mid: mid,
+            end: end,
+            point: point,
+            shadow: colorWithAlpha(start, 0.28),
+            fillStart: colorWithAlpha(start, 0.24),
+            fillMid: colorWithAlpha(mid, 0.15),
+            fillEnd: fallback.fillEnd,
+            grid: fallback.grid
+        };
+    }
+
+    function resolvePracticeTrendColor(computed, variableName, fallback) {
+        var raw = computed.getPropertyValue(variableName).trim();
+        if (!raw) {
+            return fallback;
+        }
+        return normalizeCanvasColor(raw, fallback);
+    }
+
+    function normalizeCanvasColor(value, fallback) {
+        var trimmed = String(value || '').trim();
+        if (!trimmed) {
+            return fallback;
+        }
+        if (trimmed.indexOf('var(') === -1) {
+            return trimmed;
+        }
+        var match = trimmed.match(/var\((--[^,\)]+)/);
+        if (!match || typeof window === 'undefined' || !window.getComputedStyle) {
+            return fallback;
+        }
+        var resolved = window.getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim();
+        return resolved || fallback;
+    }
+
+    function colorWithAlpha(color, alpha) {
+        var parsed = parseColorToRgb(color);
+        if (!parsed) {
+            return color;
+        }
+        return 'rgba(' + parsed.r + ', ' + parsed.g + ', ' + parsed.b + ', ' + alpha + ')';
+    }
+
+    function parseColorToRgb(color) {
+        var value = String(color || '').trim();
+        var hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+        if (hex) {
+            var raw = hex[1];
+            if (raw.length === 3) {
+                raw = raw.split('').map(function doubleHex(char) { return char + char; }).join('');
+            }
+            return {
+                r: parseInt(raw.slice(0, 2), 16),
+                g: parseInt(raw.slice(2, 4), 16),
+                b: parseInt(raw.slice(4, 6), 16)
+            };
+        }
+        var rgb = value.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i);
+        if (rgb) {
+            return {
+                r: Math.round(Number(rgb[1])),
+                g: Math.round(Number(rgb[2])),
+                b: Math.round(Number(rgb[3]))
+            };
+        }
+        return null;
+    }
+
+    function drawPracticeTrendGrid(ctx, width, height, palette) {
+        palette = palette || {};
+        var gradient = ctx.createLinearGradient(0, 0, width, height);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.18)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0.04)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.strokeStyle = palette.grid || 'rgba(15, 23, 42, 0.08)';
+        ctx.lineWidth = 1;
+        for (var i = 1; i <= 3; i += 1) {
+            var y = Math.round(height * i / 4) + 0.5;
+            ctx.beginPath();
+            ctx.moveTo(14, y);
+            ctx.lineTo(width - 14, y);
+            ctx.stroke();
+        }
+    }
+
+    function drawPracticeTrendFill(ctx, coords, baseline, palette) {
+        if (!coords.length) {
+            return;
+        }
+        palette = palette || {};
+        var gradient = ctx.createLinearGradient(0, 0, 0, baseline);
+        gradient.addColorStop(0, palette.fillStart || 'rgba(102, 126, 234, 0.24)');
+        gradient.addColorStop(0.52, palette.fillMid || 'rgba(106, 204, 199, 0.15)');
+        gradient.addColorStop(1, palette.fillEnd || 'rgba(255, 255, 255, 0.02)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.moveTo(coords[0].x, baseline);
+        ctx.lineTo(coords[0].x, coords[0].y);
+        appendSmoothPracticeTrendCurves(ctx, coords);
+        ctx.lineTo(coords[coords.length - 1].x, baseline);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    function drawPracticeTrendLine(ctx, coords, palette) {
+        if (!coords.length) {
+            return;
+        }
+        palette = palette || {};
+        var gradient = ctx.createLinearGradient(0, 0, ctx.canvas.width, 0);
+        gradient.addColorStop(0, palette.start || '#667eea');
+        gradient.addColorStop(0.52, palette.mid || '#6accc7');
+        gradient.addColorStop(1, palette.end || '#764ba2');
+        ctx.save();
+        ctx.shadowColor = palette.shadow || 'rgba(102, 126, 234, 0.28)';
+        ctx.shadowBlur = 14;
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        drawSmoothPracticeTrendPath(ctx, coords);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function drawPracticeTrendPoints(ctx, coords, palette) {
+        if (!coords.length) {
+            return;
+        }
+        palette = palette || {};
+        var markers = coords.length <= 2 ? coords : [coords[0], coords[coords.length - 1]];
+        markers.forEach(function drawPoint(point) {
+            ctx.beginPath();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+            ctx.arc(point.x, point.y, 5.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.fillStyle = palette.point || palette.start || '#667eea';
+            ctx.arc(point.x, point.y, 3.1, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    }
+
+    function drawSmoothPracticeTrendPath(ctx, coords) {
+        if (!coords.length) {
+            return;
+        }
+        ctx.moveTo(coords[0].x, coords[0].y);
+        appendSmoothPracticeTrendCurves(ctx, coords);
+    }
+
+    function appendSmoothPracticeTrendCurves(ctx, coords) {
+        if (coords.length === 1) {
+            ctx.lineTo(coords[0].x + 0.1, coords[0].y);
+            return;
+        }
+        for (var i = 0; i < coords.length - 1; i += 1) {
+            var current = coords[i];
+            var next = coords[i + 1];
+            var previous = coords[i - 1] || current;
+            var following = coords[i + 2] || next;
+            var cp1x = current.x + (next.x - previous.x) / 6;
+            var cp1y = current.y + (next.y - previous.y) / 6;
+            var cp2x = next.x - (following.x - current.x) / 6;
+            var cp2y = next.y - (following.y - current.y) / 6;
+            ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
+        }
     }
 
     // --- Practice history renderer ---
@@ -1779,6 +2720,8 @@
 
     global.PracticeStats = PracticeStats;
     global.PracticeDashboardView = PracticeDashboardView;
+    global.PracticeTrendRenderer = PracticeTrendRenderer;
+    global.PracticePriorityRenderer = PracticePriorityRenderer;
     global.PracticeHistoryRenderer = historyRenderer;
     global.LegacyExamListView = LegacyExamListView;
     global.LibraryConfigView = LibraryConfigView;

@@ -266,12 +266,42 @@
         });
     }
 
+    function refreshPracticeSummaryDependentLayout() {
+        global.setTimeout(function () {
+            try {
+                global.dispatchEvent(new Event('resize'));
+            } catch (_) { }
+        }, 680);
+    }
+
+    function togglePracticeSummary(target) {
+        var practiceView = global.document ? global.document.getElementById('practice-view') : null;
+        var region = global.document ? global.document.getElementById('practice-summary-region') : null;
+        var button = target || (global.document ? global.document.getElementById('practice-summary-toggle') : null);
+        if (!practiceView || !region || !button) {
+            return;
+        }
+
+        var collapsed = !practiceView.classList.contains('is-practice-summary-collapsed');
+        practiceView.classList.toggle('is-practice-summary-collapsed', collapsed);
+        button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        button.setAttribute('aria-label', collapsed ? '展开练习统计卡片' : '折叠练习统计卡片');
+        region.setAttribute('aria-hidden', collapsed ? 'true' : 'false');
+        region.inert = collapsed;
+        if (collapsed && region.contains(global.document.activeElement)) {
+            button.focus();
+        }
+        refreshPracticeSummaryDependentLayout();
+    }
+
     function handleInlineAction(action, target) {
         var value = target && target.dataset ? target.dataset.actionValue : undefined;
 
         switch (action) {
             case 'filter-exams':
                 return typeof global.filterByType === 'function' ? global.filterByType(value || 'all') : undefined;
+            case 'filter-frequency':
+                return typeof global.filterByFrequency === 'function' ? global.filterByFrequency(value || 'all') : undefined;
             case 'filter-records':
                 return typeof global.filterRecordsByType === 'function' ? global.filterRecordsByType(value || 'all') : undefined;
             case 'clear-search':
@@ -284,6 +314,8 @@
                 return typeof global.toggleBulkDelete === 'function' ? global.toggleBulkDelete() : undefined;
             case 'clear-practice-data':
                 return typeof global.clearPracticeData === 'function' ? global.clearPracticeData() : undefined;
+            case 'toggle-practice-summary':
+                return togglePracticeSummary(target);
             case 'show-achievements':
                 return typeof global.showAchievements === 'function' ? global.showAchievements() : undefined;
             case 'hide-achievements':

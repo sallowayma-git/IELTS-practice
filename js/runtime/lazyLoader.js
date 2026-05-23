@@ -6,11 +6,13 @@
     var groupStatus = Object.create(null);
     var dependencies = Object.create(null);
     var providedScripts = new Set();
+    var READING_EXAM_DATA_SCRIPT = 'assets/scripts/complete-exam-data.js';
+    var LISTENING_EXAM_MANIFEST_SCRIPT = 'assets/generated/listening-exams/manifest.js';
+    var LISTENING_EXAM_INDEX_SCRIPT = 'assets/generated/listening-exams/listening-index.compat.js';
 
     function registerDefaultManifest() {
         manifest['exam-data'] = [
-            'assets/scripts/complete-exam-data.js',
-            'assets/generated/listening-exams/listening-index.compat.js'
+            READING_EXAM_DATA_SCRIPT
         ];
 
         manifest['state-core'] = [
@@ -58,6 +60,13 @@
         dependencies['more-tools'] = ['state-core', 'settings-tools'];
         dependencies['theme-tools'] = [];
         dependencies['diagnostics-tools'] = ['state-core', 'settings-tools'];
+    }
+
+    function setBuiltInListeningAvailability(available, reason) {
+        try {
+            global.__defaultListeningLibraryAvailable = available === true;
+            global.__defaultListeningLibraryAvailabilityReason = reason || (available ? 'available' : 'unavailable');
+        } catch (_) { }
     }
 
     function normalizeScriptUrl(url) {
@@ -146,12 +155,59 @@
             };
             script.onerror = function handleError(error) {
                 scriptStatus[url] = null;
+                try {
+                    if (script.parentNode) {
+                        script.parentNode.removeChild(script);
+                    }
+                } catch (_) { }
                 reject(new Error('加载脚本失败: ' + url + ' => ' + (error?.message || error)));
             };
             document.head.appendChild(script);
         });
 
         return scriptStatus[url];
+    }
+
+    function loadOptionalScript(url, label) {
+        return loadScript(url).then(function onOptionalLoaded() {
+            return true;
+        }).catch(function onOptionalFailed(error) {
+            scriptStatus[url] = null;
+            try {
+                console.warn('[LazyLoader] 可选脚本未加载，已跳过:', label || url, error && error.message ? error.message : error);
+            } catch (_) { }
+            return false;
+        });
+    }
+
+    function hasListeningManifest() {
+        var manifestObject = global.__LISTENING_EXAM_MANIFEST__;
+        return !!(
+            manifestObject
+            && typeof manifestObject === 'object'
+            && Object.keys(manifestObject).length > 0
+        );
+    }
+
+    function ensureOptionalListeningExamData() {
+        setBuiltInListeningAvailability(false, 'pending-manifest');
+        return loadOptionalScript(LISTENING_EXAM_MANIFEST_SCRIPT, 'listening manifest')
+            .then(function afterManifestLoaded(loaded) {
+                if (!loaded || !hasListeningManifest()) {
+                    setBuiltInListeningAvailability(false, loaded ? 'manifest-empty' : 'manifest-missing');
+                    return undefined;
+                }
+                return loadOptionalScript(LISTENING_EXAM_INDEX_SCRIPT, 'listening index')
+                    .then(function afterListeningIndexLoaded(indexLoaded) {
+                        var available = !!(
+                            indexLoaded
+                            && Array.isArray(global.listeningExamIndex)
+                            && global.listeningExamIndex.length > 0
+                        );
+                        setBuiltInListeningAvailability(available, available ? 'available' : 'index-missing');
+                        return undefined;
+                    });
+            });
     }
 
     function loadBatch(batch) {
@@ -186,6 +242,10 @@
         var list = Array.isArray(files) ? files.slice() : [];
         if (!list.length) {
             return Promise.resolve();
+        }
+
+        if (groupName === 'exam-data') {
+            return sequentialLoad(list).then(ensureOptionalListeningExamData);
         }
 
         if ((groupName === 'browse-runtime' || groupName === 'browse-view') && list.indexOf('js/bundles/browse.bundle.js') === -1) {
@@ -249,7 +309,9 @@
         }
 
         if (groupStatus[groupName] === 'loaded') {
-            return Promise.resolve();
+            return groupName === 'exam-data'
+                ? ensureOptionalListeningExamData()
+                : Promise.resolve();
         }
         if (groupStatus[groupName] && groupStatus[groupName].then) {
             return groupStatus[groupName];

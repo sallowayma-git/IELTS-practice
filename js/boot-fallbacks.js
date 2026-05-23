@@ -341,27 +341,51 @@
         }
 
         var note = document.createElement('div');
-        note.className = 'message ' + (type || 'info');
-        var icon = document.createElement('strong');
-        var marks = { error: '✖', success: '✔', warning: '⚠️', info: 'ℹ️' };
-        icon.textContent = marks[type] || marks.info;
-        note.appendChild(icon);
-        note.appendChild(document.createTextNode(' ' + (message || '')));
-        container.appendChild(note);
+        note.className = 'message ' + (type || 'info') + ' message-entering';
+        note.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        note.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
 
-        while (container.children.length > 3) {
+        var indicator = document.createElement('span');
+        indicator.className = 'message-indicator';
+        indicator.setAttribute('aria-hidden', 'true');
+
+        var text = document.createElement('span');
+        text.className = 'message-text';
+        text.textContent = message || '';
+        note.title = text.textContent;
+
+        note.appendChild(indicator);
+        note.appendChild(text);
+
+        while (container.firstChild) {
           container.removeChild(container.firstChild);
         }
 
-        var timeout = typeof duration === 'number' && duration > 0 ? duration : 4000;
+        container.appendChild(note);
         setTimeout(function () {
+          if (note.parentNode && !note.classList.contains('message-leaving')) {
+            note.classList.remove('message-entering');
+            note.classList.add('message-visible');
+          }
+        }, 760);
+
+        var timeout = typeof duration === 'number' && duration > 0 ? duration : 4000;
+        if (window.__messageFallbackTimer) {
+          clearTimeout(window.__messageFallbackTimer);
+        }
+        var hideTimer = setTimeout(function () {
           note.classList.add('message-leaving');
+          note.classList.remove('message-entering', 'message-visible');
           setTimeout(function () {
             if (note.parentNode) {
               note.parentNode.removeChild(note);
             }
-          }, 320);
+            if (window.__messageFallbackTimer === hideTimer) {
+              window.__messageFallbackTimer = null;
+            }
+          }, 480);
         }, timeout);
+        window.__messageFallbackTimer = hideTimer;
       } catch (_) { console.log('[Toast]', type || 'info', message); }
     };
   }
