@@ -33,6 +33,72 @@
         return counts;
     }
 
+    function hasListeningEntries(index) {
+        return (Array.isArray(index) ? index : []).some((exam) => {
+            return exam && exam.type === 'listening';
+        });
+    }
+
+    function hasBuiltInListeningManifest() {
+        const manifest = global.__LISTENING_EXAM_MANIFEST__;
+        return !!(
+            manifest
+            && typeof manifest === 'object'
+            && Object.keys(manifest).length > 0
+        );
+    }
+
+    function isBuiltInListeningLibraryAvailable() {
+        if (global.__defaultListeningLibraryAvailable === true) {
+            return true;
+        }
+        if (global.__defaultListeningLibraryAvailable === false) {
+            return false;
+        }
+        return hasBuiltInListeningManifest()
+            && Array.isArray(global.listeningExamIndex)
+            && global.listeningExamIndex.length > 0;
+    }
+
+    function getActiveExamIndexSnapshot() {
+        try {
+            if (typeof global.getExamIndexState === 'function') {
+                return global.getExamIndexState();
+            }
+        } catch (_) { }
+        return Array.isArray(global.examIndex) ? global.examIndex : [];
+    }
+
+    function hasActiveListeningLibrary(index) {
+        return hasListeningEntries(Array.isArray(index) ? index : getActiveExamIndexSnapshot());
+    }
+
+    function refreshListeningAvailabilityUI(index) {
+        if (typeof global.refreshListeningAvailabilityUI === 'function') {
+            try {
+                global.refreshListeningAvailabilityUI(Array.isArray(index) ? index : getActiveExamIndexSnapshot());
+                return;
+            } catch (error) {
+                console.warn('[LibraryManager] 刷新听力入口状态失败:', error);
+            }
+        }
+        const listeningAvailable = hasActiveListeningLibrary(index);
+        try {
+            const container = global.document && global.document.getElementById('type-filter-buttons');
+            const listeningButtons = container
+                ? container.querySelectorAll('[data-filter-type="listening"], [data-filter-id="listening"]')
+                : [];
+            Array.prototype.forEach.call(listeningButtons, (button) => {
+                button.hidden = !listeningAvailable;
+                button.setAttribute('aria-hidden', listeningAvailable ? 'false' : 'true');
+                if (!listeningAvailable) {
+                    button.classList.remove('active');
+                    button.setAttribute('aria-pressed', 'false');
+                }
+            });
+        } catch (_) { }
+    }
+
     class LibraryManager {
         constructor(options = {}) {
             this.options = options || {};
@@ -200,6 +266,7 @@
                 global.reportBootStage('题库装载完成', 75);
             }
             try { global.updateOverview && global.updateOverview(); } catch (_) { }
+            refreshListeningAvailabilityUI();
             try { global.refreshBrowseProgressFromRecords && global.refreshBrowseProgressFromRecords(); } catch (_) { }
             try {
                 global.dispatchEvent(new CustomEvent('examIndexLoaded'));
@@ -249,7 +316,11 @@
 
             try {
                 if (global.ensureExamDataScripts) {
-                    await global.ensureExamDataScripts();
+                    try {
+                        await global.ensureExamDataScripts();
+                    } catch (loadError) {
+                        console.warn('[LibraryManager] 默认题库脚本部分加载失败，继续解析已可用数据:', loadError);
+                    }
                 }
                 if (typeof global.reportBootStage === 'function') {
                     global.reportBootStage('解析题库数据', 55);
@@ -258,9 +329,7 @@
                 const readingExams = Array.isArray(global.completeExamIndex)
                     ? global.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
                     : [];
-                const listeningExams = Array.isArray(global.listeningExamIndex)
-                    ? global.listeningExamIndex.map((exam) => Object.assign({}, exam, { type: 'listening' }))
-                    : [];
+                const listeningExams = this.resolveDefaultTypeIndex('listening');
 
                 if (!readingExams.length && !listeningExams.length) {
                     if (global.setExamIndexState) {
@@ -377,7 +446,11 @@
                     global.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
                 );
             }
-            if (type === 'listening' && Array.isArray(global.listeningExamIndex)) {
+            if (
+                type === 'listening'
+                && isBuiltInListeningLibraryAvailable()
+                && Array.isArray(global.listeningExamIndex)
+            ) {
                 return this.normalizeIndexForCustomConfig(
                     global.listeningExamIndex.map((exam) => Object.assign({}, exam, { type: 'listening' }))
                 );
@@ -592,6 +665,7 @@
             if (global.setExamIndexState) {
                 global.setExamIndexState(exams);
             }
+            refreshListeningAvailabilityUI(exams);
             if (typeof global.setBrowseFilterState === 'function') {
                 global.setBrowseFilterState('all', 'all');
             }
@@ -753,6 +827,15 @@
         buildOverridePathMap(metadata, fallback) {
             return getInstance().buildOverridePathMap(metadata, fallback);
         },
+        hasListeningEntries(index) {
+            return hasListeningEntries(index);
+        },
+        hasActiveListeningLibrary(index) {
+            return hasActiveListeningLibrary(index);
+        },
+        isBuiltInListeningLibraryAvailable() {
+            return isBuiltInListeningLibraryAvailable();
+        },
         createImportedLibraryConfiguration(options) {
             return getInstance().createImportedLibraryConfiguration(options);
         },
@@ -761,6 +844,8 @@
         },
     };
 
+    global.hasActiveListeningLibrary = hasActiveListeningLibrary;
+    global.isBuiltInListeningLibraryAvailable = isBuiltInListeningLibraryAvailable;
     global.switchLibraryConfig = switchLibraryConfig;
     global.loadLibrary = loadLibrary;
 })(typeof window !== 'undefined' ? window : globalThis);

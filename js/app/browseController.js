@@ -72,6 +72,38 @@
         }
     };
 
+    function getActiveExamIndex() {
+        try {
+            if (typeof global.getExamIndexState === 'function') {
+                const state = global.getExamIndexState();
+                return Array.isArray(state) ? state : [];
+            }
+        } catch (_) { }
+        return Array.isArray(global.examIndex) ? global.examIndex : null;
+    }
+
+    function hasListeningEntries(index) {
+        return (Array.isArray(index) ? index : []).some((exam) => {
+            return exam && exam.type === 'listening';
+        });
+    }
+
+    function hasActiveListeningLibrary() {
+        if (typeof global.hasActiveListeningLibrary === 'function') {
+            return global.hasActiveListeningLibrary();
+        }
+        const index = getActiveExamIndex();
+        if (index === null) {
+            return true;
+        }
+        return hasListeningEntries(index);
+    }
+
+    function isListeningMode(mode) {
+        const config = BROWSE_MODES[mode];
+        return !!(config && config.filterLogic === 'folder-based');
+    }
+
     // ============================================================================
     // BrowseController 类
     // ============================================================================
@@ -113,7 +145,10 @@
                 return;
             }
 
-            this.currentMode = mode;
+            const nextMode = isListeningMode(mode) && !hasActiveListeningLibrary()
+                ? 'default'
+                : mode;
+            this.currentMode = nextMode;
             this.activeFilter = 'all'; // 重置为默认筛选
 
             // 保存到全局状态
@@ -143,21 +178,30 @@
             }
 
             const config = this.getCurrentModeConfig();
+            const filters = this.getVisibleFilters(config);
+            if (!filters.some((filter) => filter.id === this.activeFilter)) {
+                this.activeFilter = filters.length ? filters[0].id : 'all';
+            }
 
             // 清空现有按钮
             this.buttonContainer.innerHTML = '';
 
             // 确保容器拥有 segmented control 类
-            if (!this.buttonContainer.classList.contains('shui-segmented-control')) {
+            if (this.buttonContainer.classList
+                && typeof this.buttonContainer.classList.contains === 'function'
+                && !this.buttonContainer.classList.contains('shui-segmented-control')) {
                 this.buttonContainer.classList.add('shui-segmented-control');
             }
 
             // 生成新按钮
-            config.filters.forEach(filter => {
+            filters.forEach(filter => {
                 const button = document.createElement('button');
                 button.className = 'shui-segmented-btn';
                 button.textContent = filter.label;
                 button.dataset.filterId = filter.id;
+                if (filter.type) {
+                    button.dataset.filterType = filter.type;
+                }
 
                 // 设置激活状态
                 if (filter.id === this.activeFilter) {
@@ -177,6 +221,18 @@
             if (typeof global.updateSegmentedIndicators === 'function') {
                 setTimeout(global.updateSegmentedIndicators, 20);
             }
+        }
+
+        getVisibleFilters(config) {
+            const normalized = config || this.getCurrentModeConfig();
+            const filters = Array.isArray(normalized.filters) ? normalized.filters : [];
+            if (normalized.id === 'default' && !hasActiveListeningLibrary()) {
+                return filters.filter((filter) => filter.type !== 'listening');
+            }
+            if (isListeningMode(normalized.id) && !hasActiveListeningLibrary()) {
+                return BROWSE_MODES.default.filters.filter((filter) => filter.type !== 'listening');
+            }
+            return filters.slice();
         }
 
         /**
@@ -344,7 +400,9 @@
             try {
                 const savedMode = global.__browseFilterMode;
                 if (savedMode && BROWSE_MODES[savedMode]) {
-                    this.currentMode = savedMode;
+                    this.currentMode = isListeningMode(savedMode) && !hasActiveListeningLibrary()
+                        ? 'default'
+                        : savedMode;
                 }
             } catch (error) {
                 console.warn('[BrowseController] 恢复模式失败:', error);
@@ -490,6 +548,46 @@
 
     global.BrowseController = BrowseController;
     global.BROWSE_MODES = BROWSE_MODES;
+    global.refreshListeningAvailabilityUI = function refreshListeningAvailabilityUI(index) {
+        const listeningAvailable = Array.isArray(index)
+            ? hasListeningEntries(index)
+            : hasActiveListeningLibrary();
+        const controller = global.browseController || null;
+
+        if (controller && isListeningMode(controller.currentMode) && !listeningAvailable) {
+            controller.currentMode = 'default';
+            controller.activeFilter = 'all';
+            try { global.__browseFilterMode = 'default'; } catch (_) { }
+            try { global.__browsePath = null; } catch (_) { }
+            if (typeof controller.setBrowseFilterState === 'function') {
+                controller.setBrowseFilterState('all', 'all');
+            }
+        }
+
+        if (controller && controller.getCurrentExamType && controller.getCurrentExamType() === 'listening' && !listeningAvailable) {
+            controller.activeFilter = 'all';
+            if (typeof controller.setBrowseFilterState === 'function') {
+                controller.setBrowseFilterState('all', 'all');
+            }
+        }
+
+        if (controller && controller.buttonContainer) {
+            controller.renderFilterButtons();
+        } else {
+            const container = global.document && global.document.getElementById('type-filter-buttons');
+            const listeningButtons = container
+                ? container.querySelectorAll('[data-filter-type="listening"], [data-filter-id="listening"]')
+                : [];
+            Array.prototype.forEach.call(listeningButtons, (button) => {
+                button.hidden = !listeningAvailable;
+                button.setAttribute('aria-hidden', listeningAvailable ? 'false' : 'true');
+            });
+        }
+
+        if (typeof global.updateSegmentedIndicators === 'function') {
+            setTimeout(global.updateSegmentedIndicators, 20);
+        }
+    };
 
     // 创建全局实例
     global.browseController = new BrowseController();

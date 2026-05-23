@@ -352,7 +352,9 @@
 
         var launch = function () {
             try {
-                if (exam.hasHtml && typeof global.openExam === 'function') {
+                if (exam.hasHtml && global.app && typeof global.app.openExam === 'function') {
+                    global.app.openExam(exam.id);
+                } else if (exam.hasHtml && typeof global.openExam === 'function') {
                     global.openExam(exam.id);
                 } else if (typeof global.viewPDF === 'function') {
                     global.viewPDF(exam.id);

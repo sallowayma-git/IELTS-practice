@@ -65,6 +65,42 @@
         return 0;
     }
 
+    function normalizeBrowseFrequencyFilter(value) {
+        const raw = String(value || '').trim().toLowerCase();
+        if (raw === 'high' || raw === 'medium' || raw === 'low') {
+            return raw;
+        }
+        return 'all';
+    }
+
+    function normalizeFrequencyBucket(exam) {
+        const raw = String(exam && exam.frequency || '').trim().toLowerCase();
+        if (!raw || raw === 'unknown' || raw === '未知频率') {
+            return '';
+        }
+        if (raw === 'low' || raw === '低频') {
+            return 'low';
+        }
+        if (raw === 'medium' || raw === 'mid' || raw === '中频' || raw === 'very-high' || raw === '次高频') {
+            return 'medium';
+        }
+        if (raw === 'high' || raw === '高频' || raw === 'ultra-high' || raw === '超高频') {
+            return 'high';
+        }
+        return '';
+    }
+
+    function applyBrowseFrequencyFilter(exams, frequencyFilter) {
+        const list = Array.isArray(exams) ? exams.slice() : [];
+        const filter = normalizeBrowseFrequencyFilter(
+            frequencyFilter || global.__browseFrequencyFilter || 'all'
+        );
+        if (filter === 'all') {
+            return list;
+        }
+        return list.filter((exam) => normalizeFrequencyBucket(exam) === filter);
+    }
+
     function applyExamSort(exams, sortMode) {
         const list = Array.isArray(exams) ? exams.slice() : [];
         const mode = String(sortMode || global.__browseSortMode || 'default').trim().toLowerCase();
@@ -86,9 +122,44 @@
         });
     }
 
-    function applyBrowsePostFilters(exams, sortMode) {
+    function applyBrowsePostFilters(exams, sortMode, frequencyFilter) {
         const deduplicated = deduplicateExams(exams);
-        return applyExamSort(deduplicated, sortMode);
+        const frequencyFiltered = applyBrowseFrequencyFilter(deduplicated, frequencyFilter);
+        return applyExamSort(frequencyFiltered, sortMode);
+    }
+
+    function hasListeningEntries(exams) {
+        return (Array.isArray(exams) ? exams : []).some((exam) => exam && exam.type === 'listening');
+    }
+
+    function normalizeUnavailableListeningFilter(activeCategory, activeExamType, examIndexSnapshot) {
+        const listeningAvailable = typeof global.hasActiveListeningLibrary === 'function'
+            ? global.hasActiveListeningLibrary(examIndexSnapshot)
+            : hasListeningEntries(examIndexSnapshot);
+        const isListeningFilter = activeExamType === 'listening'
+            || (global.__browseFilterMode && global.__browseFilterMode !== 'default');
+        if (listeningAvailable || !isListeningFilter) {
+            return { activeCategory, activeExamType };
+        }
+
+        global.__browseFilterMode = 'default';
+        global.__browsePath = null;
+        if (global.browseController) {
+            global.browseController.currentMode = 'default';
+            global.browseController.activeFilter = 'all';
+            if (typeof global.browseController.setBrowseFilterState === 'function') {
+                global.browseController.setBrowseFilterState('all', 'all');
+            }
+            if (typeof global.browseController.renderFilterButtons === 'function') {
+                global.browseController.renderFilterButtons();
+            }
+        } else if (typeof global.setBrowseFilterState === 'function') {
+            global.setBrowseFilterState('all', 'all');
+        }
+        if (typeof global.setBrowseTitle === 'function') {
+            global.setBrowseTitle('题库列表');
+        }
+        return { activeCategory: 'all', activeExamType: 'all' };
     }
 
     function filterExamsWithLegacyFallback(exams, state) {
@@ -98,6 +169,9 @@
         const activeExamType = String(safeState.activeExamType || safeState.examType || 'all');
         const filterMode = String(safeState.browseFilterMode || safeState.filterMode || 'default');
         const sortMode = String(safeState.sortMode || safeState.browseSortMode || global.__browseSortMode || 'default');
+        const frequencyFilter = normalizeBrowseFrequencyFilter(
+            safeState.frequencyFilter || safeState.browseFrequencyFilter || global.__browseFrequencyFilter || 'all'
+        );
         const isFrequencyMode = filterMode !== 'default';
         const basePathFilter = isFrequencyMode
             && typeof safeState.basePathFilter === 'string'
@@ -143,7 +217,7 @@
             }
         }
 
-        return applyBrowsePostFilters(list, sortMode);
+        return applyBrowsePostFilters(list, sortMode, frequencyFilter);
     }
 
     function formatFrequencyLabel(frequency) {
@@ -680,6 +754,10 @@
             activeExamType = typeof global.getCurrentExamType === 'function' ? global.getCurrentExamType() : 'all';
         }
 
+        const normalizedFilter = normalizeUnavailableListeningFilter(activeCategory, activeExamType, examIndexSnapshot);
+        activeCategory = normalizedFilter.activeCategory;
+        activeExamType = normalizedFilter.activeExamType;
+
         // 4. 执行筛选
         // 仅在频率模式下使用 basePath 过滤
         const isFrequencyMode = global.__browseFilterMode && global.__browseFilterMode !== 'default';
@@ -992,8 +1070,14 @@
                 return;
             }
 
-            if (action === 'start' && typeof global.openExam === 'function') {
-                global.openExam(examId);
+            if (action === 'start') {
+                if (global.app && typeof global.app.openExam === 'function') {
+                    global.app.openExam(examId);
+                    return;
+                }
+                if (typeof global.openExam === 'function') {
+                    global.openExam(examId);
+                }
                 return;
             }
 
@@ -1184,7 +1268,9 @@
         exportPracticeData,
         deduplicateExams,
         applyExamSort,
-        applyBrowsePostFilters
+        applyBrowsePostFilters,
+        applyBrowseFrequencyFilter,
+        normalizeBrowseFrequencyFilter
     };
 
     global.loadExamList = loadExamList;

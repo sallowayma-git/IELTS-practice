@@ -264,6 +264,7 @@
             showLibraryLoaderModal: function () { message('题库管理模块未就绪'); },
             showThemeSwitcherModal: function () { message('主题切换模块未就绪'); },
             filterByType: function () { message('题库筛选模块未就绪'); },
+            filterByFrequency: function () { message('题库筛选模块未就绪'); },
             filterRecordsByType: function () { message('练习筛选模块未就绪'); },
             openExam: function (examId, options) {
                 if (global.app && typeof global.app.openExam === 'function') {

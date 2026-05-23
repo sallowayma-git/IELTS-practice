@@ -39,6 +39,8 @@ Object.defineProperty(window, 'examListViewInstance', {
 });
 
 let practiceDashboardViewInstance = null;
+let practiceTrendRendererInstance = null;
+let practicePriorityRendererInstance = null;
 let legacyNavigationController = null;
 
 // ============================================================================
@@ -201,6 +203,20 @@ function ensurePracticeDashboardView() {
         });
     }
     return practiceDashboardViewInstance;
+}
+
+function ensurePracticeTrendRenderer() {
+    if (!practiceTrendRendererInstance && window.PracticeTrendRenderer) {
+        practiceTrendRendererInstance = new window.PracticeTrendRenderer();
+    }
+    return practiceTrendRendererInstance;
+}
+
+function ensurePracticePriorityRenderer() {
+    if (!practicePriorityRendererInstance && window.PracticePriorityRenderer) {
+        practicePriorityRendererInstance = new window.PracticePriorityRenderer();
+    }
+    return practicePriorityRendererInstance;
 }
 
 function ensureLegacyNavigation(options) {
@@ -553,17 +569,37 @@ function extractCompletionPayload(envelope) {
     if (!envelope || typeof envelope !== 'object') {
         return null;
     }
-    const candidates = [envelope.data, envelope.payload, envelope.results, envelope.detail, envelope];
+    const isCompletionPayload = (candidate) => {
+        if (!candidate || typeof candidate !== 'object') {
+            return false;
+        }
+        return Boolean(
+            candidate.scoreInfo
+            || Array.isArray(candidate.spellingErrors)
+            || typeof candidate.correctAnswers !== 'undefined'
+            || typeof candidate.totalQuestions !== 'undefined'
+            || (candidate.answers && typeof candidate.answers === 'object')
+        );
+    };
+    const candidates = [
+        envelope.data,
+        envelope.payload,
+        envelope.results,
+        envelope.detail,
+        envelope.realData,
+        envelope
+    ];
     for (let i = 0; i < candidates.length; i += 1) {
         const candidate = candidates[i];
         if (candidate && typeof candidate === 'object') {
-            if (
-                candidate.scoreInfo ||
-                typeof candidate.correctAnswers !== 'undefined' ||
-                typeof candidate.totalQuestions !== 'undefined' ||
-                (candidate.answers && typeof candidate.answers === 'object')
-            ) {
+            if (isCompletionPayload(candidate)) {
                 return candidate;
+            }
+            if (isCompletionPayload(candidate.realData)) {
+                if (typeof candidate.sessionId === 'string' && candidate.sessionId.trim() && !candidate.realData.sessionId) {
+                    candidate.realData.sessionId = candidate.sessionId.trim();
+                }
+                return candidate.realData;
             }
         }
     }
@@ -686,6 +722,35 @@ function showCompletionSummary(envelope) {
 }
 
 function setupMessageListener() {
+    const findFallbackSessionByWindow = (sourceWindow) => {
+        if (!sourceWindow || !window.fallbackExamSessions || typeof fallbackExamSessions.entries !== 'function') {
+            return null;
+        }
+        try {
+            for (const [sid, rec] of fallbackExamSessions.entries()) {
+                if (rec && rec.win === sourceWindow) {
+                    return { sid, rec };
+                }
+            }
+        } catch (_) { }
+        return null;
+    };
+
+    const sendFallbackInit = (entry) => {
+        if (!entry || !entry.rec || !entry.rec.win || entry.rec.win.closed) {
+            return;
+        }
+        const payload = entry.rec.initPayload || {
+            examId: entry.rec.examId,
+            parentOrigin: window.location.origin,
+            sessionId: entry.rec.sessionId || entry.sid
+        };
+        try {
+            entry.rec.win.postMessage({ type: 'INIT_SESSION', data: payload }, '*');
+            entry.rec.win.postMessage({ type: 'init_exam_session', data: payload }, '*');
+        } catch (_) { }
+    };
+
     window.addEventListener('message', (event) => {
         // 更兼容的安全检查：允许同源或file协议下的子窗口
         try {
@@ -697,26 +762,37 @@ function setupMessageListener() {
         const data = event.data || {};
         const type = data.type;
         if (type === 'SESSION_READY') {
+            const payload = data && typeof data.data === 'object' ? data.data : data;
+            const matched = findFallbackSessionByWindow(event.source);
+            if (payload && payload.initialized === false) {
+                sendFallbackInit(matched);
+                return;
+            }
+
             // 子页未携带 sessionId，这里基于 event.source 匹配对应会话并停止握手重试
             try {
-                for (const [sid, rec] of fallbackExamSessions.entries()) {
-                    if (rec && rec.win === event.source) {
-                        if (rec.timer) clearInterval(rec.timer);
-                        console.log('[Fallback] 会话就绪(匹配到窗口):', sid);
-                        break;
-                    }
+                if (matched && matched.rec) {
+                    if (matched.rec.timer) clearInterval(matched.rec.timer);
+                    console.log('[Fallback] 会话就绪(匹配到窗口):', matched.sid);
                 }
             } catch (_) { }
+        } else if (type === 'REQUEST_INIT') {
+            sendFallbackInit(findFallbackSessionByWindow(event.source));
         } else if (type === 'PRACTICE_COMPLETE' || type === 'practice_completed') {
             const payload = extractCompletionPayload(data) || {};
             const sessionId = extractCompletionSessionId(data);
-            const rec = sessionId ? fallbackExamSessions.get(sessionId) : null;
-            const shouldNotify = shouldAnnounceCompletion(sessionId);
+            const matchedByWindow = findFallbackSessionByWindow(event.source);
+            const rec = sessionId ? (fallbackExamSessions.get(sessionId) || (matchedByWindow && matchedByWindow.rec)) : (matchedByWindow && matchedByWindow.rec);
+            const recSessionId = rec && (rec.sessionId || (matchedByWindow && matchedByWindow.sid) || sessionId);
+            if (recSessionId && payload && typeof payload === 'object') {
+                payload.sessionId = recSessionId;
+            }
+            const shouldNotify = shouldAnnounceCompletion(recSessionId || sessionId);
             if (rec) {
                 console.log('[Fallback] 收到练习完成（降级路径），保存真实数据');
                 savePracticeRecordFallback(rec.examId, payload).finally(() => {
                     try { if (rec && rec.timer) clearInterval(rec.timer); } catch (_) { }
-                    try { fallbackExamSessions.delete(sessionId); } catch (_) { }
+                    try { fallbackExamSessions.delete(recSessionId || sessionId); } catch (_) { }
                     if (shouldNotify) {
                         showMessage('练习已完成，正在更新记录...', 'success');
                         showCompletionSummary(payload);
@@ -863,6 +939,65 @@ function normalizeFallbackAnswerComparison(existingComparison, answerMap, correc
     });
 
     return normalized;
+}
+
+function normalizeFallbackSpellingErrors(examId, realData, exam = {}) {
+    const rawErrors = Array.isArray(realData?.spellingErrors)
+        ? realData.spellingErrors
+        : (Array.isArray(realData?.realData?.spellingErrors) ? realData.realData.spellingErrors : []);
+    if (!rawErrors.length) {
+        return [];
+    }
+
+    const resolvedExamId = exam?.id || realData?.examId || examId;
+    const collector = window.spellingErrorCollector;
+    const sourceProbe = [
+        resolvedExamId,
+        exam?.path,
+        exam?.category,
+        exam?.title,
+        realData?.source,
+        realData?.pageType,
+        realData?.type
+    ].filter(Boolean).join(' ');
+    const detectedSource = collector && typeof collector.detectSource === 'function'
+        ? collector.detectSource(sourceProbe)
+        : '';
+    const resolvedSessionId = realData?.sessionId || realData?.realData?.sessionId || '';
+    const suiteId = realData?.suiteId || realData?.suiteSessionId || realData?.realData?.suiteId || realData?.realData?.suiteSessionId || '';
+
+    return rawErrors.map((error) => {
+        if (!error || typeof error !== 'object') {
+            return null;
+        }
+        const normalized = Object.assign({}, error, { examId: resolvedExamId });
+        if (resolvedSessionId) {
+            normalized.sessionId = resolvedSessionId;
+        }
+        if (suiteId && !normalized.suiteId) {
+            normalized.suiteId = suiteId;
+        }
+        if ((detectedSource === 'p1' || detectedSource === 'p4') && (!normalized.source || normalized.source === 'other')) {
+            normalized.source = detectedSource;
+        }
+        return normalized;
+    }).filter(Boolean);
+}
+
+async function saveFallbackSpellingErrors(examId, realData, exam = {}) {
+    const collector = window.spellingErrorCollector;
+    if (!collector || typeof collector.saveErrors !== 'function') {
+        return;
+    }
+    const spellingErrors = normalizeFallbackSpellingErrors(examId, realData, exam);
+    if (!spellingErrors.length) {
+        return;
+    }
+    try {
+        await collector.saveErrors(spellingErrors);
+    } catch (error) {
+        console.warn('[Fallback] 保存拼写错误词表失败（不影响主流程）:', error);
+    }
 }
 
 // 降级保存：将 PRACTICE_COMPLETE 的真实数据写入 practice_records（与旧视图字段兼容）
@@ -1012,6 +1147,7 @@ async function savePracticeRecordFallback(examId, realData) {
                 });
             }
             console.log('[Fallback] 真实数据已通过 PracticeCore 保存');
+            await saveFallbackSpellingErrors(examId, realData, exam);
             return canonicalRecord;
         }
 
@@ -1067,6 +1203,7 @@ async function savePracticeRecordFallback(examId, realData) {
             arr.push(record);
             await storage.set(practiceKey, arr);
         }
+        await saveFallbackSpellingErrors(examId, realData, exam);
         console.log('[Fallback] 真实数据已保存到 practice_records');
     } catch (e) {
         console.error('[Fallback] 保存练习记录失败:', e);
@@ -1607,6 +1744,8 @@ function updatePracticeView() {
         }
     }
 
+    const recordsForInsights = recordsToShow.slice();
+
     const historyQuery = String(window.__practiceHistoryQuery || '').trim().toLowerCase();
     if (historyQuery) {
         recordsToShow = recordsToShow.filter((record) => {
@@ -1624,6 +1763,16 @@ function updatePracticeView() {
             ];
             return fields.some((field) => String(field || '').toLowerCase().includes(historyQuery));
         });
+    }
+
+    const trendRenderer = ensurePracticeTrendRenderer();
+    if (trendRenderer && typeof trendRenderer.update === 'function') {
+        trendRenderer.update(recordsToShow);
+    }
+
+    const priorityRenderer = ensurePracticePriorityRenderer();
+    if (priorityRenderer && typeof priorityRenderer.update === 'function') {
+        priorityRenderer.update(recordsForInsights, getExamIndexState(), { examType });
     }
 
     // --- 4. Render history list ---
@@ -1875,6 +2024,23 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
 }
 
 function filterByType(type) {
+    const requestedType = type;
+    try {
+        const listeningAvailable = typeof window.hasActiveListeningLibrary === 'function'
+            ? window.hasActiveListeningLibrary()
+            : (Array.isArray(getExamIndexState()) && getExamIndexState().some((exam) => exam && exam.type === 'listening'));
+        if (requestedType === 'listening' && !listeningAvailable) {
+            type = 'all';
+            if (typeof window.showMessage === 'function') {
+                window.showMessage('听力题库尚未加载', 'warning');
+            }
+        }
+    } catch (_) {
+        if (requestedType === 'listening') {
+            type = 'all';
+        }
+    }
+
     // 重置筛选器状态
     setBrowseFilterState('all', type);
     setBrowseTitle(formatBrowseTitle('all', type));
@@ -1945,19 +2111,24 @@ function applyBrowseFilter(category = 'all', type = null, filterMode = null, pat
 
         const normalizedType = normalizeExamType(type);
         const normalizedPath = (typeof path === 'string' && path.trim()) ? path.trim() : null;
+        const listeningAvailable = typeof window.hasActiveListeningLibrary === 'function'
+            ? window.hasActiveListeningLibrary()
+            : (Array.isArray(getExamIndexState()) && getExamIndexState().some((exam) => exam && exam.type === 'listening'));
+        const effectiveFilterMode = listeningAvailable ? filterMode : null;
+        const effectiveType = (!listeningAvailable && normalizedType === 'listening') ? 'all' : normalizedType;
 
         // 1. 先处理模式切换/重置
-        if (filterMode) {
-            const modeConfig = window.BROWSE_MODES && window.BROWSE_MODES[filterMode];
+        if (effectiveFilterMode) {
+            const modeConfig = window.BROWSE_MODES && window.BROWSE_MODES[effectiveFilterMode];
             const basePath = normalizedPath || (modeConfig && modeConfig.basePath) || null;
             window.__browsePath = basePath;
-            window.__browseFilterMode = filterMode;
+            window.__browseFilterMode = effectiveFilterMode;
             if (window.browseController) {
                 try {
                     if (!window.browseController.buttonContainer) {
                         window.browseController.initialize('type-filter-buttons');
                     }
-                    window.browseController.setMode(filterMode);
+                    window.browseController.setMode(effectiveFilterMode);
                 } catch (error) {
                     console.warn('[Browse] 切换浏览模式失败:', error);
                 }
@@ -1974,15 +2145,15 @@ function applyBrowseFilter(category = 'all', type = null, filterMode = null, pat
         }
 
         // 2. 再应用具体的分类和类型筛选（确保不被重置覆盖）
-        setBrowseFilterState(normalizedCategory, normalizedType);
+        setBrowseFilterState(normalizedCategory, effectiveType);
 
 
-        setBrowseTitle(formatBrowseTitle(normalizedCategory, normalizedType));
+        setBrowseTitle(formatBrowseTitle(normalizedCategory, effectiveType));
 
         // 3. 刷新题库列表
         // 如果是频率模式，setMode 已经处理了刷新，不需要再次调用 loadExamList
         // 只有在默认模式下才显式调用
-        if (!filterMode) {
+        if (!effectiveFilterMode) {
             loadExamList();
         }
 
@@ -2012,6 +2183,9 @@ function initializeBrowseView() {
     if (window.browseController && !window.browseController.buttonContainer) {
         window.browseController.initialize('type-filter-buttons');
     }
+    if (typeof window.refreshListeningAvailabilityUI === 'function') {
+        window.refreshListeningAvailabilityUI();
+    }
 
     const persisted = getPersistedBrowseFilter();
     if (persisted) {
@@ -2026,6 +2200,26 @@ function initializeBrowseView() {
         refreshBrowseProgressFromRecords();
     });
     setupBrowseSortControl();
+    setupBrowseFrequencyFilterControl();
+    loadExamList();
+}
+
+function normalizeBrowseFrequencyFilter(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    return raw === 'high' || raw === 'medium' || raw === 'low' ? raw : 'all';
+}
+
+function getBrowseSearchQuery() {
+    const input = document.getElementById('exam-search-input') || document.querySelector('.search-input');
+    return input && typeof input.value === 'string' ? input.value.trim() : '';
+}
+
+function refreshBrowseResults() {
+    const query = getBrowseSearchQuery();
+    if (query) {
+        performSearch(query);
+        return;
+    }
     loadExamList();
 }
 
@@ -2052,9 +2246,53 @@ function setupBrowseSortControl() {
         } catch (_) {
             // ignore storage failures
         }
-        loadExamList();
+        refreshBrowseResults();
     });
     sortSelect.dataset.bound = 'true';
+}
+
+function updateBrowseFrequencyButtons(filter) {
+    const activeFilter = normalizeBrowseFrequencyFilter(filter || window.__browseFrequencyFilter || 'all');
+    const container = document.getElementById('browse-frequency-filter-buttons');
+    if (!container) {
+        return;
+    }
+    container.querySelectorAll('[data-frequency-filter]').forEach((button) => {
+        const isActive = button.dataset.frequencyFilter === activeFilter;
+        button.classList.toggle('active', isActive);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+}
+
+function setupBrowseFrequencyFilterControl() {
+    const container = document.getElementById('browse-frequency-filter-buttons');
+    if (!container) {
+        return;
+    }
+    let savedFilter = normalizeBrowseFrequencyFilter(window.__browseFrequencyFilter || 'all');
+    if (savedFilter === 'all') {
+        try {
+            savedFilter = normalizeBrowseFrequencyFilter(window.localStorage.getItem('browse_frequency_filter') || 'all');
+        } catch (_) {
+            savedFilter = 'all';
+        }
+    }
+    window.__browseFrequencyFilter = savedFilter;
+    updateBrowseFrequencyButtons(savedFilter);
+}
+
+function filterByFrequency(filter) {
+    const requested = normalizeBrowseFrequencyFilter(filter);
+    const current = normalizeBrowseFrequencyFilter(window.__browseFrequencyFilter || 'all');
+    const next = requested !== 'all' && requested === current ? 'all' : requested;
+    window.__browseFrequencyFilter = next;
+    try {
+        window.localStorage.setItem('browse_frequency_filter', next);
+    } catch (_) {
+        // ignore storage failures
+    }
+    updateBrowseFrequencyButtons(next);
+    refreshBrowseResults();
 }
 
 // 全局桥接：HTML 按钮 onclick="browseCategory('P1','reading')"
@@ -2146,9 +2384,21 @@ function loadExamListFallback() {
 
         // 应用当前筛选状态（修复 P2 bug）
         const currentCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
-        const currentType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
+        let currentType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
+        const hasListening = examIndex.some(function (exam) { return exam && exam.type === 'listening'; });
+        if (!hasListening && currentType === 'listening') {
+            currentType = 'all';
+            if (typeof setBrowseFilterState === 'function') {
+                setBrowseFilterState('all', 'all');
+            }
+        }
         const isFrequencyMode = window.__browseFilterMode && window.__browseFilterMode !== 'default';
-        const basePathFilter = isFrequencyMode && typeof window.__browsePath === 'string' && window.__browsePath.trim()
+        if (!hasListening && isFrequencyMode) {
+            window.__browseFilterMode = 'default';
+            window.__browsePath = null;
+        }
+        const effectiveFrequencyMode = window.__browseFilterMode && window.__browseFilterMode !== 'default';
+        const basePathFilter = effectiveFrequencyMode && typeof window.__browsePath === 'string' && window.__browsePath.trim()
             ? window.__browsePath.trim()
             : null;
 
@@ -2371,7 +2621,7 @@ function startHandshakeFallback(examWindow, examId) {
     try {
         const sessionId = `${examId}_${Date.now()}`;
         const initPayload = { examId, parentOrigin: window.location.origin, sessionId };
-        fallbackExamSessions.set(sessionId, { examId, timer: null, win: examWindow });
+        fallbackExamSessions.set(sessionId, { examId, sessionId, initPayload, timer: null, win: examWindow });
 
         let attempts = 0;
         const maxAttempts = 30; // ~9s
@@ -2668,19 +2918,54 @@ function clearSearch() {
     searchExams('');
 }
 
+function getBrowseFilteredExamBase() {
+    const examIndex = getExamIndexState();
+    const activeCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
+    const activeExamType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
+    const isFrequencyMode = window.__browseFilterMode && window.__browseFilterMode !== 'default';
+    const basePathFilter = isFrequencyMode && typeof window.__browsePath === 'string' && window.__browsePath.trim()
+        ? window.__browsePath.trim()
+        : null;
+
+    if (window.ExamFilterService && typeof window.ExamFilterService.filterExams === 'function') {
+        return window.ExamFilterService.filterExams(examIndex, {
+            activeCategory,
+            activeExamType,
+            browseFilterMode: window.__browseFilterMode,
+            basePathFilter,
+            browsePath: window.__browsePath,
+            sortMode: window.__browseSortMode,
+            frequencyFilter: window.__browseFrequencyFilter
+        });
+    }
+
+    let list = Array.isArray(examIndex) ? examIndex.slice() : [];
+    if (activeExamType !== 'all') {
+        list = list.filter((exam) => exam && exam.type === activeExamType);
+    }
+    if (activeCategory !== 'all') {
+        list = list.filter((exam) => exam && exam.category === activeCategory);
+    }
+    if (basePathFilter) {
+        list = list.filter((exam) => typeof exam?.path === 'string' && exam.path.includes(basePathFilter));
+    }
+    if (window.ExamActions && typeof window.ExamActions.applyBrowsePostFilters === 'function') {
+        return window.ExamActions.applyBrowsePostFilters(list, window.__browseSortMode, window.__browseFrequencyFilter);
+    }
+    return list;
+}
+
 function performSearch(query) {
     const normalizedQuery = query.toLowerCase().trim();
     if (!normalizedQuery) {
-        const currentFiltered = getFilteredExamsState();
-        const baseList = currentFiltered.length ? currentFiltered : getExamIndexState();
-        displayExams(baseList);
+        loadExamList();
         return;
     }
 
     // 调试日志
     console.log('[Search] 执行搜索，查询词:', normalizedQuery);
-    const searchBase = getExamIndexState();
-    console.log('[Search] 全量索引数量:', searchBase.length);
+    const searchBase = getBrowseFilteredExamBase();
+    console.log('[Search] 当前筛选后索引数量:', searchBase.length);
     const searchResults = searchBase.filter(exam => {
         if (exam.searchText) {
             return exam.searchText.includes(normalizedQuery);

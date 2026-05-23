@@ -68,6 +68,9 @@
                 master: 'vocab_list_master_errors',
                 custom: 'vocab_list_custom'
             };
+
+            this.lexiconCache = null;
+            this.lexiconLoadingPromise = null;
             
             // 初始化完成标志
             this.initialized = false;
@@ -171,7 +174,7 @@
             
             return {
                 id: listId,
-                name: names[source] || '词表',
+                name: names[listId] || names[source] || '词表',
                 source: source,
                 words: [],
                 createdAt: Date.now(),
@@ -181,6 +184,272 @@
                     masteredWords: 0,
                     reviewingWords: 0
                 }
+            };
+        }
+
+        normalizeListSource(listId, fallback) {
+            if (listId === 'master') {
+                return 'all';
+            }
+            if (listId === 'p1' || listId === 'p4' || listId === 'custom') {
+                return listId;
+            }
+            return fallback || 'other';
+        }
+
+        normalizeVocabListShape(rawList, listId, source) {
+            const normalizedSource = this.normalizeListSource(listId, source);
+            const base = this.createEmptyList(listId, normalizedSource);
+
+            if (Array.isArray(rawList)) {
+                return {
+                    ...base,
+                    words: rawList.filter((entry) => entry && typeof entry === 'object'),
+                    updatedAt: Date.now()
+                };
+            }
+
+            if (!rawList || typeof rawList !== 'object') {
+                return null;
+            }
+
+            const words = Array.isArray(rawList.words)
+                ? rawList.words.filter((entry) => entry && typeof entry === 'object')
+                : [];
+
+            return {
+                ...base,
+                ...rawList,
+                id: listId,
+                source: rawList.source || normalizedSource,
+                words,
+                stats: {
+                    ...base.stats,
+                    ...(rawList.stats && typeof rawList.stats === 'object' ? rawList.stats : {}),
+                    totalWords: words.length
+                }
+            };
+        }
+
+        normalizeLexiconLookupKey(word) {
+            return String(word || '').trim().toLowerCase().replace(/[^a-z'-]+/g, '');
+        }
+
+        getEmbeddedLexicon() {
+            const embedded = window.__EMBEDDED_WORDLISTS__;
+            return embedded && Array.isArray(embedded.ielts_core)
+                ? embedded.ielts_core
+                : [];
+        }
+
+        resolveAssetUrl(relativePath) {
+            const fallback = relativePath;
+            if (typeof document === 'undefined') {
+                return fallback;
+            }
+
+            const scripts = Array.from(document.querySelectorAll('script[src]'));
+            const ownerScript = document.currentScript || scripts.find((script) => {
+                const src = script.getAttribute('src') || '';
+                return /(?:js\/bundles\/|js\\bundles\\|js\/app\/|js\\app\\)/i.test(src);
+            });
+            const src = ownerScript && (ownerScript.src || ownerScript.getAttribute('src'));
+            if (!src) {
+                return fallback;
+            }
+
+            try {
+                const markerIndex = src.search(/\/js\/(?:bundles|app)\//i);
+                if (markerIndex !== -1) {
+                    const root = src.slice(0, markerIndex + 1);
+                    return new URL(relativePath, root).href;
+                }
+                return new URL(relativePath, document.baseURI || window.location.href).href;
+            } catch (_) {
+                return fallback;
+            }
+        }
+
+        async fetchJson(url) {
+            if (typeof fetch !== 'function') {
+                throw new Error('fetch_unavailable');
+            }
+            const response = await fetch(url, { cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        }
+
+        readJsonViaXHR(url) {
+            return new Promise((resolve, reject) => {
+                if (typeof XMLHttpRequest === 'undefined') {
+                    reject(new Error('xhr_unavailable'));
+                    return;
+                }
+                try {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('GET', url, true);
+                    xhr.overrideMimeType('application/json');
+                    xhr.onreadystatechange = () => {
+                        if (xhr.readyState !== 4) {
+                            return;
+                        }
+                        const isSuccess = (xhr.status >= 200 && xhr.status < 300) || xhr.status === 0;
+                        if (!isSuccess) {
+                            reject(new Error(`HTTP ${xhr.status}`));
+                            return;
+                        }
+                        try {
+                            resolve(JSON.parse(xhr.responseText));
+                        } catch (error) {
+                            reject(error);
+                        }
+                    };
+                    xhr.onerror = () => reject(new Error('xhr_network_error'));
+                    xhr.send();
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        }
+
+        async ensureCoreLexicon() {
+            const embedded = this.getEmbeddedLexicon();
+            if (embedded.length) {
+                this.lexiconCache = embedded;
+                return embedded;
+            }
+            if (Array.isArray(this.lexiconCache)) {
+                return this.lexiconCache;
+            }
+            if (this.lexiconLoadingPromise) {
+                return this.lexiconLoadingPromise;
+            }
+
+            this.lexiconLoadingPromise = (async () => {
+                const url = this.resolveAssetUrl('assets/wordlists/ielts_core.json');
+                try {
+                    const payload = await this.fetchJson(url);
+                    this.lexiconCache = Array.isArray(payload) ? payload : [];
+                } catch (fetchError) {
+                    try {
+                        const payload = await this.readJsonViaXHR(url);
+                        this.lexiconCache = Array.isArray(payload) ? payload : [];
+                    } catch (xhrError) {
+                        console.warn('[SpellingErrorCollector] 核心词库加载失败，使用错词占位释义:', xhrError.message || fetchError.message || xhrError);
+                        this.lexiconCache = [];
+                    }
+                } finally {
+                    this.lexiconLoadingPromise = null;
+                }
+                return this.lexiconCache;
+            })();
+
+            return this.lexiconLoadingPromise;
+        }
+
+        findLexiconEntry(word) {
+            const key = this.normalizeLexiconLookupKey(word);
+            if (!key) {
+                return null;
+            }
+            const sources = [this.getEmbeddedLexicon(), this.lexiconCache];
+            for (const source of sources) {
+                if (!Array.isArray(source) || !source.length) {
+                    continue;
+                }
+                const found = source.find((entry) => (
+                    entry
+                    && typeof entry.word === 'string'
+                    && this.normalizeLexiconLookupKey(entry.word) === key
+                    && typeof entry.meaning === 'string'
+                    && entry.meaning.trim()
+                ));
+                if (found) {
+                    return found;
+                }
+            }
+            return null;
+        }
+
+        buildSpellingNote(entry, errorCount) {
+            const userInput = entry && entry.userInput ? String(entry.userInput).trim() : '(未记录)';
+            let note = `你曾拼写为: ${userInput}`;
+            if (errorCount > 1) {
+                note += ` (错误${errorCount}次)`;
+            }
+            return note;
+        }
+
+        buildSourceNote(entry) {
+            const sourceParts = [];
+            if (entry && entry.examId) {
+                sourceParts.push(`来源: ${entry.examId}`);
+            }
+            if (entry && entry.questionId) {
+                sourceParts.push(`题目 ${entry.questionId}`);
+            }
+            return sourceParts.join(' - ');
+        }
+
+        isGeneratedSpellingNote(note) {
+            return typeof note === 'string' && note.trim().startsWith('你曾拼写为:');
+        }
+
+        buildVocabEntryFromError(error, existing, listSource) {
+            if (!error || typeof error !== 'object') {
+                return null;
+            }
+            const word = typeof error.word === 'string' ? error.word.trim() : '';
+            if (!word) {
+                return null;
+            }
+
+            const incomingCount = Math.max(1, Number(error.errorCount) || 1);
+            const existingCount = existing ? Math.max(0, Number(existing.errorCount) || 0) : 0;
+            const errorCount = existing ? existingCount + incomingCount : incomingCount;
+            const timestamp = error.timestamp || Date.now();
+            const lexiconEntry = this.findLexiconEntry(word);
+            const existingMeaning = existing && typeof existing.meaning === 'string' ? existing.meaning.trim() : '';
+            const errorMeaning = typeof error.meaning === 'string' ? error.meaning.trim() : '';
+            const meaning = lexiconEntry && typeof lexiconEntry.meaning === 'string' && lexiconEntry.meaning.trim()
+                ? lexiconEntry.meaning.trim()
+                : (errorMeaning || existingMeaning || '暂无中文释义');
+            const example = lexiconEntry && typeof lexiconEntry.example === 'string' && lexiconEntry.example.trim()
+                ? lexiconEntry.example.trim()
+                : (error.example || existing?.example || this.buildSourceNote(error));
+            const spellingNote = this.buildSpellingNote({ ...existing, ...error }, errorCount);
+            const sourceNote = this.buildSourceNote(error);
+            const existingNote = existing && typeof existing.note === 'string' ? existing.note.trim() : '';
+            const noteParts = [spellingNote, sourceNote];
+            if (existingNote && !this.isGeneratedSpellingNote(existingNote) && !noteParts.includes(existingNote)) {
+                noteParts.push(existingNote);
+            }
+            const normalizedWord = this.normalizeLexiconLookupKey(word) || word.toLowerCase();
+            const source = error.source || existing?.source || listSource || 'other';
+
+            return {
+                ...(existing || {}),
+                ...error,
+                id: existing?.id || error.id || `spelling-${source}-${normalizedWord}`,
+                word,
+                meaning,
+                example,
+                note: noteParts.filter(Boolean).join('；'),
+                spellingNote,
+                source,
+                errorCount,
+                timestamp,
+                easeFactor: existing?.easeFactor ?? error.easeFactor ?? null,
+                interval: existing?.interval ?? error.interval ?? 1,
+                repetitions: existing?.repetitions ?? error.repetitions ?? 0,
+                intraCycles: existing?.intraCycles ?? error.intraCycles ?? 0,
+                correctCount: existing?.correctCount ?? error.correctCount ?? 0,
+                lastReviewed: existing?.lastReviewed ?? error.lastReviewed ?? null,
+                nextReview: existing?.nextReview ?? error.nextReview ?? null,
+                createdAt: existing?.createdAt || error.createdAt || new Date(timestamp).toISOString(),
+                updatedAt: new Date().toISOString()
             };
         }
 
@@ -201,10 +470,11 @@
                 }
                 
                 const list = await window.storage.get(storageKey);
+                const normalizedList = this.normalizeVocabListShape(list, listId, listId);
                 
-                if (list && typeof list === 'object') {
-                    console.log(`[SpellingErrorCollector] 加载词表成功: ${listId}, 单词数: ${list.words?.length || 0}`);
-                    return list;
+                if (normalizedList) {
+                    console.log(`[SpellingErrorCollector] 加载词表成功: ${listId}, 单词数: ${normalizedList.words.length}`);
+                    return normalizedList;
                 }
                 
                 console.log(`[SpellingErrorCollector] 词表不存在: ${listId}`);
@@ -229,6 +499,12 @@
                     return false;
                 }
                 
+                if (!Array.isArray(vocabList.words)) {
+                    vocabList.words = [];
+                }
+
+                vocabList = this.normalizeVocabListShape(vocabList, vocabList.id, vocabList.source) || vocabList;
+
                 // 更新统计信息
                 vocabList.stats = vocabList.stats || {};
                 vocabList.stats.totalWords = vocabList.words.length;
@@ -831,6 +1107,7 @@
             
             try {
                 await this.ensureInitialized();
+                await this.ensureCoreLexicon();
                 
                 // 按来源分组错误
                 const errorsBySource = this.groupErrorsBySource(errors);
@@ -907,35 +1184,30 @@
          */
         mergeErrorsToList(vocabList, errors) {
             for (const error of errors) {
+                if (!error || typeof error.word !== 'string' || !error.word.trim()) {
+                    continue;
+                }
                 // 标准化单词（小写）
                 const normalizedWord = error.word.toLowerCase().trim();
                 
                 // 查找是否已存在该单词
                 const existingIndex = vocabList.words.findIndex(w => 
-                    w.word.toLowerCase().trim() === normalizedWord
+                    w && typeof w.word === 'string' && w.word.toLowerCase().trim() === normalizedWord
                 );
                 
                 if (existingIndex !== -1) {
                     // 单词已存在，更新错误次数和最新信息
                     const existing = vocabList.words[existingIndex];
-                    existing.errorCount = (existing.errorCount || 1) + 1;
-                    existing.timestamp = error.timestamp;
-                    existing.userInput = error.userInput; // 更新为最新的错误拼写
-                    existing.questionId = error.questionId; // 更新为最新的题目ID
-                    existing.examId = error.examId; // 更新为最新的考试ID
+                    vocabList.words[existingIndex] = this.buildVocabEntryFromError(error, existing, vocabList.source);
                     
-                    // 如果有suiteId，也更新
-                    if (error.suiteId) {
-                        existing.suiteId = error.suiteId;
-                    }
-                    
-                    console.log(`[SpellingErrorCollector] 更新已存在单词: ${error.word}, 错误次数: ${existing.errorCount}`);
+                    console.log(`[SpellingErrorCollector] 更新已存在单词: ${error.word}, 错误次数: ${vocabList.words[existingIndex].errorCount}`);
                 } else {
                     // 新单词，添加到词表
-                    vocabList.words.push({
-                        ...error,
-                        errorCount: 1
-                    });
+                    const entry = this.buildVocabEntryFromError(error, null, vocabList.source);
+                    if (!entry) {
+                        continue;
+                    }
+                    vocabList.words.push(entry);
                     
                     console.log(`[SpellingErrorCollector] 添加新单词: ${error.word}`);
                 }

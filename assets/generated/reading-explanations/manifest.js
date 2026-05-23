@@ -753,14 +753,6 @@
     "sourceDoc": "P3 解析+1202高频_副本.md",
     "matchedTitle": "Star Performers 明星员工"
   },
-  "p3-low-151": {
-    "examId": "p3-low-151",
-    "dataKey": "p3-low-151",
-    "script": "../reading-explanations/p3-low-151.js",
-    "title": "Book Review The Discovery of Slowness 富兰克林(慢的发现)",
-    "sourceDoc": "P3 解析+1202高频_副本.md",
-    "matchedTitle": "Book Review The Discovery of Slowness 富兰克林 (慢的发现)"
-  },
   "p3-low-153": {
     "examId": "p3-low-153",
     "dataKey": "p3-low-153",
@@ -1025,22 +1017,6 @@
     "sourceDoc": "228. P3 - On art and artists 艺术与艺术家.pdf",
     "matchedTitle": "On art and artists 艺术与艺术家"
   },
-  "p1-high-194": {
-    "examId": "p1-high-194",
-    "dataKey": "p1-high-194",
-    "script": "../reading-explanations/p1-high-194.js",
-    "title": "The history of the British wool industry 英国羊毛产业的历史",
-    "sourceDoc": "PDF句段翻译",
-    "matchedTitle": "The history of the British wool industry 英国羊毛产业的历史"
-  },
-  "p1-low-223": {
-    "examId": "p1-low-223",
-    "dataKey": "p1-low-223",
-    "script": "../reading-explanations/p1-low-223.js",
-    "title": "Effect and Cause 湖泊海啸研究",
-    "sourceDoc": "PDF句段翻译",
-    "matchedTitle": "Effect and Cause 湖泊海啸研究"
-  },
   "p1-medium-115": {
     "examId": "p1-medium-115",
     "dataKey": "p1-medium-115",
@@ -1056,46 +1032,6 @@
     "title": "Roller coaster 过山车",
     "sourceDoc": "PDF句段翻译",
     "matchedTitle": "Roller coaster 过山车"
-  },
-  "p2-high-14": {
-    "examId": "p2-high-14",
-    "dataKey": "p2-high-14",
-    "script": "../reading-explanations/p2-high-14.js",
-    "title": "Should space be explored by robots or by humans 人机太空探索",
-    "sourceDoc": "PDF句段翻译",
-    "matchedTitle": "Should space be explored by robots or by humans 人机太空探索"
-  },
-  "p2-high-16": {
-    "examId": "p2-high-16",
-    "dataKey": "p2-high-16",
-    "script": "../reading-explanations/p2-high-16.js",
-    "title": "The Importance of Law 法律的意义",
-    "sourceDoc": "PDF句段翻译",
-    "matchedTitle": "The Importance of Law 法律的意义"
-  },
-  "p2-high-192": {
-    "examId": "p2-high-192",
-    "dataKey": "p2-high-192",
-    "script": "../reading-explanations/p2-high-192.js",
-    "title": "Should we stop eating meat 是否应该吃素",
-    "sourceDoc": "PDF句段翻译",
-    "matchedTitle": "Should we stop eating meat 是否应该吃素"
-  },
-  "p2-high-201": {
-    "examId": "p2-high-201",
-    "dataKey": "p2-high-201",
-    "script": "../reading-explanations/p2-high-201.js",
-    "title": "Multi-tasking and the brain 大脑与多任务处理",
-    "sourceDoc": "PDF句段翻译",
-    "matchedTitle": "Multi-tasking and the brain 大脑与多任务处理"
-  },
-  "p2-high-21": {
-    "examId": "p2-high-21",
-    "dataKey": "p2-high-21",
-    "script": "../reading-explanations/p2-high-21.js",
-    "title": "Stress Less 工作压力",
-    "sourceDoc": "PDF句段翻译",
-    "matchedTitle": "Stress Less 工作压力"
   }
 };
 })(typeof window !== "undefined" ? window : globalThis);

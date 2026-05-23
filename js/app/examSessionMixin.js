@@ -1045,8 +1045,15 @@
                     } catch (_) { }
 
                     const host = doc.head || doc.body;
-                    const existingEnhancerScript = host.querySelector(`script[data-${bridgeDatasetKey.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}="true"]`);
+                    const bridgeDatasetAttr = `data-${bridgeDatasetKey.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}`;
+                    const existingSelector = `script[${bridgeDatasetAttr}], script[src*="${bridgeScriptPath.split('/').pop()}"]`;
+                    const existingEnhancerScript = typeof doc.querySelector === 'function'
+                        ? doc.querySelector(existingSelector)
+                        : (host && typeof host.querySelector === 'function' ? host.querySelector(existingSelector) : null);
                     if (existingEnhancerScript) {
+                        if (isListeningExam && (examWindow.__listeningBridgeGetState || examWindow.__listeningBridgeComplete)) {
+                            this.initializePracticeSession(examWindow, examId);
+                        }
                         return;
                     }
                     let enhancerInjected = false;
@@ -1790,9 +1797,6 @@
                 }
 
                 const windowInfo = this.ensureExamWindowSession(examId, expectedWindow);
-                if (windowInfo && sourceWindow !== expectedWindow) {
-                    windowInfo.window = sourceWindow;
-                }
                 const expectedSessionId = windowInfo.expectedSessionId || '';
 
                 // 放宽消息源过滤，兼容 inline_collector 与 practice_page
@@ -1808,6 +1812,9 @@
                 const payloadSuiteSessionId = data && typeof data.suiteSessionId === 'string'
                     ? data.suiteSessionId.trim()
                     : '';
+                const payloadSessionId = data && typeof data.sessionId === 'string'
+                    ? data.sessionId.trim()
+                    : '';
                 const activeSuiteSessionId = this.currentSuiteSession && this.currentSuiteSession.id
                     ? String(this.currentSuiteSession.id)
                     : '';
@@ -1817,6 +1824,17 @@
                     && this.currentSuiteSession.sequence.some(item => item && String(item.examId) === expectedExamId)
                 );
                 const sourceMatched = isLikelySameWindowContext(sourceWindow, expectedWindow);
+                const isListeningBridgeSource = src === 'listening_record_bridge';
+                const isListeningBridgeProtocolMessage = Boolean(
+                    isListeningBridgeSource
+                    && (
+                        type === 'SESSION_READY'
+                        || type === 'PRACTICE_COMPLETE'
+                        || type === 'PRACTICE_RESULT'
+                        || type === 'REQUEST_INIT'
+                        || type === 'PROGRESS_UPDATE'
+                    )
+                );
                 const allowSuiteSourceFallback = Boolean(
                     !sourceMatched
                     && payloadExamId
@@ -1826,8 +1844,19 @@
                         || isExamInActiveSuite
                     )
                 );
-                if (!sourceMatched && !allowSuiteSourceFallback) {
+                const allowListeningSourceFallback = Boolean(
+                    !sourceMatched
+                    && isListeningBridgeProtocolMessage
+                    && (
+                        (payloadExamId && payloadExamId === expectedExamId)
+                        || (payloadSessionId && expectedSessionId && payloadSessionId === expectedSessionId)
+                    )
+                );
+                if (!sourceMatched && !allowSuiteSourceFallback && !allowListeningSourceFallback) {
                     return;
+                }
+                if (windowInfo && sourceWindow !== expectedWindow) {
+                    windowInfo.window = sourceWindow;
                 }
                 const isSuiteFlowPayload = Boolean(
                     (type === 'PRACTICE_COMPLETE'
@@ -1842,9 +1871,6 @@
                     && payloadExamId
                     && payloadExamId === expectedExamId
                 );
-                const payloadSessionId = data && typeof data.sessionId === 'string'
-                    ? data.sessionId.trim()
-                    : '';
 
                 if (payloadSessionId) {
                     if (expectedSessionId && payloadSessionId !== expectedSessionId) {
@@ -1858,7 +1884,12 @@
                                 || isExamInActiveSuite
                             )
                         );
-                        if (!allowSuiteSessionMismatch) {
+                        const allowListeningSessionMismatch = Boolean(
+                            isListeningBridgeProtocolMessage
+                            && expectedSessionId
+                            && (sourceMatched || allowListeningSourceFallback)
+                        );
+                        if (!allowSuiteSessionMismatch && !allowListeningSessionMismatch) {
                             return;
                         }
                         data.sessionId = expectedSessionId;
@@ -1877,7 +1908,11 @@
 
                 if (payloadExamId && payloadExamId !== expectedExamId) {
                     const allowedLegacy = payloadExamId === 'session';
-                    if (!allowedLegacy) {
+                    const allowListeningExamMismatch = Boolean(
+                        isListeningBridgeProtocolMessage
+                        && (sourceMatched || allowListeningSourceFallback)
+                    );
+                    if (!allowedLegacy && !allowListeningExamMismatch) {
                         return;
                     }
                 }
@@ -2093,17 +2128,17 @@
             // 避免重复握手
             if (this._handshakeTimers.has(examId)) return;
 
-            const windowInfo = this.ensureExamWindowSession(examId, examWindow);
-            const initPayload = this._buildExamInitPayload(examId, windowInfo);
-
             let attempts = 0;
             const maxAttempts = 30; // ~9s
             const tick = () => {
                 if (examWindow && !examWindow.closed) {
                     try {
+                        const windowInfo = this.ensureExamWindowSession(examId, examWindow);
+                        const initPayload = this._buildExamInitPayload(examId, windowInfo);
+                        windowInfo.handshakeAttempts = attempts + 1;
+                        windowInfo.lastHandshakeAt = Date.now();
+                        this.examWindows && this.examWindows.set(examId, windowInfo);
                         // 直接发送两种事件名，确保增强器任何实现都能收到
-                        if (attempts === 0) {
-                        }
                         examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
                         examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
                     } catch (_) { /* 忽略 */ }
@@ -3105,6 +3140,14 @@
          */
         handleSessionReady(examId, data) {
             const payload = data && typeof data === 'object' ? data : {};
+            const isListeningBridgeReady = payload.source === 'listening_record_bridge'
+                || payload.metadata?.source === 'listening_record_bridge'
+                || payload.pageType === 'listening'
+                || payload.type === 'listening';
+            const isPreInitListeningReady = Boolean(
+                isListeningBridgeReady
+                && payload.initialized === false
+            );
 
             // 更新会话状态
             let windowInfo = null;
@@ -3115,11 +3158,17 @@
             }
 
             if (windowInfo) {
-                windowInfo.dataCollectorReady = true;
+                if (isListeningBridgeReady) {
+                    windowInfo.listeningBridgeSeen = true;
+                    windowInfo.listeningBridgeInitialized = !isPreInitListeningReady;
+                }
+                if (!isPreInitListeningReady) {
+                    windowInfo.dataCollectorReady = true;
+                }
                 if (payload.pageType) {
                     windowInfo.pageType = payload.pageType;
                 }
-                if (payload.sessionId && windowInfo.expectedSessionId !== payload.sessionId) {
+                if (!isPreInitListeningReady && payload.sessionId && windowInfo.expectedSessionId !== payload.sessionId) {
                     windowInfo.expectedSessionId = payload.sessionId;
                 }
                 if (payload.suiteSessionId && !windowInfo.suiteSessionId) {
@@ -3138,6 +3187,20 @@
                     windowInfo.latestUrl = payload.url;
                 }
                 this.examWindows && this.examWindows.set(examId, windowInfo);
+            }
+
+            if (isPreInitListeningReady) {
+                try {
+                    const targetWindow = (windowInfo && windowInfo.window) || null;
+                    if (targetWindow && typeof targetWindow.postMessage === 'function') {
+                        const initPayload = this._buildExamInitPayload(examId, windowInfo || {});
+                        targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
+                        targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                    }
+                } catch (initError) {
+                    console.warn('[App] 听力桥预初始化 ready 后补发 INIT_SESSION 失败:', initError);
+                }
+                return;
             }
 
             if (this.suiteExamMap && this.suiteExamMap.has(examId) && typeof this._handleSuiteSessionReady === 'function') {
@@ -3202,6 +3265,120 @@
             }
         },
 
+        _isListeningBridgeCompletionPayload(data) {
+            if (!data || typeof data !== 'object') {
+                return false;
+            }
+
+            const signals = [
+                data.type,
+                data.practiceType,
+                data.pageType,
+                data.source,
+                data.metadata?.type,
+                data.metadata?.examType,
+                data.metadata?.source,
+                data.scoreInfo?.source,
+                data.realData?.source,
+                data.realData?.type,
+                data.realData?.pageType
+            ].filter(Boolean).join(' ').toLowerCase();
+
+            return signals.includes('listening_record_bridge') || signals.includes('listening');
+        },
+
+        _ensureRecorderSessionForListeningCompletion(examId, data) {
+            if (!this._isListeningBridgeCompletionPayload(data)) {
+                return;
+            }
+
+            const recorder = this.components && this.components.practiceRecorder;
+            if (!recorder) {
+                return;
+            }
+
+            const windowInfo = this.examWindows && this.examWindows.has(examId)
+                ? this.examWindows.get(examId)
+                : null;
+            const sessionId = (data && data.sessionId)
+                || (windowInfo && windowInfo.expectedSessionId)
+                || this.generateSessionId(examId);
+
+            if (data && !data.sessionId) {
+                data.sessionId = sessionId;
+            }
+            if (windowInfo && !windowInfo.expectedSessionId) {
+                windowInfo.expectedSessionId = sessionId;
+                this.examWindows && this.examWindows.set(examId, windowInfo);
+            }
+
+            const hasActiveSession = Boolean(
+                recorder.activeSessions
+                && typeof recorder.activeSessions.has === 'function'
+                && recorder.activeSessions.has(examId)
+            );
+
+            if (!hasActiveSession && typeof recorder.startPracticeSession === 'function') {
+                try {
+                    recorder.startPracticeSession(examId, {
+                        title: data?.title || data?.metadata?.examTitle || '',
+                        category: data?.category || data?.pageType || data?.metadata?.category || '',
+                        frequency: data?.frequency || data?.metadata?.frequency || '',
+                        type: 'listening',
+                        totalQuestions: data?.scoreInfo?.total || data?.totalQuestions || 0
+                    });
+                } catch (startError) {
+                    console.warn('[PracticeRecorder] 听力完成前补建会话失败:', startError);
+                }
+            }
+
+            if (typeof recorder.handleSessionStarted === 'function') {
+                try {
+                    recorder.handleSessionStarted({
+                        examId,
+                        sessionId,
+                        metadata: {
+                            pageType: data?.pageType || 'listening',
+                            type: 'listening',
+                            examType: 'listening',
+                            url: data?.url || data?.metadata?.url || null,
+                            title: data?.title || data?.metadata?.examTitle || null,
+                            suiteSessionId: data?.suiteSessionId || data?.metadata?.suiteSessionId || null,
+                            source: data?.source || data?.metadata?.source || 'listening_record_bridge'
+                        }
+                    });
+                } catch (startedError) {
+                    console.warn('[PracticeRecorder] 听力完成前同步会话状态失败:', startedError);
+                }
+            }
+        },
+
+        _normalizeListeningSpellingErrors(examId, data) {
+            if (!this._isListeningBridgeCompletionPayload(data) || !Array.isArray(data?.spellingErrors)) {
+                return;
+            }
+
+            const resolvedExamId = data?.examId || examId;
+            const collector = window.spellingErrorCollector;
+            const detectedSource = collector && typeof collector.detectSource === 'function'
+                ? collector.detectSource(resolvedExamId)
+                : '';
+
+            data.spellingErrors = data.spellingErrors.map((error) => {
+                if (!error || typeof error !== 'object') {
+                    return error;
+                }
+                const normalized = Object.assign({}, error, { examId: resolvedExamId });
+                if (data?.suiteSessionId && !normalized.suiteId) {
+                    normalized.suiteId = data.suiteSessionId;
+                }
+                if ((detectedSource === 'p1' || detectedSource === 'p4') && (!normalized.source || normalized.source === 'other')) {
+                    normalized.source = detectedSource;
+                }
+                return normalized;
+            });
+        },
+
         /**
          * 处理练习完成（真实数据）
          */
@@ -3210,7 +3387,7 @@
                 data.sessionId = `${examId}_${Date.now()}`;
             }
 
-            // 仅在P1/P4听力填空场景尝试补齐 spellingErrors（错词抓取）
+            // 听力桥返回的填空答案直接按 answerComparison 检测，不能依赖题源目录名必须包含 P1/P4。
             try {
                 const collector = window.spellingErrorCollector;
                 const hasExisting = Array.isArray(data?.spellingErrors) && data.spellingErrors.length > 0;
@@ -3223,8 +3400,20 @@
                     const source = typeof collector.detectSource === 'function'
                         ? collector.detectSource(examIdForDetect)
                         : 'other';
+                    const completionSignals = [
+                        data?.type,
+                        data?.practiceType,
+                        data?.pageType,
+                        data?.metadata?.type,
+                        data?.metadata?.examType,
+                        data?.metadata?.source,
+                        data?.source,
+                        data?.scoreInfo?.source,
+                        data?.realData?.source
+                    ].filter(Boolean).join(' ').toLowerCase();
+                    const isListeningCompletion = completionSignals.includes('listening');
 
-                    if (source === 'p1' || source === 'p4') {
+                    if (source === 'p1' || source === 'p4' || isListeningCompletion) {
                         const suiteId = data?.suiteId || null;
                         const detected = collector.detectErrors(comparison, suiteId, examIdForDetect);
                         if (Array.isArray(detected) && detected.length > 0) {
@@ -3237,6 +3426,7 @@
             } catch (error) {
                 console.warn('[DataCollection] 拼写错误检测失败，已忽略:', error);
             }
+            this._normalizeListeningSpellingErrors(examId, data);
 
             let suiteHandlerDeclined = false;
             const payloadSuiteSessionId = (
@@ -3278,6 +3468,7 @@
                     metadata: Object.assign({}, data?.metadata || {}, { allowStandaloneSave: true, suiteFallback: true })
                 })
                 : data;
+            this._ensureRecorderSessionForListeningCompletion(examId, completionData);
 
             try {
                 if (recorder && typeof recorder.handleSessionCompleted === 'function') {
