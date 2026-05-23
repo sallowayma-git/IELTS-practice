@@ -36,7 +36,6 @@
             type="file"
             id="folder-picker"
             webkitdirectory
-            style="display: none"
         />
         <div class="message-container" id="message-container"></div>
 
@@ -70,15 +69,7 @@
                         href="https://www.xiaohongshu.com/user/profile/5b4d76744eacab058489e72f?xsec_token=ABlVO2QUdaoyzC6LYAHxh1yuvCcdFmZCFy-npJva106mg=&xsec_source=pc_search"
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="hero-badge hero-badge--cta"
-                        style="
-                            background: #ff1c1c;
-                            box-shadow: 0 12px 30px rgba(255, 77, 79, 0.35);
-                            text-decoration: none;
-                            display: inline-flex;
-                            align-items: center;
-                            justify-content: center;
-                        "
+                        class="hero-badge hero-badge--cta hero-badge--redbook"
                         aria-label="小红书主页"
                     >
                         小红书
@@ -89,14 +80,6 @@
                         rel="noopener noreferrer"
                         class="inline-hover-link"
                         aria-label="GitHub Repository"
-                        style="
-                            margin-left: auto;
-                            margin-right: 20px;
-                            color: inherit;
-                            display: flex;
-                            align-items: center;
-                            transition: opacity 0.2s;
-                        "
                     >
                         <svg
                             viewBox="0 0 24 24"
@@ -157,7 +140,7 @@
             <!-- 总览页面 -->
             <div id="overview-view" class="view active hero-panel hero-section">
                 <div class="hero-panel__header">
-                    <h2 class="hero-panel__title" style="margin: 0;">📊 学习总览</h2>
+                    <h2 class="hero-panel__title">📊 学习总览</h2>
                 </div>
 
                 <div class="category-grid" id="category-overview">
@@ -181,7 +164,7 @@
                             aria-hidden="true"
                         ></span>
                     </button>
-                    <h2 id="browse-title" class="hero-panel__title" style="margin: 0;">题库浏览</h2>
+                    <h2 id="browse-title" class="hero-panel__title">题库浏览</h2>
                     <div
                         class="browse-preference-panel"
                         id="browse-preference-panel"
@@ -348,7 +331,7 @@
             <div id="practice-view" class="view hero-panel hero-section">
                 <div class="hero-panel__header practice-view__header">
                     <div class="practice-view__title-row">
-                        <h2 class="hero-panel__title" style="margin: 0;">📝 练习记录</h2>
+                        <h2 class="hero-panel__title">📝 练习记录</h2>
                         <button
                             id="practice-summary-toggle"
                             class="practice-summary-toggle"
@@ -475,25 +458,37 @@
                         <section
                             id="practice-custom-card"
                             class="practice-custom-card"
-                            role="button"
-                            tabindex="0"
-                            aria-label="打开自定义练习组件选择"
-                            aria-pressed="false"
                         >
                             <div class="practice-custom-card__rotor">
                                 <div class="practice-trend-card__face practice-custom-card__front">
                                     <div class="practice-trend-card__header">
                                         <div>
                                             <p class="practice-trend-card__eyebrow">Focus</p>
-                                            <h3 class="practice-trend-card__title">中高频余量</h3>
+                                            <h3 class="practice-trend-card__title" id="practice-custom-card-title">中高频余量</h3>
                                         </div>
-                                        <div
-                                            class="practice-trend-card__range"
-                                            id="practice-custom-widget-label"
-                                        >
-                                            自定义
+                                        <div class="practice-custom-card__header-actions">
+                                            <button
+                                                class="practice-custom-card__flip-btn"
+                                                type="button"
+                                                aria-label="配置自定义组件"
+                                                title="配置自定义组件"
+                                            >
+                                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"></path>
+                                                    <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>
+                                                    <path d="M12 2v2"></path>
+                                                    <path d="M12 20v2"></path>
+                                                    <path d="m4.93 4.93 1.41 1.41"></path>
+                                                    <path d="m17.66 17.66 1.41 1.41"></path>
+                                                    <path d="M2 12h2"></path>
+                                                    <path d="M20 12h2"></path>
+                                                    <path d="m6.34 17.66-1.41 1.41"></path>
+                                                    <path d="m19.07 4.93-1.41 1.41"></path>
+                                                </svg>
+                                            </button>
                                         </div>
                                     </div>
+                                    <div class="practice-custom-widget-content" data-widget-type="priority">
                                     <div class="priority-progress-stack" aria-label="中高频练习进度">
                                         <div class="priority-progress priority-progress--high">
                                             <div class="priority-progress__head">
@@ -530,12 +525,37 @@
                                             <small>中频正确率</small>
                                         </div>
                                     </div>
+                                    </div>
+                                    <div class="practice-custom-widget-content" data-widget-type="radar" hidden>
+                                        <div class="practice-radar-chart-shell">
+                                            <canvas id="practice-radar-canvas" aria-hidden="true"></canvas>
+                                            <div id="practice-radar-empty" class="practice-trend-empty">
+                                                暂无阅读错题数据
+                                            </div>
+                                        </div>
+                                        <p class="practice-radar-summary" id="practice-radar-summary">
+                                            最近10次阅读错题题型分布
+                                        </p>
+                                    </div>
                                 </div>
                                 <div class="practice-trend-card__face practice-trend-card__back practice-custom-card__back">
                                     <div class="practice-trend-card__header">
                                         <div>
                                             <p class="practice-trend-card__eyebrow">Widgets</p>
                                             <h3 class="practice-trend-card__title">自定义组件</h3>
+                                        </div>
+                                        <div class="practice-custom-card__header-actions">
+                                            <button
+                                                class="practice-custom-card__flip-btn"
+                                                type="button"
+                                                aria-label="关闭自定义练习组件选择"
+                                                title="关闭自定义练习组件选择"
+                                            >
+                                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                </svg>
+                                            </button>
                                         </div>
                                     </div>
                                     <div class="practice-custom-options" aria-label="自定义练习组件">
@@ -546,6 +566,14 @@
                                             aria-pressed="true"
                                         >
                                             中高频余量
+                                        </button>
+                                        <button
+                                            class="practice-custom-option"
+                                            type="button"
+                                            data-practice-widget="radar"
+                                            aria-pressed="false"
+                                        >
+                                            阅读错题雷达
                                         </button>
                                     </div>
                                 </div>
@@ -636,18 +664,12 @@
                         </div>
                     </div>
                     <div id="history-list" class="practice-history-list">
-                        <div
-                            style="
-                                text-align: center;
-                                padding: 40px;
-                                opacity: 0.7;
-                            "
-                        >
-                            <div style="font-size: 3em; margin-bottom: 15px">
+                        <div class="history-empty-placeholder">
+                            <div class="history-empty-placeholder__icon">
                                 📋
                             </div>
                             <p>暂无练习记录</p>
-                            <p style="font-size: 0.9em; margin-top: 10px">
+                            <p class="history-empty-placeholder__note">
                                 开始练习后，记录将自动保存在这里
                             </p>
                         </div>
@@ -658,7 +680,7 @@
             <!-- 设置页面 -->
             <div id="settings-view" class="view hero-panel hero-section">
                 <div class="hero-panel__header">
-                    <h2 class="hero-panel__title" style="margin: 0;">⚙️ 系统设置</h2>
+                    <h2 class="hero-panel__title">⚙️ 系统设置</h2>
                 </div>
                 <div class="hero-settings-group">
                     <div
@@ -778,15 +800,8 @@
 
                     <div class="hero-panel hero-section">
                         <h3>📊 系统信息</h3>
-                        <div
-                            class="hero-surface"
-                            style="
-                                margin-top: 15px;
-                                line-height: 1.8;
-                                font-weight: bold;
-                            "
-                        >
-                            <div style="color: #10b981">
+                        <div class="hero-surface settings-system-info">
+                            <div class="settings-system-info__status">
                                 题库状态: 已加载完整索引
                             </div>
                             <div>
@@ -805,28 +820,12 @@
                         </div>
 
                         <!-- 开发团队链接 -->
-                        <div
-                            style="
-                                margin-top: 30px;
-                                text-align: center;
-                                padding-top: 20px;
-                                border-top: 1px solid rgba(255, 255, 255, 0.2);
-                            "
-                        >
+                        <div class="settings-footer">
                             <a
                                 href="https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                class="inline-hover-link"
-                                style="
-                                    color: #ff1c1c;
-                                    text-decoration: none;
-                                    font-size: 0.9em;
-                                    font-weight: bold;
-                                    display: block;
-                                    margin-bottom: 12px;
-                                    transition: opacity 0.2s;
-                                "
+                                class="inline-hover-link settings-footer__feedback"
                             >
                                 问题反馈
                             </a>
@@ -834,12 +833,7 @@
                                 href="https://github.com/sallowayma-git"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                style="
-                                    color: gray;
-                                    text-decoration: none;
-                                    font-size: 0.9em;
-                                    transition: color 0.3s ease;
-                                "
+                                class="settings-footer__author"
                             >
                                 Salloway呈现
                             </a>
@@ -851,7 +845,7 @@
             <!-- 更多页面 -->
             <div id="more-view" class="view hero-panel hero-section">
                 <div class="hero-panel__header">
-                    <h2 class="hero-panel__title" style="margin: 0;">✨ 更多工具</h2>
+                    <h2 class="hero-panel__title">✨ 更多工具</h2>
                 </div>
                 <p class="more-view-subtitle">
                     探索额外的学习辅助功能，助你高效备考。
@@ -1074,8 +1068,7 @@
                                             晨雾群山
                                         </h4>
                                         <div class="theme-card-subtitle">
-                                            <span style="opacity: 0.6"
-                                                >⛰️ Misty Mountain</span
+                                            <span>⛰️ Misty Mountain</span
                                             >
                                         </div>
                                     </div>
@@ -1100,8 +1093,7 @@
                                             深海孤航
                                         </h4>
                                         <div class="theme-card-subtitle">
-                                            <span style="opacity: 0.6"
-                                                >⛵ Teal Ocean</span
+                                            <span>⛵ Teal Ocean</span
                                             >
                                         </div>
                                     </div>
@@ -1128,8 +1120,7 @@
                                             落日雾花
                                         </h4>
                                         <div class="theme-card-subtitle">
-                                            <span style="opacity: 0.6"
-                                                >🌸 Floral Bloom</span
+                                            <span>🌸 Floral Bloom</span
                                             >
                                         </div>
                                     </div>
@@ -1207,7 +1198,6 @@
                             target="_blank"
                             rel="noopener noreferrer"
                             class="lm-warning"
-                            style="text-decoration: underline"
                             >问题反馈</a
                         >
                     </p>

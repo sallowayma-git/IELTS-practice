@@ -2057,6 +2057,36 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("PracticeRecorder 单元测试", False, "测试脚本缺失"))
         all_passed = False
 
+    practice_custom_card_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCustomCard.test.js"
+    if practice_custom_card_test.exists():
+        try:
+            completed_practice_custom_card = subprocess.run(
+                ["node", str(practice_custom_card_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8"
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = (exc.stdout or "") + (exc.stderr or "") + str(exc)
+            practice_custom_card_passed = False
+            practice_custom_card_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_practice_custom_card_output = (completed_practice_custom_card.stdout or "").strip() or (completed_practice_custom_card.stderr or "").strip()
+            try:
+                practice_custom_card_payload = json.loads(raw_practice_custom_card_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_custom_card_passed = False
+                practice_custom_card_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_custom_card_passed = practice_custom_card_payload.get("status") == "pass"
+                practice_custom_card_detail = practice_custom_card_payload.get("detail", practice_custom_card_payload)
+        results.append(_format_result("Practice 自定义卡片守卫", practice_custom_card_passed, practice_custom_card_detail))
+        all_passed &= practice_custom_card_passed
+    else:
+        results.append(_format_result("Practice 自定义卡片守卫", False, "测试脚本缺失"))
+        all_passed = False
+
     vocab_store_test = REPO_ROOT / "developer" / "tests" / "js" / "vocabStore.test.js"
     if vocab_store_test.exists():
         try:

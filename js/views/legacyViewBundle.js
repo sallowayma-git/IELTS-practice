@@ -572,12 +572,503 @@
         }
     };
 
+    // --- Helpers for Radar Chart ---
+    function hexToRgba(hex, alpha) {
+        var cleanHex = String(hex || '').trim().replace('#', '');
+        if (cleanHex.length === 3) {
+            cleanHex = cleanHex[0] + cleanHex[0] + cleanHex[1] + cleanHex[1] + cleanHex[2] + cleanHex[2];
+        }
+        var r = parseInt(cleanHex.slice(0, 2), 16) || 102;
+        var g = parseInt(cleanHex.slice(2, 4), 16) || 126;
+        var b = parseInt(cleanHex.slice(4, 6), 16) || 234;
+        return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+    }
+
+    var questionTypeNames = {
+        'heading-matching': '段落小标题',
+        'true-false-not-given': '判断题',
+        'yes-no-not-given': '观点判断',
+        'multiple-choice': '单/多选题',
+        'summary-completion': '摘要填空',
+        'sentence-completion': '句子填空',
+        'short-answer': '简答题',
+        'diagram-labelling': '图表标注',
+        'flow-chart': '流程图',
+        'table-completion': '表格填空',
+        'matching-information': '信息配对',
+        'matching-features': '特征匹配',
+        'matching-people-ideas': '人名观点配对',
+        other: '其他题型'
+    };
+
+    var readingQuestionTypeOrder = [
+        'heading-matching',
+        'true-false-not-given',
+        'yes-no-not-given',
+        'multiple-choice',
+        'matching-information',
+        'matching-features',
+        'matching-people-ideas',
+        'summary-completion',
+        'sentence-completion',
+        'short-answer',
+        'diagram-labelling',
+        'flow-chart',
+        'table-completion',
+        'other'
+    ];
+
+    var questionTypeAliases = {
+        headingmatching: 'heading-matching',
+        headingsmatching: 'heading-matching',
+        matchingheadings: 'heading-matching',
+        listofheadings: 'heading-matching',
+        truefalsenotgiven: 'true-false-not-given',
+        tfng: 'true-false-not-given',
+        yesnonotgiven: 'yes-no-not-given',
+        ynng: 'yes-no-not-given',
+        multiplechoice: 'multiple-choice',
+        mcq: 'multiple-choice',
+        summarycompletion: 'summary-completion',
+        sentencecompletion: 'sentence-completion',
+        shortanswer: 'short-answer',
+        shortanswerquestions: 'short-answer',
+        diagramlabelling: 'diagram-labelling',
+        diagramlabeling: 'diagram-labelling',
+        flowchart: 'flow-chart',
+        flowchartcompletion: 'flow-chart',
+        tablecompletion: 'table-completion',
+        matchinginformation: 'matching-information',
+        matchingfeatures: 'matching-features',
+        matchingpeopleideas: 'matching-people-ideas',
+        matchingpeople: 'matching-people-ideas',
+        matchingnames: 'matching-people-ideas',
+        matching: 'matching-features',
+        general: 'other',
+        unknown: 'other',
+        other: 'other'
+    };
+
+    function formatQuestionTypeStr(type) {
+        return questionTypeNames[type] || type || '其他题型';
+    }
+
+    function normalizeQuestionTypeToken(value) {
+        return String(value || '')
+            .trim()
+            .toLowerCase()
+            .replace(/&/g, 'and')
+            .replace(/[_\s]+/g, '-')
+            .replace(/[^a-z0-9-]/g, '');
+    }
+
+    function normalizeReadingQuestionType(value) {
+        var token = normalizeQuestionTypeToken(value);
+        if (!token) {
+            return 'other';
+        }
+        if (questionTypeNames[token]) {
+            return token;
+        }
+        var compact = token.replace(/-/g, '');
+        return questionTypeAliases[compact] || questionTypeAliases[token] || 'other';
+    }
+
+    function textFromHtml(value) {
+        return String(value || '')
+            .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+            .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+    }
+
+    function inferReadingQuestionTypeFromGroup(group) {
+        group = group || {};
+        var text = textFromHtml([group.leadHtml, group.bodyHtml, group.html, group.title, group.kind].join(' '));
+        if (/which paragraph contains|paragraph contains the following information|contains the following information/.test(text)) {
+            return 'matching-information';
+        }
+        if (/list of headings|choose the correct heading|match.*heading|headings/.test(text)) {
+            return 'heading-matching';
+        }
+        if (/true\s+if|false\s+if|not given/.test(text) && /true/.test(text) && /false/.test(text)) {
+            return 'true-false-not-given';
+        }
+        if (/yes\s+if|no\s+if|not given/.test(text) && /yes/.test(text) && /no/.test(text)) {
+            return 'yes-no-not-given';
+        }
+        if (/choose the correct letter|choose the correct answer|multiple choice/.test(text)) {
+            return 'multiple-choice';
+        }
+        if (/complete the summary|summary below/.test(text)) {
+            return 'summary-completion';
+        }
+        if (/complete each sentence|complete the sentences|sentence endings|correct ending/.test(text)) {
+            return 'sentence-completion';
+        }
+        if (/complete the table|table below/.test(text)) {
+            return 'table-completion';
+        }
+        if (/flow[- ]?chart|flow chart/.test(text)) {
+            return 'flow-chart';
+        }
+        if (/diagram|label the diagram|labelling|labeling|map below/.test(text)) {
+            return 'diagram-labelling';
+        }
+        if (/answer the questions|short answer/.test(text)) {
+            return 'short-answer';
+        }
+        if (/look at the following people|list of people|match each person|match each statement with the correct person|list of ideas/.test(text)) {
+            return 'matching-people-ideas';
+        }
+        if (/match each|match the following|classify the following|list of (points|features|options|events)/.test(text)) {
+            return 'matching-features';
+        }
+        return normalizeReadingQuestionType(group.kind || group.type);
+    }
+
+    function normalizeQuestionId(value) {
+        var raw = String(value == null ? '' : value).trim().toLowerCase();
+        if (!raw) {
+            return '';
+        }
+        var match = raw.match(/^q?(\d+)/);
+        if (match) {
+            return 'q' + String(Number(match[1]));
+        }
+        return raw;
+    }
+
+    function addQuestionTypeMapEntry(map, questionId, type) {
+        var normalized = normalizeQuestionId(questionId);
+        if (!normalized || !type) {
+            return;
+        }
+        map[normalized] = type;
+        map[String(questionId).trim().toLowerCase()] = type;
+    }
+
+    function buildReadingQuestionTypeMap(record) {
+        var registry = typeof window !== 'undefined' ? window.__READING_EXAM_DATA__ : null;
+        var getPayload = registry && typeof registry.get === 'function' ? registry.get.bind(registry) : null;
+        if (!getPayload) {
+            return {};
+        }
+        var metadata = record && record.metadata ? record.metadata : {};
+        var realData = record && record.realData ? record.realData : {};
+        var candidates = [
+            record && record.examId,
+            metadata.examId,
+            metadata.originalExamId,
+            metadata.derivedExamId,
+            realData.examId,
+            record && record.originalExamId,
+            record && record.derivedExamId
+        ];
+        var payload = null;
+        for (var i = 0; i < candidates.length; i += 1) {
+            if (!candidates[i]) {
+                continue;
+            }
+            payload = getPayload(candidates[i]);
+            if (payload) {
+                break;
+            }
+        }
+        if (!payload || !Array.isArray(payload.questionGroups)) {
+            return {};
+        }
+        var map = {};
+        payload.questionGroups.forEach(function indexQuestionGroup(group) {
+            var type = inferReadingQuestionTypeFromGroup(group);
+            var questionIds = Array.isArray(group && group.questionIds) ? group.questionIds : [];
+            questionIds.forEach(function addQuestion(questionId) {
+                addQuestionTypeMapEntry(map, questionId, type);
+            });
+        });
+        return map;
+    }
+
+    function getDetailSources(record) {
+        var sources = [];
+        if (record && record.answerDetails) {
+            sources.push(record.answerDetails);
+        }
+        if (record && record.scoreInfo && record.scoreInfo.details) {
+            sources.push(record.scoreInfo.details);
+        }
+        if (record && record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
+            sources.push(record.realData.scoreInfo.details);
+        }
+        return sources;
+    }
+
+    function isWrongAnswerDetail(detail) {
+        if (!detail || typeof detail !== 'object') {
+            return false;
+        }
+        if (detail.isCorrect === false || detail.correct === false) {
+            return true;
+        }
+        if (detail.isCorrect === true || detail.correct === true) {
+            return false;
+        }
+        var userAnswer = String(detail.userAnswer || detail.answer || detail.value || '').trim().toLowerCase();
+        var correctAnswer = String(detail.correctAnswer || detail.expectedAnswer || detail.expected || '').trim().toLowerCase();
+        return Boolean(correctAnswer && userAnswer && userAnswer !== correctAnswer);
+    }
+
+    function addRadarCount(counts, type, value) {
+        var normalizedType = normalizeReadingQuestionType(type);
+        var amount = Math.max(0, Number(value) || 0);
+        if (amount <= 0) {
+            return;
+        }
+        counts[normalizedType] = (counts[normalizedType] || 0) + amount;
+    }
+
+    function addPerformanceCounts(counts, performanceMap) {
+        if (!performanceMap || typeof performanceMap !== 'object') {
+            return false;
+        }
+        var used = false;
+        Object.keys(performanceMap).forEach(function addPerformance(type) {
+            var performance = performanceMap[type] || {};
+            var total = Number(performance.total != null ? performance.total : performance.totalQuestions);
+            var correct = Number(performance.correct != null ? performance.correct : performance.correctAnswers);
+            if (!Number.isFinite(total) || !Number.isFinite(correct)) {
+                return;
+            }
+            var wrong = Math.max(0, total - correct);
+            if (wrong > 0) {
+                addRadarCount(counts, type, wrong);
+                used = true;
+            }
+        });
+        return used;
+    }
+
+    function addDetailCounts(counts, record) {
+        var questionTypeMap = buildReadingQuestionTypeMap(record);
+        var sources = getDetailSources(record);
+        var seenQuestions = {};
+        var used = false;
+        sources.forEach(function scanDetails(source) {
+            Object.keys(source || {}).forEach(function addDetail(questionId) {
+                var normalizedId = normalizeQuestionId(questionId);
+                if (seenQuestions[normalizedId]) {
+                    return;
+                }
+                var detail = source[questionId];
+                if (!isWrongAnswerDetail(detail)) {
+                    return;
+                }
+                seenQuestions[normalizedId] = true;
+                var type = (detail && (detail.questionType || detail.type)) || questionTypeMap[normalizedId] || 'other';
+                addRadarCount(counts, type, 1);
+                used = true;
+            });
+        });
+        return used;
+    }
+
+    function calculateReadingRadarData(records) {
+        var counts = {};
+        var recentReadingRecords = ensureArray(records)
+            .filter(function filterReading(record) {
+                var metadata = record && record.metadata ? record.metadata : {};
+                var realData = record && record.realData ? record.realData : {};
+                var recordType = normalizeTypeValue(
+                    record && (record.type || record.examType ||
+                    metadata.type || metadata.examType || realData.type)
+                );
+                if (recordType) {
+                    return recordType === 'reading';
+                }
+                var examId = String((record && record.examId) || metadata.examId || realData.examId || '').toLowerCase();
+                return /^p[1-3][-_]/.test(examId);
+            })
+            .sort(function sortRecent(a, b) {
+                return getRecordTimestamp(b) - getRecordTimestamp(a);
+            })
+            .slice(0, 10);
+
+        recentReadingRecords.forEach(function collectRecord(record) {
+            var performanceMap = record && (record.questionTypePerformance ||
+                (record.realData && record.realData.questionTypePerformance));
+            if (addPerformanceCounts(counts, performanceMap)) {
+                return;
+            }
+            addDetailCounts(counts, record);
+        });
+
+        var nonZeroTypes = readingQuestionTypeOrder.filter(function hasError(type) {
+            return (counts[type] || 0) > 0;
+        });
+        if (!nonZeroTypes.length) {
+            nonZeroTypes = readingQuestionTypeOrder.slice(0, 8);
+        }
+        if (nonZeroTypes.length > 8) {
+            nonZeroTypes = nonZeroTypes
+                .sort(function sortByCount(a, b) {
+                    return (counts[b] || 0) - (counts[a] || 0);
+                })
+                .slice(0, 8)
+                .sort(function sortByOrder(a, b) {
+                    return readingQuestionTypeOrder.indexOf(a) - readingQuestionTypeOrder.indexOf(b);
+                });
+        }
+
+        var totalErrors = Object.keys(counts).reduce(function sum(total, type) {
+            return total + (counts[type] || 0);
+        }, 0);
+
+        return {
+            dataPoints: nonZeroTypes.map(function mapType(type) {
+                return {
+                    label: formatQuestionTypeStr(type),
+                    value: counts[type] || 0
+                };
+            }),
+            totalErrors: totalErrors,
+            recordCount: recentReadingRecords.length
+        };
+    }
+
+    function drawRadarChart(canvas, dataPoints) {
+        var ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        var rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
+        var cssWidth = Math.max(1, Math.round(rect && rect.width ? rect.width : (canvas.clientWidth || 320)));
+        var cssHeight = Math.max(1, Math.round(rect && rect.height ? rect.height : (canvas.clientHeight || 200)));
+        var ratio = typeof window !== 'undefined' && window.devicePixelRatio ? Math.min(window.devicePixelRatio, 2) : 1;
+
+        canvas.width = cssWidth * ratio;
+        canvas.height = cssHeight * ratio;
+        ctx.scale(ratio, ratio);
+
+        var cx = cssWidth / 2;
+        var cy = cssHeight / 2;
+        var radius = Math.min(cssWidth, cssHeight) * 0.35;
+        var totalAxes = dataPoints.length;
+
+        var maxValue = dataPoints.reduce(function(max, p) { return Math.max(max, p.value); }, 0);
+        var maxScale = maxValue < 4 ? 4 : Math.ceil(maxValue / 4) * 4;
+
+        var isDark = document.documentElement.classList.contains('dark') || document.body.classList.contains('dark-theme');
+        var gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.06)';
+        var axisColor = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.08)';
+        var labelColor = isDark ? 'rgba(255, 255, 255, 0.65)' : 'rgba(15, 23, 42, 0.6)';
+
+        // 1. Draw Concentric Grid
+        ctx.strokeStyle = gridColor;
+        ctx.lineWidth = 1;
+        for (var i = 1; i <= 4; i++) {
+            var r = (radius / 4) * i;
+            ctx.beginPath();
+            for (var j = 0; j < totalAxes; j++) {
+                var angle = (Math.PI * 2 / totalAxes) * j - Math.PI / 2;
+                var x = cx + Math.cos(angle) * r;
+                var y = cy + Math.sin(angle) * r;
+                if (j === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        // 2. Draw Axes
+        ctx.strokeStyle = axisColor;
+        for (var j = 0; j < totalAxes; j++) {
+            var angle = (Math.PI * 2 / totalAxes) * j - Math.PI / 2;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+            ctx.stroke();
+        }
+
+        // 3. Draw Labels
+        ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = labelColor;
+        for (var j = 0; j < totalAxes; j++) {
+            var angle = (Math.PI * 2 / totalAxes) * j - Math.PI / 2;
+            var labelRadius = radius + 14;
+            var lx = cx + Math.cos(angle) * labelRadius;
+            var ly = cy + Math.sin(angle) * labelRadius;
+
+            var cosVal = Math.cos(angle);
+            var sinVal = Math.sin(angle);
+
+            ctx.textAlign = Math.abs(cosVal) < 0.1 ? 'center' : (cosVal > 0 ? 'left' : 'right');
+            ctx.textBaseline = Math.abs(sinVal) < 0.1 ? 'middle' : (sinVal > 0 ? 'top' : 'bottom');
+            
+            ctx.fillText(dataPoints[j].label, lx, ly);
+        }
+
+        // 4. Draw Data Area
+        var accentColor = '#667eea';
+        if (typeof window !== 'undefined') {
+            var rootStyle = window.getComputedStyle(document.documentElement);
+            var customAccent = rootStyle.getPropertyValue('--shui-accent').trim();
+            if (customAccent) accentColor = customAccent;
+        }
+
+        ctx.beginPath();
+        for (var j = 0; j < totalAxes; j++) {
+            var val = dataPoints[j].value;
+            var valRadius = (val / maxScale) * radius;
+            var angle = (Math.PI * 2 / totalAxes) * j - Math.PI / 2;
+            var x = cx + Math.cos(angle) * valRadius;
+            var y = cy + Math.sin(angle) * valRadius;
+            if (j === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+
+        // Stroke + Glow
+        ctx.strokeStyle = accentColor;
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = accentColor;
+        ctx.shadowBlur = 8;
+        ctx.stroke();
+
+        // Fill without shadow
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = hexToRgba(accentColor, 0.18);
+        ctx.fill();
+
+        // 5. Draw Data Points Highlight
+        for (var j = 0; j < totalAxes; j++) {
+            var val = dataPoints[j].value;
+            var valRadius = (val / maxScale) * radius;
+            var angle = (Math.PI * 2 / totalAxes) * j - Math.PI / 2;
+            var x = cx + Math.cos(angle) * valRadius;
+            var y = cy + Math.sin(angle) * valRadius;
+
+            // Outer highlight circle
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, Math.PI * 2);
+            ctx.fillStyle = hexToRgba(accentColor, 0.4);
+            ctx.fill();
+
+            // Inner solid dot
+            ctx.beginPath();
+            ctx.arc(x, y, 2, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+        }
+    }
+
     // --- Practice custom priority renderer ---
     function PracticePriorityRenderer(options) {
         options = options || {};
         this.ids = {
             card: options.cardId || 'practice-custom-card',
-            widgetLabel: options.widgetLabelId || 'practice-custom-widget-label',
+            radarSummary: options.radarSummaryId || 'practice-radar-summary',
             highCount: options.highCountId || 'practice-priority-high-count',
             mediumCount: options.mediumCountId || 'practice-priority-medium-count',
             highFill: options.highFillId || 'practice-priority-high-fill',
@@ -588,7 +1079,9 @@
         this.records = [];
         this.exams = [];
         this.examType = 'all';
+        this.activeWidget = 'priority';
         this.bound = false;
+        this.resizeHandler = null;
     }
 
     PracticePriorityRenderer.prototype.update = function update(records, exams, options) {
@@ -608,11 +1101,61 @@
         if (!card) {
             return;
         }
-        var stats = calculatePriorityPracticeStats(this.records, this.exams, this.examType);
-        this._setText('widgetLabel', '自定义');
-        this._renderGroup('high', stats.high);
-        this._renderGroup('medium', stats.medium);
+        var titleElem = document.getElementById('practice-custom-card-title');
+        if (titleElem) {
+            titleElem.textContent = this.activeWidget === 'radar' ? '阅读错题雷达' : '中高频余量';
+        }
+        
+        var contents = card.querySelectorAll('.practice-custom-widget-content');
+        for (var i = 0; i < contents.length; i++) {
+            if (contents[i].dataset.widgetType === this.activeWidget) {
+                contents[i].removeAttribute('hidden');
+            } else {
+                contents[i].setAttribute('hidden', 'hidden');
+            }
+        }
+        
+        if (this.activeWidget === 'priority') {
+            var stats = calculatePriorityPracticeStats(this.records, this.exams, this.examType);
+            this._renderGroup('high', stats.high);
+            this._renderGroup('medium', stats.medium);
+        } else if (this.activeWidget === 'radar') {
+            this._renderRadarChart();
+        }
+        
         this._syncOptionState();
+        this._syncFlipButtonState(card.classList.contains('is-flipped'));
+    };
+    
+    PracticePriorityRenderer.prototype.setWidget = function setWidget(widget) {
+        if (!widget) return;
+        this.activeWidget = widget;
+        this.render();
+    };
+    
+    PracticePriorityRenderer.prototype._renderRadarChart = function _renderRadarChart() {
+        var canvas = document.getElementById('practice-radar-canvas');
+        var empty = document.getElementById('practice-radar-empty');
+        if (!canvas || !canvas.getContext) return;
+
+        var radarData = calculateReadingRadarData(this.records);
+        var dataPoints = radarData.dataPoints;
+        var hasData = radarData.totalErrors > 0;
+        if (!hasData && empty) {
+            empty.style.display = 'flex';
+            canvas.style.opacity = '0.22';
+        } else if (empty) {
+            empty.style.display = 'none';
+            canvas.style.opacity = '1';
+        }
+        this._setText(
+            'radarSummary',
+            hasData
+                ? '最近' + radarData.recordCount + '次阅读共 ' + radarData.totalErrors + ' 道错题'
+                : '最近10次阅读暂无可分类错题'
+        );
+        
+        drawRadarChart(canvas, dataPoints);
     };
 
     PracticePriorityRenderer.prototype.flipToBack = function flipToBack() {
@@ -621,8 +1164,7 @@
             return;
         }
         card.classList.add('is-flipped');
-        card.setAttribute('aria-pressed', 'true');
-        card.setAttribute('aria-label', '关闭自定义练习组件选择');
+        this._syncFlipButtonState(true);
     };
 
     PracticePriorityRenderer.prototype.flipToFront = function flipToFront() {
@@ -631,8 +1173,7 @@
             return;
         }
         card.classList.remove('is-flipped');
-        card.setAttribute('aria-pressed', 'false');
-        card.setAttribute('aria-label', '打开自定义练习组件选择');
+        this._syncFlipButtonState(false);
     };
 
     PracticePriorityRenderer.prototype._renderGroup = function _renderGroup(key, stats) {
@@ -665,14 +1206,28 @@
             if (option) {
                 event.preventDefault();
                 event.stopPropagation();
+                self.setWidget(option.dataset.practiceWidget);
                 self.flipToFront();
                 return;
             }
-            if (card.classList.contains('is-flipped')) {
-                self.flipToFront();
-            } else {
-                self.flipToBack();
+            
+            var flipBtn = event.target && event.target.closest
+                ? event.target.closest('.practice-custom-card__flip-btn')
+                : null;
+            
+            if (flipBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (card.classList.contains('is-flipped')) {
+                    self.flipToFront();
+                } else {
+                    self.flipToBack();
+                }
+                return;
             }
+
+            // 对整卡任何其他区域的点击，阻止其冒泡以防父组件捕获，且不做翻转操作
+            event.stopPropagation();
         });
 
         card.addEventListener('keydown', function onPriorityCardKeydown(event) {
@@ -680,20 +1235,49 @@
             if (key !== 'Enter' && key !== ' ') {
                 return;
             }
-            event.preventDefault();
             var option = event.target && event.target.closest
                 ? event.target.closest('[data-practice-widget]')
                 : null;
             if (option) {
+                event.preventDefault();
+                event.stopPropagation();
+                self.setWidget(option.dataset.practiceWidget);
                 self.flipToFront();
                 return;
             }
-            if (card.classList.contains('is-flipped')) {
-                self.flipToFront();
-            } else {
-                self.flipToBack();
+            var flipBtn = event.target && event.target.closest
+                ? event.target.closest('.practice-custom-card__flip-btn')
+                : null;
+            if (flipBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (card.classList.contains('is-flipped')) {
+                    self.flipToFront();
+                } else {
+                    self.flipToBack();
+                }
+                return;
             }
+            event.stopPropagation();
         });
+        
+        this.resizeHandler = function onPriorityResize() {
+            self.render();
+        };
+        if (typeof window !== 'undefined') {
+            window.addEventListener('resize', this.resizeHandler);
+        }
+    };
+
+    PracticePriorityRenderer.prototype._syncFlipButtonState = function _syncFlipButtonState(isFlipped) {
+        var card = this._getElement('card');
+        if (!card || !card.querySelectorAll) {
+            return;
+        }
+        var buttons = card.querySelectorAll('.practice-custom-card__flip-btn');
+        for (var i = 0; i < buttons.length; i += 1) {
+            buttons[i].setAttribute('aria-pressed', isFlipped ? 'true' : 'false');
+        }
     };
 
     PracticePriorityRenderer.prototype._syncOptionState = function _syncOptionState() {
@@ -703,8 +1287,14 @@
         }
         var buttons = card.querySelectorAll('[data-practice-widget]');
         for (var i = 0; i < buttons.length; i += 1) {
-            buttons[i].classList.add('active');
-            buttons[i].setAttribute('aria-pressed', 'true');
+            var active = buttons[i].dataset.practiceWidget === this.activeWidget;
+            if (active) {
+                buttons[i].classList.add('active');
+                buttons[i].setAttribute('aria-pressed', 'true');
+            } else {
+                buttons[i].classList.remove('active');
+                buttons[i].setAttribute('aria-pressed', 'false');
+            }
         }
     };
 
@@ -732,9 +1322,7 @@
         var orb = element && element.closest ? element.closest('.priority-accuracy__orb') : null;
         if (orb && orb.style) {
             var bounded = Math.max(0, Math.min(100, Number(value) || 0));
-            var hue = Math.round(4 + (bounded / 100) * 128);
             orb.style.setProperty('--priority-accuracy-level', Math.round(bounded) + '%');
-            orb.style.setProperty('--priority-accuracy-color', 'hsla(' + hue + ', 68%, 70%, 0.34)');
         }
     };
 
