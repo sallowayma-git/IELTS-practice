@@ -65,6 +65,21 @@
         return 0;
     }
 
+    function resolveDifficultyScore(exam) {
+        const score = Number(exam && exam.difficultyScore);
+        return Number.isFinite(score) ? score : Number.NEGATIVE_INFINITY;
+    }
+
+    function compareByCategoryThenTitle(a, b) {
+        const categoryA = String(a && a.category || '');
+        const categoryB = String(b && b.category || '');
+        const categoryDiff = categoryA.localeCompare(categoryB, 'zh-Hans-CN');
+        if (categoryDiff !== 0) {
+            return categoryDiff;
+        }
+        return String(a && a.title || '').localeCompare(String(b && b.title || ''), 'zh-Hans-CN');
+    }
+
     function normalizeBrowseFrequencyFilter(value) {
         const raw = String(value || '').trim().toLowerCase();
         if (raw === 'high' || raw === 'medium' || raw === 'low') {
@@ -104,6 +119,16 @@
     function applyExamSort(exams, sortMode) {
         const list = Array.isArray(exams) ? exams.slice() : [];
         const mode = String(sortMode || global.__browseSortMode || 'default').trim().toLowerCase();
+        if (mode === 'difficulty-desc') {
+            return list.sort((a, b) => {
+                const difficultyA = resolveDifficultyScore(a);
+                const difficultyB = resolveDifficultyScore(b);
+                if (difficultyA !== difficultyB) {
+                    return difficultyB - difficultyA;
+                }
+                return compareByCategoryThenTitle(a, b);
+            });
+        }
         if (mode !== 'frequency-desc') {
             return list;
         }
@@ -112,13 +137,7 @@
             if (rankDiff !== 0) {
                 return rankDiff;
             }
-            const categoryA = String(a && a.category || '');
-            const categoryB = String(b && b.category || '');
-            const categoryDiff = categoryA.localeCompare(categoryB, 'zh-Hans-CN');
-            if (categoryDiff !== 0) {
-                return categoryDiff;
-            }
-            return String(a && a.title || '').localeCompare(String(b && b.title || ''), 'zh-Hans-CN');
+            return compareByCategoryThenTitle(a, b);
         });
     }
 
@@ -712,6 +731,14 @@
      */
     function loadExamList() {
         console.log('[ExamActions] loadExamList called');
+
+        if (typeof global.setupBrowseControls === 'function') {
+            try {
+                global.setupBrowseControls();
+            } catch (error) {
+                console.warn('[ExamActions] 浏览控件绑定失败:', error);
+            }
+        }
         
         // 1. 频率模式委托给 BrowseController
         if (global.__browseFilterMode && global.__browseFilterMode !== 'default' && global.browseController) {

@@ -216,12 +216,27 @@ function testReadingLaunchHost() {
     assert.strictEqual(listening, null);
 }
 
+function testMainOpenExamDoesNotFallbackToRawHtml() {
+    const source = fs.readFileSync(path.join(repoRoot, 'js/main.js'), 'utf8');
+    const match = source.match(/function openExam\s*\([^)]*\)\s*\{([\s\S]*?)\n\}\n\nfunction viewPDF/);
+    assert(match, 'main.js 应保留 openExam 函数，并位于 viewPDF 之前');
+
+    const openExamBody = match[1];
+    assert(openExamBody.includes('window.app.openExam'), 'openExam 必须只委托统一 App 练习入口');
+    assert(openExamBody.includes('统一练习入口未就绪'), 'openExam 在统一入口不可用时必须提示明确错误点');
+    assert(!openExamBody.includes("buildResourcePath(exam, 'html')"), 'openExam 禁止拼接原始 HTML 题源路径');
+    assert(!openExamBody.includes('window.open('), 'openExam 禁止直接打开原始题源窗口');
+    assert(!openExamBody.includes('startHandshakeFallback'), 'openExam 禁止启动旧 HTML 握手兜底');
+    assert(!source.includes('function startHandshakeFallback('), 'main.js 禁止保留旧 HTML 握手兜底函数');
+}
+
 async function main() {
     await testPracticeStore();
     testFeaturesNoForwardOnlyFiles();
     testIndexCssConvergence();
     testBuildBundlesNoDeletedScriptRefs();
     testReadingLaunchHost();
+    testMainOpenExamDoesNotFallbackToRawHtml();
     testCompatPatchRegistry();
     console.log(JSON.stringify({
         status: 'pass',
