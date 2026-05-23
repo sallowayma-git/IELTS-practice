@@ -909,6 +909,16 @@ class ScoreStorage {
         const normalizedComparison = comparisonSource && typeof comparisonSource === 'object'
             ? this.clonePlainObject(comparisonSource)
             : null;
+        const questionTypeMap = (recordData.questionTypeMap && typeof recordData.questionTypeMap === 'object')
+            ? this.clonePlainObject(recordData.questionTypeMap)
+            : (recordData.realData?.questionTypeMap && typeof recordData.realData.questionTypeMap === 'object'
+                ? this.clonePlainObject(recordData.realData.questionTypeMap)
+                : {});
+        const questionTypePerformance = (recordData.questionTypePerformance && typeof recordData.questionTypePerformance === 'object')
+            ? this.clonePlainObject(recordData.questionTypePerformance)
+            : (recordData.realData?.questionTypePerformance && typeof recordData.realData.questionTypePerformance === 'object'
+                ? this.clonePlainObject(recordData.realData.questionTypePerformance)
+                : {});
         const highlights = Array.isArray(recordData.highlights)
             ? recordData.highlights.slice()
             : (Array.isArray(recordData.rawData?.highlights)
@@ -949,7 +959,8 @@ class ScoreStorage {
             answers: normalizedAnswers,
             answerDetails: detailSource || null,
             correctAnswerMap: normalizedCorrectMap || {},
-            questionTypePerformance: recordData.questionTypePerformance || {},
+            questionTypeMap,
+            questionTypePerformance,
 
             // 元数据
             metadata,
@@ -974,10 +985,12 @@ class ScoreStorage {
                     answerComparison: recordData.realData.answerComparison
                         ? this.clonePlainObject(recordData.realData.answerComparison)
                         : (normalizedComparison || null),
+                    questionTypeMap,
+                    questionTypePerformance,
                     highlights,
                     scrollY
                 })
-                : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
+                : (normalizedComparison ? { answerComparison: normalizedComparison, questionTypeMap, questionTypePerformance } : null),
             answerComparison: normalizedComparison,
 
             // 系统信息

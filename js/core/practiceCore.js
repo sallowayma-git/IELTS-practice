@@ -703,6 +703,16 @@
         const normalizedComparison = comparisonSource && typeof comparisonSource === 'object'
             ? clonePlainObject(comparisonSource)
             : null;
+        const questionTypeMap = (recordData.questionTypeMap && typeof recordData.questionTypeMap === 'object')
+            ? clonePlainObject(recordData.questionTypeMap)
+            : ((recordData.realData && recordData.realData.questionTypeMap && typeof recordData.realData.questionTypeMap === 'object')
+                ? clonePlainObject(recordData.realData.questionTypeMap)
+                : {});
+        const questionTypePerformance = (recordData.questionTypePerformance && typeof recordData.questionTypePerformance === 'object')
+            ? clonePlainObject(recordData.questionTypePerformance)
+            : ((recordData.realData && recordData.realData.questionTypePerformance && typeof recordData.realData.questionTypePerformance === 'object')
+                ? clonePlainObject(recordData.realData.questionTypePerformance)
+                : {});
         const highlights = Array.isArray(recordData.highlights)
             ? recordData.highlights.slice()
             : (Array.isArray(recordData.rawData && recordData.rawData.highlights)
@@ -739,7 +749,8 @@
             answers: normalizedAnswers,
             answerDetails: detailSource || null,
             correctAnswerMap: normalizedCorrectMap || {},
-            questionTypePerformance: recordData.questionTypePerformance || {},
+            questionTypeMap,
+            questionTypePerformance,
             metadata,
             frequency: recordData.frequency || metadata.frequency || null,
             suiteMode: Boolean(recordData.suiteMode || ((recordData.frequency || metadata.frequency || '').toLowerCase() === 'suite')),
@@ -762,10 +773,12 @@
                     answerComparison: (recordData.realData && recordData.realData.answerComparison)
                         ? clonePlainObject(recordData.realData.answerComparison)
                         : (normalizedComparison || null),
+                    questionTypeMap,
+                    questionTypePerformance,
                     highlights,
                     scrollY
                 })
-                : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
+                : (normalizedComparison ? { answerComparison: normalizedComparison, questionTypeMap, questionTypePerformance } : null),
             answerComparison: normalizedComparison,
             version: options.currentVersion || recordData.version || '1.0.0',
             createdAt: recordData.createdAt || now,
@@ -981,6 +994,16 @@
             || '未命名练习';
         const suiteEntries = rawPayload.suiteEntries || metadata.suiteEntries || [];
         const suiteSessionId = rawPayload.suiteSessionId || metadata.suiteSessionId || sessionContext.suiteSessionId || null;
+        const questionTypeMap = (rawPayload.questionTypeMap && typeof rawPayload.questionTypeMap === 'object')
+            ? rawPayload.questionTypeMap
+            : ((rawPayload.realData && rawPayload.realData.questionTypeMap && typeof rawPayload.realData.questionTypeMap === 'object')
+                ? rawPayload.realData.questionTypeMap
+                : {});
+        const questionTypePerformance = (rawPayload.questionTypePerformance && typeof rawPayload.questionTypePerformance === 'object')
+            ? rawPayload.questionTypePerformance
+            : ((rawPayload.realData && rawPayload.realData.questionTypePerformance && typeof rawPayload.realData.questionTypePerformance === 'object')
+                ? rawPayload.realData.questionTypePerformance
+                : {});
 
         return standardizeRecord({
             id: rawPayload.id,
@@ -1001,7 +1024,8 @@
             answerDetails,
             correctAnswerMap,
             answerComparison,
-            questionTypePerformance: rawPayload.questionTypePerformance || {},
+            questionTypeMap,
+            questionTypePerformance,
             metadata: Object.assign({}, metadata, {
                 examId: resolvedExamId,
                 examTitle: title,
@@ -1030,6 +1054,8 @@
                 answers: answerMap,
                 correctAnswers: correctAnswerMap,
                 answerComparison,
+                questionTypeMap,
+                questionTypePerformance,
                 scoreInfo: Object.assign({}, (rawPayload.realData && rawPayload.realData.scoreInfo) || scoreInfo, {
                     correct: correctAnswers,
                     total: totalQuestions,

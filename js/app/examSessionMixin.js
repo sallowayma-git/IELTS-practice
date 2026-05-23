@@ -2283,6 +2283,15 @@
             const score = scoreInfo.correct || 0;
             const totalQuestions = scoreInfo.total || Object.keys(realData.answers || {}).length;
             const accuracy = scoreInfo.accuracy || (totalQuestions > 0 ? score / totalQuestions : 0);
+            const answerComparison = realData.answerComparison && typeof realData.answerComparison === 'object'
+                ? realData.answerComparison
+                : {};
+            const questionTypeMap = realData.questionTypeMap && typeof realData.questionTypeMap === 'object'
+                ? realData.questionTypeMap
+                : {};
+            const questionTypePerformance = realData.questionTypePerformance && typeof realData.questionTypePerformance === 'object'
+                ? realData.questionTypePerformance
+                : {};
 
             return {
                 id: recordId,
@@ -2307,11 +2316,17 @@
                 accuracy: accuracy,
                 percentage: Math.round(accuracy * 100),
                 duration: realData.duration, // 秒
+                answerComparison,
+                questionTypeMap,
+                questionTypePerformance,
 
                 // 详细数据
                 realData: {
                     sessionId: realData.sessionId,
                     answers: realData.answers || {},
+                    answerComparison,
+                    questionTypeMap,
+                    questionTypePerformance,
                     interactions: realData.interactions || [],
                     scoreInfo: scoreInfo,
                     pageType: realData.pageType,
@@ -3661,6 +3676,15 @@
 
                 const normalizedAnswers = normalizeAnswerMap(realData?.answers);
                 const normalizedCorrectMap = normalizeAnswerMap(realData?.correctAnswers);
+                const answerComparison = realData?.answerComparison && typeof realData.answerComparison === 'object'
+                    ? realData.answerComparison
+                    : {};
+                const questionTypeMap = realData?.questionTypeMap && typeof realData.questionTypeMap === 'object'
+                    ? realData.questionTypeMap
+                    : {};
+                const questionTypePerformance = realData?.questionTypePerformance && typeof realData.questionTypePerformance === 'object'
+                    ? realData.questionTypePerformance
+                    : {};
 
                 const forceIndividualSave = Boolean(options && options.forceIndividualSave);
                 const suiteSessionId = realData?.suiteSessionId
@@ -3715,6 +3739,9 @@
                         duration: realData.duration,
                         answers: normalizedAnswers,
                         correctAnswers: normalizedCorrectMap,
+                        answerComparison,
+                        questionTypeMap,
+                        questionTypePerformance,
                         answerHistory: realData.answerHistory,
                         interactions: realData.interactions,
                         isRealData: true,
@@ -3726,6 +3753,9 @@
 
                     date: new Date().toISOString(),
                     sessionId: realData.sessionId,
+                    answerComparison,
+                    questionTypeMap,
+                    questionTypePerformance,
                     timestamp: Date.now()
                 };
 
@@ -3747,17 +3777,21 @@
                     practiceRecord.endTime = new Date((realData.endTime ?? Date.now())).toISOString();
 
                     // 填充详情，便于在练习记录详情中显示正确答案
-                    const comp = realData && realData.answerComparison ? realData.answerComparison : {};
+                    const comp = answerComparison;
                     const details = {};
                     Object.entries(comp).forEach(([qid, obj]) => {
                         details[qid] = {
                             userAnswer: obj && obj.userAnswer != null ? obj.userAnswer : '',
                             correctAnswer: obj && obj.correctAnswer != null ? obj.correctAnswer : '',
-                            isCorrect: !!(obj && obj.isCorrect)
+                            isCorrect: !!(obj && obj.isCorrect),
+                            questionType: (obj && (obj.questionType || obj.type)) || questionTypeMap[qid] || undefined
                         };
                     });
                     // 将详情放入 realData.scoreInfo，便于历史详情与Markdown导出读取
                     if (!practiceRecord.realData) practiceRecord.realData = {};
+                    practiceRecord.realData.answerComparison = comp;
+                    practiceRecord.realData.questionTypeMap = questionTypeMap;
+                    practiceRecord.realData.questionTypePerformance = questionTypePerformance;
                     practiceRecord.realData.scoreInfo = {
                         correct: correct,
                         total: total,
@@ -3777,6 +3811,8 @@
 
                     // 将比较结构提升到顶层，便于兼容读取
                     practiceRecord.answerComparison = comp;
+                    practiceRecord.questionTypeMap = questionTypeMap;
+                    practiceRecord.questionTypePerformance = questionTypePerformance;
                 } catch (compatErr) {
                     console.warn('[DataCollection] 兼容字段填充失败:', compatErr);
                 }

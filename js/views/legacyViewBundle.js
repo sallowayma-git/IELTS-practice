@@ -752,10 +752,22 @@
     }
 
     function buildReadingQuestionTypeMap(record) {
+        var map = {};
+        var recordMap = record && record.questionTypeMap && typeof record.questionTypeMap === 'object'
+            ? record.questionTypeMap
+            : (record && record.realData && record.realData.questionTypeMap && typeof record.realData.questionTypeMap === 'object'
+                ? record.realData.questionTypeMap
+                : null);
+        if (recordMap) {
+            Object.keys(recordMap).forEach(function addSavedQuestionType(questionId) {
+                addQuestionTypeMapEntry(map, questionId, normalizeReadingQuestionType(recordMap[questionId]));
+            });
+        }
+
         var registry = typeof window !== 'undefined' ? window.__READING_EXAM_DATA__ : null;
         var getPayload = registry && typeof registry.get === 'function' ? registry.get.bind(registry) : null;
         if (!getPayload) {
-            return {};
+            return map;
         }
         var metadata = record && record.metadata ? record.metadata : {};
         var realData = record && record.realData ? record.realData : {};
@@ -779,9 +791,8 @@
             }
         }
         if (!payload || !Array.isArray(payload.questionGroups)) {
-            return {};
+            return map;
         }
-        var map = {};
         payload.questionGroups.forEach(function indexQuestionGroup(group) {
             var type = inferReadingQuestionTypeFromGroup(group);
             var questionIds = Array.isArray(group && group.questionIds) ? group.questionIds : [];

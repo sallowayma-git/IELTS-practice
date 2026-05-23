@@ -88,35 +88,71 @@
         }
 
         .shell {
-            display: flex;
+            --reading-left-pane-width: clamp(360px, 50%, calc(100% - 360px));
+            --reading-divider-width: 10px;
+            display: grid;
+            grid-template-columns:
+                minmax(280px, var(--reading-left-pane-width))
+                var(--reading-divider-width)
+                minmax(320px, 1fr);
             height: calc(100vh - 67px - 72px);
             width: 100%;
+            min-width: 0;
+            overflow: hidden;
         }
 
         .pane {
             overflow: auto;
             background: var(--panel);
             padding: 22px;
+            min-width: 0;
         }
 
         #left {
-            width: 50%;
-            min-width: 320px;
+            min-width: 0;
         }
 
         #divider {
-            flex: 0 0 8px;
             background: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
             border-left: 1px solid var(--line);
             border-right: 1px solid var(--line);
             cursor: ew-resize;
+            position: relative;
+            touch-action: none;
+            user-select: none;
+            outline: none;
+        }
+
+        #divider::before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 2px;
+            height: 48px;
+            border-radius: 999px;
+            background: rgba(100, 116, 139, 0.55);
+            box-shadow: -3px 0 0 rgba(100, 116, 139, 0.28), 3px 0 0 rgba(100, 116, 139, 0.28);
+            transform: translate(-50%, -50%);
+        }
+
+        #divider:hover,
+        #divider:focus-visible,
+        #divider.is-dragging {
+            background: linear-gradient(180deg, #dbeafe 0%, #93c5fd 100%);
+            border-color: #60a5fa;
+        }
+
+        body.reading-pane-resizing,
+        body.reading-pane-resizing * {
+            cursor: ew-resize !important;
+            user-select: none !important;
         }
 
         #right {
-            flex: 1;
-            min-width: 320px;
+            min-width: 0;
             background: var(--panel-alt);
-            padding: 16px 20px;
+            padding: 12px 14px;
         }
 
         #left p,
@@ -126,22 +162,81 @@
         }
 
         .unified-group {
-            margin-bottom: 18px;
+            margin-bottom: 16px;
         }
 
         .group {
             background: var(--panel);
             border: 1px solid var(--line);
-            border-radius: 12px;
+            border-radius: 8px;
             box-shadow: var(--shadow);
-            padding: 24px 32px;
-            margin-bottom: 24px;
+            padding: 18px 22px;
+            margin-bottom: 0;
         }
 
         .question-item,
         .match-question-item,
         .choice-item {
             margin-bottom: 12px;
+        }
+
+        .tfng-item {
+            margin: 0 0 14px;
+        }
+
+        .tfng-item:last-child {
+            margin-bottom: 0;
+        }
+
+        #right .tfng-item > p {
+            margin: 0 0 6px;
+            line-height: 1.45;
+        }
+
+        .tfng-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 12px;
+            margin: 0;
+        }
+
+        .tfng-options label {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin: 0;
+            cursor: pointer;
+            line-height: 1.35;
+        }
+
+        .tfng-options input[type="radio"] {
+            flex-shrink: 0;
+            margin: 2px 0 0;
+        }
+
+        .matching-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 4px;
+        }
+
+        .matching-table thead th {
+            padding: 0 3px 4px;
+            text-align: center;
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .matching-table tbody td {
+            padding: 2px 3px;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .matching-table tbody td:first-child {
+            padding: 3px 10px 3px 0;
+            text-align: left;
+            line-height: 1.35;
         }
 
         .paragraph-dropzone,
@@ -360,6 +455,7 @@
             .shell {
                 display: block;
                 height: auto;
+                overflow: visible;
             }
 
             #left,
@@ -889,7 +985,7 @@
 
     <div class="shell">
         <section class="pane" id="left"></section>
-        <div id="divider"></div>
+        <div id="divider" role="separator" aria-orientation="vertical" aria-label="调整原文和题目宽度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" tabindex="0"></div>
         <section class="pane" id="right">
             <div id="question-groups"></div>
             <div id="results"></div>

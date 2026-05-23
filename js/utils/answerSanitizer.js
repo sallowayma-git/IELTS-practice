@@ -12,7 +12,19 @@
         if (!object || typeof object !== 'object') {
             return '';
         }
-        const preferKeys = ['value', 'label', 'text', 'answer', 'content'];
+        const preferKeys = [
+            'value',
+            'answerValue',
+            'key',
+            'option',
+            'heading',
+            'word',
+            'label',
+            'answerLabel',
+            'text',
+            'answer',
+            'content'
+        ];
         for (var i = 0; i < preferKeys.length; i += 1) {
             var key = preferKeys[i];
             if (typeof object[key] === 'string' && object[key].trim()) {
