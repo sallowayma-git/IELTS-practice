@@ -2223,11 +2223,20 @@ function refreshBrowseResults() {
     loadExamList();
 }
 
+function setupBrowseControls() {
+    setupBrowseSortControl();
+    setupBrowseFrequencyFilterControl();
+}
+
 function setupBrowseSortControl() {
     const sortSelect = document.getElementById('browse-sort-select');
     if (!sortSelect || sortSelect.dataset.bound === 'true') {
         return;
     }
+    const normalizeSortMode = (value) => {
+        const mode = String(value || 'default').trim().toLowerCase();
+        return mode === 'frequency-desc' || mode === 'difficulty-desc' ? mode : 'default';
+    };
     let savedMode = String(window.__browseSortMode || '').trim().toLowerCase();
     if (!savedMode) {
         try {
@@ -2236,11 +2245,10 @@ function setupBrowseSortControl() {
             savedMode = 'default';
         }
     }
-    sortSelect.value = savedMode === 'frequency-desc' ? 'frequency-desc' : 'default';
+    sortSelect.value = normalizeSortMode(savedMode);
     window.__browseSortMode = sortSelect.value;
     sortSelect.addEventListener('change', () => {
-        const mode = String(sortSelect.value || 'default').trim().toLowerCase();
-        window.__browseSortMode = mode === 'frequency-desc' ? 'frequency-desc' : 'default';
+        window.__browseSortMode = normalizeSortMode(sortSelect.value);
         try {
             window.localStorage.setItem('browse_sort_mode', window.__browseSortMode);
         } catch (_) {
@@ -2340,12 +2348,15 @@ function filterRecordsByType(type) {
 
 
 function loadExamList() {
+    setupBrowseControls();
+
     if (window.ExamActions && typeof window.ExamActions.loadExamList === 'function') {
         return window.ExamActions.loadExamList();
     }
     console.warn('[main.js] ExamActions.loadExamList 未就绪，尝试加载 browse-view 组');
     if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
         window.AppLazyLoader.ensureGroup('browse-view').then(function () {
+            setupBrowseControls();
             if (window.ExamActions && typeof window.ExamActions.loadExamList === 'function') {
                 window.ExamActions.loadExamList();
             } else {
@@ -2590,66 +2601,17 @@ window.setActivePathMap = function (map) {
 };
 
 function openExam(examId, options = {}) {
-    // 优先使用App流程（带会话与通信）
     if (window.app && typeof window.app.openExam === 'function') {
         try {
-            window.app.openExam(examId, options || {});
-            return;
-        } catch (e) {
-            console.warn('[Main] app.openExam 调用失败，启用降级握手路径:', e);
+            return window.app.openExam(examId, options || {});
+        } catch (error) {
+            console.error('[Main] app.openExam 调用失败，已停止原始 HTML 兜底:', error);
+            return showMessage('统一练习入口启动失败：app.openExam 抛出异常，已阻止打开原始题源 HTML。', 'error');
         }
     }
 
-    // 降级：本地完成打开 + 握手重试，确保 sessionId 下发
-    const list = getExamIndexState();
-    const exam = list.find(e => e.id === examId);
-    if (!exam) return showMessage('未找到题目', 'error');
-    if (!exam.hasHtml) return viewPDF(examId);
-
-    const fullPath = window.buildResourcePath(exam, 'html');
-    const examWindow = window.open(fullPath, `exam_${exam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
-    if (!examWindow) {
-        return showMessage('无法打开窗口，请检查弹窗设置', 'error');
-    }
-    showMessage('正在打开: ' + exam.title, 'success');
-
-    startHandshakeFallback(examWindow, examId);
-}
-
-// 降级握手：循环发送 INIT_SESSION，直至收到 SESSION_READY
-function startHandshakeFallback(examWindow, examId) {
-    try {
-        const sessionId = `${examId}_${Date.now()}`;
-        const initPayload = { examId, parentOrigin: window.location.origin, sessionId };
-        fallbackExamSessions.set(sessionId, { examId, sessionId, initPayload, timer: null, win: examWindow });
-
-        let attempts = 0;
-        const maxAttempts = 30; // ~9s
-        const tick = () => {
-            if (examWindow && !examWindow.closed) {
-                try {
-                    if (attempts === 0) {
-                        console.log('[Fallback] 发送初始化消息到练习页面:', { type: 'INIT_SESSION', data: initPayload });
-                    }
-                    examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                    examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
-                } catch (_) { }
-            }
-            attempts++;
-            if (attempts >= maxAttempts) {
-                const rec = fallbackExamSessions.get(sessionId);
-                if (rec && rec.timer) clearInterval(rec.timer);
-                fallbackExamSessions.delete(sessionId);
-                console.warn('[Fallback] 握手超时，练习页可能未加载增强器');
-            }
-        };
-        const timer = setInterval(tick, 300);
-        const rec = fallbackExamSessions.get(sessionId);
-        if (rec) rec.timer = timer;
-        tick();
-    } catch (e) {
-        console.warn('[Fallback] 启动握手失败:', e);
-    }
+    console.error('[Main] 统一练习入口未就绪，已阻止打开原始题源 HTML:', { examId });
+    return showMessage('统一练习入口未就绪：app.openExam 不可用，已阻止打开原始题源 HTML。', 'error');
 }
 
 function viewPDF(examId) {
@@ -3754,6 +3716,7 @@ async function deleteLibraryConfig(configKey) {
 if (typeof window !== 'undefined') {
     window.switchLibraryConfig = switchLibraryConfig;
     window.deleteLibraryConfig = deleteLibraryConfig;
+    window.setupBrowseControls = setupBrowseControls;
 }
 
 

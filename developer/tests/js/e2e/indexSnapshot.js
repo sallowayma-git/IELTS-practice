@@ -306,6 +306,9 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                                 <option value="frequency-desc">
                                     频率高→低
                                 </option>
+                                <option value="difficulty-desc">
+                                    难度高→低
+                                </option>
                             </select>
                             <div class="browse-sort-icon">
                                 <svg

@@ -51,14 +51,72 @@ function createHarness() {
     return sandbox.window.ExamFilterService;
 }
 
+function createExamActionsHarness() {
+    let setupCalls = 0;
+    const container = {
+        firstChild: null,
+        removeChild() {},
+        appendChild() {},
+        querySelector() { return null; }
+    };
+    const documentStub = {
+        getElementById(id) {
+            return id === 'exam-list-container' ? container : null;
+        },
+        querySelector() {
+            return { style: {} };
+        },
+        createElement() {
+            return {
+                className: '',
+                dataset: {},
+                style: {},
+                appendChild() {},
+                setAttribute() {},
+                addEventListener() {},
+                querySelector() { return null; }
+            };
+        },
+        createTextNode(value) {
+            return { textContent: String(value || '') };
+        },
+        addEventListener() {}
+    };
+    const windowStub = {
+        document: documentStub,
+        setupBrowseControls() {
+            setupCalls += 1;
+        },
+        getExamIndexState() {
+            return [];
+        }
+    };
+    const silentConsole = { log() {}, warn() {}, error() {}, info() {} };
+    const sandbox = {
+        window: windowStub,
+        document: documentStub,
+        console: silentConsole,
+        Node: function Node() {}
+    };
+    sandbox.globalThis = sandbox.window;
+    const context = vm.createContext(sandbox);
+    loadScript('js/app/examActions.js', context);
+    return {
+        window: sandbox.window,
+        getSetupCalls() {
+            return setupCalls;
+        }
+    };
+}
+
 function createExams() {
     return [
-        { id: 'p1-09', title: 'Listening to the Ocean 海洋探测', category: 'P1', type: 'reading', path: 'Reading/P1/a.html', frequency: 'high' },
-        { id: 'r1-other', title: 'Reading Other', category: 'P1', type: 'reading', path: 'Reading/P1/b.html', frequency: 'ultra-high' },
-        { id: 'r1-dup', title: 'Reading Other', category: 'P1', type: 'reading', path: 'Reading/P1/c.html', frequency: 'low' },
-        { id: 'l1', title: 'Listening P1', category: 'P1', type: 'listening', path: 'Listening/P1/a.html', frequency: 'medium' },
-        { id: 'p2', title: 'P2 Reading', category: 'P2', type: 'reading', path: 'Reading/P2/a.html', frequency: 'low' },
-        { id: 'freq-a', title: 'Freq A', category: 'P3', type: 'reading', path: 'ListeningPractice/100 P1/P1 高频（35）/a.html', frequency: 'high' },
+        { id: 'p1-09', title: 'Listening to the Ocean 海洋探测', category: 'P1', type: 'reading', path: 'Reading/P1/a.html', frequency: 'high', difficultyScore: 2.5 },
+        { id: 'r1-other', title: 'Reading Other', category: 'P1', type: 'reading', path: 'Reading/P1/b.html', frequency: 'ultra-high', difficultyScore: 3 },
+        { id: 'r1-dup', title: 'Reading Other', category: 'P1', type: 'reading', path: 'Reading/P1/c.html', frequency: 'low', difficultyScore: 1 },
+        { id: 'l1', title: 'Listening P1', category: 'P1', type: 'listening', path: 'Listening/P1/a.html', frequency: 'medium', difficultyScore: 4 },
+        { id: 'p2', title: 'P2 Reading', category: 'P2', type: 'reading', path: 'Reading/P2/a.html', frequency: 'low', difficultyScore: 5 },
+        { id: 'freq-a', title: 'Freq A', category: 'P3', type: 'reading', path: 'ListeningPractice/100 P1/P1 高频（35）/a.html', frequency: 'high', difficultyScore: 4.5 },
         { id: 'freq-b', title: 'Freq B', category: 'P3', type: 'reading', path: 'ListeningPractice/100 P1/P1 高频（35）/b.html', frequency: 'medium' }
     ];
 }
@@ -95,6 +153,26 @@ function testFrequencySort(service) {
     assert.strictEqual(result[0].frequency, 'ultra-high', '频率降序应把 ultra-high 放在最前');
 }
 
+function testDifficultySort(service) {
+    const exams = createExams();
+    const result = service.filterExams(exams, {
+        activeCategory: 'all',
+        activeExamType: 'reading',
+        sortMode: 'difficulty-desc'
+    });
+    assert.strictEqual(result[0].id, 'p2', '难度降序应把 difficultyScore 最高的题目放在最前');
+    assert.strictEqual(result[result.length - 1].id, 'freq-b', '缺少 difficultyScore 的题目应排在最后');
+}
+
+function testLoadExamListBindsBrowseControls() {
+    const harness = createExamActionsHarness();
+    assert(harness.window.ExamActions, 'ExamActions 应该挂到 window');
+    assert.strictEqual(typeof harness.window.ExamActions.loadExamList, 'function', 'loadExamList 应为函数');
+
+    harness.window.ExamActions.loadExamList();
+    assert.strictEqual(harness.getSetupCalls(), 1, 'ExamActions.loadExamList 必须先绑定浏览控件');
+}
+
 function testInvalidInput(service) {
     const result = service.filterExams(null, null);
     assert(Array.isArray(result), '非法输入应返回数组');
@@ -121,6 +199,8 @@ function main() {
     testTypeAndCategoryFiltering(service);
     testFallbackCategoryInFrequencyMode(service);
     testFrequencySort(service);
+    testDifficultySort(service);
+    testLoadExamListBindsBrowseControls();
     testInvalidInput(service);
     testExamFilterHostIsNotForwardOnlyStub();
 
