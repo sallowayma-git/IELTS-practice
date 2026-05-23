@@ -104,6 +104,32 @@ async function testFallbackAnswerComparisonKeepsListeningCandidates(PracticeReco
     recordResult('降级答案比较保留听力候选答案', q12);
 }
 
+async function testNormalizeCompletionPayloadKeepsHighlights(PracticeRecorder) {
+    const recorder = Object.create(PracticeRecorder.prototype);
+    recorder.normalizeAnswerComparison = (value) => value || {};
+    recorder.normalizeAnswerMap = (value) => value || {};
+    recorder.buildAnswerDetails = () => ({});
+    recorder.convertAnswerMapToArray = () => [];
+
+    const payload = recorder.normalizePracticeCompletePayload({
+        examId: 'reading-p1',
+        sessionId: 'session-reading-p1',
+        duration: 1200,
+        answers: { q1: 'A' },
+        correctAnswers: { q1: 'A' },
+        scoreInfo: { correct: 1, total: 1, accuracy: 1, percentage: 100 },
+        highlights: [{ id: 'hl-1', text: 'highlight' }],
+        scrollY: 240,
+        metadata: { examTitle: 'Passage 1', category: 'P1', type: 'reading' }
+    });
+
+    assert(payload, '完成负载应可归一化');
+    assert.deepStrictEqual(payload.results.highlights, [{ id: 'hl-1', text: 'highlight' }], '结果层应保留高亮');
+    assert.strictEqual(payload.results.scrollY, 240, '结果层应保留滚动位置');
+    assert.deepStrictEqual(payload.results.realData.highlights, [{ id: 'hl-1', text: 'highlight' }], 'realData 应保留高亮');
+    recordResult('完成负载保留高亮回灌字段', { highlights: payload.results.highlights, scrollY: payload.results.scrollY });
+}
+
 async function main() {
     const quietConsole = {
         log() {},
@@ -137,6 +163,7 @@ async function main() {
     try {
         await testManualStatsFailureDoesNotBreakFallbackSave(PracticeRecorder);
         await testFallbackAnswerComparisonKeepsListeningCandidates(PracticeRecorder);
+        await testNormalizeCompletionPayloadKeepsHighlights(PracticeRecorder);
         console.log(JSON.stringify({
             status: 'pass',
             detail: `${results.length}/${results.length} 测试通过`,
