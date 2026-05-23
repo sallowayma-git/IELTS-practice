@@ -250,14 +250,17 @@ body.no-scroll {
     --message-accent: rgba(78, 112, 255, 0.82);
     --message-accent-soft: rgba(78, 112, 255, 0.16);
     --message-glass: rgba(255, 255, 255, 0.44);
+    --message-collapsed-width: 48px;
+    --message-expanded-width: min(680px, calc(100vw - 56px));
     position: absolute;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 11px;
+    box-sizing: border-box;
     width: max-content;
-    min-width: min(292px, calc(100vw - 56px));
-    max-width: 100%;
+    min-width: var(--message-collapsed-width);
+    max-width: var(--message-expanded-width);
     min-height: 48px;
     padding: 10px 24px;
     border: 1px solid rgba(255, 255, 255, 0.62);
@@ -270,7 +273,8 @@ body.no-scroll {
     line-height: var(--line-height-normal);
     pointer-events: auto;
     opacity: 1;
-    transform: translateY(0) scaleX(1) scaleY(1);
+    transform: translateY(0);
+    clip-path: inset(0 0 0 0 round 999px);
     box-shadow:
         0 18px 44px rgba(17, 24, 39, 0.14),
         0 6px 18px rgba(17, 24, 39, 0.08),
@@ -281,7 +285,8 @@ body.no-scroll {
     font-weight: var(--font-weight-medium);
     text-align: center;
     transform-origin: center;
-    will-change: transform, opacity, filter;
+    overflow: hidden;
+    will-change: max-width, clip-path, transform, opacity, filter;
 }
 
 .message::before {
@@ -302,63 +307,81 @@ body.no-scroll {
 .message-text {
     position: relative;
     z-index: 1;
+    display: inline-block;
     font-weight: var(--font-weight-medium);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    opacity: 1;
+    transform: translateX(0);
+    will-change: opacity, transform;
 }
 
 .message-entering {
     z-index: 2;
-    animation: messageIslandExpand 760ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: messageIslandExpand 860ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.message-entering .message-text,
+.message-entering .message-indicator {
+    animation: messageContentReveal 620ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
 }
 
 .message-visible {
     z-index: 2;
     opacity: 1;
-    transform: translateY(0) scaleX(1) scaleY(1);
+    max-width: var(--message-expanded-width);
+    transform: translateY(0);
+    clip-path: inset(0 0 0 0 round 999px);
     filter: blur(0) saturate(170%);
 }
 
 .message-leaving {
     z-index: 1;
     pointer-events: none;
-    animation: messageIslandCollapse 440ms cubic-bezier(0.4, 0, 0.2, 1) both;
-    opacity: 0;
-    transform: translateY(-8px) scaleX(0.18) scaleY(0.78);
-    filter: blur(8px) saturate(120%);
+    animation: messageIslandCollapse 520ms cubic-bezier(0.7, 0, 0.18, 1) both;
+}
+
+.message-leaving .message-text,
+.message-leaving .message-indicator {
+    animation: messageContentVeil 260ms cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
 @keyframes messageIslandExpand {
     0% {
         opacity: 0;
-        transform: translateY(-10px) scaleX(0.08) scaleY(0.66);
-        filter: blur(9px) saturate(125%);
-        clip-path: inset(0 48% 0 48% round 999px);
+        max-width: var(--message-collapsed-width);
+        transform: translateY(-10px);
+        filter: blur(7px) saturate(125%);
+        clip-path: inset(0 49% 0 49% round 999px);
     }
 
-    34% {
+    28% {
         opacity: 1;
-        transform: translateY(-2px) scaleX(0.68) scaleY(0.92);
+        max-width: 92px;
+        transform: translateY(-3px);
         filter: blur(2px) saturate(155%);
-        clip-path: inset(0 18% 0 18% round 999px);
+        clip-path: inset(0 34% 0 34% round 999px);
     }
 
-    64% {
+    66% {
         opacity: 1;
-        transform: translateY(0) scaleX(1.045) scaleY(1.02);
+        max-width: calc(var(--message-expanded-width) + 22px);
+        transform: translateY(1px);
         filter: blur(0) saturate(170%);
-        clip-path: inset(0 -1% 0 -1% round 999px);
+        clip-path: inset(0 -2% 0 -2% round 999px);
     }
 
-    82% {
-        transform: translateY(0) scaleX(0.985) scaleY(0.99);
+    84% {
+        max-width: calc(var(--message-expanded-width) - 8px);
+        transform: translateY(0);
         clip-path: inset(0 0 0 0 round 999px);
     }
 
     100% {
         opacity: 1;
-        transform: translateY(0) scaleX(1) scaleY(1);
+        max-width: var(--message-expanded-width);
+        transform: translateY(0);
         filter: blur(0) saturate(170%);
         clip-path: inset(0 0 0 0 round 999px);
     }
@@ -367,23 +390,55 @@ body.no-scroll {
 @keyframes messageIslandCollapse {
     0% {
         opacity: 1;
-        transform: translateY(0) scaleX(1) scaleY(1);
+        max-width: var(--message-expanded-width);
+        transform: translateY(0);
         filter: blur(0) saturate(170%);
         clip-path: inset(0 0 0 0 round 999px);
     }
 
-    42% {
+    38% {
         opacity: 0.86;
-        transform: translateY(-2px) scaleX(0.72) scaleY(0.9);
+        max-width: 132px;
+        transform: translateY(-2px);
         filter: blur(1px) saturate(145%);
-        clip-path: inset(0 14% 0 14% round 999px);
+        clip-path: inset(0 24% 0 24% round 999px);
     }
 
     100% {
         opacity: 0;
-        transform: translateY(-8px) scaleX(0.08) scaleY(0.64);
-        filter: blur(9px) saturate(120%);
+        max-width: var(--message-collapsed-width);
+        transform: translateY(-8px);
+        filter: blur(7px) saturate(120%);
         clip-path: inset(0 49% 0 49% round 999px);
+    }
+}
+
+@keyframes messageContentReveal {
+    0% {
+        opacity: 0;
+        transform: translateX(-8px);
+    }
+
+    42% {
+        opacity: 0;
+        transform: translateX(-8px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes messageContentVeil {
+    0% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateX(8px);
     }
 }
 

@@ -451,11 +451,18 @@ body.hero-body {
 }
 
 .practice-trend-card,
-.practice-custom-card {
+.practice-trend-reserved-card {
     grid-column: span 2;
     position: relative;
     perspective: 1600px;
     cursor: pointer;
+    outline: none;
+}
+
+.practice-custom-card {
+    grid-column: span 2;
+    position: relative;
+    perspective: 1600px;
     outline: none;
 }
 
@@ -721,6 +728,90 @@ body.hero-body {
     gap: 16px;
 }
 
+.practice-custom-card__header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.practice-custom-card__flip-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.32);
+    border: 1px solid rgba(255, 255, 255, 0.58);
+    color: var(--shui-text-muted);
+    cursor: pointer;
+    outline: none;
+    box-shadow:
+        0 10px 24px rgba(15, 23, 42, 0.06),
+        inset 0 1px 1px rgba(255, 255, 255, 0.72);
+    z-index: 10;
+    transition:
+        transform 260ms ease,
+        background 260ms ease,
+        color 260ms ease,
+        border-color 260ms ease;
+}
+
+.practice-custom-card__flip-btn:hover,
+.practice-custom-card__flip-btn:focus-visible {
+    background: rgba(255, 255, 255, 0.58);
+    border-color: rgba(255, 255, 255, 0.86);
+    color: var(--shui-text-strong);
+    transform: translateY(-1px) rotate(18deg);
+}
+
+.practice-custom-card__flip-btn:focus-visible {
+    box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--shui-accent) 24%, transparent),
+        0 10px 24px rgba(15, 23, 42, 0.06),
+        inset 0 1px 1px rgba(255, 255, 255, 0.72);
+}
+
+.practice-custom-widget-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.practice-custom-widget-content[hidden] {
+    display: none !important;
+}
+
+.practice-radar-chart-shell {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 206px;
+    overflow: hidden;
+    border-radius: calc(var(--practice-trend-radius) - 2px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#practice-radar-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 206px;
+}
+
+.practice-radar-summary {
+    margin: 2px 0 0;
+    color: var(--shui-text-muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-align: center;
+}
+
 .priority-progress-stack {
     display: flex;
     flex-direction: column;
@@ -755,12 +846,9 @@ body.hero-body {
     height: 34px;
     border-radius: 999px;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.22);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    box-shadow:
-        inset 0 1px 1px rgba(255, 255, 255, 0.76),
-        inset 0 -6px 14px rgba(15, 23, 42, 0.04),
-        0 10px 22px rgba(15, 23, 42, 0.05);
+    background: var(--shui-panel-bg);
+    border: 1px solid var(--shui-panel-border);
+    box-shadow: var(--shui-panel-shadow);
     backdrop-filter: blur(18px) saturate(165%);
     -webkit-backdrop-filter: blur(18px) saturate(165%);
 }
@@ -770,7 +858,7 @@ body.hero-body {
     position: absolute;
     inset: 1px;
     border-radius: inherit;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.52), transparent 48%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), transparent 48%);
     pointer-events: none;
     z-index: 2;
 }
@@ -783,13 +871,6 @@ body.hero-body {
     min-width: 0;
     max-width: calc(100% - 6px);
     border-radius: inherit;
-    background:
-        radial-gradient(circle at 92% 28%, rgba(255, 255, 255, 0.92), transparent 18px),
-        linear-gradient(90deg, rgba(74, 144, 226, 0.34), rgba(106, 204, 199, 0.72));
-    box-shadow:
-        0 0 22px rgba(106, 204, 199, 0.28),
-        inset 0 1px 1px rgba(255, 255, 255, 0.7),
-        inset 0 -8px 16px rgba(15, 23, 42, 0.08);
     transition: width 780ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -798,23 +879,22 @@ body.hero-body {
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    background:
-        radial-gradient(circle at 12px 48%, rgba(255, 255, 255, 0.35), transparent 7px),
-        radial-gradient(circle at 42px 42%, rgba(255, 255, 255, 0.24), transparent 8px),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 58%);
-    opacity: 0.82;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), transparent 60%);
+    opacity: 0.6;
 }
 
 .priority-progress--high .priority-progress__fill {
-    background:
-        radial-gradient(circle at 92% 28%, rgba(255, 255, 255, 0.94), transparent 18px),
-        linear-gradient(90deg, color-mix(in srgb, var(--shui-accent) 42%, transparent), rgba(106, 204, 199, 0.78));
+    background: linear-gradient(90deg, var(--shui-accent), var(--shui-gradient-end));
+    box-shadow:
+        0 0 14px color-mix(in srgb, var(--shui-accent) 25%, transparent),
+        inset 0 1px 1px rgba(255, 255, 255, 0.4);
 }
 
 .priority-progress--medium .priority-progress__fill {
-    background:
-        radial-gradient(circle at 92% 28%, rgba(255, 255, 255, 0.94), transparent 18px),
-        linear-gradient(90deg, rgba(255, 216, 155, 0.48), color-mix(in srgb, var(--shui-accent-alt) 60%, rgba(255, 255, 255, 0.12)));
+    background: linear-gradient(90deg, var(--shui-accent-alt), var(--shui-gradient-start));
+    box-shadow:
+        0 0 14px color-mix(in srgb, var(--shui-accent-alt) 25%, transparent),
+        inset 0 1px 1px rgba(255, 255, 255, 0.4);
 }
 
 .priority-accuracy {
@@ -826,7 +906,8 @@ body.hero-body {
 
 .priority-accuracy__orb {
     --priority-accuracy-level: 0%;
-    --priority-accuracy-color: rgba(248, 113, 113, 0.28);
+    --accuracy-mix-color: color-mix(in srgb, var(--shui-success) var(--priority-accuracy-level), var(--shui-warning));
+    --priority-accuracy-color: color-mix(in srgb, var(--accuracy-mix-color) 34%, transparent);
     position: relative;
     min-height: 48px;
     padding: 0 16px;
@@ -836,14 +917,9 @@ body.hero-body {
     justify-content: space-between;
     gap: 12px;
     border-radius: 999px;
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.18)),
-        rgba(255, 255, 255, 0.16);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    box-shadow:
-        0 10px 22px rgba(15, 23, 42, 0.04),
-        inset 0 1px 1px rgba(255, 255, 255, 0.74),
-        inset 0 -1px 1px rgba(255, 255, 255, 0.12);
+    background: var(--shui-panel-bg);
+    border: 1px solid var(--shui-panel-border);
+    box-shadow: var(--shui-panel-shadow);
     backdrop-filter: blur(18px) saturate(158%);
     -webkit-backdrop-filter: blur(18px) saturate(158%);
     overflow: hidden;
@@ -856,12 +932,10 @@ body.hero-body {
     width: max(22px, var(--priority-accuracy-level));
     max-width: calc(100% - 6px);
     border-radius: inherit;
-    background:
-        radial-gradient(circle at 88% 28%, rgba(255, 255, 255, 0.58), transparent 18px),
-        var(--priority-accuracy-color);
+    background: var(--priority-accuracy-color);
     box-shadow:
-        0 0 18px color-mix(in srgb, var(--priority-accuracy-color) 60%, transparent),
-        inset 0 1px 1px rgba(255, 255, 255, 0.58);
+        0 0 14px color-mix(in srgb, var(--priority-accuracy-color) 60%, transparent),
+        inset 0 1px 1px rgba(255, 255, 255, 0.3);
     transition:
         width 780ms cubic-bezier(0.16, 1, 0.3, 1),
         background 420ms ease,
@@ -992,6 +1066,7 @@ body.hero-body {
     font-size: 1.45rem;
     font-weight: 600;
     color: var(--shui-text-strong);
+    margin: 0;
 }
 
 .hero-panel__actions {
@@ -1772,25 +1847,12 @@ body.hero-body {
 }
 
 #settings-view .btn::after {
-    content: '';
-    position: absolute;
-    inset: 1px;
-    border-radius: inherit;
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0) 54%),
-        radial-gradient(circle at 18% 14%, rgba(255, 255, 255, 0.62), transparent 34%);
-    opacity: 0.56;
-    pointer-events: none;
-    transition: opacity 260ms ease;
+    content: none;
 }
 
 #settings-view .btn:hover {
     transform: translateY(-3px) scale(1.02);
     box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
-}
-
-#settings-view .btn:hover::after {
-    opacity: 1;
 }
 
 #settings-view .btn:active {
@@ -1872,4 +1934,83 @@ body.hero-body {
     #settings-view .hero-settings-group {
         grid-template-columns: 1fr;
     }
+}
+
+/* Redbook CTA button custom theme overrides */
+.hero-badge--redbook {
+    background: #ff1c1c !important;
+    box-shadow: 0 12px 30px rgba(255, 77, 79, 0.35) !important;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.hero-badge--redbook:hover {
+    box-shadow: 0 18px 36px rgba(255, 77, 79, 0.45) !important;
+}
+
+/* GitHub repo header icon inline style override */
+.hero-brand-title .inline-hover-link {
+    color: inherit;
+    display: flex;
+    align-items: center;
+    transition: opacity 0.2s;
+}
+
+/* History empty placeholder styling */
+.history-empty-placeholder {
+    text-align: center;
+    padding: 40px;
+    opacity: 0.7;
+}
+.history-empty-placeholder__icon {
+    font-size: 3em;
+    margin-bottom: 15px;
+}
+.history-empty-placeholder__note {
+    font-size: 0.9em;
+    margin-top: 10px;
+}
+
+/* System info panel styling */
+.settings-system-info {
+    margin-top: 15px;
+    line-height: 1.8;
+    font-weight: bold;
+}
+.settings-system-info__status {
+    color: var(--shui-success);
+}
+
+/* Settings footer links */
+.settings-footer {
+    margin-top: 30px;
+    text-align: center;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+.settings-footer__feedback {
+    color: #ff1c1c;
+    text-decoration: none;
+    font-size: 0.9em;
+    font-weight: bold;
+    display: block;
+    margin-bottom: 12px;
+    transition: opacity 0.2s;
+}
+.settings-footer__author {
+    color: var(--shui-text-muted);
+    text-decoration: none;
+    font-size: 0.9em;
+    transition: color 0.3s ease;
+}
+
+/* License modal feedback link */
+#license-modal .lm-body a.lm-warning {
+    text-decoration: underline;
+}
+
+/* Hidden file input */
+#folder-picker {
+    display: none;
 }
