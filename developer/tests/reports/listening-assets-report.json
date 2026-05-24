@@ -10,6 +10,11 @@
   "missingAudio": [
     "P2/非高频/82. P2 Test New Question/82. P2 Test New Question.html"
   ],
+  "missingPdf": [
+    "P2/非高频/82. P2 Test New Question/82. P2 Test New Question.html"
+  ],
+  "pdfOnly": [],
+  "indexedPdfCount": 224,
   "duplicateIds": [],
   "outputs": {
     "index": "assets\\generated\\listening-exams\\listening-index.compat.js",
