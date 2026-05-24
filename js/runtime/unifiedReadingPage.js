@@ -39,6 +39,14 @@
         return sanitizer;
     }
 
+    function getReviewHighlightDictionary() {
+        const dictionary = global.ReviewHighlightDictionary;
+        if (!dictionary || typeof dictionary !== 'object') {
+            return null;
+        }
+        return dictionary;
+    }
+
     const state = {
         examId: null,
         dataKey: null,
@@ -416,6 +424,63 @@
         document.getElementById('btnHL')?.addEventListener('click', () => applySelectionHighlight('highlight'));
         document.getElementById('btnNote')?.addEventListener('click', () => applySelectionHighlight('note'));
         document.getElementById('btnUH')?.addEventListener('click', removeSelectionHighlight);
+    }
+
+    function isReviewDictionaryEnabled() {
+        return Boolean(state.readOnly || state.reviewMode || state.submitted);
+    }
+
+    function getReviewDictionaryContext() {
+        return {
+            examId: state.examId,
+            dataKey: state.dataKey,
+            title: state.dataset?.meta?.title || '',
+            category: state.dataset?.meta?.category || '',
+            frequency: state.dataset?.meta?.frequency || '',
+            suiteSessionId: state.suiteSessionId || null,
+            reviewSessionId: state.reviewSessionId || null,
+            reviewMode: state.reviewMode,
+            submitted: state.submitted
+        };
+    }
+
+    function enhanceReviewHighlights() {
+        const dictionary = getReviewHighlightDictionary();
+        if (!dictionary || typeof dictionary.enhance !== 'function') {
+            return;
+        }
+        dictionary.enhance({
+            roots: {
+                left: dom.left,
+                groups: dom.groups
+            },
+            isEnabled: isReviewDictionaryEnabled,
+            getContext: getReviewDictionaryContext,
+            postMessage
+        });
+    }
+
+    function attachReviewHighlightDictionary() {
+        const dictionary = getReviewHighlightDictionary();
+        if (!dictionary || typeof dictionary.attach !== 'function') {
+            return;
+        }
+        dictionary.attach({
+            roots: {
+                left: dom.left,
+                groups: dom.groups
+            },
+            isEnabled: isReviewDictionaryEnabled,
+            getContext: getReviewDictionaryContext,
+            postMessage
+        });
+    }
+
+    function closeReviewHighlightDictionary() {
+        const dictionary = getReviewHighlightDictionary();
+        if (dictionary && typeof dictionary.close === 'function') {
+            dictionary.close();
+        }
     }
 
     function decodeParam(value) {
@@ -2557,6 +2622,7 @@
         });
         syncPrimaryActionButtons();
         refreshSimulationDraftSyncLifecycle();
+        enhanceReviewHighlights();
     }
 
     function disableDragInteractions() {
@@ -2740,12 +2806,14 @@
         state.lastResults = null;
         state.submitted = false;
         state.readOnly = false;
+        closeReviewHighlightDictionary();
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
         }
         clearExplanations();
         document.body.classList.remove('review-readonly-mode');
+        enhanceReviewHighlights();
         document.querySelectorAll('input, textarea, select').forEach((control) => {
             if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
                 control.disabled = false;
@@ -2828,6 +2896,7 @@
         applyReplayAnswersToDom(replayResults.answers || {});
         const replayHighlights = Array.isArray(entry.highlights) ? entry.highlights : [];
         applyHighlights(replayHighlights);
+        enhanceReviewHighlights();
         if (Number.isFinite(Number(entry.scrollY))) {
             global.scrollTo(0, Number(entry.scrollY));
         }
@@ -2835,6 +2904,7 @@
         renderResults(replayResults);
         await renderExplanations();
         applyHighlights(replayHighlights);
+        enhanceReviewHighlights();
         updateNavStatuses(replayResults);
         if (data.readOnly !== false) {
             enterSubmittedReadOnlyState('replay-review');
@@ -3285,10 +3355,12 @@
         if (!shared) {
             return 0;
         }
-        return shared.restoreHighlights({
+        const restored = shared.restoreHighlights({
             left: dom.left,
             groups: dom.groups
         }, Array.isArray(records) ? records : []);
+        enhanceReviewHighlights();
+        return restored;
     }
 
     function preserveHighlightsDuring(callback) {
@@ -3378,6 +3450,7 @@
         enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
         await renderExplanations();
         applyHighlights(highlightSnapshot);
+        enhanceReviewHighlights();
         updateNavStatuses(results);
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
         const timing = resolvePracticeTiming(1, submissionSnapshot.timerSnapshot);
@@ -3428,6 +3501,7 @@
         if (state.readOnly || state.submitted) {
             return;
         }
+        closeReviewHighlightDictionary();
         if (state.simulationMode && state.simulationCtx) {
             if (state.simulationCtx.canPrev) {
                 dispatchSimulationNavigate('prev', buildSubmissionSnapshot());
@@ -3785,6 +3859,7 @@
         attachUnifiedTimer();
         attachUnifiedPanels();
         attachSelectionHighlightToolbar();
+        attachReviewHighlightDictionary();
         attachActionListeners();
         attachMessageBridge();
         attachPracticeTimerBridge();

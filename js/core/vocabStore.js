@@ -35,6 +35,13 @@
             icon: '✏️',
             source: 'user',
             storageKey: 'vocab_list_custom'
+        },
+        'reading-highlights': {
+            id: 'reading-highlights',
+            name: '阅读高亮生词',
+            icon: '📖',
+            source: 'reading-highlight',
+            storageKey: 'vocab_list_reading_highlights'
         }
     });
 
@@ -930,6 +937,82 @@
         return state.activeListId;
     }
 
+    function normalizeReadingHighlightPayload(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return null;
+        }
+        const word = typeof payload.word === 'string' ? payload.word.trim() : '';
+        if (!word) {
+            return null;
+        }
+        const selectedText = typeof payload.selectedText === 'string' ? payload.selectedText.trim() : '';
+        const meaning = typeof payload.meaning === 'string' && payload.meaning.trim()
+            ? payload.meaning.trim()
+            : (typeof payload.definition === 'string' && payload.definition.trim() ? payload.definition.trim() : '待补充释义');
+        const noteParts = [
+            payload.phonetic ? `音标: ${String(payload.phonetic).trim()}` : '',
+            payload.partOfSpeech ? `词性: ${String(payload.partOfSpeech).trim()}` : '',
+            selectedText && selectedText !== word ? `原高亮: ${selectedText}` : '',
+            payload.sourceLabel ? `来源: ${String(payload.sourceLabel).trim()}` : '',
+            payload.license ? `许可: ${String(payload.license).trim()}` : ''
+        ].filter(Boolean);
+        const context = payload.context && typeof payload.context === 'object' ? payload.context : {};
+        if (context.title) {
+            noteParts.push(`文章: ${String(context.title).trim()}`);
+        }
+        if (context.examId) {
+            noteParts.push(`题目: ${String(context.examId).trim()}`);
+        }
+        return normalizeWordRecord({
+            id: generateId(`reading-highlight:${word}`),
+            word,
+            meaning,
+            example: typeof payload.example === 'string' ? payload.example.trim() : '',
+            note: noteParts.join('；'),
+            easeFactor: null,
+            interval: 1,
+            repetitions: 0,
+            intraCycles: 0,
+            correctCount: 0,
+            lastReviewed: null,
+            nextReview: null,
+            createdAt: getNow(),
+            updatedAt: getNow()
+        });
+    }
+
+    async function upsertReadingHighlightWord(payload) {
+        const normalized = normalizeReadingHighlightPayload(payload);
+        if (!normalized) {
+            return null;
+        }
+        await init();
+        const listId = 'reading-highlights';
+        const listConfig = VOCAB_LISTS[listId];
+        const storedData = await read(listConfig.storageKey, []);
+        const words = normalizeStoredListWords(storedData, listId);
+        const key = normalized.word.toLowerCase();
+        const existingIndex = words.findIndex((entry) => String(entry.word || '').trim().toLowerCase() === key);
+        if (existingIndex >= 0) {
+            const existing = words[existingIndex];
+            words.splice(existingIndex, 1, normalizeWordRecord({
+                ...existing,
+                ...normalized,
+                id: existing.id || normalized.id,
+                createdAt: existing.createdAt || normalized.createdAt,
+                updatedAt: getNow()
+            }));
+        } else {
+            words.push(normalized);
+        }
+        await persist(listConfig.storageKey, words.filter(Boolean));
+        state.listCache.delete(listId);
+        if (state.activeListId === listId) {
+            setWordsInternal(words.filter(Boolean));
+        }
+        return normalized;
+    }
+
     async function init() {
         ensureReadyPromise();
         connectToProviders();
@@ -955,6 +1038,7 @@
         getListWordCount,
         getAvailableLists,
         getActiveListId,
+        upsertReadingHighlightWord,
         get VOCAB_LISTS() {
             return VOCAB_LISTS;
         },
