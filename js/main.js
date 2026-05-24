@@ -721,6 +721,35 @@ function showCompletionSummary(envelope) {
     showMessage(`📊 ${parts.join('，')}`, 'info');
 }
 
+async function saveReadingHighlightVocab(payload) {
+    if (!payload || typeof payload !== 'object') {
+        return null;
+    }
+    try {
+        if (!window.VocabStore && window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+            await window.AppLazyLoader.ensureGroup('more-tools');
+        }
+        if (!window.VocabStore || typeof window.VocabStore.upsertReadingHighlightWord !== 'function') {
+            throw new Error('VocabStore 未就绪');
+        }
+        const saved = await window.VocabStore.upsertReadingHighlightWord(payload);
+        if (saved && typeof showMessage === 'function') {
+            showMessage(`已加入阅读高亮生词：${saved.word}`, 'success');
+        }
+        return saved;
+    } catch (error) {
+        console.warn('[VocabStore] 阅读高亮生词保存失败:', error);
+        if (typeof showMessage === 'function') {
+            showMessage('高亮生词已在阅读页本地缓存，主词表稍后同步', 'warning');
+        }
+        return null;
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.saveReadingHighlightVocab = saveReadingHighlightVocab;
+}
+
 function setupMessageListener() {
     const findFallbackSessionByWindow = (sourceWindow) => {
         if (!sourceWindow || !window.fallbackExamSessions || typeof fallbackExamSessions.entries !== 'function') {
@@ -778,6 +807,11 @@ function setupMessageListener() {
             } catch (_) { }
         } else if (type === 'REQUEST_INIT') {
             sendFallbackInit(findFallbackSessionByWindow(event.source));
+        } else if (type === 'VOCAB_HIGHLIGHT_SAVE') {
+            const payload = data.data && typeof data.data === 'object' ? data.data : data;
+            saveReadingHighlightVocab(payload).catch((error) => {
+                console.warn('[VocabStore] 阅读高亮生词保存异常:', error);
+            });
         } else if (type === 'PRACTICE_COMPLETE' || type === 'practice_completed') {
             const payload = extractCompletionPayload(data) || {};
             const sessionId = extractCompletionSessionId(data);

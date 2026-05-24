@@ -97,6 +97,10 @@ const bundles = {
         'js/runtime/readingHighlightShared.js',
         'js/utils/answerSanitizer.js',
         'js/utils/answerMatchCore.js',
+        'assets/wordlists/ielts_core.bundle.js',
+        'assets/wordlists/ecdict_reading.bundle.js',
+        'js/core/dictionaryService.js',
+        'js/runtime/reviewHighlightDictionary.js',
         'js/runtime/unifiedReadingPage.js'
     ],
     'js/bundles/practice-page-enhancer.bundle.js': [

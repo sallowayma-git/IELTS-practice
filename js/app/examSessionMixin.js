@@ -1666,6 +1666,7 @@
                     'SUITE_CLOSE_ATTEMPT',
                     'REVIEW_NAVIGATE',
                     'SUITE_CONFIG_UPDATE',
+                    'VOCAB_HIGHLIGHT_SAVE',
                     'SIMULATION_DRAFT_SYNC',
                     'SIMULATION_NAVIGATE',
                     'SIMULATION_SUBMIT'
@@ -2021,6 +2022,11 @@
                         }
                         break;
                     }
+                    case 'VOCAB_HIGHLIGHT_SAVE':
+                        if (typeof window.saveReadingHighlightVocab === 'function') {
+                            await window.saveReadingHighlightVocab(data);
+                        }
+                        break;
                     case 'REVIEW_NAVIGATE':
                         if (data && typeof this.handleSuiteReviewNavigate === 'function') {
                             const activeSuiteId = this.currentSuiteSession && this.currentSuiteSession.id
