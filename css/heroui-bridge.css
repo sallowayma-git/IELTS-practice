@@ -537,7 +537,7 @@ body.hero-body {
 
 .practice-trend-card__header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 14px;
 }
@@ -545,7 +545,7 @@ body.hero-body {
 .practice-trend-card__title-line {
     display: flex;
     flex: 1 1 auto;
-    align-items: flex-end;
+    align-items: center;
     justify-content: flex-start;
     flex-wrap: wrap;
     gap: 14px;
@@ -725,7 +725,7 @@ body.hero-body {
 }
 
 .practice-custom-card__front {
-    gap: 16px;
+    gap: 12px;
 }
 
 .practice-custom-card__header-actions {
@@ -735,7 +735,27 @@ body.hero-body {
     margin-left: auto;
 }
 
-.practice-custom-card__flip-btn {
+.practice-heatmap-month-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.practice-heatmap-month-controls[hidden] {
+    display: none !important;
+}
+
+.practice-heatmap-month-label {
+    min-width: 76px;
+    color: rgba(15, 23, 42, 0.72);
+    font-size: 0.84rem;
+    font-weight: 800;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.practice-custom-card__icon-btn {
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -761,30 +781,203 @@ body.hero-body {
         border-color 260ms ease;
 }
 
-.practice-custom-card__flip-btn:hover,
-.practice-custom-card__flip-btn:focus-visible {
+.practice-custom-card__icon-btn:hover,
+.practice-custom-card__icon-btn:focus-visible {
     background: rgba(255, 255, 255, 0.58);
     border-color: rgba(255, 255, 255, 0.86);
     color: var(--shui-text-strong);
+    transform: translateY(-1px);
+}
+
+.practice-custom-card__flip-btn:hover,
+.practice-custom-card__flip-btn:focus-visible {
     transform: translateY(-1px) rotate(18deg);
 }
 
-.practice-custom-card__flip-btn:focus-visible {
+.practice-custom-card__icon-btn:focus-visible {
     box-shadow:
         0 0 0 3px color-mix(in srgb, var(--shui-accent) 24%, transparent),
         0 10px 24px rgba(15, 23, 42, 0.06),
         inset 0 1px 1px rgba(255, 255, 255, 0.72);
 }
 
+.practice-custom-card__icon-btn:disabled,
+.practice-custom-card__icon-btn[aria-disabled="true"] {
+    cursor: default;
+    opacity: 0.42;
+    transform: none;
+}
+
 .practice-custom-widget-content {
     display: flex;
     flex-direction: column;
     flex: 1;
+    min-height: 0;
 }
 
 .practice-custom-widget-content[hidden] {
     display: none !important;
 }
+
+.practice-heatmap {
+    --practice-heatmap-cell: clamp(22px, 2.35vw, 26px);
+    --practice-heatmap-gap: 6px;
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 194px;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+}
+
+.practice-heatmap__body {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
+    width: 100%;
+    align-items: center;
+}
+
+.practice-heatmap__weekdays,
+.practice-heatmap__grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    column-gap: var(--practice-heatmap-gap);
+}
+
+.practice-heatmap__weekdays {
+    color: var(--shui-text-muted);
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 1;
+    text-align: center;
+    opacity: 0.78;
+}
+
+.practice-heatmap__weekday {
+    min-width: 0;
+}
+
+.practice-heatmap__grid {
+    grid-template-rows: repeat(var(--practice-heatmap-weeks, 5), var(--practice-heatmap-cell));
+    row-gap: var(--practice-heatmap-gap);
+    align-content: center;
+}
+
+.practice-heatmap__cell {
+    --practice-heatmap-color: rgba(255, 255, 255, 0.26);
+    position: relative;
+    width: 100%;
+    height: var(--practice-heatmap-cell);
+    border: 1px solid rgba(255, 255, 255, 0.48);
+    border-radius: 7px;
+    background: var(--practice-heatmap-color);
+    box-shadow:
+        inset 0 1px 1px rgba(255, 255, 255, 0.62),
+        0 6px 14px rgba(15, 23, 42, 0.04);
+    outline: none;
+    transition:
+        transform 180ms ease,
+        border-color 180ms ease,
+        box-shadow 180ms ease;
+}
+
+.practice-heatmap__cell[data-level="0"] {
+    --practice-heatmap-color: rgba(255, 255, 255, 0.24);
+}
+
+.practice-heatmap__cell[data-level="1"] {
+    --practice-heatmap-color: #d8f5d3;
+}
+
+.practice-heatmap__cell[data-level="2"] {
+    --practice-heatmap-color: #9be28e;
+}
+
+.practice-heatmap__cell[data-level="3"] {
+    --practice-heatmap-color: #45bf63;
+}
+
+.practice-heatmap__cell[data-level="4"] {
+    --practice-heatmap-color: #1f8f46;
+}
+
+.practice-heatmap__cell.is-outside-month {
+    opacity: 0.28;
+}
+
+.practice-heatmap__cell:hover,
+.practice-heatmap__cell:focus-visible {
+    border-color: rgba(255, 255, 255, 0.92);
+    box-shadow:
+        0 0 0 3px color-mix(in srgb, var(--shui-success) 22%, transparent),
+        0 10px 22px rgba(15, 23, 42, 0.1),
+        inset 0 1px 1px rgba(255, 255, 255, 0.72);
+    transform: translateY(-2px) scale(1.08);
+    z-index: 4;
+}
+
+.practice-heatmap__cell::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    width: max-content;
+    max-width: 160px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.88);
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1.25;
+    text-align: center;
+    white-space: normal;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 4px);
+    transition:
+        opacity 160ms ease,
+        transform 160ms ease;
+    z-index: 30;
+}
+
+.practice-heatmap__cell:hover::after,
+.practice-heatmap__cell:focus-visible::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+.practice-heatmap__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 8px;
+    color: var(--shui-text-muted);
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+.practice-heatmap__legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 0 0 auto;
+}
+
+.practice-heatmap__legend-cell {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.48);
+}
+
+.practice-heatmap__legend-cell--0 { background: rgba(255, 255, 255, 0.24); }
+.practice-heatmap__legend-cell--1 { background: #d8f5d3; }
+.practice-heatmap__legend-cell--2 { background: #9be28e; }
+.practice-heatmap__legend-cell--3 { background: #45bf63; }
+.practice-heatmap__legend-cell--4 { background: #1f8f46; }
 
 .practice-radar-chart-shell {
     position: relative;
@@ -976,30 +1169,36 @@ body.hero-body {
 }
 
 .practice-custom-options {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr;
     flex: 1 1 auto;
-    align-items: center;
-    justify-content: center;
+    align-content: center;
+    gap: 10px;
+    min-height: 0;
+    padding: 4px 0;
 }
 
 .practice-custom-option {
     position: relative;
-    width: min(100%, 260px);
-    min-height: 76px;
-    padding: 14px 18px;
-    border-radius: 22px;
-    border: 1px solid rgba(255, 255, 255, 0.54);
-    background: rgba(255, 255, 255, 0.24);
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) 18px;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 54px;
+    padding: 8px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.48);
+    background: rgba(255, 255, 255, 0.18);
     color: var(--shui-text-strong);
     box-shadow:
-        0 14px 28px rgba(15, 23, 42, 0.06),
+        0 10px 22px rgba(15, 23, 42, 0.04),
         inset 0 1px 1px rgba(255, 255, 255, 0.74),
         inset 0 -1px 1px rgba(255, 255, 255, 0.16);
     backdrop-filter: blur(18px) saturate(160%);
     -webkit-backdrop-filter: blur(18px) saturate(160%);
     cursor: pointer;
-    font-size: 0.98rem;
-    font-weight: 850;
+    text-align: left;
     transition:
         transform 360ms cubic-bezier(0.16, 1, 0.3, 1),
         background 260ms ease,
@@ -1010,22 +1209,82 @@ body.hero-body {
 .practice-custom-option:hover,
 .practice-custom-option:focus-visible,
 .practice-custom-option.active {
-    background: rgba(255, 255, 255, 0.38);
+    background: rgba(255, 255, 255, 0.34);
     border-color: rgba(255, 255, 255, 0.82);
     transform: translateY(-1px);
     outline: none;
 }
 
+.practice-custom-option.active {
+    box-shadow:
+        0 14px 26px color-mix(in srgb, var(--shui-accent) 12%, transparent),
+        inset 0 1px 1px rgba(255, 255, 255, 0.82),
+        inset 0 -1px 1px rgba(255, 255, 255, 0.18);
+}
+
+.practice-custom-option__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: var(--shui-text-muted);
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.56);
+}
+
+.practice-custom-option.active .practice-custom-option__icon,
+.practice-custom-option:hover .practice-custom-option__icon,
+.practice-custom-option:focus-visible .practice-custom-option__icon {
+    color: var(--shui-text-strong);
+    background: color-mix(in srgb, var(--shui-accent) 15%, rgba(255, 255, 255, 0.3));
+    border-color: color-mix(in srgb, var(--shui-accent) 24%, rgba(255, 255, 255, 0.58));
+}
+
+.practice-custom-option__body {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+}
+
+.practice-custom-option__body strong {
+    display: block;
+    overflow: hidden;
+    color: var(--shui-text-strong);
+    font-size: 0.94rem;
+    font-weight: 850;
+    line-height: 1.2;
+    letter-spacing: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.practice-custom-option__check {
+    width: 10px;
+    height: 10px;
+    justify-self: center;
+    border-radius: 999px;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px rgba(71, 85, 105, 0.22);
+}
+
+.practice-custom-option.active .practice-custom-option__check {
+    background: var(--shui-accent);
+    box-shadow:
+        0 0 0 4px color-mix(in srgb, var(--shui-accent) 14%, transparent),
+        0 0 14px color-mix(in srgb, var(--shui-accent) 44%, transparent);
+}
+
 .practice-custom-option.active::after {
     content: '';
     position: absolute;
-    left: 28px;
-    right: 28px;
-    bottom: 14px;
-    height: 3px;
+    inset: 8px auto 8px 6px;
+    width: 3px;
     border-radius: 999px;
     background: var(--shui-accent);
-    opacity: 0.58;
+    opacity: 0.72;
 }
 
 .practice-trend-reserved-card {
