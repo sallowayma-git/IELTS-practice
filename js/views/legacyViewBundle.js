@@ -1079,6 +1079,10 @@
         options = options || {};
         this.ids = {
             card: options.cardId || 'practice-custom-card',
+            heatmap: options.heatmapId || 'practice-heatmap',
+            heatmapSummary: options.heatmapSummaryId || 'practice-heatmap-summary',
+            heatmapMonthLabel: options.heatmapMonthLabelId || 'practice-heatmap-month-label',
+            heatmapMonthControls: options.heatmapMonthControlsId || 'practice-heatmap-month-controls',
             radarSummary: options.radarSummaryId || 'practice-radar-summary',
             highCount: options.highCountId || 'practice-priority-high-count',
             mediumCount: options.mediumCountId || 'practice-priority-medium-count',
@@ -1090,7 +1094,8 @@
         this.records = [];
         this.exams = [];
         this.examType = 'all';
-        this.activeWidget = 'priority';
+        this.activeWidget = options.defaultWidget || 'heatmap';
+        this.heatmapMonth = normalizePracticeHeatmapMonth(options.defaultHeatmapMonth || new Date());
         this.bound = false;
         this.resizeHandler = null;
     }
@@ -1114,7 +1119,9 @@
         }
         var titleElem = document.getElementById('practice-custom-card-title');
         if (titleElem) {
-            titleElem.textContent = this.activeWidget === 'radar' ? '阅读错题雷达' : '中高频余量';
+            titleElem.textContent = this.activeWidget === 'radar'
+                ? '阅读错题雷达'
+                : (this.activeWidget === 'priority' ? '中高频余量' : '练习热力图');
         }
         
         var contents = card.querySelectorAll('.practice-custom-widget-content');
@@ -1126,7 +1133,9 @@
             }
         }
         
-        if (this.activeWidget === 'priority') {
+        if (this.activeWidget === 'heatmap') {
+            this._renderHeatmap();
+        } else if (this.activeWidget === 'priority') {
             var stats = calculatePriorityPracticeStats(this.records, this.exams, this.examType);
             this._renderGroup('high', stats.high);
             this._renderGroup('medium', stats.medium);
@@ -1135,6 +1144,7 @@
         }
         
         this._syncOptionState();
+        this._syncHeatmapControls();
         this._syncFlipButtonState(card.classList.contains('is-flipped'));
     };
     
@@ -1142,6 +1152,68 @@
         if (!widget) return;
         this.activeWidget = widget;
         this.render();
+    };
+
+    PracticePriorityRenderer.prototype.shiftHeatmapMonth = function shiftHeatmapMonth(direction) {
+        var offset = direction === 'next' ? 1 : -1;
+        this.heatmapMonth = addPracticeHeatmapMonths(this.heatmapMonth, offset);
+        this.render();
+    };
+
+    PracticePriorityRenderer.prototype._renderHeatmap = function _renderHeatmap() {
+        var container = this._getElement('heatmap');
+        if (!container || typeof document === 'undefined') {
+            return;
+        }
+        var heatmapData = calculatePracticeHeatmapData(this.records, this.heatmapMonth);
+        this.heatmapMonth = heatmapData.monthStart;
+        container.textContent = '';
+        if (container.style) {
+            container.style.setProperty('--practice-heatmap-weeks', String(heatmapData.weekCount));
+        }
+
+        var body = document.createElement('div');
+        body.className = 'practice-heatmap__body';
+        var weekdays = document.createElement('div');
+        weekdays.className = 'practice-heatmap__weekdays';
+        ['日', '一', '二', '三', '四', '五', '六'].forEach(function addWeekday(label) {
+            var weekday = document.createElement('span');
+            weekday.className = 'practice-heatmap__weekday';
+            weekday.textContent = label;
+            weekdays.appendChild(weekday);
+        });
+
+        var grid = document.createElement('div');
+        grid.className = 'practice-heatmap__grid';
+        grid.setAttribute('role', 'grid');
+        grid.setAttribute('aria-label', formatPracticeHeatmapMonthLabel(heatmapData.monthStart) + '练习热力图');
+
+        heatmapData.cells.forEach(function appendCell(cell) {
+            var button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'practice-heatmap__cell' + (cell.inMonth ? '' : ' is-outside-month');
+            button.style.gridColumn = String(cell.weekday + 1);
+            button.style.gridRow = String(cell.week + 1);
+            button.dataset.date = cell.dateKey;
+            button.dataset.count = String(cell.count);
+            button.dataset.level = String(cell.level);
+            button.dataset.tooltip = cell.label + '，做题 ' + cell.count + ' 题';
+            button.setAttribute('aria-label', button.dataset.tooltip);
+            button.setAttribute('title', button.dataset.tooltip);
+            grid.appendChild(button);
+        });
+
+        body.appendChild(weekdays);
+        body.appendChild(grid);
+        container.appendChild(body);
+
+        this._setText('heatmapMonthLabel', formatPracticeHeatmapMonthLabel(heatmapData.monthStart));
+        this._setText(
+            'heatmapSummary',
+            heatmapData.total > 0
+                ? formatPracticeHeatmapMonthLabel(heatmapData.monthStart) + ' 共做题 ' + heatmapData.total + ' 题，活跃 ' + heatmapData.activeDays + ' 天'
+                : formatPracticeHeatmapMonthLabel(heatmapData.monthStart) + ' 暂无练习记录'
+        );
     };
     
     PracticePriorityRenderer.prototype._renderRadarChart = function _renderRadarChart() {
@@ -1211,6 +1283,16 @@
         var self = this;
 
         card.addEventListener('click', function onPriorityCardClick(event) {
+            var monthButton = event.target && event.target.closest
+                ? event.target.closest('[data-practice-heatmap-month]')
+                : null;
+            if (monthButton) {
+                event.preventDefault();
+                event.stopPropagation();
+                self.shiftHeatmapMonth(monthButton.dataset.practiceHeatmapMonth);
+                return;
+            }
+
             var option = event.target && event.target.closest
                 ? event.target.closest('[data-practice-widget]')
                 : null;
@@ -1246,6 +1328,16 @@
             if (key !== 'Enter' && key !== ' ') {
                 return;
             }
+            var monthButton = event.target && event.target.closest
+                ? event.target.closest('[data-practice-heatmap-month]')
+                : null;
+            if (monthButton) {
+                event.preventDefault();
+                event.stopPropagation();
+                self.shiftHeatmapMonth(monthButton.dataset.practiceHeatmapMonth);
+                return;
+            }
+
             var option = event.target && event.target.closest
                 ? event.target.closest('[data-practice-widget]')
                 : null;
@@ -1288,6 +1380,18 @@
         var buttons = card.querySelectorAll('.practice-custom-card__flip-btn');
         for (var i = 0; i < buttons.length; i += 1) {
             buttons[i].setAttribute('aria-pressed', isFlipped ? 'true' : 'false');
+        }
+    };
+
+    PracticePriorityRenderer.prototype._syncHeatmapControls = function _syncHeatmapControls() {
+        var controls = this._getElement('heatmapMonthControls');
+        if (!controls) {
+            return;
+        }
+        if (this.activeWidget === 'heatmap') {
+            controls.removeAttribute('hidden');
+        } else {
+            controls.setAttribute('hidden', 'hidden');
         }
     };
 
@@ -1336,6 +1440,141 @@
             orb.style.setProperty('--priority-accuracy-level', Math.round(bounded) + '%');
         }
     };
+
+    function calculatePracticeHeatmapData(records, monthDate) {
+        var monthStart = normalizePracticeHeatmapMonth(monthDate);
+        var leadingDays = monthStart.getDay();
+        var monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+        var daysInMonth = monthEnd.getDate();
+        var weekCount = Math.ceil((leadingDays + daysInMonth) / 7);
+        var counts = aggregatePracticeHeatmapCounts(records, monthStart);
+        var maxCount = Object.keys(counts).reduce(function findMax(max, key) {
+            return counts[key] > max ? counts[key] : max;
+        }, 0);
+        var cells = [];
+        var total = 0;
+        var activeDays = 0;
+
+        for (var index = 0; index < weekCount * 7; index += 1) {
+            var dayOffset = index - leadingDays;
+            var date = new Date(monthStart.getFullYear(), monthStart.getMonth(), 1 + dayOffset);
+            var inMonth = date.getMonth() === monthStart.getMonth();
+            var dateKey = toPracticeHeatmapDateKey(date);
+            var count = inMonth ? (counts[dateKey] || 0) : 0;
+            if (inMonth) {
+                total += count;
+                if (count > 0) {
+                    activeDays += 1;
+                }
+            }
+            cells.push({
+                date: date,
+                dateKey: dateKey,
+                label: formatPracticeHeatmapDateLabel(date),
+                count: count,
+                level: inMonth ? resolvePracticeHeatmapLevel(count, maxCount) : 0,
+                inMonth: inMonth,
+                week: Math.floor(index / 7),
+                weekday: index % 7
+            });
+        }
+
+        return {
+            monthStart: monthStart,
+            weekCount: weekCount,
+            cells: cells,
+            total: total,
+            activeDays: activeDays,
+            maxCount: maxCount
+        };
+    }
+
+    function aggregatePracticeHeatmapCounts(records, monthStart) {
+        var counts = {};
+        var monthKey = toPracticeHeatmapMonthKey(monthStart);
+        ensureArray(records).forEach(function collect(record) {
+            var timestamp = getRecordTimestamp(record);
+            if (!timestamp) {
+                return;
+            }
+            var date = new Date(timestamp);
+            if (toPracticeHeatmapMonthKey(date) !== monthKey) {
+                return;
+            }
+            var key = toPracticeHeatmapDateKey(date);
+            counts[key] = (counts[key] || 0) + resolvePracticeHeatmapQuestionCount(record);
+        });
+        return counts;
+    }
+
+    function resolvePracticeHeatmapQuestionCount(record) {
+        var rd = record && record.realData && typeof record.realData === 'object' ? record.realData : {};
+        var scoreInfo = record && record.scoreInfo && typeof record.scoreInfo === 'object'
+            ? record.scoreInfo
+            : (rd.scoreInfo && typeof rd.scoreInfo === 'object' ? rd.scoreInfo : {});
+        var candidates = [
+            record && record.totalQuestions,
+            record && record.questionCount,
+            record && record.total,
+            rd.totalQuestions,
+            rd.questionCount,
+            rd.total,
+            scoreInfo.totalQuestions,
+            scoreInfo.total
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var value = Number(candidates[i]);
+            if (Number.isFinite(value) && value > 0) {
+                return Math.max(1, Math.round(value));
+            }
+        }
+        return 1;
+    }
+
+    function normalizePracticeHeatmapMonth(value) {
+        var date = value instanceof Date ? value : new Date(value);
+        if (isNaN(date.getTime())) {
+            date = new Date();
+        }
+        return new Date(date.getFullYear(), date.getMonth(), 1);
+    }
+
+    function addPracticeHeatmapMonths(value, offset) {
+        var month = normalizePracticeHeatmapMonth(value);
+        return new Date(month.getFullYear(), month.getMonth() + offset, 1);
+    }
+
+    function resolvePracticeHeatmapLevel(count, maxCount) {
+        var safeCount = Math.max(0, Number(count) || 0);
+        var safeMax = Math.max(0, Number(maxCount) || 0);
+        if (safeCount <= 0) {
+            return 0;
+        }
+        if (safeMax <= 1) {
+            return 1;
+        }
+        return Math.max(1, Math.min(4, Math.ceil(safeCount / safeMax * 4)));
+    }
+
+    function toPracticeHeatmapDateKey(date) {
+        var year = date.getFullYear();
+        var month = String(date.getMonth() + 1).padStart(2, '0');
+        var day = String(date.getDate()).padStart(2, '0');
+        return year + '-' + month + '-' + day;
+    }
+
+    function toPracticeHeatmapMonthKey(date) {
+        var normalized = normalizePracticeHeatmapMonth(date);
+        return normalized.getFullYear() + '-' + String(normalized.getMonth() + 1).padStart(2, '0');
+    }
+
+    function formatPracticeHeatmapMonthLabel(date) {
+        return date.getFullYear() + '年' + (date.getMonth() + 1) + '月';
+    }
+
+    function formatPracticeHeatmapDateLabel(date) {
+        return (date.getMonth() + 1) + '月' + date.getDate() + '日';
+    }
 
     function calculatePriorityPracticeStats(records, exams, examType) {
         var groups = {
@@ -2385,10 +2624,14 @@
             ? exam.category.trim().toUpperCase()
             : '';
         var isSelecting = selectionMode === 'custom-suite' && !!draft && draft.status !== 'ready';
+        var isMemorizeSelecting = selectionMode === 'reading-memorize';
         var isSelected = !!draft && draft.pickedByCategory && examCategory && draft.pickedByCategory[examCategory]
             && String(draft.pickedByCategory[examCategory].examId) === String(exam.id);
         var examItem = this._createElement('div', {
-            className: 'exam-item' + (isSelecting ? ' exam-item--suite-selecting' : '') + (isSelected ? ' exam-item--suite-selected' : ''),
+            className: 'exam-item'
+                + (isSelecting ? ' exam-item--suite-selecting' : '')
+                + (isMemorizeSelecting ? ' exam-item--memorize-selecting' : '')
+                + (isSelected ? ' exam-item--suite-selected' : ''),
             dataset: { examId: exam.id }
         });
         if (isSelecting) {
@@ -2458,6 +2701,9 @@
         if (isSelecting && currentCategory) {
             info.appendChild(this._createElement('div', { className: 'suite-custom-selection-badge' }, currentCategory + ' Pending'));
         }
+        if (isMemorizeSelecting) {
+            info.appendChild(this._createElement('div', { className: 'suite-custom-selection-badge' }, '背题模式'));
+        }
 
         var actions = this._createElement('div', { className: 'exam-actions' });
         var actionConfig = this._resolveActionConfig(exam, options);
@@ -2508,12 +2754,21 @@
 
     LegacyExamListView.prototype._resolveActionConfig = function _resolveActionConfig(exam, options) {
         var hasHtml = !!(exam && exam.hasHtml);
+        var selectionMode = options && options.selectionMode ? String(options.selectionMode) : '';
         var config = {
             startAction: 'start',
             startLabel: hasHtml ? '开始练习' : '查看PDF',
             startClass: hasHtml ? 'btn exam-item-action-btn' : 'btn btn-secondary exam-item-action-btn',
             includePdfButton: true
         };
+        if (selectionMode === 'reading-memorize') {
+            config = {
+                startAction: 'reading-memorize-select',
+                startLabel: '选择背题',
+                startClass: 'btn exam-item-action-btn',
+                includePdfButton: false
+            };
+        }
 
         if (options && typeof options.configureStartButton === 'function') {
             try {
@@ -2529,6 +2784,9 @@
 
     LegacyExamListView.prototype._shouldShowGenerate = function _shouldShowGenerate(exam, options) {
         if (!this.supportsGenerate) {
+            return false;
+        }
+        if (options && String(options.selectionMode || '') === 'reading-memorize') {
             return false;
         }
         if (options && options.supportsGenerate === false) {
