@@ -103,6 +103,18 @@ def find_audio(dir_path: Path) -> str:
     return ""
 
 
+def find_pdf(dir_path: Path, html_path: Path | None = None) -> str:
+    matches = sorted([path for path in dir_path.iterdir() if path.is_file() and path.suffix.lower() == ".pdf"])
+    if not matches:
+        return ""
+    if html_path is not None:
+        html_stem = html_path.stem.casefold()
+        for path in matches:
+            if path.stem.casefold() == html_stem:
+                return path.name
+    return matches[0].name
+
+
 def scan_html(root: Path, html_path: Path, index: int) -> dict:
     raw = read_text(html_path)
     rel_html = html_path.relative_to(root)
@@ -121,6 +133,7 @@ def scan_html(root: Path, html_path: Path, index: int) -> dict:
     source_path = normalize_rel(rel_html)
     exam_id = build_exam_id(category, number or index, frequency, title, source_path)
     audio = find_audio(html_path.parent)
+    pdf = find_pdf(html_path.parent, html_path)
     return {
         "id": exam_id,
         "examId": exam_id,
@@ -131,8 +144,41 @@ def scan_html(root: Path, html_path: Path, index: int) -> dict:
         "type": "listening",
         "path": normalize_rel(rel_dir) + "/",
         "filename": html_path.name,
+        "pdfFilename": pdf,
         "audioFilename": audio,
         "hasHtml": True,
+        "hasPdf": bool(pdf),
+        "hasAudio": bool(audio),
+        "sourcePath": source_path,
+        "questionNumber": number,
+    }
+
+
+def scan_pdf_only(root: Path, pdf_path: Path, index: int) -> dict:
+    rel_pdf = pdf_path.relative_to(root)
+    rel_dir = rel_pdf.parent
+    parts = list(rel_pdf.parts)
+    title = clean_title(pdf_path.stem)
+    category = detect_category(parts, normalize_rel(rel_pdf))
+    frequency = detect_frequency(parts)
+    number = detect_number(pdf_path, title)
+    source_path = normalize_rel(rel_pdf)
+    exam_id = build_exam_id(category, number or index, frequency, title, source_path)
+    audio = find_audio(pdf_path.parent)
+    return {
+        "id": exam_id,
+        "examId": exam_id,
+        "dataKey": exam_id,
+        "title": title or pdf_path.stem,
+        "category": category,
+        "frequency": frequency,
+        "type": "listening",
+        "path": normalize_rel(rel_dir) + "/",
+        "filename": "",
+        "pdfFilename": pdf_path.name,
+        "audioFilename": audio,
+        "hasHtml": False,
+        "hasPdf": True,
         "hasAudio": bool(audio),
         "sourcePath": source_path,
         "questionNumber": number,
@@ -158,7 +204,10 @@ def render_manifest(entries: list[dict]) -> str:
             "dataKey": entry["dataKey"],
             "path": entry["path"],
             "filename": entry["filename"],
+            "pdfFilename": entry["pdfFilename"],
             "audioFilename": entry["audioFilename"],
+            "hasHtml": entry["hasHtml"],
+            "hasPdf": entry["hasPdf"],
             "title": entry["title"],
             "category": entry["category"],
             "frequency": entry["frequency"],
@@ -185,13 +234,18 @@ def main() -> int:
     args = parser.parse_args()
 
     root = Path(args.root)
-    html_files = []
+    html_files: list[Path] = []
+    pdf_files: list[Path] = []
     for category in ("P1", "P2", "P3", "P4"):
         category_dir = root / category
         if category_dir.exists():
             html_files.extend(sorted(category_dir.rglob("*.html")))
+            pdf_files.extend(sorted(category_dir.rglob("*.pdf")))
 
     entries = [scan_html(root, path, index + 1) for index, path in enumerate(html_files)]
+    html_dirs = {path.parent for path in html_files}
+    pdf_only_files = [path for path in pdf_files if path.parent not in html_dirs]
+    entries.extend(scan_pdf_only(root, path, len(entries) + index + 1) for index, path in enumerate(pdf_only_files))
     entries.sort(key=lambda item: (
         item["category"],
         item["frequency"],
@@ -213,6 +267,9 @@ def main() -> int:
         "count": len(entries),
         "byCategory": {},
         "missingAudio": [entry["sourcePath"] for entry in entries if not entry["hasAudio"]],
+        "missingPdf": [entry["sourcePath"] for entry in entries if not entry["hasPdf"]],
+        "pdfOnly": [entry["sourcePath"] for entry in entries if not entry["hasHtml"] and entry["hasPdf"]],
+        "indexedPdfCount": sum(1 for entry in entries if entry["hasPdf"]),
         "duplicateIds": [],
         "outputs": {
             "index": str(index_output),

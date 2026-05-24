@@ -630,7 +630,10 @@ def _check_listening_generated_assets(index_path: Path, manifest_path: Path) -> 
     seen: set[str] = set()
     bad_paths: List[str] = []
     missing_html: List[str] = []
+    missing_pdf: List[str] = []
     missing_audio: List[str] = []
+    entries_without_pdf: List[str] = []
+    indexed_pdf_paths: set[str] = set()
     for entry in index_entries:
         if not isinstance(entry, dict):
             bad_paths.append("<non-object-entry>")
@@ -643,6 +646,7 @@ def _check_listening_generated_assets(index_path: Path, manifest_path: Path) -> 
 
         rel_path = str(entry.get("path") or "")
         filename = str(entry.get("filename") or "")
+        pdf_filename = str(entry.get("pdfFilename") or "")
         audio = str(entry.get("audioFilename") or "")
         if (
             rel_path.startswith("ListeningPractice/")
@@ -652,8 +656,26 @@ def _check_listening_generated_assets(index_path: Path, manifest_path: Path) -> 
             bad_paths.append(f"{exam_id}:{rel_path}")
         if filename and not (REPO_ROOT / "ListeningPractice" / rel_path / filename).exists():
             missing_html.append(f"{rel_path}{filename}")
+        if pdf_filename:
+            pdf_rel = f"{rel_path}{pdf_filename}".replace("\\", "/")
+            indexed_pdf_paths.add(pdf_rel)
+            if not (REPO_ROOT / "ListeningPractice" / rel_path / pdf_filename).exists():
+                missing_pdf.append(pdf_rel)
+        elif entry.get("hasPdf") is True:
+            missing_pdf.append(f"{exam_id}:hasPdf-without-pdfFilename")
+        else:
+            entries_without_pdf.append(f"{rel_path}{filename or exam_id}")
         if audio and not (REPO_ROOT / "ListeningPractice" / rel_path / audio).exists():
             missing_audio.append(f"{rel_path}{audio}")
+
+    disk_pdf_paths: set[str] = set()
+    listening_root = REPO_ROOT / "ListeningPractice"
+    for part in ("P1", "P2", "P3", "P4"):
+        part_root = listening_root / part
+        if part_root.exists():
+            for pdf_path in sorted(part_root.rglob("*.pdf")):
+                disk_pdf_paths.add(pdf_path.relative_to(listening_root).as_posix())
+    unindexed_disk_pdfs = sorted(disk_pdf_paths - indexed_pdf_paths)
 
     manifest_ids = set(manifest.keys())
     index_ids = set(ids)
@@ -666,6 +688,8 @@ def _check_listening_generated_assets(index_path: Path, manifest_path: Path) -> 
         and not duplicate_ids
         and not bad_paths
         and not missing_html
+        and not missing_pdf
+        and not unindexed_disk_pdfs
         and not missing_in_manifest
         and not missing_in_index
         and path_root_ok
@@ -673,9 +697,14 @@ def _check_listening_generated_assets(index_path: Path, manifest_path: Path) -> 
     return passed, {
         "indexCount": len(index_entries),
         "manifestCount": len(manifest),
+        "diskPdfCount": len(disk_pdf_paths),
+        "indexedPdfCount": len(indexed_pdf_paths),
         "duplicateIds": duplicate_ids[:20],
         "badPaths": bad_paths[:20],
         "missingHtml": missing_html[:20],
+        "missingPdf": missing_pdf[:20],
+        "unindexedDiskPdfs": unindexed_disk_pdfs[:20],
+        "entriesWithoutPdf": entries_without_pdf[:20],
         "missingAudio": missing_audio[:20],
         "missingInManifest": missing_in_manifest[:20],
         "missingInIndex": missing_in_index[:20],
