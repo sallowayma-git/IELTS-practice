@@ -1866,6 +1866,24 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("练习记录持久化删除链路测试", False, "测试脚本缺失"))
         all_passed = False
 
+    dictionary_service_test = REPO_ROOT / "developer" / "tests" / "js" / "dictionaryService.test.js"
+    if dictionary_service_test.exists():
+        dictionary_test_passed, dictionary_test_payload = _run_json_subprocess(
+            ["node", str(dictionary_service_test)],
+            timeout=30,
+        )
+        if dictionary_test_passed and isinstance(dictionary_test_payload, dict):
+            test_passed = dictionary_test_payload.get("status") == "pass"
+            test_detail = dictionary_test_payload.get("detail", dictionary_test_payload)
+        else:
+            test_passed = False
+            test_detail = dictionary_test_payload
+        results.append(_format_result("阅读高亮本地词典测试", test_passed, test_detail))
+        all_passed &= test_passed
+    else:
+        results.append(_format_result("阅读高亮本地词典测试", False, "测试脚本缺失"))
+        all_passed = False
+
     practice_core_app_state_sync_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCoreAppStateSync.test.js"
     if practice_core_app_state_sync_test.exists():
         try:
