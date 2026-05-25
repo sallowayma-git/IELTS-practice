@@ -1662,6 +1662,7 @@
                     'PRACTICE_RESULT',
                     'ERROR_OCCURRED',
                     'REQUEST_INIT',
+                    'PRACTICE_RESET_REQUEST',
                     'SUITE_CLOSE_ATTEMPT',
                     'REVIEW_NAVIGATE',
                     'SUITE_CONFIG_UPDATE',
@@ -1821,6 +1822,7 @@
                 }
 
                 const { type, data } = normalized;
+                const isPracticeResetRequest = type === 'PRACTICE_RESET_REQUEST';
                 const expectedExamId = String(examId);
                 const payloadExamId = data && data.examId != null ? String(data.examId) : '';
                 const payloadSuiteSessionId = data && typeof data.suiteSessionId === 'string'
@@ -1903,7 +1905,12 @@
                             && expectedSessionId
                             && (sourceMatched || allowListeningSourceFallback)
                         );
-                        if (!allowSuiteSessionMismatch && !allowListeningSessionMismatch) {
+                        const allowResetSessionMismatch = Boolean(
+                            isPracticeResetRequest
+                            && expectedSessionId
+                            && sourceMatched
+                        );
+                        if (!allowSuiteSessionMismatch && !allowListeningSessionMismatch && !allowResetSessionMismatch) {
                             return;
                         }
                         data.sessionId = expectedSessionId;
@@ -1987,6 +1994,9 @@
                         break;
                     case 'REQUEST_INIT':
                         sendInitEnvelope(sourceWindow || examWindow);
+                        break;
+                    case 'PRACTICE_RESET_REQUEST':
+                        await this.handlePracticeResetRequest(examId, data, sourceWindow || expectedWindow);
                         break;
                     case 'SUITE_CLOSE_ATTEMPT':
                         console.warn('[SuitePractice] 练习页尝试关闭套题窗口:', data);
@@ -3015,6 +3025,34 @@
             return payload;
         },
 
+        _sendExamInitEnvelope(examId, targetWindow, extras = {}) {
+            if (!targetWindow || targetWindow.closed) {
+                return null;
+            }
+            try {
+                const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
+                const initPayload = this._buildExamInitPayload(examId, windowInfo, extras);
+                targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
+                targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                return initPayload;
+            } catch (initError) {
+                console.warn('[App] 发送初始化消息失败:', initError);
+                return null;
+            }
+        },
+
+        restartExamHandshake(examWindow, examId) {
+            if (this._handshakeTimers && this._handshakeTimers.has(examId)) {
+                try {
+                    clearInterval(this._handshakeTimers.get(examId));
+                } catch (_) {
+                    // ignore stale timer cleanup
+                }
+                this._handshakeTimers.delete(examId);
+            }
+            this.startExamHandshake(examWindow, examId);
+        },
+
         ensureExamWindowSession(examId, examWindow = null) {
             if (!this.examWindows) {
                 this.examWindows = new Map();
@@ -3068,6 +3106,130 @@
 
             this.examWindows.set(examId, windowInfo);
             return windowInfo;
+        },
+
+        _syncRecorderSessionStarted(examId, windowInfo, metadata = {}) {
+            const recorder = this.components && this.components.practiceRecorder;
+            if (!recorder || typeof recorder.handleSessionStarted !== 'function') {
+                return;
+            }
+            const sessionId = (windowInfo && windowInfo.expectedSessionId) || this.generateSessionId(examId);
+            try {
+                recorder.handleSessionStarted({
+                    examId,
+                    sessionId,
+                    metadata
+                });
+            } catch (recorderError) {
+                console.warn('[PracticeRecorder] 重置后同步会话状态失败:', recorderError);
+            }
+        },
+
+        async _removeActiveExamSessionMetadata(examId) {
+            try {
+                const activeSessions = await storage.get('active_sessions', []);
+                const updatedSessions = Array.isArray(activeSessions)
+                    ? activeSessions.filter(session => session && session.examId !== examId)
+                    : [];
+                await storage.set('active_sessions', updatedSessions);
+            } catch (error) {
+                console.warn('[App] 清理活动会话元数据失败:', error);
+            }
+        },
+
+        _isResetCapableUnifiedReadingCompletion(data, sourceWindow = null) {
+            if (!sourceWindow || sourceWindow.closed) {
+                return false;
+            }
+            const payload = data && typeof data === 'object' ? data : {};
+            const metadata = payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {};
+            const suiteSessionId = payload.suiteSessionId || metadata.suiteSessionId || '';
+            if (suiteSessionId) {
+                return false;
+            }
+            const mode = String(payload.practiceMode || metadata.practiceMode || '').toLowerCase();
+            if (mode === 'memorize' || mode === 'suite') {
+                return false;
+            }
+            const renderMode = String(payload.renderMode || metadata.renderMode || '').toLowerCase();
+            const pageType = String(payload.pageType || metadata.pageType || '').toLowerCase();
+            return renderMode === 'unified-reading' || pageType === 'unified-reading';
+        },
+
+        async retainExamWindowAfterCompletion(examId, sourceWindow, data = {}) {
+            const windowInfo = this.ensureExamWindowSession(examId, sourceWindow);
+            windowInfo.window = sourceWindow || windowInfo.window || null;
+            windowInfo.status = 'completed';
+            windowInfo.completedAt = Date.now();
+            windowInfo.lastCompletedSessionId = data && data.sessionId ? String(data.sessionId) : windowInfo.expectedSessionId;
+            windowInfo.practiceMode = null;
+            windowInfo.reviewMode = false;
+            windowInfo.readOnly = false;
+            this.examWindows && this.examWindows.set(examId, windowInfo);
+            await this._removeActiveExamSessionMetadata(examId);
+        },
+
+        async handlePracticeResetRequest(examId, data = {}, sourceWindow = null) {
+            const targetWindow = sourceWindow
+                || (this.examWindows && this.examWindows.has(examId) ? this.examWindows.get(examId).window : null);
+            if (!targetWindow || targetWindow.closed) {
+                window.showMessage && window.showMessage('题目窗口已关闭，无法重置测试', 'warning');
+                return;
+            }
+
+            const payload = data && typeof data === 'object' ? data : {};
+            const reason = String(payload.reason || '').trim().toLowerCase();
+            const fromPracticeMode = String(payload.fromPracticeMode || payload.practiceMode || '').trim().toLowerCase();
+            const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
+            const shouldReopenAsNormal = reason === 'memorize-start-test'
+                || fromPracticeMode === 'memorize'
+                || windowInfo.practiceMode === 'memorize';
+
+            if (shouldReopenAsNormal) {
+                windowInfo.practiceMode = null;
+                windowInfo.reviewMode = false;
+                windowInfo.readOnly = false;
+                windowInfo.status = 'active';
+                this.examWindows && this.examWindows.set(examId, windowInfo);
+                await this.openExam(examId, {
+                    target: 'tab',
+                    windowName: 'ielts-reading-practice',
+                    reuseWindow: targetWindow
+                });
+                return;
+            }
+
+            windowInfo.window = targetWindow;
+            windowInfo.status = 'active';
+            windowInfo.startTime = Date.now();
+            windowInfo.completedAt = null;
+            windowInfo.expectedSessionId = this.generateSessionId(examId);
+            windowInfo.sessionId = null;
+            windowInfo.practiceMode = null;
+            windowInfo.reviewMode = false;
+            windowInfo.reviewSessionId = null;
+            windowInfo.reviewEntryIndex = 0;
+            windowInfo.readOnly = false;
+            windowInfo.dataCollectorReady = false;
+            windowInfo.lastResetAt = Date.now();
+            windowInfo.lastResetReason = reason || 'reset';
+            this.examWindows && this.examWindows.set(examId, windowInfo);
+
+            await this.startPracticeSession(examId);
+            this._syncRecorderSessionStarted(examId, windowInfo, {
+                pageType: 'unified-reading',
+                url: payload.normalUrl || payload.url || null,
+                title: payload.title || null,
+                resetReason: reason || 'reset'
+            });
+
+            this._sendExamInitEnvelope(examId, targetWindow, {
+                practiceMode: null,
+                reviewMode: false,
+                readOnly: false
+            });
+            this.restartExamHandshake(targetWindow, examId);
+            this.updateExamStatus(examId, 'in-progress');
         },
 
         /**
@@ -3583,8 +3745,11 @@
                 // 即使出错也要显示通知
                 window.showMessage('练习已完成，但数据保存可能有问题', 'warning');
             } finally {
-                // 清理会话
-                this.cleanupExamSession(examId);
+                if (this._isResetCapableUnifiedReadingCompletion(completionData, sourceWindow)) {
+                    await this.retainExamWindowAfterCompletion(examId, sourceWindow, completionData);
+                } else {
+                    this.cleanupExamSession(examId);
+                }
             }
         },
 
