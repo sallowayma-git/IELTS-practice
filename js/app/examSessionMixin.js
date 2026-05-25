@@ -1,5 +1,4 @@
 (function (global) {
-    const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
     const PRACTICE_ENHANCER_SCRIPT_PATH = './js/bundles/practice-page-enhancer.bundle.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
@@ -82,6 +81,24 @@
         }
 
         return null;
+    }
+
+    function normalizeDurationSeconds(...values) {
+        for (const value of values) {
+            const number = Number(value);
+            if (Number.isFinite(number) && number >= 0) {
+                return Math.floor(number);
+            }
+        }
+        return 0;
+    }
+
+    async function listPracticeRecordsFromUnifiedFacade() {
+        if (global.PracticeRecordAPI && typeof global.PracticeRecordAPI.list === 'function') {
+            const records = await global.PracticeRecordAPI.list();
+            return Array.isArray(records) ? records : [];
+        }
+        return [];
     }
 
     const mixin = {
@@ -1655,19 +1672,25 @@
                 const activeSuiteSessionId = this.currentSuiteSession && this.currentSuiteSession.id
                     ? String(this.currentSuiteSession.id)
                     : '';
-                const isExamInActiveSuite = Boolean(
+                const isExpectedExamInActiveSuite = Boolean(
                     this.currentSuiteSession
                     && Array.isArray(this.currentSuiteSession.sequence)
                     && this.currentSuiteSession.sequence.some(item => item && String(item.examId) === expectedExamId)
+                );
+                const hasPayloadExamInActiveSuite = Boolean(
+                    payloadExamId
+                    && this.currentSuiteSession
+                    && Array.isArray(this.currentSuiteSession.sequence)
+                    && this.currentSuiteSession.sequence.some(item => item && String(item.examId) === payloadExamId)
                 );
                 const sourceMatched = isLikelySameWindowContext(sourceWindow, expectedWindow);
                 const allowSuiteSourceFallback = Boolean(
                     !sourceMatched
                     && payloadExamId
-                    && payloadExamId === expectedExamId
+                    && (payloadExamId === expectedExamId || hasPayloadExamInActiveSuite)
                     && (
                         (payloadSuiteSessionId && activeSuiteSessionId && payloadSuiteSessionId === activeSuiteSessionId)
-                        || isExamInActiveSuite
+                        || isExpectedExamInActiveSuite
                     )
                 );
                 if (!sourceMatched && !allowSuiteSourceFallback) {
@@ -1682,9 +1705,14 @@
                     && payloadSuiteSessionId
                     && activeSuiteSessionId
                     && payloadSuiteSessionId === activeSuiteSessionId
-                    && payloadExamId
-                    && payloadExamId === expectedExamId
+                    && (
+                        (payloadExamId && payloadExamId === expectedExamId)
+                        || hasPayloadExamInActiveSuite
+                    )
                 );
+                const routedExamId = isSuiteFlowPayload && hasPayloadExamInActiveSuite
+                    ? payloadExamId
+                    : expectedExamId;
                 const payloadSessionId = data && typeof data.sessionId === 'string'
                     ? data.sessionId.trim()
                     : '';
@@ -1698,7 +1726,7 @@
                             isSuiteFlowPayload
                             && (
                                 (windowSuiteSessionId && windowSuiteSessionId === payloadSuiteSessionId)
-                                || isExamInActiveSuite
+                                || isExpectedExamInActiveSuite
                             )
                         );
                         if (!allowSuiteSessionMismatch) {
@@ -1718,14 +1746,14 @@
                     data.sessionId = expectedSessionId;
                 }
 
-                if (payloadExamId && payloadExamId !== expectedExamId) {
+                if (payloadExamId && payloadExamId !== expectedExamId && payloadExamId !== routedExamId) {
                     const allowedLegacy = payloadExamId === 'session';
                     if (!allowedLegacy) {
                         return;
                     }
                 }
 
-                data.examId = examId;
+                data.examId = routedExamId;
                 if (!data.sessionId && expectedSessionId) {
                     data.sessionId = expectedSessionId;
                 }
@@ -1747,29 +1775,29 @@
                         break;
                     // 新增：处理数据采集器的消息
                     case 'SESSION_READY':
-                        this.handleSessionReady(examId, data);
+                        this.handleSessionReady(routedExamId, data);
                         if (typeof this._maybeRestoreSuiteReviewState === 'function') {
-                            this._maybeRestoreSuiteReviewState(examId, sourceWindow || expectedWindow, windowInfo).catch((restoreError) => {
+                            this._maybeRestoreSuiteReviewState(routedExamId, sourceWindow || expectedWindow, windowInfo).catch((restoreError) => {
                                 console.warn('[SuitePractice] 恢复回看态失败:', restoreError);
                             });
                         }
                         break;
                     case 'PROGRESS_UPDATE':
-                        this.handleProgressUpdate(examId, data);
+                        this.handleProgressUpdate(routedExamId, data);
                         break;
                     case 'PRACTICE_COMPLETE':
                         if (windowInfo && windowInfo.reviewMode) {
-                            console.info('[ReviewReplay] 回顾模式忽略 PRACTICE_COMPLETE:', examId);
+                            console.info('[ReviewReplay] 回顾模式忽略 PRACTICE_COMPLETE:', routedExamId);
                             break;
                         }
                         if (data && data.suiteSessionId && windowInfo) {
                             windowInfo.suiteSessionId = data.suiteSessionId;
                             this.examWindows && this.examWindows.set(examId, windowInfo);
                         }
-                        await this.handlePracticeComplete(examId, data, sourceWindow || expectedWindow);
+                        await this.handlePracticeComplete(routedExamId, data, sourceWindow || expectedWindow);
                         break;
                     case 'ERROR_OCCURRED':
-                        this.handleDataCollectionError(examId, data);
+                        this.handleDataCollectionError(routedExamId, data);
                         break;
                     case 'REQUEST_INIT':
                         sendInitEnvelope(sourceWindow || examWindow);
@@ -1810,29 +1838,21 @@
                             const windowSuiteId = windowInfo && windowInfo.suiteSessionId
                                 ? String(windowInfo.suiteSessionId)
                                 : '';
-                            const isExplicitSuiteNavigate = data.suiteReviewMode === true;
-                            const isActiveSuiteWindow = Boolean(windowSuiteId && activeSuiteId && windowSuiteId === activeSuiteId);
-                            if (isExplicitSuiteNavigate || isActiveSuiteWindow) {
-                                const payloadExamId = data.examId != null ? String(data.examId).trim() : '';
-                                const hasPayloadExamInActiveSuite = Boolean(
-                                    payloadExamId
-                                    && this.currentSuiteSession
-                                    && Array.isArray(this.currentSuiteSession.sequence)
-                                    && this.currentSuiteSession.sequence.some(item => item && item.examId === payloadExamId)
-                                );
-                                const routedExamId = hasPayloadExamInActiveSuite ? payloadExamId : examId;
-                                const handledSuiteReview = await this.handleSuiteReviewNavigate(routedExamId, data, sourceWindow || expectedWindow);
-                                if (handledSuiteReview) {
-                                    break;
-                                }
-                            }
-                        }
-                        await this.handleReviewReplayNavigate(examId, data, sourceWindow || expectedWindow);
-                        break;
-                    case 'SIMULATION_DRAFT_SYNC':
-                        if (this.currentSuiteSession && data && data.draft) {
-                            const incomingUpdatedAt = Number(data.draftUpdatedAt ?? data.draft.updatedAt);
-                            const previousDraft = this.currentSuiteSession.draftsByExam[examId] || null;
+	                            const isExplicitSuiteNavigate = data.suiteReviewMode === true;
+	                            const isActiveSuiteWindow = Boolean(windowSuiteId && activeSuiteId && windowSuiteId === activeSuiteId);
+	                            if (isExplicitSuiteNavigate || isActiveSuiteWindow) {
+	                                const handledSuiteReview = await this.handleSuiteReviewNavigate(routedExamId, data, sourceWindow || expectedWindow);
+	                                if (handledSuiteReview) {
+	                                    break;
+	                                }
+	                            }
+	                        }
+	                        await this.handleReviewReplayNavigate(routedExamId, data, sourceWindow || expectedWindow);
+	                        break;
+	                    case 'SIMULATION_DRAFT_SYNC':
+	                        if (this.currentSuiteSession && data && data.draft) {
+	                            const incomingUpdatedAt = Number(data.draftUpdatedAt ?? data.draft.updatedAt);
+	                            const previousDraft = this.currentSuiteSession.draftsByExam[routedExamId] || null;
                             const previousUpdatedAt = Number(previousDraft && previousDraft.updatedAt);
                             const shouldAcceptDraft = !(
                                 previousDraft
@@ -1841,7 +1861,7 @@
                                 && incomingUpdatedAt < previousUpdatedAt
                             );
                             if (shouldAcceptDraft) {
-                                this.currentSuiteSession.draftsByExam[examId] = {
+                                this.currentSuiteSession.draftsByExam[routedExamId] = {
                                     ...data.draft,
                                     updatedAt: Number.isFinite(incomingUpdatedAt) ? incomingUpdatedAt : Date.now()
                                 };
@@ -1853,14 +1873,14 @@
                         break;
                     case 'SIMULATION_NAVIGATE':
                         if (typeof this._handleSimulationNavigate === 'function') {
-                            await this._handleSimulationNavigate(examId, data, sourceWindow || expectedWindow);
+                            await this._handleSimulationNavigate(routedExamId, data, sourceWindow || expectedWindow);
                         }
                         break;
                     case 'SIMULATION_SUBMIT':
                         if (windowInfo && windowInfo.reviewMode) {
                             break;
                         }
-                        await this.handlePracticeComplete(examId, data, sourceWindow || expectedWindow);
+                        await this.handlePracticeComplete(routedExamId, data, sourceWindow || expectedWindow);
                         break;
                     default:
                 }
@@ -1983,20 +2003,12 @@
                             return null;
                         }
 
-                        // 创建练习记录
-                        const practiceRecord = this.createSimplePracticeRecord(exam, realData);
-
-                        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
-                            await window.PracticeCore.store.savePracticeRecord(practiceRecord);
-                        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
-                            await window.simpleStorageWrapper.addPracticeRecord(practiceRecord);
-                        } else {
-                            // 直接保存到localStorage
-                            const records = await storage.get('practice_records', []);
-                            records.unshift(practiceRecord);
-                            const practiceKey = ['practice', 'records'].join('_');
-                            await storage.set(practiceKey, records);
-                        }
+	                        // 创建练习记录
+	                        const practiceRecord = this.createSimplePracticeRecord(exam, realData);
+	                        if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.saveRecord !== 'function') {
+	                            throw new Error('统一练习记录存储未就绪');
+	                        }
+	                        await window.PracticeRecordAPI.saveRecord(practiceRecord);
 
                         // 检查成就
                         if (window.AchievementManager) {
@@ -2022,7 +2034,7 @@
 
                 getPracticeRecords: async (filters = {}) => {
                     try {
-                        const records = await storage.get('practice_records', []);
+                        const records = await listPracticeRecordsFromUnifiedFacade();
 
                         if (Object.keys(filters).length === 0) {
                             return records;
@@ -2234,6 +2246,19 @@
             return normalized;
         },
 
+        _mergeReplayAnswerMapsFirstWins(target, targetExamId = '', allowUnprefixed = true, ...sources) {
+            const result = this._isReplayObject(target) ? target : {};
+            sources.forEach((source) => {
+                const normalized = this._normalizeReplayAnswerMap(source, targetExamId, allowUnprefixed);
+                Object.entries(normalized).forEach(([questionId, value]) => {
+                    if (!Object.prototype.hasOwnProperty.call(result, questionId)) {
+                        result[questionId] = this._cloneReviewData(value);
+                    }
+                });
+            });
+            return result;
+        },
+
         _normalizeReplayComparison(rawComparison, targetExamId = '', allowUnprefixed = true) {
             const normalized = {};
             if (!this._isReplayObject(rawComparison)) {
@@ -2281,41 +2306,29 @@
             return '';
         },
 
-        _hydrateReplayCorrectAnswersFromDetails(detailSource, correctAnswers, comparison, targetExamId = '', allowUnprefixed = true) {
-            if (!this._isReplayObject(detailSource)) {
-                return;
-            }
-            const normalizedTarget = targetExamId ? String(targetExamId).trim().toLowerCase() : '';
-            Object.entries(detailSource).forEach(([rawKey, rawDetail]) => {
-                const split = this._splitReplayCompositeKey(rawKey);
-                if (!split.questionKey) {
-                    return;
-                }
-                const hasPrefix = !!split.examPrefix;
-                if (hasPrefix) {
-                    if (!normalizedTarget || split.examPrefix.toLowerCase() !== normalizedTarget) {
-                        return;
-                    }
-                } else if (!allowUnprefixed) {
-                    return;
-                }
-                const detail = this._isReplayObject(rawDetail) ? rawDetail : {};
-                const userAnswer = detail.userAnswer != null ? detail.userAnswer : '';
-                const correctAnswer = detail.correctAnswer != null ? detail.correctAnswer : '';
-                if (!Object.prototype.hasOwnProperty.call(correctAnswers, split.questionKey) && correctAnswer !== '') {
-                    correctAnswers[split.questionKey] = this._cloneReviewData(correctAnswer);
-                }
-                if (!comparison[split.questionKey]) {
-                    comparison[split.questionKey] = {
-                        questionId: split.questionKey,
-                        userAnswer: this._cloneReviewData(userAnswer),
-                        correctAnswer: this._cloneReviewData(correctAnswer),
-                        isCorrect: typeof detail.isCorrect === 'boolean' ? detail.isCorrect : null
-                    };
-                } else if (comparison[split.questionKey].correctAnswer == null || comparison[split.questionKey].correctAnswer === '') {
-                    comparison[split.questionKey].correctAnswer = this._cloneReviewData(correctAnswer);
-                }
-            });
+        _resolveReplayCorrectAnswerMap(source = {}, options = {}) {
+            const entry = this._isReplayObject(source) ? source : {};
+            const realData = this._isReplayObject(entry.realData) ? entry.realData : {};
+            const rawData = this._isReplayObject(entry.rawData) ? entry.rawData : {};
+            const rawRealData = this._isReplayObject(rawData.realData) ? rawData.realData : {};
+            const targetExamId = String(
+                options.examId
+                || entry.examId
+                || realData.examId
+                || rawData.examId
+                || rawRealData.examId
+                || ''
+            ).trim();
+            const allowUnprefixed = options.allowUnprefixed !== false;
+            const correctAnswers = this._mergeReplayAnswerMapsFirstWins({},
+                targetExamId,
+                allowUnprefixed,
+                entry.correctAnswerMap,
+                realData.correctAnswerMap,
+                rawData.correctAnswerMap,
+                rawRealData.correctAnswerMap
+            );
+            return correctAnswers;
         },
 
         _finalizeReplayComparison(answers, correctAnswers, comparison) {
@@ -2335,24 +2348,30 @@
                 const userAnswer = Object.prototype.hasOwnProperty.call(existing, 'userAnswer')
                     ? existing.userAnswer
                     : (Object.prototype.hasOwnProperty.call(answers, questionId) ? answers[questionId] : '');
-                const correctAnswer = Object.prototype.hasOwnProperty.call(existing, 'correctAnswer')
-                    ? existing.correctAnswer
-                    : (Object.prototype.hasOwnProperty.call(correctAnswers, questionId) ? correctAnswers[questionId] : '');
-                let isCorrect = typeof existing.isCorrect === 'boolean' ? existing.isCorrect : null;
-                if (isCorrect === null && userAnswer != null && correctAnswer != null && String(correctAnswer).trim()) {
-                    isCorrect = String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
+                const hasCanonicalCorrectAnswer = Object.prototype.hasOwnProperty.call(correctAnswers, questionId);
+                const correctAnswer = hasCanonicalCorrectAnswer
+                    ? correctAnswers[questionId]
+                    : '';
+                let comparedResult = null;
+                if (hasCanonicalCorrectAnswer && userAnswer != null && correctAnswer != null && String(correctAnswer).trim()) {
+                    const matchCore = global.AnswerMatchCore;
+                    if (matchCore && typeof matchCore.compareAnswers === 'function') {
+                        comparedResult = matchCore.compareAnswers(userAnswer, correctAnswer);
+                    } else {
+                        comparedResult = String(userAnswer).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
+                    }
                 }
                 merged[questionId] = {
                     questionId,
                     userAnswer: this._cloneReviewData(userAnswer),
                     correctAnswer: this._cloneReviewData(correctAnswer),
-                    isCorrect
+                    isCorrect: hasCanonicalCorrectAnswer ? comparedResult : null
                 };
             });
             return merged;
         },
 
-        _deriveReplayScoreInfo(sourceScoreInfo, comparison) {
+        _deriveReplayScoreInfo(sourceScoreInfo, comparison, preferDerived = false) {
             const scoreInfo = this._isReplayObject(sourceScoreInfo) ? this._cloneReviewData(sourceScoreInfo) : {};
             const stats = {
                 total: 0,
@@ -2376,13 +2395,13 @@
 
             const resolvedTotal = Number(scoreInfo.total ?? scoreInfo.totalQuestions);
             const resolvedCorrect = Number(scoreInfo.correct ?? scoreInfo.score);
-            const finalTotal = Number.isFinite(resolvedTotal) && resolvedTotal >= 0 ? resolvedTotal : stats.total;
-            const finalCorrect = Number.isFinite(resolvedCorrect) && resolvedCorrect >= 0 ? resolvedCorrect : stats.correct;
+            const finalTotal = preferDerived || !Number.isFinite(resolvedTotal) || resolvedTotal < 0 ? stats.total : resolvedTotal;
+            const finalCorrect = preferDerived || !Number.isFinite(resolvedCorrect) || resolvedCorrect < 0 ? stats.correct : resolvedCorrect;
             const derivedAccuracy = finalTotal > 0 ? finalCorrect / finalTotal : 0;
             const resolvedAccuracy = Number(scoreInfo.accuracy);
-            const finalAccuracy = Number.isFinite(resolvedAccuracy) ? resolvedAccuracy : derivedAccuracy;
+            const finalAccuracy = preferDerived || !Number.isFinite(resolvedAccuracy) ? derivedAccuracy : resolvedAccuracy;
             const resolvedPercentage = Number(scoreInfo.percentage);
-            const finalPercentage = Number.isFinite(resolvedPercentage)
+            const finalPercentage = !preferDerived && Number.isFinite(resolvedPercentage)
                 ? resolvedPercentage
                 : Math.round(finalAccuracy * 100);
 
@@ -2392,6 +2411,23 @@
             scoreInfo.accuracy = finalAccuracy;
             scoreInfo.percentage = finalPercentage;
             return scoreInfo;
+        },
+
+        _hasCompleteReplayCorrectAnswerMap(correctAnswers, comparison, sourceScoreInfo = {}) {
+            if (!this._isReplayObject(correctAnswers) || !this._isReplayObject(comparison)) {
+                return false;
+            }
+            const correctKeys = Object.keys(correctAnswers);
+            const comparisonKeys = Object.keys(comparison);
+            if (correctKeys.length === 0 || comparisonKeys.length === 0) {
+                return false;
+            }
+            const scoreInfo = this._isReplayObject(sourceScoreInfo) ? sourceScoreInfo : {};
+            const scoreTotal = Number(scoreInfo.total ?? scoreInfo.totalQuestions);
+            if (Number.isFinite(scoreTotal) && scoreTotal > comparisonKeys.length) {
+                return false;
+            }
+            return comparisonKeys.every(key => Object.prototype.hasOwnProperty.call(correctAnswers, key));
         },
 
         _collectReplayQuestionIds(entry) {
@@ -2408,6 +2444,7 @@
                 });
             };
             collect(entry.answers);
+            collect(entry.correctAnswerMap);
             collect(entry.correctAnswers);
             collect(entry.answerComparison);
             if (Array.isArray(entry.allQuestionIds)) {
@@ -2431,14 +2468,11 @@
             const isAggregated = baseEntries.length > 1;
             const recordAnswersSource = this._isReplayObject(record.answers) ? record.answers : (this._isReplayObject(record.realData?.answers) ? record.realData.answers : {});
             const recordComparisonSource = this._isReplayObject(record.answerComparison) ? record.answerComparison : (this._isReplayObject(record.realData?.answerComparison) ? record.realData.answerComparison : {});
-            const recordCorrectSource = this._isReplayObject(record.correctAnswerMap)
-                ? record.correctAnswerMap
-                : (this._isReplayObject(record.correctAnswers)
-                    ? record.correctAnswers
-                    : (this._isReplayObject(record.realData?.correctAnswers) ? record.realData.correctAnswers : {}));
-            const recordDetailSource = record.scoreInfo?.details
-                || record.realData?.scoreInfo?.details
-                || null;
+            const recordCorrectSources = [
+                record.correctAnswerMap,
+                record.realData?.correctAnswerMap,
+                record.rawData?.correctAnswerMap
+            ];
 
             const builtEntries = [];
             baseEntries.forEach((rawEntry, index) => {
@@ -2446,7 +2480,15 @@
                 const entryMetadata = this._isReplayObject(entry.metadata) ? entry.metadata : {};
                 const entryExamId = entry.examId
                     || entryMetadata.examId
-                    || this._deriveReplayExamIdFromSources(entry.answers, entry.answerComparison, recordAnswersSource, recordComparisonSource)
+                    || this._deriveReplayExamIdFromSources(
+                        entry.answers,
+                        entry.correctAnswerMap,
+                        entry.realData?.correctAnswerMap,
+                        entry.answerComparison,
+                        recordAnswersSource,
+                        recordComparisonSource,
+                        ...recordCorrectSources
+                    )
                     || (!isAggregated ? (record.examId || recordMetadata.examId) : '');
                 const allowUnprefixed = !isAggregated;
 
@@ -2472,32 +2514,26 @@
                     comparison = this._normalizeReplayComparison(recordComparisonSource, entryExamId, allowUnprefixed);
                 }
 
-                let correctAnswers = this._normalizeReplayAnswerMap(
-                    this._isReplayObject(entry.correctAnswerMap)
-                        ? entry.correctAnswerMap
-                        : (this._isReplayObject(entry.correctAnswers)
-                            ? entry.correctAnswers
-                            : (this._isReplayObject(entry.realData?.correctAnswers) ? entry.realData.correctAnswers : {})),
-                    entryExamId,
-                    true
-                );
+                const correctAnswers = this._resolveReplayCorrectAnswerMap(entry, {
+                    examId: entryExamId,
+                    allowUnprefixed: true
+                });
                 if (Object.keys(correctAnswers).length === 0) {
-                    correctAnswers = this._normalizeReplayAnswerMap(recordCorrectSource, entryExamId, allowUnprefixed);
+                    this._mergeReplayAnswerMapsFirstWins(
+                        correctAnswers,
+                        entryExamId,
+                        allowUnprefixed,
+                        ...recordCorrectSources
+                    );
                 }
 
-                const detailSource = entry.scoreInfo?.details
-                    || entry.realData?.scoreInfo?.details
-                    || recordDetailSource;
-                this._hydrateReplayCorrectAnswersFromDetails(
-                    detailSource,
-                    correctAnswers,
-                    comparison,
-                    entryExamId,
-                    allowUnprefixed
-                );
-
                 comparison = this._finalizeReplayComparison(answers, correctAnswers, comparison);
-                const scoreInfo = this._deriveReplayScoreInfo(entry.scoreInfo || entry.realData?.scoreInfo || record.scoreInfo || record.realData?.scoreInfo, comparison);
+                const sourceScoreInfo = entry.scoreInfo || entry.realData?.scoreInfo || record.scoreInfo || record.realData?.scoreInfo;
+                const scoreInfo = this._deriveReplayScoreInfo(
+                    sourceScoreInfo,
+                    comparison,
+                    this._hasCompleteReplayCorrectAnswerMap(correctAnswers, comparison, sourceScoreInfo)
+                );
                 const highlights = Array.isArray(entry.highlights)
                     ? entry.highlights.slice()
                     : (Array.isArray(entry.rawData?.highlights) ? entry.rawData.highlights.slice() : []);
@@ -2516,6 +2552,7 @@
                         || recordMetadata.examTitle
                         || `回顾题目 ${index + 1}`,
                     answers,
+                    correctAnswerMap: correctAnswers,
                     correctAnswers,
                     answerComparison: comparison,
                     scoreInfo,
@@ -3053,8 +3090,28 @@
          * 处理练习完成（真实数据）
          */
         async handlePracticeComplete(examId, data, sourceWindow = null) {
-            if (data && !data.sessionId) {
-                data.sessionId = `${examId}_${Date.now()}`;
+            if (!data || typeof data !== 'object') {
+                data = {};
+            }
+
+            const windowInfo = this.examWindows && this.examWindows.has(examId)
+                ? this.examWindows.get(examId)
+                : null;
+            if (!data.sessionId && windowInfo && (windowInfo.expectedSessionId || windowInfo.sessionId)) {
+                data.sessionId = windowInfo.expectedSessionId || windowInfo.sessionId;
+            }
+
+            const completionKey = data.sessionId
+                ? `${examId}::${String(data.sessionId)}`
+                : '';
+            if (completionKey) {
+                this._practiceCompletionSavingKeys = this._practiceCompletionSavingKeys || new Set();
+                this._practiceCompletionSavedKeys = this._practiceCompletionSavedKeys || new Set();
+                if (this._practiceCompletionSavingKeys.has(completionKey) || this._practiceCompletionSavedKeys.has(completionKey)) {
+                    console.info('[DataCollection] 忽略重复完成事件:', completionKey);
+                    return;
+                }
+                this._practiceCompletionSavingKeys.add(completionKey);
             }
 
             // 仅在P1/P4听力填空场景尝试补齐 spellingErrors（错词抓取）
@@ -3106,6 +3163,12 @@
                 try {
                     const handled = await this.handleSuitePracticeComplete(examId, data, sourceWindow);
                     if (handled) {
+                        if (completionKey && this._practiceCompletionSavedKeys) {
+                            this._practiceCompletionSavedKeys.add(completionKey);
+                        }
+                        if (completionKey && this._practiceCompletionSavingKeys) {
+                            this._practiceCompletionSavingKeys.delete(completionKey);
+                        }
                         return;
                     }
                     suiteHandlerDeclined = true;
@@ -3116,36 +3179,44 @@
                 }
             }
 
-            const recorderAvailable = this.components
-                && this.components.practiceRecorder
-                && typeof this.components.practiceRecorder.savePracticeRecord === 'function';
-
-            try {
-                if (recorderAvailable) {
-                    try {
-                        const normalizedData = suiteHandlerDeclined
-                            ? Object.assign({}, data, {
-                                allowStandaloneSave: true,
-                                metadata: Object.assign({}, data?.metadata || {}, { allowStandaloneSave: true, suiteFallback: true })
-                            })
-                            : data;
-                        await this.components.practiceRecorder.savePracticeRecord(normalizedData);
-                    } catch (recErr) {
-                        console.warn('[DataCollection] PracticeRecorder 保存失败，改用降级存储:', recErr);
-                        await this.saveRealPracticeData(examId, data, { savingAsFallback: true });
-                    }
-                } else {
-                    // 直接保存真实数据（采用旧版本的简单方式）
-                    await this.saveRealPracticeData(examId, data, { savingAsFallback: true });
-                }
+	            try {
+	                const normalizedData = suiteHandlerDeclined
+	                    ? Object.assign({}, data, {
+	                        allowStandaloneSave: true,
+	                        metadata: Object.assign({}, data?.metadata || {}, { allowStandaloneSave: true, suiteStandaloneSave: true })
+	                    })
+	                    : data;
+	                if (!global.PracticeRecordAPI || typeof global.PracticeRecordAPI.saveCompletion !== 'function') {
+	                    throw new Error('统一练习记录 API 未就绪');
+	                }
+	                const exam = await findExamDefinition(examId);
+	                await global.PracticeRecordAPI.saveCompletion(
+	                    normalizedData,
+	                    {
+	                        examId,
+	                        sessionId: normalizedData?.sessionId || null,
+	                        metadata: Object.assign({}, normalizedData?.metadata || {}, {
+	                            examId,
+	                            examTitle: normalizedData?.title || exam?.title || '',
+	                            category: normalizedData?.category || exam?.category || normalizedData?.pageType || 'Unknown',
+	                            frequency: normalizedData?.frequency || exam?.frequency || 'unknown',
+	                            type: normalizedData?.type || exam?.type || normalizedData?.metadata?.type || null
+	                        })
+	                    },
+	                    exam || null,
+	                    { updateStats: true }
+	                );
 
                 // 刷新内存中的练习记录，确保无需手动刷新即可看到
                 try {
-                    if (typeof window.syncPracticeRecords === 'function') {
-                        window.syncPracticeRecords();
-                    } else if (window.storage) {
-                        const latest = await window.storage.get('practice_records', []);
-                        this.setState('practice.records', Array.isArray(latest) ? latest : []);
+	                    if (typeof window.syncPracticeRecords === 'function') {
+	                        await window.syncPracticeRecords({ forceRender: true });
+	                    } else if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
+	                        const latest = await window.PracticeRecordAPI.list();
+	                        this.setState('practice.records', Array.isArray(latest) ? latest : []);
+	                    } else {
+	                        const latest = await listPracticeRecordsFromUnifiedFacade();
+	                        this.setState('practice.records', Array.isArray(latest) ? latest : []);
                     }
                 } catch (syncErr) {
                     console.warn('[DataCollection] 刷新练习记录失败（UI可能需要手动刷新）:', syncErr);
@@ -3166,23 +3237,23 @@
                 this.updateExamStatus(examId, 'completed');
 
                 // 显示完成通知（使用真实数据）
-                this.showRealCompletionNotification(examId, data);
+                await this.showRealCompletionNotification(examId, data);
 
                 // 检查成就
                 if (window.AchievementManager) {
                     window.AchievementManager.check(data?.realData).catch(console.warn);
                 }
 
-                // 刷新练习记录显示
-                if (typeof updatePracticeView === 'function') {
-                    updatePracticeView();
+                if (completionKey) {
+                    this._practiceCompletionSavedKeys.add(completionKey);
                 }
-
             } catch (error) {
                 console.error('[DataCollection] 处理练习完成数据失败:', error);
-                // 即使出错也要显示通知
-                window.showMessage('练习已完成，但数据保存可能有问题', 'warning');
+                window.showMessage && window.showMessage('练习完成，但记录保存失败：' + (error && error.message ? error.message : '未知错误'), 'error');
             } finally {
+                if (completionKey && this._practiceCompletionSavingKeys) {
+                    this._practiceCompletionSavingKeys.delete(completionKey);
+                }
                 // 清理会话
                 this.cleanupExamSession(examId);
             }
@@ -3248,69 +3319,10 @@
         },
 
         /**
-         * 保存真实练习数据（采用旧版本的简单直接方式）
+         * 保存真实练习数据
          */
         async saveRealPracticeData(examId, realData, options = {}) {
             try {
-                const normalizeKey = (rawKey) => {
-                    if (rawKey == null) return null;
-                    const s = String(rawKey).trim();
-                    if (!s) return null;
-                    const range = s.match(/^q?(\d+)\s*-\s*(\d+)$/i);
-                    if (range) return `q${range[1]}-${range[2]}`;
-                    if (/^q\d+$/i.test(s)) return s.toLowerCase();
-                    if (/^\d+$/.test(s)) return `q${s}`;
-                    return s;
-                };
-
-                const normalizeValue = (value) => {
-                    if (value == null) return '';
-                    if (typeof value === 'boolean') {
-                        return value ? 'True' : 'False';
-                    }
-                    if (Array.isArray(value)) {
-                        const tokens = value
-                            .map(v => String(v).trim())
-                            .filter(Boolean)
-                            .map(v => v.toUpperCase());
-                        return Array.from(new Set(tokens)).sort().join(', ');
-                    }
-                    if (typeof value === 'object') {
-                        if (value.answer != null) return normalizeValue(value.answer);
-                        if (value.value != null) return normalizeValue(value.value);
-                        try {
-                            const json = JSON.stringify(value);
-                            return json === '{}' || json === '[]' ? '' : json;
-                        } catch (_) {
-                            return '';
-                        }
-                    }
-                    return String(value).trim();
-                };
-
-                const normalizeAnswerMap = (raw) => {
-                    const map = {};
-                    if (!raw) return map;
-                    if (Array.isArray(raw)) {
-                        raw.forEach((entry, idx) => {
-                            if (!entry) return;
-                            const k = normalizeKey(entry.questionId || `q${idx + 1}`);
-                            const v = normalizeValue(entry.answer ?? entry.userAnswer ?? entry.value ?? entry);
-                            if (k) map[k] = v;
-                        });
-                        return map;
-                    }
-                    Object.entries(raw).forEach(([rk, rv]) => {
-                        const k = normalizeKey(rk);
-                        const v = normalizeValue(rv && typeof rv === 'object' && 'answer' in rv ? rv.answer : rv);
-                        if (k) map[k] = v;
-                    });
-                    return map;
-                };
-
-                const normalizedAnswers = normalizeAnswerMap(realData?.answers);
-                const normalizedCorrectMap = normalizeAnswerMap(realData?.correctAnswers);
-
                 const forceIndividualSave = Boolean(options && options.forceIndividualSave);
                 const suiteSessionId = realData?.suiteSessionId
                     || realData?.metadata?.suiteSessionId
@@ -3328,150 +3340,45 @@
                     || normalizedFrequency === 'suite'
                     || hasSuiteMapping
                 );
-                const savingAsFallback = Boolean(options && options.savingAsFallback);
 
-                if (!savingAsFallback) {
-                    if (isSuiteFlow && !aggregatePayload && !forceIndividualSave) {
-                        console.log('[DataCollection] 套题模式结果由套题流程接管，跳过单篇降级保存:', {
-                            examId,
-                            suiteSessionId: suiteSessionId || null
-                        });
-                        return;
-                    }
+                if (isSuiteFlow && !aggregatePayload && !forceIndividualSave) {
+                    console.log('[DataCollection] 套题模式结果由套题流程接管，跳过单篇保存:', {
+                        examId,
+                        suiteSessionId: suiteSessionId || null
+                    });
+                    return;
                 }
 
                 const exam = await findExamDefinition(examId);
 
                 if (!exam) {
                     console.error('[DataCollection] 无法找到题目信息:', examId);
-                    return;
+                    throw new Error('无法找到题目信息: ' + examId);
                 }
 
-                // 构造练习记录（与旧版本完全相同的格式）
-                const practiceRecord = {
-                    id: Date.now(),
-                    examId: examId,
-                    title: exam.title,
-                    category: exam.category,
-                    frequency: exam.frequency,
+                if (!global.PracticeRecordAPI || typeof global.PracticeRecordAPI.saveCompletion !== 'function') {
+                    throw new Error('统一练习记录 API 未就绪');
+                }
 
-                    // 真实数据
-                    realData: {
-                        score: realData.scoreInfo?.correct || 0,
-                        totalQuestions: realData.scoreInfo?.total || 0,
-                        accuracy: realData.scoreInfo?.accuracy || 0,
-                        percentage: realData.scoreInfo?.percentage || 0,
-                        duration: realData.duration,
-                        answers: normalizedAnswers,
-                        correctAnswers: normalizedCorrectMap,
-                        answerHistory: realData.answerHistory,
-                        interactions: realData.interactions,
-                        isRealData: true,
-                        source: realData.scoreInfo?.source || 'unknown'
+                return await global.PracticeRecordAPI.saveCompletion(
+                    realData,
+                    {
+                        examId,
+                        sessionId: realData?.sessionId || null,
+                        metadata: Object.assign({}, realData?.metadata || {}, {
+                            examId,
+                            examTitle: realData?.title || exam?.title || '',
+                            category: realData?.category || exam?.category || realData?.pageType || 'Unknown',
+                            frequency: realData?.frequency || exam?.frequency || 'unknown',
+                            type: realData?.type || exam?.type || realData?.metadata?.type || null
+                        })
                     },
-
-                    // 数据来源标识
-                    dataSource: 'real',
-
-                    date: new Date().toISOString(),
-                    sessionId: realData.sessionId,
-                    timestamp: Date.now()
-                };
-
-                // 兼容旧视图字段（便于总览系统统计与详情展示）
-                try {
-                    const sInfo = realData && realData.scoreInfo ? realData.scoreInfo : {};
-                    const correct = typeof sInfo?.correct === 'number' ? sInfo.correct : 0;
-                    const total = typeof sInfo?.total === 'number' ? sInfo.total : (practiceRecord.realData?.totalQuestions || Object.keys(realData.answers || {}).length || 0);
-                    const acc = typeof sInfo?.accuracy === 'number' ? sInfo.accuracy : (total > 0 ? correct / total : 0);
-                    const pct = typeof sInfo?.percentage === 'number' ? sInfo.percentage : Math.round(acc * 100);
-
-                    practiceRecord.score = correct;
-                    practiceRecord.correctAnswers = correct; // 兼容练习记录视图所需字段
-                    practiceRecord.totalQuestions = total;
-                    practiceRecord.accuracy = acc;
-                    practiceRecord.percentage = pct;
-                    practiceRecord.answers = normalizedAnswers;
-                    practiceRecord.startTime = new Date((realData.startTime ?? (Date.now() - (realData.duration || 0) * 1000))).toISOString();
-                    practiceRecord.endTime = new Date((realData.endTime ?? Date.now())).toISOString();
-
-                    // 填充详情，便于在练习记录详情中显示正确答案
-                    const comp = realData && realData.answerComparison ? realData.answerComparison : {};
-                    const details = {};
-                    Object.entries(comp).forEach(([qid, obj]) => {
-                        details[qid] = {
-                            userAnswer: obj && obj.userAnswer != null ? obj.userAnswer : '',
-                            correctAnswer: obj && obj.correctAnswer != null ? obj.correctAnswer : '',
-                            isCorrect: !!(obj && obj.isCorrect)
-                        };
-                    });
-                    // 将详情放入 realData.scoreInfo，便于历史详情与Markdown导出读取
-                    if (!practiceRecord.realData) practiceRecord.realData = {};
-                    practiceRecord.realData.scoreInfo = {
-                        correct: correct,
-                        total: total,
-                        accuracy: acc,
-                        percentage: pct,
-                        details: details
-                    };
-
-                    // 同时保留顶层一致性（仅用于展示，不作为详情读取来源）
-                    practiceRecord.scoreInfo = {
-                        correct: correct,
-                        total: total,
-                        accuracy: acc,
-                        percentage: pct,
-                        details: details
-                    };
-
-                    // 将比较结构提升到顶层，便于兼容读取
-                    practiceRecord.answerComparison = comp;
-                } catch (compatErr) {
-                    console.warn('[DataCollection] 兼容字段填充失败:', compatErr);
-                }
-
-                // 直接保存到localStorage（与旧版本完全相同的方式）
-                let practiceRecords = await storage.get('practice_records', []);
-                if (!Array.isArray(practiceRecords)) {
-                    // 迁移修复：历史上可能被错误压缩为对象，这里强制纠正为数组
-                    practiceRecords = [];
-                }
-
-                practiceRecords.unshift(practiceRecord);
-
-                // 限制记录数量
-                if (practiceRecords.length > MAX_LEGACY_PRACTICE_RECORDS) {
-                    practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
-                }
-
-                let saveResult = null;
-                if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
-                    saveResult = await window.PracticeCore.store.savePracticeRecord(practiceRecord);
-                } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
-                    saveResult = await window.simpleStorageWrapper.addPracticeRecord(practiceRecord);
-                } else {
-                    const practiceKey = ['practice', 'records'].join('_');
-                    saveResult = await storage.set(practiceKey, practiceRecords);
-                }
-
-                // 立即验证保存是否成功
-                const verifyRecords = window.PracticeStore && typeof window.PracticeStore.list === 'function'
-                    ? await window.PracticeStore.list()
-                    : (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function'
-                        ? await window.PracticeCore.store.listPracticeRecords()
-                        : await storage.get('practice_records', []));
-                const practiceRecordId = String(practiceRecord.id);
-                const savedRecord = Array.isArray(verifyRecords)
-                    ? verifyRecords.find(r => r && String(r.id) === practiceRecordId)
-                    : undefined;
-
-                if (savedRecord) {
-                } else {
-                    console.error('[DataCollection] ✗ 保存验证失败，记录未找到');
-                }
-
+                    exam || null,
+                    { updateStats: options.updateStats === true }
+                );
             } catch (error) {
                 console.error('[DataCollection] 保存真实数据失败:', error);
+                throw error;
             }
         },
 
@@ -3486,9 +3393,15 @@
             if (!exam) return;
 
             const scoreInfo = realData.scoreInfo;
+            const durationSeconds = normalizeDurationSeconds(
+                realData.duration,
+                realData.durationSeconds,
+                realData.realData?.duration,
+                realData.scoreInfo?.duration
+            );
+            const duration = Math.round(durationSeconds / 60);
             if (scoreInfo) {
                 const accuracy = scoreInfo.percentage || Math.round((scoreInfo.accuracy || 0) * 100);
-                const duration = Math.round(realData.duration / 60); // 转换为分钟
 
                 let message = `练习完成！\n${exam.title}\n`;
 
@@ -3507,7 +3420,6 @@
                 window.showMessage(message, 'success');
             } else {
                 // 没有分数信息的情况
-                const duration = Math.round(realData.duration / 60);
                 window.showMessage(`练习完成！\n${exam.title}\n用时: ${duration} 分钟`, 'success');
             }
         },

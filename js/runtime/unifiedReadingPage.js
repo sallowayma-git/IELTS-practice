@@ -875,14 +875,18 @@
 
     function updateNavStatuses(results = null) {
         const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+        let answerSnapshot = results ? null : collectAnswers();
         order.forEach((questionId) => {
             if (!results) {
-                navStatus.set(questionId, hasAnswer(questionId) ? 'answered' : '');
+                navStatus.set(questionId, hasAnswer(questionId, answerSnapshot) ? 'answered' : '');
                 return;
             }
             const entry = results.answerComparison?.[questionId];
             if (!entry) {
-                navStatus.set(questionId, hasAnswer(questionId) ? 'answered' : '');
+                if (!answerSnapshot) {
+                    answerSnapshot = collectAnswers();
+                }
+                navStatus.set(questionId, hasAnswer(questionId, answerSnapshot) ? 'answered' : '');
                 return;
             }
             navStatus.set(questionId, entry.isCorrect ? 'correct' : 'incorrect');
@@ -1637,8 +1641,8 @@
         return 1;
     }
 
-    function hasAnswer(questionId) {
-        const answers = collectAnswers();
+    function hasAnswer(questionId, answerSnapshot = null) {
+        const answers = answerSnapshot || collectAnswers();
         const value = answers[questionId];
         return Array.isArray(value) ? value.some(Boolean) : !!String(value || '').trim();
     }
@@ -1679,6 +1683,7 @@
         return {
             answers,
             answerComparison,
+            correctAnswerMap: answerKey,
             correctAnswers: answerKey,
             scoreInfo: {
                 correct: correctCount,
@@ -1738,86 +1743,19 @@
     }
 
     function normalizeReplayQuestionId(rawValue) {
-        if (rawValue == null) return '';
-        const raw = String(rawValue).trim();
-        if (!raw) return '';
-        const splitIndex = raw.lastIndexOf('::');
-        const value = splitIndex >= 0 ? raw.slice(splitIndex + 2) : raw;
-        const direct = normalizeQuestionId(value);
-        if (direct) return direct;
-        const digits = value.match(/(\d+)/);
-        return digits ? `q${digits[1]}` : value.toLowerCase();
-    }
-
-    function normalizeReplayMap(rawMap = {}) {
-        const normalized = {};
-        if (!rawMap || typeof rawMap !== 'object') {
-            return normalized;
+        const contracts = global.PracticeCore && global.PracticeCore.contracts;
+        if (!contracts || typeof contracts.normalizeReplayQuestionKey !== 'function') {
+            throw new Error('PracticeCore replay contract is required before UnifiedReadingPage replay');
         }
-        Object.entries(rawMap).forEach(([key, value]) => {
-            const normalizedKey = normalizeReplayQuestionId(key);
-            if (!normalizedKey) return;
-            normalized[normalizedKey] = value;
-        });
-        return normalized;
+        return contracts.normalizeReplayQuestionKey(rawValue);
     }
 
     function buildReplayResults(entry = {}) {
-        const normalizedAnswers = normalizeReplayMap(entry.answers || {});
-        const normalizedCorrectAnswers = normalizeReplayMap(entry.correctAnswers || {});
-        const normalizedComparison = {};
-        const rawComparison = normalizeReplayMap(entry.answerComparison || {});
-        const questionIds = new Set([
-            ...Object.keys(normalizedAnswers),
-            ...Object.keys(normalizedCorrectAnswers),
-            ...Object.keys(rawComparison),
-            ...(Array.isArray(entry.allQuestionIds)
-                ? entry.allQuestionIds.map((item) => normalizeReplayQuestionId(item)).filter(Boolean)
-                : [])
-        ]);
-
-        let correctCount = 0;
-        questionIds.forEach((questionId) => {
-            const rawEntry = rawComparison[questionId];
-            const comparisonEntry = (rawEntry && typeof rawEntry === 'object' && !Array.isArray(rawEntry))
-                ? rawEntry
-                : {};
-            const userAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'userAnswer')
-                ? comparisonEntry.userAnswer
-                : (Object.prototype.hasOwnProperty.call(normalizedAnswers, questionId) ? normalizedAnswers[questionId] : '');
-            const correctAnswer = Object.prototype.hasOwnProperty.call(comparisonEntry, 'correctAnswer')
-                ? comparisonEntry.correctAnswer
-                : (Object.prototype.hasOwnProperty.call(normalizedCorrectAnswers, questionId) ? normalizedCorrectAnswers[questionId] : '');
-            let isCorrect = typeof comparisonEntry.isCorrect === 'boolean'
-                ? comparisonEntry.isCorrect
-                : compareAnswers(userAnswer, correctAnswer);
-            if (isCorrect) {
-                correctCount += 1;
-            }
-            normalizedComparison[questionId] = {
-                questionId,
-                userAnswer,
-                correctAnswer,
-                isCorrect
-            };
-        });
-
-        const totalQuestions = questionIds.size;
-        const scoreInfo = Object.assign({}, entry.scoreInfo || {});
-        scoreInfo.correct = Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : correctCount;
-        scoreInfo.total = Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : totalQuestions;
-        scoreInfo.totalQuestions = Number.isFinite(Number(scoreInfo.totalQuestions)) ? Number(scoreInfo.totalQuestions) : scoreInfo.total;
-        scoreInfo.accuracy = scoreInfo.totalQuestions > 0 ? scoreInfo.correct / scoreInfo.totalQuestions : 0;
-        scoreInfo.percentage = Number.isFinite(Number(scoreInfo.percentage))
-            ? Number(scoreInfo.percentage)
-            : Math.round(scoreInfo.accuracy * 100);
-
-        return {
-            answers: normalizedAnswers,
-            correctAnswers: normalizedCorrectAnswers,
-            answerComparison: normalizedComparison,
-            scoreInfo
-        };
+        const contracts = global.PracticeCore && global.PracticeCore.contracts;
+        if (!contracts || typeof contracts.buildReplayResultSnapshot !== 'function') {
+            throw new Error('PracticeCore replay contract is required before UnifiedReadingPage replay');
+        }
+        return contracts.buildReplayResultSnapshot(entry);
     }
 
     function applyReplayAnswersToDom(answers = {}) {
@@ -3009,6 +2947,12 @@
                 return;
             }
             syncPagePauseState(detail.running);
+        });
+    }
+
+    if (global.__IELTS_READING_PAGE_TEST_HOOKS__ === true) {
+        global.__IELTS_UNIFIED_READING_PAGE_TEST__ = Object.freeze({
+            buildReplayResults
         });
     }
 

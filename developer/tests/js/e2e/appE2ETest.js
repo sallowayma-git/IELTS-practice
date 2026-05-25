@@ -167,6 +167,36 @@ class AppE2ETestSuite {
         }
     }
 
+    getPracticeRecordAPI(requiredMethods = []) {
+        const api = this.win && this.win.PracticeRecordAPI;
+        if (!api) {
+            throw new Error('PracticeRecordAPI 不可用');
+        }
+        requiredMethods.forEach((method) => {
+            if (typeof api[method] !== 'function') {
+                throw new Error(`PracticeRecordAPI.${method} 不可用`);
+            }
+        });
+        return api;
+    }
+
+    async listPracticeRecords() {
+        const api = this.getPracticeRecordAPI(['list']);
+        return await api.list();
+    }
+
+    async replacePracticeRecords(records) {
+        const api = this.getPracticeRecordAPI(['replace']);
+        await api.replace(Array.isArray(records) ? records : [], { updateStats: true });
+        return true;
+    }
+
+    async savePracticeRecord(record) {
+        const api = this.getPracticeRecordAPI(['saveRecord']);
+        await api.saveRecord(record, { updateStats: true });
+        return true;
+    }
+
     async setup() {
         this.win = this.frame.contentWindow;
         this.doc = this.win.document;
@@ -179,9 +209,9 @@ class AppE2ETestSuite {
             description: '主应用完成初始化'
         });
 
-        if (this.win.simpleStorageWrapper && typeof this.win.simpleStorageWrapper.getPracticeRecords === 'function') {
+        if (this.win.PracticeRecordAPI && typeof this.win.PracticeRecordAPI.list === 'function') {
             try {
-                this.originalPracticeRecords = await this.win.simpleStorageWrapper.getPracticeRecords();
+                this.originalPracticeRecords = await this.listPracticeRecords();
             } catch (error) {
                 console.warn('[E2E] 备份练习记录失败:', error);
                 this.originalPracticeRecords = null;
@@ -190,9 +220,9 @@ class AppE2ETestSuite {
     }
 
     async teardown() {
-        if (this.originalPracticeRecords && this.win?.simpleStorageWrapper) {
+        if (this.originalPracticeRecords && this.win?.PracticeRecordAPI) {
             try {
-                await this.win.simpleStorageWrapper.savePracticeRecords(this.originalPracticeRecords);
+                await this.replacePracticeRecords(this.originalPracticeRecords);
                 if (typeof this.win.syncPracticeRecords === 'function') {
                     await this.win.syncPracticeRecords();
                 }
@@ -624,7 +654,7 @@ class AppE2ETestSuite {
                 try {
                     await manager.repositories.transaction(['practice', 'settings'], async (repos, tx) => {
                         if (Array.isArray(before.practice_records)) {
-                            await repos.practice.overwrite(before.practice_records, { transaction: tx });
+                            await this.replacePracticeRecords(before.practice_records);
                         }
                         if (before.system_settings && typeof repos.settings?.saveAll === 'function') {
                             await repos.settings.saveAll(before.system_settings, { transaction: tx });
@@ -1054,8 +1084,8 @@ class AppE2ETestSuite {
     async testPracticeRecordsFlow() {
         const name = '练习记录同步流程';
         try {
-            if (!this.win.simpleStorageWrapper || typeof this.win.simpleStorageWrapper.savePracticeRecords !== 'function') {
-                this.recordResult(name, false, 'simpleStorageWrapper 不可用');
+            if (!this.win.PracticeRecordAPI || typeof this.win.PracticeRecordAPI.replace !== 'function') {
+                this.recordResult(name, false, 'PracticeRecordAPI.replace 不可用');
                 return;
             }
 
@@ -1067,7 +1097,7 @@ class AppE2ETestSuite {
                 description: '切换到练习记录视图'
             });
 
-            await this.win.simpleStorageWrapper.savePracticeRecords([]);
+            await this.replacePracticeRecords([]);
             if (typeof this.win.syncPracticeRecords === 'function') {
                 await this.win.syncPracticeRecords();
             }
@@ -1089,7 +1119,7 @@ class AppE2ETestSuite {
                 dataSource: 'real'
             };
 
-            await this.win.simpleStorageWrapper.savePracticeRecords([sampleRecord]);
+            await this.replacePracticeRecords([sampleRecord]);
             if (typeof this.win.syncPracticeRecords === 'function') {
                 await this.win.syncPracticeRecords();
             }
@@ -1165,8 +1195,8 @@ class AppE2ETestSuite {
         let originalConfirm = null;
 
         try {
-            if (!this.win.simpleStorageWrapper || typeof this.win.simpleStorageWrapper.savePracticeRecords !== 'function') {
-                this.recordResult(name, false, 'simpleStorageWrapper 不可用');
+            if (!this.win.PracticeRecordAPI || typeof this.win.PracticeRecordAPI.replace !== 'function') {
+                this.recordResult(name, false, 'PracticeRecordAPI.replace 不可用');
                 return;
             }
 
@@ -1179,7 +1209,7 @@ class AppE2ETestSuite {
                 description: '切换到练习视图'
             });
 
-            await this.win.simpleStorageWrapper.savePracticeRecords(sampleRecords);
+            await this.replacePracticeRecords(sampleRecords);
             if (typeof this.win.syncPracticeRecords === 'function') {
                 await this.win.syncPracticeRecords();
             }
@@ -1217,7 +1247,7 @@ class AppE2ETestSuite {
                 description: '等待列表刷新到剩余记录'
             });
 
-            const remaining = await this.win.simpleStorageWrapper.getPracticeRecords();
+            const remaining = await this.listPracticeRecords();
             const remainingIds = Array.isArray(remaining) ? remaining.map(record => record.id) : [];
             const passed = remainingIds.length === 1 && remainingIds[0] === 'bulk-c';
 
@@ -1255,8 +1285,8 @@ class AppE2ETestSuite {
                 this.recordResult(name, false, 'app.openExam 不可用');
                 return;
             }
-            if (!this.win.simpleStorageWrapper || typeof this.win.simpleStorageWrapper.savePracticeRecords !== 'function') {
-                this.recordResult(name, false, 'simpleStorageWrapper 不可用');
+            if (!this.win.PracticeRecordAPI || typeof this.win.PracticeRecordAPI.replace !== 'function') {
+                this.recordResult(name, false, 'PracticeRecordAPI.replace 不可用');
                 return;
             }
 
@@ -1272,7 +1302,7 @@ class AppE2ETestSuite {
                 return;
             }
 
-            await this.win.simpleStorageWrapper.savePracticeRecords([]);
+            await this.replacePracticeRecords([]);
             if (typeof this.win.syncPracticeRecords === 'function') {
                 await this.win.syncPracticeRecords();
             }
@@ -1460,7 +1490,7 @@ class AppE2ETestSuite {
                         }
                     };
 
-                    await this.win.simpleStorageWrapper.savePracticeRecords([fallbackRecord]);
+                    await this.savePracticeRecord(fallbackRecord);
                     if (typeof this.win.syncPracticeRecords === 'function') {
                         await this.win.syncPracticeRecords();
                     }

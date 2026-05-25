@@ -75,64 +75,6 @@
         return result;
     };
 
-    const detectEnhancerScriptUrl = () => {
-        try {
-            if (document.currentScript && document.currentScript.src) {
-                return document.currentScript.src;
-            }
-            const scripts = document.querySelectorAll('script[src]');
-            for (let idx = scripts.length - 1; idx >= 0; idx -= 1) {
-                const script = scripts[idx];
-                if (script.src && script.src.includes('practice-page-enhancer.js')) {
-                    return script.src;
-                }
-            }
-        } catch (_) {
-            // ignore
-        }
-        return null;
-    };
-
-    const resolveEnhancerBaseUrl = () => {
-        const scriptUrl = detectEnhancerScriptUrl();
-        if (scriptUrl) {
-            try {
-                return new URL('.', scriptUrl).href;
-            } catch (_) {
-                // ignore and fallback
-            }
-        }
-        try {
-            return new URL('./js/', window.location.href).href;
-        } catch (_) {
-            return './js/';
-        }
-    };
-
-    const ENHANCER_BASE_URL = resolveEnhancerBaseUrl();
-    const dependencyLoader = {
-        cache: new Map(),
-        loadScript(url) {
-            if (!url) {
-                return Promise.reject(new Error('script url missing'));
-            }
-            if (this.cache.has(url)) {
-                return this.cache.get(url);
-            }
-            const promise = new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.type = 'text/javascript';
-                script.defer = true;
-                script.src = url;
-                script.onload = () => resolve(true);
-                script.onerror = (err) => reject(err);
-                (document.head || document.body || document.documentElement).appendChild(script);
-            });
-            this.cache.set(url, promise);
-            return promise;
-        }
-    };
-
     function sanitizeExamTitle(rawTitle) {
         if (!rawTitle) return '';
         const title = String(rawTitle).trim();
@@ -881,7 +823,6 @@
                     this.enableSuiteMode({ suiteSessionId: suiteSessionIdFromUrl });
                 }
 
-                this.enhancerBaseUrl = this.getEnhancerBaseUrl();
                 await this.ensureStorageAvailable();
                 await this.ensureSpellingErrorCollector();
                 await this.prepareStorageNamespace();
@@ -1063,66 +1004,12 @@
             return null;
         },
 
-        getEnhancerBaseUrl: function () {
-            if (this.enhancerBaseUrl) {
-                return this.enhancerBaseUrl;
-            }
-            this.enhancerBaseUrl = ENHANCER_BASE_URL;
-            return this.enhancerBaseUrl;
-        },
-
-        buildFallbackUrls: function (paths) {
-            return (paths || []).map((p) => {
-                try {
-                    return new URL(p, window.location.href).href;
-                } catch (_) {
-                    return null;
-                }
-            }).filter(Boolean);
-        },
-
         ensureStorageAvailable: async function () {
-            try {
-                if (window.storage && typeof window.storage.setNamespace === 'function') {
-                    if (window.storage.ready && typeof window.storage.ready.then === 'function') {
-                        await window.storage.ready;
-                    }
-                    return true;
+            if (window.storage && typeof window.storage.setNamespace === 'function') {
+                if (window.storage.ready && typeof window.storage.ready.then === 'function') {
+                    await window.storage.ready;
                 }
-
-                const tryLoad = async (urls) => {
-                    for (const url of urls) {
-                        if (!url) continue;
-                        try {
-                            console.log('[PracticeEnhancer] 尝试加载存储管理器:', url);
-                            await dependencyLoader.loadScript(url);
-                            if (window.storage && typeof window.storage.setNamespace === 'function') {
-                                if (window.storage.ready && typeof window.storage.ready.then === 'function') {
-                                    await window.storage.ready;
-                                }
-                                return true;
-                            }
-                        } catch (error) {
-                            console.warn('[PracticeEnhancer] 存储管理器加载失败:', error);
-                        }
-                    }
-                    return false;
-                };
-
-                const baseUrl = this.getEnhancerBaseUrl();
-                const baseCandidate = new URL('utils/storage.js', baseUrl).href;
-                const fallbackUrls = this.buildFallbackUrls([
-                    '../../../../js/utils/storage.js',
-                    '../../../js/utils/storage.js',
-                    '../../js/utils/storage.js',
-                    '../js/utils/storage.js',
-                    './js/utils/storage.js'
-                ]);
-
-                const loaded = await tryLoad([baseCandidate, ...fallbackUrls]);
-                if (loaded) return true;
-            } catch (error) {
-                console.warn('[PracticeEnhancer] 加载存储管理器失败:', error);
+                return true;
             }
 
             // 创建简易回退存储，确保流程不中断
@@ -1180,35 +1067,8 @@
                 return true;
             }
 
-            const tryLoad = async (urls) => {
-                for (const url of urls) {
-                    if (!url) continue;
-                    try {
-                        console.log('[PracticeEnhancer] 尝试加载SpellingErrorCollector:', url);
-                        await dependencyLoader.loadScript(url);
-                        if (!window.spellingErrorCollector && window.SpellingErrorCollector) {
-                            window.spellingErrorCollector = new window.SpellingErrorCollector();
-                        }
-                        if (window.spellingErrorCollector) return true;
-                    } catch (error) {
-                        console.warn('[PracticeEnhancer] 加载SpellingErrorCollector失败:', error);
-                    }
-                }
-                return false;
-            };
-
-            const baseUrl = this.getEnhancerBaseUrl();
-            const baseCandidate = new URL('app/spellingErrorCollector.js', baseUrl).href;
-            const fallbackUrls = this.buildFallbackUrls([
-                '../../../../js/app/spellingErrorCollector.js',
-                '../../../js/app/spellingErrorCollector.js',
-                '../../js/app/spellingErrorCollector.js',
-                '../js/app/spellingErrorCollector.js',
-                './js/app/spellingErrorCollector.js'
-            ]);
-
-            const loaded = await tryLoad([baseCandidate, ...fallbackUrls]);
-            return loaded;
+            console.warn('[PracticeEnhancer] SpellingErrorCollector 未随增强器 bundle 加载，跳过拼写错误收集');
+            return false;
         },
 
         prepareStorageNamespace: async function () {
@@ -1367,82 +1227,12 @@
             return normalizedId;
         },
 
-        normalizeReplayMap: function (rawMap) {
-            const normalized = {};
-            if (!rawMap || typeof rawMap !== 'object') {
-                return normalized;
-            }
-            Object.entries(rawMap).forEach(([key, value]) => {
-                let candidate = key;
-                if (typeof candidate === 'string' && candidate.includes('::')) {
-                    const split = candidate.split('::');
-                    candidate = split[split.length - 1];
-                }
-                const normalizedKey = this.normalizeQuestionId(candidate);
-                if (!normalizedKey) {
-                    return;
-                }
-                normalized[normalizedKey] = value;
-            });
-            return normalized;
-        },
-
         buildReplayResultsFromEntry: function (entry = {}) {
-            const answers = this.normalizeReplayMap(entry.answers || {});
-            const correctAnswers = this.normalizeReplayMap(entry.correctAnswers || entry.correctAnswerMap || {});
-            const rawComparison = this.normalizeReplayMap(entry.answerComparison || {});
-            const questionIds = new Set([
-                ...Object.keys(answers),
-                ...Object.keys(correctAnswers),
-                ...Object.keys(rawComparison),
-                ...(Array.isArray(entry.allQuestionIds)
-                    ? entry.allQuestionIds.map((item) => this.normalizeQuestionId(item)).filter(Boolean)
-                    : [])
-            ]);
-
-            const answerComparison = {};
-            questionIds.forEach((questionId) => {
-                const rawEntry = rawComparison[questionId];
-                const item = (rawEntry && typeof rawEntry === 'object' && !Array.isArray(rawEntry))
-                    ? rawEntry
-                    : {};
-                const userAnswer = Object.prototype.hasOwnProperty.call(item, 'userAnswer')
-                    ? item.userAnswer
-                    : (Object.prototype.hasOwnProperty.call(answers, questionId) ? answers[questionId] : '');
-                const correctAnswer = Object.prototype.hasOwnProperty.call(item, 'correctAnswer')
-                    ? item.correctAnswer
-                    : (Object.prototype.hasOwnProperty.call(correctAnswers, questionId) ? correctAnswers[questionId] : '');
-                const isCorrect = typeof item.isCorrect === 'boolean'
-                    ? item.isCorrect
-                    : this.compareAnswers(userAnswer, correctAnswer);
-                answerComparison[questionId] = {
-                    questionId,
-                    userAnswer,
-                    correctAnswer,
-                    isCorrect
-                };
-            });
-
-            let scoreInfo = {};
-            if (entry.scoreInfo && typeof entry.scoreInfo === 'object') {
-                scoreInfo = Object.assign({}, entry.scoreInfo);
-            } else {
-                scoreInfo = {};
+            const contracts = window.PracticeCore && window.PracticeCore.contracts;
+            if (!contracts || typeof contracts.buildReplayResultSnapshot !== 'function') {
+                throw new Error('PracticeCore replay contract is required before PracticePageEnhancer replay');
             }
-            const derivedScore = this.calculateScoreFromComparison(answerComparison) || { correct: 0, total: questionIds.size, accuracy: 0, percentage: 0 };
-            scoreInfo.correct = Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : derivedScore.correct;
-            scoreInfo.total = Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : derivedScore.total;
-            scoreInfo.accuracy = Number.isFinite(Number(scoreInfo.accuracy)) ? Number(scoreInfo.accuracy) : derivedScore.accuracy;
-            scoreInfo.percentage = Number.isFinite(Number(scoreInfo.percentage))
-                ? Number(scoreInfo.percentage)
-                : Math.round(scoreInfo.accuracy * 100);
-
-            return {
-                answers,
-                correctAnswers,
-                answerComparison,
-                scoreInfo
-            };
+            return contracts.buildReplayResultSnapshot(entry);
         },
 
         applyReplayAnswersToDom: function (answers) {
@@ -3292,6 +3082,7 @@
                 examId: `${this.examId}_${suiteId}`,  // Requirement 9.2: examId包含套题标识
                 sessionId: this.sessionId,
                 answers: suiteAnswers,                 // Requirement 9.3: 答案键使用"套题ID::问题ID"格式
+                correctAnswerMap: suiteCorrectAnswers,
                 correctAnswers: suiteCorrectAnswers,
 
                 // Requirement 9.4: scoreInfo包含必需字段
@@ -4068,6 +3859,7 @@
                 duration: timing.duration,
                 effectiveEndTime: timing.effectiveEndTime,
                 answers: Object.assign({}, this.answers),
+                correctAnswerMap: Object.assign({}, this.correctAnswers),
                 correctAnswers: Object.assign({}, this.correctAnswers),
                 answerComparison: answerComparison,
                 interactions: Array.isArray(this.interactions) ? this.interactions.slice() : [],

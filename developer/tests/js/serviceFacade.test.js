@@ -46,18 +46,56 @@ function isForwardOnlyFeatureSource(source) {
 
 async function testPracticeStore() {
     const records = [];
+    const calls = [];
     const windowStub = {
+        PracticeRecordAPI: {
+            async list() {
+                calls.push('list');
+                return records.slice();
+            },
+            async replace(next, options) {
+                calls.push({ method: 'replace', options });
+                records.splice(0, records.length, ...(Array.isArray(next) ? next : []));
+                return records.slice();
+            },
+            async saveRecord(record, options) {
+                calls.push({ method: 'saveRecord', options });
+                records.unshift(record);
+                return record;
+            },
+            async clear(options) {
+                calls.push({ method: 'clear', options });
+                records.splice(0, records.length);
+                return true;
+            }
+        },
         PracticeCore: {
             store: {
-                async listPracticeRecords() { return records.slice(); },
-                async replacePracticeRecords(next) {
-                    records.splice(0, records.length, ...next);
-                    return true;
+                async listPracticeRecords() {
+                    throw new Error('PracticeStore must not read PracticeCore.store directly');
                 },
-                async savePracticeRecord(record) {
-                    records.unshift(record);
-                    return record;
+                async replacePracticeRecords() {
+                    throw new Error('PracticeStore must not write PracticeCore.store directly');
+                },
+                async savePracticeRecord() {
+                    throw new Error('PracticeStore must not save through PracticeCore.store directly');
                 }
+            }
+        },
+        simpleStorageWrapper: {
+            async getPracticeRecords() {
+                throw new Error('PracticeStore must not read simpleStorageWrapper');
+            },
+            async savePracticeRecords() {
+                throw new Error('PracticeStore must not write simpleStorageWrapper');
+            }
+        },
+        storage: {
+            async get() {
+                throw new Error('PracticeStore must not read raw storage');
+            },
+            async set() {
+                throw new Error('PracticeStore must not write raw storage');
             }
         }
     };
@@ -69,6 +107,13 @@ async function testPracticeStore() {
     assert.strictEqual((await windowStub.PracticeStore.list()).length, 1);
     await windowStub.PracticeStore.clear();
     assert.strictEqual((await windowStub.PracticeStore.list()).length, 0);
+    assert.deepStrictEqual(
+        calls.map((entry) => typeof entry === 'string' ? entry : entry.method),
+        ['saveRecord', 'list', 'clear', 'list'],
+        'PracticeStore 只能委托 PracticeRecordAPI'
+    );
+    assert.strictEqual(calls[0].options.updateStats, true, 'PracticeStore.save 默认要求 stats 同步');
+    assert.strictEqual(calls[2].options.updateStats, true, 'PracticeStore.clear 默认要求 stats 同步');
 }
 
 function testFeaturesNoForwardOnlyFiles() {

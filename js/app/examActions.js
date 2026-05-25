@@ -957,7 +957,18 @@
             return;
         }
 
-        var invoke = function (target, event) {
+        var reportActionError = function (error) {
+            console.error('[ExamActions] 操作执行失败:', error);
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('操作失败: ' + (error && error.message || error), 'error');
+            }
+        };
+
+        var runInvoke = function (target, event) {
+            void invoke(target, event).catch(reportActionError);
+        };
+
+        var invoke = async function (target, event) {
             var action = target.dataset.action;
             var examId = target.dataset.examId;
             var category = target.dataset.category || target.dataset.examCategory || '';
@@ -979,7 +990,7 @@
             }
 
             if (action === 'suite-custom-confirm') {
-                handleCustomSuiteConfirm();
+                await handleCustomSuiteConfirm();
                 return;
             }
 
@@ -993,7 +1004,7 @@
             }
 
             if (action === 'start' && typeof global.openExam === 'function') {
-                global.openExam(examId);
+                await global.openExam(examId);
                 return;
             }
 
@@ -1013,25 +1024,25 @@
 
         if (hasDomDelegate) {
             global.DOM.delegate('click', '[data-action="start"]', function (event) {
-                invoke(this, event);
+                runInvoke(this, event);
             });
             global.DOM.delegate('click', '[data-action="pdf"]', function (event) {
-                invoke(this, event);
+                runInvoke(this, event);
             });
             global.DOM.delegate('click', '[data-action="generate"]', function (event) {
-                invoke(this, event);
+                runInvoke(this, event);
             });
             global.DOM.delegate('click', '[data-action="suite-custom-select"]', function (event) {
-                invoke(this, event);
+                runInvoke(this, event);
             });
             global.DOM.delegate('click', '[data-action="suite-custom-delete"]', function (event) {
-                invoke(this, event);
+                runInvoke(this, event);
             });
             global.DOM.delegate('click', '[data-action="suite-custom-confirm"]', function (event) {
-                invoke(this, event);
+                runInvoke(this, event);
             });
             global.DOM.delegate('click', '[data-action="suite-custom-cancel"]', function (event) {
-                invoke(this, event);
+                runInvoke(this, event);
             });
         } else if (typeof document !== 'undefined') {
             document.addEventListener('click', function (event) {
@@ -1045,7 +1056,7 @@
                     return;
                 }
 
-                invoke(target, event);
+                runInvoke(target, event);
             });
         }
 
@@ -1093,13 +1104,22 @@
     async function exportPracticeData() {
         try {
             if (global.dataIntegrityManager && typeof global.dataIntegrityManager.exportData === 'function') {
-                global.dataIntegrityManager.exportData();
+                await global.dataIntegrityManager.exportData();
                 try { global.showMessage && global.showMessage('导出完成', 'success'); } catch (_) { }
                 return;
             }
         } catch (_) { }
         try {
-            var records = (global.storage && storage.get) ? (await storage.get('practice_records', [])) : (global.getPracticeRecordsState ? global.getPracticeRecordsState() : []);
+            var records = [];
+            if (global.PracticeRecordAPI && typeof global.PracticeRecordAPI.list === 'function') {
+                try {
+                    records = await global.PracticeRecordAPI.list();
+                } catch (error) {
+                    console.warn('[Export] PracticeRecordAPI.list failed:', error);
+                    records = [];
+                }
+            }
+            records = Array.isArray(records) ? records : [];
             var blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json; charset=utf-8' });
             var url = URL.createObjectURL(blob);
             var a = document.createElement('a'); a.href = url; a.download = 'practice-records.json';

@@ -202,35 +202,21 @@
   AcademicAdapter.getPracticeRecords = function () {
     const records = window.ThemeAdapterBase.getPracticeRecords.call(this);
     
-    // 如果基类没有数据，尝试从全局变量获取
+    // 如果基类没有数据，先异步从统一记录 API 回灌缓存
     if (records.length === 0) {
-      // Academic 页面可能使用 practiceRecords 全局变量
-      if (Array.isArray(window.practiceRecords) && window.practiceRecords.length > 0) {
-        return window.practiceRecords.slice();
-      }
-      // 尝试从 window.storage 获取
-      if (window.storage && typeof window.storage.get === 'function') {
-        try {
-          const stored = window.storage.get('practice_records', []);
-          if (stored && typeof stored.then === 'function') {
-            stored.then((resolved) => {
-              if (!Array.isArray(resolved) || resolved.length === 0) return;
-              this._practiceRecords = resolved;
-              if (typeof this._notifyDataUpdated === 'function') {
-                this._notifyDataUpdated({ practiceRecords: this._practiceRecords });
-              }
-              if (typeof window.updatePracticeView === 'function') {
-                try { window.updatePracticeView(); } catch (_) {}
-              }
-            }).catch((error) => {
-              console.warn('[AcademicAdapter] 从 storage 获取练习记录失败:', error);
-            });
-          } else if (Array.isArray(stored) && stored.length > 0) {
-            return stored;
+      if (typeof this._readPracticeRecordsFromAPI === 'function') {
+        this._readPracticeRecordsFromAPI().then((resolved) => {
+          if (!Array.isArray(resolved) || resolved.length === 0) return;
+          this._practiceRecords = resolved;
+          if (typeof this._notifyDataUpdated === 'function') {
+            this._notifyDataUpdated({ practiceRecords: this._practiceRecords });
           }
-        } catch (error) {
-          console.warn('[AcademicAdapter] 从 storage 获取练习记录失败:', error);
-        }
+          if (typeof window.updatePracticeView === 'function') {
+            try { window.updatePracticeView(); } catch (_) {}
+          }
+        }).catch((error) => {
+          console.warn('[AcademicAdapter] 从统一记录 API 获取练习记录失败:', error);
+        });
       }
     }
     

@@ -143,18 +143,44 @@ function createHarness(options = {}) {
                     }
                 }
             },
-            PracticeCore: {
-                store: {
-                    async listPracticeRecords() {
-                        return practiceState.map((record) => ({ ...record }));
-                    },
-                    async replacePracticeRecords(records) {
-                        practiceState.splice(0, practiceState.length, ...(Array.isArray(records) ? records.map((record) => ({ ...record })) : []));
-                        if (syncUiOnReplace) {
-                            uiState.splice(0, uiState.length, ...(Array.isArray(records) ? records.map((record) => ({ ...record })) : []));
-                        }
-                        return true;
+            PracticeRecordAPI: {
+                async list() {
+                    return practiceState.map((record) => ({ ...record }));
+                },
+                async getById(recordId) {
+                    const targetId = recordId == null ? '' : String(recordId);
+                    return practiceState.find((record) => (
+                        String(record.id) === targetId || String(record.sessionId || '') === targetId
+                    )) || null;
+                },
+                async replace(records) {
+                    practiceState.splice(0, practiceState.length, ...(Array.isArray(records) ? records.map((record) => ({ ...record })) : []));
+                    if (syncUiOnReplace) {
+                        uiState.splice(0, uiState.length, ...(Array.isArray(records) ? records.map((record) => ({ ...record })) : []));
                     }
+                    return practiceState.map((record) => ({ ...record }));
+                },
+                async deleteById(recordId) {
+                    const targetId = recordId == null ? '' : String(recordId);
+                    const next = [];
+                    let deleted = null;
+                    practiceState.forEach((record) => {
+                        if (!deleted && (String(record.id) === targetId || String(record.sessionId || '') === targetId)) {
+                            deleted = { ...record };
+                            return;
+                        }
+                        next.push(record);
+                    });
+                    await this.replace(next);
+                    return {
+                        deleted: Boolean(deleted),
+                        record: deleted,
+                        records: practiceState.map((record) => ({ ...record }))
+                    };
+                },
+                async clear() {
+                    await this.replace([]);
+                    return true;
                 }
             }
         }
@@ -197,8 +223,8 @@ async function testDeleteRecordPersistsAndCleansLegacyKeys() {
     );
     assert.strictEqual(
         harness.localStorage.getItem('practice_records'),
-        JSON.stringify([{ id: 'record-2', title: 'Record 2', date: '2026-03-09T11:00:00.000Z', percentage: 60, duration: 90 }]),
-        'deleteRecord 后应同步 legacy practice_records'
+        null,
+        'deleteRecord 后应清理 legacy practice_records，避免删除记录被影子键回灌'
     );
     assert.deepStrictEqual(
         harness.sandbox.window.app.state.practice.records.map((record) => record.id),

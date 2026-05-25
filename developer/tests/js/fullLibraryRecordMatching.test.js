@@ -6,14 +6,17 @@
  */
 
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const repoRoot = path.join(__dirname, '..', '..', '..');
 
-const AnswerComparisonUtils = require(path.join(__dirname, '..', '..', '..', 'js', 'utils', 'answerComparisonUtils.js'));
+Function(fs.readFileSync(path.join(repoRoot, 'js', 'core', 'practiceCore.js'), 'utf8'))();
+const AnswerComparisonUtils = require(path.join(repoRoot, 'js', 'utils', 'answerComparisonUtils.js'));
 
 const results = [];
 
@@ -161,13 +164,42 @@ async function testUnknownFallbacks() {
     recordResult(testName, true, { enriched });
 }
 
+async function testCanonicalCorrectAnswerMapWinsInNormalizedEntries() {
+    const testName = 'correctAnswerMap 优先生成 normalized entries';
+    resetGlobalIndexes();
+
+    const entries = AnswerComparisonUtils.getNormalizedEntries({
+        id: 'canonical-answer-map-conflict',
+        answers: { q1: 'A', q2: 'D' },
+        correctAnswerMap: { q1: 'A', q2: 'D' },
+        correctAnswers: { q1: 'B', q2: 'C' },
+        answerComparison: {
+            q1: { userAnswer: 'A', correctAnswer: 'B', isCorrect: false },
+            q2: { userAnswer: 'D', correctAnswer: 'C', isCorrect: false }
+        },
+        realData: {
+            correctAnswerMap: { q2: 'D' },
+            correctAnswers: { q1: 'B', q2: 'C' }
+        }
+    });
+
+    const byKey = new Map(entries.map(entry => [entry.canonicalKey, entry]));
+    assertStrictEqual(byKey.get('q1').correctAnswer, 'A', 'q1 应使用 canonical correctAnswerMap');
+    assertStrictEqual(byKey.get('q1').isCorrect, true, 'q1 结果应按 canonical correctAnswerMap 重算');
+    assertStrictEqual(byKey.get('q2').correctAnswer, 'D', 'q2 不应被 legacy correctAnswers 覆盖');
+    assertStrictEqual(byKey.get('q2').isCorrect, true, 'q2 结果应按 canonical correctAnswerMap 重算');
+
+    recordResult(testName, true, { entries });
+}
+
 async function runAllTests() {
     const suite = [
         testUrlPathMatching,
         testFuzzyTitleMatching,
         testCategoryInferenceFromId,
         testEnrichedMetadataGuard,
-        testUnknownFallbacks
+        testUnknownFallbacks,
+        testCanonicalCorrectAnswerMapWinsInNormalizedEntries
     ];
 
     for (const testFn of suite) {

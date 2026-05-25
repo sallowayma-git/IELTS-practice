@@ -9,16 +9,36 @@ class PracticeRecordModal {
         this.replayTriggerElement = null;
         this.boundReplayClickHandler = null;
         this.boundReplayKeyHandler = null;
+        this.replayInFlight = false;
 
         window.practiceRecordModal = this;
     }
 
+    cloneRecordForReplay(record) {
+        if (!record || typeof record !== 'object') {
+            return record;
+        }
+        if (typeof structuredClone === 'function') {
+            try {
+                return structuredClone(record);
+            } catch (_) {
+                // Fall through to JSON-compatible clone.
+            }
+        }
+        try {
+            return JSON.parse(JSON.stringify(record));
+        } catch (_) {
+            return Object.assign({}, record);
+        }
+    }
+
     show(record) {
         try {
+            const replayRecord = this.cloneRecordForReplay(record);
             let processedRecord = record;
 
             if (window.DataConsistencyManager) {
-                const manager = new DataConsistencyManager();
+                const manager = new window.DataConsistencyManager();
                 processedRecord = manager.ensureConsistency(record);
                 console.log('[PracticeRecordModal] \u6570\u636e\u4e00\u81f4\u6027\u68c0\u67e5\u5b8c\u6210');
             }
@@ -31,7 +51,7 @@ class PracticeRecordModal {
             document.body.insertAdjacentHTML('beforeend', modalHtml);
 
             this.modalElement = document.getElementById(this.modalId);
-            this.currentRecord = processedRecord;
+            this.currentRecord = replayRecord;
             this.setupEventListeners(this.modalElement);
             this.isVisible = true;
 
@@ -58,6 +78,7 @@ class PracticeRecordModal {
         this.modalElement = null;
         this.currentRecord = null;
         this.isVisible = false;
+        this.replayInFlight = false;
     }
 
     teardownEventListeners() {
@@ -112,6 +133,9 @@ class PracticeRecordModal {
         if (replayTrigger) {
             this.replayTriggerElement = replayTrigger;
             const launchReplay = async () => {
+                if (this.replayInFlight) {
+                    return;
+                }
                 const replayRecord = this.currentRecord;
                 if (!replayRecord) {
                     if (typeof window.showMessage === 'function') {
@@ -126,25 +150,30 @@ class PracticeRecordModal {
                     return;
                 }
 
-                closeModal();
+                this.replayInFlight = true;
+                replayTrigger.setAttribute('aria-disabled', 'true');
                 try {
+                    closeModal();
                     await window.app.openPracticeRecordReplay(replayRecord);
                 } catch (error) {
                     console.error('[PracticeRecordModal] 启动回放失败:', error);
                     if (typeof window.showMessage === 'function') {
                         window.showMessage(`无法回放该记录：${error.message || '未知错误'}`, 'error');
                     }
+                } finally {
+                    this.replayInFlight = false;
+                    replayTrigger.removeAttribute('aria-disabled');
                 }
             };
 
             this.boundReplayClickHandler = (event) => {
                 event.preventDefault();
-                launchReplay();
+                void launchReplay();
             };
             this.boundReplayKeyHandler = (event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
-                    launchReplay();
+                    void launchReplay();
                 }
             };
 
@@ -470,10 +499,15 @@ class PracticeRecordModal {
         }
 
         if (hasSuites) {
-            suites.forEach((entry) => {
+            suites.forEach((entry, index) => {
                 const subset = utils.getNormalizedEntries(entry) || [];
                 if (subset.length > 0) {
-                    entries = entries.concat(subset);
+                    const sourceKey = this.getSuiteEntrySourceKey(entry, index);
+                    entries = entries.concat(subset.map(item => ({
+                        ...item,
+                        sourceEntryKey: sourceKey,
+                        sourceExamId: entry && entry.examId ? String(entry.examId) : ''
+                    })));
                 }
             });
         }
@@ -485,7 +519,7 @@ class PracticeRecordModal {
         const seen = new Set();
         return entries.filter((entry) => {
             const questionKey = entry && (entry.questionId || entry.displayNumber || entry.key || '');
-            const examKey = entry && (entry.examId || '');
+            const examKey = entry && (entry.sourceEntryKey || entry.examId || entry.sourceExamId || '');
             const dedupeKey = `${examKey}::${questionKey}::${entry && entry.correctAnswer ? String(entry.correctAnswer) : ''}`;
             if (seen.has(dedupeKey)) {
                 return false;
@@ -493,6 +527,19 @@ class PracticeRecordModal {
             seen.add(dedupeKey);
             return true;
         });
+    }
+
+    getSuiteEntrySourceKey(entry, index) {
+        const metadata = entry && entry.metadata ? entry.metadata : {};
+        const rawKey = [
+            entry && (entry.examId || entry.id || entry.sessionId || entry.title || entry.examTitle),
+            metadata.examId || metadata.examTitle || metadata.title,
+            index
+        ]
+            .filter(value => value != null && value !== '')
+            .map(value => String(value))
+            .join('::');
+        return rawKey || `suite-entry::${index}`;
     }
 
     getEntriesSummary(entries) {
@@ -603,14 +650,12 @@ class PracticeRecordModal {
             .map((questionNumber) => {
                 const userAnswer = this.getLegacyUserAnswer(answers, questionNumber);
                 const correctAnswer = this.getLegacyCorrectAnswer(correctAnswers, questionNumber);
-                const isCorrect = this.compareLegacyAnswers(userAnswer, correctAnswer);
-                const resultClass = isCorrect ? 'correct' : 'incorrect';
-                const resultIcon = isCorrect ? '&#10003;' : '&#10005;';
+                const result = this.getLegacyQuestionResult(userAnswer, correctAnswer);
                 const safeUser = userAnswer != null ? this.truncateAnswer(userAnswer) : '\u672a\u4f5c\u7b54';
                 const safeCorrect = correctAnswer != null ? this.truncateAnswer(correctAnswer) : '\u65e0';
 
                 return `
-                    <tr class="answer-row ${resultClass}">
+                    <tr class="answer-row ${result.resultClass}">
                         <td class="question-num">${this.escapeHtml(String(questionNumber))}</td>
                         <td class="correct-answer" title="${this.escapeHtml(correctAnswer == null ? '' : String(correctAnswer))}">
                             ${this.escapeHtml(safeCorrect)}
@@ -618,7 +663,7 @@ class PracticeRecordModal {
                         <td class="user-answer" title="${this.escapeHtml(userAnswer == null ? '' : String(userAnswer))}">
                             ${this.escapeHtml(safeUser)}
                         </td>
-                        <td class="result-icon ${resultClass}">${resultIcon}</td>
+                        <td class="result-icon ${result.resultClass}">${result.resultIcon}</td>
                     </tr>
                 `;
             })
@@ -848,42 +893,32 @@ class PracticeRecordModal {
         return true;
     }
 
+    isAnswerMap(value) {
+        return Object.prototype.toString.call(value) === '[object Object]';
+    }
+
     mergeComparisonWithCorrections(record) {
         const comparison = JSON.parse(JSON.stringify(record.answerComparison || {}));
-        const sources = [
-            record.correctAnswers || {},
-            record.realData && record.realData.correctAnswers,
-            (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details)
-                ? Object.fromEntries(Object.entries(record.realData.scoreInfo.details).map(([key, detail]) => [key, detail && detail.correctAnswer]))
-                : null,
-            (record.scoreInfo && record.scoreInfo.details)
-                ? Object.fromEntries(Object.entries(record.scoreInfo.details).map(([key, detail]) => [key, detail && detail.correctAnswer]))
-                : null
-        ].filter(Boolean);
+        const correctAnswerMap = this.getLegacyCorrectAnswers(record);
 
-        const getFromSources = (key) => {
-            for (const source of sources) {
-                if (source && source[key] != null && String(source[key]).trim() !== '') {
-                    return source[key];
-                }
+        const getCanonicalAnswer = (key) => {
+            if (correctAnswerMap && correctAnswerMap[key] != null && String(correctAnswerMap[key]).trim() !== '') {
+                return correctAnswerMap[key];
             }
             return null;
         };
 
         Object.keys(comparison).forEach((key) => {
             const item = comparison[key] || {};
-            if (item.correctAnswer == null || String(item.correctAnswer).trim() === '') {
-                const fixed = getFromSources(key);
-                if (fixed != null) {
-                    item.correctAnswer = fixed;
-                }
-            }
+            const canonicalCorrectAnswer = getCanonicalAnswer(key);
+            const hasCanonicalCorrectAnswer = canonicalCorrectAnswer != null;
+            item.correctAnswer = hasCanonicalCorrectAnswer ? canonicalCorrectAnswer : '';
             if (item.userAnswer == null) {
                 item.userAnswer = '';
             }
-            if (item.correctAnswer == null) {
-                item.correctAnswer = '';
-            }
+            item.isCorrect = hasCanonicalCorrectAnswer
+                ? this.compareLegacyAnswers(item.userAnswer, canonicalCorrectAnswer)
+                : null;
             comparison[key] = item;
         });
 
@@ -891,15 +926,10 @@ class PracticeRecordModal {
         if (letterKeys.length > 0) {
             let numericKeys = Object.keys(comparison).filter(key => /q\d+$/i.test(key));
             if (numericKeys.length === 0) {
-                sources.forEach((source) => {
-                    if (!source) {
-                        return;
+                Object.keys(correctAnswerMap || {}).forEach((key) => {
+                    if (/q\d+$/i.test(key)) {
+                        numericKeys.push(key);
                     }
-                    Object.keys(source).forEach((key) => {
-                        if (/q\d+$/i.test(key)) {
-                            numericKeys.push(key);
-                        }
-                    });
                 });
                 numericKeys = Array.from(new Set(numericKeys));
             }
@@ -928,11 +958,7 @@ class PracticeRecordModal {
                         }
                         const item = comparison[letterKey] || {};
                         if (!item.correctAnswer || String(item.correctAnswer).trim() === '') {
-                            const numericItem = comparison[numericKey];
-                            let value = numericItem && numericItem.correctAnswer;
-                            if (!value) {
-                                value = getFromSources(numericKey);
-                            }
+                            const value = getCanonicalAnswer(numericKey);
                             if (value != null) {
                                 item.correctAnswer = value;
                             }
@@ -943,6 +969,9 @@ class PracticeRecordModal {
                         if (item.correctAnswer == null) {
                             item.correctAnswer = '';
                         }
+                        item.isCorrect = item.correctAnswer
+                            ? this.compareLegacyAnswers(item.userAnswer, item.correctAnswer)
+                            : null;
                         comparison[letterKey] = item;
                     }
                 }
@@ -953,48 +982,33 @@ class PracticeRecordModal {
     }
 
     getLegacyCorrectAnswers(record) {
-        if (record.correctAnswers && Object.keys(record.correctAnswers).length > 0) {
-            return record.correctAnswers;
-        }
-
-        if (record.realData && record.realData.correctAnswers && Object.keys(record.realData.correctAnswers).length > 0) {
-            return record.realData.correctAnswers;
-        }
-
-        if (record.answerComparison) {
-            const extracted = {};
-            Object.keys(record.answerComparison).forEach((key) => {
-                const comparison = record.answerComparison[key];
-                if (comparison && comparison.correctAnswer) {
-                    extracted[key] = comparison.correctAnswer;
+        const merged = {};
+        [
+            record && record.correctAnswerMap,
+            record && record.realData && record.realData.correctAnswerMap
+        ].forEach((source) => {
+            if (!this.isAnswerMap(source)) {
+                return;
+            }
+            Object.entries(source).forEach(([key, value]) => {
+                if (!Object.prototype.hasOwnProperty.call(merged, key) && value != null && String(value).trim() !== '') {
+                    merged[key] = value;
                 }
             });
-            if (Object.keys(extracted).length > 0) {
-                return extracted;
-            }
-        }
+        });
+        return merged;
+    }
 
-        const detailSources = [];
-        if (record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
-            detailSources.push(record.realData.scoreInfo.details);
+    getLegacyQuestionResult(userAnswer, correctAnswer) {
+        if (correctAnswer == null || String(correctAnswer).trim() === '') {
+            return { isCorrect: null, resultClass: 'unknown', resultIcon: '-' };
         }
-        if (record.scoreInfo && record.scoreInfo.details) {
-            detailSources.push(record.scoreInfo.details);
-        }
-        for (const details of detailSources) {
-            const extracted = {};
-            Object.keys(details || {}).forEach((key) => {
-                const detail = details[key];
-                if (detail && detail.correctAnswer != null && String(detail.correctAnswer).trim() !== '') {
-                    extracted[key] = detail.correctAnswer;
-                }
-            });
-            if (Object.keys(extracted).length > 0) {
-                return extracted;
-            }
-        }
-
-        return {};
+        const isCorrect = this.compareLegacyAnswers(userAnswer, correctAnswer);
+        return {
+            isCorrect,
+            resultClass: isCorrect ? 'correct' : 'incorrect',
+            resultIcon: isCorrect ? '&#10003;' : '&#10005;'
+        };
     }
 
     extractLegacyQuestionNumbers(userAnswers, correctAnswers) {
@@ -1135,13 +1149,17 @@ class PracticeRecordModal {
     async exportSingle(recordId) {
         try {
             let record = null;
+            const normalise = (value) => (value == null ? '' : String(value));
+            const targetId = normalise(recordId);
 
-            // 1) 优先使用 PracticeRecorder / ScoreStorage
-            const practiceRecorder = window.app?.components?.practiceRecorder;
-            if (practiceRecorder && typeof practiceRecorder.getPracticeRecords === 'function') {
-                const maybe = practiceRecorder.getPracticeRecords();
-                const records = Array.isArray(maybe?.then ? await maybe : maybe) ? (maybe?.then ? await maybe : maybe) : [];
-                record = records.find(r => r.id === recordId || String(r.sessionId || '') === String(recordId));
+            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.getById === 'function') {
+                record = await window.PracticeRecordAPI.getById(targetId);
+            }
+
+            if (!record && window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
+                const records = await window.PracticeRecordAPI.list();
+                const list = Array.isArray(records) ? records : [];
+                record = list.find(r => normalise(r.id) === targetId || normalise(r.sessionId) === targetId);
             }
 
             if (!record) {
@@ -1192,9 +1210,17 @@ if (!window.practiceRecordModal.showById) {
             const normalise = (value) => (value == null ? '' : String(value));
             const targetId = normalise(recordId);
 
-            const records = (window.storage ? (await window.storage.get('practice_records', [])) : []) || [];
-            let record = records.find(r => normalise(r.id) === targetId) ||
-                records.find(r => normalise(r.sessionId) === targetId);
+            let record = null;
+            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.getById === 'function') {
+                record = await window.PracticeRecordAPI.getById(targetId);
+            }
+
+            if (!record && window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
+                const records = await window.PracticeRecordAPI.list();
+                const list = Array.isArray(records) ? records : [];
+                record = list.find(r => normalise(r.id) === targetId) ||
+                    list.find(r => normalise(r.sessionId) === targetId);
+            }
 
             if (!record) {
                 throw new Error('\u8bb0\u5f55\u4e0d\u5b58\u5728');

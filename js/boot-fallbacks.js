@@ -164,18 +164,8 @@
     if (!_fallbackDataIntegrityLoadPromise) {
       if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
         _fallbackDataIntegrityLoadPromise = window.AppLazyLoader.ensureGroup('settings-tools');
-      } else if (typeof document !== 'undefined' && !window.DataIntegrityManager) {
-        _fallbackDataIntegrityLoadPromise = new Promise(function (resolve, reject) {
-          var script = document.createElement('script');
-          script.src = 'js/components/DataIntegrityManager.js';
-          script.onload = resolve;
-          script.onerror = function (error) {
-            reject(error || new Error('failed to load DataIntegrityManager'));
-          };
-          document.head.appendChild(script);
-        });
       } else {
-        _fallbackDataIntegrityLoadPromise = Promise.resolve();
+        _fallbackDataIntegrityLoadPromise = Promise.reject(new Error('settings-tools loader unavailable'));
       }
     }
 
@@ -379,13 +369,7 @@
         loading = window.AppLazyLoader.ensureGroup('settings-tools');
         return loading.then(() => new window.DataBackupManager());
       }
-      loading = new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'js/utils/dataBackupManager.js';
-        script.onload = () => resolve();
-        script.onerror = (err) => reject(err || new Error('failed to load dataBackupManager'));
-        document.head.appendChild(script);
-      });
+      loading = Promise.reject(new Error('settings-tools loader unavailable'));
       return loading.then(() => new window.DataBackupManager());
     };
   })();

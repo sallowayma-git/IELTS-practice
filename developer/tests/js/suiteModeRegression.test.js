@@ -243,6 +243,54 @@ async function run() {
         windowStub.localStorage.removeItem('suite_auto_advance_after_submit');
     }
 
+    // Case 1.2: 手动回看 next 必须以 payload examId 为事实源，不能被旧 listener 的 examId 拉回 P1
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_manual_payload_exam');
+        session.flowMode = 'classic';
+        session.autoAdvanceAfterSubmit = false;
+        session.currentIndex = 1;
+        session.activeExamId = 'reading-p2';
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+
+        const openCalls = [];
+        const oldWindow = createStubWindow('old-p1-window');
+        const nextWindow = createStubWindow('suite-window');
+        app.openExam = async (examId, options = {}) => {
+            openCalls.push({ examId, options });
+            return nextWindow;
+        };
+        const cleaned = [];
+        app.cleanupExamSession = async (examId) => {
+            cleaned.push(examId);
+        };
+        app._sendSuiteReviewState = async (targetSession, targetExamId, targetWindow) => {
+            targetWindow.postMessage({
+                type: 'REVIEW_CONTEXT',
+                data: { examId: targetExamId, currentIndex: targetSession.currentIndex }
+            });
+            return true;
+        };
+
+        const handled = await app.handleSuiteReviewNavigate('reading-p1', {
+            suiteSessionId: session.id,
+            suiteReviewMode: true,
+            examId: 'reading-p2',
+            direction: 'next'
+        }, oldWindow);
+
+        assert.strictEqual(handled, true, '手动回看 next 应处理成功');
+        assert.strictEqual(openCalls.length, 1, '应打开下一篇');
+        assert.strictEqual(openCalls[0].examId, 'reading-p3', 'payload 为 P2 时 next 必须进入 P3');
+        assert.deepStrictEqual(cleaned, ['reading-p2'], '清理旧会话必须使用规范化后的 P2');
+        assert.strictEqual(session.currentIndex, 2, 'session currentIndex 应推进到 P3');
+        assert.strictEqual(session.activeExamId, 'reading-p3', 'activeExamId 应推进到 P3');
+        const reviewMsg = nextWindow._messages.find(msg => msg && msg.type === 'REVIEW_CONTEXT');
+        assert(reviewMsg, 'P3 页面必须收到回看上下文');
+        assert.strictEqual(reviewMsg.data.examId, 'reading-p3', '回看上下文必须绑定 P3');
+    }
+
     // Case 2: SIMULATION_NAVIGATE 前后切换并保存 draft
     {
         const app = createApp(windowStub);
@@ -360,6 +408,86 @@ async function run() {
         assert.strictEqual(Object.prototype.hasOwnProperty.call(p2Entry.rawData || {}, 'highlights'), false, '最终 entry.rawData 不应重复持久化高亮');
         assert.strictEqual(Object.prototype.hasOwnProperty.call(savedRecord.metadata || {}, 'suiteEntries'), false, 'metadata 不应重复持久化 suiteEntries');
         assert.strictEqual(Object.prototype.hasOwnProperty.call(savedRecord.realData || {}, 'suiteEntries'), false, 'realData 不应重复持久化 suiteEntries');
+    }
+
+    // Case 2.0.0b: 套题回看 payload 必须用 canonical correctAnswerMap 覆盖旧 comparison/scoreInfo
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_replay_canonical_answers');
+        session.flowMode = 'stationary';
+        session.autoAdvanceAfterSubmit = false;
+        session.currentIndex = 1;
+        session.activeExamId = 'reading-p2';
+        session.results = [
+            {
+                examId: 'reading-p2',
+                title: 'Passage 2',
+                answers: { q1: 'A', q2: 'B' },
+                correctAnswerMap: { q1: 'A', q2: 'C' },
+                correctAnswers: { q1: 'B', q2: 'B' },
+                answerComparison: {
+                    q1: { userAnswer: 'A', correctAnswer: 'B', isCorrect: false },
+                    q2: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true }
+                },
+                scoreInfo: { correct: 0, total: 2, accuracy: 0, percentage: 0 },
+                rawData: {
+                    correctAnswerMap: { q1: 'STALE', q2: 'STALE' },
+                    scoreInfo: { details: { q1: { correctAnswer: 'STALE' } } }
+                }
+            }
+        ];
+        app.currentSuiteSession = session;
+        app.suiteExamMap = new Map(session.sequence.map(item => [item.examId, session.id]));
+
+        const p2Replay = app._buildSuiteReplayEntry(session, 'reading-p2');
+        assert.strictEqual(p2Replay.correctAnswerMap.q1, 'A', 'suite replay 必须保留 canonical q1 正确答案');
+        assert.strictEqual(p2Replay.correctAnswerMap.q2, 'C', 'suite replay 必须保留 canonical q2 正确答案');
+        assert.strictEqual(p2Replay.answerComparison.q1.correctAnswer, 'A', 'suite replay 必须覆盖旧 q1 comparison 正确答案');
+        assert.strictEqual(p2Replay.answerComparison.q1.isCorrect, true, 'suite replay 必须重算 q1 isCorrect');
+        assert.strictEqual(p2Replay.answerComparison.q2.correctAnswer, 'C', 'suite replay 必须覆盖旧 q2 comparison 正确答案');
+        assert.strictEqual(p2Replay.answerComparison.q2.isCorrect, false, 'suite replay 必须重算 q2 isCorrect');
+        assert.strictEqual(p2Replay.scoreInfo.correct, 1, 'suite replay 必须按 canonical comparison 重算正确数');
+        assert.strictEqual(p2Replay.scoreInfo.total, 2, 'suite replay 必须按 canonical comparison 重算总题数');
+        assert.strictEqual(p2Replay.scoreInfo.percentage, 50, 'suite replay 必须按 canonical comparison 重算百分比');
+
+        const replayWindow = createStubWindow('suite-replay-window');
+        const sent = await app._sendSuiteReviewState(session, 'reading-p2', replayWindow);
+        assert.strictEqual(sent, true, '套题回看应能下发 replay payload');
+        const replayMsg = replayWindow._messages.find(msg => msg && msg.type === 'REPLAY_PRACTICE_RECORD');
+        assert(replayMsg, '套题回看必须向子页下发 replay payload');
+        assert.strictEqual(replayMsg.data.entry.correctAnswerMap.q1, 'A', '下发 payload 必须包含 canonical correctAnswerMap');
+        assert.strictEqual(replayMsg.data.entry.answerComparison.q1.correctAnswer, 'A', '下发 payload 不得继续携带旧 comparison 正确答案');
+        assert.strictEqual(replayMsg.data.entry.scoreInfo.correct, 1, '下发 payload 不得继续携带旧 scoreInfo');
+    }
+
+    // Case 2.0.0c: partial correctAnswerMap 只能修正已知题，不能把原始总分压小
+    {
+        const app = createApp(windowStub);
+        const session = makeSession('suite_replay_partial_answer_map');
+        session.flowMode = 'stationary';
+        session.autoAdvanceAfterSubmit = false;
+        session.results = [
+            {
+                examId: 'reading-p2',
+                title: 'Passage 2',
+                answers: { q1: 'A', q2: 'B' },
+                correctAnswerMap: { 'reading-p2::1': 'A' },
+                answerComparison: {
+                    'reading-p2::q1': { userAnswer: 'A', correctAnswer: 'STALE', isCorrect: false },
+                    q2: { userAnswer: 'B', correctAnswer: 'B', isCorrect: true }
+                },
+                scoreInfo: { correct: 30, total: 40, accuracy: 0.75, percentage: 75 }
+            }
+        ];
+
+        const p2Replay = app._buildSuiteReplayEntry(session, 'reading-p2');
+        assert.strictEqual(p2Replay.correctAnswerMap.q1, 'A', 'prefixed/numeric correctAnswerMap key 必须归一到 q1');
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(p2Replay.correctAnswerMap, 'reading-p2::1'), false, 'correctAnswerMap 不应保留复合旧 key');
+        assert.strictEqual(p2Replay.answerComparison.q1.correctAnswer, 'A', 'partial map 应修正可确定的 q1 正确答案');
+        assert.strictEqual(p2Replay.answerComparison.q1.isCorrect, true, 'partial map 应重算可确定的 q1 isCorrect');
+        assert.strictEqual(p2Replay.scoreInfo.correct, 30, 'partial map 不得覆盖原始 correct');
+        assert.strictEqual(p2Replay.scoreInfo.total, 40, 'partial map 不得把原始 total=40 压成局部题数');
+        assert.strictEqual(p2Replay.scoreInfo.percentage, 75, 'partial map 不得覆盖原始 percentage');
     }
 
     // Case 2.0.1: 模拟模式最终聚合记录必须保留 P2 高亮展示态

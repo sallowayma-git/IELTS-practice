@@ -876,10 +876,12 @@
         questions: []
       };
 
-      // 注意：全局小写形式为 window.dataRepositories
-      const repos = window.dataRepositories;
-      if (repos && repos.practice) {
-        repos.practice.upsert(demoRecordObj).then(() => {
+      const saveTask = window.PracticeRecordAPI && typeof window.PracticeRecordAPI.saveRecord === 'function'
+        ? window.PracticeRecordAPI.saveRecord(demoRecordObj, { maxRecords: 1000, updateStats: true })
+        : null;
+
+      if (saveTask) {
+        saveTask.then(() => {
           // 尝试触发界面刷新
           if (typeof window.syncPracticeRecords === 'function') {
             window.syncPracticeRecords({ forceRender: true });
@@ -893,14 +895,17 @@
           console.error('[Onboarding] 注入示例记录失败:', err);
         });
       } else {
-        console.warn('[Onboarding] window.dataRepositories.practice 不可用，无法注入示例记录');
+        console.warn('[Onboarding] 练习记录存储不可用，无法注入示例记录');
       }
     }
 
     _cleanupDemoRecord() {
-      const repos = window.dataRepositories;
-      if (repos && repos.practice) {
-        repos.practice.removeById('demo-onboarding-record').then(() => {
+      const deleteTask = window.PracticeRecordAPI && typeof window.PracticeRecordAPI.deleteById === 'function'
+        ? window.PracticeRecordAPI.deleteById('demo-onboarding-record', { updateStats: true })
+        : null;
+
+      if (deleteTask) {
+        deleteTask.then(() => {
           if (typeof window.syncPracticeRecords === 'function') {
             window.syncPracticeRecords({ forceRender: true });
           } else if (window.app && typeof window.app.renderPracticeHistory === 'function') {

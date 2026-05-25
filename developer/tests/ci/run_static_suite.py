@@ -524,12 +524,14 @@ def _check_settings_tools_split() -> Tuple[bool, dict]:
     lazy_loader = REPO_ROOT / "js" / "runtime" / "lazyLoader.js"
     boot_fallbacks = REPO_ROOT / "js" / "boot-fallbacks.js"
     exam_actions = REPO_ROOT / "js" / "app" / "examActions.js"
+    practice_enhancer = REPO_ROOT / "js" / "practice-page-enhancer.js"
 
     try:
         build_source = build_script.read_text(encoding="utf-8")
         loader_source = lazy_loader.read_text(encoding="utf-8")
         fallback_source = boot_fallbacks.read_text(encoding="utf-8")
         actions_source = exam_actions.read_text(encoding="utf-8")
+        enhancer_source = practice_enhancer.read_text(encoding="utf-8")
     except Exception as exc:  # pragma: no cover - defensive guard
         return False, {"error": f"读取失败：{exc}"}
 
@@ -547,7 +549,11 @@ def _check_settings_tools_split() -> Tuple[bool, dict]:
 
     forbidden = {
         "fallbackLoadsBrowseForDataIntegrity": "ensureGroup('browse-runtime')" in fallback_source,
+        "fallbackLoadsDataIntegritySource": "js/components/DataIntegrityManager.js" in fallback_source,
+        "fallbackLoadsDataBackupSource": "js/utils/dataBackupManager.js" in fallback_source,
         "examActionsLoadsDiagnosticsForDataIntegrity": "ensureGroup('diagnostics-tools')" in actions_source,
+        "enhancerLoadsStorageSource": "js/utils/storage.js" in enhancer_source,
+        "enhancerLoadsSpellingSource": "js/app/spellingErrorCollector.js" in enhancer_source,
     }
 
     passed = all(required.values()) and not any(forbidden.values())
@@ -1866,23 +1872,74 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("练习记录持久化删除链路测试", False, "测试脚本缺失"))
         all_passed = False
 
-    dictionary_service_test = REPO_ROOT / "developer" / "tests" / "js" / "dictionaryService.test.js"
-    if dictionary_service_test.exists():
-        dictionary_test_passed, dictionary_test_payload = _run_json_subprocess(
-            ["node", str(dictionary_service_test)],
-            timeout=30,
-        )
-        if dictionary_test_passed and isinstance(dictionary_test_payload, dict):
-            test_passed = dictionary_test_payload.get("status") == "pass"
-            test_detail = dictionary_test_payload.get("detail", dictionary_test_payload)
+    data_flow_regression_tests = [
+        (
+            "DataIntegrityManager 练习记录导入恢复同步测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "dataIntegrityRecords.test.js",
+        ),
+        (
+            "DataBackupManager 练习记录导入 API 单入口测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "dataBackupManagerRecords.test.js",
+        ),
+        (
+            "StorageManager 运行期练习记录导入 API 单入口测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "storageManagerRecords.test.js",
+        ),
+        (
+            "SimpleStorageWrapper 练习数据只读兼容测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "simpleStorageWrapperPracticeData.test.js",
+        ),
+        (
+            "单篇练习完成保存同步链路测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "practiceCompletionFlow.test.js",
+        ),
+        (
+            "练习记录详情套题答案去重测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "practiceRecordModal.test.js",
+        ),
+        (
+            "占位页 correctAnswerMap 回灌测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "examPlaceholderReplay.test.js",
+        ),
+        (
+            "练习页回放 correctAnswerMap 契约测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "practicePageEnhancerReplay.test.js",
+        ),
+        (
+            "阅读高亮本地词典测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "dictionaryService.test.js",
+        ),
+        (
+            "Markdown 导出正确答案语义测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "markdownExporter.test.js",
+        ),
+        (
+            "ScoreStorage 正确答案契约测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "scoreStorageCorrectAnswers.test.js",
+        ),
+        (
+            "练习记录展示投影不变异测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "dataConsistencyManager.test.js",
+        ),
+        (
+            "练习历史列表刷新签名测试",
+            REPO_ROOT / "developer" / "tests" / "js" / "practiceHistorySignature.test.js",
+        ),
+    ]
+    for test_name, test_path in data_flow_regression_tests:
+        if test_path.exists():
+            test_process_passed, test_payload = _run_json_subprocess(["node", str(test_path)], timeout=30)
+            if test_process_passed and isinstance(test_payload, dict):
+                test_passed = test_payload.get("status") == "pass"
+                test_detail = test_payload.get("detail", test_payload)
+            else:
+                test_passed = False
+                test_detail = test_payload
+            results.append(_format_result(test_name, test_passed, test_detail))
+            all_passed &= test_passed
         else:
-            test_passed = False
-            test_detail = dictionary_test_payload
-        results.append(_format_result("阅读高亮本地词典测试", test_passed, test_detail))
-        all_passed &= test_passed
-    else:
-        results.append(_format_result("阅读高亮本地词典测试", False, "测试脚本缺失"))
-        all_passed = False
+            results.append(_format_result(test_name, False, "测试脚本缺失"))
+            all_passed = False
 
     practice_core_app_state_sync_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceCoreAppStateSync.test.js"
     if practice_core_app_state_sync_test.exists():

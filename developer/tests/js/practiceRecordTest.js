@@ -9,6 +9,54 @@ class PracticeRecordTest {
         this.testRecords = [];
         this.originalRecords = [];
         this.simpleStorage = window.simpleStorageWrapper;
+        this.practiceRecordAPI = window.PracticeRecordAPI;
+    }
+
+    getPracticeRecordAPI(requiredMethods = []) {
+        const api = this.practiceRecordAPI || window.PracticeRecordAPI;
+        if (!api) {
+            throw new Error('PracticeRecordAPI不可用');
+        }
+        requiredMethods.forEach(method => {
+            if (typeof api[method] !== 'function') {
+                throw new Error(`PracticeRecordAPI.${method}不可用`);
+            }
+        });
+        return api;
+    }
+
+    async listPracticeRecords() {
+        const api = this.getPracticeRecordAPI(['list']);
+        return await api.list();
+    }
+
+    async getPracticeRecordById(id) {
+        const api = this.getPracticeRecordAPI(['getById']);
+        return await api.getById(id);
+    }
+
+    async savePracticeRecord(record) {
+        const api = this.getPracticeRecordAPI(['saveRecord']);
+        await api.saveRecord(record, { updateStats: true });
+        return true;
+    }
+
+    async replacePracticeRecords(records) {
+        const api = this.getPracticeRecordAPI(['replace']);
+        await api.replace(Array.isArray(records) ? records : [], { updateStats: true });
+        return true;
+    }
+
+    async deletePracticeRecord(id) {
+        const api = this.getPracticeRecordAPI(['deleteById']);
+        const result = await api.deleteById(id, { updateStats: true });
+        return Boolean(result && result.deleted);
+    }
+
+    async deletePracticeRecords(ids) {
+        const api = this.getPracticeRecordAPI(['deleteMany']);
+        const result = await api.deleteMany(ids, { updateStats: true });
+        return Number(result && result.deletedCount) || 0;
     }
 
     // 运行所有Practice记录测试
@@ -56,15 +104,15 @@ class PracticeRecordTest {
         const testName = '备份原始数据';
 
         try {
-            if (this.simpleStorage) {
-                this.originalRecords = await this.simpleStorage.getPracticeRecords();
+            if (this.practiceRecordAPI) {
+                this.originalRecords = await this.listPracticeRecords();
                 console.log(`[PracticeRecordTest] 备份了 ${this.originalRecords.length} 条原始记录`);
                 this.recordTest(testName, true, {
                     backupCount: this.originalRecords.length,
                     timestamp: new Date().toISOString()
                 });
             } else {
-                this.recordTest(testName, false, { error: 'simpleStorageWrapper不可用' });
+                this.recordTest(testName, false, { error: 'PracticeRecordAPI不可用' });
             }
         } catch (error) {
             this.recordTest(testName, false, { error: error.message });
@@ -77,10 +125,11 @@ class PracticeRecordTest {
 
         try {
             const checks = [
-                { name: 'simpleStorageWrapper存在', exists: !!this.simpleStorage },
-                { name: 'getPracticeRecords方法存在', exists: typeof this.simpleStorage?.getPracticeRecords === 'function' },
-                { name: 'addPracticeRecord方法存在', exists: typeof this.simpleStorage?.addPracticeRecord === 'function' },
-                { name: 'deletePracticeRecord方法存在', exists: typeof this.simpleStorage?.deletePracticeRecord === 'function' }
+                { name: 'simpleStorageWrapper只读兼容存在', exists: !!this.simpleStorage },
+                { name: 'getPracticeRecords只读方法存在', exists: typeof this.simpleStorage?.getPracticeRecords === 'function' },
+                { name: 'PracticeRecordAPI存在', exists: !!this.practiceRecordAPI },
+                { name: 'PracticeRecordAPI.saveRecord方法存在', exists: typeof this.practiceRecordAPI?.saveRecord === 'function' },
+                { name: 'PracticeRecordAPI.deleteById方法存在', exists: typeof this.practiceRecordAPI?.deleteById === 'function' }
             ];
 
             const allConnected = checks.every(check => check.exists);
@@ -141,7 +190,7 @@ class PracticeRecordTest {
 
             for (const record of newRecords) {
                 try {
-                    const success = await this.simpleStorage.addPracticeRecord(record);
+                    const success = await this.savePracticeRecord(record);
                     createResults.push({
                         recordId: record.id,
                         success,
@@ -179,7 +228,7 @@ class PracticeRecordTest {
 
         try {
             // 获取所有记录
-            const allRecords = await this.simpleStorage.getPracticeRecords();
+            const allRecords = await this.listPracticeRecords();
 
             // 验证测试记录是否被正确保存
             const foundTestRecords = this.testRecords.filter(testRecord =>
@@ -190,7 +239,7 @@ class PracticeRecordTest {
             const singleRecordResults = [];
             for (const testRecord of this.testRecords) {
                 try {
-                    const foundRecord = await this.simpleStorage.getById(testRecord.id);
+                    const foundRecord = await this.getPracticeRecordById(testRecord.id);
                     singleRecordResults.push({
                         recordId: testRecord.id,
                         success: foundRecord !== null && foundRecord.id === testRecord.id
@@ -241,10 +290,10 @@ class PracticeRecordTest {
                 notes: '更新后的笔记'
             };
 
-            const updateSuccess = await this.simpleStorage.update(updateRecord.id, updates);
+            const updateSuccess = await this.savePracticeRecord({ ...updateRecord, ...updates });
 
             // 验证更新
-            const updatedRecord = await this.simpleStorage.getById(updateRecord.id);
+            const updatedRecord = await this.getPracticeRecordById(updateRecord.id);
             const updateVerified = updatedRecord !== null &&
                                  updatedRecord.score === updates.score &&
                                  updatedRecord.timeSpent === updates.timeSpent &&
@@ -252,7 +301,7 @@ class PracticeRecordTest {
 
             // 恢复原始数据（用于其他测试）
             if (updateSuccess) {
-                await this.simpleStorage.update(updateRecord.id, { score: originalScore });
+                await this.savePracticeRecord({ ...updatedRecord, score: originalScore });
             }
 
             this.recordTest(testName, updateSuccess && updateVerified, {
@@ -280,17 +329,17 @@ class PracticeRecordTest {
             }
 
             const recordToDelete = this.testRecords.pop(); // 删除最后一个测试记录
-            const recordsBeforeDelete = (await this.simpleStorage.getPracticeRecords()).length;
+            const recordsBeforeDelete = (await this.listPracticeRecords()).length;
 
             // 执行删除
-            const deleteSuccess = await this.simpleStorage.delete(recordToDelete.id);
+            const deleteSuccess = await this.deletePracticeRecord(recordToDelete.id);
 
             // 验证删除
-            const recordsAfterDelete = (await this.simpleStorage.getPracticeRecords()).length;
+            const recordsAfterDelete = (await this.listPracticeRecords()).length;
             const deleteVerified = recordsAfterDelete === recordsBeforeDelete - 1;
 
             // 确认记录确实被删除
-            const deletedRecordExists = (await this.simpleStorage.getById(recordToDelete.id)) !== null;
+            const deletedRecordExists = (await this.getPracticeRecordById(recordToDelete.id)) !== null;
 
             const fullyDeleted = deleteSuccess && deleteVerified && !deletedRecordExists;
 
@@ -335,7 +384,7 @@ class PracticeRecordTest {
             let batchAddSuccess = true;
             const addedIds = [];
             for (const record of batchRecords) {
-                const success = await this.simpleStorage.addPracticeRecord(record);
+                const success = await this.savePracticeRecord(record);
                 if (success) {
                     addedIds.push(record.id);
                 } else {
@@ -344,9 +393,10 @@ class PracticeRecordTest {
             }
 
             // 批量删除
-            const recordsBeforeBatchDelete = (await this.simpleStorage.getPracticeRecords()).length;
-            const batchDeleteSuccess = await this.simpleStorage.deletePracticeRecords(addedIds);
-            const recordsAfterBatchDelete = (await this.simpleStorage.getPracticeRecords()).length;
+            const recordsBeforeBatchDelete = (await this.listPracticeRecords()).length;
+            const deletedCount = await this.deletePracticeRecords(addedIds);
+            const batchDeleteSuccess = deletedCount === addedIds.length;
+            const recordsAfterBatchDelete = (await this.listPracticeRecords()).length;
 
             const batchDeleteVerified = recordsAfterBatchDelete === recordsBeforeBatchDelete - addedIds.length;
 
@@ -522,16 +572,11 @@ class PracticeRecordTest {
 
         try {
             // 清理所有测试记录
-            const allRecords = await this.simpleStorage.getPracticeRecords();
-            const testRecordIds = this.testRecords.map(r => r.id);
-            const nonTestRecords = allRecords.filter(record => !testRecordIds.includes(record.id));
-
-            // 恢复原始记录
-            await this.simpleStorage.savePracticeRecords([...this.originalRecords, ...nonTestRecords]);
+            await this.replacePracticeRecords(this.originalRecords);
 
             // 验证恢复
-            const finalRecords = await this.simpleStorage.getPracticeRecords();
-            const expectedCount = this.originalRecords.length + nonTestRecords.length;
+            const finalRecords = await this.listPracticeRecords();
+            const expectedCount = this.originalRecords.length;
             const restoreSuccess = finalRecords.length === expectedCount;
 
             this.recordTest(testName, restoreSuccess, {

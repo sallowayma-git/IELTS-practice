@@ -22,6 +22,7 @@ function deepClone(value) {
 async function main() {
     const state = new Map();
     state.set('practice_records', [{ id: 'legacy_1', examId: 'legacy-a' }]);
+    const apiRecords = [{ id: 'api_1', examId: 'api-a' }];
     const storage = {
         async get(key, fallback = undefined) {
             if (state.has(key)) {
@@ -40,16 +41,44 @@ async function main() {
         addEventListener() {},
         removeEventListener() {},
         document: { addEventListener() {}, removeEventListener() {} },
+        PracticeRecordAPI: {
+            async list() {
+                return deepClone(apiRecords);
+            },
+            async replace(records) {
+                apiRecords.splice(
+                    0,
+                    apiRecords.length,
+                    ...(Array.isArray(records) ? records.map((record) => deepClone(record)) : [])
+                );
+                return deepClone(apiRecords);
+            },
+            async saveRecord(record) {
+                apiRecords.unshift(deepClone(record));
+                return deepClone(record);
+            },
+            async deleteMany(ids) {
+                const idSet = new Set((Array.isArray(ids) ? ids : []).map(String));
+                const before = apiRecords.length;
+                for (let index = apiRecords.length - 1; index >= 0; index -= 1) {
+                    const record = apiRecords[index];
+                    if (record && idSet.has(String(record.id))) {
+                        apiRecords.splice(index, 1);
+                    }
+                }
+                return { deletedCount: before - apiRecords.length, records: deepClone(apiRecords) };
+            }
+        },
         PracticeCore: {
             store: {
                 async listPracticeRecords() {
-                    return [{ id: 'core_1', examId: 'core-a' }];
+                    throw new Error('PracticeCore should not be read by business fallback');
                 }
             }
         },
         PracticeStore: {
             async list() {
-                return [{ id: 'store_1', examId: 'store-a' }];
+                throw new Error('PracticeStore should not be read by business fallback');
             },
             async save() {
                 throw new Error('save should not be called in this case');
@@ -85,7 +114,7 @@ async function main() {
         components: {
             practiceRecorder: {
                 async getPracticeRecords() {
-                    return [{ id: 'recorder_1', examId: 'recorder-a' }];
+                    throw new Error('PracticeRecorder should not be read by business fallback');
                 }
             }
         },
@@ -99,26 +128,21 @@ async function main() {
     Object.assign(app, mixins.examSession, mixins.suitePractice);
 
     const fromFiltering = await app._loadSuitePracticeRecordsForFiltering();
-    assert.strictEqual(fromFiltering[0].id, 'recorder_1', '过滤读取应优先 PracticeRecorder');
+    assert.strictEqual(fromFiltering[0].id, 'api_1', '过滤读取应只使用 PracticeRecordAPI');
 
-    delete app.components.practiceRecorder;
-    const fromStateSync = await app._listPracticeRecordsWithFallback({ includeRecorder: false });
-    assert.strictEqual(fromStateSync[0].id, 'core_1', '无 recorder 时应回退 PracticeCore');
+    const fromStateSync = await app._listPracticeRecordsViaAPI();
+    assert.strictEqual(fromStateSync[0].id, 'api_1', '状态同步读取应只使用 PracticeRecordAPI');
 
-    delete sandboxWindow.PracticeCore;
-    const fromStore = await app._listPracticeRecordsWithFallback({ includeRecorder: false });
-    assert.strictEqual(fromStore[0].id, 'store_1', '无 PracticeCore 时应回退 PracticeStore');
-
-    delete sandboxWindow.PracticeStore;
-    const fromStorage = await app._listPracticeRecordsWithFallback({ includeRecorder: false });
-    assert.strictEqual(fromStorage[0].id, 'legacy_1', '最终应回退 storage practice_records');
+    delete sandboxWindow.PracticeRecordAPI;
+    const fromStorage = await app._listPracticeRecordsViaAPI();
+    assert.strictEqual(fromStorage.length, 0, '无统一记录层时不应把 storage practice_records 当业务事实源');
 
     await app._updatePracticeRecordsState();
     assert.strictEqual(app.setStateCalls.length, 1, '应同步一次 practice.records');
     assert.strictEqual(app.setStateCalls[0].pathName, 'practice.records');
-    assert.strictEqual(app.setStateCalls[0].value[0].id, 'legacy_1');
+    assert.strictEqual(app.setStateCalls[0].value.length, 0, '无统一记录层时应同步空记录，避免 legacy shadow key 回灌');
 
-    process.stdout.write(JSON.stringify({ status: 'pass', detail: 'suitePractice fallback 链统一并按顺序工作' }));
+    process.stdout.write(JSON.stringify({ status: 'pass', detail: 'suitePractice 读取链只认 PracticeRecordAPI，并拒绝 raw practice_records 作为业务事实源' }));
 }
 
 main().catch((error) => {

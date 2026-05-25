@@ -672,7 +672,49 @@
             var ts = historyRenderer.helpers.getRecordTimestampSafe(record);
             var pct = Number(record && record.percentage) || 0;
             var dur = Number(record && record.duration) || 0;
-            return id + ':' + ts + ':' + pct + ':' + dur;
+            var metadata = record && record.metadata || {};
+            var rd = record && record.realData || {};
+            var scoreInfo = record && record.scoreInfo || rd.scoreInfo || {};
+            var title = [
+                record && record.title,
+                record && record.examTitle,
+                metadata.examTitle,
+                metadata.title,
+                rd.title,
+                record && record.examId
+            ].filter(Boolean).join('/');
+            var suiteEntries = Array.isArray(record && record.suiteEntries)
+                ? record.suiteEntries
+                : (Array.isArray(rd.suiteEntries)
+                    ? rd.suiteEntries
+                    : (Array.isArray(metadata.suiteEntries) ? metadata.suiteEntries : []));
+            var updatedAt = record && record.updatedAt != null ? record.updatedAt : (rd && rd.updatedAt);
+            var correct = Number(record && record.correctAnswers);
+            if (!isFinite(correct)) correct = Number(scoreInfo.correct);
+            if (!isFinite(correct)) correct = Number(record && record.score);
+            if (!isFinite(correct)) correct = 0;
+            var total = Number(record && record.totalQuestions);
+            if (!isFinite(total)) total = Number(scoreInfo.total);
+            if (!isFinite(total)) total = Number(record && record.total);
+            if (!isFinite(total)) total = 0;
+            var accuracy = Number(record && record.accuracy);
+            if (!isFinite(accuracy)) accuracy = Number(scoreInfo.accuracy);
+            if (!isFinite(accuracy)) accuracy = 0;
+            return [
+                id,
+                ts,
+                pct,
+                dur,
+                record && record.sessionId || '',
+                updatedAt || '',
+                title,
+                correct,
+                total,
+                accuracy,
+                suiteEntries.length
+            ].map(function (part) {
+                return String(part == null ? '' : part).replace(/[|;:]/g, '_');
+            }).join(':');
         });
         return list.length + '|' + tokens.join(';');
     };
@@ -1232,7 +1274,7 @@
     LegacyExamListView.prototype._getCompletionStatus = function _getCompletionStatus(exam) {
         var source = (typeof global.getPracticeRecordsState === 'function')
             ? global.getPracticeRecordsState()
-            : global.practiceRecords;
+            : [];
         var records = ensureArray(source).filter(function (record) {
             return recordMatchesExam(exam, record);
         });

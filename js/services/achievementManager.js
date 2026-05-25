@@ -207,24 +207,16 @@
             return null;
         }
 
-        async _getUserStatsFromScoreStorage() {
-            const recorder = this._getPracticeRecorder();
-            if (recorder && typeof recorder.getUserStats === 'function') {
-                return await recorder.getUserStats();
-            }
-            if (window.storage) {
-                return await window.storage.get('user_stats', this._getDefaultUserStats());
+        async _getUserStatsFromPracticeRecordAPI() {
+            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.readStats === 'function') {
+                return await window.PracticeRecordAPI.readStats({ fallback: this._getDefaultUserStats() });
             }
             return this._getDefaultUserStats();
         }
 
         async _getPracticeRecordsFromScoreStorage() {
-            const recorder = this._getPracticeRecorder();
-            if (recorder && typeof recorder.getPracticeRecords === 'function') {
-                return await recorder.getPracticeRecords();
-            }
-            if (window.storage) {
-                return await window.storage.get('practice_records', []);
+            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
+                return await window.PracticeRecordAPI.list();
             }
             return [];
         }
@@ -439,7 +431,7 @@
                 notify = false
             } = options;
 
-            const rawStats = await this._getUserStatsFromScoreStorage();
+            const rawStats = await this._getUserStatsFromPracticeRecordAPI();
             const derivedStats = this._buildDerivedStats(rawStats);
 
             const records = await this._getPracticeRecordsFromScoreStorage();

@@ -52,6 +52,7 @@ function createStubWindow(name) {
 
 async function main() {
     const storageState = new Map();
+    const practiceRecordsState = [];
     const storage = {
         async get(key, fallback = undefined) {
             if (storageState.has(key)) {
@@ -61,6 +62,59 @@ async function main() {
         },
         async set(key, value) {
             storageState.set(key, deepClone(value));
+        }
+    };
+    const practiceRecordApi = {
+        async list() {
+            return deepClone(practiceRecordsState);
+        },
+        async replace(records) {
+            practiceRecordsState.splice(
+                0,
+                practiceRecordsState.length,
+                ...(Array.isArray(records) ? records.map((record) => deepClone(record)) : [])
+            );
+            return true;
+        },
+        async save(record, options = {}) {
+            const recordId = record && record.id != null ? String(record.id) : '';
+            const existingIndex = recordId
+                ? practiceRecordsState.findIndex((entry) => entry && String(entry.id) === recordId)
+                : -1;
+            if (existingIndex >= 0) {
+                practiceRecordsState[existingIndex] = deepClone(record);
+            } else {
+                practiceRecordsState.unshift(deepClone(record));
+            }
+            const maxRecords = Number(options.maxRecords);
+            if (Number.isFinite(maxRecords) && maxRecords > 0 && practiceRecordsState.length > maxRecords) {
+                practiceRecordsState.splice(maxRecords);
+            }
+            return deepClone(record);
+        },
+        async saveRecord(record, options = {}) {
+            return this.save(record, options);
+        },
+        async deleteMany(ids) {
+            const idSet = new Set((Array.isArray(ids) ? ids : []).map(String).filter(Boolean));
+            const deletedRecords = [];
+            for (let index = practiceRecordsState.length - 1; index >= 0; index -= 1) {
+                const record = practiceRecordsState[index];
+                const recordId = record && record.id != null ? String(record.id) : '';
+                const sessionId = record && record.sessionId != null ? String(record.sessionId) : '';
+                if ((recordId && idSet.has(recordId)) || (sessionId && idSet.has(sessionId))) {
+                    deletedRecords.push(practiceRecordsState.splice(index, 1)[0]);
+                }
+            }
+            return {
+                deletedCount: deletedRecords.length,
+                deletedRecords: deepClone(deletedRecords),
+                records: deepClone(practiceRecordsState)
+            };
+        },
+        async clear() {
+            practiceRecordsState.splice(0, practiceRecordsState.length);
+            return true;
         }
     };
 
@@ -97,6 +151,7 @@ async function main() {
     };
 
     windowStub.storage = storage;
+    windowStub.PracticeRecordAPI = practiceRecordApi;
     windowStub.CustomEvent = function CustomEvent(type, init = {}) {
         return { type, detail: init.detail || null };
     };
@@ -322,7 +377,7 @@ async function main() {
     assert.strictEqual(handledP3, true, 'P3 完成后应顺利收尾');
     assert.strictEqual(app.currentSuiteSession, null, '套题会话应在完成后被清理');
 
-    const practiceRecords = await storage.get('practice_records', []);
+    const practiceRecords = await windowStub.PracticeRecordAPI.list();
     assert.strictEqual(practiceRecords.length, 1, '应只生成一条套题练习记录');
     assert.strictEqual(practiceRecords[0].suiteEntries.length, 3, '套题记录应包含三篇文章');
 

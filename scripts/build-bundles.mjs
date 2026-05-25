@@ -26,8 +26,9 @@ const bundles = {
         'js/data/repositories/settingsRepository.js',
         'js/data/repositories/backupRepository.js',
         'js/data/repositories/metaRepository.js',
-        'js/data/index.js',
         'js/core/practiceCore.js',
+        'js/data/index.js',
+        'js/core/practiceRecordAPI.js',
         'js/core/practiceStore.js',
         'js/core/resourceCore.js',
         'assets/generated/reading-exams/manifest.js',
@@ -94,6 +95,7 @@ const bundles = {
         'js/runtime/readingExplanationRegistry.js',
         'js/runtime/readingHighlightShared.js',
         'js/utils/answerMatchCore.js',
+        'js/core/practiceCore.js',
         'assets/wordlists/ielts_core.bundle.js',
         'assets/wordlists/ecdict_reading.bundle.js',
         'js/core/dictionaryService.js',
@@ -104,6 +106,7 @@ const bundles = {
         'js/utils/suiteBackGuard.js',
         'js/utils/answerMatchCore.js',
         'js/app/spellingErrorCollector.js',
+        'js/core/practiceCore.js',
         'js/practice-page-enhancer.js'
     ],
     'js/bundles/more.bundle.js': [
