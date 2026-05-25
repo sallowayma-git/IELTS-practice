@@ -363,6 +363,78 @@
             : null;
     }
 
+    function isReadingMemorizeBrowseMode() {
+        return global.__readingMemorizeBrowseMode === true
+            || String(global.__browseMemorizeFilterMode || '') === 'reading-memorize';
+    }
+
+    function clearReadingMemorizeBrowseMode() {
+        global.__readingMemorizeBrowseMode = false;
+        global.__browseMemorizeFilterMode = null;
+    }
+
+    function isReadingMemorizeExam(exam) {
+        if (global.isReadingMemorizeCandidate && global.isReadingMemorizeCandidate !== isReadingMemorizeExam) {
+            try {
+                return global.isReadingMemorizeCandidate(exam) === true;
+            } catch (_) {
+                // fallback below
+            }
+        }
+        if (!exam || !exam.id) {
+            return false;
+        }
+        if (exam.type && String(exam.type).toLowerCase() === 'listening') {
+            return false;
+        }
+        if (String(exam.id).toLowerCase().indexOf('listening-') === 0) {
+            return false;
+        }
+        if (exam.hasHtml === false) {
+            return false;
+        }
+        const manifest = global.__READING_EXAM_MANIFEST__;
+        return !!(manifest && manifest[exam.id]);
+    }
+
+    function filterReadingMemorizeExams(exams) {
+        return (Array.isArray(exams) ? exams : []).filter(isReadingMemorizeExam);
+    }
+
+    function launchReadingMemorizeExam(examId) {
+        const exam = findExamById(examId);
+        if (!isReadingMemorizeExam(exam)) {
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('该题目无法使用统一阅读页背题，请选择有 HTML 数据的阅读题。', 'warning');
+            }
+            return;
+        }
+        const launchOptions = {
+            practiceMode: 'memorize',
+            target: 'tab',
+            windowName: 'ielts-reading-memorize'
+        };
+        clearReadingMemorizeBrowseMode();
+        if (typeof global.setBrowseTitle === 'function') {
+            global.setBrowseTitle('阅读理解');
+        }
+        if (global.app && typeof global.app.openExam === 'function') {
+            global.app.openExam(examId, launchOptions);
+            return;
+        }
+        if (typeof global.openExam === 'function') {
+            global.openExam(examId, launchOptions);
+            return;
+        }
+        if (global.AppActions && typeof global.AppActions.openExamWithFallback === 'function') {
+            global.AppActions.openExamWithFallback(exam, 0, launchOptions);
+            return;
+        }
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('打开阅读背题失败，题目启动模块未就绪。', 'error');
+        }
+    }
+
     function ensureCustomSuiteSelectionPortal() {
         if (typeof document === 'undefined' || !document.body) {
             return null;
@@ -739,9 +811,11 @@
                 console.warn('[ExamActions] 浏览控件绑定失败:', error);
             }
         }
+
+        const memorizeSelectionActive = isReadingMemorizeBrowseMode();
         
         // 1. 频率模式委托给 BrowseController
-        if (global.__browseFilterMode && global.__browseFilterMode !== 'default' && global.browseController) {
+        if (!memorizeSelectionActive && global.__browseFilterMode && global.__browseFilterMode !== 'default' && global.browseController) {
             try {
                 if (!global.browseController.buttonContainer) {
                     global.browseController.initialize('type-filter-buttons');
@@ -784,6 +858,19 @@
         const normalizedFilter = normalizeUnavailableListeningFilter(activeCategory, activeExamType, examIndexSnapshot);
         activeCategory = normalizedFilter.activeCategory;
         activeExamType = normalizedFilter.activeExamType;
+        if (memorizeSelectionActive) {
+            activeCategory = 'all';
+            activeExamType = 'reading';
+            global.__browseFilterMode = 'default';
+            global.__browsePath = null;
+            if (global.browseController) {
+                global.browseController.currentMode = 'default';
+                global.browseController.activeFilter = 'reading';
+            }
+            if (typeof global.setBrowseFilterState === 'function') {
+                global.setBrowseFilterState('all', 'reading');
+            }
+        }
 
         // 4. 执行筛选
         // 仅在频率模式下使用 basePath 过滤
@@ -792,7 +879,7 @@
             ? global.__browsePath.trim()
             : null;
 
-        const examsToShow = filterExamsWithLegacyFallback(examIndexSnapshot, {
+        let examsToShow = filterExamsWithLegacyFallback(examIndexSnapshot, {
             activeCategory,
             activeExamType,
             browseFilterMode: global.__browseFilterMode,
@@ -801,8 +888,16 @@
             sortMode: global.__browseSortMode,
             preferredFirstExamByCategory
         });
+        if (memorizeSelectionActive) {
+            examsToShow = filterReadingMemorizeExams(examsToShow);
+            if (typeof global.setBrowseTitle === 'function') {
+                global.setBrowseTitle('阅读背题选题');
+            }
+        }
         const customSuiteDraft = getCustomSuiteDraft();
-        const selectionMode = isCustomSuiteSelectionActive() ? 'custom-suite' : '';
+        const selectionMode = memorizeSelectionActive
+            ? 'reading-memorize'
+            : (isCustomSuiteSelectionActive() ? 'custom-suite' : '');
 
         // 6. 更新状态并渲染
         if (global.appStateService) {
@@ -829,6 +924,7 @@
      * 重置浏览视图
      */
     function resetBrowseViewToAll() {
+        clearReadingMemorizeBrowseMode();
         // 1. 清除频率模式标记（关键修复）
         if (typeof global.__browseFilterMode !== 'undefined') {
             global.__browseFilterMode = 'default';
@@ -874,6 +970,13 @@
      * 渲染题库列表 DOM
      */
     function displayExams(exams, options = {}) {
+        const effectiveOptions = Object.assign({}, options || {});
+        if (!effectiveOptions.selectionMode && isReadingMemorizeBrowseMode()) {
+            effectiveOptions.selectionMode = 'reading-memorize';
+        }
+        const renderExams = effectiveOptions.selectionMode === 'reading-memorize'
+            ? filterReadingMemorizeExams(exams)
+            : exams;
         // 1. 尝试使用 BrowseController 管理的 examListViewInstance
         let view = null;
         if (global.browseController && typeof global.browseController.getExamListView === 'function') {
@@ -893,10 +996,10 @@
         }
 
         if (view) {
-            view.render(exams, {
+            view.render(renderExams, {
                 loadingSelector: '#browse-view .loading',
-                selectionMode: options.selectionMode || '',
-                customSuiteDraft: options.customSuiteDraft || null
+                selectionMode: effectiveOptions.selectionMode || '',
+                customSuiteDraft: effectiveOptions.customSuiteDraft || null
             });
             setupExamActionHandlers();
             return;
@@ -918,7 +1021,7 @@
             loadingEl.style.display = 'none';
         }
 
-        const normalizedExams = Array.isArray(exams) ? exams : [];
+        const normalizedExams = Array.isArray(renderExams) ? renderExams : [];
         if (normalizedExams.length === 0) {
             renderEmptyState(container);
             return;
@@ -929,7 +1032,7 @@
 
         normalizedExams.forEach((exam) => {
             if (!exam) return;
-            const item = createExamCard(exam, options);
+            const item = createExamCard(exam, effectiveOptions);
             list.appendChild(item);
         });
 
@@ -973,11 +1076,13 @@
         const currentCategory = getCustomSuiteCurrentCategory(draft);
         const examCategory = normalizeExamCategory(exam);
         const isSelecting = selectionMode === 'custom-suite' && !!draft && draft.status !== 'ready';
+        const isMemorizeSelecting = selectionMode === 'reading-memorize';
         const isSelected = !!draft && draft.pickedByCategory && draft.pickedByCategory[examCategory]
             && String(draft.pickedByCategory[examCategory].examId) === String(exam.id);
         const item = document.createElement('div');
         item.className = 'exam-item'
             + (isSelecting ? ' exam-item--suite-selecting' : '')
+            + (isMemorizeSelecting ? ' exam-item--memorize-selecting' : '')
             + (isSelected ? ' exam-item--suite-selected' : '');
         if (exam.id) {
             item.dataset.examId = exam.id;
@@ -1014,9 +1119,30 @@
             selectBadge.textContent = `${currentCategory} 待选`;
             info.appendChild(selectBadge);
         }
+        if (isMemorizeSelecting) {
+            const selectBadge = document.createElement('div');
+            selectBadge.className = 'suite-custom-selection-badge';
+            selectBadge.textContent = '背题模式';
+            info.appendChild(selectBadge);
+        }
 
         const actions = document.createElement('div');
         actions.className = 'exam-actions';
+
+        if (isMemorizeSelecting) {
+            const selectBtn = document.createElement('button');
+            selectBtn.className = 'btn exam-item-action-btn';
+            selectBtn.type = 'button';
+            selectBtn.dataset.action = 'reading-memorize-select';
+            if (exam.id) {
+                selectBtn.dataset.examId = exam.id;
+            }
+            selectBtn.textContent = '选择背题';
+            actions.appendChild(selectBtn);
+            item.appendChild(info);
+            item.appendChild(actions);
+            return item;
+        }
 
         const startBtn = document.createElement('button');
         startBtn.className = 'btn exam-item-action-btn';
@@ -1097,6 +1223,11 @@
                 return;
             }
 
+            if (action === 'reading-memorize-select') {
+                launchReadingMemorizeExam(examId);
+                return;
+            }
+
             if (action === 'start') {
                 if (global.app && typeof global.app.openExam === 'function') {
                     global.app.openExam(examId);
@@ -1142,6 +1273,9 @@
                 invoke(this, event);
             });
             global.DOM.delegate('click', '[data-action="suite-custom-cancel"]', function (event) {
+                invoke(this, event);
+            });
+            global.DOM.delegate('click', '[data-action="reading-memorize-select"]', function (event) {
                 invoke(this, event);
             });
         } else if (typeof document !== 'undefined') {
@@ -1297,7 +1431,10 @@
         applyExamSort,
         applyBrowsePostFilters,
         applyBrowseFrequencyFilter,
-        normalizeBrowseFrequencyFilter
+        normalizeBrowseFrequencyFilter,
+        launchReadingMemorizeExam,
+        isReadingMemorizeBrowseMode,
+        isReadingMemorizeExam
     };
 
     global.loadExamList = loadExamList;
@@ -1306,6 +1443,7 @@
     global.setupExamActionHandlers = setupExamActionHandlers;
     global.exportAllData = exportAllData;
     global.exportPracticeData = exportPracticeData;
+    global.launchReadingMemorizeExam = launchReadingMemorizeExam;
 
     console.log('[ExamActions] 模块已加载 (Phase 2)');
 

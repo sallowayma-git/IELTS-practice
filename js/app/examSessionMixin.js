@@ -261,7 +261,7 @@
             return !!this._getUnifiedReadingManifestEntry(exam);
         },
 
-        _buildUnifiedReadingUrl(exam) {
+        _buildUnifiedReadingUrl(exam, options = {}) {
             const manifestEntry = this._getUnifiedReadingManifestEntry(exam);
             if (!manifestEntry) {
                 return '';
@@ -273,6 +273,13 @@
             const resolvedDataKey = manifestEntry.dataKey || manifestEntry.examId || exam?.id;
             if (resolvedDataKey) {
                 params.set('dataKey', String(resolvedDataKey));
+            }
+            const practiceMode = options && typeof options.practiceMode === 'string'
+                ? options.practiceMode.trim().toLowerCase()
+                : '';
+            if (practiceMode === 'memorize') {
+                params.set('practiceMode', 'memorize');
+                params.set('mode', 'memorize');
             }
             const query = params.toString();
             const url = query
@@ -297,7 +304,7 @@
                 : pdfUrl;
         },
 
-        resolveReadingLaunchDescriptor(exam) {
+        resolveReadingLaunchDescriptor(exam, options = {}) {
             if (!this._isReadingLibraryExam(exam)) {
                 return null;
             }
@@ -309,7 +316,7 @@
                     examId: exam.id,
                     dataKey: manifestEntry.dataKey || manifestEntry.examId || exam.id,
                     manifestEntry,
-                    url: this._buildUnifiedReadingUrl(exam)
+                    url: this._buildUnifiedReadingUrl(exam, options)
                 };
             }
 
@@ -334,6 +341,10 @@
             const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
             const exam = list.find(e => e.id === examId);
             const reviewMode = Boolean(options && options.reviewMode);
+            const practiceMode = options && typeof options.practiceMode === 'string'
+                ? options.practiceMode.trim().toLowerCase()
+                : '';
+            const memorizeMode = practiceMode === 'memorize';
 
             if (!exam) {
                 window.showMessage('题目不存在', 'error');
@@ -342,7 +353,7 @@
 
             try {
                 const readingLaunch = typeof this.resolveReadingLaunchDescriptor === 'function'
-                    ? this.resolveReadingLaunchDescriptor(exam)
+                    ? this.resolveReadingLaunchDescriptor(exam, options)
                     : null;
 
                 if (readingLaunch && readingLaunch.mode === 'pdf_manual' && readingLaunch.pdfUrl) {
@@ -384,7 +395,7 @@
                 }
 
                 // 再进行会话记录与脚本注入
-                if (!reviewMode) {
+                if (!reviewMode && !memorizeMode) {
                     await this.startPracticeSession(examId);
                 }
                 this.injectDataCollectionScript(examWindow, examId, exam);
@@ -421,7 +432,7 @@
                 }
 
                 window.showMessage(
-                    reviewMode ? `正在打开历史回顾: ${exam.title}` : `正在打开题目: ${exam.title}`,
+                    reviewMode ? `正在打开历史回顾: ${exam.title}` : (memorizeMode ? `正在打开阅读背题: ${exam.title}` : `正在打开题目: ${exam.title}`),
                     'info'
                 );
 
@@ -1545,6 +1556,9 @@
                 reviewMode: Boolean(options && options.reviewMode),
                 reviewSessionId: options && options.reviewSessionId ? String(options.reviewSessionId) : null,
                 reviewEntryIndex: Number.isInteger(options && options.reviewEntryIndex) ? options.reviewEntryIndex : 0,
+                practiceMode: options && typeof options.practiceMode === 'string'
+                    ? options.practiceMode.trim().toLowerCase()
+                    : null,
                 readOnly: options && Object.prototype.hasOwnProperty.call(options, 'readOnly')
                     ? Boolean(options.readOnly)
                     : Boolean(options && options.reviewMode)
@@ -1953,6 +1967,13 @@
                     case 'PRACTICE_RESULT':
                         if (windowInfo && windowInfo.reviewMode) {
                             console.info('[ReviewReplay] 回顾模式忽略 PRACTICE_COMPLETE:', examId);
+                            break;
+                        }
+                        if (
+                            (windowInfo && windowInfo.practiceMode === 'memorize')
+                            || String(data?.practiceMode || data?.metadata?.practiceMode || '').toLowerCase() === 'memorize'
+                        ) {
+                            console.info('[ReadingMemorize] 背题模式结果仅在统一阅读页内展示，跳过练习记录:', examId);
                             break;
                         }
                         if (data && data.suiteSessionId && windowInfo) {
@@ -2978,6 +2999,9 @@
                 suiteTimerLimitSeconds: timerContext.suiteTimerLimitSeconds != null ? timerContext.suiteTimerLimitSeconds : null,
                 suiteSequenceIndex: Number.isInteger(info.suiteSequenceIndex) ? info.suiteSequenceIndex : null,
                 suiteSequenceTotal: Number.isInteger(info.suiteSequenceTotal) ? info.suiteSequenceTotal : null,
+                practiceMode: typeof info.practiceMode === 'string' && info.practiceMode.trim()
+                    ? info.practiceMode.trim().toLowerCase()
+                    : null,
                 reviewMode: Boolean(info.reviewMode),
                 reviewSessionId: info.reviewSessionId ? String(info.reviewSessionId) : null,
                 reviewEntryIndex: Number.isInteger(info.reviewEntryIndex) ? info.reviewEntryIndex : 0,
@@ -3010,6 +3034,7 @@
                     suiteFlowMode: null,
                     suiteSequenceIndex: null,
                     suiteSequenceTotal: null,
+                    practiceMode: null,
                     reviewMode: false,
                     reviewSessionId: null,
                     reviewEntryIndex: 0,
@@ -3025,6 +3050,11 @@
 
             if (!windowInfo.expectedSessionId) {
                 windowInfo.expectedSessionId = this.generateSessionId(examId);
+            }
+            if (typeof windowInfo.practiceMode !== 'string') {
+                windowInfo.practiceMode = null;
+            } else {
+                windowInfo.practiceMode = windowInfo.practiceMode.trim().toLowerCase() || null;
             }
             if (typeof windowInfo.reviewMode !== 'boolean') {
                 windowInfo.reviewMode = false;
@@ -3408,6 +3438,10 @@
         async handlePracticeComplete(examId, data, sourceWindow = null) {
             if (data && !data.sessionId) {
                 data.sessionId = `${examId}_${Date.now()}`;
+            }
+            if (String(data?.practiceMode || data?.metadata?.practiceMode || '').toLowerCase() === 'memorize') {
+                console.info('[ReadingMemorize] 背题模式完成事件不保存为正式练习记录:', examId);
+                return;
             }
 
             // 听力桥返回的填空答案直接按 answerComparison 检测，不能依赖题源目录名必须包含 P1/P4。
