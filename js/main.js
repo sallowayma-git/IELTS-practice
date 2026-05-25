@@ -2086,6 +2086,13 @@ function filterByType(type) {
 // 应用分类筛选（供 App/总览调用）
 function applyBrowseFilter(category = 'all', type = null, filterMode = null, path = null) {
     try {
+        const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (memorizeSelectionActive) {
+            category = 'all';
+            type = 'reading';
+            filterMode = null;
+            path = null;
+        }
         // 归一化输入：兼容 "P1 阅读"/"P2 听力" 这类文案
         const raw = String(category || 'all');
         let normalizedCategory = 'all';
@@ -2148,7 +2155,7 @@ function applyBrowseFilter(category = 'all', type = null, filterMode = null, pat
         setBrowseFilterState(normalizedCategory, effectiveType);
 
 
-        setBrowseTitle(formatBrowseTitle(normalizedCategory, effectiveType));
+        setBrowseTitle(memorizeSelectionActive ? '阅读背题选题' : formatBrowseTitle(normalizedCategory, effectiveType));
 
         // 3. 刷新题库列表
         // 如果是频率模式，setMode 已经处理了刷新，不需要再次调用 loadExamList
@@ -2373,6 +2380,147 @@ function loadExamList() {
     }
 }
 
+function isReadingMemorizeBrowseMode() {
+    return window.__readingMemorizeBrowseMode === true
+        || String(window.__browseMemorizeFilterMode || '') === 'reading-memorize';
+}
+
+function isReadingMemorizeCandidateFallback(exam) {
+    if (typeof window.isReadingMemorizeCandidate === 'function') {
+        try {
+            return window.isReadingMemorizeCandidate(exam) === true;
+        } catch (_) {
+            // Fall back to local checks below.
+        }
+    }
+    if (!exam || !exam.id) {
+        return false;
+    }
+    if (exam.type && String(exam.type).toLowerCase() === 'listening') {
+        return false;
+    }
+    if (String(exam.id).toLowerCase().indexOf('listening-') === 0) {
+        return false;
+    }
+    if (exam.hasHtml === false) {
+        return false;
+    }
+    return !!(window.__READING_EXAM_MANIFEST__ && window.__READING_EXAM_MANIFEST__[exam.id]);
+}
+
+function filterReadingMemorizeExamsFallback(exams) {
+    return (Array.isArray(exams) ? exams : []).filter(isReadingMemorizeCandidateFallback);
+}
+
+function clearReadingMemorizeBrowseMode() {
+    window.__readingMemorizeBrowseMode = false;
+    window.__browseMemorizeFilterMode = null;
+}
+
+function selectReadingMemorizeExam(examId) {
+    if (window.ExamActions && typeof window.ExamActions.launchReadingMemorizeExam === 'function') {
+        return window.ExamActions.launchReadingMemorizeExam(examId);
+    }
+    const list = typeof getExamIndexState === 'function'
+        ? getExamIndexState()
+        : (Array.isArray(window.examIndex) ? window.examIndex : []);
+    const exam = Array.isArray(list)
+        ? list.find(function (item) { return item && String(item.id) === String(examId); })
+        : null;
+    if (!isReadingMemorizeCandidateFallback(exam)) {
+        if (typeof showMessage === 'function') {
+            showMessage('该题目无法使用统一阅读页背题，请选择有 HTML 数据的阅读题。', 'warning');
+        }
+        return null;
+    }
+    clearReadingMemorizeBrowseMode();
+    if (typeof setBrowseTitle === 'function') {
+        setBrowseTitle('阅读理解');
+    }
+    return openExam(examId, {
+        practiceMode: 'memorize',
+        target: 'tab',
+        windowName: 'ielts-reading-memorize'
+    });
+}
+
+window.selectReadingMemorizeExam = selectReadingMemorizeExam;
+
+function createFallbackExamCard(exam, options = {}) {
+    const item = document.createElement('div');
+    const memorizeSelectionActive = options.selectionMode === 'reading-memorize';
+    item.className = 'exam-item' + (memorizeSelectionActive ? ' exam-item--memorize-selecting' : '');
+    if (exam && exam.id) {
+        item.dataset.examId = exam.id;
+    }
+
+    const info = document.createElement('div');
+    info.className = 'exam-info';
+    const title = document.createElement('h4');
+    title.textContent = (exam && exam.title) || '';
+    info.appendChild(title);
+
+    if (options.showMeta) {
+        const meta = document.createElement('div');
+        meta.className = 'exam-meta';
+        meta.textContent = typeof window.formatExamMetaText === 'function'
+            ? window.formatExamMetaText(exam)
+            : [exam.category || '', exam.type || '', Number.isFinite(Number(exam.difficultyScore)) ? '难度 ' + Number(exam.difficultyScore) : '']
+                .filter(Boolean)
+                .join(' | ');
+        info.appendChild(meta);
+    }
+
+    if (memorizeSelectionActive) {
+        const badge = document.createElement('div');
+        badge.className = 'suite-custom-selection-badge';
+        badge.textContent = '背题模式';
+        info.appendChild(badge);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'exam-actions';
+
+    if (memorizeSelectionActive) {
+        const selectBtn = document.createElement('button');
+        selectBtn.className = 'btn exam-item-action-btn';
+        selectBtn.type = 'button';
+        selectBtn.dataset.action = 'reading-memorize-select';
+        if (exam && exam.id) {
+            selectBtn.dataset.examId = exam.id;
+        }
+        selectBtn.textContent = '选择背题';
+        selectBtn.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            selectReadingMemorizeExam(exam.id);
+        });
+        actions.appendChild(selectBtn);
+    } else {
+        const startBtn = document.createElement('button');
+        startBtn.className = 'btn exam-item-action-btn';
+        startBtn.type = 'button';
+        startBtn.textContent = '开始练习';
+        startBtn.addEventListener('click', function () {
+            openExam(exam.id);
+        });
+        actions.appendChild(startBtn);
+
+        const pdfBtn = document.createElement('button');
+        pdfBtn.className = 'btn btn-outline exam-item-action-btn';
+        pdfBtn.type = 'button';
+        pdfBtn.textContent = 'PDF';
+        pdfBtn.addEventListener('click', function () {
+            viewPDF(exam.id);
+        });
+        actions.appendChild(pdfBtn);
+    }
+
+    item.appendChild(info);
+    item.appendChild(actions);
+    return item;
+}
+
 function loadExamListFallback() {
     console.warn('[main.js] 使用降级渲染逻辑');
     try {
@@ -2394,8 +2542,21 @@ function loadExamListFallback() {
         }
 
         // 应用当前筛选状态（修复 P2 bug）
-        const currentCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
+        let currentCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
         let currentType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
+        const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (memorizeSelectionActive) {
+            currentCategory = 'all';
+            currentType = 'reading';
+            window.__browseFilterMode = 'default';
+            window.__browsePath = null;
+            if (typeof setBrowseFilterState === 'function') {
+                setBrowseFilterState('all', 'reading');
+            }
+            if (typeof setBrowseTitle === 'function') {
+                setBrowseTitle('阅读背题选题');
+            }
+        }
         const hasListening = examIndex.some(function (exam) { return exam && exam.type === 'listening'; });
         if (!hasListening && currentType === 'listening') {
             currentType = 'all';
@@ -2425,6 +2586,9 @@ function loadExamListFallback() {
                 return typeof exam?.path === 'string' && exam.path.includes(basePathFilter);
             });
         }
+        if (memorizeSelectionActive) {
+            filtered = filterReadingMemorizeExamsFallback(filtered);
+        }
 
         if (window.ExamActions && typeof window.ExamActions.applyBrowsePostFilters === 'function') {
             filtered = window.ExamActions.applyBrowsePostFilters(filtered);
@@ -2446,14 +2610,10 @@ function loadExamListFallback() {
         list.className = 'exam-list';
         filtered.forEach(function (exam) {
             if (!exam) return;
-            const item = document.createElement('div');
-            item.className = 'exam-item';
-            item.innerHTML = '<div class="exam-info"><h4>' + (exam.title || '') + '</h4></div>' +
-                '<div class="exam-actions">' +
-                '<button class="btn" onclick="window.openExam(\'' + (exam.id || '') + '\')">开始练习</button>' +
-                '<button class="btn btn-outline" onclick="window.viewPDF(\'' + (exam.id || '') + '\')">PDF</button>' +
-                '</div>';
-            list.appendChild(item);
+            list.appendChild(createFallbackExamCard(exam, {
+                selectionMode: memorizeSelectionActive ? 'reading-memorize' : '',
+                showMeta: false
+            }));
         });
         container.innerHTML = '';
         container.appendChild(list);
@@ -2469,6 +2629,7 @@ function resetBrowseViewToAll() {
     console.warn('[main.js] ExamActions.resetBrowseViewToAll 未就绪');
 
     // 清除频率模式状态，确保回到默认列表
+    clearReadingMemorizeBrowseMode();
     window.__browseFilterMode = 'default';
     window.__browsePath = null;
 
@@ -2508,7 +2669,13 @@ function displayExams(exams) {
             loadingEl.style.display = 'none';
         }
         
-        const normalizedExams = Array.isArray(exams) ? exams : [];
+        const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        const normalizedExams = memorizeSelectionActive
+            ? filterReadingMemorizeExamsFallback(exams)
+            : (Array.isArray(exams) ? exams : []);
+        if (memorizeSelectionActive && typeof setBrowseTitle === 'function') {
+            setBrowseTitle('阅读背题选题');
+        }
         if (normalizedExams.length === 0) {
             container.innerHTML = '<div class="exam-list-empty"><p>未找到匹配的题目</p></div>';
             return;
@@ -2518,20 +2685,10 @@ function displayExams(exams) {
         list.className = 'exam-list';
         normalizedExams.forEach(function (exam) {
             if (!exam) return;
-            const item = document.createElement('div');
-            item.className = 'exam-item';
-            const metaText = typeof window.formatExamMetaText === 'function'
-                ? window.formatExamMetaText(exam)
-                : [exam.category || '', exam.type || '', Number.isFinite(Number(exam.difficultyScore)) ? '难度 ' + Number(exam.difficultyScore) : '']
-                    .filter(Boolean)
-                    .join(' | ');
-            item.innerHTML = '<div class="exam-info"><h4>' + (exam.title || '') + '</h4>' +
-                '<div class="exam-meta">' + metaText + '</div></div>' +
-                '<div class="exam-actions">' +
-                '<button class="btn" onclick="window.openExam(\'' + (exam.id || '') + '\')">开始练习</button>' +
-                '<button class="btn btn-outline" onclick="window.viewPDF(\'' + (exam.id || '') + '\')">PDF</button>' +
-                '</div>';
-            list.appendChild(item);
+            list.appendChild(createFallbackExamCard(exam, {
+                selectionMode: memorizeSelectionActive ? 'reading-memorize' : '',
+                showMeta: true
+            }));
         });
         container.innerHTML = '';
         container.appendChild(list);

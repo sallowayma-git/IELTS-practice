@@ -73,6 +73,22 @@
         });
     }
 
+    function unwrapMatchingHighlights(root, selector) {
+        if (!root || !selector) return;
+        Array.from(root.querySelectorAll(selector)).forEach((highlight) => {
+            if (isInsideExplanation(highlight)) {
+                return;
+            }
+            const parent = highlight.parentNode;
+            if (!parent) return;
+            while (highlight.firstChild) {
+                parent.insertBefore(highlight.firstChild, highlight);
+            }
+            parent.removeChild(highlight);
+            parent.normalize();
+        });
+    }
+
     function resolveRangeFromOffsets(root, start, end) {
         const nodes = getTextNodes(root);
         let offset = 0;
@@ -307,6 +323,71 @@
         return restoredCount;
     }
 
+    function closestElement(node, selector) {
+        if (!node || !selector) {
+            return null;
+        }
+        const element = node instanceof Element ? node : node.parentElement;
+        return element && typeof element.closest === 'function'
+            ? element.closest(selector)
+            : null;
+    }
+
+    function shouldSkipTextNode(node, skipSelector) {
+        if (!node || !node.nodeValue || !node.nodeValue.trim()) {
+            return true;
+        }
+        if (isInsideExplanation(node)) {
+            return true;
+        }
+        return !!closestElement(node, skipSelector || '.hl');
+    }
+
+    function createInlineHighlight(className, attrs) {
+        const span = document.createElement('span');
+        span.className = className || 'hl';
+        Object.entries(attrs || {}).forEach(([key, value]) => {
+            if (value == null) return;
+            span.setAttribute(key, String(value));
+        });
+        return span;
+    }
+
+    function wrapTextMatches(root, needle, options = {}) {
+        const text = String(needle || '').replace(/\s+/g, ' ').trim();
+        if (!root || text.length < 3) {
+            return [];
+        }
+        const className = options.className || 'hl';
+        const attrs = options.attrs || {};
+        const limit = Number.isFinite(Number(options.limit)) ? Math.max(1, Number(options.limit)) : 20;
+        const skipSelector = options.skipSelector || '.hl';
+        const matches = [];
+        const nodes = getTextNodes(root);
+
+        for (let index = 0; index < nodes.length && matches.length < limit; index += 1) {
+            let current = nodes[index];
+            if (shouldSkipTextNode(current, skipSelector)) {
+                continue;
+            }
+            while (current && matches.length < limit) {
+                const source = current.nodeValue || '';
+                const hit = source.indexOf(text);
+                if (hit < 0) {
+                    break;
+                }
+                const matchedNode = current.splitText(hit);
+                const remainder = matchedNode.splitText(text.length);
+                const span = createInlineHighlight(className, attrs);
+                matchedNode.parentNode.insertBefore(span, matchedNode);
+                span.appendChild(matchedNode);
+                matches.push(span);
+                current = remainder;
+            }
+        }
+        return matches;
+    }
+
     async function preserveHighlights(rootsByScope, callback) {
         const snapshot = snapshotHighlights(rootsByScope);
         const result = callback();
@@ -331,6 +412,8 @@
         getTextNodes,
         getText,
         unwrapHighlights,
+        unwrapMatchingHighlights,
+        wrapTextMatches,
         snapshotHighlights,
         restoreHighlights,
         preserveHighlights

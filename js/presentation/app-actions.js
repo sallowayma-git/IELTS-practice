@@ -340,8 +340,9 @@
         });
     }
 
-    function openExamWithFallback(exam, delay) {
+    function openExamWithFallback(exam, delay, options) {
         var actualDelay = typeof delay === 'number' ? delay : 600;
+        var launchOptions = options && typeof options === 'object' ? options : {};
 
         if (!exam) {
             if (typeof global.showMessage === 'function') {
@@ -353,9 +354,9 @@
         var launch = function () {
             try {
                 if (exam.hasHtml && global.app && typeof global.app.openExam === 'function') {
-                    global.app.openExam(exam.id);
+                    global.app.openExam(exam.id, launchOptions);
                 } else if (exam.hasHtml && typeof global.openExam === 'function') {
-                    global.openExam(exam.id);
+                    global.openExam(exam.id, launchOptions);
                 } else if (typeof global.viewPDF === 'function') {
                     global.viewPDF(exam.id);
                 } else {
@@ -374,6 +375,140 @@
         } else {
             launch();
         }
+    }
+
+    function getExamIndexSnapshot() {
+        if (typeof global.getExamIndexState === 'function') {
+            try {
+                var snapshot = global.getExamIndexState();
+                if (Array.isArray(snapshot) && snapshot.length) {
+                    return snapshot.slice();
+                }
+            } catch (_) { }
+        }
+        if (Array.isArray(global.examIndex) && global.examIndex.length) {
+            return global.examIndex.slice();
+        }
+        if (Array.isArray(global.completeExamIndex) && global.completeExamIndex.length) {
+            return global.completeExamIndex.map(function (exam) {
+                return Object.assign({}, exam, { type: exam.type || 'reading' });
+            });
+        }
+        return [];
+    }
+
+    function isReadingMemorizeCandidate(exam) {
+        if (!exam || !exam.id) {
+            return false;
+        }
+        if (exam.type && String(exam.type).toLowerCase() === 'listening') {
+            return false;
+        }
+        if (String(exam.id).toLowerCase().indexOf('listening-') === 0) {
+            return false;
+        }
+        if (exam.hasHtml === false) {
+            return false;
+        }
+        var manifest = global.__READING_EXAM_MANIFEST__;
+        return !!(manifest && manifest[exam.id]);
+    }
+
+    function ensureReadingMemorizeDataReady() {
+        var loader = global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function'
+            ? global.AppLazyLoader
+            : null;
+        var tasks = [];
+        if (loader) {
+            tasks.push(loader.ensureGroup('exam-data'));
+            tasks.push(loader.ensureGroup('browse-runtime').catch(function () { return undefined; }));
+        }
+        return Promise.all(tasks).then(function () {
+            return undefined;
+        });
+    }
+
+    function setReadingMemorizeBrowseMode(enabled) {
+        global.__readingMemorizeBrowseMode = enabled === true;
+        if (!global.__readingMemorizeBrowseMode && typeof global.__browseMemorizeFilterMode !== 'undefined') {
+            global.__browseMemorizeFilterMode = null;
+        }
+    }
+
+    function navigateToReadingMemorizeBrowse() {
+        setReadingMemorizeBrowseMode(true);
+        global.__browseMemorizeFilterMode = 'reading-memorize';
+        global.__browseFilterMode = 'default';
+        global.__browsePath = null;
+        global.__pendingBrowseFilter = {
+            category: 'all',
+            type: 'reading',
+            filterMode: null,
+            path: null
+        };
+
+        if (global.browseController) {
+            try {
+                if (!global.browseController.buttonContainer
+                    && typeof global.browseController.initialize === 'function') {
+                    global.browseController.initialize('type-filter-buttons');
+                }
+                global.browseController.currentMode = 'default';
+                global.browseController.activeFilter = 'reading';
+                if (typeof global.browseController.setBrowseFilterState === 'function') {
+                    global.browseController.setBrowseFilterState('all', 'reading');
+                } else if (typeof global.setBrowseFilterState === 'function') {
+                    global.setBrowseFilterState('all', 'reading');
+                }
+                if (typeof global.browseController.renderFilterButtons === 'function') {
+                    global.browseController.renderFilterButtons();
+                }
+            } catch (_) { }
+        } else if (typeof global.setBrowseFilterState === 'function') {
+            global.setBrowseFilterState('all', 'reading');
+        }
+
+        if (global.app && typeof global.app.navigateToView === 'function') {
+            global.app.navigateToView('browse');
+        } else if (typeof global.showView === 'function') {
+            global.showView('browse', false);
+        } else {
+            try {
+                document.querySelectorAll('.view').forEach(function (view) {
+                    view.classList.remove('active');
+                });
+                var browseView = document.getElementById('browse-view');
+                if (browseView) {
+                    browseView.classList.add('active');
+                }
+            } catch (_) { }
+        }
+
+        if (typeof global.applyBrowseFilter === 'function') {
+            global.applyBrowseFilter('all', 'reading', null, null);
+        } else if (typeof global.loadExamList === 'function') {
+            global.loadExamList();
+        }
+
+        if (typeof global.setBrowseTitle === 'function') {
+            global.setBrowseTitle('阅读背题选题');
+        }
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('请选择一套阅读题进入背题模式。', 'info');
+        }
+    }
+
+    function startReadingMemorize() {
+        return ensureReadingMemorizeDataReady().then(function openMemorizeBrowser() {
+            navigateToReadingMemorizeBrowse();
+            return null;
+        }).catch(function handleMemorizeError(error) {
+            console.error('[AppActions] 阅读背题启动失败:', error);
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('阅读背题启动失败，请稍后重试。', 'error');
+            }
+            return null;
+        });
     }
 
     function startRandomPractice(category, type, filterMode, path) {
@@ -699,6 +834,7 @@
         startSuitePractice: startSuitePractice,
         continueSuitePractice: continueSuitePractice,
         openExamWithFallback: openExamWithFallback,
+        startReadingMemorize: startReadingMemorize,
         startRandomPractice: startRandomPractice,
         // Phase 4
         startEndlessPractice: startEndlessPractice,
@@ -709,6 +845,8 @@
     global.startSuitePractice = startSuitePractice;
     global.continueSuitePractice = continueSuitePractice;
     global.openExamWithFallback = openExamWithFallback;
+    global.isReadingMemorizeCandidate = isReadingMemorizeCandidate;
+    global.startReadingMemorize = startReadingMemorize;
     global.startRandomPractice = startRandomPractice;
     global.startEndlessPractice = startEndlessPractice;
     global.stopEndlessPractice = stopEndlessPractice;

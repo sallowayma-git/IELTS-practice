@@ -5,6 +5,7 @@
     const INIT_RETRY_MS = 1500;
     const SIMULATION_DRAFT_SYNC_MS = 1200;
     const EXPLANATION_STYLE_ID = 'reading-explanation-style';
+    const MEMORIZE_STYLE_ID = 'reading-memorize-style';
     const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__';
     const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange';
     const EXPLANATION_NODE_SELECTOR = [
@@ -21,6 +22,7 @@
     ]);
     const navStatus = new Map();
     const scriptCache = new Map();
+    const LOCATOR_HIGHLIGHT_SELECTOR = '.reading-locator-highlight, .reading-locator-block';
     function getAnswerMatchCore() {
         const core = global.AnswerMatchCore;
         if (!core || typeof core !== 'object') {
@@ -46,6 +48,10 @@
         reviewEntryIndex: 0,
         reviewMode: false,
         reviewViewMode: null,
+        practiceMode: 'single',
+        memorizeMode: false,
+        memorizeTestActive: false,
+        memorizeTestSubmitted: false,
         readOnly: false,
         reviewContext: null,
         suiteReviewMode: false,
@@ -422,10 +428,56 @@
         }
     }
 
+    function normalizePracticeMode(value) {
+        return String(value || '').trim().toLowerCase();
+    }
+
+    function applyPracticeMode(value) {
+        const mode = normalizePracticeMode(value);
+        if (!mode) {
+            return;
+        }
+        state.practiceMode = mode;
+        state.memorizeMode = mode === 'memorize';
+        syncPracticeModeDom();
+    }
+
+    function syncPracticeModeDom() {
+        if (!document.body) {
+            return;
+        }
+        const practiceMode = state.memorizeMode ? 'memorize' : (state.practiceMode || 'single');
+        document.body.dataset.practiceMode = practiceMode;
+        document.body.classList.toggle('reading-memorize-mode', state.memorizeMode);
+        document.body.classList.toggle(
+            'reading-memorize-test-active',
+            Boolean(state.memorizeMode && state.memorizeTestActive && !state.memorizeTestSubmitted)
+        );
+    }
+
+    function renderReadingSubtitle() {
+        if (!dom.subtitle) {
+            return;
+        }
+        const questionCount = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder.length : 0;
+        const parts = ['统一阅读页'];
+        if (state.memorizeMode) {
+            parts.push('背题模式');
+        }
+        if (state.dataset?.meta?.category) {
+            parts.push(state.dataset.meta.category);
+        }
+        if (questionCount) {
+            parts.push(`${questionCount} 题`);
+        }
+        dom.subtitle.textContent = parts.join(' · ');
+    }
+
     function parseQuery() {
         const params = new URLSearchParams(global.location.search);
         state.examId = decodeParam(params.get('examId')) || null;
         state.dataKey = decodeParam(params.get('dataKey')) || state.examId;
+        applyPracticeMode(params.get('practiceMode') || params.get('mode') || '');
         const suiteSessionId = decodeParam(params.get('suiteSessionId')) || null;
         if (suiteSessionId) {
             state.suiteSessionId = suiteSessionId;
@@ -614,8 +666,73 @@
         document.head.appendChild(style);
     }
 
+    function ensureMemorizeStyles() {
+        if (document.getElementById(MEMORIZE_STYLE_ID)) {
+            return;
+        }
+        const style = document.createElement('style');
+        style.id = MEMORIZE_STYLE_ID;
+        style.textContent = `
+            .reading-answer-key-card {
+                margin: 8px 0 10px;
+                padding: 9px 11px;
+                border: 1px solid rgba(22, 163, 74, 0.24);
+                border-left: 4px solid rgba(22, 163, 74, 0.9);
+                border-radius: 8px;
+                background: rgba(240, 253, 244, 0.82);
+            }
+            .reading-answer-key-card__label {
+                font-size: 12px;
+                line-height: 1.35;
+                margin-bottom: 4px;
+                font-weight: 700;
+                color: #166534;
+            }
+            .reading-answer-key-card__value {
+                font-size: 14px;
+                line-height: 1.55;
+                color: #14532d;
+                white-space: pre-wrap;
+            }
+            .reading-locator-highlight {
+                border-radius: 3px;
+                background: rgba(250, 204, 21, 0.42);
+                box-shadow: 0 0 0 1px rgba(202, 138, 4, 0.18);
+                cursor: pointer;
+            }
+            .reading-locator-highlight:hover {
+                background: rgba(250, 204, 21, 0.62);
+            }
+            body.reading-memorize-test-active .reading-answer-key-card,
+            body.reading-memorize-test-active .reading-explanation-card,
+            body.reading-memorize-test-active .reading-group-explanation,
+            body.reading-memorize-test-active .reading-question-explanation,
+            body.reading-memorize-test-active .reading-question-explanation-list {
+                display: none !important;
+            }
+            body.reading-memorize-test-active .reading-locator-highlight {
+                background: transparent;
+                box-shadow: none;
+                cursor: text;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
     function clearExplanations() {
         document.querySelectorAll(EXPLANATION_NODE_SELECTOR).forEach((node) => node.remove());
+    }
+
+    function clearMemorizeAnswerKeys() {
+        document.querySelectorAll('.reading-answer-key-row, .reading-answer-key-card').forEach((node) => node.remove());
+    }
+
+    function clearMemorizeLocatorHighlights() {
+        const shared = getHighlightShared();
+        if (!shared || typeof shared.unwrapMatchingHighlights !== 'function') {
+            return;
+        }
+        shared.unwrapMatchingHighlights(dom.left, LOCATOR_HIGHLIGHT_SELECTOR);
     }
 
     function getHighlightShared() {
@@ -709,7 +826,7 @@
             dom.title.textContent = dataset.meta?.title || 'IELTS 阅读练习';
         }
         if (dom.subtitle) {
-            dom.subtitle.textContent = `统一阅读页 · ${dataset.meta?.category || ''} · ${questionCount} 题`;
+            renderReadingSubtitle();
         }
         if (dom.left) {
             dom.left.innerHTML = passageHtml;
@@ -1159,6 +1276,24 @@
         dom.nav?.addEventListener('click', navClickHandler);
     }
 
+    function attachMemorizeLocatorListeners() {
+        document.addEventListener('click', (event) => {
+            const target = event.target instanceof HTMLElement
+                ? event.target.closest('.reading-locator-highlight[data-question-id]')
+                : null;
+            if (!target) {
+                return;
+            }
+            const questionId = target.dataset.questionId || '';
+            const anchor = findQuestionAnchor(questionId);
+            if (anchor && typeof global.scrollToElement === 'function') {
+                global.scrollToElement(anchor);
+                return;
+            }
+            anchor?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        });
+    }
+
     function resolvePassageTargets() {
         if (!dom.left) return [];
         const wrapped = Array.from(dom.left.querySelectorAll('.paragraph-wrapper > p'));
@@ -1320,6 +1455,196 @@
         }
         renderPassageExplanations();
         renderQuestionExplanations();
+    }
+
+    function createAnswerKeyCard(questionId, answerValue) {
+        const card = document.createElement('div');
+        card.className = 'reading-answer-key-card';
+        card.dataset.questionId = questionId;
+
+        const label = document.createElement('div');
+        label.className = 'reading-answer-key-card__label';
+        label.textContent = `Q${displayLabel(questionId)} 答案`;
+
+        const value = document.createElement('div');
+        value.className = 'reading-answer-key-card__value';
+        value.textContent = displayAnswerValue(answerValue, '无答案');
+
+        card.appendChild(label);
+        card.appendChild(value);
+        return card;
+    }
+
+    function renderMemorizeAnswerKeys() {
+        clearMemorizeAnswerKeys();
+        if (!state.memorizeMode || !dom.groups) {
+            return;
+        }
+        ensureMemorizeStyles();
+        const answerKey = state.dataset?.answerKey || {};
+        const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : Object.keys(answerKey);
+        const groups = Array.from(dom.groups.querySelectorAll('.unified-group'));
+        const datasetGroups = Array.isArray(state.dataset?.questionGroups) ? state.dataset.questionGroups : [];
+
+        order.forEach((questionId) => {
+            if (!Object.prototype.hasOwnProperty.call(answerKey, questionId)) {
+                return;
+            }
+            const groupIndex = datasetGroups.findIndex((group) => (
+                Array.isArray(group?.questionIds)
+                && group.questionIds.some((entry) => isQuestionIdMatch(entry, questionId))
+            ));
+            const groupEl = groupIndex >= 0 ? groups[groupIndex] : null;
+            if (!groupEl) {
+                return;
+            }
+            const container = locateQuestionContainer(groupEl, questionId) || groupEl;
+            if (container.querySelector(`.reading-answer-key-card[data-question-id="${escapeSelector(questionId)}"]`)) {
+                return;
+            }
+            container.appendChild(createAnswerKeyCard(questionId, answerKey[questionId]));
+        });
+    }
+
+    function buildDisplayNumberQuestionMap() {
+        const map = new Map();
+        const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+        order.forEach((questionId) => {
+            const number = questionNumberFromId(questionId);
+            if (Number.isFinite(number) && !map.has(number)) {
+                map.set(number, questionId);
+            }
+        });
+        return map;
+    }
+
+    function resolveExplanationItemQuestionId(item, numberMap) {
+        const direct = normalizeQuestionId(item?.questionId);
+        if (direct) {
+            return direct;
+        }
+        const number = Number(item?.questionNumber);
+        if (Number.isFinite(number) && numberMap.has(number)) {
+            return numberMap.get(number);
+        }
+        return '';
+    }
+
+    function addLocatorSnippet(snippetsByQuestionId, questionId, text) {
+        if (!questionId || !text) {
+            return;
+        }
+        const cleaned = String(text)
+            .replace(/\s+/g, ' ')
+            .replace(/^[\s"'“”‘’「」『』()（）.,;:，。；：]+|[\s"'“”‘’「」『』()（）.,;:，。；：]+$/g, '')
+            .trim();
+        if (cleaned.length < 10 || !/[A-Za-z]/.test(cleaned)) {
+            return;
+        }
+        const list = snippetsByQuestionId.get(questionId) || [];
+        if (!list.some((entry) => entry.toLowerCase() === cleaned.toLowerCase())) {
+            list.push(cleaned);
+        }
+        snippetsByQuestionId.set(questionId, list);
+    }
+
+    function extractQuotedLocatorSnippets(text) {
+        const snippets = [];
+        const source = String(text || '');
+        const pattern = /["“”]([^"“”]{8,220})["“”]/g;
+        let match = pattern.exec(source);
+        while (match) {
+            String(match[1] || '')
+                .split(/(?:\.{3,}|…+|。|；|;)/)
+                .map((entry) => entry.trim())
+                .filter(Boolean)
+                .forEach((entry) => snippets.push(entry));
+            match = pattern.exec(source);
+        }
+        return snippets;
+    }
+
+    function buildMemorizeLocatorSnippets() {
+        const snippetsByQuestionId = new Map();
+        const sections = Array.isArray(state.explanation?.questionExplanations)
+            ? state.explanation.questionExplanations
+            : [];
+        if (!sections.length) {
+            return snippetsByQuestionId;
+        }
+        const numberMap = buildDisplayNumberQuestionMap();
+
+        sections.forEach((section) => {
+            const items = Array.isArray(section?.items) ? section.items : [];
+            items.forEach((item) => {
+                const questionId = resolveExplanationItemQuestionId(item, numberMap);
+                extractQuotedLocatorSnippets(item?.text).forEach((snippet) => {
+                    addLocatorSnippet(snippetsByQuestionId, questionId, snippet);
+                });
+            });
+
+            if (items.length) {
+                return;
+            }
+            const range = section?.questionRange || {};
+            const targetIds = [];
+            const start = Number(range.start);
+            const end = Number(range.end);
+            if (Number.isFinite(start) && Number.isFinite(end)) {
+                for (let number = start; number <= end; number += 1) {
+                    const questionId = numberMap.get(number);
+                    if (questionId) {
+                        targetIds.push(questionId);
+                    }
+                }
+            }
+            extractQuotedLocatorSnippets(section?.text).forEach((snippet) => {
+                targetIds.forEach((questionId) => addLocatorSnippet(snippetsByQuestionId, questionId, snippet));
+            });
+        });
+        return snippetsByQuestionId;
+    }
+
+    function applyMemorizeLocatorHighlights() {
+        clearMemorizeLocatorHighlights();
+        if (!state.memorizeMode || !dom.left) {
+            return 0;
+        }
+        const shared = getHighlightShared();
+        if (!shared || typeof shared.wrapTextMatches !== 'function') {
+            return 0;
+        }
+        ensureMemorizeStyles();
+        const snippetsByQuestionId = buildMemorizeLocatorSnippets();
+        let applied = 0;
+        snippetsByQuestionId.forEach((snippets, questionId) => {
+            snippets.slice(0, 4).forEach((snippet) => {
+                const matches = shared.wrapTextMatches(dom.left, snippet, {
+                    className: 'reading-locator-highlight',
+                    attrs: {
+                        'data-question-id': questionId,
+                        title: `Q${displayLabel(questionId)} 定位`
+                    },
+                    limit: 2,
+                    skipSelector: '.hl, .reading-locator-highlight, .reading-locator-block'
+                });
+                applied += matches.length;
+            });
+        });
+        return applied;
+    }
+
+    async function renderMemorizeStudyLayer() {
+        if (!state.memorizeMode) {
+            return;
+        }
+        ensureMemorizeStyles();
+        renderReadingSubtitle();
+        renderMemorizeAnswerKeys();
+        await renderExplanations();
+        applyMemorizeLocatorHighlights();
+        syncPracticeModeDom();
+        syncPrimaryActionButtons();
     }
 
     function getDropzones() {
@@ -2296,6 +2621,21 @@
         const ctx = state.simulationCtx && typeof state.simulationCtx === 'object' ? state.simulationCtx : null;
         const simulationEnabled = Boolean(state.simulationMode && ctx);
         syncSimulationRuntimeFlags();
+        if (state.memorizeMode && !state.reviewMode && !simulationEnabled) {
+            if (dom.submitBtn) {
+                dom.submitBtn.style.display = '';
+                dom.submitBtn.setAttribute('type', 'button');
+                dom.submitBtn.textContent = state.memorizeTestSubmitted ? '测试完成' : '提交测试';
+                dom.submitBtn.disabled = state.readOnly || state.memorizeTestSubmitted;
+            }
+            if (dom.resetBtn) {
+                dom.resetBtn.style.display = '';
+                dom.resetBtn.setAttribute('type', 'button');
+                dom.resetBtn.textContent = state.memorizeTestSubmitted ? '重新测试' : '重置测试';
+                dom.resetBtn.disabled = state.readOnly;
+            }
+            return;
+        }
         if (!simulationEnabled || state.reviewMode) {
             if (dom.submitBtn) {
                 dom.submitBtn.style.display = '';
@@ -2520,6 +2860,7 @@
                 examId: state.examId,
                 sessionId: state.sessionId,
                 suiteSessionId: state.suiteSessionId,
+                practiceMode: state.practiceMode,
                 suiteTimerAnchorMs: state.suiteTimerAnchorMs,
                 globalTimerAnchorMs: state.suiteTimerAnchorMs,
                 suiteTimerMode: state.suiteTimerMode,
@@ -2564,6 +2905,7 @@
             title: state.dataset?.meta?.title || document.title,
             reviewMode: state.reviewMode,
             readOnly: state.readOnly,
+            practiceMode: state.practiceMode,
             reviewSessionId: state.reviewSessionId,
             reviewEntryIndex: state.reviewEntryIndex,
             suiteTimerAnchorMs: state.suiteTimerAnchorMs,
@@ -2583,6 +2925,7 @@
             reviewEntryIndex: Number.isInteger(data && data.reviewEntryIndex) ? data.reviewEntryIndex : 0,
             reviewMode: Boolean(data && data.reviewMode),
             readOnly: data && Object.prototype.hasOwnProperty.call(data, 'readOnly') ? Boolean(data.readOnly) : null,
+            practiceMode: data && typeof data.practiceMode === 'string' ? data.practiceMode.trim().toLowerCase() : '',
             suiteFlowMode: data && typeof data.suiteFlowMode === 'string' ? data.suiteFlowMode.trim().toLowerCase() : '',
             suiteTimerAnchorMs: Number.isFinite(Number(data && (data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs))) ? Number(data && (data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs)) : null,
             suiteTimerMode: data && typeof data.suiteTimerMode === 'string' ? data.suiteTimerMode.trim().toLowerCase() : '',
@@ -2607,7 +2950,8 @@
         postMessage('REQUEST_INIT', {
             derivedExamId: state.examId,
             url: global.location.href,
-            title: state.dataset?.meta?.title || document.title || ''
+            title: state.dataset?.meta?.title || document.title || '',
+            practiceMode: state.practiceMode
         });
     }
 
@@ -2933,6 +3277,21 @@
         };
     }
 
+    function clearCurrentAnswers() {
+        document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach((input) => {
+            input.checked = false;
+        });
+        document.querySelectorAll('input[type="text"], textarea').forEach((input) => {
+            input.value = '';
+        });
+        document.querySelectorAll('select').forEach((select) => {
+            select.selectedIndex = 0;
+        });
+        getDropzones().forEach((dropzone) => {
+            clearDropzone(dropzone);
+        });
+    }
+
     function dispatchSimulationNavigate(direction, submissionSnapshot = null) {
         if (!state.simulationMode || !state.simulationCtx || state.readOnly) {
             return;
@@ -2973,6 +3332,16 @@
             : [];
         state.lastResults = results;
         renderResults(results);
+        if (state.memorizeMode) {
+            state.submitted = true;
+            state.memorizeTestActive = false;
+            state.memorizeTestSubmitted = true;
+            setTimerRunning(false);
+            await renderMemorizeStudyLayer();
+            applyHighlights(highlightSnapshot);
+            updateNavStatuses(results);
+            return;
+        }
         enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
         await renderExplanations();
         applyHighlights(highlightSnapshot);
@@ -3013,6 +3382,26 @@
     }
 
     function handleReset() {
+        if (state.memorizeMode) {
+            if (state.readOnly) {
+                return;
+            }
+            state.lastResults = null;
+            state.submitted = false;
+            state.memorizeTestActive = true;
+            state.memorizeTestSubmitted = false;
+            clearCurrentAnswers();
+            if (dom.results) {
+                dom.results.style.display = 'none';
+                dom.results.innerHTML = '';
+            }
+            setTimerRunning(true);
+            setExitButtonVisible(false);
+            updateNavStatuses();
+            syncPracticeModeDom();
+            syncPrimaryActionButtons();
+            return;
+        }
         if (state.readOnly || state.submitted) {
             return;
         }
@@ -3022,18 +3411,7 @@
             }
             return;
         }
-        document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach((input) => {
-            input.checked = false;
-        });
-        document.querySelectorAll('input[type="text"], textarea').forEach((input) => {
-            input.value = '';
-        });
-        document.querySelectorAll('select').forEach((select) => {
-            select.selectedIndex = 0;
-        });
-        getDropzones().forEach((dropzone) => {
-            clearDropzone(dropzone);
-        });
+        clearCurrentAnswers();
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
@@ -3123,6 +3501,7 @@
             if (data.suiteSessionId) {
                 state.suiteSessionId = data.suiteSessionId;
             }
+            applyPracticeMode(data.practiceMode || data.mode || '');
             const initTimerAnchorMs = Number(data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs);
             if (Number.isFinite(initTimerAnchorMs) && initTimerAnchorMs > 0) {
                 state.suiteTimerAnchorMs = Math.floor(initTimerAnchorMs);
@@ -3193,6 +3572,9 @@
                 return;
             }
             state.lastInitSignature = initSignature;
+            if (state.memorizeMode && !state.reviewMode && !state.simulationMode) {
+                renderMemorizeStudyLayer().catch(() => {});
+            }
             sendSessionReady();
             return;
         }
@@ -3355,6 +3737,7 @@
         renderDataset(dataset);
         buildQuestionNav();
         attachNavListeners();
+        attachMemorizeLocatorListeners();
         attachDragDrop();
         attachPaneResizer();
 
@@ -3384,6 +3767,9 @@
         attachPracticeTimerBridge();
         syncSuiteModeState();
         setExitButtonVisible(false);
+        if (state.memorizeMode) {
+            await renderMemorizeStudyLayer();
+        }
         updateNavStatuses();
         refreshSimulationDraftSyncLifecycle();
         startInitLoop();
