@@ -50,9 +50,8 @@
         reviewViewMode: null,
         practiceMode: 'single',
         memorizeMode: false,
-        memorizeTestActive: false,
-        memorizeTestSubmitted: false,
         readOnly: false,
+        readOnlyReason: '',
         reviewContext: null,
         suiteReviewMode: false,
         pageStartTime: Date.now(),
@@ -434,11 +433,14 @@
 
     function applyPracticeMode(value) {
         const mode = normalizePracticeMode(value);
-        if (!mode) {
-            return;
-        }
-        state.practiceMode = mode;
+        const wasMemorizeMode = state.memorizeMode;
+        state.practiceMode = mode || 'single';
         state.memorizeMode = mode === 'memorize';
+        if (wasMemorizeMode && !state.memorizeMode) {
+            clearMemorizeAnswerKeys();
+            clearMemorizeLocatorHighlights();
+            clearExplanations();
+        }
         syncPracticeModeDom();
     }
 
@@ -449,10 +451,6 @@
         const practiceMode = state.memorizeMode ? 'memorize' : (state.practiceMode || 'single');
         document.body.dataset.practiceMode = practiceMode;
         document.body.classList.toggle('reading-memorize-mode', state.memorizeMode);
-        document.body.classList.toggle(
-            'reading-memorize-test-active',
-            Boolean(state.memorizeMode && state.memorizeTestActive && !state.memorizeTestSubmitted)
-        );
     }
 
     function renderReadingSubtitle() {
@@ -702,18 +700,6 @@
             }
             .reading-locator-highlight:hover {
                 background: rgba(250, 204, 21, 0.62);
-            }
-            body.reading-memorize-test-active .reading-answer-key-card,
-            body.reading-memorize-test-active .reading-explanation-card,
-            body.reading-memorize-test-active .reading-group-explanation,
-            body.reading-memorize-test-active .reading-question-explanation,
-            body.reading-memorize-test-active .reading-question-explanation-list {
-                display: none !important;
-            }
-            body.reading-memorize-test-active .reading-locator-highlight {
-                background: transparent;
-                box-shadow: none;
-                cursor: text;
             }
         `;
         document.head.appendChild(style);
@@ -2543,8 +2529,11 @@
         });
     }
 
-    function setReadOnlyMode(enabled) {
+    function setReadOnlyMode(enabled, reason = '') {
         state.readOnly = Boolean(enabled);
+        state.readOnlyReason = state.readOnly
+            ? (reason || state.readOnlyReason || 'readonly')
+            : '';
         document.body.classList.toggle('review-readonly-mode', state.readOnly);
         if (dom.submitBtn) {
             if (!dom.submitBtn.dataset.defaultLabel) {
@@ -2585,15 +2574,15 @@
 
     function enterSubmittedReadOnlyState(reason = 'submit') {
         state.submitted = true;
-        setReadOnlyMode(true);
+        setReadOnlyMode(true, reason);
         disableDragInteractions();
         setTimerRunning(false);
         if (dom.submitBtn) dom.submitBtn.disabled = true;
-        if (dom.resetBtn) dom.resetBtn.disabled = true;
         setExitButtonVisible(true);
         if (reason === 'simulation-final-submit' || reason === 'replay-review') {
             stopSimulationDraftSync();
         }
+        syncPrimaryActionButtons();
     }
 
     function syncSimulationRuntimeFlags() {
@@ -2625,36 +2614,44 @@
             if (dom.submitBtn) {
                 dom.submitBtn.style.display = '';
                 dom.submitBtn.setAttribute('type', 'button');
-                dom.submitBtn.textContent = state.memorizeTestSubmitted ? '测试完成' : '提交测试';
-                dom.submitBtn.disabled = state.readOnly || state.memorizeTestSubmitted;
+                dom.submitBtn.textContent = 'Exit';
+                dom.submitBtn.disabled = false;
             }
             if (dom.resetBtn) {
                 dom.resetBtn.style.display = '';
                 dom.resetBtn.setAttribute('type', 'button');
-                dom.resetBtn.textContent = state.memorizeTestSubmitted ? '重新测试' : '重置测试';
-                dom.resetBtn.disabled = state.readOnly;
+                dom.resetBtn.textContent = '重置测试';
+                dom.resetBtn.disabled = false;
             }
             return;
         }
         if (!simulationEnabled || state.reviewMode) {
+            const canResetSubmittedSingle = Boolean(
+                state.submitted
+                && state.readOnly
+                && state.readOnlyReason === 'final-submit'
+                && !state.reviewMode
+                && !state.suiteSessionId
+            );
             if (dom.submitBtn) {
                 dom.submitBtn.style.display = '';
                 if (dom.submitBtn.dataset.defaultType) {
                     dom.submitBtn.setAttribute('type', dom.submitBtn.dataset.defaultType);
                 }
-                if (!state.readOnly) {
+                if (!state.readOnly || canResetSubmittedSingle) {
                     dom.submitBtn.textContent = dom.submitBtn.dataset.defaultLabel || 'Submit';
                 }
+                dom.submitBtn.disabled = state.readOnly;
             }
             if (dom.resetBtn) {
                 dom.resetBtn.style.display = '';
                 if (dom.resetBtn.dataset.defaultType) {
                     dom.resetBtn.setAttribute('type', dom.resetBtn.dataset.defaultType);
                 }
-                if (!state.readOnly) {
+                if (!state.readOnly || canResetSubmittedSingle) {
                     dom.resetBtn.textContent = dom.resetBtn.dataset.defaultLabel || 'Reset';
                 }
-                dom.resetBtn.disabled = state.readOnly;
+                dom.resetBtn.disabled = state.readOnly && !canResetSubmittedSingle;
             }
             return;
         }
@@ -2884,11 +2881,12 @@
             try {
                 target.postMessage(envelope, '*');
                 state.parentWindow = target;
-                return;
+                return true;
             } catch (_) {
                 // try next candidate
             }
         }
+        return false;
     }
 
     function stopInitLoop() {
@@ -2953,6 +2951,47 @@
             title: state.dataset?.meta?.title || document.title || '',
             practiceMode: state.practiceMode
         });
+    }
+
+    function restartInitHandshake() {
+        state.sessionId = null;
+        state.sessionReadySent = false;
+        state.lastInitSignature = '';
+        dispatchReady();
+        startInitLoop();
+    }
+
+    function buildNormalPracticeUrl() {
+        try {
+            const url = new URL(global.location.href);
+            url.searchParams.delete('practiceMode');
+            url.searchParams.delete('mode');
+            return url.href;
+        } catch (_) {
+            const raw = String(global.location.href || '');
+            return raw
+                .replace(/([?&])practiceMode=memorize(&?)/i, '$1')
+                .replace(/([?&])mode=memorize(&?)/i, '$1')
+                .replace(/[?&]$/, '');
+        }
+    }
+
+    function requestNormalPracticeRestart(reason = 'reset') {
+        const delivered = postMessage('PRACTICE_RESET_REQUEST', {
+            reason,
+            previousSessionId: state.sessionId || null,
+            fromPracticeMode: state.practiceMode || 'single',
+            targetPracticeMode: 'single',
+            dataKey: state.dataKey || state.examId || '',
+            url: global.location.href,
+            normalUrl: buildNormalPracticeUrl(),
+            title: state.dataset?.meta?.title || document.title || ''
+        });
+        if (!delivered && reason === 'memorize-start-test') {
+            global.location.href = buildNormalPracticeUrl();
+            return;
+        }
+        restartInitHandshake();
     }
 
     function startInitLoop() {
@@ -3315,6 +3354,10 @@
         });
     }
     async function handleSubmit() {
+        if (state.memorizeMode && !state.reviewMode && !state.simulationMode) {
+            handleExitClick();
+            return;
+        }
         if (state.readOnly) {
             return;
         }
@@ -3332,16 +3375,6 @@
             : [];
         state.lastResults = results;
         renderResults(results);
-        if (state.memorizeMode) {
-            state.submitted = true;
-            state.memorizeTestActive = false;
-            state.memorizeTestSubmitted = true;
-            setTimerRunning(false);
-            await renderMemorizeStudyLayer();
-            applyHighlights(highlightSnapshot);
-            updateNavStatuses(results);
-            return;
-        }
         enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
         await renderExplanations();
         applyHighlights(highlightSnapshot);
@@ -3383,23 +3416,13 @@
 
     function handleReset() {
         if (state.memorizeMode) {
-            if (state.readOnly) {
-                return;
-            }
-            state.lastResults = null;
-            state.submitted = false;
-            state.memorizeTestActive = true;
-            state.memorizeTestSubmitted = false;
+            requestNormalPracticeRestart('memorize-start-test');
+            return;
+        }
+        if (state.submitted && state.readOnlyReason === 'final-submit' && !state.suiteSessionId && !state.reviewMode) {
+            resetToAnsweringPresentation();
             clearCurrentAnswers();
-            if (dom.results) {
-                dom.results.style.display = 'none';
-                dom.results.innerHTML = '';
-            }
-            setTimerRunning(true);
-            setExitButtonVisible(false);
-            updateNavStatuses();
-            syncPracticeModeDom();
-            syncPrimaryActionButtons();
+            requestNormalPracticeRestart('retake-after-submit');
             return;
         }
         if (state.readOnly || state.submitted) {

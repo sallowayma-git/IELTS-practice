@@ -287,13 +287,6 @@
     }
 
     function refreshAppPrototypeIfNeeded(groupName) {
-        var files = manifest[groupName] || [];
-        var containsMixin = files.some(function (file) {
-            return typeof file === 'string' && /Mixin\.js$/.test(file);
-        });
-        if (!containsMixin) {
-            return;
-        }
         try {
             if (global.ExamSystemAppMixins && typeof global.ExamSystemAppMixins.__applyToApp === 'function') {
                 global.ExamSystemAppMixins.__applyToApp();

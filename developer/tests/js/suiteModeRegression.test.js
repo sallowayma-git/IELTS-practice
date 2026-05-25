@@ -1220,6 +1220,144 @@ async function run() {
         assert.deepStrictEqual(status, { examId, status: 'completed' }, '完成后应更新题源状态');
     }
 
+    // Case 13: 统一阅读提交后 reset 必须复用父页通信链路并重建 recorder session
+    {
+        const app = createApp(windowStub);
+        const examWindow = createStubWindow('unified-reading-retake-window');
+        const examId = 'reading-retake-unified';
+        const firstSessionId = 'reading-retake-first-session';
+        const resetSessionId = 'reading-retake-reset-session';
+        const completions = [];
+        const recorderStarts = [];
+        const resetStarts = [];
+        const statuses = [];
+        let cleanupCount = 0;
+        let restartCount = 0;
+
+        app.generateSessionId = () => resetSessionId;
+        app.components.practiceRecorder = {
+            activeSessions: new Map(),
+            async handleSessionCompleted(payload) {
+                completions.push(payload);
+                this.activeSessions.delete(payload.examId);
+                return { id: `record_${payload.sessionId}`, examId: payload.examId, sessionId: payload.sessionId };
+            },
+            handleSessionStarted(payload) {
+                recorderStarts.push(payload);
+                const session = this.activeSessions.get(payload.examId) || {
+                    examId: payload.examId,
+                    metadata: {},
+                    progress: {},
+                    answers: {}
+                };
+                session.sessionId = payload.sessionId;
+                session.metadata = { ...session.metadata, ...payload.metadata };
+                this.activeSessions.set(payload.examId, session);
+            }
+        };
+        app.startPracticeSession = async (handledExamId) => {
+            resetStarts.push(handledExamId);
+            app.components.practiceRecorder.activeSessions.set(handledExamId, {
+                examId: handledExamId,
+                sessionId: 'temporary-reset-session',
+                metadata: {},
+                progress: {},
+                answers: {}
+            });
+        };
+        app.cleanupExamSession = async () => {
+            cleanupCount += 1;
+        };
+        app.restartExamHandshake = (targetWindow, handledExamId) => {
+            restartCount += 1;
+            assert.strictEqual(targetWindow, examWindow, 'reset 应复用当前统一阅读窗口');
+            assert.strictEqual(handledExamId, examId, 'reset 握手应使用当前题源');
+        };
+        app.updateExamStatus = (handledExamId, status) => {
+            statuses.push({ examId: handledExamId, status });
+        };
+        app.showRealCompletionNotification = () => {};
+        app.setState = () => {};
+
+        app.setupExamWindowCommunication(examWindow, examId, {
+            id: examId,
+            title: 'Unified Retake Reading',
+            type: 'reading'
+        });
+
+        const info = app.ensureExamWindowSession(examId, examWindow);
+        info.expectedSessionId = firstSessionId;
+        app.examWindows.set(examId, info);
+
+        const handler = app.messageHandlers.get(examId);
+        assert.strictEqual(typeof handler, 'function', '统一阅读题源应注册 message handler');
+
+        await handler({
+            source: examWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'PRACTICE_COMPLETE',
+                source: 'practice_page',
+                data: {
+                    examId,
+                    sessionId: firstSessionId,
+                    answers: { q1: 'A' },
+                    answerComparison: {
+                        q1: { userAnswer: 'A', correctAnswer: 'A', isCorrect: true }
+                    },
+                    scoreInfo: { correct: 1, total: 1, totalQuestions: 1, accuracy: 1, percentage: 100 },
+                    metadata: {
+                        type: 'reading',
+                        examType: 'reading',
+                        practiceMode: 'single',
+                        renderMode: 'unified-reading'
+                    }
+                }
+            }
+        });
+
+        assert.strictEqual(cleanupCount, 0, '统一阅读提交后不得清掉父页消息 handler');
+        assert.strictEqual(app.messageHandlers.has(examId), true, '统一阅读完成后应保留 message handler 等待 reset');
+        assert.strictEqual(app.examWindows.get(examId).status, 'completed', '统一阅读完成后应标记窗口完成态');
+        assert.strictEqual(completions.length, 1, '统一阅读完成应正常进入 recorder');
+
+        examWindow._messages.length = 0;
+        await handler({
+            source: examWindow,
+            origin: 'http://localhost',
+            data: {
+                type: 'PRACTICE_RESET_REQUEST',
+                source: 'practice_page',
+                data: {
+                    examId,
+                    sessionId: firstSessionId,
+                    reason: 'retake-after-submit',
+                    fromPracticeMode: 'single',
+                    targetPracticeMode: 'single',
+                    normalUrl: 'file:///reading-practice-unified.html?examId=reading-retake-unified'
+                }
+            }
+        });
+
+        const resetInfo = app.examWindows.get(examId);
+        assert.strictEqual(resetInfo.expectedSessionId, resetSessionId, 'reset 必须生成新的 expectedSessionId');
+        assert.strictEqual(resetInfo.status, 'active', 'reset 后窗口应回到 active');
+        assert.deepStrictEqual(resetStarts, [examId], 'reset 后必须补建练习会话');
+        assert.strictEqual(recorderStarts.length, 1, 'reset 后必须同步 recorder sessionId');
+        assert.strictEqual(recorderStarts[0].sessionId, resetSessionId, 'recorder sessionId 必须使用 reset 后的新 session');
+        assert.strictEqual(
+            app.components.practiceRecorder.activeSessions.get(examId).sessionId,
+            resetSessionId,
+            'reset 后 active recorder session 必须可被下一次提交使用'
+        );
+        assert(
+            examWindow._messages.some(message => message && message.type === 'INIT_SESSION' && message.data && message.data.sessionId === resetSessionId),
+            'reset 后必须向子页发送新的 INIT_SESSION'
+        );
+        assert.strictEqual(restartCount, 1, 'reset 后必须重启握手');
+        assert(statuses.some(item => item.examId === examId && item.status === 'in-progress'), 'reset 后题源状态应回到 in-progress');
+    }
+
     process.stdout.write(JSON.stringify({ status: 'pass', detail: 'simulation mode regression cases passed' }));
 }
 

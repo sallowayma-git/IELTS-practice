@@ -106,7 +106,7 @@ async def run() -> Dict[str, Any]:
             timeout=30000,
         )
 
-        after = await page.evaluate(
+        after_submit = await page.evaluate(
             """() => {
                 const leftItems = Array.from(document.querySelectorAll('#left .hl'));
                 const leftTexts = leftItems.map((n) => String(n.textContent || '').trim()).filter(Boolean);
@@ -126,13 +126,40 @@ async def run() -> Dict[str, Any]:
             }"""
         )
 
+        await page.click("#reset-btn")
+        await page.wait_for_function(
+            "() => !document.body.classList.contains('review-readonly-mode')",
+            timeout=30000,
+        )
+
+        after_reset = await page.evaluate(
+            """() => {
+                const input = document.querySelector('input[type="text"], textarea, input[type="radio"], input[type="checkbox"], select');
+                const textInput = document.querySelector('input[type="text"], textarea');
+                const submit = document.getElementById('submit-btn');
+                const reset = document.getElementById('reset-btn');
+                const exit = document.getElementById('exit-btn');
+                const results = document.getElementById('results');
+                return {
+                    readOnlyClass: document.body.classList.contains('review-readonly-mode'),
+                    inputDisabled: !input || input.disabled === true,
+                    inputValue: textInput && 'value' in textInput ? String(textInput.value || '') : '',
+                    submitDisabled: !!(submit && submit.disabled),
+                    resetDisabled: !!(reset && reset.disabled),
+                    exitVisible: !!(exit && getComputedStyle(exit).display !== 'none'),
+                    resultsVisible: !!(results && getComputedStyle(results).display !== 'none')
+                };
+            }"""
+        )
+
         await browser.close()
         return {
             "status": "pass",
             "detail": "unified submit readonly regression passed",
             "data": {
                 "before": before,
-                "after": after
+                "afterSubmit": after_submit,
+                "afterReset": after_reset
             }
         }
 
@@ -149,20 +176,28 @@ async def main() -> int:
         return 1
 
     before = payload.get("data", {}).get("before", {})
-    after = payload.get("data", {}).get("after", {})
+    after_submit = payload.get("data", {}).get("afterSubmit", {})
+    after_reset = payload.get("data", {}).get("afterReset", {})
     before_count = int(before.get("count") or 0)
     before_texts = [str(v) for v in (before.get("texts") or []) if str(v).strip()]
-    after_count = int(after.get("leftCount") or 0)
-    after_texts = [str(v) for v in (after.get("leftTexts") or []) if str(v).strip()]
+    after_count = int(after_submit.get("leftCount") or 0)
+    after_texts = [str(v) for v in (after_submit.get("leftTexts") or []) if str(v).strip()]
 
     checks = [
         (after_count >= before_count, "highlight_count_decreased"),
         (all(text in after_texts for text in before_texts), "highlight_text_not_preserved"),
-        (bool(after.get("readOnlyClass")), "readonly_class_missing"),
-        (bool(after.get("inputDisabled")), "input_not_disabled"),
-        (bool(after.get("submitDisabled")), "submit_not_disabled"),
-        (bool(after.get("resetDisabled")), "reset_not_disabled"),
-        (bool(after.get("exitVisible")), "exit_not_visible"),
+        (bool(after_submit.get("readOnlyClass")), "readonly_class_missing"),
+        (bool(after_submit.get("inputDisabled")), "input_not_disabled"),
+        (bool(after_submit.get("submitDisabled")), "submit_not_disabled"),
+        (not bool(after_submit.get("resetDisabled")), "reset_disabled_after_submit"),
+        (bool(after_submit.get("exitVisible")), "exit_not_visible"),
+        (not bool(after_reset.get("readOnlyClass")), "reset_readonly_class_still_present"),
+        (not bool(after_reset.get("inputDisabled")), "reset_input_still_disabled"),
+        (not bool(after_reset.get("submitDisabled")), "reset_submit_still_disabled"),
+        (not bool(after_reset.get("resetDisabled")), "reset_button_still_disabled"),
+        (not bool(after_reset.get("exitVisible")), "reset_exit_still_visible"),
+        (not bool(after_reset.get("resultsVisible")), "reset_results_still_visible"),
+        (str(after_reset.get("inputValue") or "") == "", "reset_input_not_cleared"),
     ]
     failed = [name for ok, name in checks if not ok]
     if failed:
