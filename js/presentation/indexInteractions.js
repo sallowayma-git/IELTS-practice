@@ -3,32 +3,60 @@
 
     var browsePrefetched = false;
     var morePrefetched = false;
+    var settingsPrefetched = false;
+    var browsePrefetchPromise = null;
+    var morePrefetchPromise = null;
+    var settingsPrefetchPromise = null;
     var indexInteractionsInitialized = false;
+    var licenseModalInitialized = false;
+    var LICENSE_STORAGE_KEY = 'hasSeenGplLicense';
 
     function ensureBrowse() {
         if (browsePrefetched) {
-            return;
+            return browsePrefetchPromise || Promise.resolve();
         }
         browsePrefetched = true;
         var loader = global.AppEntry && typeof global.AppEntry.ensureBrowseGroup === 'function'
             ? global.AppEntry.ensureBrowseGroup
             : function fallback() { return Promise.resolve(); };
-        loader().catch(function swallow(error) {
+        browsePrefetchPromise = loader().catch(function swallow(error) {
+            browsePrefetched = false;
+            browsePrefetchPromise = null;
             console.warn('[IndexInteractions] 预加载 browse-view 失败:', error);
         });
+        return browsePrefetchPromise;
     }
 
     function ensureMore() {
         if (morePrefetched) {
-            return;
+            return morePrefetchPromise || Promise.resolve();
         }
         morePrefetched = true;
         var loader = global.AppEntry && typeof global.AppEntry.ensureMoreToolsGroup === 'function'
             ? global.AppEntry.ensureMoreToolsGroup
             : function fallback() { return Promise.resolve(); };
-        loader().catch(function swallow(error) {
+        morePrefetchPromise = loader().catch(function swallow(error) {
+            morePrefetched = false;
+            morePrefetchPromise = null;
             console.warn('[IndexInteractions] 预加载 more-tools 失败:', error);
         });
+        return morePrefetchPromise;
+    }
+
+    function ensureSettings() {
+        if (settingsPrefetched) {
+            return settingsPrefetchPromise || Promise.resolve();
+        }
+        settingsPrefetched = true;
+        var loader = global.AppEntry && typeof global.AppEntry.ensureSettingsToolsGroup === 'function'
+            ? global.AppEntry.ensureSettingsToolsGroup
+            : function fallback() { return Promise.resolve(); };
+        settingsPrefetchPromise = loader().catch(function swallow(error) {
+            settingsPrefetched = false;
+            settingsPrefetchPromise = null;
+            console.warn('[IndexInteractions] 预加载 settings-tools 失败:', error);
+        });
+        return settingsPrefetchPromise;
     }
 
     function startListeningSprint() {
@@ -197,10 +225,32 @@
                     }
                 }
             }],
-            ['create-backup-btn', function () { return typeof global.createManualBackup === 'function' && global.createManualBackup(); }],
-            ['backup-list-btn', function () { return typeof global.showBackupList === 'function' && global.showBackupList(); }],
-            ['export-data-btn', function () { return typeof global.exportAllData === 'function' && global.exportAllData(); }],
-            ['import-data-btn', function () { return typeof global.importData === 'function' && global.importData(); }]
+            ['theme-switcher-btn-entry', function () { return typeof global.showThemeSwitcherModal === 'function' && global.showThemeSwitcherModal(); }],
+            ['show-onboarding-btn', function () {
+                return global.OnboardingTour && typeof global.OnboardingTour.start === 'function'
+                    ? global.OnboardingTour.start(true)
+                    : undefined;
+            }],
+            ['create-backup-btn', function () {
+                return ensureSettings().then(function () {
+                    return typeof global.createManualBackup === 'function' && global.createManualBackup();
+                });
+            }],
+            ['backup-list-btn', function () {
+                return ensureSettings().then(function () {
+                    return typeof global.showBackupList === 'function' && global.showBackupList();
+                });
+            }],
+            ['export-data-btn', function () {
+                return ensureSettings().then(function () {
+                    return typeof global.exportAllData === 'function' && global.exportAllData();
+                });
+            }],
+            ['import-data-btn', function () {
+                return ensureSettings().then(function () {
+                    return typeof global.importData === 'function' && global.importData();
+                });
+            }]
         ];
 
         bindings.forEach(function (pair) {
@@ -216,9 +266,104 @@
         });
     }
 
+    function refreshPracticeSummaryDependentLayout() {
+        global.setTimeout(function () {
+            try {
+                global.dispatchEvent(new Event('resize'));
+            } catch (_) { }
+        }, 680);
+    }
+
+    function togglePracticeSummary(target) {
+        var practiceView = global.document ? global.document.getElementById('practice-view') : null;
+        var region = global.document ? global.document.getElementById('practice-summary-region') : null;
+        var button = target || (global.document ? global.document.getElementById('practice-summary-toggle') : null);
+        if (!practiceView || !region || !button) {
+            return;
+        }
+
+        var collapsed = !practiceView.classList.contains('is-practice-summary-collapsed');
+        practiceView.classList.toggle('is-practice-summary-collapsed', collapsed);
+        button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        button.setAttribute('aria-label', collapsed ? '展开练习统计卡片' : '折叠练习统计卡片');
+        region.setAttribute('aria-hidden', collapsed ? 'true' : 'false');
+        region.inert = collapsed;
+        if (collapsed && region.contains(global.document.activeElement)) {
+            button.focus();
+        }
+        refreshPracticeSummaryDependentLayout();
+    }
+
+    function handleInlineAction(action, target) {
+        var value = target && target.dataset ? target.dataset.actionValue : undefined;
+
+        switch (action) {
+            case 'filter-exams':
+                return typeof global.filterByType === 'function' ? global.filterByType(value || 'all') : undefined;
+            case 'filter-frequency':
+                return typeof global.filterByFrequency === 'function' ? global.filterByFrequency(value || 'all') : undefined;
+            case 'filter-records':
+                return typeof global.filterRecordsByType === 'function' ? global.filterRecordsByType(value || 'all') : undefined;
+            case 'clear-search':
+                return typeof global.clearSearch === 'function' ? global.clearSearch() : undefined;
+            case 'export-practice-markdown':
+                return global.AppActions && typeof global.AppActions.exportPracticeMarkdown === 'function'
+                    ? global.AppActions.exportPracticeMarkdown()
+                    : undefined;
+            case 'toggle-bulk-delete':
+                return typeof global.toggleBulkDelete === 'function' ? global.toggleBulkDelete() : undefined;
+            case 'clear-practice-data':
+                return typeof global.clearPracticeData === 'function' ? global.clearPracticeData() : undefined;
+            case 'toggle-practice-summary':
+                return togglePracticeSummary(target);
+            case 'show-achievements':
+                return typeof global.showAchievements === 'function' ? global.showAchievements() : undefined;
+            case 'hide-achievements':
+                return typeof global.hideAchievements === 'function' ? global.hideAchievements() : undefined;
+            case 'hide-theme-switcher':
+                return typeof global.hideThemeSwitcherModal === 'function' ? global.hideThemeSwitcherModal() : undefined;
+            case 'switch-bg-theme':
+                return typeof global.switchBgTheme === 'function' ? global.switchBgTheme(value) : undefined;
+            case 'accept-license':
+                return typeof global.acceptGplLicense === 'function' ? global.acceptGplLicense() : undefined;
+            default:
+                return undefined;
+        }
+    }
+
+    function setupDeclarativeActions() {
+        if (global.__indexDeclarativeActionsInitialized) {
+            return;
+        }
+
+        document.addEventListener('click', function (event) {
+            var target = event.target && event.target.closest
+                ? event.target.closest('[data-index-action]')
+                : null;
+            if (!target) {
+                return;
+            }
+            event.preventDefault();
+            handleInlineAction(target.dataset.indexAction, target);
+        });
+
+        document.addEventListener('input', function (event) {
+            var target = event.target;
+            if (!target || !target.dataset || target.dataset.indexAction !== 'search-exams') {
+                return;
+            }
+            if (typeof global.searchExams === 'function') {
+                global.searchExams(target.value);
+            }
+        });
+
+        global.__indexDeclarativeActionsInitialized = true;
+    }
+
     function attachNavPrefetch() {
         var browseBtn = document.querySelector('.main-nav [data-view=\"browse\"]');
         var moreBtn = document.querySelector('.main-nav [data-view=\"more\"]');
+        var settingsBtn = document.querySelector('.main-nav [data-view=\"settings\"]');
 
         if (browseBtn) {
             ['pointerenter', 'focus'].forEach(function (eventName) {
@@ -232,6 +377,13 @@
                 moreBtn.addEventListener(eventName, ensureMore, { once: true });
             });
             moreBtn.addEventListener('click', ensureMore);
+        }
+
+        if (settingsBtn) {
+            ['pointerenter', 'focus'].forEach(function (eventName) {
+                settingsBtn.addEventListener(eventName, ensureSettings, { once: true });
+            });
+            settingsBtn.addEventListener('click', ensureSettings);
         }
     }
 
@@ -389,9 +541,160 @@
         global.__heroNavLiquidInitialized = true;
     }
 
+    function setupSegmentedControls() {
+        if (global.__segmentedControlsInitialized) return;
+        
+        function syncIndicator(control) {
+            // indicator 可能在 innerHTML='' 后被销毁，必须每次检查重建
+            var indicator = control.querySelector('.shui-segmented-indicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.className = 'shui-segmented-indicator';
+                control.insertBefore(indicator, control.firstChild);
+            }
+            
+            var activeBtn = control.querySelector('.shui-segmented-btn.active') || control.querySelector('.shui-segmented-btn[aria-pressed="true"]');
+            if (activeBtn && activeBtn.offsetWidth > 0) {
+                indicator.style.width = activeBtn.offsetWidth + 'px';
+                indicator.style.transform = 'translateX(' + activeBtn.offsetLeft + 'px)';
+                indicator.style.opacity = '1';
+            } else {
+                indicator.style.opacity = '0';
+            }
+        }
+
+        function syncAll() {
+            var controls = document.querySelectorAll('.shui-segmented-control');
+            for (var i = 0; i < controls.length; i++) {
+                syncIndicator(controls[i]);
+            }
+        }
+
+        // 点击任何 segmented btn 时立即同步
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.closest && e.target.closest('.shui-segmented-btn')) {
+                setTimeout(syncAll, 10);
+                setTimeout(syncAll, 60);
+            }
+        });
+
+        // 监听 DOM 变更：browseController 重建按钮时 childList 会变更
+        var observer = new MutationObserver(function(mutations) {
+            var needsSync = false;
+            for (var i = 0; i < mutations.length; i++) {
+                var mutation = mutations[i];
+                var target = mutation.target;
+                // childList 变更直接在 segmented-control 容器上
+                if (mutation.type === 'childList' && target.classList && target.classList.contains('shui-segmented-control')) {
+                    needsSync = true;
+                    break;
+                }
+                // class 属性变更在 segmented-btn 上（active 切换）
+                if (mutation.type === 'attributes' && target.classList && target.classList.contains('shui-segmented-btn')) {
+                    needsSync = true;
+                    break;
+                }
+                // 向上查找（safety net）
+                if (target.closest && target.closest('.shui-segmented-control')) {
+                    needsSync = true;
+                    break;
+                }
+            }
+            if (needsSync) {
+                setTimeout(syncAll, 15);
+            }
+        });
+        
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+        global.addEventListener('resize', syncAll);
+        
+        // 视图切换时重新同步（view 从 display:none 变为可见后 offsetLeft 才有效）
+        document.addEventListener('click', function(e) {
+            var navBtn = e.target && e.target.closest && e.target.closest('.hero-nav__btn');
+            if (navBtn) {
+                // 视图切换动画完成后同步
+                setTimeout(syncAll, 50);
+                setTimeout(syncAll, 200);
+                setTimeout(syncAll, 500);
+            }
+        });
+        
+        if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+            document.fonts.ready.then(syncAll);
+        }
+        
+        setTimeout(syncAll, 50);
+        setTimeout(syncAll, 300);
+        global.__segmentedControlsInitialized = true;
+        global.updateSegmentedIndicators = syncAll;
+    }
+
+    function getLicenseModal() {
+        return global.document ? global.document.getElementById('license-modal') : null;
+    }
+
+    function hasAcceptedLicense() {
+        try {
+            return global.localStorage && global.localStorage.getItem(LICENSE_STORAGE_KEY) === 'true';
+        } catch (_) {
+            return true;
+        }
+    }
+
+    function showLicenseModal() {
+        var modal = getLicenseModal();
+        if (!modal) {
+            return;
+        }
+        global.requestAnimationFrame(function () {
+            global.requestAnimationFrame(function () {
+                modal.classList.add('show');
+            });
+        });
+    }
+
+    function hideLicenseModal() {
+        var modal = getLicenseModal();
+        if (modal) {
+            modal.classList.remove('show');
+        }
+    }
+
+    function acceptGplLicense() {
+        try {
+            if (global.localStorage) {
+                global.localStorage.setItem(LICENSE_STORAGE_KEY, 'true');
+            }
+        } catch (error) {
+            console.warn('LocalStorage error:', error);
+        }
+        hideLicenseModal();
+    }
+
+    function initLicenseModal() {
+        if (licenseModalInitialized) {
+            return;
+        }
+        licenseModalInitialized = true;
+        if (!hasAcceptedLicense()) {
+            showLicenseModal();
+        }
+    }
+
+    global.LicenseModal = Object.assign({}, global.LicenseModal || {}, {
+        init: initLicenseModal,
+        show: showLicenseModal,
+        hide: hideLicenseModal,
+        accept: acceptGplLicense,
+        hasAccepted: hasAcceptedLicense
+    });
+    global.acceptGplLicense = acceptGplLicense;
+
     function initializeIndexInteractions() {
         setupIndexSettingsButtons();
         setupQuickLaneInteractions();
+        setupDeclarativeActions();
+        setupSegmentedControls();
     }
 
     function init() {
@@ -402,6 +705,7 @@
         attachNavPrefetch();
         setupHeroNavLiquidIndicator();
         initializeIndexInteractions();
+        initLicenseModal();
     }
 
     if (document.readyState === 'loading') {

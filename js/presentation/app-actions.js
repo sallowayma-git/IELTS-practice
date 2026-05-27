@@ -340,8 +340,9 @@
         });
     }
 
-    function openExamWithFallback(exam, delay) {
+    function openExamWithFallback(exam, delay, options) {
         var actualDelay = typeof delay === 'number' ? delay : 600;
+        var launchOptions = options && typeof options === 'object' ? options : {};
 
         if (!exam) {
             if (typeof global.showMessage === 'function') {
@@ -352,8 +353,10 @@
 
         var launch = function () {
             try {
-                if (exam.hasHtml && typeof global.openExam === 'function') {
-                    global.openExam(exam.id);
+                if (exam.hasHtml && global.app && typeof global.app.openExam === 'function') {
+                    global.app.openExam(exam.id, launchOptions);
+                } else if (exam.hasHtml && typeof global.openExam === 'function') {
+                    global.openExam(exam.id, launchOptions);
                 } else if (typeof global.viewPDF === 'function') {
                     global.viewPDF(exam.id);
                 } else {
@@ -372,6 +375,140 @@
         } else {
             launch();
         }
+    }
+
+    function getExamIndexSnapshot() {
+        if (typeof global.getExamIndexState === 'function') {
+            try {
+                var snapshot = global.getExamIndexState();
+                if (Array.isArray(snapshot) && snapshot.length) {
+                    return snapshot.slice();
+                }
+            } catch (_) { }
+        }
+        if (Array.isArray(global.examIndex) && global.examIndex.length) {
+            return global.examIndex.slice();
+        }
+        if (Array.isArray(global.completeExamIndex) && global.completeExamIndex.length) {
+            return global.completeExamIndex.map(function (exam) {
+                return Object.assign({}, exam, { type: exam.type || 'reading' });
+            });
+        }
+        return [];
+    }
+
+    function isReadingMemorizeCandidate(exam) {
+        if (!exam || !exam.id) {
+            return false;
+        }
+        if (exam.type && String(exam.type).toLowerCase() === 'listening') {
+            return false;
+        }
+        if (String(exam.id).toLowerCase().indexOf('listening-') === 0) {
+            return false;
+        }
+        if (exam.hasHtml === false) {
+            return false;
+        }
+        var manifest = global.__READING_EXAM_MANIFEST__;
+        return !!(manifest && manifest[exam.id]);
+    }
+
+    function ensureReadingMemorizeDataReady() {
+        var loader = global.AppLazyLoader && typeof global.AppLazyLoader.ensureGroup === 'function'
+            ? global.AppLazyLoader
+            : null;
+        var tasks = [];
+        if (loader) {
+            tasks.push(loader.ensureGroup('exam-data'));
+            tasks.push(loader.ensureGroup('browse-runtime').catch(function () { return undefined; }));
+        }
+        return Promise.all(tasks).then(function () {
+            return undefined;
+        });
+    }
+
+    function setReadingMemorizeBrowseMode(enabled) {
+        global.__readingMemorizeBrowseMode = enabled === true;
+        if (!global.__readingMemorizeBrowseMode && typeof global.__browseMemorizeFilterMode !== 'undefined') {
+            global.__browseMemorizeFilterMode = null;
+        }
+    }
+
+    function navigateToReadingMemorizeBrowse() {
+        setReadingMemorizeBrowseMode(true);
+        global.__browseMemorizeFilterMode = 'reading-memorize';
+        global.__browseFilterMode = 'default';
+        global.__browsePath = null;
+        global.__pendingBrowseFilter = {
+            category: 'all',
+            type: 'reading',
+            filterMode: null,
+            path: null
+        };
+
+        if (global.browseController) {
+            try {
+                if (!global.browseController.buttonContainer
+                    && typeof global.browseController.initialize === 'function') {
+                    global.browseController.initialize('type-filter-buttons');
+                }
+                global.browseController.currentMode = 'default';
+                global.browseController.activeFilter = 'reading';
+                if (typeof global.browseController.setBrowseFilterState === 'function') {
+                    global.browseController.setBrowseFilterState('all', 'reading');
+                } else if (typeof global.setBrowseFilterState === 'function') {
+                    global.setBrowseFilterState('all', 'reading');
+                }
+                if (typeof global.browseController.renderFilterButtons === 'function') {
+                    global.browseController.renderFilterButtons();
+                }
+            } catch (_) { }
+        } else if (typeof global.setBrowseFilterState === 'function') {
+            global.setBrowseFilterState('all', 'reading');
+        }
+
+        if (global.app && typeof global.app.navigateToView === 'function') {
+            global.app.navigateToView('browse');
+        } else if (typeof global.showView === 'function') {
+            global.showView('browse', false);
+        } else {
+            try {
+                document.querySelectorAll('.view').forEach(function (view) {
+                    view.classList.remove('active');
+                });
+                var browseView = document.getElementById('browse-view');
+                if (browseView) {
+                    browseView.classList.add('active');
+                }
+            } catch (_) { }
+        }
+
+        if (typeof global.applyBrowseFilter === 'function') {
+            global.applyBrowseFilter('all', 'reading', null, null);
+        } else if (typeof global.loadExamList === 'function') {
+            global.loadExamList();
+        }
+
+        if (typeof global.setBrowseTitle === 'function') {
+            global.setBrowseTitle('阅读背题选题');
+        }
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('请选择一套阅读题进入背题模式。', 'info');
+        }
+    }
+
+    function startReadingMemorize() {
+        return ensureReadingMemorizeDataReady().then(function openMemorizeBrowser() {
+            navigateToReadingMemorizeBrowse();
+            return null;
+        }).catch(function handleMemorizeError(error) {
+            console.error('[AppActions] 阅读背题启动失败:', error);
+            if (typeof global.showMessage === 'function') {
+                global.showMessage('阅读背题启动失败，请稍后重试。', 'error');
+            }
+            return null;
+        });
     }
 
     function startRandomPractice(category, type, filterMode, path) {
@@ -443,6 +580,10 @@
             clearInterval(endlessState.countdownTimer);
             endlessState.countdownTimer = null;
         }
+        if (endlessState.windowMonitor) {
+            clearInterval(endlessState.windowMonitor);
+            endlessState.windowMonitor = null;
+        }
         if (endlessState.messageHandler) {
             window.removeEventListener('message', endlessState.messageHandler);
             endlessState.messageHandler = null;
@@ -451,6 +592,29 @@
         if (!silent && typeof global.showMessage === 'function') {
             global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\u5df2\u9000\u51fa', 'info');
         }
+    }
+
+    function startEndlessWindowMonitor() {
+        if (!endlessState) return;
+        if (endlessState.windowMonitor) {
+            clearInterval(endlessState.windowMonitor);
+        }
+        endlessState.windowMonitor = setInterval(function () {
+            if (!endlessState || !endlessState.active) {
+                if (endlessState && endlessState.windowMonitor) {
+                    clearInterval(endlessState.windowMonitor);
+                    endlessState.windowMonitor = null;
+                }
+                return;
+            }
+            var win = endlessState.currentWindow;
+            if (win && win.closed) {
+                if (typeof global.showMessage === 'function') {
+                    global.showMessage('\u65e0\u5c3d\u6a21\u5f0f\uff1a\u7ec3\u4e60\u7a97\u53e3\u5df2\u5173\u95ed\uff0c\u6b63\u5728\u9000\u51fa', 'warning');
+                }
+                stopEndlessPractice({ silent: true });
+            }
+        }, 1000);
     }
 
     function pickRandomExam() {
@@ -542,6 +706,15 @@
                 clearInterval(endlessState.countdownTimer);
                 endlessState.countdownTimer = null;
 
+                try {
+                    if (sourceWindow && !sourceWindow.closed) {
+                        sourceWindow.postMessage({
+                            type: 'ENDLESS_COUNTDOWN_END',
+                            data: {}
+                        }, '*');
+                    }
+                } catch (_) { }
+
                 if (!endlessState || !endlessState.active) return;
 
                 var nextExam = pickRandomExam();
@@ -561,18 +734,11 @@
                 var newWin = openEndlessExam(nextExam, reuseWin);
                 if (newWin) {
                     endlessState.currentWindow = newWin;
-                    // 注入数据采集脚本（延迟，等页面加载）
-                    if (global.app && typeof global.app.injectDataCollectionScript === 'function') {
-                        setTimeout(function () {
-                            if (newWin && !newWin.closed) {
-                                try { global.app.startPracticeSession && global.app.startPracticeSession(nextExam.id); } catch (_) { }
-                                global.app.injectDataCollectionScript(newWin, nextExam.id, nextExam);
-                                global.app.setupExamWindowManagement && global.app.setupExamWindowManagement(newWin, nextExam.id, nextExam, {});
-                            }
-                        }, 600);
-                    } else if (typeof global.openExam === 'function') {
-                        // fallback: 重新通过标准路径打开（会产生新窗口，但保证注入）
-                        try { global.openExam(nextExam.id); } catch (_) { }
+                    if (global.app && typeof global.app.setupExamWindowManagement === 'function') {
+                        global.app.setupExamWindowManagement(newWin, nextExam.id, nextExam, {});
+                    }
+                    if (global.app && typeof global.app.startPracticeSession === 'function') {
+                        try { global.app.startPracticeSession(nextExam.id); } catch (_) { }
                     }
                 }
             }
@@ -601,16 +767,27 @@
             active: true,
             countdownTimer: null,
             currentWindow: null,
-            messageHandler: null
+            messageHandler: null,
+            windowMonitor: null
         };
 
-        // 监听 PRACTICE_COMPLETE 消息（无尽模式专用拦截）
+        // 监听 PRACTICE_COMPLETE / REQUEST_INIT 消息（无尽模式专用拦截）
         var handler = function (event) {
             if (!endlessState || !endlessState.active) return;
             var msg = event && event.data;
             if (!msg || typeof msg.type !== 'string') return;
             if (msg.type === 'ENDLESS_USER_EXIT') {
                 stopEndlessPractice();
+                return;
+            }
+            if (msg.type === 'REQUEST_INIT') {
+                var initSrcWin = event.source || (endlessState.currentWindow && !endlessState.currentWindow.closed ? endlessState.currentWindow : null);
+                if (initSrcWin && !initSrcWin.closed && global.app && typeof global.app.setupExamWindowCommunication === 'function') {
+                    var data = msg.data || msg;
+                    var examId = (data && data.derivedExamId) || '';
+                    if (examId && global.app.examWindows && global.app.examWindows.has(examId)) return;
+                    global.app.setupExamWindowCommunication(initSrcWin, examId, null, {});
+                }
                 return;
             }
             if (msg.type !== 'PRACTICE_COMPLETE') return;
@@ -637,11 +814,13 @@
                     windowName: ENDLESS_WINDOW_NAME
                 })).then(function (w) {
                     if (w && endlessState) endlessState.currentWindow = w;
+                    startEndlessWindowMonitor();
                 }).catch(function () { });
             } catch (_) { }
         } else {
             win = openEndlessExam(firstExam, null);
             if (win && endlessState) endlessState.currentWindow = win;
+            startEndlessWindowMonitor();
         }
     }
 
@@ -655,6 +834,7 @@
         startSuitePractice: startSuitePractice,
         continueSuitePractice: continueSuitePractice,
         openExamWithFallback: openExamWithFallback,
+        startReadingMemorize: startReadingMemorize,
         startRandomPractice: startRandomPractice,
         // Phase 4
         startEndlessPractice: startEndlessPractice,
@@ -665,6 +845,8 @@
     global.startSuitePractice = startSuitePractice;
     global.continueSuitePractice = continueSuitePractice;
     global.openExamWithFallback = openExamWithFallback;
+    global.isReadingMemorizeCandidate = isReadingMemorizeCandidate;
+    global.startReadingMemorize = startReadingMemorize;
     global.startRandomPractice = startRandomPractice;
     global.startEndlessPractice = startEndlessPractice;
     global.stopEndlessPractice = stopEndlessPractice;

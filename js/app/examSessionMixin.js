@@ -1,9 +1,8 @@
 (function (global) {
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
-    const PRACTICE_ENHANCER_SCRIPT_PATH = './js/practice-page-enhancer.js';
-    const ANSWER_MATCH_CORE_SCRIPT_PATH = './js/utils/answerMatchCore.js';
-    const SUITE_BACK_GUARD_SCRIPT_PATH = './js/utils/suiteBackGuard.js';
+    const PRACTICE_ENHANCER_SCRIPT_PATH = './js/bundles/practice-page-enhancer.bundle.js';
+    const LISTENING_RECORD_BRIDGE_SCRIPT_PATH = './js/bundles/listening-record-bridge.bundle.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
 
     async function getActiveExamIndexSnapshot() {
@@ -87,6 +86,253 @@
     }
 
     const mixin = {
+        _isReadingLibraryExam(exam) {
+            if (!exam || typeof exam !== 'object') {
+                return false;
+            }
+
+            const examType = typeof exam.type === 'string'
+                ? exam.type.trim().toLowerCase()
+                : '';
+            if (examType === 'listening') {
+                return false;
+            }
+
+            const examId = typeof exam.id === 'string'
+                ? exam.id.trim().toLowerCase()
+                : '';
+            if (examId.startsWith('listening-')) {
+                return false;
+            }
+
+            return true;
+        },
+
+        _isListeningLibraryExam(exam) {
+            if (!exam || typeof exam !== 'object') {
+                return false;
+            }
+            const examType = typeof exam.type === 'string'
+                ? exam.type.trim().toLowerCase()
+                : '';
+            if (examType === 'listening') {
+                return true;
+            }
+            const examId = typeof exam.id === 'string'
+                ? exam.id.trim().toLowerCase()
+                : '';
+            if (examId.startsWith('listening-')) {
+                return true;
+            }
+            const path = typeof exam.path === 'string'
+                ? exam.path.replace(/\\/g, '/').toLowerCase()
+                : '';
+            return path.includes('listeningpractice/') || /^p[1-4]\//.test(path);
+        },
+
+        _normalizeCompletionQuestionKey(rawKey, fallbackIndex = 0) {
+            const raw = String(rawKey ?? '').replace(/\s+/g, ' ').trim();
+            const fallback = `q${Number(fallbackIndex) + 1}`;
+            if (!raw) {
+                return fallback;
+            }
+            const cleaned = raw.replace(/^questions?\s*/i, '').replace(/^q\s*/i, '');
+            const match = cleaned.match(/(\d{1,3})(?:\s*[-–—_]\s*(\d{1,3}))?/);
+            if (match) {
+                return match[2] ? `q${match[1]}-${match[2]}` : `q${match[1]}`;
+            }
+            return /^q/i.test(cleaned) ? cleaned.replace(/^Q/, 'q') : `q${cleaned}`;
+        },
+
+        _normalizeCompletionAnswerValue(value) {
+            if (value === null || value === undefined) {
+                return '';
+            }
+            if (Array.isArray(value)) {
+                return value.map((item) => this._normalizeCompletionAnswerValue(item)).filter(Boolean).join(', ');
+            }
+            return String(value).replace(/\s+/g, ' ').trim();
+        },
+
+        _normalizeCompletionAcceptedAnswers(value) {
+            const values = Array.isArray(value) ? value : [];
+            const normalized = [];
+            values.forEach((item) => {
+                const text = this._normalizeCompletionAnswerValue(item);
+                if (!text) {
+                    return;
+                }
+                if (!normalized.some(existing => existing.toLowerCase() === text.toLowerCase())) {
+                    normalized.push(text);
+                }
+            });
+            return normalized;
+        },
+
+        _buildCompletionComparisonFromDetails(details) {
+            if (!details || typeof details !== 'object') {
+                return {};
+            }
+
+            const entries = Array.isArray(details)
+                ? details.map((detail, index) => [index, detail])
+                : Object.entries(details);
+            const comparison = {};
+
+            entries.forEach(([rawKey, detail], index) => {
+                if (!detail || typeof detail !== 'object') {
+                    return;
+                }
+                const questionId = this._normalizeCompletionQuestionKey(
+                    detail.questionId ?? detail.question ?? detail.id ?? rawKey,
+                    index
+                );
+                const userAnswer = this._normalizeCompletionAnswerValue(
+                    detail.userAnswer ?? detail.user ?? detail.answer ?? detail.value
+                );
+                const correctAnswer = this._normalizeCompletionAnswerValue(
+                    detail.correctAnswer ?? detail.correct ?? detail.expected ?? detail.answerKey
+                );
+                if (!userAnswer && !correctAnswer) {
+                    return;
+                }
+                const acceptedAnswers = this._normalizeCompletionAcceptedAnswers(detail.acceptedAnswers);
+                const canonicalAnswer = this._normalizeCompletionAnswerValue(detail.canonicalAnswer)
+                    || acceptedAnswers[0]
+                    || correctAnswer;
+                comparison[questionId] = {
+                    questionId,
+                    userAnswer,
+                    correctAnswer,
+                    acceptedAnswers: acceptedAnswers.length ? acceptedAnswers : undefined,
+                    canonicalAnswer,
+                    isCorrect: typeof detail.isCorrect === 'boolean' ? detail.isCorrect : null
+                };
+            });
+
+            return comparison;
+        },
+
+        _resolveCompletionAnswerComparison(data) {
+            if (!data || typeof data !== 'object') {
+                return null;
+            }
+
+            const direct = data.answerComparison || data.realData?.answerComparison;
+            if (direct && typeof direct === 'object' && Object.keys(direct).length > 0) {
+                return direct;
+            }
+
+            const detailSources = [
+                data.answerDetails,
+                data.details,
+                data.scoreInfo?.details,
+                data.realData?.scoreInfo?.details
+            ];
+            for (const details of detailSources) {
+                const comparison = this._buildCompletionComparisonFromDetails(details);
+                if (Object.keys(comparison).length > 0) {
+                    data.answerComparison = comparison;
+                    if (data.realData && typeof data.realData === 'object') {
+                        data.realData.answerComparison = comparison;
+                    }
+                    return comparison;
+                }
+            }
+
+            return null;
+        },
+
+        _getUnifiedReadingManifestEntry(exam) {
+            if (!this._isReadingLibraryExam(exam) || !exam.id) {
+                return null;
+            }
+            const manifest = (typeof window !== 'undefined' && window.__READING_EXAM_MANIFEST__)
+                ? window.__READING_EXAM_MANIFEST__
+                : null;
+            const manifestEntry = manifest && exam.id ? manifest[exam.id] : null;
+            if (!manifestEntry || !(manifestEntry.dataKey || manifestEntry.examId)) {
+                return null;
+            }
+            return manifestEntry;
+        },
+
+        _isUnifiedReadingExam(exam) {
+            return !!this._getUnifiedReadingManifestEntry(exam);
+        },
+
+        _buildUnifiedReadingUrl(exam, options = {}) {
+            const manifestEntry = this._getUnifiedReadingManifestEntry(exam);
+            if (!manifestEntry) {
+                return '';
+            }
+            const params = new URLSearchParams();
+            if (exam && exam.id) {
+                params.set('examId', String(exam.id));
+            }
+            const resolvedDataKey = manifestEntry.dataKey || manifestEntry.examId || exam?.id;
+            if (resolvedDataKey) {
+                params.set('dataKey', String(resolvedDataKey));
+            }
+            const practiceMode = options && typeof options.practiceMode === 'string'
+                ? options.practiceMode.trim().toLowerCase()
+                : '';
+            if (practiceMode === 'memorize') {
+                params.set('practiceMode', 'memorize');
+                params.set('mode', 'memorize');
+            }
+            const query = params.toString();
+            const url = query
+                ? `assets/generated/reading-exams/reading-practice-unified.html?${query}`
+                : 'assets/generated/reading-exams/reading-practice-unified.html';
+            return typeof this._ensureAbsoluteUrl === 'function'
+                ? this._ensureAbsoluteUrl(url)
+                : url;
+        },
+
+        _buildReadingPdfUrl(exam) {
+            if (!this._isReadingLibraryExam(exam) || !exam || !exam.pdfFilename) {
+                return '';
+            }
+
+            const pdfUrl = (typeof window.buildResourcePath === 'function')
+                ? window.buildResourcePath(exam, 'pdf')
+                : ((exam.path || '').replace(/\\/g, '/').replace(/\/+\//g, '/') + (exam.pdfFilename || ''));
+
+            return typeof this._ensureAbsoluteUrl === 'function'
+                ? this._ensureAbsoluteUrl(pdfUrl)
+                : pdfUrl;
+        },
+
+        resolveReadingLaunchDescriptor(exam, options = {}) {
+            if (!this._isReadingLibraryExam(exam)) {
+                return null;
+            }
+
+            const manifestEntry = this._getUnifiedReadingManifestEntry(exam);
+            if (manifestEntry) {
+                return {
+                    mode: 'unified_html',
+                    examId: exam.id,
+                    dataKey: manifestEntry.dataKey || manifestEntry.examId || exam.id,
+                    manifestEntry,
+                    url: this._buildUnifiedReadingUrl(exam, options)
+                };
+            }
+
+            const pdfUrl = this._buildReadingPdfUrl(exam);
+            if (!pdfUrl) {
+                return null;
+            }
+
+            return {
+                mode: 'pdf_manual',
+                examId: exam.id,
+                pdfUrl,
+                reviewReason: 'manual_mapping_needed'
+            };
+        },
+
         /**
           * 打开指定题目进行练习
           */
@@ -95,6 +341,10 @@
             const list = Array.isArray(examIndex) ? examIndex : (Array.isArray(window.examIndex) ? window.examIndex : []);
             const exam = list.find(e => e.id === examId);
             const reviewMode = Boolean(options && options.reviewMode);
+            const practiceMode = options && typeof options.practiceMode === 'string'
+                ? options.practiceMode.trim().toLowerCase()
+                : '';
+            const memorizeMode = practiceMode === 'memorize';
 
             if (!exam) {
                 window.showMessage('题目不存在', 'error');
@@ -103,7 +353,7 @@
 
             try {
                 const readingLaunch = typeof this.resolveReadingLaunchDescriptor === 'function'
-                    ? this.resolveReadingLaunchDescriptor(exam)
+                    ? this.resolveReadingLaunchDescriptor(exam, options)
                     : null;
 
                 if (readingLaunch && readingLaunch.mode === 'pdf_manual' && readingLaunch.pdfUrl) {
@@ -145,7 +395,7 @@
                 }
 
                 // 再进行会话记录与脚本注入
-                if (!reviewMode) {
+                if (!reviewMode && !memorizeMode) {
                     await this.startPracticeSession(examId);
                 }
                 this.injectDataCollectionScript(examWindow, examId, exam);
@@ -182,7 +432,7 @@
                 }
 
                 window.showMessage(
-                    reviewMode ? `正在打开历史回顾: ${exam.title}` : `正在打开题目: ${exam.title}`,
+                    reviewMode ? `正在打开历史回顾: ${exam.title}` : (memorizeMode ? `正在打开阅读背题: ${exam.title}` : `正在打开题目: ${exam.title}`),
                     'info'
                 );
 
@@ -748,10 +998,20 @@
                 return;
             }
 
+            const isListeningExam = typeof this._isListeningLibraryExam === 'function'
+                ? this._isListeningLibraryExam(exam)
+                : false;
+            const bridgeScriptPath = isListeningExam
+                ? LISTENING_RECORD_BRIDGE_SCRIPT_PATH
+                : PRACTICE_ENHANCER_SCRIPT_PATH;
+            const bridgeDatasetKey = isListeningExam
+                ? 'listeningRecordBridge'
+                : 'practiceEnhancer';
+
             const ensureScriptUrl = () => {
-                const resolved = this._ensureAbsoluteUrl(PRACTICE_ENHANCER_SCRIPT_PATH);
+                const resolved = this._ensureAbsoluteUrl(bridgeScriptPath);
                 if (!resolved) {
-                    return PRACTICE_ENHANCER_SCRIPT_PATH;
+                    return bridgeScriptPath;
                 }
                 if (!PRACTICE_ENHANCER_BUILD_ID) {
                     return resolved;
@@ -760,15 +1020,6 @@
                     ? `${resolved}&v=${PRACTICE_ENHANCER_BUILD_ID}`
                     : `${resolved}?v=${PRACTICE_ENHANCER_BUILD_ID}`;
             };
-            const ensureCoreScriptUrl = () => {
-                const resolved = this._ensureAbsoluteUrl(ANSWER_MATCH_CORE_SCRIPT_PATH);
-                return resolved || ANSWER_MATCH_CORE_SCRIPT_PATH;
-            };
-            const ensureBackGuardScriptUrl = () => {
-                const resolved = this._ensureAbsoluteUrl(SUITE_BACK_GUARD_SCRIPT_PATH);
-                return resolved || SUITE_BACK_GUARD_SCRIPT_PATH;
-            };
-
             const injectScript = () => {
                 try {
                     if (!examWindow || examWindow.closed) {
@@ -776,7 +1027,10 @@
                         return;
                     }
 
-                    if (examWindow.practicePageEnhancer && typeof examWindow.practicePageEnhancer.initialize === 'function') {
+                    const bridgeReady = isListeningExam
+                        ? (examWindow.__listeningBridgeGetState || examWindow.__listeningBridgeComplete)
+                        : (examWindow.practicePageEnhancer && typeof examWindow.practicePageEnhancer.initialize === 'function');
+                    if (bridgeReady) {
                         this.initializePracticeSession(examWindow, examId);
                         return;
                     }
@@ -802,20 +1056,30 @@
                     } catch (_) { }
 
                     const host = doc.head || doc.body;
-                    const existingEnhancerScript = host.querySelector('script[data-practice-enhancer="true"]');
+                    const bridgeDatasetAttr = `data-${bridgeDatasetKey.replace(/[A-Z]/g, m => '-' + m.toLowerCase())}`;
+                    const existingSelector = `script[${bridgeDatasetAttr}], script[src*="${bridgeScriptPath.split('/').pop()}"]`;
+                    const existingEnhancerScript = typeof doc.querySelector === 'function'
+                        ? doc.querySelector(existingSelector)
+                        : (host && typeof host.querySelector === 'function' ? host.querySelector(existingSelector) : null);
                     if (existingEnhancerScript) {
+                        if (isListeningExam && (examWindow.__listeningBridgeGetState || examWindow.__listeningBridgeComplete)) {
+                            this.initializePracticeSession(examWindow, examId);
+                        }
                         return;
                     }
                     let enhancerInjected = false;
                     const appendEnhancer = () => {
-                        if (enhancerInjected || (examWindow.practicePageEnhancer && typeof examWindow.practicePageEnhancer.initialize === 'function')) {
+                        const alreadyReady = isListeningExam
+                            ? (examWindow.__listeningBridgeGetState || examWindow.__listeningBridgeComplete)
+                            : (examWindow.practicePageEnhancer && typeof examWindow.practicePageEnhancer.initialize === 'function');
+                        if (enhancerInjected || alreadyReady) {
                             return;
                         }
                         enhancerInjected = true;
                         const scriptEl = doc.createElement('script');
                         scriptEl.type = 'text/javascript';
                         scriptEl.defer = true;
-                        scriptEl.dataset.practiceEnhancer = 'true';
+                        scriptEl.dataset[bridgeDatasetKey] = 'true';
                         scriptEl.src = ensureScriptUrl();
 
                         scriptEl.onload = () => {
@@ -829,94 +1093,22 @@
                         };
 
                         scriptEl.onerror = (loadError) => {
-                            console.warn('[DataInjection] 加载增强器失败，回退到内联脚本:', loadError);
+                            console.warn('[DataInjection] 加载增强器失败:', loadError);
                             scriptEl.remove();
-                            this.injectInlineScript(examWindow, examId);
+                            if (!isListeningExam) {
+                                this.injectInlineScript(examWindow, examId);
+                            }
                         };
 
                         host.appendChild(scriptEl);
                     };
 
-                    const waitForDependencyReady = (isReady, timeoutMs = 4500) => (
-                        new Promise((resolve) => {
-                            if (isReady()) {
-                                resolve(true);
-                                return;
-                            }
-                            const startedAt = Date.now();
-                            const poll = () => {
-                                if (isReady()) {
-                                    resolve(true);
-                                    return;
-                                }
-                                if ((Date.now() - startedAt) >= timeoutMs) {
-                                    resolve(false);
-                                    return;
-                                }
-                                setTimeout(poll, 40);
-                            };
-                            poll();
-                        })
-                    );
-
-                    const ensureDependencyScript = ({
-                        selector,
-                        dataKey,
-                        scriptUrl,
-                        isReady,
-                        timeoutMs = 4500
-                    }) => {
-                        if (isReady()) {
-                            return Promise.resolve(true);
-                        }
-                        const existingScript = host.querySelector(selector);
-                        if (!existingScript) {
-                            const scriptEl = doc.createElement('script');
-                            scriptEl.type = 'text/javascript';
-                            scriptEl.defer = true;
-                            scriptEl.dataset[dataKey] = 'true';
-                            scriptEl.src = scriptUrl;
-                            host.appendChild(scriptEl);
-                        }
-                        return waitForDependencyReady(isReady, timeoutMs);
-                    };
-
-                    const isAnswerMatchReady = () => {
-                        return !!(
-                            examWindow.AnswerMatchCore
-                            && typeof examWindow.AnswerMatchCore.compareAnswers === 'function'
-                        );
-                    };
-
-                    const isBackGuardReady = () => (
-                        typeof examWindow.createSuiteBackGuard === 'function'
-                        || (
-                            examWindow.SuiteBackGuard
-                            && typeof examWindow.SuiteBackGuard.create === 'function'
-                        )
-                    );
-
-                    Promise.all([
-                        ensureDependencyScript({
-                            selector: 'script[data-answer-match-core="true"]',
-                            dataKey: 'answerMatchCore',
-                            scriptUrl: ensureCoreScriptUrl(),
-                            isReady: isAnswerMatchReady,
-                            timeoutMs: 4500
-                        }),
-                        ensureDependencyScript({
-                            selector: 'script[data-suite-back-guard="true"]',
-                            dataKey: 'suiteBackGuard',
-                            scriptUrl: ensureBackGuardScriptUrl(),
-                            isReady: isBackGuardReady,
-                            timeoutMs: 2500
-                        })
-                    ]).finally(() => {
-                        appendEnhancer();
-                    });
+                    appendEnhancer();
                 } catch (error) {
                     console.error('[DataInjection] 注入增强器脚本时出错:', error);
-                    this.injectInlineScript(examWindow, examId);
+                    if (!isListeningExam) {
+                        this.injectInlineScript(examWindow, examId);
+                    }
                 }
             };
 
@@ -1364,6 +1556,9 @@
                 reviewMode: Boolean(options && options.reviewMode),
                 reviewSessionId: options && options.reviewSessionId ? String(options.reviewSessionId) : null,
                 reviewEntryIndex: Number.isInteger(options && options.reviewEntryIndex) ? options.reviewEntryIndex : 0,
+                practiceMode: options && typeof options.practiceMode === 'string'
+                    ? options.practiceMode.trim().toLowerCase()
+                    : null,
                 readOnly: options && Object.prototype.hasOwnProperty.call(options, 'readOnly')
                     ? Boolean(options.readOnly)
                     : Boolean(options && options.reviewMode)
@@ -1464,11 +1659,14 @@
                     'SESSION_READY',
                     'PROGRESS_UPDATE',
                     'PRACTICE_COMPLETE',
+                    'PRACTICE_RESULT',
                     'ERROR_OCCURRED',
                     'REQUEST_INIT',
+                    'PRACTICE_RESET_REQUEST',
                     'SUITE_CLOSE_ATTEMPT',
                     'REVIEW_NAVIGATE',
                     'SUITE_CONFIG_UPDATE',
+                    'VOCAB_HIGHLIGHT_SAVE',
                     'SIMULATION_DRAFT_SYNC',
                     'SIMULATION_NAVIGATE',
                     'SIMULATION_SUBMIT'
@@ -1615,23 +1813,24 @@
                 }
 
                 const windowInfo = this.ensureExamWindowSession(examId, expectedWindow);
-                if (windowInfo && sourceWindow !== expectedWindow) {
-                    windowInfo.window = sourceWindow;
-                }
                 const expectedSessionId = windowInfo.expectedSessionId || '';
 
                 // 放宽消息源过滤，兼容 inline_collector 与 practice_page
                 const src = normalized.sourceTag || '';
-                const allowedSources = new Set(['practice_page', 'inline_collector', 'suite_placeholder']);
+                const allowedSources = new Set(['practice_page', 'inline_collector', 'suite_placeholder', 'listening_record_bridge']);
                 if (src && !allowedSources.has(src)) {
                     return; // 非预期来源的消息忽略
                 }
 
                 const { type, data } = normalized;
+                const isPracticeResetRequest = type === 'PRACTICE_RESET_REQUEST';
                 const expectedExamId = String(examId);
                 const payloadExamId = data && data.examId != null ? String(data.examId) : '';
                 const payloadSuiteSessionId = data && typeof data.suiteSessionId === 'string'
                     ? data.suiteSessionId.trim()
+                    : '';
+                const payloadSessionId = data && typeof data.sessionId === 'string'
+                    ? data.sessionId.trim()
                     : '';
                 const activeSuiteSessionId = this.currentSuiteSession && this.currentSuiteSession.id
                     ? String(this.currentSuiteSession.id)
@@ -1642,6 +1841,17 @@
                     && this.currentSuiteSession.sequence.some(item => item && String(item.examId) === expectedExamId)
                 );
                 const sourceMatched = isLikelySameWindowContext(sourceWindow, expectedWindow);
+                const isListeningBridgeSource = src === 'listening_record_bridge';
+                const isListeningBridgeProtocolMessage = Boolean(
+                    isListeningBridgeSource
+                    && (
+                        type === 'SESSION_READY'
+                        || type === 'PRACTICE_COMPLETE'
+                        || type === 'PRACTICE_RESULT'
+                        || type === 'REQUEST_INIT'
+                        || type === 'PROGRESS_UPDATE'
+                    )
+                );
                 const allowSuiteSourceFallback = Boolean(
                     !sourceMatched
                     && payloadExamId
@@ -1651,11 +1861,24 @@
                         || isExamInActiveSuite
                     )
                 );
-                if (!sourceMatched && !allowSuiteSourceFallback) {
+                const allowListeningSourceFallback = Boolean(
+                    !sourceMatched
+                    && isListeningBridgeProtocolMessage
+                    && (
+                        (payloadExamId && payloadExamId === expectedExamId)
+                        || (payloadSessionId && expectedSessionId && payloadSessionId === expectedSessionId)
+                    )
+                );
+                if (!sourceMatched && !allowSuiteSourceFallback && !allowListeningSourceFallback) {
                     return;
+                }
+                if (windowInfo && sourceWindow !== expectedWindow) {
+                    windowInfo.window = sourceWindow;
                 }
                 const isSuiteFlowPayload = Boolean(
                     (type === 'PRACTICE_COMPLETE'
+                        || type === 'PRACTICE_RESULT'
+                        || type === 'REVIEW_NAVIGATE'
                         || type === 'SIMULATION_NAVIGATE'
                         || type === 'SIMULATION_SUBMIT'
                         || type === 'SESSION_READY')
@@ -1665,9 +1888,6 @@
                     && payloadExamId
                     && payloadExamId === expectedExamId
                 );
-                const payloadSessionId = data && typeof data.sessionId === 'string'
-                    ? data.sessionId.trim()
-                    : '';
 
                 if (payloadSessionId) {
                     if (expectedSessionId && payloadSessionId !== expectedSessionId) {
@@ -1681,7 +1901,17 @@
                                 || isExamInActiveSuite
                             )
                         );
-                        if (!allowSuiteSessionMismatch) {
+                        const allowListeningSessionMismatch = Boolean(
+                            isListeningBridgeProtocolMessage
+                            && expectedSessionId
+                            && (sourceMatched || allowListeningSourceFallback)
+                        );
+                        const allowResetSessionMismatch = Boolean(
+                            isPracticeResetRequest
+                            && expectedSessionId
+                            && sourceMatched
+                        );
+                        if (!allowSuiteSessionMismatch && !allowListeningSessionMismatch && !allowResetSessionMismatch) {
                             return;
                         }
                         data.sessionId = expectedSessionId;
@@ -1691,7 +1921,7 @@
                             windowInfo.expectedSessionId = payloadSessionId;
                         }
                     }
-                } else if (type === 'PRACTICE_COMPLETE') {
+                } else if (type === 'PRACTICE_COMPLETE' || type === 'PRACTICE_RESULT') {
                     if (!expectedSessionId) {
                         return;
                     }
@@ -1700,7 +1930,11 @@
 
                 if (payloadExamId && payloadExamId !== expectedExamId) {
                     const allowedLegacy = payloadExamId === 'session';
-                    if (!allowedLegacy) {
+                    const allowListeningExamMismatch = Boolean(
+                        isListeningBridgeProtocolMessage
+                        && (sourceMatched || allowListeningSourceFallback)
+                    );
+                    if (!allowedLegacy && !allowListeningExamMismatch) {
                         return;
                     }
                 }
@@ -1738,8 +1972,16 @@
                         this.handleProgressUpdate(examId, data);
                         break;
                     case 'PRACTICE_COMPLETE':
+                    case 'PRACTICE_RESULT':
                         if (windowInfo && windowInfo.reviewMode) {
                             console.info('[ReviewReplay] 回顾模式忽略 PRACTICE_COMPLETE:', examId);
+                            break;
+                        }
+                        if (
+                            (windowInfo && windowInfo.practiceMode === 'memorize')
+                            || String(data?.practiceMode || data?.metadata?.practiceMode || '').toLowerCase() === 'memorize'
+                        ) {
+                            console.info('[ReadingMemorize] 背题模式结果仅在统一阅读页内展示，跳过练习记录:', examId);
                             break;
                         }
                         if (data && data.suiteSessionId && windowInfo) {
@@ -1753,6 +1995,9 @@
                         break;
                     case 'REQUEST_INIT':
                         sendInitEnvelope(sourceWindow || examWindow);
+                        break;
+                    case 'PRACTICE_RESET_REQUEST':
+                        await this.handlePracticeResetRequest(examId, data, sourceWindow || expectedWindow);
                         break;
                     case 'SUITE_CLOSE_ATTEMPT':
                         console.warn('[SuitePractice] 练习页尝试关闭套题窗口:', data);
@@ -1777,6 +2022,11 @@
                         }
                         break;
                     }
+                    case 'VOCAB_HIGHLIGHT_SAVE':
+                        if (typeof window.saveReadingHighlightVocab === 'function') {
+                            await window.saveReadingHighlightVocab(data);
+                        }
+                        break;
                     case 'REVIEW_NAVIGATE':
                         if (data && typeof this.handleSuiteReviewNavigate === 'function') {
                             const activeSuiteId = this.currentSuiteSession && this.currentSuiteSession.id
@@ -1806,7 +2056,21 @@
                         break;
                     case 'SIMULATION_DRAFT_SYNC':
                         if (this.currentSuiteSession && data && data.draft) {
-                            this.currentSuiteSession.draftsByExam[examId] = data.draft;
+                            const incomingUpdatedAt = Number(data.draftUpdatedAt ?? data.draft.updatedAt);
+                            const previousDraft = this.currentSuiteSession.draftsByExam[examId] || null;
+                            const previousUpdatedAt = Number(previousDraft && previousDraft.updatedAt);
+                            const shouldAcceptDraft = !(
+                                previousDraft
+                                && Number.isFinite(previousUpdatedAt)
+                                && Number.isFinite(incomingUpdatedAt)
+                                && incomingUpdatedAt < previousUpdatedAt
+                            );
+                            if (shouldAcceptDraft) {
+                                this.currentSuiteSession.draftsByExam[examId] = {
+                                    ...data.draft,
+                                    updatedAt: Number.isFinite(incomingUpdatedAt) ? incomingUpdatedAt : Date.now()
+                                };
+                            }
                             if (typeof this._mirrorSessionToStorage === 'function') {
                                 this._mirrorSessionToStorage(this.currentSuiteSession);
                             }
@@ -1901,17 +2165,17 @@
             // 避免重复握手
             if (this._handshakeTimers.has(examId)) return;
 
-            const windowInfo = this.ensureExamWindowSession(examId, examWindow);
-            const initPayload = this._buildExamInitPayload(examId, windowInfo);
-
             let attempts = 0;
             const maxAttempts = 30; // ~9s
             const tick = () => {
                 if (examWindow && !examWindow.closed) {
                     try {
+                        const windowInfo = this.ensureExamWindowSession(examId, examWindow);
+                        const initPayload = this._buildExamInitPayload(examId, windowInfo);
+                        windowInfo.handshakeAttempts = attempts + 1;
+                        windowInfo.lastHandshakeAt = Date.now();
+                        this.examWindows && this.examWindows.set(examId, windowInfo);
                         // 直接发送两种事件名，确保增强器任何实现都能收到
-                        if (attempts === 0) {
-                        }
                         examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
                         examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
                     } catch (_) { /* 忽略 */ }
@@ -2056,6 +2320,15 @@
             const score = scoreInfo.correct || 0;
             const totalQuestions = scoreInfo.total || Object.keys(realData.answers || {}).length;
             const accuracy = scoreInfo.accuracy || (totalQuestions > 0 ? score / totalQuestions : 0);
+            const answerComparison = realData.answerComparison && typeof realData.answerComparison === 'object'
+                ? realData.answerComparison
+                : {};
+            const questionTypeMap = realData.questionTypeMap && typeof realData.questionTypeMap === 'object'
+                ? realData.questionTypeMap
+                : {};
+            const questionTypePerformance = realData.questionTypePerformance && typeof realData.questionTypePerformance === 'object'
+                ? realData.questionTypePerformance
+                : {};
 
             return {
                 id: recordId,
@@ -2080,11 +2353,17 @@
                 accuracy: accuracy,
                 percentage: Math.round(accuracy * 100),
                 duration: realData.duration, // 秒
+                answerComparison,
+                questionTypeMap,
+                questionTypePerformance,
 
                 // 详细数据
                 realData: {
                     sessionId: realData.sessionId,
                     answers: realData.answers || {},
+                    answerComparison,
+                    questionTypeMap,
+                    questionTypePerformance,
                     interactions: realData.interactions || [],
                     scoreInfo: scoreInfo,
                     pageType: realData.pageType,
@@ -2459,6 +2738,20 @@
 
                 comparison = this._finalizeReplayComparison(answers, correctAnswers, comparison);
                 const scoreInfo = this._deriveReplayScoreInfo(entry.scoreInfo || entry.realData?.scoreInfo || record.scoreInfo || record.realData?.scoreInfo, comparison);
+                const highlights = Array.isArray(entry.highlights)
+                    ? entry.highlights.slice()
+                    : (Array.isArray(entry.rawData?.highlights)
+                        ? entry.rawData.highlights.slice()
+                        : (Array.isArray(entry.realData?.highlights)
+                            ? entry.realData.highlights.slice()
+                            : (Array.isArray(record.realData?.highlights) ? record.realData.highlights.slice() : [])));
+                const scrollY = Number.isFinite(Number(entry.scrollY))
+                    ? Number(entry.scrollY)
+                    : (Number.isFinite(Number(entry.rawData?.scrollY))
+                        ? Number(entry.rawData.scrollY)
+                        : (Number.isFinite(Number(entry.realData?.scrollY))
+                            ? Number(entry.realData.scrollY)
+                            : (Number.isFinite(Number(record.realData?.scrollY)) ? Number(record.realData.scrollY) : 0)));
                 const mergedMetadata = Object.assign({}, recordMetadata, entryMetadata, {
                     examId: entryExamId
                 });
@@ -2483,6 +2776,8 @@
                         : (Array.isArray(entryMetadata.markedQuestions)
                             ? entryMetadata.markedQuestions.slice()
                             : (Array.isArray(recordMetadata.markedQuestions) ? recordMetadata.markedQuestions.slice() : [])),
+                    highlights,
+                    scrollY,
                     metadata: mergedMetadata
                 };
                 built.allQuestionIds = this._collectReplayQuestionIds(built);
@@ -2720,6 +3015,9 @@
                 suiteTimerLimitSeconds: timerContext.suiteTimerLimitSeconds != null ? timerContext.suiteTimerLimitSeconds : null,
                 suiteSequenceIndex: Number.isInteger(info.suiteSequenceIndex) ? info.suiteSequenceIndex : null,
                 suiteSequenceTotal: Number.isInteger(info.suiteSequenceTotal) ? info.suiteSequenceTotal : null,
+                practiceMode: typeof info.practiceMode === 'string' && info.practiceMode.trim()
+                    ? info.practiceMode.trim().toLowerCase()
+                    : null,
                 reviewMode: Boolean(info.reviewMode),
                 reviewSessionId: info.reviewSessionId ? String(info.reviewSessionId) : null,
                 reviewEntryIndex: Number.isInteger(info.reviewEntryIndex) ? info.reviewEntryIndex : 0,
@@ -2731,6 +3029,34 @@
                 Object.assign(payload, extras);
             }
             return payload;
+        },
+
+        _sendExamInitEnvelope(examId, targetWindow, extras = {}) {
+            if (!targetWindow || targetWindow.closed) {
+                return null;
+            }
+            try {
+                const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
+                const initPayload = this._buildExamInitPayload(examId, windowInfo, extras);
+                targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
+                targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                return initPayload;
+            } catch (initError) {
+                console.warn('[App] 发送初始化消息失败:', initError);
+                return null;
+            }
+        },
+
+        restartExamHandshake(examWindow, examId) {
+            if (this._handshakeTimers && this._handshakeTimers.has(examId)) {
+                try {
+                    clearInterval(this._handshakeTimers.get(examId));
+                } catch (_) {
+                    // ignore stale timer cleanup
+                }
+                this._handshakeTimers.delete(examId);
+            }
+            this.startExamHandshake(examWindow, examId);
         },
 
         ensureExamWindowSession(examId, examWindow = null) {
@@ -2752,6 +3078,7 @@
                     suiteFlowMode: null,
                     suiteSequenceIndex: null,
                     suiteSequenceTotal: null,
+                    practiceMode: null,
                     reviewMode: false,
                     reviewSessionId: null,
                     reviewEntryIndex: 0,
@@ -2768,6 +3095,11 @@
             if (!windowInfo.expectedSessionId) {
                 windowInfo.expectedSessionId = this.generateSessionId(examId);
             }
+            if (typeof windowInfo.practiceMode !== 'string') {
+                windowInfo.practiceMode = null;
+            } else {
+                windowInfo.practiceMode = windowInfo.practiceMode.trim().toLowerCase() || null;
+            }
             if (typeof windowInfo.reviewMode !== 'boolean') {
                 windowInfo.reviewMode = false;
             }
@@ -2780,6 +3112,130 @@
 
             this.examWindows.set(examId, windowInfo);
             return windowInfo;
+        },
+
+        _syncRecorderSessionStarted(examId, windowInfo, metadata = {}) {
+            const recorder = this.components && this.components.practiceRecorder;
+            if (!recorder || typeof recorder.handleSessionStarted !== 'function') {
+                return;
+            }
+            const sessionId = (windowInfo && windowInfo.expectedSessionId) || this.generateSessionId(examId);
+            try {
+                recorder.handleSessionStarted({
+                    examId,
+                    sessionId,
+                    metadata
+                });
+            } catch (recorderError) {
+                console.warn('[PracticeRecorder] 重置后同步会话状态失败:', recorderError);
+            }
+        },
+
+        async _removeActiveExamSessionMetadata(examId) {
+            try {
+                const activeSessions = await storage.get('active_sessions', []);
+                const updatedSessions = Array.isArray(activeSessions)
+                    ? activeSessions.filter(session => session && session.examId !== examId)
+                    : [];
+                await storage.set('active_sessions', updatedSessions);
+            } catch (error) {
+                console.warn('[App] 清理活动会话元数据失败:', error);
+            }
+        },
+
+        _isResetCapableUnifiedReadingCompletion(data, sourceWindow = null) {
+            if (!sourceWindow || sourceWindow.closed) {
+                return false;
+            }
+            const payload = data && typeof data === 'object' ? data : {};
+            const metadata = payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {};
+            const suiteSessionId = payload.suiteSessionId || metadata.suiteSessionId || '';
+            if (suiteSessionId) {
+                return false;
+            }
+            const mode = String(payload.practiceMode || metadata.practiceMode || '').toLowerCase();
+            if (mode === 'memorize' || mode === 'suite') {
+                return false;
+            }
+            const renderMode = String(payload.renderMode || metadata.renderMode || '').toLowerCase();
+            const pageType = String(payload.pageType || metadata.pageType || '').toLowerCase();
+            return renderMode === 'unified-reading' || pageType === 'unified-reading';
+        },
+
+        async retainExamWindowAfterCompletion(examId, sourceWindow, data = {}) {
+            const windowInfo = this.ensureExamWindowSession(examId, sourceWindow);
+            windowInfo.window = sourceWindow || windowInfo.window || null;
+            windowInfo.status = 'completed';
+            windowInfo.completedAt = Date.now();
+            windowInfo.lastCompletedSessionId = data && data.sessionId ? String(data.sessionId) : windowInfo.expectedSessionId;
+            windowInfo.practiceMode = null;
+            windowInfo.reviewMode = false;
+            windowInfo.readOnly = false;
+            this.examWindows && this.examWindows.set(examId, windowInfo);
+            await this._removeActiveExamSessionMetadata(examId);
+        },
+
+        async handlePracticeResetRequest(examId, data = {}, sourceWindow = null) {
+            const targetWindow = sourceWindow
+                || (this.examWindows && this.examWindows.has(examId) ? this.examWindows.get(examId).window : null);
+            if (!targetWindow || targetWindow.closed) {
+                window.showMessage && window.showMessage('题目窗口已关闭，无法重置测试', 'warning');
+                return;
+            }
+
+            const payload = data && typeof data === 'object' ? data : {};
+            const reason = String(payload.reason || '').trim().toLowerCase();
+            const fromPracticeMode = String(payload.fromPracticeMode || payload.practiceMode || '').trim().toLowerCase();
+            const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
+            const shouldReopenAsNormal = reason === 'memorize-start-test'
+                || fromPracticeMode === 'memorize'
+                || windowInfo.practiceMode === 'memorize';
+
+            if (shouldReopenAsNormal) {
+                windowInfo.practiceMode = null;
+                windowInfo.reviewMode = false;
+                windowInfo.readOnly = false;
+                windowInfo.status = 'active';
+                this.examWindows && this.examWindows.set(examId, windowInfo);
+                await this.openExam(examId, {
+                    target: 'tab',
+                    windowName: 'ielts-reading-practice',
+                    reuseWindow: targetWindow
+                });
+                return;
+            }
+
+            windowInfo.window = targetWindow;
+            windowInfo.status = 'active';
+            windowInfo.startTime = Date.now();
+            windowInfo.completedAt = null;
+            windowInfo.expectedSessionId = this.generateSessionId(examId);
+            windowInfo.sessionId = null;
+            windowInfo.practiceMode = null;
+            windowInfo.reviewMode = false;
+            windowInfo.reviewSessionId = null;
+            windowInfo.reviewEntryIndex = 0;
+            windowInfo.readOnly = false;
+            windowInfo.dataCollectorReady = false;
+            windowInfo.lastResetAt = Date.now();
+            windowInfo.lastResetReason = reason || 'reset';
+            this.examWindows && this.examWindows.set(examId, windowInfo);
+
+            await this.startPracticeSession(examId);
+            this._syncRecorderSessionStarted(examId, windowInfo, {
+                pageType: 'unified-reading',
+                url: payload.normalUrl || payload.url || null,
+                title: payload.title || null,
+                resetReason: reason || 'reset'
+            });
+
+            this._sendExamInitEnvelope(examId, targetWindow, {
+                practiceMode: null,
+                reviewMode: false,
+                readOnly: false
+            });
+            this.restartExamHandshake(targetWindow, examId);
+            this.updateExamStatus(examId, 'in-progress');
         },
 
         /**
@@ -2905,6 +3361,14 @@
          */
         handleSessionReady(examId, data) {
             const payload = data && typeof data === 'object' ? data : {};
+            const isListeningBridgeReady = payload.source === 'listening_record_bridge'
+                || payload.metadata?.source === 'listening_record_bridge'
+                || payload.pageType === 'listening'
+                || payload.type === 'listening';
+            const isPreInitListeningReady = Boolean(
+                isListeningBridgeReady
+                && payload.initialized === false
+            );
 
             // 更新会话状态
             let windowInfo = null;
@@ -2915,11 +3379,17 @@
             }
 
             if (windowInfo) {
-                windowInfo.dataCollectorReady = true;
+                if (isListeningBridgeReady) {
+                    windowInfo.listeningBridgeSeen = true;
+                    windowInfo.listeningBridgeInitialized = !isPreInitListeningReady;
+                }
+                if (!isPreInitListeningReady) {
+                    windowInfo.dataCollectorReady = true;
+                }
                 if (payload.pageType) {
                     windowInfo.pageType = payload.pageType;
                 }
-                if (payload.sessionId && windowInfo.expectedSessionId !== payload.sessionId) {
+                if (!isPreInitListeningReady && payload.sessionId && windowInfo.expectedSessionId !== payload.sessionId) {
                     windowInfo.expectedSessionId = payload.sessionId;
                 }
                 if (payload.suiteSessionId && !windowInfo.suiteSessionId) {
@@ -2938,6 +3408,20 @@
                     windowInfo.latestUrl = payload.url;
                 }
                 this.examWindows && this.examWindows.set(examId, windowInfo);
+            }
+
+            if (isPreInitListeningReady) {
+                try {
+                    const targetWindow = (windowInfo && windowInfo.window) || null;
+                    if (targetWindow && typeof targetWindow.postMessage === 'function') {
+                        const initPayload = this._buildExamInitPayload(examId, windowInfo || {});
+                        targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
+                        targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                    }
+                } catch (initError) {
+                    console.warn('[App] 听力桥预初始化 ready 后补发 INIT_SESSION 失败:', initError);
+                }
+                return;
             }
 
             if (this.suiteExamMap && this.suiteExamMap.has(examId) && typeof this._handleSuiteSessionReady === 'function') {
@@ -3002,6 +3486,120 @@
             }
         },
 
+        _isListeningBridgeCompletionPayload(data) {
+            if (!data || typeof data !== 'object') {
+                return false;
+            }
+
+            const signals = [
+                data.type,
+                data.practiceType,
+                data.pageType,
+                data.source,
+                data.metadata?.type,
+                data.metadata?.examType,
+                data.metadata?.source,
+                data.scoreInfo?.source,
+                data.realData?.source,
+                data.realData?.type,
+                data.realData?.pageType
+            ].filter(Boolean).join(' ').toLowerCase();
+
+            return signals.includes('listening_record_bridge') || signals.includes('listening');
+        },
+
+        _ensureRecorderSessionForListeningCompletion(examId, data) {
+            if (!this._isListeningBridgeCompletionPayload(data)) {
+                return;
+            }
+
+            const recorder = this.components && this.components.practiceRecorder;
+            if (!recorder) {
+                return;
+            }
+
+            const windowInfo = this.examWindows && this.examWindows.has(examId)
+                ? this.examWindows.get(examId)
+                : null;
+            const sessionId = (data && data.sessionId)
+                || (windowInfo && windowInfo.expectedSessionId)
+                || this.generateSessionId(examId);
+
+            if (data && !data.sessionId) {
+                data.sessionId = sessionId;
+            }
+            if (windowInfo && !windowInfo.expectedSessionId) {
+                windowInfo.expectedSessionId = sessionId;
+                this.examWindows && this.examWindows.set(examId, windowInfo);
+            }
+
+            const hasActiveSession = Boolean(
+                recorder.activeSessions
+                && typeof recorder.activeSessions.has === 'function'
+                && recorder.activeSessions.has(examId)
+            );
+
+            if (!hasActiveSession && typeof recorder.startPracticeSession === 'function') {
+                try {
+                    recorder.startPracticeSession(examId, {
+                        title: data?.title || data?.metadata?.examTitle || '',
+                        category: data?.category || data?.pageType || data?.metadata?.category || '',
+                        frequency: data?.frequency || data?.metadata?.frequency || '',
+                        type: 'listening',
+                        totalQuestions: data?.scoreInfo?.total || data?.totalQuestions || 0
+                    });
+                } catch (startError) {
+                    console.warn('[PracticeRecorder] 听力完成前补建会话失败:', startError);
+                }
+            }
+
+            if (typeof recorder.handleSessionStarted === 'function') {
+                try {
+                    recorder.handleSessionStarted({
+                        examId,
+                        sessionId,
+                        metadata: {
+                            pageType: data?.pageType || 'listening',
+                            type: 'listening',
+                            examType: 'listening',
+                            url: data?.url || data?.metadata?.url || null,
+                            title: data?.title || data?.metadata?.examTitle || null,
+                            suiteSessionId: data?.suiteSessionId || data?.metadata?.suiteSessionId || null,
+                            source: data?.source || data?.metadata?.source || 'listening_record_bridge'
+                        }
+                    });
+                } catch (startedError) {
+                    console.warn('[PracticeRecorder] 听力完成前同步会话状态失败:', startedError);
+                }
+            }
+        },
+
+        _normalizeListeningSpellingErrors(examId, data) {
+            if (!this._isListeningBridgeCompletionPayload(data) || !Array.isArray(data?.spellingErrors)) {
+                return;
+            }
+
+            const resolvedExamId = data?.examId || examId;
+            const collector = window.spellingErrorCollector;
+            const detectedSource = collector && typeof collector.detectSource === 'function'
+                ? collector.detectSource(resolvedExamId)
+                : '';
+
+            data.spellingErrors = data.spellingErrors.map((error) => {
+                if (!error || typeof error !== 'object') {
+                    return error;
+                }
+                const normalized = Object.assign({}, error, { examId: resolvedExamId });
+                if (data?.suiteSessionId && !normalized.suiteId) {
+                    normalized.suiteId = data.suiteSessionId;
+                }
+                if ((detectedSource === 'p1' || detectedSource === 'p4') && (!normalized.source || normalized.source === 'other')) {
+                    normalized.source = detectedSource;
+                }
+                return normalized;
+            });
+        },
+
         /**
          * 处理练习完成（真实数据）
          */
@@ -3009,20 +3607,38 @@
             if (data && !data.sessionId) {
                 data.sessionId = `${examId}_${Date.now()}`;
             }
+            if (String(data?.practiceMode || data?.metadata?.practiceMode || '').toLowerCase() === 'memorize') {
+                console.info('[ReadingMemorize] 背题模式完成事件不保存为正式练习记录:', examId);
+                return;
+            }
 
-            // 仅在P1/P4听力填空场景尝试补齐 spellingErrors（错词抓取）
+            // 听力桥返回的填空答案直接按 answerComparison 检测，不能依赖题源目录名必须包含 P1/P4。
             try {
                 const collector = window.spellingErrorCollector;
                 const hasExisting = Array.isArray(data?.spellingErrors) && data.spellingErrors.length > 0;
-                const comparison = data?.answerComparison || data?.realData?.answerComparison || null;
+                const comparison = typeof this._resolveCompletionAnswerComparison === 'function'
+                    ? this._resolveCompletionAnswerComparison(data)
+                    : (data?.answerComparison || data?.realData?.answerComparison || null);
 
                 if (!hasExisting && collector && typeof collector.detectErrors === 'function' && comparison && typeof comparison === 'object') {
                     const examIdForDetect = data?.examId || examId;
                     const source = typeof collector.detectSource === 'function'
                         ? collector.detectSource(examIdForDetect)
                         : 'other';
+                    const completionSignals = [
+                        data?.type,
+                        data?.practiceType,
+                        data?.pageType,
+                        data?.metadata?.type,
+                        data?.metadata?.examType,
+                        data?.metadata?.source,
+                        data?.source,
+                        data?.scoreInfo?.source,
+                        data?.realData?.source
+                    ].filter(Boolean).join(' ').toLowerCase();
+                    const isListeningCompletion = completionSignals.includes('listening');
 
-                    if (source === 'p1' || source === 'p4') {
+                    if (source === 'p1' || source === 'p4' || isListeningCompletion) {
                         const suiteId = data?.suiteId || null;
                         const detected = collector.detectErrors(comparison, suiteId, examIdForDetect);
                         if (Array.isArray(detected) && detected.length > 0) {
@@ -3035,6 +3651,7 @@
             } catch (error) {
                 console.warn('[DataCollection] 拼写错误检测失败，已忽略:', error);
             }
+            this._normalizeListeningSpellingErrors(examId, data);
 
             let suiteHandlerDeclined = false;
             const payloadSuiteSessionId = (
@@ -3069,27 +3686,25 @@
                 }
             }
 
-            const recorderAvailable = this.components
-                && this.components.practiceRecorder
-                && typeof this.components.practiceRecorder.savePracticeRecord === 'function';
+            const recorder = this.components && this.components.practiceRecorder;
+            const completionData = suiteHandlerDeclined
+                ? Object.assign({}, data, {
+                    allowStandaloneSave: true,
+                    metadata: Object.assign({}, data?.metadata || {}, { allowStandaloneSave: true, suiteFallback: true })
+                })
+                : data;
+            this._ensureRecorderSessionForListeningCompletion(examId, completionData);
 
             try {
-                if (recorderAvailable) {
+                if (recorder && typeof recorder.handleSessionCompleted === 'function') {
                     try {
-                        const normalizedData = suiteHandlerDeclined
-                            ? Object.assign({}, data, {
-                                allowStandaloneSave: true,
-                                metadata: Object.assign({}, data?.metadata || {}, { allowStandaloneSave: true, suiteFallback: true })
-                            })
-                            : data;
-                        await this.components.practiceRecorder.savePracticeRecord(normalizedData);
+                        await recorder.handleSessionCompleted(completionData);
                     } catch (recErr) {
-                        console.warn('[DataCollection] PracticeRecorder 保存失败，改用降级存储:', recErr);
-                        await this.saveRealPracticeData(examId, data, { savingAsFallback: true });
+                        console.warn('[DataCollection] PracticeRecorder 完成事件处理失败，改用降级存储:', recErr);
+                        await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true });
                     }
                 } else {
-                    // 直接保存真实数据（采用旧版本的简单方式）
-                    await this.saveRealPracticeData(examId, data, { savingAsFallback: true });
+                    await this.saveRealPracticeData(examId, completionData, { savingAsFallback: true });
                 }
 
                 // 刷新内存中的练习记录，确保无需手动刷新即可看到
@@ -3136,8 +3751,11 @@
                 // 即使出错也要显示通知
                 window.showMessage('练习已完成，但数据保存可能有问题', 'warning');
             } finally {
-                // 清理会话
-                this.cleanupExamSession(examId);
+                if (this._isResetCapableUnifiedReadingCompletion(completionData, sourceWindow)) {
+                    await this.retainExamWindowAfterCompletion(examId, sourceWindow, completionData);
+                } else {
+                    this.cleanupExamSession(examId);
+                }
             }
         },
 
@@ -3263,6 +3881,15 @@
 
                 const normalizedAnswers = normalizeAnswerMap(realData?.answers);
                 const normalizedCorrectMap = normalizeAnswerMap(realData?.correctAnswers);
+                const answerComparison = realData?.answerComparison && typeof realData.answerComparison === 'object'
+                    ? realData.answerComparison
+                    : {};
+                const questionTypeMap = realData?.questionTypeMap && typeof realData.questionTypeMap === 'object'
+                    ? realData.questionTypeMap
+                    : {};
+                const questionTypePerformance = realData?.questionTypePerformance && typeof realData.questionTypePerformance === 'object'
+                    ? realData.questionTypePerformance
+                    : {};
 
                 const forceIndividualSave = Boolean(options && options.forceIndividualSave);
                 const suiteSessionId = realData?.suiteSessionId
@@ -3317,6 +3944,9 @@
                         duration: realData.duration,
                         answers: normalizedAnswers,
                         correctAnswers: normalizedCorrectMap,
+                        answerComparison,
+                        questionTypeMap,
+                        questionTypePerformance,
                         answerHistory: realData.answerHistory,
                         interactions: realData.interactions,
                         isRealData: true,
@@ -3328,6 +3958,9 @@
 
                     date: new Date().toISOString(),
                     sessionId: realData.sessionId,
+                    answerComparison,
+                    questionTypeMap,
+                    questionTypePerformance,
                     timestamp: Date.now()
                 };
 
@@ -3349,17 +3982,21 @@
                     practiceRecord.endTime = new Date((realData.endTime ?? Date.now())).toISOString();
 
                     // 填充详情，便于在练习记录详情中显示正确答案
-                    const comp = realData && realData.answerComparison ? realData.answerComparison : {};
+                    const comp = answerComparison;
                     const details = {};
                     Object.entries(comp).forEach(([qid, obj]) => {
                         details[qid] = {
                             userAnswer: obj && obj.userAnswer != null ? obj.userAnswer : '',
                             correctAnswer: obj && obj.correctAnswer != null ? obj.correctAnswer : '',
-                            isCorrect: !!(obj && obj.isCorrect)
+                            isCorrect: !!(obj && obj.isCorrect),
+                            questionType: (obj && (obj.questionType || obj.type)) || questionTypeMap[qid] || undefined
                         };
                     });
                     // 将详情放入 realData.scoreInfo，便于历史详情与Markdown导出读取
                     if (!practiceRecord.realData) practiceRecord.realData = {};
+                    practiceRecord.realData.answerComparison = comp;
+                    practiceRecord.realData.questionTypeMap = questionTypeMap;
+                    practiceRecord.realData.questionTypePerformance = questionTypePerformance;
                     practiceRecord.realData.scoreInfo = {
                         correct: correct,
                         total: total,
@@ -3379,6 +4016,8 @@
 
                     // 将比较结构提升到顶层，便于兼容读取
                     practiceRecord.answerComparison = comp;
+                    practiceRecord.questionTypeMap = questionTypeMap;
+                    practiceRecord.questionTypePerformance = questionTypePerformance;
                 } catch (compatErr) {
                     console.warn('[DataCollection] 兼容字段填充失败:', compatErr);
                 }
@@ -3408,11 +4047,14 @@
                 }
 
                 // 立即验证保存是否成功
-                const verifyRecords = window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function'
-                    ? await window.PracticeCore.store.listPracticeRecords()
-                    : await storage.get('practice_records', []);
+                const verifyRecords = window.PracticeStore && typeof window.PracticeStore.list === 'function'
+                    ? await window.PracticeStore.list()
+                    : (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function'
+                        ? await window.PracticeCore.store.listPracticeRecords()
+                        : await storage.get('practice_records', []));
+                const practiceRecordId = String(practiceRecord.id);
                 const savedRecord = Array.isArray(verifyRecords)
-                    ? verifyRecords.find(r => r.id === practiceRecord.id)
+                    ? verifyRecords.find(r => r && String(r.id) === practiceRecordId)
                     : undefined;
 
                 if (savedRecord) {

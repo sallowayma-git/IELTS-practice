@@ -5,8 +5,15 @@
     const INIT_RETRY_MS = 1500;
     const SIMULATION_DRAFT_SYNC_MS = 1200;
     const EXPLANATION_STYLE_ID = 'reading-explanation-style';
+    const MEMORIZE_STYLE_ID = 'reading-memorize-style';
     const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__';
     const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange';
+    const EXPLANATION_NODE_SELECTOR = [
+        '.reading-explanation-card',
+        '.reading-group-explanation',
+        '.reading-question-explanation',
+        '.reading-question-explanation-list'
+    ].join(', ');
     const EXPLANATION_SPLIT_KINDS = new Set([
         'single_choice',
         'multi_choice',
@@ -15,12 +22,29 @@
     ]);
     const navStatus = new Map();
     const scriptCache = new Map();
+    const LOCATOR_HIGHLIGHT_SELECTOR = '.reading-locator-highlight, .reading-locator-block';
     function getAnswerMatchCore() {
         const core = global.AnswerMatchCore;
         if (!core || typeof core !== 'object') {
             return null;
         }
         return core;
+    }
+
+    function getAnswerSanitizer() {
+        const sanitizer = global.AnswerSanitizer;
+        if (!sanitizer || typeof sanitizer !== 'object') {
+            return null;
+        }
+        return sanitizer;
+    }
+
+    function getReviewHighlightDictionary() {
+        const dictionary = global.ReviewHighlightDictionary;
+        if (!dictionary || typeof dictionary !== 'object') {
+            return null;
+        }
+        return dictionary;
     }
 
     const state = {
@@ -32,7 +56,10 @@
         reviewEntryIndex: 0,
         reviewMode: false,
         reviewViewMode: null,
+        practiceMode: 'single',
+        memorizeMode: false,
         readOnly: false,
+        readOnlyReason: '',
         reviewContext: null,
         suiteReviewMode: false,
         pageStartTime: Date.now(),
@@ -41,6 +68,8 @@
         simulationGlobalAnchorMs: null,
         suiteTimerAnchorMs: null,
         suiteTimerMode: null,
+        endlessCountdownSeconds: 0,
+        endlessCountdownEndTime: null,
         suiteTimerLimitSeconds: null,
         ready: false,
         submitted: false,
@@ -63,15 +92,61 @@
     const dom = {
         title: null,
         subtitle: null,
+        shell: null,
         left: null,
+        right: null,
+        divider: null,
         groups: null,
         results: null,
         nav: null,
         submitBtn: null,
-        resetBtn: null
+        resetBtn: null,
+        exitBtn: null
     };
 
+    const interaction = {
+        timerRunning: true,
+        timerInterval: null,
+        lastRange: null,
+        currentHighlightNode: null,
+        keepToolbar: false
+    };
+
+    function ensurePracticeTimerBridge() {
+        if (global[PRACTICE_TIMER_BRIDGE_KEY] && typeof global[PRACTICE_TIMER_BRIDGE_KEY].getSnapshot === 'function') {
+            return;
+        }
+        global[PRACTICE_TIMER_BRIDGE_KEY] = {
+            eventName: PRACTICE_TIMER_EVENT,
+            getSnapshot() {
+                const nowMs = Date.now();
+                const anchorMs = resolveTimerAnchorMs();
+                const elapsedMs = resolveElapsedMs();
+                const elapsedSeconds = Math.round(elapsedMs / 1000);
+                const durationSeconds = Math.max(0, Math.round(elapsedSeconds));
+                const effectiveStartTimeMs = Math.max(0, anchorMs);
+                const effectiveEndTimeMs = Math.max(effectiveStartTimeMs, effectiveStartTimeMs + elapsedMs);
+                return {
+                    running: !Number.isFinite(state.pagePausedAtMs),
+                    elapsedSeconds,
+                    durationSeconds,
+                    displaySeconds: Math.floor(elapsedSeconds),
+                    effectiveStartTimeMs,
+                    effectiveEndTimeMs,
+                    anchorMs,
+                    mode: state.suiteTimerMode || 'elapsed',
+                    limitSeconds: state.suiteTimerLimitSeconds,
+                    source: state.suiteSessionId ? 'suite' : 'local',
+                    actualEndTimeMs: nowMs,
+                    pausedAtMs: Number.isFinite(state.pagePausedAtMs) ? state.pagePausedAtMs : null,
+                    pausedOffsetMs: Math.max(0, Number(state.pagePausedOffsetMs) || 0)
+                };
+            }
+        };
+    }
+
     function getPracticeTimerBridge() {
+        ensurePracticeTimerBridge();
         return global[PRACTICE_TIMER_BRIDGE_KEY];
     }
 
@@ -79,14 +154,26 @@
         return getPracticeTimerBridge().getSnapshot();
     }
 
-    function getPageElapsedSeconds() {
+    function resolveTimerAnchorMs() {
+        const suiteAnchorMs = Number(state.suiteTimerAnchorMs);
+        if (state.suiteSessionId && Number.isFinite(suiteAnchorMs) && suiteAnchorMs > 0) {
+            return Math.floor(suiteAnchorMs);
+        }
+        return Math.floor(Number(state.pageStartTime) || Date.now());
+    }
+
+    function resolveElapsedMs() {
         const referenceNow = Number.isFinite(state.pagePausedAtMs)
             ? state.pagePausedAtMs
             : Date.now();
         return Math.max(
             0,
-            Math.round((referenceNow - state.pageStartTime - state.pagePausedOffsetMs) / 1000)
+            referenceNow - resolveTimerAnchorMs() - Math.max(0, Number(state.pagePausedOffsetMs) || 0)
         );
+    }
+
+    function getPageElapsedSeconds() {
+        return Math.round(resolveElapsedMs() / 1000);
     }
 
     function syncPagePauseState(isRunning) {
@@ -104,13 +191,340 @@
         }
     }
 
-    function resolvePracticeTiming(minDurationSeconds = 0) {
-        const snapshot = getPracticeTimerSnapshot();
+    function resolvePracticeTiming(minDurationSeconds = 0, timerSnapshot = null) {
+        const snapshot = timerSnapshot && typeof timerSnapshot === 'object'
+            ? timerSnapshot
+            : getPracticeTimerSnapshot();
+        const startTimeMs = Math.floor(Number(snapshot.effectiveStartTimeMs));
+        const duration = Math.max(minDurationSeconds, Math.round(Number(snapshot.durationSeconds)));
+        const actualEndTimeMsRaw = Number(snapshot.actualEndTimeMs);
+        const endTimeMs = Number.isFinite(actualEndTimeMsRaw)
+            ? Math.floor(actualEndTimeMsRaw)
+            : Date.now();
+        const effectiveEndTimeMs = Math.max(startTimeMs, startTimeMs + duration * 1000);
         return {
-            duration: Math.max(minDurationSeconds, Math.round(Number(snapshot.durationSeconds))),
-            startTimeMs: Math.floor(Number(snapshot.effectiveStartTimeMs)),
-            endTimeMs: Math.floor(Number(snapshot.effectiveEndTimeMs))
+            duration,
+            startTimeMs,
+            endTimeMs,
+            effectiveEndTimeMs
         };
+    }
+
+    function formatTimerSeconds(totalSeconds) {
+        const safeSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+        const minutes = String(Math.floor(safeSeconds / 60)).padStart(2, '0');
+        const seconds = String(safeSeconds % 60).padStart(2, '0');
+        return `${minutes}:${seconds}`;
+    }
+
+    function renderTimer() {
+        const timer = document.getElementById('timer');
+        if (!timer) return;
+        var displaySeconds;
+        if (state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime)) {
+            var remainingMs = state.endlessCountdownEndTime - Date.now();
+            displaySeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+            if (remainingMs <= 0) {
+                state.endlessCountdownSeconds = 0;
+                state.endlessCountdownEndTime = null;
+                timer.classList.remove('endless-countdown');
+            }
+        } else {
+            displaySeconds = getPageElapsedSeconds();
+            if (state.suiteTimerMode === 'countdown' && Number.isFinite(Number(state.suiteTimerLimitSeconds))) {
+                displaySeconds = Math.max(0, Number(state.suiteTimerLimitSeconds) - displaySeconds);
+            }
+        }
+        timer.textContent = formatTimerSeconds(displaySeconds);
+        var hasEndlessCountdown = state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime);
+        timer.classList.toggle('paused', !interaction.timerRunning && !hasEndlessCountdown);
+        timer.style.opacity = (interaction.timerRunning || hasEndlessCountdown) ? '1' : '0.5';
+    }
+
+    function setTimerRunning(nextRunning) {
+        interaction.timerRunning = !!nextRunning;
+        syncPagePauseState(interaction.timerRunning);
+        renderTimer();
+        try {
+            global.dispatchEvent(new CustomEvent(PRACTICE_TIMER_EVENT, {
+                detail: getPracticeTimerSnapshot()
+            }));
+        } catch (_) {
+            // ignore timer bridge event failures
+        }
+    }
+
+    function attachUnifiedTimer() {
+        ensurePracticeTimerBridge();
+        const timer = document.getElementById('timer');
+        if (timer) {
+            timer.addEventListener('click', () => setTimerRunning(!interaction.timerRunning));
+        }
+        if (!interaction.timerInterval) {
+            interaction.timerInterval = global.setInterval(() => {
+                if (interaction.timerRunning || (state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime))) {
+                    renderTimer();
+                }
+            }, 250);
+        }
+        renderTimer();
+    }
+
+    function closeFloatingPanels() {
+        const settingsPanel = document.getElementById('settings-panel');
+        const notesPanel = document.getElementById('notes-panel');
+        const overlay = document.querySelector('.overlay');
+        if (settingsPanel) settingsPanel.style.display = 'none';
+        if (notesPanel) notesPanel.style.display = 'none';
+        if (overlay) overlay.style.display = 'none';
+    }
+
+    function attachUnifiedPanels() {
+        const settingsPanel = document.getElementById('settings-panel');
+        const notesPanel = document.getElementById('notes-panel');
+        const overlay = document.querySelector('.overlay');
+        const settingsBtn = document.getElementById('settings-btn');
+        const noteBtn = document.getElementById('note-btn');
+        const closeNoteBtn = document.getElementById('close-note');
+
+        settingsBtn?.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const nextVisible = settingsPanel?.style.display !== 'block';
+            closeFloatingPanels();
+            if (settingsPanel && nextVisible) {
+                settingsPanel.style.display = 'block';
+            }
+        });
+        noteBtn?.addEventListener('click', () => {
+            closeFloatingPanels();
+            if (notesPanel) notesPanel.style.display = 'flex';
+            if (overlay) overlay.style.display = 'block';
+        });
+        closeNoteBtn?.addEventListener('click', closeFloatingPanels);
+        overlay?.addEventListener('click', closeFloatingPanels);
+        document.querySelectorAll('.settings-option[data-size]').forEach((button) => {
+            button.addEventListener('click', () => {
+                document.documentElement.className = `font-${button.dataset.size || 'normal'}`;
+                document.querySelectorAll('.settings-option[data-size]').forEach((item) => item.classList.remove('active'));
+                button.classList.add('active');
+            });
+        });
+        document.querySelectorAll('.settings-option[data-mode]').forEach((button) => {
+            button.addEventListener('click', () => {
+                document.body.classList.toggle('dark-mode', button.dataset.mode === 'dark');
+                document.querySelectorAll('.settings-option[data-mode]').forEach((item) => item.classList.remove('active'));
+                button.classList.add('active');
+            });
+        });
+    }
+
+    function positionSelectionToolbar(rect) {
+        const toolbar = document.getElementById('selbar');
+        if (!toolbar) return;
+        toolbar.style.display = 'flex';
+        global.requestAnimationFrame(() => {
+            const top = global.scrollY + rect.top - toolbar.offsetHeight - 8;
+            const left = global.scrollX + rect.left + (rect.width / 2) - (toolbar.offsetWidth / 2);
+            toolbar.style.top = `${top > 0 ? top : global.scrollY + rect.bottom + 8}px`;
+            toolbar.style.left = `${Math.max(8, left)}px`;
+        });
+    }
+
+    function updateSelectionToolbar() {
+        const toolbar = document.getElementById('selbar');
+        if (!toolbar) return;
+        const selection = global.getSelection();
+        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+            if (!interaction.keepToolbar && !interaction.currentHighlightNode) {
+                toolbar.style.display = 'none';
+                interaction.currentHighlightNode = null;
+            }
+            return;
+        }
+        const range = selection.getRangeAt(0);
+        let container = range.commonAncestorContainer;
+        if (container.nodeType === Node.TEXT_NODE) {
+            container = container.parentElement;
+        }
+        const leftPane = dom.left;
+        const rightPane = document.getElementById('right');
+        const isInAllowedPane = (leftPane && leftPane.contains(container)) || (rightPane && rightPane.contains(container));
+        const highlightNode = container instanceof HTMLElement
+            ? (container.matches('.hl') ? container : container.closest('.hl'))
+            : null;
+        if (!isInAllowedPane && !highlightNode) {
+            toolbar.style.display = 'none';
+            return;
+        }
+        interaction.lastRange = range.cloneRange();
+        interaction.currentHighlightNode = highlightNode || null;
+        positionSelectionToolbar(range.getBoundingClientRect());
+    }
+
+    function applySelectionHighlight(kind = 'highlight') {
+        const toolbar = document.getElementById('selbar');
+        const selection = global.getSelection();
+        if (!interaction.lastRange || interaction.lastRange.collapsed || interaction.currentHighlightNode) {
+            return;
+        }
+        const span = document.createElement('span');
+        span.className = 'hl';
+        if (kind === 'note') {
+            span.dataset.hlType = 'note';
+        }
+        try {
+            interaction.lastRange.surroundContents(span);
+        } catch (_) {
+            return;
+        }
+        selection?.removeAllRanges();
+        if (toolbar) toolbar.style.display = 'none';
+        interaction.lastRange = null;
+        interaction.currentHighlightNode = null;
+        syncSimulationDraftSnapshot('highlight');
+    }
+
+    function removeSelectionHighlight() {
+        const toolbar = document.getElementById('selbar');
+        const selection = global.getSelection();
+        let target = interaction.currentHighlightNode;
+        if (!target && interaction.lastRange) {
+            const ancestor = interaction.lastRange.commonAncestorContainer;
+            target = ancestor.nodeType === Node.TEXT_NODE
+                ? ancestor.parentElement?.closest('.hl')
+                : ancestor.closest?.('.hl');
+        }
+        if (target && target.parentNode) {
+            const parent = target.parentNode;
+            while (target.firstChild) {
+                parent.insertBefore(target.firstChild, target);
+            }
+            parent.removeChild(target);
+            parent.normalize();
+        }
+        selection?.removeAllRanges();
+        if (toolbar) toolbar.style.display = 'none';
+        interaction.lastRange = null;
+        interaction.currentHighlightNode = null;
+        syncSimulationDraftSnapshot('unhighlight');
+    }
+
+    function attachSelectionHighlightToolbar() {
+        const toolbar = document.getElementById('selbar');
+        if (!toolbar) return;
+        document.addEventListener('selectionchange', () => {
+            global.setTimeout(updateSelectionToolbar, 10);
+        });
+        toolbar.addEventListener('mousedown', () => {
+            interaction.keepToolbar = true;
+        });
+        toolbar.addEventListener('mouseup', () => {
+            interaction.keepToolbar = false;
+        });
+        document.getElementById('btnHL')?.addEventListener('click', () => applySelectionHighlight('highlight'));
+        document.getElementById('btnNote')?.addEventListener('click', () => {
+            let targetNode = interaction.currentHighlightNode;
+            let text = '';
+
+            if (targetNode) {
+                if (targetNode.dataset.hlType !== 'note') {
+                    targetNode.dataset.hlType = 'note';
+                    syncSimulationDraftSnapshot('highlight');
+                }
+                text = (targetNode.textContent || '').trim();
+            } else if (interaction.lastRange && !interaction.lastRange.collapsed) {
+                const span = document.createElement('span');
+                span.className = 'hl';
+                span.dataset.hlType = 'note';
+                try {
+                    interaction.lastRange.surroundContents(span);
+                    targetNode = span;
+                    text = (span.textContent || '').trim();
+                    const selection = global.getSelection();
+                    selection?.removeAllRanges();
+                    syncSimulationDraftSnapshot('highlight');
+                } catch (_) {
+                    // Ignore
+                }
+            }
+
+            const toolbar = document.getElementById('selbar');
+            if (toolbar) toolbar.style.display = 'none';
+            interaction.lastRange = null;
+            interaction.currentHighlightNode = null;
+
+            if (text) {
+                const noteArea = document.querySelector('#notes-panel textarea');
+                if (noteArea) {
+                    noteArea.value += (noteArea.value ? '\n\n' : '') + '> ' + text + '\n';
+                    noteArea.scrollTop = noteArea.scrollHeight;
+                    noteArea.focus();
+                }
+                closeFloatingPanels();
+                const notesPanel = document.getElementById('notes-panel');
+                const overlay = document.querySelector('.overlay');
+                if (notesPanel) notesPanel.style.display = 'flex';
+                if (overlay) overlay.style.display = 'block';
+            }
+        });
+        document.getElementById('btnUH')?.addEventListener('click', removeSelectionHighlight);
+    }
+
+    function isReviewDictionaryEnabled() {
+        return Boolean(state.readOnly || state.reviewMode || state.submitted);
+    }
+
+    function getReviewDictionaryContext() {
+        return {
+            examId: state.examId,
+            dataKey: state.dataKey,
+            title: state.dataset?.meta?.title || '',
+            category: state.dataset?.meta?.category || '',
+            frequency: state.dataset?.meta?.frequency || '',
+            suiteSessionId: state.suiteSessionId || null,
+            reviewSessionId: state.reviewSessionId || null,
+            reviewMode: state.reviewMode,
+            submitted: state.submitted
+        };
+    }
+
+    function enhanceReviewHighlights() {
+        const dictionary = getReviewHighlightDictionary();
+        if (!dictionary || typeof dictionary.enhance !== 'function') {
+            return;
+        }
+        dictionary.enhance({
+            roots: {
+                left: dom.left,
+                groups: dom.groups
+            },
+            isEnabled: isReviewDictionaryEnabled,
+            getContext: getReviewDictionaryContext,
+            postMessage
+        });
+    }
+
+    function attachReviewHighlightDictionary() {
+        const dictionary = getReviewHighlightDictionary();
+        if (!dictionary || typeof dictionary.attach !== 'function') {
+            return;
+        }
+        dictionary.attach({
+            roots: {
+                left: dom.left,
+                groups: dom.groups
+            },
+            isEnabled: isReviewDictionaryEnabled,
+            getContext: getReviewDictionaryContext,
+            postMessage
+        });
+    }
+
+    function closeReviewHighlightDictionary() {
+        const dictionary = getReviewHighlightDictionary();
+        if (dictionary && typeof dictionary.close === 'function') {
+            dictionary.close();
+        }
     }
 
     function decodeParam(value) {
@@ -122,10 +536,55 @@
         }
     }
 
+    function normalizePracticeMode(value) {
+        return String(value || '').trim().toLowerCase();
+    }
+
+    function applyPracticeMode(value) {
+        const mode = normalizePracticeMode(value);
+        const wasMemorizeMode = state.memorizeMode;
+        state.practiceMode = mode || 'single';
+        state.memorizeMode = mode === 'memorize';
+        if (wasMemorizeMode && !state.memorizeMode) {
+            clearMemorizeAnswerKeys();
+            clearMemorizeLocatorHighlights();
+            clearExplanations();
+        }
+        syncPracticeModeDom();
+    }
+
+    function syncPracticeModeDom() {
+        if (!document.body) {
+            return;
+        }
+        const practiceMode = state.memorizeMode ? 'memorize' : (state.practiceMode || 'single');
+        document.body.dataset.practiceMode = practiceMode;
+        document.body.classList.toggle('reading-memorize-mode', state.memorizeMode);
+    }
+
+    function renderReadingSubtitle() {
+        if (!dom.subtitle) {
+            return;
+        }
+        const questionCount = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder.length : 0;
+        const parts = ['统一阅读页'];
+        if (state.memorizeMode) {
+            parts.push('背题模式');
+        }
+        if (state.dataset?.meta?.category) {
+            parts.push(state.dataset.meta.category);
+        }
+        if (questionCount) {
+            parts.push(`${questionCount} 题`);
+        }
+        dom.subtitle.textContent = parts.join(' · ');
+    }
+
     function parseQuery() {
         const params = new URLSearchParams(global.location.search);
         state.examId = decodeParam(params.get('examId')) || null;
         state.dataKey = decodeParam(params.get('dataKey')) || state.examId;
+        applyPracticeMode(params.get('practiceMode') || params.get('mode') || '');
         const suiteSessionId = decodeParam(params.get('suiteSessionId')) || null;
         if (suiteSessionId) {
             state.suiteSessionId = suiteSessionId;
@@ -165,12 +624,16 @@
     function captureDom() {
         dom.title = document.getElementById('exam-title');
         dom.subtitle = document.getElementById('exam-subtitle');
+        dom.shell = document.querySelector('.shell');
         dom.left = document.getElementById('left');
+        dom.right = document.getElementById('right');
+        dom.divider = document.getElementById('divider');
         dom.groups = document.getElementById('question-groups');
         dom.results = document.getElementById('results');
         dom.nav = document.getElementById('question-nav');
         dom.submitBtn = document.getElementById('submit-btn');
         dom.resetBtn = document.getElementById('reset-btn');
+        dom.exitBtn = document.getElementById('exit-btn');
     }
 
     function loadScript(url) {
@@ -310,10 +773,65 @@
         document.head.appendChild(style);
     }
 
+    function ensureMemorizeStyles() {
+        if (document.getElementById(MEMORIZE_STYLE_ID)) {
+            return;
+        }
+        const style = document.createElement('style');
+        style.id = MEMORIZE_STYLE_ID;
+        style.textContent = `
+            .reading-answer-key-card {
+                margin: 8px 0 10px;
+                padding: 9px 11px;
+                border: 1px solid rgba(22, 163, 74, 0.24);
+                border-left: 4px solid rgba(22, 163, 74, 0.9);
+                border-radius: 8px;
+                background: rgba(240, 253, 244, 0.82);
+            }
+            .reading-answer-key-card__label {
+                font-size: 12px;
+                line-height: 1.35;
+                margin-bottom: 4px;
+                font-weight: 700;
+                color: #166534;
+            }
+            .reading-answer-key-card__value {
+                font-size: 14px;
+                line-height: 1.55;
+                color: #14532d;
+                white-space: pre-wrap;
+            }
+            .reading-locator-highlight {
+                border-radius: 3px;
+                background: rgba(250, 204, 21, 0.42);
+                box-shadow: 0 0 0 1px rgba(202, 138, 4, 0.18);
+                cursor: pointer;
+            }
+            .reading-locator-highlight:hover {
+                background: rgba(250, 204, 21, 0.62);
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
     function clearExplanations() {
-        document.querySelectorAll(
-            '.reading-explanation-card, .reading-group-explanation, .reading-question-explanation, .reading-question-explanation-list'
-        ).forEach((node) => node.remove());
+        document.querySelectorAll(EXPLANATION_NODE_SELECTOR).forEach((node) => node.remove());
+    }
+
+    function clearMemorizeAnswerKeys() {
+        document.querySelectorAll('.reading-answer-key-row, .reading-answer-key-card').forEach((node) => node.remove());
+    }
+
+    function clearMemorizeLocatorHighlights() {
+        const shared = getHighlightShared();
+        if (!shared || typeof shared.unwrapMatchingHighlights !== 'function') {
+            return;
+        }
+        shared.unwrapMatchingHighlights(dom.left, LOCATOR_HIGHLIGHT_SELECTOR);
+    }
+
+    function getHighlightShared() {
+        return global.__READING_HIGHLIGHT_SHARED__ || null;
     }
 
     function parseQuestionNumber(value) {
@@ -376,7 +894,6 @@
     }
 
     function createGroupMarkup(group) {
-        const lead = group.leadHtml ? `<div class="unified-group__lead">${group.leadHtml}</div>` : '';
         const questionIds = Array.isArray(group.questionIds) ? group.questionIds.join(',') : '';
         const allowOptionReuseFlag = resolveAllowOptionReuse(group);
         const allowOptionReuse = typeof allowOptionReuseFlag === 'boolean'
@@ -384,7 +901,6 @@
             : '';
         return `
             <section class="unified-group" data-group-id="${group.groupId}" data-question-ids="${questionIds}"${allowOptionReuse}>
-                ${lead}
                 ${group.bodyHtml || ''}
             </section>
         `;
@@ -405,7 +921,7 @@
             dom.title.textContent = dataset.meta?.title || 'IELTS 阅读练习';
         }
         if (dom.subtitle) {
-            dom.subtitle.textContent = `统一阅读页 · ${dataset.meta?.category || ''} · ${questionCount} 题`;
+            renderReadingSubtitle();
         }
         if (dom.left) {
             dom.left.innerHTML = passageHtml;
@@ -484,11 +1000,316 @@
         }).join('');
     }
 
+    function attachPaneResizer() {
+        const shell = dom.shell;
+        const divider = dom.divider;
+        const leftPane = dom.left;
+        const rightPane = dom.right;
+        if (!shell || !divider || !leftPane || !rightPane || divider.dataset.resizeBound === '1') {
+            return;
+        }
+        divider.dataset.resizeBound = '1';
+
+        const baseMinLeft = 280;
+        const baseMinRight = 320;
+        const minPane = 220;
+
+        const isResizableLayout = () => {
+            const dividerStyle = global.getComputedStyle ? global.getComputedStyle(divider) : null;
+            const shellStyle = global.getComputedStyle ? global.getComputedStyle(shell) : null;
+            return !!(
+                dividerStyle
+                && shellStyle
+                && dividerStyle.display !== 'none'
+                && shellStyle.display === 'grid'
+            );
+        };
+
+        const resolveConstraints = () => {
+            const shellRect = shell.getBoundingClientRect();
+            const dividerRect = divider.getBoundingClientRect();
+            const dividerWidth = Math.max(1, Math.round(dividerRect.width || 10));
+            const contentWidth = Math.max(0, Math.round(shellRect.width - dividerWidth));
+            let minLeft = baseMinLeft;
+            let minRight = baseMinRight;
+            if (contentWidth < minLeft + minRight) {
+                minLeft = Math.max(minPane, Math.floor(contentWidth * 0.42));
+                minRight = Math.max(0, contentWidth - minLeft);
+            }
+            return {
+                shellRect,
+                contentWidth,
+                minLeft,
+                minRight,
+                minWidth: minLeft,
+                maxWidth: Math.max(minLeft, contentWidth - minRight)
+            };
+        };
+
+        const setDividerA11y = (leftWidth, constraints) => {
+            const contentWidth = constraints.contentWidth || 1;
+            const percent = Math.round((leftWidth / contentWidth) * 100);
+            const clampedPercent = Math.max(0, Math.min(100, percent));
+            divider.setAttribute('aria-valuenow', String(clampedPercent));
+            divider.setAttribute('aria-valuetext', `原文 ${clampedPercent}%`);
+        };
+
+        const applyPaneWidth = (leftWidth) => {
+            if (!isResizableLayout()) {
+                return;
+            }
+            const constraints = resolveConstraints();
+            const clamped = Math.max(
+                constraints.minWidth,
+                Math.min(constraints.maxWidth, Math.round(leftWidth))
+            );
+            shell.style.setProperty('--reading-left-pane-width', `${clamped}px`);
+            setDividerA11y(clamped, constraints);
+        };
+
+        const applyPointerPosition = (clientX) => {
+            const constraints = resolveConstraints();
+            applyPaneWidth(clientX - constraints.shellRect.left);
+        };
+
+        let dragging = false;
+
+        function handlePointerMove(event) {
+            if (!dragging || !event) {
+                return;
+            }
+            event.preventDefault();
+            applyPointerPosition(event.clientX);
+        }
+
+        function stopDragging(event) {
+            if (!dragging) {
+                return;
+            }
+            dragging = false;
+            divider.classList.remove('is-dragging');
+            document.body.classList.remove('reading-pane-resizing');
+            document.removeEventListener('pointermove', handlePointerMove);
+            document.removeEventListener('pointerup', stopDragging);
+            document.removeEventListener('pointercancel', stopDragging);
+            try {
+                if (event && typeof divider.releasePointerCapture === 'function') {
+                    divider.releasePointerCapture(event.pointerId);
+                }
+            } catch (_) {
+                // Pointer capture may already be released by the browser.
+            }
+        }
+
+        divider.addEventListener('pointerdown', (event) => {
+            if (
+                !isResizableLayout()
+                || !event
+                || (Number.isFinite(Number(event.button)) && event.button > 0)
+            ) {
+                return;
+            }
+            event.preventDefault();
+            dragging = true;
+            divider.classList.add('is-dragging');
+            document.body.classList.add('reading-pane-resizing');
+            try {
+                if (typeof divider.setPointerCapture === 'function') {
+                    divider.setPointerCapture(event.pointerId);
+                }
+            } catch (_) {
+                // Pointer capture is progressive enhancement.
+            }
+            document.addEventListener('pointermove', handlePointerMove);
+            document.addEventListener('pointerup', stopDragging);
+            document.addEventListener('pointercancel', stopDragging);
+            applyPointerPosition(event.clientX);
+        });
+
+        divider.addEventListener('keydown', (event) => {
+            if (!isResizableLayout()) {
+                return;
+            }
+            const currentWidth = leftPane.getBoundingClientRect().width;
+            const step = event.shiftKey ? 80 : 32;
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                applyPaneWidth(currentWidth - step);
+            } else if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                applyPaneWidth(currentWidth + step);
+            } else if (event.key === 'Home') {
+                event.preventDefault();
+                applyPaneWidth(resolveConstraints().contentWidth * 0.36);
+            } else if (event.key === 'End') {
+                event.preventDefault();
+                applyPaneWidth(resolveConstraints().contentWidth * 0.64);
+            }
+        });
+
+        global.addEventListener('resize', () => {
+            if (isResizableLayout()) {
+                applyPaneWidth(leftPane.getBoundingClientRect().width);
+            }
+        });
+
+        applyPaneWidth(leftPane.getBoundingClientRect().width || shell.getBoundingClientRect().width * 0.5);
+    }
+
     function normalizeQuestionId(rawValue) {
         if (!rawValue) return null;
         const value = String(rawValue).trim().toLowerCase();
         const match = value.match(/q(\d+)/);
         return match ? `q${match[1]}` : null;
+    }
+
+    const READING_QUESTION_TYPE_NAMES = {
+        'heading-matching': true,
+        'true-false-not-given': true,
+        'yes-no-not-given': true,
+        'multiple-choice': true,
+        'summary-completion': true,
+        'sentence-completion': true,
+        'short-answer': true,
+        'diagram-labelling': true,
+        'flow-chart': true,
+        'table-completion': true,
+        'matching-information': true,
+        'matching-features': true,
+        'matching-people-ideas': true,
+        other: true
+    };
+
+    const READING_QUESTION_TYPE_ALIASES = {
+        headingmatching: 'heading-matching',
+        headingsmatching: 'heading-matching',
+        matchingheadings: 'heading-matching',
+        listofheadings: 'heading-matching',
+        truefalsenotgiven: 'true-false-not-given',
+        tfng: 'true-false-not-given',
+        yesnonotgiven: 'yes-no-not-given',
+        ynng: 'yes-no-not-given',
+        multiplechoice: 'multiple-choice',
+        mcq: 'multiple-choice',
+        summarycompletion: 'summary-completion',
+        sentencecompletion: 'sentence-completion',
+        shortanswer: 'short-answer',
+        shortanswerquestions: 'short-answer',
+        diagramlabelling: 'diagram-labelling',
+        diagramlabeling: 'diagram-labelling',
+        flowchart: 'flow-chart',
+        flowchartcompletion: 'flow-chart',
+        tablecompletion: 'table-completion',
+        matchinginformation: 'matching-information',
+        matchingfeatures: 'matching-features',
+        matchingpeopleideas: 'matching-people-ideas',
+        matchingpeople: 'matching-people-ideas',
+        matchingnames: 'matching-people-ideas',
+        matching: 'matching-features',
+        general: 'other',
+        unknown: 'other',
+        other: 'other'
+    };
+
+    function normalizeQuestionTypeToken(value) {
+        return String(value || '')
+            .trim()
+            .toLowerCase()
+            .replace(/&/g, 'and')
+            .replace(/[_\s]+/g, '-')
+            .replace(/[^a-z0-9-]/g, '');
+    }
+
+    function normalizeReadingQuestionType(value) {
+        const token = normalizeQuestionTypeToken(value);
+        if (!token) {
+            return 'other';
+        }
+        if (READING_QUESTION_TYPE_NAMES[token]) {
+            return token;
+        }
+        const compact = token.replace(/-/g, '');
+        return READING_QUESTION_TYPE_ALIASES[compact] || READING_QUESTION_TYPE_ALIASES[token] || 'other';
+    }
+
+    function textFromHtml(value) {
+        return String(value || '')
+            .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+            .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+    }
+
+    function inferReadingQuestionTypeFromGroup(group) {
+        group = group || {};
+        const explicitType = normalizeReadingQuestionType(group.questionType || group.kind || group.type);
+        if (explicitType !== 'other') {
+            return explicitType;
+        }
+        const text = textFromHtml([group.leadHtml, group.bodyHtml, group.html, group.title].join(' '));
+        if (/which paragraph contains|paragraph contains the following information|contains the following information/.test(text)) {
+            return 'matching-information';
+        }
+        if (/list of headings|choose the correct heading|match.*heading|headings/.test(text)) {
+            return 'heading-matching';
+        }
+        if (/true\s+if|false\s+if|not given/.test(text) && /true/.test(text) && /false/.test(text)) {
+            return 'true-false-not-given';
+        }
+        if (/yes\s+if|no\s+if|not given/.test(text) && /yes/.test(text) && /no/.test(text)) {
+            return 'yes-no-not-given';
+        }
+        if (/choose the correct letter|choose the correct answer|multiple choice/.test(text)) {
+            return 'multiple-choice';
+        }
+        if (/complete the summary|summary below/.test(text)) {
+            return 'summary-completion';
+        }
+        if (/complete each sentence|complete the sentences|sentence endings|correct ending/.test(text)) {
+            return 'sentence-completion';
+        }
+        if (/complete the table|table below/.test(text)) {
+            return 'table-completion';
+        }
+        if (/flow[- ]?chart|flow chart/.test(text)) {
+            return 'flow-chart';
+        }
+        if (/diagram|label the diagram|labelling|labeling|map below/.test(text)) {
+            return 'diagram-labelling';
+        }
+        if (/answer the questions|short answer/.test(text)) {
+            return 'short-answer';
+        }
+        if (/look at the following people|list of people|match each person|match each statement with the correct person|list of ideas/.test(text)) {
+            return 'matching-people-ideas';
+        }
+        if (/match each|match the following|classify the following|list of (points|features|options|events)/.test(text)) {
+            return 'matching-features';
+        }
+        return explicitType;
+    }
+
+    function addQuestionTypeMapEntry(map, questionId, type) {
+        const normalizedId = normalizeQuestionId(questionId);
+        if (!normalizedId || !type) {
+            return;
+        }
+        map[normalizedId] = type;
+        map[String(questionId).trim().toLowerCase()] = type;
+    }
+
+    function buildQuestionTypeMap(dataset = state.dataset) {
+        const map = {};
+        const groups = Array.isArray(dataset?.questionGroups) ? dataset.questionGroups : [];
+        groups.forEach((group) => {
+            const type = inferReadingQuestionTypeFromGroup(group);
+            const questionIds = Array.isArray(group?.questionIds) ? group.questionIds : [];
+            questionIds.forEach((questionId) => addQuestionTypeMapEntry(map, questionId, type));
+        });
+        return map;
     }
 
     function isQuestionIdMatch(value, target) {
@@ -550,6 +1371,24 @@
         dom.nav?.addEventListener('click', navClickHandler);
     }
 
+    function attachMemorizeLocatorListeners() {
+        document.addEventListener('click', (event) => {
+            const target = event.target instanceof HTMLElement
+                ? event.target.closest('.reading-locator-highlight[data-question-id]')
+                : null;
+            if (!target) {
+                return;
+            }
+            const questionId = target.dataset.questionId || '';
+            const anchor = findQuestionAnchor(questionId);
+            if (anchor && typeof global.scrollToElement === 'function') {
+                global.scrollToElement(anchor);
+                return;
+            }
+            anchor?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        });
+    }
+
     function resolvePassageTargets() {
         if (!dom.left) return [];
         const wrapped = Array.from(dom.left.querySelectorAll('.paragraph-wrapper > p'));
@@ -585,19 +1424,33 @@
     }
 
     function locateQuestionContainer(groupEl, questionId) {
+        const itemContainerSelector = '.question-item, .tfng-item, .match-question-item, .question-row, .summary-completion, tr, li';
         const escaped = escapeSelector(questionId);
         const directByAnchor = groupEl.querySelector(`#${escaped}-anchor`);
         if (directByAnchor) {
-            return directByAnchor.closest('.question-item, .tfng-item, .match-question-item, .question-row, .summary-completion')
+            return directByAnchor.closest(itemContainerSelector)
                 || directByAnchor.parentElement;
         }
         const inputByName = groupEl.querySelector(`[name="${escaped}"]`);
         if (inputByName) {
-            return inputByName.closest('.question-item, .tfng-item, .match-question-item, .question-row, .summary-completion');
+            return inputByName.closest(itemContainerSelector);
         }
         const byData = groupEl.querySelector(`[data-question="${escaped}"]`);
         if (byData) {
-            return byData.closest('.question-item, .match-question-item, .paragraph-wrapper, .summary-completion') || byData.parentElement;
+            return byData.closest('.question-item, .match-question-item, .question-row, .summary-completion, .paragraph-wrapper, tr, li')
+                || byData.parentElement;
+        }
+        const displayNumber = Number(questionNumberFromId(questionId));
+        if (Number.isFinite(displayNumber)) {
+            const candidates = Array.from(groupEl.querySelectorAll(itemContainerSelector));
+            for (let index = 0; index < candidates.length; index += 1) {
+                const candidate = candidates[index];
+                const text = String(candidate.textContent || '');
+                if (!text) continue;
+                if (new RegExp(`\\b${displayNumber}\\b`).test(text)) {
+                    return candidate;
+                }
+            }
         }
         return null;
     }
@@ -667,11 +1520,14 @@
                 number: questionNumberFromId(questionId)
             })).filter((pair) => Number.isFinite(pair.number));
             const questionNumbers = questionPairs.map((pair) => pair.number);
-            const splitMode = EXPLANATION_SPLIT_KINDS.has(group.kind);
+            const sectionForGroup = pickSectionForGroup(questionNumbers, 'per_question')
+                || pickSectionForGroup(questionNumbers, 'group')
+                || pickSectionForGroup(questionNumbers, null);
+            const hasPerQuestionItems = Array.isArray(sectionForGroup?.items) && sectionForGroup.items.length > 0;
+            const splitMode = EXPLANATION_SPLIT_KINDS.has(group.kind) || hasPerQuestionItems;
 
             if (splitMode) {
-                const section = pickSectionForGroup(questionNumbers, 'per_question')
-                    || pickSectionForGroup(questionNumbers, null);
+                const section = sectionForGroup || pickSectionForGroup(questionNumbers, null);
                 if (section) {
                     renderPerQuestionExplanations(groupEl, section, questionPairs);
                 }
@@ -694,6 +1550,196 @@
         }
         renderPassageExplanations();
         renderQuestionExplanations();
+    }
+
+    function createAnswerKeyCard(questionId, answerValue) {
+        const card = document.createElement('div');
+        card.className = 'reading-answer-key-card';
+        card.dataset.questionId = questionId;
+
+        const label = document.createElement('div');
+        label.className = 'reading-answer-key-card__label';
+        label.textContent = `Q${displayLabel(questionId)} 答案`;
+
+        const value = document.createElement('div');
+        value.className = 'reading-answer-key-card__value';
+        value.textContent = displayAnswerValue(answerValue, '无答案');
+
+        card.appendChild(label);
+        card.appendChild(value);
+        return card;
+    }
+
+    function renderMemorizeAnswerKeys() {
+        clearMemorizeAnswerKeys();
+        if (!state.memorizeMode || !dom.groups) {
+            return;
+        }
+        ensureMemorizeStyles();
+        const answerKey = state.dataset?.answerKey || {};
+        const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : Object.keys(answerKey);
+        const groups = Array.from(dom.groups.querySelectorAll('.unified-group'));
+        const datasetGroups = Array.isArray(state.dataset?.questionGroups) ? state.dataset.questionGroups : [];
+
+        order.forEach((questionId) => {
+            if (!Object.prototype.hasOwnProperty.call(answerKey, questionId)) {
+                return;
+            }
+            const groupIndex = datasetGroups.findIndex((group) => (
+                Array.isArray(group?.questionIds)
+                && group.questionIds.some((entry) => isQuestionIdMatch(entry, questionId))
+            ));
+            const groupEl = groupIndex >= 0 ? groups[groupIndex] : null;
+            if (!groupEl) {
+                return;
+            }
+            const container = locateQuestionContainer(groupEl, questionId) || groupEl;
+            if (container.querySelector(`.reading-answer-key-card[data-question-id="${escapeSelector(questionId)}"]`)) {
+                return;
+            }
+            container.appendChild(createAnswerKeyCard(questionId, answerKey[questionId]));
+        });
+    }
+
+    function buildDisplayNumberQuestionMap() {
+        const map = new Map();
+        const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+        order.forEach((questionId) => {
+            const number = questionNumberFromId(questionId);
+            if (Number.isFinite(number) && !map.has(number)) {
+                map.set(number, questionId);
+            }
+        });
+        return map;
+    }
+
+    function resolveExplanationItemQuestionId(item, numberMap) {
+        const direct = normalizeQuestionId(item?.questionId);
+        if (direct) {
+            return direct;
+        }
+        const number = Number(item?.questionNumber);
+        if (Number.isFinite(number) && numberMap.has(number)) {
+            return numberMap.get(number);
+        }
+        return '';
+    }
+
+    function addLocatorSnippet(snippetsByQuestionId, questionId, text) {
+        if (!questionId || !text) {
+            return;
+        }
+        const cleaned = String(text)
+            .replace(/\s+/g, ' ')
+            .replace(/^[\s"'“”‘’「」『』()（）.,;:，。；：]+|[\s"'“”‘’「」『』()（）.,;:，。；：]+$/g, '')
+            .trim();
+        if (cleaned.length < 10 || !/[A-Za-z]/.test(cleaned)) {
+            return;
+        }
+        const list = snippetsByQuestionId.get(questionId) || [];
+        if (!list.some((entry) => entry.toLowerCase() === cleaned.toLowerCase())) {
+            list.push(cleaned);
+        }
+        snippetsByQuestionId.set(questionId, list);
+    }
+
+    function extractQuotedLocatorSnippets(text) {
+        const snippets = [];
+        const source = String(text || '');
+        const pattern = /["“”]([^"“”]{8,220})["“”]/g;
+        let match = pattern.exec(source);
+        while (match) {
+            String(match[1] || '')
+                .split(/(?:\.{3,}|…+|。|；|;)/)
+                .map((entry) => entry.trim())
+                .filter(Boolean)
+                .forEach((entry) => snippets.push(entry));
+            match = pattern.exec(source);
+        }
+        return snippets;
+    }
+
+    function buildMemorizeLocatorSnippets() {
+        const snippetsByQuestionId = new Map();
+        const sections = Array.isArray(state.explanation?.questionExplanations)
+            ? state.explanation.questionExplanations
+            : [];
+        if (!sections.length) {
+            return snippetsByQuestionId;
+        }
+        const numberMap = buildDisplayNumberQuestionMap();
+
+        sections.forEach((section) => {
+            const items = Array.isArray(section?.items) ? section.items : [];
+            items.forEach((item) => {
+                const questionId = resolveExplanationItemQuestionId(item, numberMap);
+                extractQuotedLocatorSnippets(item?.text).forEach((snippet) => {
+                    addLocatorSnippet(snippetsByQuestionId, questionId, snippet);
+                });
+            });
+
+            if (items.length) {
+                return;
+            }
+            const range = section?.questionRange || {};
+            const targetIds = [];
+            const start = Number(range.start);
+            const end = Number(range.end);
+            if (Number.isFinite(start) && Number.isFinite(end)) {
+                for (let number = start; number <= end; number += 1) {
+                    const questionId = numberMap.get(number);
+                    if (questionId) {
+                        targetIds.push(questionId);
+                    }
+                }
+            }
+            extractQuotedLocatorSnippets(section?.text).forEach((snippet) => {
+                targetIds.forEach((questionId) => addLocatorSnippet(snippetsByQuestionId, questionId, snippet));
+            });
+        });
+        return snippetsByQuestionId;
+    }
+
+    function applyMemorizeLocatorHighlights() {
+        clearMemorizeLocatorHighlights();
+        if (!state.memorizeMode || !dom.left) {
+            return 0;
+        }
+        const shared = getHighlightShared();
+        if (!shared || typeof shared.wrapTextMatches !== 'function') {
+            return 0;
+        }
+        ensureMemorizeStyles();
+        const snippetsByQuestionId = buildMemorizeLocatorSnippets();
+        let applied = 0;
+        snippetsByQuestionId.forEach((snippets, questionId) => {
+            snippets.slice(0, 4).forEach((snippet) => {
+                const matches = shared.wrapTextMatches(dom.left, snippet, {
+                    className: 'reading-locator-highlight',
+                    attrs: {
+                        'data-question-id': questionId,
+                        title: `Q${displayLabel(questionId)} 定位`
+                    },
+                    limit: 2,
+                    skipSelector: '.hl, .reading-locator-highlight, .reading-locator-block'
+                });
+                applied += matches.length;
+            });
+        });
+        return applied;
+    }
+
+    async function renderMemorizeStudyLayer() {
+        if (!state.memorizeMode) {
+            return;
+        }
+        ensureMemorizeStyles();
+        renderReadingSubtitle();
+        renderMemorizeAnswerKeys();
+        await renderExplanations();
+        applyMemorizeLocatorHighlights();
+        syncPracticeModeDom();
+        syncPrimaryActionButtons();
     }
 
     function getDropzones() {
@@ -872,14 +1918,53 @@
     }
 
     function attachDragDrop() {
-        // practice-page-ui.js already manages drag boundaries and placing items.
-        // We only need to ensure the dropzones have the correct structure initialized.
         getDropzones().forEach((dropzone, index) => {
             if (!dropzone.dataset.dropzoneId) {
                 dropzone.dataset.dropzoneId = `dropzone-${index + 1}`;
             }
             ensureDropzoneHolder(dropzone);
             updateDropzoneState(dropzone);
+        });
+        document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
+            if (item instanceof HTMLElement) {
+                attachDraggableBehavior(item);
+            }
+        });
+        document.addEventListener('dragover', (event) => {
+            const target = event.target instanceof HTMLElement
+                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                : null;
+            if (!target) {
+                return;
+            }
+            event.preventDefault();
+            target.classList.add('drag-over');
+        });
+        document.addEventListener('dragleave', (event) => {
+            const target = event.target instanceof HTMLElement
+                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                : null;
+            target?.classList?.remove('drag-over');
+        });
+        document.addEventListener('drop', (event) => {
+            const target = event.target instanceof HTMLElement
+                ? event.target.closest('.paragraph-dropzone, .match-dropzone, .drop-target-summary, .pool-items')
+                : null;
+            if (!target) {
+                return;
+            }
+            event.preventDefault();
+            target.classList.remove('drag-over');
+            const raw = event.dataTransfer?.getData('text/plain') || '';
+            const payload = parseDragPayload(raw);
+            if (!payload) {
+                return;
+            }
+            if (target.classList.contains('pool-items')) {
+                handleDropBackToPool(payload);
+                return;
+            }
+            handleDropOnDropzone(target, payload);
         });
     }
 
@@ -981,11 +2066,85 @@
         return Array.from(items).map((item) => normalizeDragValue(item)).filter(Boolean).join(', ');
     }
 
+    function getObjectAnswerField(value, keys) {
+        if (!value || typeof value !== 'object') {
+            return '';
+        }
+        for (let index = 0; index < keys.length; index += 1) {
+            const key = keys[index];
+            if (!Object.prototype.hasOwnProperty.call(value, key)) {
+                continue;
+            }
+            const fieldValue = value[key];
+            if (fieldValue == null || typeof fieldValue === 'object') {
+                continue;
+            }
+            const text = String(fieldValue).trim();
+            if (text) {
+                return text;
+            }
+        }
+        return '';
+    }
+
+    function normalizeAnswerForReplay(value, mode = 'value') {
+        const sanitizer = getAnswerSanitizer();
+        if (Array.isArray(value)) {
+            return value
+                .map((item) => normalizeAnswerForReplay(item, mode))
+                .filter(Boolean)
+                .join(', ');
+        }
+        if (value && typeof value === 'object') {
+            const valueKeys = ['value', 'answerValue', 'key', 'option', 'heading', 'word', 'answer', 'text', 'label', 'answerLabel', 'content'];
+            const labelKeys = ['label', 'answerLabel', 'text', 'content', 'value', 'answerValue', 'key', 'option', 'heading', 'word', 'answer'];
+            const extracted = getObjectAnswerField(value, mode === 'label' ? labelKeys : valueKeys);
+            if (extracted) {
+                return extracted;
+            }
+            if (sanitizer && typeof sanitizer.normalizeValue === 'function') {
+                return sanitizer.normalizeValue(value);
+            }
+            return '';
+        }
+        if (sanitizer && typeof sanitizer.normalizeValue === 'function') {
+            return sanitizer.normalizeValue(value);
+        }
+        const text = String(value == null ? '' : value).trim();
+        return /^\[object\s/i.test(text) ? '' : text;
+    }
+
+    function displayAnswerValue(value, fallback = '未作答') {
+        const text = normalizeAnswerForReplay(value, 'label');
+        return text || fallback;
+    }
+
+    function normalizeAnswerForCompare(value) {
+        if (Array.isArray(value)) {
+            return value.map((item) => normalizeAnswerForCompare(item)).filter((item) => item !== '');
+        }
+        if (value && typeof value === 'object') {
+            return normalizeAnswerForReplay(value, 'value');
+        }
+        return normalizeAnswerForReplay(value, 'value');
+    }
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function splitAnswerTokens(rawValue) {
         if (Array.isArray(rawValue)) {
-            return rawValue.map((item) => String(item == null ? '' : item).trim()).filter(Boolean);
+            return rawValue
+                .flatMap((item) => splitAnswerTokens(item))
+                .filter(Boolean);
         }
-        const text = String(rawValue == null ? '' : rawValue).trim();
+        const text = normalizeAnswerForReplay(rawValue, 'value');
         if (!text) return [];
         if (text.includes(',')) {
             return text.split(',').map((item) => String(item || '').trim()).filter(Boolean);
@@ -1059,7 +2218,8 @@
             clearDropzone(dropzone);
             return true;
         }
-        setDropzoneAnswer(dropzone, value, value);
+        const label = normalizeAnswerForReplay(rawValue, 'label') || value;
+        setDropzoneAnswer(dropzone, value, label);
         return true;
     }
 
@@ -1131,23 +2291,19 @@
     }
 
     function normalizeAnswerValue(value) {
-        const core = getAnswerMatchCore();
         if (Array.isArray(value)) {
-            if (core && typeof core.splitAnswerTokens === 'function') {
-                return core.splitAnswerTokens(value);
-            }
-            return value.map((entry) => canonicalizeAnswerToken(entry)).filter(Boolean);
+            return splitAnswerTokens(value);
         }
         if (value == null) return '';
         return canonicalizeAnswerToken(value);
     }
 
     function canonicalizeAnswerToken(value) {
+        value = normalizeAnswerForReplay(value, 'value');
         const core = getAnswerMatchCore();
         if (core && typeof core.normalizeToken === 'function') {
             return core.normalizeToken(value);
         }
-        if (value == null) return '';
         const cleaned = String(value)
             .replace(/[“”]/g, '"')
             .replace(/[‘’]/g, "'")
@@ -1172,8 +2328,10 @@
 
     function compareAnswers(userAnswer, correctAnswer) {
         const core = getAnswerMatchCore();
+        const normalizedUserAnswer = normalizeAnswerForCompare(userAnswer);
+        const normalizedCorrectAnswer = normalizeAnswerForCompare(correctAnswer);
         if (core && typeof core.compareAnswers === 'function') {
-            return core.compareAnswers(userAnswer, correctAnswer) === true;
+            return core.compareAnswers(normalizedUserAnswer, normalizedCorrectAnswer) === true;
         }
         const toTokens = (value) => {
             const source = Array.isArray(value) ? value : splitAnswerTokens(value);
@@ -1181,8 +2339,8 @@
                 source.map((entry) => canonicalizeAnswerToken(entry)).filter(Boolean)
             ));
         };
-        const actualTokens = toTokens(userAnswer);
-        const expectedTokens = toTokens(correctAnswer);
+        const actualTokens = toTokens(normalizedUserAnswer);
+        const expectedTokens = toTokens(normalizedCorrectAnswer);
         if (!actualTokens.length && !expectedTokens.length) {
             return null;
         }
@@ -1227,13 +2385,15 @@
     function hasAnswer(questionId) {
         const answers = collectAnswers();
         const value = answers[questionId];
-        return Array.isArray(value) ? value.some(Boolean) : !!String(value || '').trim();
+        return splitAnswerTokens(value).length > 0;
     }
 
     function buildResults() {
         const answers = collectAnswers();
         const answerKey = state.dataset?.answerKey || {};
         const questionOrder = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : Object.keys(answerKey);
+        const questionTypeMap = buildQuestionTypeMap();
+        const questionTypePerformance = {};
         const answerComparison = {};
         const details = {};
         let correctCount = 0;
@@ -1244,22 +2404,40 @@
             const correctAnswer = answerKey[questionId];
             const isCorrect = compareAnswers(userAnswer, correctAnswer);
             const weight = questionWeight(correctAnswer);
+            const normalizedQuestionId = normalizeQuestionId(questionId) || questionId;
+            const questionType = questionTypeMap[normalizedQuestionId] || 'other';
+            if (!questionTypePerformance[questionType]) {
+                questionTypePerformance[questionType] = {
+                    total: 0,
+                    correct: 0,
+                    accuracy: 0
+                };
+            }
             totalQuestions += weight;
+            questionTypePerformance[questionType].total += weight;
             if (isCorrect) {
                 correctCount += weight;
+                questionTypePerformance[questionType].correct += weight;
             }
             answerComparison[questionId] = {
                 questionId,
                 userAnswer,
                 correctAnswer,
-                isCorrect
+                isCorrect,
+                questionType
             };
             details[questionId] = {
                 questionId,
                 userAnswer,
                 correctAnswer,
-                isCorrect
+                isCorrect,
+                questionType
             };
+        });
+
+        Object.keys(questionTypePerformance).forEach((type) => {
+            const performance = questionTypePerformance[type];
+            performance.accuracy = performance.total > 0 ? performance.correct / performance.total : 0;
         });
 
         const accuracy = totalQuestions > 0 ? correctCount / totalQuestions : 0;
@@ -1267,6 +2445,8 @@
             answers,
             answerComparison,
             correctAnswers: answerKey,
+            questionTypeMap,
+            questionTypePerformance,
             scoreInfo: {
                 correct: correctCount,
                 total: totalQuestions,
@@ -1282,9 +2462,9 @@
     function renderResults(results) {
         if (!dom.results) return;
         const rows = Object.values(results.answerComparison).map((entry) => {
-            const label = displayLabel(entry.questionId);
-            const userAnswer = Array.isArray(entry.userAnswer) ? entry.userAnswer.join(', ') : (entry.userAnswer || '未作答');
-            const correctAnswer = Array.isArray(entry.correctAnswer) ? entry.correctAnswer.join(', ') : entry.correctAnswer;
+            const label = escapeHtml(displayLabel(entry.questionId));
+            const userAnswer = escapeHtml(displayAnswerValue(entry.userAnswer));
+            const correctAnswer = escapeHtml(displayAnswerValue(entry.correctAnswer, ''));
             const status = entry.isCorrect ? '✓' : '✗';
             return `
                 <tr>
@@ -1420,9 +2600,7 @@
                 `question${normalizedId.replace(/^q/i, '')}`
             ])).filter(Boolean);
 
-            const valueList = Array.isArray(rawValue)
-                ? rawValue.map((item) => String(item).trim()).filter(Boolean)
-                : String(rawValue == null ? '' : rawValue).split(',').map((item) => item.trim()).filter(Boolean);
+            const valueList = splitAnswerTokens(rawValue);
             const firstValue = valueList[0] || '';
 
             aliases.forEach((alias) => {
@@ -1460,8 +2638,11 @@
         });
     }
 
-    function setReadOnlyMode(enabled) {
+    function setReadOnlyMode(enabled, reason = '') {
         state.readOnly = Boolean(enabled);
+        state.readOnlyReason = state.readOnly
+            ? (reason || state.readOnlyReason || 'readonly')
+            : '';
         document.body.classList.toggle('review-readonly-mode', state.readOnly);
         if (dom.submitBtn) {
             if (!dom.submitBtn.dataset.defaultLabel) {
@@ -1485,6 +2666,33 @@
         });
         syncPrimaryActionButtons();
         refreshSimulationDraftSyncLifecycle();
+        enhanceReviewHighlights();
+    }
+
+    function disableDragInteractions() {
+        document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
+            if (!(item instanceof HTMLElement)) return;
+            item.setAttribute('draggable', state.readOnly ? 'false' : 'true');
+            item.classList.toggle('drag-item-locked', state.readOnly);
+        });
+    }
+
+    function setExitButtonVisible(visible) {
+        if (!dom.exitBtn) return;
+        dom.exitBtn.style.display = visible ? 'block' : 'none';
+    }
+
+    function enterSubmittedReadOnlyState(reason = 'submit') {
+        state.submitted = true;
+        setReadOnlyMode(true, reason);
+        disableDragInteractions();
+        setTimerRunning(false);
+        if (dom.submitBtn) dom.submitBtn.disabled = true;
+        setExitButtonVisible(true);
+        if (reason === 'simulation-final-submit' || reason === 'replay-review') {
+            stopSimulationDraftSync();
+        }
+        syncPrimaryActionButtons();
     }
 
     function syncSimulationRuntimeFlags() {
@@ -1512,25 +2720,48 @@
         const ctx = state.simulationCtx && typeof state.simulationCtx === 'object' ? state.simulationCtx : null;
         const simulationEnabled = Boolean(state.simulationMode && ctx);
         syncSimulationRuntimeFlags();
+        if (state.memorizeMode && !state.reviewMode && !simulationEnabled) {
+            if (dom.submitBtn) {
+                dom.submitBtn.style.display = '';
+                dom.submitBtn.setAttribute('type', 'button');
+                dom.submitBtn.textContent = 'Exit';
+                dom.submitBtn.disabled = false;
+            }
+            if (dom.resetBtn) {
+                dom.resetBtn.style.display = '';
+                dom.resetBtn.setAttribute('type', 'button');
+                dom.resetBtn.textContent = '重置测试';
+                dom.resetBtn.disabled = false;
+            }
+            return;
+        }
         if (!simulationEnabled || state.reviewMode) {
+            const canResetSubmittedSingle = Boolean(
+                state.submitted
+                && state.readOnly
+                && state.readOnlyReason === 'final-submit'
+                && !state.reviewMode
+                && !state.suiteSessionId
+            );
             if (dom.submitBtn) {
                 dom.submitBtn.style.display = '';
                 if (dom.submitBtn.dataset.defaultType) {
                     dom.submitBtn.setAttribute('type', dom.submitBtn.dataset.defaultType);
                 }
-                if (!state.readOnly) {
+                if (!state.readOnly || canResetSubmittedSingle) {
                     dom.submitBtn.textContent = dom.submitBtn.dataset.defaultLabel || 'Submit';
                 }
+                dom.submitBtn.disabled = state.readOnly;
             }
             if (dom.resetBtn) {
                 dom.resetBtn.style.display = '';
                 if (dom.resetBtn.dataset.defaultType) {
                     dom.resetBtn.setAttribute('type', dom.resetBtn.dataset.defaultType);
                 }
-                if (!state.readOnly) {
+                if (!state.readOnly || canResetSubmittedSingle) {
                     dom.resetBtn.textContent = dom.resetBtn.dataset.defaultLabel || 'Reset';
                 }
-                dom.resetBtn.disabled = state.readOnly;
+                dom.resetBtn.disabled = state.readOnly && !canResetSubmittedSingle;
             }
             return;
         }
@@ -1618,12 +2849,25 @@
     function resetToAnsweringPresentation() {
         state.lastResults = null;
         state.submitted = false;
+        state.readOnly = false;
+        closeReviewHighlightDictionary();
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
         }
         clearExplanations();
+        document.body.classList.remove('review-readonly-mode');
+        enhanceReviewHighlights();
+        document.querySelectorAll('input, textarea, select').forEach((control) => {
+            if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) {
+                control.disabled = false;
+            }
+        });
+        disableDragInteractions();
+        setTimerRunning(true);
+        setExitButtonVisible(false);
         updateNavStatuses();
+        syncPrimaryActionButtons();
     }
 
     function applyReviewContext(data = {}) {
@@ -1659,9 +2903,14 @@
             state.reviewMode = false;
             resetToAnsweringPresentation();
             setReadOnlyMode(false);
+            syncPrimaryActionButtons();
         } else {
             state.reviewMode = true;
-            setReadOnlyMode(data.readOnly !== false);
+            if (data.readOnly !== false) {
+                enterSubmittedReadOnlyState('stationary-review');
+            } else {
+                setReadOnlyMode(false);
+            }
         }
     }
 
@@ -1689,12 +2938,23 @@
         state.reviewMode = true;
         state.reviewViewMode = 'review';
         applyReplayAnswersToDom(replayResults.answers || {});
+        const replayHighlights = Array.isArray(entry.highlights) ? entry.highlights : [];
+        applyHighlights(replayHighlights);
+        enhanceReviewHighlights();
+        if (Number.isFinite(Number(entry.scrollY))) {
+            global.scrollTo(0, Number(entry.scrollY));
+        }
         state.lastResults = replayResults;
-        state.submitted = true;
         renderResults(replayResults);
         await renderExplanations();
+        applyHighlights(replayHighlights);
+        enhanceReviewHighlights();
         updateNavStatuses(replayResults);
-        setReadOnlyMode(data.readOnly !== false);
+        if (data.readOnly !== false) {
+            enterSubmittedReadOnlyState('replay-review');
+        } else {
+            setReadOnlyMode(false);
+        }
         if (typeof global.setPracticeMarkedQuestions === 'function') {
             try {
                 global.setPracticeMarkedQuestions(replayMarks);
@@ -1711,6 +2971,7 @@
                 examId: state.examId,
                 sessionId: state.sessionId,
                 suiteSessionId: state.suiteSessionId,
+                practiceMode: state.practiceMode,
                 suiteTimerAnchorMs: state.suiteTimerAnchorMs,
                 globalTimerAnchorMs: state.suiteTimerAnchorMs,
                 suiteTimerMode: state.suiteTimerMode,
@@ -1734,11 +2995,12 @@
             try {
                 target.postMessage(envelope, '*');
                 state.parentWindow = target;
-                return;
+                return true;
             } catch (_) {
                 // try next candidate
             }
         }
+        return false;
     }
 
     function stopInitLoop() {
@@ -1755,6 +3017,7 @@
             title: state.dataset?.meta?.title || document.title,
             reviewMode: state.reviewMode,
             readOnly: state.readOnly,
+            practiceMode: state.practiceMode,
             reviewSessionId: state.reviewSessionId,
             reviewEntryIndex: state.reviewEntryIndex,
             suiteTimerAnchorMs: state.suiteTimerAnchorMs,
@@ -1774,6 +3037,7 @@
             reviewEntryIndex: Number.isInteger(data && data.reviewEntryIndex) ? data.reviewEntryIndex : 0,
             reviewMode: Boolean(data && data.reviewMode),
             readOnly: data && Object.prototype.hasOwnProperty.call(data, 'readOnly') ? Boolean(data.readOnly) : null,
+            practiceMode: data && typeof data.practiceMode === 'string' ? data.practiceMode.trim().toLowerCase() : '',
             suiteFlowMode: data && typeof data.suiteFlowMode === 'string' ? data.suiteFlowMode.trim().toLowerCase() : '',
             suiteTimerAnchorMs: Number.isFinite(Number(data && (data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs))) ? Number(data && (data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs)) : null,
             suiteTimerMode: data && typeof data.suiteTimerMode === 'string' ? data.suiteTimerMode.trim().toLowerCase() : '',
@@ -1792,6 +3056,56 @@
             suiteSessionId: data && data.suiteSessionId != null ? String(data.suiteSessionId).trim() : '',
             reviewEntryIndex: Number.isInteger(data && data.reviewEntryIndex) ? data.reviewEntryIndex : 0
         });
+    }
+
+    function dispatchReady() {
+        postMessage('REQUEST_INIT', {
+            derivedExamId: state.examId,
+            url: global.location.href,
+            title: state.dataset?.meta?.title || document.title || '',
+            practiceMode: state.practiceMode
+        });
+    }
+
+    function restartInitHandshake() {
+        state.sessionId = null;
+        state.sessionReadySent = false;
+        state.lastInitSignature = '';
+        dispatchReady();
+        startInitLoop();
+    }
+
+    function buildNormalPracticeUrl() {
+        try {
+            const url = new URL(global.location.href);
+            url.searchParams.delete('practiceMode');
+            url.searchParams.delete('mode');
+            return url.href;
+        } catch (_) {
+            const raw = String(global.location.href || '');
+            return raw
+                .replace(/([?&])practiceMode=memorize(&?)/i, '$1')
+                .replace(/([?&])mode=memorize(&?)/i, '$1')
+                .replace(/[?&]$/, '');
+        }
+    }
+
+    function requestNormalPracticeRestart(reason = 'reset') {
+        const delivered = postMessage('PRACTICE_RESET_REQUEST', {
+            reason,
+            previousSessionId: state.sessionId || null,
+            fromPracticeMode: state.practiceMode || 'single',
+            targetPracticeMode: 'single',
+            dataKey: state.dataKey || state.examId || '',
+            url: global.location.href,
+            normalUrl: buildNormalPracticeUrl(),
+            title: state.dataset?.meta?.title || document.title || ''
+        });
+        if (!delivered && reason === 'memorize-start-test') {
+            global.location.href = buildNormalPracticeUrl();
+            return;
+        }
+        restartInitHandshake();
     }
 
     function startInitLoop() {
@@ -1896,10 +3210,12 @@
 
     function collectCurrentDraft() {
         const answers = collectAnswers();
+        const updatedAt = Date.now();
         return {
             answers,
             highlights: collectHighlights(),
-            scrollY: global.scrollY || 0
+            scrollY: global.scrollY || 0,
+            updatedAt
         };
     }
 
@@ -1920,6 +3236,7 @@
         persistSimulationDraftMirror(mirroredDraft);
         postMessage('SIMULATION_DRAFT_SYNC', {
             draft: mirroredDraft,
+            draftUpdatedAt: Number.isFinite(Number(mirroredDraft.updatedAt)) ? Number(mirroredDraft.updatedAt) : Date.now(),
             elapsed: getPageElapsedSeconds()
         });
     }
@@ -2019,14 +3336,14 @@
                 // Text input
                 const textInput = document.querySelector(`input[data-question-id="${escapedId}"], input#${escapedId}`);
                 if (textInput && textInput.type !== 'radio' && textInput.type !== 'checkbox') {
-                    textInput.value = Array.isArray(value) ? value.join(', ') : (value || '');
+                    textInput.value = displayAnswerValue(value, '');
                     return;
                 }
                 const namedTextFields = Array.from(
                     document.querySelectorAll(`input[name="${escapedId}"], textarea[name="${escapedId}"]`)
                 ).filter((field) => field.type !== 'radio' && field.type !== 'checkbox');
                 if (namedTextFields.length) {
-                    const normalizedTextValue = Array.isArray(value) ? value.join(', ') : (value || '');
+                    const normalizedTextValue = displayAnswerValue(value, '');
                     namedTextFields.forEach((field) => {
                         field.value = normalizedTextValue;
                     });
@@ -2061,230 +3378,133 @@
         }
     }
 
-    function unwrapHighlights(root) {
-        if (!root) return;
-        root.querySelectorAll('.hl').forEach((highlight) => {
-            const parent = highlight.parentNode;
-            if (!parent) return;
-            while (highlight.firstChild) {
-                parent.insertBefore(highlight.firstChild, highlight);
-            }
-            parent.removeChild(highlight);
-            parent.normalize();
-        });
-    }
-
-    function resolveHighlightKind(node) {
-        if (!(node instanceof HTMLElement)) {
-            return 'highlight';
-        }
-        if (node.dataset && node.dataset.hlType === 'note') {
-            return 'note';
-        }
-        return 'highlight';
-    }
-
-    function applyHighlightKind(node, kind = 'highlight') {
-        if (!(node instanceof HTMLElement)) {
-            return;
-        }
-        node.classList.add('hl');
-        if (kind === 'note') {
-            node.dataset.hlType = 'note';
-        } else {
-            delete node.dataset.hlType;
-        }
-    }
-
     function resolveHighlightRoot(scope) {
         if (scope === 'left') return dom.left;
         return dom.groups;
     }
 
     function collectHighlights() {
-        const records = [];
-        const addScopeHighlights = (scope, root) => {
-            if (!root) return;
-            const seenByText = new Map();
-            const fullText = String(root.textContent || '');
-            const cursorByText = new Map();
-            Array.from(root.querySelectorAll('.hl')).forEach((node) => {
-                const text = String(node.textContent || '').trim();
-                if (!text) return;
-                const key = `${scope}::${text}`;
-                const seen = seenByText.get(key) || 0;
-                seenByText.set(key, seen + 1);
-                let cursor = cursorByText.get(key) || 0;
-                let hit = -1;
-                for (let index = 0; index <= seen; index += 1) {
-                    hit = fullText.indexOf(text, cursor);
-                    if (hit < 0) break;
-                    cursor = hit + text.length;
-                }
-                if (hit < 0) return;
-                cursorByText.set(key, cursor);
-                records.push({
-                    scope,
-                    text,
-                    kind: resolveHighlightKind(node),
-                    occurrence: seen,
-                    startOffset: hit,
-                    endOffset: hit + text.length,
-                    before: fullText.slice(Math.max(0, hit - 20), hit),
-                    after: fullText.slice(hit + text.length, hit + text.length + 20)
-                });
-            });
-        };
-        addScopeHighlights('left', dom.left);
-        addScopeHighlights('groups', dom.groups);
-        return records;
-    }
-
-    function resolveRangeFromOffsets(root, start, end) {
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-        let node = walker.nextNode();
-        let offset = 0;
-        let startNode = null;
-        let endNode = null;
-        let startOffset = 0;
-        let endOffset = 0;
-        while (node) {
-            const text = node.textContent || '';
-            const nextOffset = offset + text.length;
-            if (!startNode && start >= offset && start <= nextOffset) {
-                startNode = node;
-                startOffset = Math.max(0, start - offset);
-            }
-            if (!endNode && end >= offset && end <= nextOffset) {
-                endNode = node;
-                endOffset = Math.max(0, end - offset);
-            }
-            if (startNode && endNode) {
-                break;
-            }
-            offset = nextOffset;
-            node = walker.nextNode();
+        const shared = getHighlightShared();
+        if (!shared) {
+            return [];
         }
-        if (!startNode || !endNode) {
-            return null;
-        }
-        const range = document.createRange();
-        range.setStart(startNode, startOffset);
-        range.setEnd(endNode, endOffset);
-        return range;
-    }
-
-    function applyHighlightRecord(record) {
-        if (!record || !record.text) return;
-        const root = resolveHighlightRoot(record.scope);
-        if (!root) return;
-        const fullText = String(root.textContent || '');
-        if (!fullText) return;
-        const highlightKind = record.kind === 'note' ? 'note' : 'highlight';
-        const normalizedRecordText = String(record.text || '').replace(/\s+/g, ' ').trim();
-        const startOffset = Number(record.startOffset);
-        const endOffset = Number(record.endOffset);
-        if (
-            Number.isFinite(startOffset)
-            && Number.isFinite(endOffset)
-            && endOffset > startOffset
-            && startOffset >= 0
-            && endOffset <= fullText.length
-        ) {
-            const segment = fullText.slice(startOffset, endOffset);
-            const normalizedSegment = String(segment || '').replace(/\s+/g, ' ').trim();
-            const offsetLooksValid = !normalizedRecordText
-                || normalizedSegment === normalizedRecordText
-                || normalizedSegment.includes(normalizedRecordText)
-                || normalizedRecordText.includes(normalizedSegment);
-            if (offsetLooksValid) {
-                const offsetRange = resolveRangeFromOffsets(root, startOffset, endOffset);
-                if (offsetRange && !offsetRange.collapsed) {
-                    const offsetSpan = document.createElement('span');
-                    applyHighlightKind(offsetSpan, highlightKind);
-                    try {
-                        offsetRange.surroundContents(offsetSpan);
-                        return;
-                    } catch (_) {
-                        // fallback to text-based restore
-                    }
-                }
-            }
-        }
-        let cursor = 0;
-        let hit = -1;
-        const requiredOccurrence = Number.isFinite(Number(record.occurrence)) ? Number(record.occurrence) : 0;
-        for (let index = 0; index <= requiredOccurrence; index += 1) {
-            hit = fullText.indexOf(record.text, cursor);
-            if (hit < 0) break;
-            cursor = hit + record.text.length;
-        }
-        if (hit < 0) {
-            return;
-        }
-        const expectedBefore = String(record.before || '').trim();
-        const expectedAfter = String(record.after || '').trim();
-        if (expectedBefore && !fullText.slice(Math.max(0, hit - expectedBefore.length), hit).includes(expectedBefore)) {
-            return;
-        }
-        if (expectedAfter && !fullText.slice(hit + record.text.length, hit + record.text.length + expectedAfter.length).includes(expectedAfter)) {
-            return;
-        }
-        const range = resolveRangeFromOffsets(root, hit, hit + record.text.length);
-        if (!range || range.collapsed) {
-            return;
-        }
-        const span = document.createElement('span');
-        applyHighlightKind(span, highlightKind);
-        try {
-            range.surroundContents(span);
-        } catch (_) {
-            // ignore malformed ranges
-        }
+        return shared.snapshotHighlights({
+            left: dom.left,
+            groups: dom.groups
+        });
     }
 
     function applyHighlights(records = []) {
-        unwrapHighlights(dom.left);
-        unwrapHighlights(dom.groups);
-        if (!Array.isArray(records) || !records.length) {
-            return;
+        const shared = getHighlightShared();
+        if (!shared) {
+            return 0;
         }
-        records.forEach((record) => applyHighlightRecord(record));
+        const restored = shared.restoreHighlights({
+            left: dom.left,
+            groups: dom.groups
+        }, Array.isArray(records) ? records : []);
+        enhanceReviewHighlights();
+        return restored;
     }
 
-    function dispatchSimulationNavigate(direction) {
+    function preserveHighlightsDuring(callback) {
+        const shared = getHighlightShared();
+        if (!shared) {
+            return callback();
+        }
+        return shared.preserveHighlights({
+            left: dom.left,
+            groups: dom.groups
+        }, callback);
+    }
+
+    function buildSubmissionSnapshot() {
+        const results = buildResults();
+        const timerSnapshot = getPracticeTimerSnapshot();
+        return {
+            results,
+            answers: results.answers || {},
+            highlights: collectHighlights(),
+            scrollY: global.scrollY || 0,
+            elapsed: Math.max(0, Number(timerSnapshot.durationSeconds) || 0),
+            timerSnapshot,
+            updatedAt: Date.now()
+        };
+    }
+
+    function clearCurrentAnswers() {
+        document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach((input) => {
+            input.checked = false;
+        });
+        document.querySelectorAll('input[type="text"], textarea').forEach((input) => {
+            input.value = '';
+        });
+        document.querySelectorAll('select').forEach((select) => {
+            select.selectedIndex = 0;
+        });
+        getDropzones().forEach((dropzone) => {
+            clearDropzone(dropzone);
+        });
+    }
+
+    function dispatchSimulationNavigate(direction, submissionSnapshot = null) {
         if (!state.simulationMode || !state.simulationCtx || state.readOnly) {
             return;
         }
+        const snapshot = submissionSnapshot || buildSubmissionSnapshot();
         postMessage('SIMULATION_NAVIGATE', {
             direction: direction === 'prev' ? 'prev' : 'next',
-            draft: collectCurrentDraft(),
-            resultSnapshot: buildResults(),
-            elapsed: getPageElapsedSeconds()
+            draft: {
+                answers: snapshot.answers || {},
+                highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
+                scrollY: Number.isFinite(Number(snapshot.scrollY)) ? Number(snapshot.scrollY) : 0,
+                updatedAt: Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now()
+            },
+            draftUpdatedAt: Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now(),
+            resultSnapshot: snapshot.results,
+            answers: snapshot.answers || {},
+            highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
+            scrollY: Number.isFinite(Number(snapshot.scrollY)) ? Number(snapshot.scrollY) : 0,
+            elapsed: Number.isFinite(Number(snapshot.elapsed)) ? Number(snapshot.elapsed) : getPageElapsedSeconds(),
+            timerSnapshot: snapshot.timerSnapshot || getPracticeTimerSnapshot()
         });
     }
     async function handleSubmit() {
+        if (state.memorizeMode && !state.reviewMode && !state.simulationMode) {
+            handleExitClick();
+            return;
+        }
         if (state.readOnly) {
             return;
         }
+        const submissionSnapshot = buildSubmissionSnapshot();
         if (state.simulationMode) {
             syncSimulationDraftSnapshot('submit');
         }
         if (state.simulationMode && state.simulationCtx && !state.simulationCtx.isLast) {
-            dispatchSimulationNavigate('next');
+            dispatchSimulationNavigate('next', submissionSnapshot);
             return;
         }
-        const results = buildResults();
+        const results = submissionSnapshot.results;
+        const highlightSnapshot = Array.isArray(submissionSnapshot.highlights)
+            ? submissionSnapshot.highlights
+            : [];
         state.lastResults = results;
         renderResults(results);
+        enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
         await renderExplanations();
+        applyHighlights(highlightSnapshot);
+        enhanceReviewHighlights();
         updateNavStatuses(results);
         const messageType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
-        const timing = resolvePracticeTiming(1);
+        const timing = resolvePracticeTiming(1, submissionSnapshot.timerSnapshot);
         postMessage(messageType, Object.assign({
             duration: timing.duration,
             startTime: new Date(timing.startTimeMs).toISOString(),
             endTime: new Date(timing.endTimeMs).toISOString(),
+            effectiveEndTime: new Date(timing.effectiveEndTimeMs).toISOString(),
+            effectiveEndTimeMs: timing.effectiveEndTimeMs,
+            timerSnapshot: submissionSnapshot.timerSnapshot || getPracticeTimerSnapshot(),
             metadata: {
                 examId: state.examId,
                 examTitle: state.dataset?.meta?.title || '',
@@ -2299,7 +3519,10 @@
                 markedQuestions: (typeof global.getPracticeMarkedQuestions === 'function')
                     ? global.getPracticeMarkedQuestions()
                     : []
-            }
+            },
+            answers: submissionSnapshot.answers || {},
+            highlights: Array.isArray(submissionSnapshot.highlights) ? submissionSnapshot.highlights : [],
+            scrollY: Number.isFinite(Number(submissionSnapshot.scrollY)) ? Number(submissionSnapshot.scrollY) : 0
         }, results));
         if (state.simulationMode && state.simulationCtx && state.simulationCtx.isLast) {
             stopSimulationDraftSync();
@@ -2309,38 +3532,71 @@
     }
 
     function handleReset() {
-        if (state.readOnly) {
+        if (state.memorizeMode) {
+            requestNormalPracticeRestart('memorize-start-test');
             return;
         }
+        if (state.submitted && state.readOnlyReason === 'final-submit' && !state.suiteSessionId && !state.reviewMode) {
+            resetToAnsweringPresentation();
+            clearCurrentAnswers();
+            requestNormalPracticeRestart('retake-after-submit');
+            return;
+        }
+        if (state.readOnly || state.submitted) {
+            return;
+        }
+        closeReviewHighlightDictionary();
         if (state.simulationMode && state.simulationCtx) {
             if (state.simulationCtx.canPrev) {
-                dispatchSimulationNavigate('prev');
+                dispatchSimulationNavigate('prev', buildSubmissionSnapshot());
             }
             return;
         }
-        document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach((input) => {
-            input.checked = false;
-        });
-        document.querySelectorAll('input[type="text"], textarea').forEach((input) => {
-            input.value = '';
-        });
-        document.querySelectorAll('select').forEach((select) => {
-            select.selectedIndex = 0;
-        });
-        getDropzones().forEach((dropzone) => {
-            clearDropzone(dropzone);
-        });
+        clearCurrentAnswers();
         if (dom.results) {
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
         }
         clearExplanations();
+        setExitButtonVisible(false);
         updateNavStatuses();
+    }
+
+    function handleExitClick() {
+        const inSuiteLikeMode = Boolean(state.suiteSessionId || state.reviewMode || state.suiteReviewMode);
+        const hasEndlessMarker = /(?:^|[?&])endless(?:=|&|$)/i.test(global.location.search || '')
+            || document.body?.dataset?.endlessMode === 'true'
+            || global.__ENDLESS_PRACTICE_MODE__ === true;
+        const opener = global.opener && !global.opener.closed ? global.opener : null;
+        if (hasEndlessMarker && opener) {
+            try {
+                opener.postMessage({ type: 'ENDLESS_USER_EXIT' }, '*');
+                if (typeof opener.stopEndlessPractice === 'function') {
+                    opener.stopEndlessPractice();
+                } else if (opener.AppActions && typeof opener.AppActions.stopEndlessPractice === 'function') {
+                    opener.AppActions.stopEndlessPractice();
+                }
+            } catch (_) {
+                // ignore endless callback failures
+            }
+        } else if (inSuiteLikeMode) {
+            postMessage('SUITE_USER_EXIT', {
+                reviewMode: state.reviewMode,
+                suiteReviewMode: state.suiteReviewMode,
+                submitted: state.submitted
+            });
+        }
+        try {
+            global.close();
+        } catch (_) {
+            // ignore close failures
+        }
     }
 
     function attachActionListeners() {
         dom.submitBtn?.addEventListener('click', handleSubmit);
         dom.resetBtn?.addEventListener('click', handleReset);
+        dom.exitBtn?.addEventListener('click', handleExitClick);
         document.addEventListener('change', () => updateNavStatuses());
         document.addEventListener('input', () => updateNavStatuses());
         document.addEventListener('drop', () => {
@@ -2386,6 +3642,7 @@
             if (data.suiteSessionId) {
                 state.suiteSessionId = data.suiteSessionId;
             }
+            applyPracticeMode(data.practiceMode || data.mode || '');
             const initTimerAnchorMs = Number(data.suiteTimerAnchorMs ?? data.globalTimerAnchorMs);
             if (Number.isFinite(initTimerAnchorMs) && initTimerAnchorMs > 0) {
                 state.suiteTimerAnchorMs = Math.floor(initTimerAnchorMs);
@@ -2400,6 +3657,16 @@
             if (Number.isFinite(Number(data.suiteTimerLimitSeconds))) {
                 state.suiteTimerLimitSeconds = Number(data.suiteTimerLimitSeconds);
             }
+            const initPausedOffsetMs = Number(data.suiteTimerPausedOffsetMs ?? data.pausedOffsetMs);
+            if (Number.isFinite(initPausedOffsetMs) && initPausedOffsetMs >= 0) {
+                state.pagePausedOffsetMs = Math.max(0, initPausedOffsetMs);
+            }
+            const initPausedAtMs = Number(data.suiteTimerPausedAtMs ?? data.pausedAtMs);
+            const initRunning = data.suiteTimerRunning !== false;
+            interaction.timerRunning = initRunning;
+            state.pagePausedAtMs = (!initRunning && Number.isFinite(initPausedAtMs) && initPausedAtMs > 0)
+                ? Math.floor(initPausedAtMs)
+                : null;
             if (data.reviewSessionId) {
                 state.reviewSessionId = data.reviewSessionId;
             }
@@ -2432,7 +3699,11 @@
             }
             if (data.reviewMode) {
                 state.reviewMode = true;
-                setReadOnlyMode(data.readOnly !== false);
+                if (data.readOnly !== false) {
+                    enterSubmittedReadOnlyState('stationary-review');
+                } else {
+                    setReadOnlyMode(false);
+                }
             }
             syncPrimaryActionButtons();
             refreshSimulationDraftSyncLifecycle();
@@ -2442,6 +3713,9 @@
                 return;
             }
             state.lastInitSignature = initSignature;
+            if (state.memorizeMode && !state.reviewMode && !state.simulationMode) {
+                renderMemorizeStudyLayer().catch(() => {});
+            }
             sendSessionReady();
             return;
         }
@@ -2503,11 +3777,31 @@
             if (Number.isFinite(Number(data.suiteTimerLimitSeconds))) {
                 state.suiteTimerLimitSeconds = Number(data.suiteTimerLimitSeconds);
             }
-            const elapsedSeconds = Number.isFinite(Number(data.elapsed)) ? Number(data.elapsed) : 0;
-            state.pageStartTime = Date.now() - (elapsedSeconds * 1000);
-            state.pagePausedAtMs = null;
-            state.pagePausedOffsetMs = 0;
+            const timerSnapshot = data && data.timerSnapshot && typeof data.timerSnapshot === 'object'
+                ? data.timerSnapshot
+                : null;
+            const snapshotPausedOffsetMs = Number(
+                (timerSnapshot && timerSnapshot.pausedOffsetMs)
+                ?? data.suiteTimerPausedOffsetMs
+                ?? data.pausedOffsetMs
+            );
+            if (Number.isFinite(snapshotPausedOffsetMs) && snapshotPausedOffsetMs >= 0) {
+                state.pagePausedOffsetMs = Math.max(0, snapshotPausedOffsetMs);
+            }
+            const snapshotRunning = timerSnapshot ? timerSnapshot.running : data.suiteTimerRunning;
+            interaction.timerRunning = snapshotRunning !== false;
+            const snapshotPausedAtMs = Number(
+                (timerSnapshot && timerSnapshot.pausedAtMs)
+                ?? data.suiteTimerPausedAtMs
+                ?? data.pausedAtMs
+            );
+            state.pagePausedAtMs = (
+                interaction.timerRunning === false
+                && Number.isFinite(snapshotPausedAtMs)
+                && snapshotPausedAtMs > 0
+            ) ? Math.floor(snapshotPausedAtMs) : null;
             syncPrimaryActionButtons();
+            renderTimer();
             const draftFromParent = data && data.draft && typeof data.draft === 'object'
                 ? data.draft
                 : null;
@@ -2519,6 +3813,33 @@
             }
             refreshSimulationDraftSyncLifecycle();
             updateNavStatuses();
+            return;
+        }
+        if (type === 'ENDLESS_COUNTDOWN') {
+            var countdownSeconds = Number(data && data.seconds);
+            if (Number.isFinite(countdownSeconds) && countdownSeconds > 0) {
+                state.endlessCountdownSeconds = Math.ceil(countdownSeconds);
+                state.endlessCountdownEndTime = Date.now() + state.endlessCountdownSeconds * 1000;
+                var timer = document.getElementById('timer');
+                if (timer) timer.classList.add('endless-countdown');
+            }
+            return;
+        }
+        if (type === 'ENDLESS_COUNTDOWN_TICK') {
+            var tickSeconds = Number(data && data.seconds);
+            if (Number.isFinite(tickSeconds)) {
+                state.endlessCountdownSeconds = Math.max(0, Math.ceil(tickSeconds));
+                state.endlessCountdownEndTime = Date.now() + state.endlessCountdownSeconds * 1000;
+                var timerEl = document.getElementById('timer');
+                if (timerEl) timerEl.classList.add('endless-countdown');
+            }
+            return;
+        }
+        if (type === 'ENDLESS_COUNTDOWN_END') {
+            state.endlessCountdownSeconds = 0;
+            state.endlessCountdownEndTime = null;
+            var timerEnd = document.getElementById('timer');
+            if (timerEnd) timerEnd.classList.remove('endless-countdown');
             return;
         }
         if (type === 'SUITE_FORCE_CLOSE') {
@@ -2557,7 +3878,9 @@
         renderDataset(dataset);
         buildQuestionNav();
         attachNavListeners();
+        attachMemorizeLocatorListeners();
         attachDragDrop();
+        attachPaneResizer();
 
         // Ensure drag items can return home when replaced or discarded
         function initDragPools() {
@@ -2577,10 +3900,18 @@
         }
         initDragPools();
 
+        attachUnifiedTimer();
+        attachUnifiedPanels();
+        attachSelectionHighlightToolbar();
+        attachReviewHighlightDictionary();
         attachActionListeners();
         attachMessageBridge();
         attachPracticeTimerBridge();
         syncSuiteModeState();
+        setExitButtonVisible(false);
+        if (state.memorizeMode) {
+            await renderMemorizeStudyLayer();
+        }
         updateNavStatuses();
         refreshSimulationDraftSyncLifecycle();
         startInitLoop();

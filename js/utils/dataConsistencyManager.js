@@ -294,11 +294,9 @@ class DataConsistencyManager {
         let total = 0;
 
         Object.values(answerComparison).forEach(comparison => {
-            if (comparison.userAnswer !== null) {
-                total++;
-                if (comparison.isCorrect) {
-                    correct++;
-                }
+            total++;
+            if (comparison.userAnswer !== null && comparison.isCorrect) {
+                correct++;
             }
         });
 
