@@ -568,14 +568,424 @@
         }
     }
 
+    function normalizeId(value) {
+        return value == null ? '' : String(value).trim();
+    }
+
+    function asObject(value) {
+        return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    }
+
+    function firstObject() {
+        let fallback = null;
+        for (let i = 0; i < arguments.length; i++) {
+            const value = arguments[i];
+            if (value && typeof value === 'object' && !Array.isArray(value)) {
+                if (Object.keys(value).length > 0) {
+                    return Object.assign({}, value);
+                }
+                if (!fallback) {
+                    fallback = value;
+                }
+            }
+        }
+        return fallback ? Object.assign({}, fallback) : {};
+    }
+
+    function isAnswerMap(value) {
+        return value && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function normalizeQuestionKey(rawKey, index) {
+        if (rawKey == null || rawKey === '') {
+            return `q${index + 1}`;
+        }
+        const key = String(rawKey).trim();
+        const keyPart = key.includes('::')
+            ? key.split('::').pop().trim()
+            : key;
+        const explicitQuestionMatch = keyPart.match(/(?:^|[^a-z0-9])q(?:uestion)?[-_\s]*(\d+)(?:\D|$)/i)
+            || keyPart.match(/^q(?:uestion)?[-_\s]*(\d+)$/i);
+        if (explicitQuestionMatch) {
+            return `q${explicitQuestionMatch[1]}`;
+        }
+        const digitMatches = Array.from(keyPart.matchAll(/(\d+)/g));
+        const digitMatch = digitMatches.length ? digitMatches[digitMatches.length - 1] : null;
+        if (digitMatch) {
+            return `q${digitMatch[1]}`;
+        }
+        return keyPart.toLowerCase();
+    }
+
+    function normalizeAnswerValue(value) {
+        if (value == null) {
+            return '';
+        }
+        if (Array.isArray(value)) {
+            return value.map((item) => normalizeAnswerValue(item)).filter(Boolean).join(',');
+        }
+        if (typeof value === 'object') {
+            return normalizeAnswerValue(
+                value.answer ?? value.userAnswer ?? value.value ?? value.text ?? value.label ?? ''
+            );
+        }
+        return String(value).trim();
+    }
+
+    function normalizeAnswerMap(rawMap) {
+        const map = {};
+        if (Array.isArray(rawMap)) {
+            rawMap.forEach((entry, index) => {
+                if (!entry) {
+                    return;
+                }
+                const key = normalizeQuestionKey(entry.questionId ?? entry.id ?? entry.key, index);
+                const value = normalizeAnswerValue(entry.answer ?? entry.userAnswer ?? entry.correctAnswer ?? entry.value ?? entry);
+                if (value) {
+                    map[key] = value;
+                }
+            });
+            return map;
+        }
+        if (!isAnswerMap(rawMap)) {
+            return map;
+        }
+        Object.entries(rawMap).forEach(([rawKey, rawValue], index) => {
+            const key = normalizeQuestionKey(rawKey, index);
+            const value = normalizeAnswerValue(rawValue);
+            if (value) {
+                map[key] = value;
+            }
+        });
+        return map;
+    }
+
+    function mergeAnswerMaps() {
+        const merged = {};
+        for (let i = 0; i < arguments.length; i++) {
+            const normalized = normalizeAnswerMap(arguments[i]);
+            Object.entries(normalized).forEach(([key, value]) => {
+                if (!Object.prototype.hasOwnProperty.call(merged, key)) {
+                    merged[key] = value;
+                }
+            });
+        }
+        return merged;
+    }
+
+    function normalizeComparisonMap(rawComparison) {
+        if (!isAnswerMap(rawComparison)) {
+            return {};
+        }
+        const comparison = {};
+        Object.entries(rawComparison).forEach(([rawKey, rawItem], index) => {
+            if (!rawItem) {
+                return;
+            }
+            const item = asObject(rawItem);
+            const key = normalizeQuestionKey(item.questionId ?? rawKey, index);
+            const userAnswer = normalizeAnswerValue(item.userAnswer ?? item.user ?? item.answer);
+            if (!userAnswer) {
+                return;
+            }
+            comparison[key] = {
+                questionId: key,
+                userAnswer,
+                correctAnswer: '',
+                isCorrect: null
+            };
+        });
+        return comparison;
+    }
+
+    function buildComparisonFromMaps(rawComparison, answers, correctAnswerMap) {
+        const comparison = normalizeComparisonMap(rawComparison);
+        const answerMap = normalizeAnswerMap(answers);
+        const correctMap = normalizeAnswerMap(correctAnswerMap);
+        const keys = new Set([
+            ...Object.keys(answerMap),
+            ...Object.keys(correctMap),
+            ...Object.keys(comparison)
+        ]);
+        keys.forEach((key) => {
+            const item = comparison[key] || { questionId: key };
+            if (!item.userAnswer) {
+                item.userAnswer = answerMap[key] || '';
+            }
+            const hasCanonicalCorrectAnswer = Object.prototype.hasOwnProperty.call(correctMap, key);
+            if (hasCanonicalCorrectAnswer) {
+                item.correctAnswer = correctMap[key] || '';
+            } else {
+                item.correctAnswer = '';
+            }
+            if (hasCanonicalCorrectAnswer) {
+                item.isCorrect = item.correctAnswer
+                    ? String(item.userAnswer).trim().toLowerCase() === String(item.correctAnswer).trim().toLowerCase()
+                    : false;
+            } else {
+                item.isCorrect = null;
+            }
+            comparison[key] = item;
+        });
+        return comparison;
+    }
+
+    function firstArray() {
+        for (let i = 0; i < arguments.length; i++) {
+            if (Array.isArray(arguments[i])) {
+                return arguments[i].slice();
+            }
+        }
+        return [];
+    }
+
+    function firstFiniteNumber() {
+        for (let i = 0; i < arguments.length; i++) {
+            if (arguments[i] == null || arguments[i] === '') {
+                continue;
+            }
+            const normalized = Number(arguments[i]);
+            if (Number.isFinite(normalized)) {
+                return normalized;
+            }
+        }
+        return null;
+    }
+
+    function firstNonEmptyString() {
+        for (let i = 0; i < arguments.length; i++) {
+            const normalized = normalizeId(arguments[i]);
+            if (normalized) {
+                return normalized;
+            }
+        }
+        return '';
+    }
+
+    function extractPayloadScope(payload = {}, entry = null) {
+        const source = asObject(payload);
+        const replayEntry = asObject(entry || source.entry);
+        const metadata = asObject(replayEntry.metadata);
+        const rawData = asObject(replayEntry.rawData);
+        const realData = asObject(replayEntry.realData);
+        return {
+            examId: firstNonEmptyString(
+                replayEntry.examId,
+                metadata.examId,
+                rawData.examId,
+                realData.examId,
+                source.examId
+            ),
+            suiteSessionId: firstNonEmptyString(
+                source.suiteSessionId,
+                replayEntry.suiteSessionId,
+                metadata.suiteSessionId,
+                rawData.suiteSessionId,
+                realData.suiteSessionId
+            ),
+            sessionId: firstNonEmptyString(
+                source.sessionId,
+                replayEntry.sessionId,
+                metadata.sessionId,
+                rawData.sessionId,
+                realData.sessionId
+            )
+        };
+    }
+
+    function canAcceptScopedPayload(scope, options = {}) {
+        const incomingExamId = normalizeId(scope && scope.examId);
+        const currentExamId = normalizeId(state.examId);
+        if (!incomingExamId || !currentExamId || incomingExamId === currentExamId) {
+            return true;
+        }
+
+        const incomingSuiteId = normalizeId(scope && scope.suiteSessionId);
+        const currentSuiteId = normalizeId(state.suiteSessionId);
+        if (incomingSuiteId && currentSuiteId && incomingSuiteId === currentSuiteId) {
+            return true;
+        }
+
+        return Boolean(options.allowSuiteBind && incomingSuiteId && !currentSuiteId);
+    }
+
+    function applyPayloadScope(scope, options = {}) {
+        const previousSuiteId = normalizeId(state.suiteSessionId);
+        const suiteSessionId = normalizeId(scope && scope.suiteSessionId);
+        if (suiteSessionId) {
+            state.suiteSessionId = suiteSessionId;
+            dom.metaSuite.textContent = suiteSessionId;
+        }
+
+        const sessionId = normalizeId(scope && scope.sessionId);
+        if (sessionId) {
+            state.sessionId = sessionId;
+            dom.metaSession.textContent = sessionId;
+        }
+
+        const examId = normalizeId(scope && scope.examId);
+        const currentExamId = normalizeId(state.examId);
+        const sameSuite = suiteSessionId && previousSuiteId && suiteSessionId === previousSuiteId;
+        const canReplaceExamId = !currentExamId
+            || examId === currentExamId
+            || options.forceExamId === true
+            || sameSuite
+            || !previousSuiteId;
+        if (examId && canReplaceExamId) {
+            state.examId = examId;
+            document.body.dataset.examId = examId;
+            dom.metaExam.textContent = examId;
+        }
+
+        updateSuiteBackGuard();
+    }
+
+    function calculateScoreFromComparison(answerComparison) {
+        const comparison = asObject(answerComparison);
+        const keys = Object.keys(comparison);
+        if (keys.length === 0) {
+            return null;
+        }
+        let correct = 0;
+        keys.forEach((key) => {
+            const item = asObject(comparison[key]);
+            if (item.isCorrect === true) {
+                correct += 1;
+            }
+        });
+        const total = keys.length;
+        const accuracy = total > 0 ? correct / total : 0;
+        return {
+            correct,
+            total,
+            accuracy,
+            percentage: Math.round(accuracy * 100)
+        };
+    }
+
+    function normalizeScoreInfo(scoreInfo, answerComparison) {
+        const score = asObject(scoreInfo);
+        const derived = calculateScoreFromComparison(answerComparison) || {};
+        const correct = firstFiniteNumber(score.correct, score.correctCount, derived.correct, state.correctCount);
+        const total = firstFiniteNumber(score.total, score.totalCount, score.questionCount, derived.total, state.totalCount);
+        const accuracy = firstFiniteNumber(score.accuracy, total ? correct / total : null);
+        const percentage = firstFiniteNumber(
+            score.percentage,
+            score.percent,
+            accuracy != null ? Math.round(accuracy * 100) : null
+        );
+        return {
+            correct: correct == null ? state.correctCount : correct,
+            total: total == null ? state.totalCount : total,
+            accuracy: accuracy == null ? 0 : accuracy,
+            percentage: percentage == null ? 0 : Math.round(percentage)
+        };
+    }
+
+    function formatDuration(seconds) {
+        const normalized = Number(seconds);
+        if (!Number.isFinite(normalized) || normalized <= 0) {
+            return '~12 分钟';
+        }
+        const minutes = Math.max(1, Math.round(normalized / 60));
+        return `${minutes} 分钟`;
+    }
+
+    function updateScoreDisplay(scoreInfo, duration) {
+        const normalized = normalizeScoreInfo(scoreInfo || state.scoreInfo, state.answerComparison);
+        state.correctCount = normalized.correct;
+        state.totalCount = normalized.total;
+        state.scoreInfo = normalized;
+        dom.metaScore.textContent = `正确 ${normalized.correct} / 总题数 ${normalized.total}（${normalized.percentage}%）`;
+        dom.metaDuration.textContent = formatDuration(duration || state.baseDuration);
+    }
+
+    function buildReplaySnapshot(payload = {}) {
+        const source = asObject(payload);
+        const entry = asObject(source.entry || source);
+        const metadata = asObject(entry.metadata);
+        const rawData = asObject(entry.rawData);
+        const realData = asObject(entry.realData);
+        const scoreInfo = firstObject(source.scoreInfo, entry.scoreInfo, realData.scoreInfo, rawData.scoreInfo);
+        const rawAnswerComparison = firstObject(
+            source.answerComparison,
+            entry.answerComparison,
+            realData.answerComparison,
+            rawData.answerComparison,
+            scoreInfo.details
+        );
+        const answers = firstObject(source.answers, entry.answers, realData.answers, rawData.answers);
+        const correctAnswerMap = mergeAnswerMaps(
+            source.correctAnswerMap,
+            entry.correctAnswerMap,
+            realData.correctAnswerMap,
+            rawData.correctAnswerMap
+        );
+        const answerComparison = buildComparisonFromMaps(rawAnswerComparison, answers, correctAnswerMap);
+        const hasCanonicalCorrectAnswers = Object.keys(correctAnswerMap).length > 0;
+        const replayScoreInfo = hasCanonicalCorrectAnswers
+            ? (calculateScoreFromComparison(answerComparison) || scoreInfo)
+            : scoreInfo;
+        const markedQuestions = firstArray(
+            source.markedQuestions,
+            entry.markedQuestions,
+            metadata.markedQuestions,
+            realData.markedQuestions,
+            rawData.markedQuestions
+        );
+        const highlights = firstArray(source.highlights, entry.highlights, realData.highlights, rawData.highlights);
+        const scrollY = firstFiniteNumber(source.scrollY, entry.scrollY, realData.scrollY, rawData.scrollY);
+        return {
+            entry,
+            answers,
+            answerComparison,
+            markedQuestions,
+            highlights,
+            scrollY: scrollY == null ? 0 : scrollY,
+            scoreInfo: replayScoreInfo,
+            duration: firstFiniteNumber(source.duration, entry.duration, realData.duration, rawData.duration)
+        };
+    }
+
+    function buildReplaySummary(snapshot) {
+        const parts = [];
+        const answerCount = Object.keys(snapshot.answers || {}).length;
+        const comparisonCount = Object.keys(snapshot.answerComparison || {}).length;
+        if (answerCount) {
+            parts.push(`答案 ${answerCount}`);
+        }
+        if (comparisonCount) {
+            parts.push(`对照 ${comparisonCount}`);
+        }
+        if (snapshot.markedQuestions.length) {
+            parts.push(`标记 ${snapshot.markedQuestions.length}`);
+        }
+        if (snapshot.highlights.length) {
+            parts.push(`高亮 ${snapshot.highlights.length}`);
+        }
+        if (snapshot.scrollY > 0) {
+            parts.push(`滚动 ${Math.round(snapshot.scrollY)}px`);
+        }
+        return parts.length ? `已恢复${parts.join('、')}。` : '已回灌本篇结果。';
+    }
+
+    function appendReplaySummary(detail) {
+        return state.replaySummary ? `${detail} ${state.replaySummary}` : detail;
+    }
+
     function applyReviewContext(context = {}) {
-        const contextExamId = context && context.examId != null ? String(context.examId).trim() : '';
-        const currentExamId = state.examId != null ? String(state.examId).trim() : '';
-        if (contextExamId && currentExamId && contextExamId !== currentExamId) {
+        const scope = extractPayloadScope(context);
+        if (!canAcceptScopedPayload(scope, { allowSuiteBind: true })) {
+            log(`忽略错篇 REVIEW_CONTEXT: incoming=${scope.examId}, current=${state.examId}`, 'warn');
             return;
         }
+        applyPayloadScope(scope);
         state.reviewContext = context;
         state.suiteReviewMode = Boolean(context.suiteReviewMode);
+        const previousFinalizeOnNext = state.finalizeOnNext === true;
+        const previousReviewEntryIndex = Number.isFinite(Number(state.reviewEntryIndex))
+            ? Number(state.reviewEntryIndex)
+            : 0;
         state.reviewViewMode = context.viewMode === 'answering' ? 'answering' : 'review';
         if (Number.isInteger(context.currentIndex)) {
             state.reviewEntryIndex = context.currentIndex;
@@ -585,20 +995,25 @@
         const nextBtn = bar.querySelector('button[data-review-nav="next"]');
         const currentIndex = Number.isFinite(Number(context.currentIndex)) ? Number(context.currentIndex) : state.reviewEntryIndex;
         const total = Number.isFinite(Number(context.total)) ? Number(context.total) : 1;
+        state.finalizeOnNext = state.reviewViewMode === 'review' && (
+            Boolean(context.finalizeOnNext)
+            || (previousFinalizeOnNext && previousReviewEntryIndex === Number(currentIndex))
+        );
         bar.dataset.reviewIndex = String(currentIndex);
         bar.dataset.reviewTotal = String(total);
         bar.dataset.viewMode = state.reviewViewMode;
-        bar.dataset.finalizeOnNext = context.finalizeOnNext ? 'true' : 'false';
+        bar.dataset.finalizeOnNext = state.finalizeOnNext ? 'true' : 'false';
         if (prevBtn) {
             prevBtn.disabled = !context.canPrev;
         }
         if (nextBtn) {
-            nextBtn.disabled = !context.canNext;
+            nextBtn.disabled = !(context.canNext || state.finalizeOnNext);
         }
         setReviewNavVisibility(context.showNav !== false);
 
         if (state.reviewViewMode === 'answering') {
             state.submitted = false;
+            state.finalizeOnNext = false;
             setReadOnlyMode(false);
             markState('当前为作答态', '请完成当前篇章后点击“提交本篇成绩”。');
             return;
@@ -606,24 +1021,40 @@
 
         state.submitted = true;
         setReadOnlyMode(context.readOnly !== false);
-        if (context.finalizeOnNext) {
-            markState('当前为回看态（末篇）', '点击“下一题”将完成并保存整套记录。');
+        if (state.finalizeOnNext) {
+            markState('当前为回看态（末篇）', appendReplaySummary('点击“下一题”将完成并保存整套记录。'));
             return;
         }
-        markState('当前为回看态', '可使用顶部“上一题/下一题”切换篇章。');
+        markState('当前为回看态', appendReplaySummary('可使用顶部“上一题/下一题”切换篇章。'));
     }
 
     function applyReplayRecord(payload = {}) {
         const entry = payload && typeof payload.entry === 'object' ? payload.entry : payload;
-        const entryExamId = entry && entry.examId != null ? String(entry.examId).trim() : '';
-        const currentExamId = state.examId != null ? String(state.examId).trim() : '';
-        if (entryExamId && currentExamId && entryExamId !== currentExamId) {
+        const scope = extractPayloadScope(payload, entry);
+        if (!canAcceptScopedPayload(scope, { allowSuiteBind: true })) {
+            log(`忽略错篇 REPLAY_PRACTICE_RECORD: incoming=${scope.examId}, current=${state.examId}`, 'warn');
             return;
+        }
+        applyPayloadScope(scope);
+        const snapshot = buildReplaySnapshot(payload);
+        state.answers = snapshot.answers;
+        state.answerComparison = snapshot.answerComparison;
+        state.markedQuestions = snapshot.markedQuestions;
+        state.highlights = snapshot.highlights;
+        state.scrollY = snapshot.scrollY;
+        state.replaySummary = buildReplaySummary(snapshot);
+        updateScoreDisplay(snapshot.scoreInfo, snapshot.duration);
+        document.body.dataset.replayAnswers = String(Object.keys(state.answers).length);
+        document.body.dataset.replayComparisons = String(Object.keys(state.answerComparison).length);
+        document.body.dataset.replayMarked = String(state.markedQuestions.length);
+        document.body.dataset.replayHighlights = String(state.highlights.length);
+        if (snapshot.scrollY > 0 && typeof window.scrollTo === 'function') {
+            setTimeout(() => window.scrollTo(0, snapshot.scrollY), 0);
         }
         state.reviewViewMode = 'review';
         state.submitted = true;
         setReadOnlyMode(payload.readOnly !== false);
-        markState('当前为回看态', '已回灌本篇结果，可切题继续回看。');
+        markState('当前为回看态', appendReplaySummary('已回灌本篇结果，可切题继续回看。'));
     }
 
     function sendSessionReady() {
@@ -665,13 +1096,15 @@
         const percentage = Math.round(accuracy * 100);
 
         const answers = {};
+        const correctAnswerMap = {};
         const comparison = {};
         for (let i = 1; i <= total; i++) {
             const qKey = `Q${i}`;
+            correctAnswerMap[qKey] = i <= correct ? 'A' : 'B';
             answers[qKey] = i <= correct ? 'A' : 'B';
             comparison[qKey] = {
                 questionId: qKey,
-                correctAnswer: i <= correct ? 'A' : 'B',
+                correctAnswer: correctAnswerMap[qKey],
                 userAnswer: answers[qKey],
                 isCorrect: i <= correct
             };
@@ -689,6 +1122,7 @@
                 details: comparison
             },
             answers,
+            correctAnswerMap,
             answerComparison: comparison,
             metadata: {
                 category: state.category,
@@ -696,6 +1130,33 @@
                 suitePlaceholder: true
             }
         };
+
+        if (state.simulationMode && state.simulationCtx && !state.simulationCtx.isLast) {
+            const updatedAt = Date.now();
+            postMessage('SIMULATION_NAVIGATE', {
+                direction: 'next',
+                draft: {
+                    answers,
+                    highlights: Array.isArray(state.highlights) ? state.highlights : [],
+                    scrollY: Number.isFinite(Number(state.scrollY)) ? Number(state.scrollY) : 0,
+                    updatedAt
+                },
+                draftUpdatedAt: updatedAt,
+                resultSnapshot: payload,
+                answers,
+                highlights: Array.isArray(state.highlights) ? state.highlights : [],
+                scrollY: Number.isFinite(Number(state.scrollY)) ? Number(state.scrollY) : 0,
+                elapsed: duration,
+                timerSnapshot: {
+                    durationSeconds: duration,
+                    elapsedSeconds: duration,
+                    running: false,
+                    updatedAt
+                }
+            });
+            markState('已提交本篇，等待下一篇...', '请稍候，系统将自动进入下一篇套题。');
+            return;
+        }
 
         const msgType = state.simulationMode ? 'SIMULATION_SUBMIT' : 'PRACTICE_COMPLETE';
         postMessage(msgType, payload);
@@ -707,10 +1168,16 @@
             const prevBtn = bar.querySelector('button[data-review-nav="prev"]');
             const nextBtn = bar.querySelector('button[data-review-nav="next"]');
             const currentIndex = Number.isFinite(state.sequenceIndex) ? Number(state.sequenceIndex) : 0;
+            const totalFromNav = Number(bar.dataset && bar.dataset.reviewTotal);
+            const totalFromContext = Number(state.reviewContext && state.reviewContext.total);
+            const total = Number.isFinite(totalFromNav) && totalFromNav > 0
+                ? totalFromNav
+                : (Number.isFinite(totalFromContext) && totalFromContext > 0 ? totalFromContext : 3);
+            state.finalizeOnNext = currentIndex >= (total - 1);
             bar.dataset.reviewIndex = String(currentIndex);
-            bar.dataset.reviewTotal = '3';
+            bar.dataset.reviewTotal = String(total);
             bar.dataset.viewMode = 'review';
-            bar.dataset.finalizeOnNext = currentIndex >= 2 ? 'true' : 'false';
+            bar.dataset.finalizeOnNext = state.finalizeOnNext ? 'true' : 'false';
             if (prevBtn) {
                 prevBtn.disabled = currentIndex <= 0;
             }

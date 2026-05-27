@@ -326,55 +326,57 @@
 
   function ensureHandshake(examWindow, exam, fallbackExamId, options) {
     if (!examWindow) return;
-    if (typeof window.startHandshakeFallback === 'function') {
+    const mainHandshake = typeof window.startExamHandshakeCompat === 'function'
+      ? window.startExamHandshakeCompat
+      : (typeof window.startHandshakeFallback === 'function' ? window.startHandshakeFallback : null);
+    if (mainHandshake) {
       try {
         const examId = (exam && exam.id) || fallbackExamId;
-        window.startHandshakeFallback(examWindow, examId);
+        mainHandshake(examWindow, examId);
       } catch (_) {}
     }
     startLocalHandshake(examWindow, exam, fallbackExamId, options || null);
   }
 
-  function ingestLocalPracticeRecord(examId, payload, context) {
+  async function ingestLocalPracticeRecord(examId, payload, context) {
     if (!examId) return;
     try {
-      if (window.PracticeCore && window.PracticeCore.ingestor && window.PracticeCore.store) {
-        const exams = readExamIndexSnapshot();
-        const contextExam = context && context.exam
-          ? context.exam
-          : (context && context.id && !context.exam ? context : null);
-        const exam = contextExam || exams.find((item) => item && item.id === examId) || {};
-        const record = window.PracticeCore.ingestor.fromCompletion(payload, {
-          examId,
-          sessionId: context && context.sessionId ? context.sessionId : null,
-          metadata: {
-            examId,
-            examTitle: exam.title || '',
-            category: exam.category || '',
-            frequency: exam.frequency || 'unknown',
-            type: exam.type || null
-          }
-        }, exam, { maxRecords: 1000 });
-        if (record) {
-          Promise.resolve(window.PracticeCore.store.savePracticeRecord(record, { maxRecords: 1000 }))
-            .then(() => {
-              if (window.hpCore && typeof window.hpCore._loadRecords === 'function') {
-                window.hpCore._loadRecords().catch(() => {});
-              }
-            })
-            .catch((error) => { try { console.warn('[hpCore] PracticeCore 保存失败', error); } catch (_) {} });
-          try { window.hpCore && window.hpCore.showMessage && window.hpCore.showMessage('练习已完成，记录已同步', 'success'); } catch (_) {}
-          return;
-        }
+      const recordApi = window.PracticeRecordAPI || null;
+      const canSaveCompletion = recordApi && typeof recordApi.saveCompletion === 'function';
+      const canSaveRecord = recordApi && typeof recordApi.saveRecord === 'function';
+      if (!canSaveCompletion && !canSaveRecord) {
+        throw new Error('PracticeRecordAPI 保存接口未就绪');
       }
 
-      const snapshot = readPracticeRecordsSnapshot();
-      const records = Array.isArray(snapshot) ? snapshot.slice() : [];
       const exams = readExamIndexSnapshot();
       const contextExam = context && context.exam
         ? context.exam
         : (context && context.id && !context.exam ? context : null);
       const exam = contextExam || exams.find((item) => item && item.id === examId) || {};
+      const sessionId = payload && (payload.sessionId || payload.sessionID)
+        ? (payload.sessionId || payload.sessionID)
+        : (context && context.sessionId ? context.sessionId : null);
+      const contextPayload = {
+        examId,
+        sessionId,
+        metadata: {
+          examId,
+          examTitle: exam.title || '',
+          category: exam.category || '',
+          frequency: exam.frequency || 'unknown',
+          type: exam.type || null
+        }
+      };
+
+      if (canSaveCompletion) {
+        await recordApi.saveCompletion(payload, contextPayload, exam, { maxRecords: 1000 });
+        if (window.hpCore && typeof window.hpCore._loadRecords === 'function') {
+          window.hpCore._loadRecords().catch(() => {});
+        }
+        try { window.hpCore && window.hpCore.showMessage && window.hpCore.showMessage('练习已完成，记录已同步', 'success'); } catch (_) {}
+        return;
+      }
+
       const normalized = normalizePracticePayload(payload);
 
       const totalQuestions = Number.isFinite(normalized.total) ? normalized.total : 0;
@@ -395,17 +397,9 @@
         completedAt = new Date();
       }
 
-      const sessionId = normalized.sessionId
+      const fallbackSessionId = normalized.sessionId
         || (payload && (payload.sessionId || payload.sessionID))
         || (context && context.sessionId);
-      if (sessionId) {
-        for (let i = records.length - 1; i >= 0; i -= 1) {
-          const item = records[i];
-          if (item && item.sessionId && item.sessionId === sessionId) {
-            records.splice(i, 1);
-          }
-        }
-      }
 
       const rawType = exam.type || (payload && payload.type) || null;
       const recordType = rawType ? String(rawType).toLowerCase() : undefined;
@@ -413,7 +407,7 @@
       const record = {
         id: Date.now(),
         examId,
-        sessionId: sessionId || undefined,
+        sessionId: fallbackSessionId || undefined,
         title: normalized.title || exam.title || '',
         category: normalized.category || exam.category || '',
         frequency: exam.frequency || (payload && payload.frequency) || undefined,
@@ -427,29 +421,19 @@
         realData: normalized.raw || payload || {}
       };
 
-      records.unshift(record);
-
-      if (window.hpCore && typeof window.hpCore._setRecords === 'function') {
-        window.hpCore._setRecords(records);
-      }
-
-      if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
-        Promise.resolve(window.PracticeCore.store.replacePracticeRecords(records)).catch(() => {});
-      } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
-        Promise.resolve(window.simpleStorageWrapper.savePracticeRecords(records)).catch(() => {});
-      } else if (window.storage && typeof storage.set === 'function') {
-        try {
-          const practiceKey = ['practice', 'records'].join('_');
-          const maybeSet = storage.set(practiceKey, records);
-          if (maybeSet && typeof maybeSet.then === 'function') {
-            maybeSet.catch(() => {});
-          }
-        } catch (_) {}
+      await recordApi.saveRecord(record, { maxRecords: 1000 });
+      if (window.hpCore && typeof window.hpCore._loadRecords === 'function') {
+        window.hpCore._loadRecords().catch(() => {});
       }
 
       try { window.hpCore && window.hpCore.showMessage && window.hpCore.showMessage('练习已完成，记录已同步', 'success'); } catch (_) {}
     } catch (error) {
       try { console.warn('[hpCore] 本地保存练习记录失败', error); } catch (_) {}
+      try {
+        window.hpCore
+          && window.hpCore.showMessage
+          && window.hpCore.showMessage('练习完成，但记录保存失败：' + (error && error.message ? error.message : '未知错误'), 'error');
+      } catch (_) {}
     }
   }
 
@@ -765,16 +749,11 @@
     },
     async _loadRecords() {
       try {
-        const existing = readPracticeRecordsSnapshot();
-        if (existing.length) {
-          this._setRecords(existing);
-          return;
+        if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.list !== 'function') {
+          throw new Error('PracticeRecordAPI.list 未就绪');
         }
-
-        let rec = null;
-        if (window.storage && storage.get) rec = await storage.get('practice_records', null);
-        if (!rec) rec = window.practiceRecords || [];
-        this._setRecords(coerceArray(rec));
+        const records = await window.PracticeRecordAPI.list();
+        this._setRecords(coerceArray(records));
       } catch (e) { console.warn('[hpCore] _loadRecords failed', e); }
     },
     _setRecords(list) {
@@ -813,7 +792,8 @@
           const sessionEntry = sid ? localFallbackSessions.get(sid) : null;
           if (sid) clearLocalHandshake(sid, 'complete');
 
-          const mainHandles = typeof window.startHandshakeFallback === 'function';
+          const mainHandles = typeof window.startExamHandshakeCompat === 'function'
+            || typeof window.startHandshakeFallback === 'function';
           if (!mainHandles) {
             const derivedExamId = payload.examId
               || payload.examID
@@ -821,15 +801,8 @@
               || this.lastOpenedExamId;
 
             if (derivedExamId) {
-              if (typeof window.savePracticeRecordFallback === 'function') {
-                Promise.resolve(window.savePracticeRecordFallback(derivedExamId, payload))
-                  .catch((error) => { try { console.warn('[hpCore] 保存练习记录失败', error); } catch (_) {} })
-                  .finally(() => { setTimeout(() => this._loadRecords(), 400); });
-              } else {
-                const recordContext = sessionEntry || { exam: this.lastOpenedExam || null };
-                ingestLocalPracticeRecord(derivedExamId, payload, recordContext);
-                setTimeout(() => this._loadRecords(), 400);
-              }
+              const recordContext = sessionEntry || { exam: this.lastOpenedExam || null };
+              ingestLocalPracticeRecord(derivedExamId, payload, recordContext);
             } else {
               setTimeout(() => this._loadRecords(), 600);
             }
@@ -857,17 +830,6 @@
     return cloneArray(hpCore.examIndex);
   }
 
-  function readPracticeRecordsSnapshot() {
-    const stateService = getStateService();
-    if (stateService && typeof stateService.getPracticeRecords === 'function') {
-      return cloneArray(stateService.getPracticeRecords());
-    }
-    if (Array.isArray(window.practiceRecords)) {
-      return cloneArray(window.practiceRecords);
-    }
-    return cloneArray(hpCore.practiceRecords);
-  }
-
   function syncExamIndex(list) {
     const normalized = cloneArray(list);
     let synced = normalized;
@@ -889,8 +851,6 @@
     const stateService = getStateService();
     if (stateService && typeof stateService.setPracticeRecords === 'function') {
       synced = cloneArray(stateService.setPracticeRecords(normalized));
-    } else {
-      try { window.practiceRecords = synced.slice(); } catch (_) {}
     }
     hpCore.practiceRecords = synced;
     return synced;
@@ -911,23 +871,12 @@
         __source: 'hp-core'
       });
     });
-
-    stateService.subscribe('practiceRecords', function (value) {
-      const next = cloneArray(value);
-      hpCore.practiceRecords = next;
-      hpCore.emit('dataUpdated', {
-        examIndex: hpCore.examIndex,
-        practiceRecords: next,
-        __source: 'hp-core'
-      });
-    });
   }
 
   subscribeAdapterUpdates();
 
   if (getStateService()) {
     hpCore.examIndex = readExamIndexSnapshot();
-    hpCore.practiceRecords = readPracticeRecordsSnapshot();
   }
 
   window.hpCore = hpCore;

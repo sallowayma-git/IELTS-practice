@@ -136,6 +136,13 @@
     return Array.from(recordMap.values());
   }
 
+  function normalizePracticeRecords(records) {
+    return deduplicateRecords(Array.isArray(records) ? records : []).map(record => ({
+      ...record,
+      type: normalizeType(record.type)
+    }));
+  }
+
   /**
    * 获取记录的时间戳
    */
@@ -498,26 +505,15 @@
           timestamp: record.timestamp || Date.now()
         };
 
-        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
-          await window.PracticeCore.store.savePracticeRecord(normalizedRecord, { maxRecords: 1000 });
-          await this._loadPracticeRecords();
-          console.log('[ThemeAdapterBase] 练习记录已通过 PracticeCore 保存', normalizedRecord.id || normalizedRecord.sessionId);
-          return;
+        if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.saveRecord !== 'function') {
+          throw new Error('Unified practice record store not ready');
         }
 
-        // 添加到本地缓存
-        this._practiceRecords.unshift(normalizedRecord);
-        
-        // 去重
-        this._practiceRecords = deduplicateRecords(this._practiceRecords);
-
-        // 写入存储
-        await this._writeToStorage(STORAGE_KEYS.PRACTICE_RECORDS, this._practiceRecords);
-        
-        // 触发更新回调
+        await window.PracticeRecordAPI.saveRecord(normalizedRecord, { maxRecords: 1000 });
+        await this._loadPracticeRecords();
         this._notifyDataUpdated({ practiceRecords: this._practiceRecords });
-        
-        console.log('[ThemeAdapterBase] 练习记录已保存', normalizedRecord.id || normalizedRecord.sessionId);
+
+        console.log('[ThemeAdapterBase] 练习记录已通过 PracticeRecordAPI 保存', normalizedRecord.id || normalizedRecord.sessionId);
       } catch (error) {
         console.error('[ThemeAdapterBase] 保存练习记录失败:', error);
         throw error;
@@ -954,35 +950,6 @@
           this._cleanupSession(sessionId);
         }
 
-        // 检查主系统是否已处理
-        const mainHandles = typeof window.startHandshakeFallback === 'function';
-        if (mainHandles) {
-          // 主系统会处理，延迟刷新本地缓存
-          console.log('[ThemeAdapterBase] 主系统将处理练习完成消息');
-          setTimeout(() => this._loadPracticeRecords().catch(console.error), 800);
-          return;
-        }
-
-        // 尝试使用主系统的保存函数
-        if (typeof window.savePracticeRecordFallback === 'function') {
-          const examId = normalized.examId || this._getLastOpenedExamId();
-          if (examId) {
-            Promise.resolve(window.savePracticeRecordFallback(examId, payload))
-              .then(() => {
-                console.log('[ThemeAdapterBase] 通过主系统保存练习记录成功');
-              })
-              .catch((error) => {
-                console.warn('[ThemeAdapterBase] 主系统保存失败，使用本地保存:', error);
-                this._saveLocalPracticeRecord(normalized, payload);
-              })
-              .finally(() => {
-                setTimeout(() => this._loadPracticeRecords().catch(console.error), 400);
-              });
-            return;
-          }
-        }
-
-        // 本地保存
         this._saveLocalPracticeRecord(normalized, payload);
       } catch (error) {
         console.error('[ThemeAdapterBase] 处理练习完成消息失败:', error);
@@ -1134,17 +1101,8 @@
      */
     async _loadPracticeRecords() {
       try {
-        let data = await this._readFromStorage(STORAGE_KEYS.PRACTICE_RECORDS);
-        
-        if (!Array.isArray(data)) {
-          data = [];
-        }
-
-        // 去重并规范化
-        this._practiceRecords = deduplicateRecords(data).map(record => ({
-          ...record,
-          type: normalizeType(record.type)
-        }));
+        const data = await this._readPracticeRecordsFromAPI();
+        this._practiceRecords = normalizePracticeRecords(data);
         
         this._notifyDataUpdated({ practiceRecords: this._practiceRecords });
       } catch (error) {
@@ -1153,10 +1111,42 @@
       }
     },
 
+    async _readPracticeRecordsFromAPI() {
+      if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.list !== 'function') {
+        return [];
+      }
+
+      try {
+        const records = await window.PracticeRecordAPI.list();
+        if (Array.isArray(records)) {
+          return records;
+        }
+      } catch (error) {
+        console.warn('[ThemeAdapterBase] PracticeRecordAPI.list 失败:', error);
+      }
+
+      return [];
+    },
+
+    async _replacePracticeRecordsThroughAPI(records) {
+      const finalRecords = Array.isArray(records) ? records : [];
+
+      if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.replace !== 'function') {
+        throw new Error('Unified practice record store not ready');
+      }
+
+      await window.PracticeRecordAPI.replace(finalRecords, { maxRecords: 1000 });
+      return true;
+    },
+
     /**
      * 从存储读取数据
      */
     async _readFromStorage(key) {
+      if (key === STORAGE_KEYS.PRACTICE_RECORDS) {
+        return this._readPracticeRecordsFromAPI();
+      }
+
       // 优先使用 window.storage
       if (window.storage && typeof window.storage.get === 'function') {
         try {
@@ -1189,6 +1179,14 @@
      * 写入存储
      */
     async _writeToStorage(key, value) {
+      if (key === STORAGE_KEYS.PRACTICE_RECORDS) {
+        await this._replacePracticeRecordsThroughAPI(value);
+        return;
+      }
+      await this._writeRawStorage(key, value);
+    },
+
+    async _writeRawStorage(key, value) {
       // 优先使用 window.storage
       if (window.storage && typeof window.storage.set === 'function') {
         try {

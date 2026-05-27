@@ -208,10 +208,10 @@
       if (Array.isArray(window.practiceRecords) && window.practiceRecords.length > 0) {
         return window.practiceRecords.slice();
       }
-      // 尝试从 window.storage 获取
-      if (window.storage && typeof window.storage.get === 'function') {
+      // 尝试从统一记录 API 获取
+      if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
         try {
-          const stored = window.storage.get('practice_records', []);
+          const stored = window.PracticeRecordAPI.list();
           if (stored && typeof stored.then === 'function') {
             stored.then((resolved) => {
               if (!Array.isArray(resolved) || resolved.length === 0) return;
@@ -223,13 +223,13 @@
                 try { window.updatePracticeView(); } catch (_) {}
               }
             }).catch((error) => {
-              console.warn('[AcademicAdapter] 从 storage 获取练习记录失败:', error);
+              console.warn('[AcademicAdapter] 从 PracticeRecordAPI 获取练习记录失败:', error);
             });
           } else if (Array.isArray(stored) && stored.length > 0) {
             return stored;
           }
         } catch (error) {
-          console.warn('[AcademicAdapter] 从 storage 获取练习记录失败:', error);
+          console.warn('[AcademicAdapter] 从 PracticeRecordAPI 获取练习记录失败:', error);
         }
       }
     }

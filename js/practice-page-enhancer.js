@@ -1389,7 +1389,7 @@
 
         buildReplayResultsFromEntry: function (entry = {}) {
             const answers = this.normalizeReplayMap(entry.answers || {});
-            const correctAnswers = this.normalizeReplayMap(entry.correctAnswers || entry.correctAnswerMap || {});
+            const correctAnswers = this.normalizeReplayMap(entry.correctAnswerMap || (entry.realData && entry.realData.correctAnswerMap) || {});
             const rawComparison = this.normalizeReplayMap(entry.answerComparison || {});
             const questionIds = new Set([
                 ...Object.keys(answers),
@@ -1409,12 +1409,11 @@
                 const userAnswer = Object.prototype.hasOwnProperty.call(item, 'userAnswer')
                     ? item.userAnswer
                     : (Object.prototype.hasOwnProperty.call(answers, questionId) ? answers[questionId] : '');
-                const correctAnswer = Object.prototype.hasOwnProperty.call(item, 'correctAnswer')
-                    ? item.correctAnswer
-                    : (Object.prototype.hasOwnProperty.call(correctAnswers, questionId) ? correctAnswers[questionId] : '');
-                const isCorrect = typeof item.isCorrect === 'boolean'
-                    ? item.isCorrect
-                    : this.compareAnswers(userAnswer, correctAnswer);
+                const hasCanonicalCorrectAnswer = Object.prototype.hasOwnProperty.call(correctAnswers, questionId);
+                const correctAnswer = hasCanonicalCorrectAnswer ? correctAnswers[questionId] : '';
+                const isCorrect = hasCanonicalCorrectAnswer
+                    ? this.compareAnswers(userAnswer, correctAnswer)
+                    : null;
                 answerComparison[questionId] = {
                     questionId,
                     userAnswer,
@@ -1430,9 +1429,13 @@
                 scoreInfo = {};
             }
             const derivedScore = this.calculateScoreFromComparison(answerComparison) || { correct: 0, total: questionIds.size, accuracy: 0, percentage: 0 };
-            scoreInfo.correct = Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : derivedScore.correct;
-            scoreInfo.total = Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : derivedScore.total;
-            scoreInfo.accuracy = Number.isFinite(Number(scoreInfo.accuracy)) ? Number(scoreInfo.accuracy) : derivedScore.accuracy;
+            const hasCanonicalCorrectAnswers = Object.keys(correctAnswers).length > 0;
+            scoreInfo.correct = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.correct)) ? derivedScore.correct : Number(scoreInfo.correct);
+            scoreInfo.total = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.total)) ? derivedScore.total : Number(scoreInfo.total);
+            scoreInfo.accuracy = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.accuracy)) ? derivedScore.accuracy : Number(scoreInfo.accuracy);
+            scoreInfo.percentage = hasCanonicalCorrectAnswers || !Number.isFinite(Number(scoreInfo.percentage))
+                ? derivedScore.percentage
+                : Number(scoreInfo.percentage);
             scoreInfo.percentage = Number.isFinite(Number(scoreInfo.percentage))
                 ? Number(scoreInfo.percentage)
                 : Math.round(scoreInfo.accuracy * 100);
@@ -4069,6 +4072,7 @@
                 effectiveEndTime: timing.effectiveEndTime,
                 answers: Object.assign({}, this.answers),
                 correctAnswers: Object.assign({}, this.correctAnswers),
+                correctAnswerMap: Object.assign({}, this.correctAnswers),
                 answerComparison: answerComparison,
                 interactions: Array.isArray(this.interactions) ? this.interactions.slice() : [],
                 scoreInfo: includeScore ? this.extractScore() : null,

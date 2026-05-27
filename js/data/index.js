@@ -27,6 +27,35 @@
         };
     }
 
+    function createMetaFacade(metaRepo) {
+        function assertAllowedKey(key) {
+            if (key === 'user_stats') {
+                throw new Error('user_stats must go through PracticeRecordAPI');
+            }
+        }
+
+        return Object.freeze({
+            async get(key, defaultValue, options = {}) {
+                assertAllowedKey(key);
+                return await metaRepo.get(key, defaultValue, options);
+            },
+            async set(key, value, options = {}) {
+                assertAllowedKey(key);
+                return await metaRepo.set(key, value, options);
+            },
+            async remove(key, options = {}) {
+                assertAllowedKey(key);
+                return await metaRepo.remove(key, options);
+            },
+            async runConsistencyCheck(keys) {
+                const targetKeys = Array.isArray(keys)
+                    ? keys.filter((key) => key !== 'user_stats')
+                    : undefined;
+                return await metaRepo.runConsistencyCheck(targetKeys);
+            }
+        });
+    }
+
     function bootstrap() {
         if (!window.persistentStore) {
             console.warn('[data/index] StorageManager 未就绪，延迟初始化数据仓库');
@@ -38,7 +67,28 @@
             return;
         }
 
-        const dataSource = new ExamData.StorageDataSource(window.persistentStore);
+        if (!window.PracticeCore || typeof window.PracticeCore.__installInternalRepositories !== 'function') {
+            console.warn('[data/index] PracticeCore internal installer 未就绪，延迟初始化数据仓库');
+            setTimeout(bootstrap, 100);
+            return;
+        }
+
+        let createInternalOptions = null;
+        if (typeof window.__installStorageInternalAccess === 'function') {
+            window.__installStorageInternalAccess((factory) => {
+                createInternalOptions = typeof factory === 'function' ? factory : null;
+                return Boolean(createInternalOptions);
+            });
+        }
+        if (!createInternalOptions) {
+            console.warn('[data/index] Storage internal access 未就绪，延迟初始化数据仓库');
+            setTimeout(bootstrap, 100);
+            return;
+        }
+
+        const dataSource = new ExamData.StorageDataSource(window.persistentStore, {
+            createInternalOptions
+        });
         const registry = new ExamData.DataRepositoryRegistry(dataSource);
 
         const practiceRepo = new ExamData.PracticeRepository(dataSource, { maxRecords: 1000 });
@@ -130,7 +180,7 @@
         registry.register('backups', backupRepo);
         registry.register('meta', metaRepo);
 
-        const api = {
+        const internalApi = {
             get practice() { return practiceRepo; },
             get settings() { return settingsRepo; },
             get backups() { return backupRepo; },
@@ -142,7 +192,33 @@
                 return registry.runConsistencyChecks(names);
             }
         };
-
+        window.PracticeCore.__installInternalRepositories(internalApi);
+        if (window.__installStorageInternalAccess) {
+            try {
+                delete window.__installStorageInternalAccess;
+            } catch (_) {
+                window.__installStorageInternalAccess = undefined;
+            }
+        }
+        const metaFacade = createMetaFacade(metaRepo);
+        const api = {
+            get settings() { return settingsRepo; },
+            get backups() { return backupRepo; },
+            get meta() { return metaFacade; },
+            transaction(names, handler) {
+                const targetNames = Array.isArray(names) ? names : [];
+                if (targetNames.includes('practice')) {
+                    throw new Error('practice_records transactions must go through PracticeRecordAPI');
+                }
+                return registry.transaction(names, handler);
+            },
+            runConsistencyChecks(names) {
+                const targetNames = Array.isArray(names)
+                    ? names.filter((name) => name !== 'practice')
+                    : undefined;
+                return registry.runConsistencyChecks(targetNames);
+            }
+        };
         const registryApi = window.StorageProviderRegistry;
         if (registryApi && typeof registryApi.registerStorageProviders === 'function') {
             registryApi.registerStorageProviders({

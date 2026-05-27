@@ -49,6 +49,13 @@
         return core;
     }
 
+    function getPracticeCoreContracts() {
+        const core = global.PracticeCore;
+        return core && core.contracts && typeof core.contracts === 'object'
+            ? core.contracts
+            : null;
+    }
+
     function toStringKey(value) {
         if (value == null) {
             return '';
@@ -230,10 +237,14 @@
         return String(userInfo.normalized) === String(correctInfo.normalized);
     }
 
+    function isPlainObject(value) {
+        return value !== null && typeof value === 'object' && !Array.isArray(value);
+    }
+
     function mergeSourceMaps(sources) {
         const target = {};
         sources.forEach(source => {
-            if (!source || typeof source !== 'object') {
+            if (!isPlainObject(source)) {
                 return;
             }
             Object.keys(source).forEach(key => {
@@ -398,18 +409,14 @@
             extractFromDetails(record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details, entry => entry.userAnswer ?? entry.user)
         ].filter(Boolean);
 
-        const correctSources = [
-            extractFromComparison(record.answerComparison, entry => entry.correctAnswer ?? entry.correct),
-            extractFromComparison(record.realData && record.realData.answerComparison, entry => entry.correctAnswer ?? entry.correct),
-            record.correctAnswers,
-            record.realData && record.realData.correctAnswers,
-            extractFromDetails(record.scoreInfo && record.scoreInfo.details, entry => entry.correctAnswer ?? entry.correct),
-            extractFromDetails(record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details, entry => entry.correctAnswer ?? entry.correct)
-        ].filter(Boolean);
+        const coreContracts = getPracticeCoreContracts();
+        if (!coreContracts || typeof coreContracts.resolveRecordCorrectAnswerMap !== 'function') {
+            throw new Error('AnswerComparisonUtils requires PracticeCore.contracts.resolveRecordCorrectAnswerMap');
+        }
+        const correctMap = coreContracts.resolveRecordCorrectAnswerMap(record);
 
         const comparisonMap = mergeSourceMaps(comparisonSources);
         const userMap = mergeSourceMaps(userSources);
-        const correctMap = mergeSourceMaps(correctSources);
 
         const allKeys = new Set([
             ...Object.keys(comparisonMap),

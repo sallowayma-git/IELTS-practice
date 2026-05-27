@@ -28,6 +28,7 @@ const bundles = {
         'js/data/repositories/metaRepository.js',
         'js/data/index.js',
         'js/core/practiceCore.js',
+        'js/core/practiceRecordAPI.js',
         'js/core/practiceStore.js',
         'js/core/resourceCore.js',
         'assets/generated/reading-exams/manifest.js',
