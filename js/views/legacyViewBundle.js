@@ -1197,7 +1197,7 @@
             button.dataset.date = cell.dateKey;
             button.dataset.count = String(cell.count);
             button.dataset.level = String(cell.level);
-            button.dataset.tooltip = cell.label + '，做题 ' + cell.count + ' 题';
+            button.dataset.tooltip = cell.label + '，做题 ' + cell.count + ' 套';
             button.setAttribute('aria-label', button.dataset.tooltip);
             button.setAttribute('title', button.dataset.tooltip);
             grid.appendChild(button);
@@ -1211,7 +1211,7 @@
         this._setText(
             'heatmapSummary',
             heatmapData.total > 0
-                ? formatPracticeHeatmapMonthLabel(heatmapData.monthStart) + ' 共做题 ' + heatmapData.total + ' 题，活跃 ' + heatmapData.activeDays + ' 天'
+                ? formatPracticeHeatmapMonthLabel(heatmapData.monthStart) + ' 共做题 ' + heatmapData.total + ' 套，活跃 ' + heatmapData.activeDays + ' 天'
                 : formatPracticeHeatmapMonthLabel(heatmapData.monthStart) + ' 暂无练习记录'
         );
     };
@@ -1447,10 +1447,9 @@
         var monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
         var daysInMonth = monthEnd.getDate();
         var weekCount = Math.ceil((leadingDays + daysInMonth) / 7);
-        var counts = aggregatePracticeHeatmapCounts(records, monthStart);
-        var maxCount = Object.keys(counts).reduce(function findMax(max, key) {
-            return counts[key] > max ? counts[key] : max;
-        }, 0);
+        var aggregate = aggregatePracticeHeatmapSets(records, monthStart);
+        var counts = aggregate.monthCounts;
+
         var cells = [];
         var total = 0;
         var activeDays = 0;
@@ -1472,7 +1471,7 @@
                 dateKey: dateKey,
                 label: formatPracticeHeatmapDateLabel(date),
                 count: count,
-                level: inMonth ? resolvePracticeHeatmapLevel(count, maxCount) : 0,
+                level: inMonth ? resolvePracticeHeatmapLevel(count, aggregate.averageSetsPerActiveDay) : 0,
                 inMonth: inMonth,
                 week: Math.floor(index / 7),
                 weekday: index % 7
@@ -1485,12 +1484,13 @@
             cells: cells,
             total: total,
             activeDays: activeDays,
-            maxCount: maxCount
+            averageSetsPerActiveDay: aggregate.averageSetsPerActiveDay
         };
     }
 
-    function aggregatePracticeHeatmapCounts(records, monthStart) {
-        var counts = {};
+    function aggregatePracticeHeatmapSets(records, monthStart) {
+        var monthCounts = {};
+        var allCounts = {};
         var monthKey = toPracticeHeatmapMonthKey(monthStart);
         ensureArray(records).forEach(function collect(record) {
             var timestamp = getRecordTimestamp(record);
@@ -1498,37 +1498,20 @@
                 return;
             }
             var date = new Date(timestamp);
-            if (toPracticeHeatmapMonthKey(date) !== monthKey) {
-                return;
-            }
             var key = toPracticeHeatmapDateKey(date);
-            counts[key] = (counts[key] || 0) + resolvePracticeHeatmapQuestionCount(record);
-        });
-        return counts;
-    }
-
-    function resolvePracticeHeatmapQuestionCount(record) {
-        var rd = record && record.realData && typeof record.realData === 'object' ? record.realData : {};
-        var scoreInfo = record && record.scoreInfo && typeof record.scoreInfo === 'object'
-            ? record.scoreInfo
-            : (rd.scoreInfo && typeof rd.scoreInfo === 'object' ? rd.scoreInfo : {});
-        var candidates = [
-            record && record.totalQuestions,
-            record && record.questionCount,
-            record && record.total,
-            rd.totalQuestions,
-            rd.questionCount,
-            rd.total,
-            scoreInfo.totalQuestions,
-            scoreInfo.total
-        ];
-        for (var i = 0; i < candidates.length; i += 1) {
-            var value = Number(candidates[i]);
-            if (Number.isFinite(value) && value > 0) {
-                return Math.max(1, Math.round(value));
+            allCounts[key] = (allCounts[key] || 0) + 1;
+            if (toPracticeHeatmapMonthKey(date) === monthKey) {
+                monthCounts[key] = (monthCounts[key] || 0) + 1;
             }
-        }
-        return 1;
+        });
+        var activeDayKeys = Object.keys(allCounts);
+        var totalSets = activeDayKeys.reduce(function sumSets(total, key) {
+            return total + allCounts[key];
+        }, 0);
+        return {
+            monthCounts: monthCounts,
+            averageSetsPerActiveDay: activeDayKeys.length > 0 ? totalSets / activeDayKeys.length : 0
+        };
     }
 
     function normalizePracticeHeatmapMonth(value) {
@@ -1544,16 +1527,26 @@
         return new Date(month.getFullYear(), month.getMonth() + offset, 1);
     }
 
-    function resolvePracticeHeatmapLevel(count, maxCount) {
+    function resolvePracticeHeatmapLevel(count, avg) {
         var safeCount = Math.max(0, Number(count) || 0);
-        var safeMax = Math.max(0, Number(maxCount) || 0);
+        var safeAvg = Math.max(0, Number(avg) || 0);
         if (safeCount <= 0) {
             return 0;
         }
-        if (safeMax <= 1) {
+        if (safeAvg <= 0) {
             return 1;
         }
-        return Math.max(1, Math.min(4, Math.ceil(safeCount / safeMax * 4)));
+        var ratio = safeCount / safeAvg;
+        if (ratio < 0.8) {
+            return 1;
+        }
+        if (ratio < 1.5) {
+            return 2;
+        }
+        if (ratio < 2.5) {
+            return 3;
+        }
+        return 4;
     }
 
     function toPracticeHeatmapDateKey(date) {

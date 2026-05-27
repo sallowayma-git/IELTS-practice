@@ -422,7 +422,51 @@
             interaction.keepToolbar = false;
         });
         document.getElementById('btnHL')?.addEventListener('click', () => applySelectionHighlight('highlight'));
-        document.getElementById('btnNote')?.addEventListener('click', () => applySelectionHighlight('note'));
+        document.getElementById('btnNote')?.addEventListener('click', () => {
+            let targetNode = interaction.currentHighlightNode;
+            let text = '';
+
+            if (targetNode) {
+                if (targetNode.dataset.hlType !== 'note') {
+                    targetNode.dataset.hlType = 'note';
+                    syncSimulationDraftSnapshot('highlight');
+                }
+                text = (targetNode.textContent || '').trim();
+            } else if (interaction.lastRange && !interaction.lastRange.collapsed) {
+                const span = document.createElement('span');
+                span.className = 'hl';
+                span.dataset.hlType = 'note';
+                try {
+                    interaction.lastRange.surroundContents(span);
+                    targetNode = span;
+                    text = (span.textContent || '').trim();
+                    const selection = global.getSelection();
+                    selection?.removeAllRanges();
+                    syncSimulationDraftSnapshot('highlight');
+                } catch (_) {
+                    // Ignore
+                }
+            }
+
+            const toolbar = document.getElementById('selbar');
+            if (toolbar) toolbar.style.display = 'none';
+            interaction.lastRange = null;
+            interaction.currentHighlightNode = null;
+
+            if (text) {
+                const noteArea = document.querySelector('#notes-panel textarea');
+                if (noteArea) {
+                    noteArea.value += (noteArea.value ? '\n\n' : '') + '> ' + text + '\n';
+                    noteArea.scrollTop = noteArea.scrollHeight;
+                    noteArea.focus();
+                }
+                closeFloatingPanels();
+                const notesPanel = document.getElementById('notes-panel');
+                const overlay = document.querySelector('.overlay');
+                if (notesPanel) notesPanel.style.display = 'flex';
+                if (overlay) overlay.style.display = 'block';
+            }
+        });
         document.getElementById('btnUH')?.addEventListener('click', removeSelectionHighlight);
     }
 

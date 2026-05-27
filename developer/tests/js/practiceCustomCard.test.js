@@ -104,13 +104,14 @@ try {
 
     assertContains(source, "this.activeWidget = options.defaultWidget || 'heatmap'", '自定义卡片默认组件应为热力图');
     assertContains(source, 'function calculatePracticeHeatmapData(records, monthDate)', '热力图数据聚合函数应存在');
-    assertContains(source, 'aggregatePracticeHeatmapCounts(records, monthStart)', '热力图应按月份聚合练习记录');
+    assertContains(source, 'aggregatePracticeHeatmapSets(records, monthStart)', '热力图应按套数聚合练习记录');
     assertContains(source, "event.target.closest('[data-practice-heatmap-month]')", '月份按钮事件应单独绑定');
     assertContains(source, 'button.dataset.tooltip = cell.label', '热力图块应写入悬浮提示文案');
     assertContains(source, 'button.style.gridColumn = String(cell.weekday + 1);', '热力图应按星期横向铺开');
     assertContains(source, 'button.style.gridRow = String(cell.week + 1);', '热力图应按周数纵向换行');
     assertNotContains(source, 'button.style.gridColumn = String(cell.week + 1);', '热力图不能继续使用竖向周列布局');
-    assertContains(source, 'resolvePracticeHeatmapQuestionCount(record)', '热力图深浅应按做题数量聚合');
+    assertContains(source, 'averageSetsPerActiveDay', '热力图深浅应按用户每日平均做题套数动态渲染');
+    assertNotContains(source, 'resolvePracticeHeatmapQuestionCount(record)', '热力图不能继续按题目数量聚合');
     assertContains(source, 'function calculateReadingRadarData(records)', '雷达数据聚合函数应存在');
     assertContains(source, 'buildReadingQuestionTypeMap(record)', '雷达应从阅读题组建立题型映射');
     assertContains(source, 'window.__READING_EXAM_DATA__', '雷达应使用阅读题库注册数据兜底');
@@ -134,10 +135,11 @@ try {
     const mayTwelfth = heatmapData.cells.find((cell) => cell.dateKey === '2026-05-12');
     assert.strictEqual(heatmapData.monthStart.getFullYear(), 2026, '热力图月份年份应来自选中月份');
     assert.strictEqual(heatmapData.monthStart.getMonth(), 4, '热力图月份应来自选中月份');
-    assert.strictEqual(heatmapData.total, 25, '热力图应只统计选中月份的做题数量');
+    assert.strictEqual(heatmapData.total, 3, '热力图应只统计选中月份的做题套数');
     assert.strictEqual(heatmapData.activeDays, 2, '热力图应统计活跃天数');
-    assert.strictEqual(mayFirst.count, 20, '同一天多条记录的做题数量应累加');
-    assert.strictEqual(mayTwelfth.count, 5, '单日做题数量应写入对应热力块');
+    assert.strictEqual(mayFirst.count, 2, '同一天多条记录的做题套数应累加');
+    assert.strictEqual(mayTwelfth.count, 1, '单日做题套数应写入对应热力块');
+    assert.strictEqual(heatmapData.averageSetsPerActiveDay, 4 / 3, '热力图颜色基准应使用全局活跃日每日平均套数');
     assert(mayFirst.level > mayTwelfth.level, '做题量更多的日期颜色等级应更深');
     record('热力图月份聚合回归守卫');
 
@@ -170,7 +172,8 @@ try {
     [
         "this.activeWidget = options.defaultWidget || 'heatmap'",
         'function calculatePracticeHeatmapData(records, monthDate)',
-        'resolvePracticeHeatmapQuestionCount(record)',
+        'aggregatePracticeHeatmapSets(records, monthStart)',
+        'averageSetsPerActiveDay',
         'practice-heatmap__cell',
         "event.target.closest('[data-practice-heatmap-month]')",
         'function calculateReadingRadarData(records)',
