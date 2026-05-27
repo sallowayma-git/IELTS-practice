@@ -909,6 +909,30 @@ class ScoreStorage {
         const normalizedComparison = comparisonSource && typeof comparisonSource === 'object'
             ? this.clonePlainObject(comparisonSource)
             : null;
+        const questionTypeMap = (recordData.questionTypeMap && typeof recordData.questionTypeMap === 'object')
+            ? this.clonePlainObject(recordData.questionTypeMap)
+            : (recordData.realData?.questionTypeMap && typeof recordData.realData.questionTypeMap === 'object'
+                ? this.clonePlainObject(recordData.realData.questionTypeMap)
+                : {});
+        const questionTypePerformance = (recordData.questionTypePerformance && typeof recordData.questionTypePerformance === 'object')
+            ? this.clonePlainObject(recordData.questionTypePerformance)
+            : (recordData.realData?.questionTypePerformance && typeof recordData.realData.questionTypePerformance === 'object'
+                ? this.clonePlainObject(recordData.realData.questionTypePerformance)
+                : {});
+        const highlights = Array.isArray(recordData.highlights)
+            ? recordData.highlights.slice()
+            : (Array.isArray(recordData.rawData?.highlights)
+                ? recordData.rawData.highlights.slice()
+                : (Array.isArray(recordData.realData?.highlights)
+                    ? recordData.realData.highlights.slice()
+                    : []));
+        const scrollY = Number.isFinite(Number(recordData.scrollY))
+            ? Number(recordData.scrollY)
+            : (Number.isFinite(Number(recordData.rawData?.scrollY))
+                ? Number(recordData.rawData.scrollY)
+                : (Number.isFinite(Number(recordData.realData?.scrollY))
+                    ? Number(recordData.realData.scrollY)
+                    : 0));
 
         return {
             // 基础信息
@@ -935,7 +959,8 @@ class ScoreStorage {
             answers: normalizedAnswers,
             answerDetails: detailSource || null,
             correctAnswerMap: normalizedCorrectMap || {},
-            questionTypePerformance: recordData.questionTypePerformance || {},
+            questionTypeMap,
+            questionTypePerformance,
 
             // 元数据
             metadata,
@@ -943,6 +968,8 @@ class ScoreStorage {
             suiteMode: Boolean(recordData.suiteMode || (frequency && frequency.toLowerCase() === 'suite')),
             suiteSessionId,
             suiteEntries: normalizedSuiteEntries,
+            highlights,
+            scrollY,
             scoreInfo: recordData.scoreInfo
                 ? Object.assign({}, recordData.scoreInfo, {
                     details: recordData.scoreInfo.details || detailSource || null
@@ -957,9 +984,13 @@ class ScoreStorage {
                     }),
                     answerComparison: recordData.realData.answerComparison
                         ? this.clonePlainObject(recordData.realData.answerComparison)
-                        : (normalizedComparison || null)
+                        : (normalizedComparison || null),
+                    questionTypeMap,
+                    questionTypePerformance,
+                    highlights,
+                    scrollY
                 })
-                : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
+                : (normalizedComparison ? { answerComparison: normalizedComparison, questionTypeMap, questionTypePerformance } : null),
             answerComparison: normalizedComparison,
 
             // 系统信息
@@ -1072,6 +1103,12 @@ class ScoreStorage {
                 || normalizedScoreInfo?.details
                 || entry.rawData?.answerComparison
                 || null;
+            const highlights = Array.isArray(entry.highlights)
+                ? entry.highlights.slice()
+                : (Array.isArray(entry.rawData?.highlights) ? entry.rawData.highlights.slice() : []);
+            const scrollY = Number.isFinite(Number(entry.scrollY))
+                ? Number(entry.scrollY)
+                : (Number.isFinite(Number(entry.rawData?.scrollY)) ? Number(entry.rawData.scrollY) : 0);
             return {
                 examId: entry.examId || null,
                 title: entry.title || entry.examTitle || `套题第${index + 1}篇`,
@@ -1081,6 +1118,8 @@ class ScoreStorage {
                 answers: answerMap,
                 answerComparison: this.clonePlainObject(answerComparisonSource) || null,
                 metadata: entry.metadata ? Object.assign({}, entry.metadata) : {},
+                highlights,
+                scrollY,
                 rawData: entry.rawData ? this.clonePlainObject(entry.rawData) : null
             };
         }).filter(Boolean);
@@ -1124,7 +1163,10 @@ class ScoreStorage {
             const correctAnswer = correctMap && correctMap[questionId] ? String(correctMap[questionId]) : '-';
             let isCorrect = null;
             if (correctAnswer !== '-') {
-                isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+                const matchCore = window.AnswerMatchCore;
+                isCorrect = matchCore && typeof matchCore.compareAnswers === 'function'
+                    ? matchCore.compareAnswers(userAnswer, correctAnswer) === true
+                    : userAnswer.toLowerCase() === correctAnswer.toLowerCase();
             }
             details[questionId] = {
                 userAnswer,

@@ -107,6 +107,15 @@
                     (value) => Array.isArray(value) || 'vocab_review_queue 必须为数组'
                 ]
             },
+            vocab_list_reading_highlights: {
+                defaultValue: () => [],
+                validators: [
+                    (value) => (
+                        Array.isArray(value)
+                        || (value && typeof value === 'object' && Array.isArray(value.words))
+                    ) || 'vocab_list_reading_highlights 必须为数组或词表对象'
+                ]
+            },
             legacy_practice_records_migrated: {
                 defaultValue: () => false,
                 validators: [

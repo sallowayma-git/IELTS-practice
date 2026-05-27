@@ -2,6 +2,44 @@
 (function () {
   'use strict';
 
+  function ensureCompatPatch(global) {
+    if (!global || (global.CompatPatch && typeof global.CompatPatch.register === 'function')) {
+      return global && global.CompatPatch ? global.CompatPatch : null;
+    }
+    var patches = [];
+    var register = function register(name, metadata) {
+      if (!name) {
+        return null;
+      }
+      var patch = Object.assign({
+        name: String(name),
+        owner: 'legacy',
+        reason: '',
+        removeAfter: ''
+      }, metadata || {});
+      patches.push(patch);
+      return patch;
+    };
+    var list = function list() {
+      return patches.slice();
+    };
+    global.CompatPatch = Object.assign({}, global.CompatPatch || {}, {
+      register: register,
+      list: list
+    });
+    return global.CompatPatch;
+  }
+
+  ensureCompatPatch(window);
+
+  if (window.CompatPatch && typeof window.CompatPatch.register === 'function') {
+    window.CompatPatch.register('practice-recorder-temp-recovery-async', {
+      owner: 'practice',
+      reason: 'file protocol compatible recovery for legacy temporary practice records',
+      removeAfter: 'after PracticeRecorder recovery is canonical'
+    });
+  }
+
   try {
     // Patch PracticeRecorder.recoverTemporaryRecords to a robust async version
     const patchPracticeRecorder = () => {
@@ -69,4 +107,3 @@
     tryPatch();
   } catch (_) {}
 })();
-

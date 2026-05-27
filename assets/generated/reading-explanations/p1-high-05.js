@@ -59,7 +59,7 @@
       "items": [
         {
           "questionNumber": 1,
-          "text": "(1) 题目 1：The name Katherine Mansfield, which appears on the writer's books, was exactly the same as her original name. （出现在作者书上的名字凯瑟琳·曼斯菲尔德，与她的原名完全相同。）\n答案：FALSE\n解析：第一段明确指出“Katherine Mansfield”是她的笔名（pen name），而她的原名是“Katherine Mansfield Beauchamp Murry”，两者并不完全相同。",
+          "text": "(1) 题目 1：The name Katherine Mansfield, which appears on the writer’s books, was exactly the same as her original name. （出现在作者书上的名字凯瑟琳·曼斯菲尔德，与她的原名完全相同。）\n答案：FALSE\n解析：第一段明确指出“Katherine Mansfield”是她的笔名（pen name），而她的原名是“Katherine Mansfield Beauchamp Murry”，两者并不完全相同。",
           "questionId": "q1"
         },
         {
@@ -74,12 +74,12 @@
         },
         {
           "questionNumber": 4,
-          "text": "(4) 题目 4：When Mansfield was at Queen's College, she planned to be a professional writer. （当曼斯菲尔德在女王学院时，她计划成为一名职业作家。）\n答案：FALSE\n解析：第三段说她在女王学院时，相信自己会专业从事大提琴演奏（take up professionally）；而第四段指出，她是在回到新西兰后才下定决心成为职业作家的。",
+          "text": "(4) 题目 4：When Mansfield was at Queen’s College, she planned to be a professional writer. （当曼斯菲尔德在女王学院时，她计划成为一名职业作家。）\n答案：FALSE\n解析：第三段说她在女王学院时，相信自己会专业从事大提琴演奏（take up professionally）；而第四段指出，她是在回到新西兰后才下定决心成为职业作家的。",
           "questionId": "q4"
         },
         {
           "questionNumber": 5,
-          "text": "(5) 题目 5：Mansfield was unpopular with the other students at Queen's College. （曼斯菲尔德在女王学院不受其他学生欢迎。）\n答案：FALSE\n解析：第三段说她因其“lively and charismatic approach”而受到同学们的“appreciated”（欣赏），与“unpopular”（不受欢迎）相反。",
+          "text": "(5) 题目 5：Mansfield was unpopular with the other students at Queen’s College. （曼斯菲尔德在女王学院不受其他学生欢迎。）\n答案：FALSE\n解析：第三段说她因其“lively and charismatic approach”而受到同学们的“appreciated”（欣赏），与“unpopular”（不受欢迎）相反。",
           "questionId": "q5"
         },
         {
@@ -130,7 +130,7 @@
         },
         {
           "questionNumber": 13,
-          "text": "(7) 题目 13：Mansfield's \\___\\___ published more of her works after her death （曼斯菲尔德的_\\___\\__在她去世后出版了她更多的作品）\n答案：husband\n解析：第九段明确指出“her husband, Murry, took on the task of editing and publishing her works.”。",
+          "text": "(7) 题目 13：Mansfield’s \\___\\___ published more of her works after her death （曼斯菲尔德的_\\___\\__在她去世后出版了她更多的作品）\n答案：husband\n解析：第九段明确指出“her husband, Murry, took on the task of editing and publishing her works.”。",
           "questionId": "q13"
         }
       ],
