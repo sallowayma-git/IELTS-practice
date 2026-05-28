@@ -35,6 +35,13 @@
             icon: '✏️',
             source: 'user',
             storageKey: 'vocab_list_custom'
+        },
+        'reading-highlights': {
+            id: 'reading-highlights',
+            name: '阅读高亮生词',
+            icon: '📖',
+            source: 'reading-highlight',
+            storageKey: 'vocab_list_reading_highlights'
         }
     });
 
@@ -106,6 +113,15 @@
 
     function generateId(seed) {
         if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            var seedStr = seed ? String(seed).trim() : '';
+            if (seedStr) {
+                var hash = 0;
+                for (var i = 0; i < seedStr.length; i++) {
+                    hash = ((hash << 5) - hash) + seedStr.charCodeAt(i);
+                    hash |= 0;
+                }
+                return 'word-' + Math.abs(hash).toString(36);
+            }
             return crypto.randomUUID();
         }
         const base = seed ? String(seed).trim().toLowerCase().replace(/[^a-z0-9]+/gi, '-') : 'word';
@@ -124,6 +140,7 @@
         const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : generateId(baseWord);
         const example = typeof entry.example === 'string' ? entry.example.trim() : '';
         const note = typeof entry.note === 'string' ? entry.note.trim() : '';
+        const source = typeof entry.source === 'string' ? entry.source.trim() : '';
         const freq = typeof entry.freq === 'number' && Number.isFinite(entry.freq) ? Math.min(1, Math.max(0, entry.freq)) : null;
         
         // SM-2 字段
@@ -182,7 +199,79 @@
         if (freq !== null) {
             record.freq = freq;
         }
+        if (source) {
+            record.source = source;
+        }
+        [
+            'userInput',
+            'questionId',
+            'suiteId',
+            'examId',
+            'errorCount',
+            'timestamp',
+            'acceptedAnswers',
+            'canonicalAnswer',
+            'reasonCode',
+            'confidence',
+            'tokenIndex',
+            'metadata',
+            'spellingNote'
+        ].forEach((key) => {
+            if (entry[key] !== undefined) {
+                record[key] = entry[key];
+            }
+        });
         return record;
+    }
+
+    function normalizeLexiconLookupKey(word) {
+        return String(word || '').trim().toLowerCase().replace(/[^a-z'-]+/g, '');
+    }
+
+    function isSpellingFallbackMeaning(meaning) {
+        return typeof meaning === 'string' && meaning.trim().startsWith('你曾拼写为:');
+    }
+
+    function isUsableLexiconEntry(entry) {
+        return entry
+            && typeof entry === 'object'
+            && typeof entry.word === 'string'
+            && entry.word.trim()
+            && typeof entry.meaning === 'string'
+            && entry.meaning.trim()
+            && !isSpellingFallbackMeaning(entry.meaning);
+    }
+
+    function findLexiconEntry(word) {
+        const key = normalizeLexiconLookupKey(word);
+        if (!key) {
+            return null;
+        }
+
+        const embedded = window.__EMBEDDED_WORDLISTS__;
+        const embeddedCore = embedded && Array.isArray(embedded.ielts_core)
+            ? embedded.ielts_core
+            : [];
+        const cacheDefault = state.listCache.get(DEFAULT_LIST_ID);
+        const cachedWords = cacheDefault && cacheDefault.data && Array.isArray(cacheDefault.data.words)
+            ? cacheDefault.data.words
+            : [];
+        const sources = [embeddedCore, cachedWords, state.words];
+
+        for (const source of sources) {
+            if (!Array.isArray(source) || !source.length) {
+                continue;
+            }
+            const found = source.find((entry) => (
+                isUsableLexiconEntry(entry)
+                && normalizeLexiconLookupKey(entry.word) === key
+            ));
+            if (found) {
+                return found;
+            }
+        }
+
+        return null;
     }
 
     function rebuildIndex() {
@@ -279,7 +368,7 @@
 
     function normalizeListEntry(entry, listId) {
         if (isSpellingErrorList(listId)) {
-            return convertSpellingErrorToWord(entry) || normalizeWordRecord(entry);
+            return convertSpellingErrorToWord(entry, listId) || normalizeWordRecord(entry);
         }
         return normalizeWordRecord(entry);
     }
@@ -600,7 +689,23 @@
         return fresh.slice(0, target).map((word) => ({ ...word }));
     }
 
-    function convertSpellingErrorToWord(error) {
+    function sourceForSpellingList(errorSource, listId) {
+        if (errorSource === 'p1' || listId === 'spelling-errors-p1') {
+            return 'P1 听力练习';
+        }
+        if (errorSource === 'p4' || listId === 'spelling-errors-p4') {
+            return 'P4 听力练习';
+        }
+        if (errorSource === 'all' || errorSource === 'master' || listId === 'spelling-errors-master') {
+            return '综合练习';
+        }
+        if (typeof errorSource === 'string' && errorSource.trim()) {
+            return errorSource.trim();
+        }
+        return '听力练习';
+    }
+
+    function convertSpellingErrorToWord(error, listId) {
         if (!error || typeof error !== 'object') {
             return null;
         }
@@ -613,53 +718,63 @@
             return null;
         }
 
-        // 生成含义：显示用户的错误拼写和题目来源
         const userInput = error.userInput || '(未记录)';
         const examId = error.examId || '';
         const questionId = error.questionId || '';
         const errorCount = error.errorCount || 1;
-        
-        let meaning = `你曾拼写为: ${userInput}`;
+
+        const lexiconEntry = findLexiconEntry(word);
+        let spellingNote = `你曾拼写为: ${userInput}`;
         if (errorCount > 1) {
-            meaning += ` (错误${errorCount}次)`;
+            spellingNote += ` (错误${errorCount}次)`;
         }
         
-        // 生成例句：显示题目来源
-        let example = '';
+        const sourceParts = [];
         if (examId) {
-            example = `来源: ${examId}`;
-            if (questionId) {
-                example += ` - 题目 ${questionId}`;
-            }
+            sourceParts.push(`来源: ${examId}`);
         }
+        if (questionId) {
+            sourceParts.push(`题目 ${questionId}`);
+        }
+        const sourceNote = sourceParts.join(' - ');
+        const note = [spellingNote, sourceNote].filter(Boolean).join('；');
+
+        const existingMeaning = typeof error.meaning === 'string' && error.meaning.trim() && !isSpellingFallbackMeaning(error.meaning)
+            ? error.meaning.trim()
+            : '';
+        const fallbackMeaning = '暂无中文释义';
+        const meaning = lexiconEntry && typeof lexiconEntry.meaning === 'string' && lexiconEntry.meaning.trim()
+            ? lexiconEntry.meaning.trim()
+            : (existingMeaning || fallbackMeaning);
+        const example = lexiconEntry && typeof lexiconEntry.example === 'string' && lexiconEntry.example.trim()
+            ? lexiconEntry.example.trim()
+            : (error.example || sourceNote);
 
         // 生成ID
-        const id = generateId(word);
-
-        // 生成来源标签
-        const sourceLabels = {
-            'p1': 'P1 听力练习',
-            'p4': 'P4 听力练习',
-            'all': '综合练习',
-            'other': '听力练习'
-        };
-        const source = sourceLabels[error.source] || '听力练习';
+        const id = typeof error.id === 'string' && error.id.trim() ? error.id.trim() : generateId(word);
+        const source = sourceForSpellingList(error.source, listId);
 
         return normalizeWordRecord({
+            ...error,
             id,
             word,
             meaning,
             example,
-            note: '',
+            note,
             source,
+            userInput,
+            examId,
+            questionId,
+            errorCount,
+            spellingNote,
             // 新词，没有复习记录
-            easeFactor: null,
-            interval: 1,
-            repetitions: 0,
-            intraCycles: 0,
-            correctCount: 0,
-            lastReviewed: null,
-            nextReview: null,
+            easeFactor: error.easeFactor ?? null,
+            interval: error.interval ?? 1,
+            repetitions: error.repetitions ?? 0,
+            intraCycles: error.intraCycles ?? 0,
+            correctCount: error.correctCount ?? 0,
+            lastReviewed: error.lastReviewed ?? null,
+            nextReview: error.nextReview ?? null,
             createdAt: error.timestamp ? new Date(error.timestamp).toISOString() : getNow(),
             updatedAt: getNow()
         });
@@ -822,6 +937,82 @@
         return state.activeListId;
     }
 
+    function normalizeReadingHighlightPayload(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return null;
+        }
+        const word = typeof payload.word === 'string' ? payload.word.trim() : '';
+        if (!word) {
+            return null;
+        }
+        const selectedText = typeof payload.selectedText === 'string' ? payload.selectedText.trim() : '';
+        const meaning = typeof payload.meaning === 'string' && payload.meaning.trim()
+            ? payload.meaning.trim()
+            : (typeof payload.definition === 'string' && payload.definition.trim() ? payload.definition.trim() : '待补充释义');
+        const noteParts = [
+            payload.phonetic ? `音标: ${String(payload.phonetic).trim()}` : '',
+            payload.partOfSpeech ? `词性: ${String(payload.partOfSpeech).trim()}` : '',
+            selectedText && selectedText !== word ? `原高亮: ${selectedText}` : '',
+            payload.sourceLabel ? `来源: ${String(payload.sourceLabel).trim()}` : '',
+            payload.license ? `许可: ${String(payload.license).trim()}` : ''
+        ].filter(Boolean);
+        const context = payload.context && typeof payload.context === 'object' ? payload.context : {};
+        if (context.title) {
+            noteParts.push(`文章: ${String(context.title).trim()}`);
+        }
+        if (context.examId) {
+            noteParts.push(`题目: ${String(context.examId).trim()}`);
+        }
+        return normalizeWordRecord({
+            id: generateId(`reading-highlight:${word}`),
+            word,
+            meaning,
+            example: typeof payload.example === 'string' ? payload.example.trim() : '',
+            note: noteParts.join('；'),
+            easeFactor: null,
+            interval: 1,
+            repetitions: 0,
+            intraCycles: 0,
+            correctCount: 0,
+            lastReviewed: null,
+            nextReview: null,
+            createdAt: getNow(),
+            updatedAt: getNow()
+        });
+    }
+
+    async function upsertReadingHighlightWord(payload) {
+        const normalized = normalizeReadingHighlightPayload(payload);
+        if (!normalized) {
+            return null;
+        }
+        await init();
+        const listId = 'reading-highlights';
+        const listConfig = VOCAB_LISTS[listId];
+        const storedData = await read(listConfig.storageKey, []);
+        const words = normalizeStoredListWords(storedData, listId);
+        const key = normalized.word.toLowerCase();
+        const existingIndex = words.findIndex((entry) => String(entry.word || '').trim().toLowerCase() === key);
+        if (existingIndex >= 0) {
+            const existing = words[existingIndex];
+            words.splice(existingIndex, 1, normalizeWordRecord({
+                ...existing,
+                ...normalized,
+                id: existing.id || normalized.id,
+                createdAt: existing.createdAt || normalized.createdAt,
+                updatedAt: getNow()
+            }));
+        } else {
+            words.push(normalized);
+        }
+        await persist(listConfig.storageKey, words.filter(Boolean));
+        state.listCache.delete(listId);
+        if (state.activeListId === listId) {
+            setWordsInternal(words.filter(Boolean));
+        }
+        return normalized;
+    }
+
     async function init() {
         ensureReadyPromise();
         connectToProviders();
@@ -847,6 +1038,7 @@
         getListWordCount,
         getAvailableLists,
         getActiveListId,
+        upsertReadingHighlightWord,
         get VOCAB_LISTS() {
             return VOCAB_LISTS;
         },

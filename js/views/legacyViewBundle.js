@@ -38,11 +38,15 @@
             return 0;
         }
         var candidates = [
-            record.date, record.endTime, record.timestamp, record.createdAt, record.updatedAt,
-            record.completedAt
+            record.date, record.startTime, record.endTime, record.timestamp, record.createdAt, record.updatedAt,
+            record.completedAt, record.startedAt
         ];
         var rd = record.realData || {};
-        candidates.push(rd.date, rd.endTime, rd.timestamp);
+        var metadata = record.metadata || {};
+        candidates.push(
+            rd.date, rd.startTime, rd.endTime, rd.timestamp, rd.createdAt, rd.completedAt,
+            metadata.startedAt, metadata.completedAt, metadata.createdAt
+        );
 
         var maxTs = 0;
         for (var i = 0; i < candidates.length; i += 1) {
@@ -284,6 +288,1774 @@
             return '0';
         }
         return Math.round(minutes).toString();
+    }
+
+    // --- Practice trend renderer ---
+    var practiceTrendRanges = [
+        { key: 'recent10', label: '最近十次', mode: 'count', value: 10 },
+        { key: 'last7d', label: '最近七天', mode: 'days', value: 7 },
+        { key: 'last30d', label: '最近一月', mode: 'days', value: 30 },
+        { key: 'recent20', label: '最近20次', mode: 'count', value: 20 }
+    ];
+    var practiceTrendRangeByKey = practiceTrendRanges.reduce(function buildRangeMap(map, range) {
+        map[range.key] = range;
+        return map;
+    }, {});
+
+    function PracticeTrendRenderer(options) {
+        options = options || {};
+        this.ids = {
+            card: options.cardId || 'practice-trend-card',
+            canvas: options.canvasId || 'practice-trend-canvas',
+            empty: options.emptyId || 'practice-trend-empty',
+            rangeLabel: options.rangeLabelId || 'practice-trend-range-label',
+            count: options.countId || 'practice-trend-count',
+            average: options.averageId || 'practice-trend-average'
+        };
+        this.rangeKey = options.defaultRange || 'recent10';
+        this.records = [];
+        this.bound = false;
+        this.resizeHandler = null;
+    }
+
+    PracticeTrendRenderer.ranges = practiceTrendRanges.slice();
+
+    PracticeTrendRenderer.prototype.update = function update(records) {
+        this.records = Array.isArray(records) ? records.slice() : [];
+        this._ensureInteractions();
+        this.render();
+    };
+
+    PracticeTrendRenderer.prototype.render = function render() {
+        if (typeof document === 'undefined') {
+            return;
+        }
+        var card = this._getElement('card');
+        var canvas = this._getElement('canvas');
+        if (!card || !canvas || !canvas.getContext) {
+            return;
+        }
+
+        var range = practiceTrendRangeByKey[this.rangeKey] || practiceTrendRangeByKey.recent10;
+        var points = this._selectPoints(range);
+        this._setText('rangeLabel', range.label);
+        this._setText('count', String(points.length));
+        this._setText('average', this._formatAverage(points));
+        this._syncOptionState();
+
+        if (points.length === 0) {
+            card.classList.add('is-empty');
+            this._drawEmpty(canvas);
+            return;
+        }
+        card.classList.remove('is-empty');
+        this._drawChart(canvas, points);
+    };
+
+    PracticeTrendRenderer.prototype.flipToBack = function flipToBack() {
+        var card = this._getElement('card');
+        if (!card) {
+            return;
+        }
+        card.classList.add('is-flipped');
+        card.setAttribute('aria-pressed', 'true');
+        card.setAttribute('aria-label', '关闭练习趋势筛选范围');
+    };
+
+    PracticeTrendRenderer.prototype.flipToFront = function flipToFront() {
+        var card = this._getElement('card');
+        if (!card) {
+            return;
+        }
+        card.classList.remove('is-flipped');
+        card.setAttribute('aria-pressed', 'false');
+        card.setAttribute('aria-label', '打开练习趋势筛选范围');
+    };
+
+    PracticeTrendRenderer.prototype.setRange = function setRange(rangeKey) {
+        if (!practiceTrendRangeByKey[rangeKey]) {
+            return;
+        }
+        this.rangeKey = rangeKey;
+        this.render();
+        this.flipToFront();
+    };
+
+    PracticeTrendRenderer.prototype._ensureInteractions = function _ensureInteractions() {
+        if (this.bound || typeof document === 'undefined') {
+            return;
+        }
+        var card = this._getElement('card');
+        if (!card) {
+            return;
+        }
+        this.bound = true;
+        var self = this;
+
+        card.addEventListener('click', function onTrendCardClick(event) {
+            var option = event.target && event.target.closest
+                ? event.target.closest('[data-practice-trend-range]')
+                : null;
+            if (option) {
+                event.preventDefault();
+                event.stopPropagation();
+                self.setRange(option.dataset.practiceTrendRange);
+                return;
+            }
+            if (card.classList.contains('is-flipped')) {
+                self.flipToFront();
+            } else {
+                self.flipToBack();
+            }
+        });
+
+        card.addEventListener('keydown', function onTrendCardKeydown(event) {
+            var key = event.key || '';
+            if (key !== 'Enter' && key !== ' ') {
+                return;
+            }
+            var option = event.target && event.target.closest
+                ? event.target.closest('[data-practice-trend-range]')
+                : null;
+            event.preventDefault();
+            if (option) {
+                self.setRange(option.dataset.practiceTrendRange);
+                return;
+            }
+            if (card.classList.contains('is-flipped')) {
+                self.flipToFront();
+            } else {
+                self.flipToBack();
+            }
+        });
+
+        this.resizeHandler = function onTrendResize() {
+            self.render();
+        };
+        if (typeof window !== 'undefined') {
+            window.addEventListener('resize', this.resizeHandler);
+        }
+    };
+
+    PracticeTrendRenderer.prototype._selectPoints = function _selectPoints(range) {
+        var points = this.records
+            .map(function mapRecord(record, index) {
+                var timestamp = getRecordTimestamp(record);
+                var value = normalizePracticeTrendPercentage(record);
+                if (!Number.isFinite(value)) {
+                    return null;
+                }
+                return {
+                    timestamp: timestamp,
+                    order: index,
+                    value: Math.max(0, Math.min(100, value))
+                };
+            })
+            .filter(Boolean)
+            .sort(function sortPoints(a, b) {
+                if (a.timestamp !== b.timestamp) {
+                    return a.timestamp - b.timestamp;
+                }
+                return a.order - b.order;
+            });
+
+        if (!range || points.length === 0) {
+            return points;
+        }
+
+        if (range.mode === 'count') {
+            return points.slice(-range.value);
+        }
+
+        if (range.mode === 'days') {
+            var latestTimestamp = points.reduce(function findLatest(max, point) {
+                return point.timestamp > max ? point.timestamp : max;
+            }, 0);
+            var now = Date.now();
+            var anchor = latestTimestamp > 0 ? Math.max(now, latestTimestamp) : now;
+            var cutoff = anchor - range.value * 24 * 60 * 60 * 1000;
+            return points.filter(function inWindow(point) {
+                return point.timestamp > 0 && point.timestamp >= cutoff;
+            });
+        }
+
+        return points;
+    };
+
+    PracticeTrendRenderer.prototype._drawEmpty = function _drawEmpty(canvas) {
+        var ctx = preparePracticeTrendCanvas(canvas);
+        if (!ctx) {
+            return;
+        }
+        var palette = getPracticeTrendPalette(canvas);
+        var width = canvas.__practiceTrendCssWidth || canvas.clientWidth || 320;
+        var height = canvas.__practiceTrendCssHeight || canvas.clientHeight || 180;
+        ctx.clearRect(0, 0, width, height);
+        drawPracticeTrendGrid(ctx, width, height, palette);
+    };
+
+    PracticeTrendRenderer.prototype._drawChart = function _drawChart(canvas, points) {
+        var ctx = preparePracticeTrendCanvas(canvas);
+        if (!ctx) {
+            return;
+        }
+        var palette = getPracticeTrendPalette(canvas);
+        var width = canvas.__practiceTrendCssWidth || canvas.clientWidth || 320;
+        var height = canvas.__practiceTrendCssHeight || canvas.clientHeight || 180;
+        ctx.clearRect(0, 0, width, height);
+        drawPracticeTrendGrid(ctx, width, height, palette);
+
+        var inset = { left: 18, right: 18, top: 16, bottom: 22 };
+        var usableWidth = Math.max(1, width - inset.left - inset.right);
+        var usableHeight = Math.max(1, height - inset.top - inset.bottom);
+        var values = points.map(function valueOf(point) { return point.value; });
+        var minValue = Math.min.apply(Math, values);
+        var maxValue = Math.max.apply(Math, values);
+        var spread = Math.max(8, maxValue - minValue);
+        var floor = Math.max(0, minValue - spread * 0.28);
+        var ceiling = Math.min(100, maxValue + spread * 0.28);
+        if (ceiling - floor < 12) {
+            var mid = (ceiling + floor) / 2;
+            floor = Math.max(0, mid - 6);
+            ceiling = Math.min(100, mid + 6);
+        }
+        if (ceiling <= floor) {
+            ceiling = floor + 1;
+        }
+
+        var coords = points.map(function toCoord(point, index) {
+            var x = points.length === 1
+                ? inset.left + usableWidth / 2
+                : inset.left + usableWidth * (index / (points.length - 1));
+            var y = inset.top + usableHeight * (1 - (point.value - floor) / (ceiling - floor));
+            return { x: x, y: y, value: point.value };
+        });
+
+        drawPracticeTrendFill(ctx, coords, height - inset.bottom, palette);
+        drawPracticeTrendLine(ctx, coords, palette);
+        drawPracticeTrendPoints(ctx, coords, palette);
+    };
+
+    PracticeTrendRenderer.prototype._formatAverage = function _formatAverage(points) {
+        if (!Array.isArray(points) || points.length === 0) {
+            return '0%';
+        }
+        var total = points.reduce(function sum(acc, point) {
+            return acc + point.value;
+        }, 0);
+        return Math.round(total / points.length) + '%';
+    };
+
+    PracticeTrendRenderer.prototype._syncOptionState = function _syncOptionState() {
+        var card = this._getElement('card');
+        if (!card || !card.querySelectorAll) {
+            return;
+        }
+        var buttons = card.querySelectorAll('[data-practice-trend-range]');
+        for (var i = 0; i < buttons.length; i += 1) {
+            var button = buttons[i];
+            var active = button.dataset.practiceTrendRange === this.rangeKey;
+            button.classList.toggle('active', active);
+            button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        }
+    };
+
+    PracticeTrendRenderer.prototype._getElement = function _getElement(key) {
+        var id = this.ids[key];
+        return id ? document.getElementById(id) : null;
+    };
+
+    PracticeTrendRenderer.prototype._setText = function _setText(key, value) {
+        var element = this._getElement(key);
+        if (element) {
+            element.textContent = value;
+        }
+    };
+
+    // --- Helpers for Radar Chart ---
+    function hexToRgba(hex, alpha) {
+        var cleanHex = String(hex || '').trim().replace('#', '');
+        if (cleanHex.length === 3) {
+            cleanHex = cleanHex[0] + cleanHex[0] + cleanHex[1] + cleanHex[1] + cleanHex[2] + cleanHex[2];
+        }
+        var r = parseInt(cleanHex.slice(0, 2), 16) || 102;
+        var g = parseInt(cleanHex.slice(2, 4), 16) || 126;
+        var b = parseInt(cleanHex.slice(4, 6), 16) || 234;
+        return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+    }
+
+    var questionTypeNames = {
+        'heading-matching': '段落小标题',
+        'true-false-not-given': '判断题',
+        'yes-no-not-given': '观点判断',
+        'multiple-choice': '单/多选题',
+        'summary-completion': '摘要填空',
+        'sentence-completion': '句子填空',
+        'short-answer': '简答题',
+        'diagram-labelling': '图表标注',
+        'flow-chart': '流程图',
+        'table-completion': '表格填空',
+        'matching-information': '信息配对',
+        'matching-features': '特征匹配',
+        'matching-people-ideas': '人名观点配对',
+        other: '其他题型'
+    };
+
+    var readingQuestionTypeOrder = [
+        'heading-matching',
+        'true-false-not-given',
+        'yes-no-not-given',
+        'multiple-choice',
+        'matching-information',
+        'matching-features',
+        'matching-people-ideas',
+        'summary-completion',
+        'sentence-completion',
+        'short-answer',
+        'diagram-labelling',
+        'flow-chart',
+        'table-completion',
+        'other'
+    ];
+
+    var questionTypeAliases = {
+        headingmatching: 'heading-matching',
+        headingsmatching: 'heading-matching',
+        matchingheadings: 'heading-matching',
+        listofheadings: 'heading-matching',
+        truefalsenotgiven: 'true-false-not-given',
+        tfng: 'true-false-not-given',
+        yesnonotgiven: 'yes-no-not-given',
+        ynng: 'yes-no-not-given',
+        multiplechoice: 'multiple-choice',
+        mcq: 'multiple-choice',
+        summarycompletion: 'summary-completion',
+        sentencecompletion: 'sentence-completion',
+        shortanswer: 'short-answer',
+        shortanswerquestions: 'short-answer',
+        diagramlabelling: 'diagram-labelling',
+        diagramlabeling: 'diagram-labelling',
+        flowchart: 'flow-chart',
+        flowchartcompletion: 'flow-chart',
+        tablecompletion: 'table-completion',
+        matchinginformation: 'matching-information',
+        matchingfeatures: 'matching-features',
+        matchingpeopleideas: 'matching-people-ideas',
+        matchingpeople: 'matching-people-ideas',
+        matchingnames: 'matching-people-ideas',
+        matching: 'matching-features',
+        general: 'other',
+        unknown: 'other',
+        other: 'other'
+    };
+
+    function formatQuestionTypeStr(type) {
+        return questionTypeNames[type] || type || '其他题型';
+    }
+
+    function normalizeQuestionTypeToken(value) {
+        return String(value || '')
+            .trim()
+            .toLowerCase()
+            .replace(/&/g, 'and')
+            .replace(/[_\s]+/g, '-')
+            .replace(/[^a-z0-9-]/g, '');
+    }
+
+    function normalizeReadingQuestionType(value) {
+        var token = normalizeQuestionTypeToken(value);
+        if (!token) {
+            return 'other';
+        }
+        if (questionTypeNames[token]) {
+            return token;
+        }
+        var compact = token.replace(/-/g, '');
+        return questionTypeAliases[compact] || questionTypeAliases[token] || 'other';
+    }
+
+    function textFromHtml(value) {
+        return String(value || '')
+            .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+            .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+    }
+
+    function inferReadingQuestionTypeFromGroup(group) {
+        group = group || {};
+        var text = textFromHtml([group.leadHtml, group.bodyHtml, group.html, group.title, group.kind].join(' '));
+        if (/which paragraph contains|paragraph contains the following information|contains the following information/.test(text)) {
+            return 'matching-information';
+        }
+        if (/list of headings|choose the correct heading|match.*heading|headings/.test(text)) {
+            return 'heading-matching';
+        }
+        if (/true\s+if|false\s+if|not given/.test(text) && /true/.test(text) && /false/.test(text)) {
+            return 'true-false-not-given';
+        }
+        if (/yes\s+if|no\s+if|not given/.test(text) && /yes/.test(text) && /no/.test(text)) {
+            return 'yes-no-not-given';
+        }
+        if (/choose the correct letter|choose the correct answer|multiple choice/.test(text)) {
+            return 'multiple-choice';
+        }
+        if (/complete the summary|summary below/.test(text)) {
+            return 'summary-completion';
+        }
+        if (/complete each sentence|complete the sentences|sentence endings|correct ending/.test(text)) {
+            return 'sentence-completion';
+        }
+        if (/complete the table|table below/.test(text)) {
+            return 'table-completion';
+        }
+        if (/flow[- ]?chart|flow chart/.test(text)) {
+            return 'flow-chart';
+        }
+        if (/diagram|label the diagram|labelling|labeling|map below/.test(text)) {
+            return 'diagram-labelling';
+        }
+        if (/answer the questions|short answer/.test(text)) {
+            return 'short-answer';
+        }
+        if (/look at the following people|list of people|match each person|match each statement with the correct person|list of ideas/.test(text)) {
+            return 'matching-people-ideas';
+        }
+        if (/match each|match the following|classify the following|list of (points|features|options|events)/.test(text)) {
+            return 'matching-features';
+        }
+        return normalizeReadingQuestionType(group.kind || group.type);
+    }
+
+    function normalizeQuestionId(value) {
+        var raw = String(value == null ? '' : value).trim().toLowerCase();
+        if (!raw) {
+            return '';
+        }
+        var match = raw.match(/^q?(\d+)/);
+        if (match) {
+            return 'q' + String(Number(match[1]));
+        }
+        return raw;
+    }
+
+    function addQuestionTypeMapEntry(map, questionId, type) {
+        var normalized = normalizeQuestionId(questionId);
+        if (!normalized || !type) {
+            return;
+        }
+        map[normalized] = type;
+        map[String(questionId).trim().toLowerCase()] = type;
+    }
+
+    function buildReadingQuestionTypeMap(record) {
+        var map = {};
+        var recordMap = record && record.questionTypeMap && typeof record.questionTypeMap === 'object'
+            ? record.questionTypeMap
+            : (record && record.realData && record.realData.questionTypeMap && typeof record.realData.questionTypeMap === 'object'
+                ? record.realData.questionTypeMap
+                : null);
+        if (recordMap) {
+            Object.keys(recordMap).forEach(function addSavedQuestionType(questionId) {
+                addQuestionTypeMapEntry(map, questionId, normalizeReadingQuestionType(recordMap[questionId]));
+            });
+        }
+
+        var registry = typeof window !== 'undefined' ? window.__READING_EXAM_DATA__ : null;
+        var getPayload = registry && typeof registry.get === 'function' ? registry.get.bind(registry) : null;
+        if (!getPayload) {
+            return map;
+        }
+        var metadata = record && record.metadata ? record.metadata : {};
+        var realData = record && record.realData ? record.realData : {};
+        var candidates = [
+            record && record.examId,
+            metadata.examId,
+            metadata.originalExamId,
+            metadata.derivedExamId,
+            realData.examId,
+            record && record.originalExamId,
+            record && record.derivedExamId
+        ];
+        var payload = null;
+        for (var i = 0; i < candidates.length; i += 1) {
+            if (!candidates[i]) {
+                continue;
+            }
+            payload = getPayload(candidates[i]);
+            if (payload) {
+                break;
+            }
+        }
+        if (!payload || !Array.isArray(payload.questionGroups)) {
+            return map;
+        }
+        payload.questionGroups.forEach(function indexQuestionGroup(group) {
+            var type = inferReadingQuestionTypeFromGroup(group);
+            var questionIds = Array.isArray(group && group.questionIds) ? group.questionIds : [];
+            questionIds.forEach(function addQuestion(questionId) {
+                addQuestionTypeMapEntry(map, questionId, type);
+            });
+        });
+        return map;
+    }
+
+    function getDetailSources(record) {
+        var sources = [];
+        if (record && record.answerDetails) {
+            sources.push(record.answerDetails);
+        }
+        if (record && record.scoreInfo && record.scoreInfo.details) {
+            sources.push(record.scoreInfo.details);
+        }
+        if (record && record.realData && record.realData.scoreInfo && record.realData.scoreInfo.details) {
+            sources.push(record.realData.scoreInfo.details);
+        }
+        return sources;
+    }
+
+    function isWrongAnswerDetail(detail) {
+        if (!detail || typeof detail !== 'object') {
+            return false;
+        }
+        if (detail.isCorrect === false || detail.correct === false) {
+            return true;
+        }
+        if (detail.isCorrect === true || detail.correct === true) {
+            return false;
+        }
+        var userAnswer = String(detail.userAnswer || detail.answer || detail.value || '').trim().toLowerCase();
+        var correctAnswer = String(detail.correctAnswer || detail.expectedAnswer || detail.expected || '').trim().toLowerCase();
+        return Boolean(correctAnswer && userAnswer && userAnswer !== correctAnswer);
+    }
+
+    function addRadarCount(counts, type, value) {
+        var normalizedType = normalizeReadingQuestionType(type);
+        var amount = Math.max(0, Number(value) || 0);
+        if (amount <= 0) {
+            return;
+        }
+        counts[normalizedType] = (counts[normalizedType] || 0) + amount;
+    }
+
+    function addPerformanceCounts(counts, performanceMap) {
+        if (!performanceMap || typeof performanceMap !== 'object') {
+            return false;
+        }
+        var used = false;
+        Object.keys(performanceMap).forEach(function addPerformance(type) {
+            var performance = performanceMap[type] || {};
+            var total = Number(performance.total != null ? performance.total : performance.totalQuestions);
+            var correct = Number(performance.correct != null ? performance.correct : performance.correctAnswers);
+            if (!Number.isFinite(total) || !Number.isFinite(correct)) {
+                return;
+            }
+            var wrong = Math.max(0, total - correct);
+            if (wrong > 0) {
+                addRadarCount(counts, type, wrong);
+                used = true;
+            }
+        });
+        return used;
+    }
+
+    function addDetailCounts(counts, record) {
+        var questionTypeMap = buildReadingQuestionTypeMap(record);
+        var sources = getDetailSources(record);
+        var seenQuestions = {};
+        var used = false;
+        sources.forEach(function scanDetails(source) {
+            Object.keys(source || {}).forEach(function addDetail(questionId) {
+                var normalizedId = normalizeQuestionId(questionId);
+                if (seenQuestions[normalizedId]) {
+                    return;
+                }
+                var detail = source[questionId];
+                if (!isWrongAnswerDetail(detail)) {
+                    return;
+                }
+                seenQuestions[normalizedId] = true;
+                var type = (detail && (detail.questionType || detail.type)) || questionTypeMap[normalizedId] || 'other';
+                addRadarCount(counts, type, 1);
+                used = true;
+            });
+        });
+        return used;
+    }
+
+    function calculateReadingRadarData(records) {
+        var counts = {};
+        var recentReadingRecords = ensureArray(records)
+            .filter(function filterReading(record) {
+                var metadata = record && record.metadata ? record.metadata : {};
+                var realData = record && record.realData ? record.realData : {};
+                var recordType = normalizeTypeValue(
+                    record && (record.type || record.examType ||
+                    metadata.type || metadata.examType || realData.type)
+                );
+                if (recordType) {
+                    return recordType === 'reading';
+                }
+                var examId = String((record && record.examId) || metadata.examId || realData.examId || '').toLowerCase();
+                return /^p[1-3][-_]/.test(examId);
+            })
+            .sort(function sortRecent(a, b) {
+                return getRecordTimestamp(b) - getRecordTimestamp(a);
+            })
+            .slice(0, 10);
+
+        recentReadingRecords.forEach(function collectRecord(record) {
+            var performanceMap = record && (record.questionTypePerformance ||
+                (record.realData && record.realData.questionTypePerformance));
+            if (addPerformanceCounts(counts, performanceMap)) {
+                return;
+            }
+            addDetailCounts(counts, record);
+        });
+
+        var nonZeroTypes = readingQuestionTypeOrder.filter(function hasError(type) {
+            return (counts[type] || 0) > 0;
+        });
+        if (!nonZeroTypes.length) {
+            nonZeroTypes = readingQuestionTypeOrder.slice(0, 8);
+        }
+        if (nonZeroTypes.length > 8) {
+            nonZeroTypes = nonZeroTypes
+                .sort(function sortByCount(a, b) {
+                    return (counts[b] || 0) - (counts[a] || 0);
+                })
+                .slice(0, 8)
+                .sort(function sortByOrder(a, b) {
+                    return readingQuestionTypeOrder.indexOf(a) - readingQuestionTypeOrder.indexOf(b);
+                });
+        }
+
+        var totalErrors = Object.keys(counts).reduce(function sum(total, type) {
+            return total + (counts[type] || 0);
+        }, 0);
+
+        return {
+            dataPoints: nonZeroTypes.map(function mapType(type) {
+                return {
+                    label: formatQuestionTypeStr(type),
+                    value: counts[type] || 0
+                };
+            }),
+            totalErrors: totalErrors,
+            recordCount: recentReadingRecords.length
+        };
+    }
+
+    function drawRadarChart(canvas, dataPoints) {
+        var ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        var rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
+        var cssWidth = Math.max(1, Math.round(rect && rect.width ? rect.width : (canvas.clientWidth || 320)));
+        var cssHeight = Math.max(1, Math.round(rect && rect.height ? rect.height : (canvas.clientHeight || 200)));
+        var ratio = typeof window !== 'undefined' && window.devicePixelRatio ? Math.min(window.devicePixelRatio, 2) : 1;
+
+        canvas.width = cssWidth * ratio;
+        canvas.height = cssHeight * ratio;
+        ctx.scale(ratio, ratio);
+
+        var cx = cssWidth / 2;
+        var cy = cssHeight / 2;
+        var radius = Math.min(cssWidth, cssHeight) * 0.35;
+        var totalAxes = dataPoints.length;
+
+        var maxValue = dataPoints.reduce(function(max, p) { return Math.max(max, p.value); }, 0);
+        var maxScale = maxValue < 4 ? 4 : Math.ceil(maxValue / 4) * 4;
+
+        var isDark = document.documentElement.classList.contains('dark') || document.body.classList.contains('dark-theme');
+        var gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.06)';
+        var axisColor = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.08)';
+        var labelColor = isDark ? 'rgba(255, 255, 255, 0.65)' : 'rgba(15, 23, 42, 0.6)';
+
+        // 1. Draw Concentric Grid
+        ctx.strokeStyle = gridColor;
+        ctx.lineWidth = 1;
+        for (var i = 1; i <= 4; i++) {
+            var r = (radius / 4) * i;
+            ctx.beginPath();
+            for (var j = 0; j < totalAxes; j++) {
+                var angle = (Math.PI * 2 / totalAxes) * j - Math.PI / 2;
+                var x = cx + Math.cos(angle) * r;
+                var y = cy + Math.sin(angle) * r;
+                if (j === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        // 2. Draw Axes
+        ctx.strokeStyle = axisColor;
+        for (var j = 0; j < totalAxes; j++) {
+            var angle = (Math.PI * 2 / totalAxes) * j - Math.PI / 2;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+            ctx.stroke();
+        }
+
+        // 3. Draw Labels
+        ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = labelColor;
+        for (var j = 0; j < totalAxes; j++) {
+            var angle = (Math.PI * 2 / totalAxes) * j - Math.PI / 2;
+            var labelRadius = radius + 14;
+            var lx = cx + Math.cos(angle) * labelRadius;
+            var ly = cy + Math.sin(angle) * labelRadius;
+
+            var cosVal = Math.cos(angle);
+            var sinVal = Math.sin(angle);
+
+            ctx.textAlign = Math.abs(cosVal) < 0.1 ? 'center' : (cosVal > 0 ? 'left' : 'right');
+            ctx.textBaseline = Math.abs(sinVal) < 0.1 ? 'middle' : (sinVal > 0 ? 'top' : 'bottom');
+            
+            ctx.fillText(dataPoints[j].label, lx, ly);
+        }
+
+        // 4. Draw Data Area
+        var accentColor = '#667eea';
+        if (typeof window !== 'undefined') {
+            var rootStyle = window.getComputedStyle(document.documentElement);
+            var customAccent = rootStyle.getPropertyValue('--shui-accent').trim();
+            if (customAccent) accentColor = customAccent;
+        }
+
+        ctx.beginPath();
+        for (var j = 0; j < totalAxes; j++) {
+            var val = dataPoints[j].value;
+            var valRadius = (val / maxScale) * radius;
+            var angle = (Math.PI * 2 / totalAxes) * j - Math.PI / 2;
+            var x = cx + Math.cos(angle) * valRadius;
+            var y = cy + Math.sin(angle) * valRadius;
+            if (j === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+
+        // Stroke + Glow
+        ctx.strokeStyle = accentColor;
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = accentColor;
+        ctx.shadowBlur = 8;
+        ctx.stroke();
+
+        // Fill without shadow
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = hexToRgba(accentColor, 0.18);
+        ctx.fill();
+
+        // 5. Draw Data Points Highlight
+        for (var j = 0; j < totalAxes; j++) {
+            var val = dataPoints[j].value;
+            var valRadius = (val / maxScale) * radius;
+            var angle = (Math.PI * 2 / totalAxes) * j - Math.PI / 2;
+            var x = cx + Math.cos(angle) * valRadius;
+            var y = cy + Math.sin(angle) * valRadius;
+
+            // Outer highlight circle
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, Math.PI * 2);
+            ctx.fillStyle = hexToRgba(accentColor, 0.4);
+            ctx.fill();
+
+            // Inner solid dot
+            ctx.beginPath();
+            ctx.arc(x, y, 2, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+        }
+    }
+
+    // --- Practice custom priority renderer ---
+    function PracticePriorityRenderer(options) {
+        options = options || {};
+        this.ids = {
+            card: options.cardId || 'practice-custom-card',
+            heatmap: options.heatmapId || 'practice-heatmap',
+            heatmapSummary: options.heatmapSummaryId || 'practice-heatmap-summary',
+            heatmapMonthLabel: options.heatmapMonthLabelId || 'practice-heatmap-month-label',
+            heatmapMonthControls: options.heatmapMonthControlsId || 'practice-heatmap-month-controls',
+            radarSummary: options.radarSummaryId || 'practice-radar-summary',
+            highCount: options.highCountId || 'practice-priority-high-count',
+            mediumCount: options.mediumCountId || 'practice-priority-medium-count',
+            highFill: options.highFillId || 'practice-priority-high-fill',
+            mediumFill: options.mediumFillId || 'practice-priority-medium-fill',
+            highAccuracy: options.highAccuracyId || 'practice-priority-high-accuracy',
+            mediumAccuracy: options.mediumAccuracyId || 'practice-priority-medium-accuracy'
+        };
+        this.records = [];
+        this.exams = [];
+        this.examType = 'all';
+        this.activeWidget = options.defaultWidget || 'heatmap';
+        this.heatmapMonth = normalizePracticeHeatmapMonth(options.defaultHeatmapMonth || new Date());
+        this.bound = false;
+        this.resizeHandler = null;
+    }
+
+    PracticePriorityRenderer.prototype.update = function update(records, exams, options) {
+        options = options || {};
+        this.records = Array.isArray(records) ? records.slice() : [];
+        this.exams = Array.isArray(exams) ? exams.slice() : [];
+        this.examType = options.examType || 'all';
+        this._ensureInteractions();
+        this.render();
+    };
+
+    PracticePriorityRenderer.prototype.render = function render() {
+        if (typeof document === 'undefined') {
+            return;
+        }
+        var card = this._getElement('card');
+        if (!card) {
+            return;
+        }
+        var titleElem = document.getElementById('practice-custom-card-title');
+        if (titleElem) {
+            titleElem.textContent = this.activeWidget === 'radar'
+                ? '阅读错题雷达'
+                : (this.activeWidget === 'priority' ? '中高频余量' : '练习热力图');
+        }
+        
+        var contents = card.querySelectorAll('.practice-custom-widget-content');
+        for (var i = 0; i < contents.length; i++) {
+            if (contents[i].dataset.widgetType === this.activeWidget) {
+                contents[i].removeAttribute('hidden');
+            } else {
+                contents[i].setAttribute('hidden', 'hidden');
+            }
+        }
+        
+        if (this.activeWidget === 'heatmap') {
+            this._renderHeatmap();
+        } else if (this.activeWidget === 'priority') {
+            var stats = calculatePriorityPracticeStats(this.records, this.exams, this.examType);
+            this._renderGroup('high', stats.high);
+            this._renderGroup('medium', stats.medium);
+        } else if (this.activeWidget === 'radar') {
+            this._renderRadarChart();
+        }
+        
+        this._syncOptionState();
+        this._syncHeatmapControls();
+        this._syncFlipButtonState(card.classList.contains('is-flipped'));
+    };
+    
+    PracticePriorityRenderer.prototype.setWidget = function setWidget(widget) {
+        if (!widget) return;
+        this.activeWidget = widget;
+        this.render();
+    };
+
+    PracticePriorityRenderer.prototype.shiftHeatmapMonth = function shiftHeatmapMonth(direction) {
+        var offset = direction === 'next' ? 1 : -1;
+        this.heatmapMonth = addPracticeHeatmapMonths(this.heatmapMonth, offset);
+        this.render();
+    };
+
+    PracticePriorityRenderer.prototype._renderHeatmap = function _renderHeatmap() {
+        var container = this._getElement('heatmap');
+        if (!container || typeof document === 'undefined') {
+            return;
+        }
+        var heatmapData = calculatePracticeHeatmapData(this.records, this.heatmapMonth);
+        this.heatmapMonth = heatmapData.monthStart;
+        container.textContent = '';
+        if (container.style) {
+            container.style.setProperty('--practice-heatmap-weeks', String(heatmapData.weekCount));
+        }
+
+        var body = document.createElement('div');
+        body.className = 'practice-heatmap__body';
+        var weekdays = document.createElement('div');
+        weekdays.className = 'practice-heatmap__weekdays';
+        ['日', '一', '二', '三', '四', '五', '六'].forEach(function addWeekday(label) {
+            var weekday = document.createElement('span');
+            weekday.className = 'practice-heatmap__weekday';
+            weekday.textContent = label;
+            weekdays.appendChild(weekday);
+        });
+
+        var grid = document.createElement('div');
+        grid.className = 'practice-heatmap__grid';
+        grid.setAttribute('role', 'grid');
+        grid.setAttribute('aria-label', formatPracticeHeatmapMonthLabel(heatmapData.monthStart) + '练习热力图');
+
+        heatmapData.cells.forEach(function appendCell(cell) {
+            var button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'practice-heatmap__cell' + (cell.inMonth ? '' : ' is-outside-month');
+            button.style.gridColumn = String(cell.weekday + 1);
+            button.style.gridRow = String(cell.week + 1);
+            button.dataset.date = cell.dateKey;
+            button.dataset.count = String(cell.count);
+            button.dataset.level = String(cell.level);
+            button.dataset.tooltip = cell.label + '，做题 ' + cell.count + ' 套';
+            button.setAttribute('aria-label', button.dataset.tooltip);
+            button.setAttribute('title', button.dataset.tooltip);
+            grid.appendChild(button);
+        });
+
+        body.appendChild(weekdays);
+        body.appendChild(grid);
+        container.appendChild(body);
+
+        this._setText('heatmapMonthLabel', formatPracticeHeatmapMonthLabel(heatmapData.monthStart));
+        this._setText(
+            'heatmapSummary',
+            heatmapData.total > 0
+                ? formatPracticeHeatmapMonthLabel(heatmapData.monthStart) + ' 共做题 ' + heatmapData.total + ' 套，活跃 ' + heatmapData.activeDays + ' 天'
+                : formatPracticeHeatmapMonthLabel(heatmapData.monthStart) + ' 暂无练习记录'
+        );
+    };
+    
+    PracticePriorityRenderer.prototype._renderRadarChart = function _renderRadarChart() {
+        var canvas = document.getElementById('practice-radar-canvas');
+        var empty = document.getElementById('practice-radar-empty');
+        if (!canvas || !canvas.getContext) return;
+
+        var radarData = calculateReadingRadarData(this.records);
+        var dataPoints = radarData.dataPoints;
+        var hasData = radarData.totalErrors > 0;
+        if (!hasData && empty) {
+            empty.style.display = 'flex';
+            canvas.style.opacity = '0.22';
+        } else if (empty) {
+            empty.style.display = 'none';
+            canvas.style.opacity = '1';
+        }
+        this._setText(
+            'radarSummary',
+            hasData
+                ? '最近' + radarData.recordCount + '次阅读共 ' + radarData.totalErrors + ' 道错题'
+                : '最近10次阅读暂无可分类错题'
+        );
+        
+        drawRadarChart(canvas, dataPoints);
+    };
+
+    PracticePriorityRenderer.prototype.flipToBack = function flipToBack() {
+        var card = this._getElement('card');
+        if (!card) {
+            return;
+        }
+        card.classList.add('is-flipped');
+        this._syncFlipButtonState(true);
+    };
+
+    PracticePriorityRenderer.prototype.flipToFront = function flipToFront() {
+        var card = this._getElement('card');
+        if (!card) {
+            return;
+        }
+        card.classList.remove('is-flipped');
+        this._syncFlipButtonState(false);
+    };
+
+    PracticePriorityRenderer.prototype._renderGroup = function _renderGroup(key, stats) {
+        stats = stats || { done: 0, total: 0, accuracy: 0 };
+        var done = Math.max(0, Number(stats.done) || 0);
+        var total = Math.max(0, Number(stats.total) || 0);
+        var pct = total > 0 ? Math.max(0, Math.min(100, done / total * 100)) : 0;
+        var accuracy = Math.max(0, Math.min(100, Number(stats.accuracy) || 0));
+        this._setText(key + 'Count', done + '/' + total);
+        this._setText(key + 'Accuracy', Math.round(accuracy) + '%');
+        this._setProgress(key + 'Fill', pct);
+        this._setAccuracyLevel(key + 'Accuracy', accuracy);
+    };
+
+    PracticePriorityRenderer.prototype._ensureInteractions = function _ensureInteractions() {
+        if (this.bound || typeof document === 'undefined') {
+            return;
+        }
+        var card = this._getElement('card');
+        if (!card) {
+            return;
+        }
+        this.bound = true;
+        var self = this;
+
+        card.addEventListener('click', function onPriorityCardClick(event) {
+            var monthButton = event.target && event.target.closest
+                ? event.target.closest('[data-practice-heatmap-month]')
+                : null;
+            if (monthButton) {
+                event.preventDefault();
+                event.stopPropagation();
+                self.shiftHeatmapMonth(monthButton.dataset.practiceHeatmapMonth);
+                return;
+            }
+
+            var option = event.target && event.target.closest
+                ? event.target.closest('[data-practice-widget]')
+                : null;
+            if (option) {
+                event.preventDefault();
+                event.stopPropagation();
+                self.setWidget(option.dataset.practiceWidget);
+                self.flipToFront();
+                return;
+            }
+            
+            var flipBtn = event.target && event.target.closest
+                ? event.target.closest('.practice-custom-card__flip-btn')
+                : null;
+            
+            if (flipBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (card.classList.contains('is-flipped')) {
+                    self.flipToFront();
+                } else {
+                    self.flipToBack();
+                }
+                return;
+            }
+
+            // 对整卡任何其他区域的点击，阻止其冒泡以防父组件捕获，且不做翻转操作
+            event.stopPropagation();
+        });
+
+        card.addEventListener('keydown', function onPriorityCardKeydown(event) {
+            var key = event.key || '';
+            if (key !== 'Enter' && key !== ' ') {
+                return;
+            }
+            var monthButton = event.target && event.target.closest
+                ? event.target.closest('[data-practice-heatmap-month]')
+                : null;
+            if (monthButton) {
+                event.preventDefault();
+                event.stopPropagation();
+                self.shiftHeatmapMonth(monthButton.dataset.practiceHeatmapMonth);
+                return;
+            }
+
+            var option = event.target && event.target.closest
+                ? event.target.closest('[data-practice-widget]')
+                : null;
+            if (option) {
+                event.preventDefault();
+                event.stopPropagation();
+                self.setWidget(option.dataset.practiceWidget);
+                self.flipToFront();
+                return;
+            }
+            var flipBtn = event.target && event.target.closest
+                ? event.target.closest('.practice-custom-card__flip-btn')
+                : null;
+            if (flipBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (card.classList.contains('is-flipped')) {
+                    self.flipToFront();
+                } else {
+                    self.flipToBack();
+                }
+                return;
+            }
+            event.stopPropagation();
+        });
+        
+        this.resizeHandler = function onPriorityResize() {
+            self.render();
+        };
+        if (typeof window !== 'undefined') {
+            window.addEventListener('resize', this.resizeHandler);
+        }
+    };
+
+    PracticePriorityRenderer.prototype._syncFlipButtonState = function _syncFlipButtonState(isFlipped) {
+        var card = this._getElement('card');
+        if (!card || !card.querySelectorAll) {
+            return;
+        }
+        var buttons = card.querySelectorAll('.practice-custom-card__flip-btn');
+        for (var i = 0; i < buttons.length; i += 1) {
+            buttons[i].setAttribute('aria-pressed', isFlipped ? 'true' : 'false');
+        }
+    };
+
+    PracticePriorityRenderer.prototype._syncHeatmapControls = function _syncHeatmapControls() {
+        var controls = this._getElement('heatmapMonthControls');
+        if (!controls) {
+            return;
+        }
+        if (this.activeWidget === 'heatmap') {
+            controls.removeAttribute('hidden');
+        } else {
+            controls.setAttribute('hidden', 'hidden');
+        }
+    };
+
+    PracticePriorityRenderer.prototype._syncOptionState = function _syncOptionState() {
+        var card = this._getElement('card');
+        if (!card || !card.querySelectorAll) {
+            return;
+        }
+        var buttons = card.querySelectorAll('[data-practice-widget]');
+        for (var i = 0; i < buttons.length; i += 1) {
+            var active = buttons[i].dataset.practiceWidget === this.activeWidget;
+            if (active) {
+                buttons[i].classList.add('active');
+                buttons[i].setAttribute('aria-pressed', 'true');
+            } else {
+                buttons[i].classList.remove('active');
+                buttons[i].setAttribute('aria-pressed', 'false');
+            }
+        }
+    };
+
+    PracticePriorityRenderer.prototype._getElement = function _getElement(key) {
+        var id = this.ids[key];
+        return id ? document.getElementById(id) : null;
+    };
+
+    PracticePriorityRenderer.prototype._setText = function _setText(key, value) {
+        var element = this._getElement(key);
+        if (element) {
+            element.textContent = value;
+        }
+    };
+
+    PracticePriorityRenderer.prototype._setProgress = function _setProgress(key, value) {
+        var element = this._getElement(key);
+        if (element && element.style) {
+            element.style.setProperty('--priority-progress-value', Math.round(value) + '%');
+        }
+    };
+
+    PracticePriorityRenderer.prototype._setAccuracyLevel = function _setAccuracyLevel(key, value) {
+        var element = this._getElement(key);
+        var orb = element && element.closest ? element.closest('.priority-accuracy__orb') : null;
+        if (orb && orb.style) {
+            var bounded = Math.max(0, Math.min(100, Number(value) || 0));
+            orb.style.setProperty('--priority-accuracy-level', Math.round(bounded) + '%');
+        }
+    };
+
+    function calculatePracticeHeatmapData(records, monthDate) {
+        var monthStart = normalizePracticeHeatmapMonth(monthDate);
+        var leadingDays = monthStart.getDay();
+        var monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+        var daysInMonth = monthEnd.getDate();
+        var weekCount = Math.ceil((leadingDays + daysInMonth) / 7);
+        var aggregate = aggregatePracticeHeatmapSets(records, monthStart);
+        var counts = aggregate.monthCounts;
+
+        var cells = [];
+        var total = 0;
+        var activeDays = 0;
+
+        for (var index = 0; index < weekCount * 7; index += 1) {
+            var dayOffset = index - leadingDays;
+            var date = new Date(monthStart.getFullYear(), monthStart.getMonth(), 1 + dayOffset);
+            var inMonth = date.getMonth() === monthStart.getMonth();
+            var dateKey = toPracticeHeatmapDateKey(date);
+            var count = inMonth ? (counts[dateKey] || 0) : 0;
+            if (inMonth) {
+                total += count;
+                if (count > 0) {
+                    activeDays += 1;
+                }
+            }
+            cells.push({
+                date: date,
+                dateKey: dateKey,
+                label: formatPracticeHeatmapDateLabel(date),
+                count: count,
+                level: inMonth ? resolvePracticeHeatmapLevel(count, aggregate.averageSetsPerActiveDay) : 0,
+                inMonth: inMonth,
+                week: Math.floor(index / 7),
+                weekday: index % 7
+            });
+        }
+
+        return {
+            monthStart: monthStart,
+            weekCount: weekCount,
+            cells: cells,
+            total: total,
+            activeDays: activeDays,
+            averageSetsPerActiveDay: aggregate.averageSetsPerActiveDay
+        };
+    }
+
+    function aggregatePracticeHeatmapSets(records, monthStart) {
+        var monthCounts = {};
+        var allCounts = {};
+        var monthKey = toPracticeHeatmapMonthKey(monthStart);
+        ensureArray(records).forEach(function collect(record) {
+            var timestamp = getRecordTimestamp(record);
+            if (!timestamp) {
+                return;
+            }
+            var date = new Date(timestamp);
+            var key = toPracticeHeatmapDateKey(date);
+            allCounts[key] = (allCounts[key] || 0) + 1;
+            if (toPracticeHeatmapMonthKey(date) === monthKey) {
+                monthCounts[key] = (monthCounts[key] || 0) + 1;
+            }
+        });
+        var activeDayKeys = Object.keys(allCounts);
+        var totalSets = activeDayKeys.reduce(function sumSets(total, key) {
+            return total + allCounts[key];
+        }, 0);
+        return {
+            monthCounts: monthCounts,
+            averageSetsPerActiveDay: activeDayKeys.length > 0 ? totalSets / activeDayKeys.length : 0
+        };
+    }
+
+    function normalizePracticeHeatmapMonth(value) {
+        var date = value instanceof Date ? value : new Date(value);
+        if (isNaN(date.getTime())) {
+            date = new Date();
+        }
+        return new Date(date.getFullYear(), date.getMonth(), 1);
+    }
+
+    function addPracticeHeatmapMonths(value, offset) {
+        var month = normalizePracticeHeatmapMonth(value);
+        return new Date(month.getFullYear(), month.getMonth() + offset, 1);
+    }
+
+    function resolvePracticeHeatmapLevel(count, avg) {
+        var safeCount = Math.max(0, Number(count) || 0);
+        var safeAvg = Math.max(0, Number(avg) || 0);
+        if (safeCount <= 0) {
+            return 0;
+        }
+        if (safeAvg <= 0) {
+            return 1;
+        }
+        var ratio = safeCount / safeAvg;
+        if (ratio < 0.8) {
+            return 1;
+        }
+        if (ratio < 1.5) {
+            return 2;
+        }
+        if (ratio < 2.5) {
+            return 3;
+        }
+        return 4;
+    }
+
+    function toPracticeHeatmapDateKey(date) {
+        var year = date.getFullYear();
+        var month = String(date.getMonth() + 1).padStart(2, '0');
+        var day = String(date.getDate()).padStart(2, '0');
+        return year + '-' + month + '-' + day;
+    }
+
+    function toPracticeHeatmapMonthKey(date) {
+        var normalized = normalizePracticeHeatmapMonth(date);
+        return normalized.getFullYear() + '-' + String(normalized.getMonth() + 1).padStart(2, '0');
+    }
+
+    function formatPracticeHeatmapMonthLabel(date) {
+        return date.getFullYear() + '年' + (date.getMonth() + 1) + '月';
+    }
+
+    function formatPracticeHeatmapDateLabel(date) {
+        return (date.getMonth() + 1) + '月' + date.getDate() + '日';
+    }
+
+    function calculatePriorityPracticeStats(records, exams, examType) {
+        var groups = {
+            high: createPriorityBucket(),
+            medium: createPriorityBucket()
+        };
+        var eligibleExams = ensureArray(exams).filter(function filterExam(exam) {
+            if (!exam) {
+                return false;
+            }
+            if (examType && examType !== 'all' && normalizeTypeValue(exam.type) !== normalizeTypeValue(examType)) {
+                return false;
+            }
+            return Boolean(normalizePriorityFrequency(exam.frequency || (exam.metadata && exam.metadata.frequency)));
+        });
+        var examByKey = {};
+
+        eligibleExams.forEach(function indexExam(exam) {
+            var priority = normalizePriorityFrequency(exam.frequency || (exam.metadata && exam.metadata.frequency));
+            if (!groups[priority]) {
+                return;
+            }
+            var identity = getPracticeEntityIdentity(exam);
+            if (!identity || groups[priority].totalIds.has(identity)) {
+                return;
+            }
+            groups[priority].totalIds.add(identity);
+            addExamLookupKeys(examByKey, exam, priority);
+        });
+
+        ensureArray(records).forEach(function collectRecord(record) {
+            if (!record) {
+                return;
+            }
+            var match = resolvePriorityRecordMatch(record, examByKey, eligibleExams);
+            var priority = match.priority || normalizePriorityFrequency(
+                record.frequency ||
+                (record.metadata && record.metadata.frequency) ||
+                (record.realData && record.realData.frequency)
+            );
+            if (!groups[priority]) {
+                return;
+            }
+            var identity = match.identity || getPracticeRecordEntityIdentity(record);
+            if (identity) {
+                groups[priority].doneIds.add(identity);
+            }
+            var accuracy = normalizePracticeTrendPercentage(record);
+            if (Number.isFinite(accuracy)) {
+                groups[priority].accuracyValues.push(Math.max(0, Math.min(100, accuracy)));
+            }
+        });
+
+        return {
+            high: summarizePriorityBucket(groups.high),
+            medium: summarizePriorityBucket(groups.medium)
+        };
+    }
+
+    function createPriorityBucket() {
+        return {
+            totalIds: new Set(),
+            doneIds: new Set(),
+            accuracyValues: []
+        };
+    }
+
+    function summarizePriorityBucket(bucket) {
+        var total = bucket.totalIds.size;
+        var done = bucket.doneIds.size;
+        done = total > 0 ? Math.min(done, total) : 0;
+        var accuracy = 0;
+        if (bucket.accuracyValues.length) {
+            accuracy = bucket.accuracyValues.reduce(function sum(acc, value) {
+                return acc + value;
+            }, 0) / bucket.accuracyValues.length;
+        }
+        return {
+            done: done,
+            total: total,
+            accuracy: accuracy
+        };
+    }
+
+    function normalizePriorityFrequency(value) {
+        var raw = String(value || '').trim().toLowerCase();
+        if (!raw) {
+            return '';
+        }
+        var compact = raw.replace(/[\s_-]+/g, '');
+        if (raw.indexOf('非高频') !== -1 || compact === 'low' || compact === 'nonhigh' || compact === 'unknown') {
+            return '';
+        }
+        if (raw.indexOf('次高频') !== -1 || raw.indexOf('中频') !== -1) {
+            return 'medium';
+        }
+        if (compact === 'medium' || compact === 'mid' || compact === 'mediumfrequency') {
+            return 'medium';
+        }
+        if (raw.indexOf('高频') !== -1) {
+            return 'high';
+        }
+        if (compact === 'high' || compact === 'ultrahigh' || compact === 'veryhigh' || compact === 'highfrequency') {
+            return 'high';
+        }
+        return '';
+    }
+
+    function getPracticeEntityIdentity(item) {
+        if (!item) {
+            return '';
+        }
+        var metadata = item.metadata || {};
+        var realData = item.realData || {};
+        var candidates = [
+            item.id,
+            item.examId,
+            item.dataKey,
+            item.title,
+            item.examTitle,
+            metadata.examId,
+            metadata.examTitle,
+            realData.examId,
+            realData.title,
+            item.path,
+            item.resourcePath,
+            item.sourcePath,
+            realData.path,
+            realData.examPath
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var value = candidates[i];
+            if (value != null && String(value).trim()) {
+                return String(value).trim().toLowerCase();
+            }
+        }
+        return '';
+    }
+
+    function getPracticeRecordEntityIdentity(record) {
+        if (!record) {
+            return '';
+        }
+        var metadata = record.metadata || {};
+        var realData = record.realData || {};
+        var candidates = [
+            record.examId,
+            record.title,
+            record.examTitle,
+            metadata.examId,
+            metadata.examTitle,
+            realData.examId,
+            realData.title,
+            record.path,
+            record.examPath,
+            realData.path,
+            realData.examPath,
+            record.filename,
+            record.examFile,
+            realData.filename,
+            realData.examFile
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var value = candidates[i];
+            if (value != null && String(value).trim()) {
+                return String(value).trim().toLowerCase();
+            }
+        }
+        return '';
+    }
+
+    function addExamLookupKeys(map, exam, priority) {
+        var keys = [
+            exam.id,
+            exam.examId,
+            exam.dataKey,
+            exam.title,
+            exam.path,
+            exam.resourcePath,
+            exam.sourcePath,
+            exam.filename,
+            exam.pdfFilename
+        ];
+        var identity = getPracticeEntityIdentity(exam);
+        keys.forEach(function addKey(key) {
+            var normalized = normalizePriorityLookupKey(key);
+            if (normalized) {
+                map[normalized] = {
+                    priority: priority,
+                    identity: identity
+                };
+            }
+        });
+    }
+
+    function resolvePriorityRecordMatch(record, map, exams) {
+        var metadata = record.metadata || {};
+        var realData = record.realData || {};
+        var keys = [
+            record.examId,
+            record.title,
+            record.examTitle,
+            metadata.examId,
+            metadata.examTitle,
+            realData.examId,
+            realData.title,
+            record.path,
+            record.examPath,
+            realData.path,
+            realData.examPath,
+            record.filename,
+            record.examFile,
+            realData.filename,
+            realData.examFile
+        ];
+        for (var i = 0; i < keys.length; i += 1) {
+            var normalized = normalizePriorityLookupKey(keys[i]);
+            if (normalized && map[normalized]) {
+                return map[normalized];
+            }
+        }
+        for (var j = 0; j < exams.length; j += 1) {
+            var exam = exams[j];
+            if (recordMatchesExam(exam, record)) {
+                return {
+                    priority: normalizePriorityFrequency(exam.frequency || (exam.metadata && exam.metadata.frequency)),
+                    identity: getPracticeEntityIdentity(exam)
+                };
+            }
+        }
+        return {};
+    }
+
+    function normalizePriorityLookupKey(value) {
+        if (value == null) {
+            return '';
+        }
+        return String(value).replace(/\\/g, '/').trim().toLowerCase();
+    }
+
+    function normalizePracticeTrendPercentage(record) {
+        if (!record || typeof record !== 'object') {
+            return NaN;
+        }
+        var rd = record.realData && typeof record.realData === 'object' ? record.realData : {};
+        var scoreInfo = record.scoreInfo && typeof record.scoreInfo === 'object'
+            ? record.scoreInfo
+            : (rd.scoreInfo && typeof rd.scoreInfo === 'object' ? rd.scoreInfo : {});
+        var candidates = [
+            record.percentage,
+            rd.percentage,
+            record.accuracy != null ? Number(record.accuracy) * 100 : undefined,
+            rd.accuracy != null ? Number(rd.accuracy) * 100 : undefined,
+            scoreInfo.percentage,
+            scoreInfo.accuracy != null ? Number(scoreInfo.accuracy) * 100 : undefined
+        ];
+        for (var i = 0; i < candidates.length; i += 1) {
+            var value = Number(candidates[i]);
+            if (Number.isFinite(value)) {
+                return value;
+            }
+        }
+        var correct = Number.isFinite(Number(record.correctAnswers))
+            ? Number(record.correctAnswers)
+            : (Number.isFinite(Number(scoreInfo.correct)) ? Number(scoreInfo.correct) : Number(record.score));
+        var total = Number.isFinite(Number(record.totalQuestions))
+            ? Number(record.totalQuestions)
+            : (Number.isFinite(Number(scoreInfo.total)) ? Number(scoreInfo.total) : Number(record.total));
+        if (Number.isFinite(correct) && Number.isFinite(total) && total > 0) {
+            return correct / total * 100;
+        }
+        return NaN;
+    }
+
+    function preparePracticeTrendCanvas(canvas) {
+        var rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
+        var cssWidth = Math.max(1, Math.round(rect && rect.width ? rect.width : (canvas.clientWidth || 320)));
+        var cssHeight = Math.max(1, Math.round(rect && rect.height ? rect.height : (canvas.clientHeight || 180)));
+        var ratio = typeof window !== 'undefined' && window.devicePixelRatio ? Math.min(window.devicePixelRatio, 2) : 1;
+        if (canvas.width !== Math.round(cssWidth * ratio) || canvas.height !== Math.round(cssHeight * ratio)) {
+            canvas.width = Math.round(cssWidth * ratio);
+            canvas.height = Math.round(cssHeight * ratio);
+        }
+        canvas.__practiceTrendCssWidth = cssWidth;
+        canvas.__practiceTrendCssHeight = cssHeight;
+        var ctx = canvas.getContext('2d');
+        if (!ctx) {
+            return null;
+        }
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        return ctx;
+    }
+
+    function getPracticeTrendPalette(canvas) {
+        var host = canvas && canvas.closest ? canvas.closest('.practice-trend-card') : null;
+        var computed = host && typeof window !== 'undefined' && window.getComputedStyle
+            ? window.getComputedStyle(host)
+            : null;
+        var fallback = {
+            start: '#667eea',
+            mid: '#6accc7',
+            end: '#764ba2',
+            point: '#667eea',
+            shadow: 'rgba(102, 126, 234, 0.28)',
+            fillStart: 'rgba(102, 126, 234, 0.24)',
+            fillMid: 'rgba(106, 204, 199, 0.15)',
+            fillEnd: 'rgba(255, 255, 255, 0.02)',
+            grid: 'rgba(15, 23, 42, 0.08)'
+        };
+        if (!computed) {
+            return fallback;
+        }
+        var start = resolvePracticeTrendColor(computed, '--practice-trend-line-start', fallback.start);
+        var mid = resolvePracticeTrendColor(computed, '--practice-trend-line-mid', fallback.mid);
+        var end = resolvePracticeTrendColor(computed, '--practice-trend-line-end', fallback.end);
+        var point = resolvePracticeTrendColor(computed, '--practice-trend-point', start);
+        return {
+            start: start,
+            mid: mid,
+            end: end,
+            point: point,
+            shadow: colorWithAlpha(start, 0.28),
+            fillStart: colorWithAlpha(start, 0.24),
+            fillMid: colorWithAlpha(mid, 0.15),
+            fillEnd: fallback.fillEnd,
+            grid: fallback.grid
+        };
+    }
+
+    function resolvePracticeTrendColor(computed, variableName, fallback) {
+        var raw = computed.getPropertyValue(variableName).trim();
+        if (!raw) {
+            return fallback;
+        }
+        return normalizeCanvasColor(raw, fallback);
+    }
+
+    function normalizeCanvasColor(value, fallback) {
+        var trimmed = String(value || '').trim();
+        if (!trimmed) {
+            return fallback;
+        }
+        if (trimmed.indexOf('var(') === -1) {
+            return trimmed;
+        }
+        var match = trimmed.match(/var\((--[^,\)]+)/);
+        if (!match || typeof window === 'undefined' || !window.getComputedStyle) {
+            return fallback;
+        }
+        var resolved = window.getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim();
+        return resolved || fallback;
+    }
+
+    function colorWithAlpha(color, alpha) {
+        var parsed = parseColorToRgb(color);
+        if (!parsed) {
+            return color;
+        }
+        return 'rgba(' + parsed.r + ', ' + parsed.g + ', ' + parsed.b + ', ' + alpha + ')';
+    }
+
+    function parseColorToRgb(color) {
+        var value = String(color || '').trim();
+        var hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+        if (hex) {
+            var raw = hex[1];
+            if (raw.length === 3) {
+                raw = raw.split('').map(function doubleHex(char) { return char + char; }).join('');
+            }
+            return {
+                r: parseInt(raw.slice(0, 2), 16),
+                g: parseInt(raw.slice(2, 4), 16),
+                b: parseInt(raw.slice(4, 6), 16)
+            };
+        }
+        var rgb = value.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i);
+        if (rgb) {
+            return {
+                r: Math.round(Number(rgb[1])),
+                g: Math.round(Number(rgb[2])),
+                b: Math.round(Number(rgb[3]))
+            };
+        }
+        return null;
+    }
+
+    function drawPracticeTrendGrid(ctx, width, height, palette) {
+        palette = palette || {};
+        var gradient = ctx.createLinearGradient(0, 0, width, height);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.18)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0.04)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.strokeStyle = palette.grid || 'rgba(15, 23, 42, 0.08)';
+        ctx.lineWidth = 1;
+        for (var i = 1; i <= 3; i += 1) {
+            var y = Math.round(height * i / 4) + 0.5;
+            ctx.beginPath();
+            ctx.moveTo(14, y);
+            ctx.lineTo(width - 14, y);
+            ctx.stroke();
+        }
+    }
+
+    function drawPracticeTrendFill(ctx, coords, baseline, palette) {
+        if (!coords.length) {
+            return;
+        }
+        palette = palette || {};
+        var gradient = ctx.createLinearGradient(0, 0, 0, baseline);
+        gradient.addColorStop(0, palette.fillStart || 'rgba(102, 126, 234, 0.24)');
+        gradient.addColorStop(0.52, palette.fillMid || 'rgba(106, 204, 199, 0.15)');
+        gradient.addColorStop(1, palette.fillEnd || 'rgba(255, 255, 255, 0.02)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.moveTo(coords[0].x, baseline);
+        ctx.lineTo(coords[0].x, coords[0].y);
+        appendSmoothPracticeTrendCurves(ctx, coords);
+        ctx.lineTo(coords[coords.length - 1].x, baseline);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    function drawPracticeTrendLine(ctx, coords, palette) {
+        if (!coords.length) {
+            return;
+        }
+        palette = palette || {};
+        var gradient = ctx.createLinearGradient(0, 0, ctx.canvas.width, 0);
+        gradient.addColorStop(0, palette.start || '#667eea');
+        gradient.addColorStop(0.52, palette.mid || '#6accc7');
+        gradient.addColorStop(1, palette.end || '#764ba2');
+        ctx.save();
+        ctx.shadowColor = palette.shadow || 'rgba(102, 126, 234, 0.28)';
+        ctx.shadowBlur = 14;
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        drawSmoothPracticeTrendPath(ctx, coords);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function drawPracticeTrendPoints(ctx, coords, palette) {
+        if (!coords.length) {
+            return;
+        }
+        palette = palette || {};
+        var markers = coords.length <= 2 ? coords : [coords[0], coords[coords.length - 1]];
+        markers.forEach(function drawPoint(point) {
+            ctx.beginPath();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+            ctx.arc(point.x, point.y, 5.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.fillStyle = palette.point || palette.start || '#667eea';
+            ctx.arc(point.x, point.y, 3.1, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    }
+
+    function drawSmoothPracticeTrendPath(ctx, coords) {
+        if (!coords.length) {
+            return;
+        }
+        ctx.moveTo(coords[0].x, coords[0].y);
+        appendSmoothPracticeTrendCurves(ctx, coords);
+    }
+
+    function appendSmoothPracticeTrendCurves(ctx, coords) {
+        if (coords.length === 1) {
+            ctx.lineTo(coords[0].x + 0.1, coords[0].y);
+            return;
+        }
+        for (var i = 0; i < coords.length - 1; i += 1) {
+            var current = coords[i];
+            var next = coords[i + 1];
+            var previous = coords[i - 1] || current;
+            var following = coords[i + 2] || next;
+            var cp1x = current.x + (next.x - previous.x) / 6;
+            var cp1y = current.y + (next.y - previous.y) / 6;
+            var cp2x = next.x - (following.x - current.x) / 6;
+            var cp2y = next.y - (following.y - current.y) / 6;
+            ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
+        }
     }
 
     // --- Practice history renderer ---
@@ -845,10 +2617,14 @@
             ? exam.category.trim().toUpperCase()
             : '';
         var isSelecting = selectionMode === 'custom-suite' && !!draft && draft.status !== 'ready';
+        var isMemorizeSelecting = selectionMode === 'reading-memorize';
         var isSelected = !!draft && draft.pickedByCategory && examCategory && draft.pickedByCategory[examCategory]
             && String(draft.pickedByCategory[examCategory].examId) === String(exam.id);
         var examItem = this._createElement('div', {
-            className: 'exam-item' + (isSelecting ? ' exam-item--suite-selecting' : '') + (isSelected ? ' exam-item--suite-selected' : ''),
+            className: 'exam-item'
+                + (isSelecting ? ' exam-item--suite-selecting' : '')
+                + (isMemorizeSelecting ? ' exam-item--memorize-selecting' : '')
+                + (isSelected ? ' exam-item--suite-selected' : ''),
             dataset: { examId: exam.id }
         });
         if (isSelecting) {
@@ -888,14 +2664,24 @@
             // Add frequency text for reading materials
             if (exam && exam.type === 'reading' && exam.frequency) {
                 var frequencyLabels = {
-                    'ultra-high': '超高',
-                    'high': '高',
-                    'medium': '次',
-                    'low': '低',
-                    'standard': '标准'
+                    'ultra-high': '超高频',
+                    'very-high': '次高频',
+                    'high': '高频',
+                    'medium': '中频',
+                    'mid': '中频',
+                    'low': '低频',
+                    'standard': '标准',
+                    '超高频': '超高频',
+                    '次高频': '次高频',
+                    '高频': '高频',
+                    '中频': '中频',
+                    '低频': '低频'
                 };
                 var label = frequencyLabels[exam.frequency] || exam.frequency;
                 fallbackParts.push(label);
+            }
+            if (exam && exam.type === 'reading' && typeof exam.difficultyScore === 'number' && isFinite(exam.difficultyScore)) {
+                fallbackParts.push('难度 ' + exam.difficultyScore);
             }
 
             metaText = fallbackParts.join(' | ');
@@ -907,6 +2693,9 @@
         info.appendChild(infoContent);
         if (isSelecting && currentCategory) {
             info.appendChild(this._createElement('div', { className: 'suite-custom-selection-badge' }, currentCategory + ' Pending'));
+        }
+        if (isMemorizeSelecting) {
+            info.appendChild(this._createElement('div', { className: 'suite-custom-selection-badge' }, '背题模式'));
         }
 
         var actions = this._createElement('div', { className: 'exam-actions' });
@@ -958,12 +2747,21 @@
 
     LegacyExamListView.prototype._resolveActionConfig = function _resolveActionConfig(exam, options) {
         var hasHtml = !!(exam && exam.hasHtml);
+        var selectionMode = options && options.selectionMode ? String(options.selectionMode) : '';
         var config = {
             startAction: 'start',
             startLabel: hasHtml ? '开始练习' : '查看PDF',
             startClass: hasHtml ? 'btn exam-item-action-btn' : 'btn btn-secondary exam-item-action-btn',
             includePdfButton: true
         };
+        if (selectionMode === 'reading-memorize') {
+            config = {
+                startAction: 'reading-memorize-select',
+                startLabel: '选择背题',
+                startClass: 'btn exam-item-action-btn',
+                includePdfButton: false
+            };
+        }
 
         if (options && typeof options.configureStartButton === 'function') {
             try {
@@ -979,6 +2777,9 @@
 
     LegacyExamListView.prototype._shouldShowGenerate = function _shouldShowGenerate(exam, options) {
         if (!this.supportsGenerate) {
+            return false;
+        }
+        if (options && String(options.selectionMode || '') === 'reading-memorize') {
             return false;
         }
         if (options && options.supportsGenerate === false) {
@@ -1537,7 +3338,7 @@
 
         info.appendChild(this._createElement('div', null, titleChildren));
 
-        var metaText = this._formatTimestamp(config.timestamp) + ' · ' + (config.examCount || 0) + ' 个题目';
+        var metaText = this._formatConfigMeta(config);
         info.appendChild(this._createElement('div', { className: this.classNames.meta }, metaText));
 
         var actions = this._createElement('div', { className: this.classNames.actions });
@@ -1749,8 +3550,28 @@
         }
     };
 
+    LibraryConfigView.prototype._formatConfigMeta = function _formatConfigMeta(config) {
+        config = config || {};
+        var counts = config.counts && typeof config.counts === 'object' ? config.counts : {};
+        var total = Number.isFinite(Number(config.examCount)) ? Number(config.examCount) : (Number(counts.total) || 0);
+        var parts = [this._formatTimestamp(config.timestamp), total + ' 个题目'];
+        if (Number.isFinite(Number(counts.reading)) || Number.isFinite(Number(counts.listening))) {
+            parts.push('阅读 ' + (Number(counts.reading) || 0));
+            parts.push('听力 ' + (Number(counts.listening) || 0));
+        }
+        var lastImport = config.lastImport && typeof config.lastImport === 'object' ? config.lastImport : null;
+        if (lastImport && (lastImport.type || lastImport.mode)) {
+            var typeLabel = lastImport.type === 'reading' ? '阅读' : (lastImport.type === 'listening' ? '听力' : '题库');
+            var modeLabel = lastImport.mode === 'incremental' ? '增量' : (lastImport.mode === 'full' ? '全量' : '导入');
+            parts.push(typeLabel + modeLabel);
+        }
+        return parts.join(' · ');
+    };
+
     global.PracticeStats = PracticeStats;
     global.PracticeDashboardView = PracticeDashboardView;
+    global.PracticeTrendRenderer = PracticeTrendRenderer;
+    global.PracticePriorityRenderer = PracticePriorityRenderer;
     global.PracticeHistoryRenderer = historyRenderer;
     global.LegacyExamListView = LegacyExamListView;
     global.LibraryConfigView = LibraryConfigView;

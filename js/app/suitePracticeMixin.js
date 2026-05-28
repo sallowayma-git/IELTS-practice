@@ -222,6 +222,7 @@
 
             const normalized = this._normalizeSuiteResult(sequenceEntry.exam, data);
             this._upsertSuiteResult(session, examId, normalized);
+            this._syncSuiteTimerFromPayload(session, data);
             session.lastUpdate = Date.now();
             this.updateExamStatus && this.updateExamStatus(examId, 'completed');
 
@@ -229,7 +230,10 @@
             session.draftsByExam[examId] = {
                 answers: data.answers || {},
                 highlights: data.highlights || [],
-                scrollY: data.scrollY || 0
+                scrollY: data.scrollY || 0,
+                updatedAt: Number.isFinite(Number(data && data.draftUpdatedAt))
+                    ? Number(data.draftUpdatedAt)
+                    : Date.now()
             };
             if (Number.isFinite(Number(data && data.duration))) {
                 session.elapsedByExam[examId] = Math.max(0, Number(data.duration));
@@ -331,6 +335,90 @@
             return String(value).trim() !== '';
         },
 
+        _resolveSuiteEntryDraft(session, examId) {
+            if (!session || !session.draftsByExam || !examId) {
+                return null;
+            }
+            const draft = session.draftsByExam[examId];
+            return draft && typeof draft === 'object' ? draft : null;
+        },
+
+        _cloneSuitePlainObject(value) {
+            if (!value || typeof value !== 'object') {
+                return value;
+            }
+            try {
+                return JSON.parse(JSON.stringify(value));
+            } catch (_) {
+                return Array.isArray(value) ? value.slice() : { ...value };
+            }
+        },
+
+        _sanitizeSuiteRawData(rawData) {
+            const cloned = this._cloneSuitePlainObject(rawData || {});
+            if (!cloned || typeof cloned !== 'object') {
+                return {};
+            }
+            delete cloned.highlights;
+            delete cloned.scrollY;
+            return cloned;
+        },
+
+        _buildSuiteEntryIndividualPayload(session, entry) {
+            const rawData = this._sanitizeSuiteRawData(entry && entry.rawData);
+            const draft = this._resolveSuiteEntryDraft(session, entry && entry.examId);
+            const highlights = this._resolveSuiteEntryHighlights(entry, draft);
+            if (highlights.length > 0) {
+                rawData.highlights = highlights;
+            }
+            const scrollY = this._resolveSuiteEntryScrollY(entry, draft);
+            if (Number.isFinite(Number(scrollY))) {
+                rawData.scrollY = Number(scrollY);
+            }
+            return rawData;
+        },
+
+        _resolveSuiteEntryHighlights(entry, draft = null) {
+            const sources = [
+                draft && draft.highlights,
+                entry && entry.highlights,
+                entry && entry.rawData && entry.rawData.highlights
+            ];
+            for (const source of sources) {
+                if (Array.isArray(source) && source.length > 0) {
+                    return source.slice();
+                }
+            }
+            return [];
+        },
+
+        _resolveSuiteEntryScrollY(entry, draft = null) {
+            if (draft && Array.isArray(draft.highlights) && draft.highlights.length > 0) {
+                const normalized = Number(draft.scrollY);
+                return Number.isFinite(normalized) ? normalized : 0;
+            }
+            if (entry && Array.isArray(entry.highlights) && entry.highlights.length > 0) {
+                const normalized = Number(entry.scrollY);
+                return Number.isFinite(normalized) ? normalized : 0;
+            }
+            if (entry && entry.rawData && Array.isArray(entry.rawData.highlights) && entry.rawData.highlights.length > 0) {
+                const normalized = Number(entry.rawData.scrollY);
+                return Number.isFinite(normalized) ? normalized : 0;
+            }
+            const sources = [
+                draft && draft.scrollY,
+                entry && entry.scrollY,
+                entry && entry.rawData && entry.rawData.scrollY
+            ];
+            for (const source of sources) {
+                const normalized = Number(source);
+                if (Number.isFinite(normalized)) {
+                    return normalized;
+                }
+            }
+            return 0;
+        },
+
         _buildSuiteReplayEntry(session, examId) {
             if (!session || !Array.isArray(session.results)) {
                 return null;
@@ -376,13 +464,16 @@
                 filteredAnswers[questionId] = value;
             });
 
+            const draft = this._resolveSuiteEntryDraft(session, result.examId || examId);
             return {
                 examId: result.examId,
                 title: result.title,
                 answers: filteredAnswers,
                 answerComparison: filteredComparison,
                 scoreInfo: result.scoreInfo || {},
-                markedQuestions: Array.isArray(result.markedQuestions) ? result.markedQuestions.slice() : []
+                markedQuestions: Array.isArray(result.markedQuestions) ? result.markedQuestions.slice() : [],
+                highlights: this._resolveSuiteEntryHighlights(result, draft),
+                scrollY: this._resolveSuiteEntryScrollY(result, draft)
             };
         },
 
@@ -679,6 +770,9 @@
                     draftsByExam: session.draftsByExam || {},
                     elapsedByExam: session.elapsedByExam || {},
                     globalTimerAnchorMs: session.globalTimerAnchorMs,
+                    suiteTimerPausedOffsetMs: Math.max(0, Number(session.suiteTimerPausedOffsetMs) || 0),
+                    suiteTimerPausedAtMs: Number.isFinite(Number(session.suiteTimerPausedAtMs)) ? Number(session.suiteTimerPausedAtMs) : null,
+                    suiteTimerRunning: session.suiteTimerRunning !== false,
                     flowMode: session.flowMode || 'simulation',
                     autoAdvanceAfterSubmit: typeof session.autoAdvanceAfterSubmit === 'boolean'
                         ? session.autoAdvanceAfterSubmit
@@ -686,7 +780,9 @@
                     results: (session.results || []).map(r => ({
                         examId: r.examId, title: r.title, category: r.category,
                         duration: r.duration, scoreInfo: r.scoreInfo,
-                        answers: r.answers, answerComparison: r.answerComparison
+                        answers: r.answers, answerComparison: r.answerComparison,
+                        markedQuestions: Array.isArray(r.markedQuestions) ? r.markedQuestions.slice() : [],
+                        rawData: this._sanitizeSuiteRawData(r.rawData)
                     })),
                     startTime: session.startTime,
                     activeExamId: session.activeExamId
@@ -716,15 +812,71 @@
             } catch (_) { /* ignore */ }
         },
 
+        _syncSuiteTimerFromPayload(session, data = {}) {
+            if (!session || !data || typeof data !== 'object') return;
+            const timerSnapshot = data.timerSnapshot && typeof data.timerSnapshot === 'object'
+                ? data.timerSnapshot
+                : null;
+            const anchorMs = Number(
+                (timerSnapshot && (timerSnapshot.anchorMs ?? timerSnapshot.effectiveStartTimeMs))
+                ?? data.suiteTimerAnchorMs
+                ?? data.globalTimerAnchorMs
+            );
+            const existingAnchorMs = Number(session.globalTimerAnchorMs);
+            if ((!Number.isFinite(existingAnchorMs) || existingAnchorMs <= 0) && Number.isFinite(anchorMs) && anchorMs > 0) {
+                session.globalTimerAnchorMs = Math.floor(anchorMs);
+            }
+            const pausedOffsetMs = Number(
+                (timerSnapshot && timerSnapshot.pausedOffsetMs)
+                ?? data.suiteTimerPausedOffsetMs
+                ?? data.pausedOffsetMs
+            );
+            if (Number.isFinite(pausedOffsetMs) && pausedOffsetMs >= 0) {
+                const existingOffsetMs = Math.max(0, Number(session.suiteTimerPausedOffsetMs) || 0);
+                session.suiteTimerPausedOffsetMs = Math.max(existingOffsetMs, Math.max(0, pausedOffsetMs));
+            }
+            const running = timerSnapshot ? timerSnapshot.running : data.suiteTimerRunning;
+            session.suiteTimerRunning = running !== false;
+            const pausedAtMs = Number(
+                (timerSnapshot && timerSnapshot.pausedAtMs)
+                ?? data.suiteTimerPausedAtMs
+                ?? data.pausedAtMs
+            );
+            session.suiteTimerPausedAtMs = (
+                session.suiteTimerRunning === false
+                && Number.isFinite(pausedAtMs)
+                && pausedAtMs > 0
+            ) ? Math.floor(pausedAtMs) : null;
+        },
+
+        _computeSuiteElapsedSeconds(session, referenceNow = Date.now()) {
+            if (!session || typeof session !== 'object') return 0;
+            const anchorMs = Number(session.globalTimerAnchorMs) > 0
+                ? Number(session.globalTimerAnchorMs)
+                : Number(session.startTime) || Number(referenceNow) || Date.now();
+            const pausedOffsetMs = Math.max(0, Number(session.suiteTimerPausedOffsetMs) || 0);
+            const pausedAtMs = Number(session.suiteTimerPausedAtMs);
+            const endMs = Number.isFinite(pausedAtMs) && pausedAtMs > 0
+                ? pausedAtMs
+                : (Number(referenceNow) || Date.now());
+            return Math.max(0, Math.round((endMs - anchorMs - pausedOffsetMs) / 1000));
+        },
+
         _sendSimulationContext(session, examId, targetWindow) {
             if (!session || !examId || !targetWindow || targetWindow.closed) return false;
             if (session.flowMode !== 'simulation') return false;
             const idx = session.sequence.findIndex(e => e && e.examId === examId);
             if (idx < 0) return false;
             const draft = session.draftsByExam && session.draftsByExam[examId] || null;
+            const timerAnchorMs = Number(session.globalTimerAnchorMs) > 0
+                ? Number(session.globalTimerAnchorMs)
+                : Number(session.startTime) || Date.now();
             const elapsed = Number.isFinite(Number(session.elapsedByExam && session.elapsedByExam[examId]))
                 ? Math.max(0, Number(session.elapsedByExam[examId]))
-                : 0;
+                : this._computeSuiteElapsedSeconds(session, Date.now());
+            const pausedOffsetMs = Math.max(0, Number(session.suiteTimerPausedOffsetMs) || 0);
+            const pausedAtMs = Number.isFinite(Number(session.suiteTimerPausedAtMs)) ? Number(session.suiteTimerPausedAtMs) : null;
+            const suiteTimerRunning = session.suiteTimerRunning !== false;
             const payload = {
                 type: 'SIMULATION_CONTEXT',
                 data: {
@@ -738,7 +890,18 @@
                     canNext: idx < session.sequence.length - 1,
                     draft,
                     elapsed,
-                    globalTimerAnchorMs: session.globalTimerAnchorMs
+                    globalTimerAnchorMs: timerAnchorMs,
+                    suiteTimerAnchorMs: timerAnchorMs,
+                    suiteTimerPausedOffsetMs: pausedOffsetMs,
+                    suiteTimerPausedAtMs: pausedAtMs,
+                    suiteTimerRunning,
+                    timerSnapshot: {
+                        anchorMs: timerAnchorMs,
+                        effectiveStartTimeMs: timerAnchorMs,
+                        pausedOffsetMs,
+                        pausedAtMs,
+                        running: suiteTimerRunning
+                    }
                 }
             };
             try {
@@ -773,16 +936,43 @@
 
                 // Save current draft before switching
                 if (data && data.draft) {
-                    session.draftsByExam[normalizedExamId] = data.draft;
+                    const incomingUpdatedAt = Number(data.draftUpdatedAt ?? data.draft.updatedAt);
+                    const previousDraft = session.draftsByExam[normalizedExamId] || null;
+                    const previousUpdatedAt = Number(previousDraft && previousDraft.updatedAt);
+                    const shouldAcceptDraft = !(
+                        previousDraft
+                        && Number.isFinite(previousUpdatedAt)
+                        && Number.isFinite(incomingUpdatedAt)
+                        && incomingUpdatedAt < previousUpdatedAt
+                    );
+                    if (shouldAcceptDraft) {
+                        session.draftsByExam[normalizedExamId] = {
+                            ...data.draft,
+                            updatedAt: Number.isFinite(incomingUpdatedAt) ? incomingUpdatedAt : Date.now()
+                        };
+                    }
                 }
                 if (data && typeof data.elapsed === 'number') {
                     session.elapsedByExam[normalizedExamId] = data.elapsed;
                 }
+                this._syncSuiteTimerFromPayload(session, data);
                 const currentEntry = session.sequence.find(e => e && e.examId === normalizedExamId);
                 if (currentEntry && data && data.resultSnapshot) {
+                    const draftSnapshot = data.draft && typeof data.draft === 'object' ? data.draft : {};
                     const snapshot = {
                         ...data.resultSnapshot,
-                        duration: Number.isFinite(Number(data.elapsed)) ? Number(data.elapsed) : data.resultSnapshot.duration
+                        duration: Number.isFinite(Number(data.elapsed)) ? Number(data.elapsed) : data.resultSnapshot.duration,
+                        answers: data.resultSnapshot.answers || data.answers || draftSnapshot.answers || {},
+                        highlights: Array.isArray(data.resultSnapshot.highlights)
+                            ? data.resultSnapshot.highlights
+                            : (Array.isArray(data.highlights)
+                                ? data.highlights
+                                : (Array.isArray(draftSnapshot.highlights) ? draftSnapshot.highlights : [])),
+                        scrollY: Number.isFinite(Number(data.resultSnapshot.scrollY))
+                            ? Number(data.resultSnapshot.scrollY)
+                            : (Number.isFinite(Number(data.scrollY))
+                                ? Number(data.scrollY)
+                                : (Number.isFinite(Number(draftSnapshot.scrollY)) ? Number(draftSnapshot.scrollY) : 0))
                     };
                     const normalizedSnapshot = this._normalizeSuiteResult(currentEntry.exam, snapshot);
                     this._upsertSuiteResult(session, normalizedExamId, normalizedSnapshot);
@@ -1277,13 +1467,26 @@
                     if (errorMap.has(key)) {
                         // 更新已存在的错误记录
                         const existing = errorMap.get(key);
+                        const existingTimestamp = Number(existing.timestamp) || 0;
+                        const incomingTimestamp = Number(error.timestamp) || 0;
                         existing.errorCount = (existing.errorCount || 1) + 1;
-                        existing.timestamp = Math.max(existing.timestamp || 0, error.timestamp || 0);
-                        
+
                         // 保留最新的用户输入
-                        if (error.timestamp > (existing.timestamp || 0)) {
+                        if (incomingTimestamp >= existingTimestamp) {
                             existing.userInput = error.userInput;
+                            existing.questionId = error.questionId || existing.questionId;
+                            existing.suiteId = error.suiteId || result.suiteId || existing.suiteId;
+                            existing.examId = error.examId || result.examId || existing.examId;
+                            existing.acceptedAnswers = Array.isArray(error.acceptedAnswers)
+                                ? error.acceptedAnswers.slice()
+                                : existing.acceptedAnswers;
+                            existing.canonicalAnswer = error.canonicalAnswer || existing.canonicalAnswer;
+                            existing.reasonCode = error.reasonCode || existing.reasonCode;
+                            existing.confidence = typeof error.confidence === 'number' ? error.confidence : existing.confidence;
+                            existing.tokenIndex = Number.isFinite(error.tokenIndex) ? error.tokenIndex : existing.tokenIndex;
+                            existing.metadata = error.metadata || existing.metadata;
                         }
+                        existing.timestamp = Math.max(existingTimestamp, incomingTimestamp);
                     } else {
                         // 添加新的错误记录
                         errorMap.set(key, {
@@ -1294,7 +1497,13 @@
                             examId: error.examId || result.examId,
                             timestamp: error.timestamp || Date.now(),
                             errorCount: error.errorCount || 1,
-                            source: error.source || this._detectMultiSuiteSource(result.examId)
+                            source: error.source || this._detectMultiSuiteSource(result.examId),
+                            acceptedAnswers: Array.isArray(error.acceptedAnswers) ? error.acceptedAnswers.slice() : undefined,
+                            canonicalAnswer: error.canonicalAnswer,
+                            reasonCode: error.reasonCode,
+                            confidence: typeof error.confidence === 'number' ? error.confidence : undefined,
+                            tokenIndex: Number.isFinite(error.tokenIndex) ? error.tokenIndex : undefined,
+                            metadata: error.metadata
                         });
                     }
                 });
@@ -1316,24 +1525,34 @@
 
             try {
                 const completionTime = Date.now();
-                const suiteEntries = session.results.map(entry => ({
-                    examId: entry.examId,
-                    title: entry.title,
-                    category: entry.category,
-                    duration: entry.duration,
-                    scoreInfo: entry.scoreInfo,
-                    answers: entry.answers,
-                    answerComparison: entry.answerComparison,
-                    markedQuestions: Array.isArray(entry.markedQuestions) ? entry.markedQuestions.slice() : [],
-                    rawData: entry.rawData || {}
-                }));
+                const suiteEntries = session.results.map(entry => {
+                    const draft = this._resolveSuiteEntryDraft(session, entry && entry.examId);
+                    return {
+                        examId: entry.examId,
+                        title: entry.title,
+                        category: entry.category,
+                        duration: entry.duration,
+                        scoreInfo: entry.scoreInfo,
+                        answers: entry.answers,
+                        answerComparison: entry.answerComparison,
+                        markedQuestions: Array.isArray(entry.markedQuestions) ? entry.markedQuestions.slice() : [],
+                        highlights: this._resolveSuiteEntryHighlights(entry, draft),
+                        scrollY: this._resolveSuiteEntryScrollY(entry, draft),
+                        rawData: this._sanitizeSuiteRawData(entry.rawData)
+                    };
+                });
 
-                const entryDurations = session.results.map(entry => Number.isFinite(entry.duration) ? entry.duration : 0);
-                const summedDuration = entryDurations.reduce((sum, value) => sum + value, 0);
-                const startTimestamp = session.startTime || completionTime;
-                const elapsedMs = Math.max(0, completionTime - startTimestamp);
-                const elapsedSeconds = Math.max(0, Math.round(elapsedMs / 1000));
-                const totalDuration = elapsedSeconds > 0 ? Math.max(summedDuration, elapsedSeconds) : summedDuration;
+                const timerAnchorMs = Number(session.globalTimerAnchorMs) > 0
+                    ? Number(session.globalTimerAnchorMs)
+                    : Number(session.startTime) || completionTime;
+                const startTimestamp = timerAnchorMs;
+                let pausedOffsetMs = Math.max(0, Number(session.suiteTimerPausedOffsetMs) || 0);
+                const pausedAtMs = Number(session.suiteTimerPausedAtMs);
+                if (Number.isFinite(pausedAtMs) && pausedAtMs > 0 && completionTime > pausedAtMs) {
+                    pausedOffsetMs += (completionTime - pausedAtMs);
+                }
+                const elapsedMs = Math.max(0, completionTime - startTimestamp - pausedOffsetMs);
+                const totalDuration = Math.max(0, Math.round(elapsedMs / 1000));
                 const totalCorrect = session.results.reduce((sum, entry) => sum + entry.scoreInfo.correct, 0);
                 const totalQuestions = session.results.reduce((sum, entry) => sum + entry.scoreInfo.total, 0);
                 const accuracy = totalQuestions > 0 ? (totalCorrect / totalQuestions) : 0;
@@ -1398,7 +1617,7 @@
                         suiteSequence,
                         suiteDisplayDate: dateLabel,
                         suiteSessionId: session.id,
-                        suiteEntries,
+                        suiteEntryCount: suiteEntries.length,
                         startedAt: startTimeIso,
                         completedAt: endTimeIso
                     },
@@ -1410,7 +1629,7 @@
                         total: totalQuestions,
                         accuracy,
                         percentage,
-                        suiteEntries
+                        suiteEntryCount: suiteEntries.length
                     },
                     sessionId: session.id
                 };
@@ -1448,17 +1667,18 @@
             return Array.isArray(list) ? list.filter(Boolean) : [];
         },
 
-        async _loadSuitePracticeRecordsForFiltering() {
+        async _listPracticeRecordsWithFallback(options = {}) {
             const normalizeList = (list) => (Array.isArray(list) ? list : []);
+            const includeRecorder = options && options.includeRecorder !== false;
 
             if (
-                this.components
+                includeRecorder
+                && this.components
                 && this.components.practiceRecorder
                 && typeof this.components.practiceRecorder.getPracticeRecords === 'function'
             ) {
                 try {
-                    const records = await this.components.practiceRecorder.getPracticeRecords();
-                    return normalizeList(records);
+                    return normalizeList(await this.components.practiceRecorder.getPracticeRecords());
                 } catch (error) {
                     console.warn('[SuitePractice] 读取 PracticeRecorder 记录失败，尝试存储回退:', error);
                 }
@@ -1466,23 +1686,88 @@
 
             if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function') {
                 try {
-                    const records = await window.PracticeCore.store.listPracticeRecords();
-                    return normalizeList(records);
+                    return normalizeList(await window.PracticeCore.store.listPracticeRecords());
                 } catch (error) {
                     console.warn('[SuitePractice] 读取 PracticeCore 记录失败，尝试存储回退:', error);
                 }
             }
 
+            if (window.PracticeStore && typeof window.PracticeStore.list === 'function') {
+                try {
+                    return normalizeList(await window.PracticeStore.list());
+                } catch (error) {
+                    console.warn('[SuitePractice] 读取 PracticeStore 记录失败，尝试存储回退:', error);
+                }
+            }
+
             if (typeof storage?.get === 'function') {
                 try {
-                    const records = await storage.get('practice_records', []);
-                    return normalizeList(records);
+                    return normalizeList(await storage.get('practice_records', []));
                 } catch (error) {
                     console.warn('[SuitePractice] 读取 practice_records 失败:', error);
                 }
             }
 
             return [];
+        },
+
+        async _replacePracticeRecordsWithFallback(records) {
+            const normalizedRecords = Array.isArray(records) ? records : [];
+            if (window.PracticeStore && typeof window.PracticeStore.replace === 'function') {
+                await window.PracticeStore.replace(normalizedRecords);
+                return;
+            }
+            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
+                await window.PracticeCore.store.replacePracticeRecords(normalizedRecords);
+                return;
+            }
+            if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+                await window.simpleStorageWrapper.savePracticeRecords(normalizedRecords);
+                return;
+            }
+            const practiceKey = ['practice', 'records'].join('_');
+            await storage.set(practiceKey, normalizedRecords);
+        },
+
+        async _saveSinglePracticeRecordWithFallback(record) {
+            if (window.PracticeStore && typeof window.PracticeStore.save === 'function') {
+                await window.PracticeStore.save(record);
+                return;
+            }
+            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+                await window.PracticeCore.store.savePracticeRecord(record);
+                return;
+            }
+            if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+                await window.simpleStorageWrapper.addPracticeRecord(record);
+                return;
+            }
+
+            let practiceRecords = await this._listPracticeRecordsWithFallback({ includeRecorder: false });
+            if (!Array.isArray(practiceRecords)) {
+                practiceRecords = [];
+            }
+            practiceRecords.unshift(record);
+            if (practiceRecords.length > MAX_LEGACY_PRACTICE_RECORDS) {
+                practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
+            }
+            await this._replacePracticeRecordsWithFallback(practiceRecords);
+        },
+
+        _isSuitePracticeRecord(record) {
+            if (!record || typeof record !== 'object') {
+                return false;
+            }
+            if (record.suiteMode === true) {
+                return true;
+            }
+            const freq = String(record.frequency || '').toLowerCase();
+            const metaFreq = String(record.metadata && record.metadata.frequency || '').toLowerCase();
+            return freq === 'suite' || metaFreq === 'suite';
+        },
+
+        async _loadSuitePracticeRecordsForFiltering() {
+            return this._listPracticeRecordsWithFallback({ includeRecorder: true });
         },
 
         _collectExamIdsFromPracticeRecord(record, collector) {
@@ -1764,16 +2049,20 @@
                 const lockedAutoAdvance = flowMode === 'stationary'
                     ? false
                     : true;
+                const timerAnchorMs = Date.now();
                 const session = {
                     id: suiteSessionId,
                     status: 'initializing',
-                    startTime: Date.now(),
+                    startTime: timerAnchorMs,
                     sequence: normalizedSequence,
                     currentIndex: 0,
                     results: [],
                     draftsByExam: {},
                     elapsedByExam: {},
-                    globalTimerAnchorMs: Date.now(),
+                    globalTimerAnchorMs: timerAnchorMs,
+                    suiteTimerPausedOffsetMs: 0,
+                    suiteTimerPausedAtMs: null,
+                    suiteTimerRunning: true,
                     flowMode,
                     frequencyScope,
                     autoAdvanceAfterSubmit: lockedAutoAdvance,
@@ -1904,7 +2193,7 @@
                 markedQuestions: Array.isArray(rawData?.metadata?.markedQuestions)
                     ? rawData.metadata.markedQuestions.slice()
                     : (Array.isArray(rawData?.markedQuestions) ? rawData.markedQuestions.slice() : []),
-                rawData: rawData || {}
+                rawData: this._sanitizeSuiteRawData(rawData)
             };
         },
 
@@ -1929,24 +2218,7 @@
         },
 
         async _saveSuitePracticeRecordFallback(record) {
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
-                await window.PracticeCore.store.savePracticeRecord(record);
-            } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
-                await window.simpleStorageWrapper.addPracticeRecord(record);
-            } else {
-                let practiceRecords = await storage.get('practice_records', []);
-                if (!Array.isArray(practiceRecords)) {
-                    practiceRecords = [];
-                }
-
-                practiceRecords.unshift(record);
-                if (practiceRecords.length > MAX_LEGACY_PRACTICE_RECORDS) {
-                    practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
-                }
-
-                const practiceKey = ['practice', 'records'].join('_');
-                await storage.set(practiceKey, practiceRecords);
-            }
+            await this._saveSinglePracticeRecordWithFallback(record);
             await this._cleanupSuiteEntryRecords(record).catch(error => {
                 console.warn('[SuitePractice] 清理套题子记录失败:', error);
             });
@@ -1957,9 +2229,7 @@
                 return;
             }
 
-            let practiceRecords = window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function'
-                ? await window.PracticeCore.store.listPracticeRecords()
-                : await storage.get('practice_records', []);
+            let practiceRecords = await this._listPracticeRecordsWithFallback({ includeRecorder: false });
             if (!Array.isArray(practiceRecords) || practiceRecords.length === 0) {
                 return;
             }
@@ -2002,18 +2272,6 @@
             })();
             const tolerance = 10 * 60 * 1000; // 10分钟
 
-            const isSuiteRecord = (rec) => {
-                if (!rec || typeof rec !== 'object') {
-                    return false;
-                }
-                if (rec.suiteMode) {
-                    return true;
-                }
-                const freq = String(rec.frequency || '').toLowerCase();
-                const metaFreq = String(rec.metadata && rec.metadata.frequency || '').toLowerCase();
-                return freq === 'suite' || metaFreq === 'suite';
-            };
-
             const before = practiceRecords.length;
             practiceRecords = practiceRecords.filter((rec) => {
                 if (!rec || typeof rec !== 'object') {
@@ -2026,7 +2284,7 @@
                 if (sessionMatch) {
                     return false;
                 }
-                if (isSuiteRecord(rec)) {
+                if (this._isSuitePracticeRecord(rec)) {
                     return true;
                 }
                 const examMatch = rec.examId && entryExamIds.has(rec.examId);
@@ -2042,14 +2300,7 @@
             });
 
             if (practiceRecords.length !== before) {
-                if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
-                    await window.PracticeCore.store.replacePracticeRecords(practiceRecords);
-                } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
-                    await window.simpleStorageWrapper.savePracticeRecords(practiceRecords);
-                } else {
-                    const practiceKey = ['practice', 'records'].join('_');
-                    await storage.set(practiceKey, practiceRecords);
-                }
+                await this._replacePracticeRecordsWithFallback(practiceRecords);
                 console.log('[SuitePractice] cleared ' + (before - practiceRecords.length) + ' suite child records');
             }
         },
@@ -2058,8 +2309,8 @@
             try {
                 if (typeof window.syncPracticeRecords === 'function') {
                     window.syncPracticeRecords();
-                } else if (window.storage) {
-                    const latest = await window.storage.get('practice_records', []);
+                } else {
+                    const latest = await this._listPracticeRecordsWithFallback({ includeRecorder: false });
                     if (this.setState) {
                         this.setState('practice.records', Array.isArray(latest) ? latest : []);
                     }
@@ -2094,47 +2345,7 @@
             const targetMonth = date.getMonth();
             const targetDate = date.getDate();
 
-            const normalizeList = list => (Array.isArray(list) ? list : []);
-
-            const collectRecords = async () => {
-                if (this.components && this.components.practiceRecorder && typeof this.components.practiceRecorder.getPracticeRecords === 'function') {
-                    try {
-                        const records = await this.components.practiceRecorder.getPracticeRecords();
-                        return normalizeList(records);
-                    } catch (error) {
-                        console.warn('[SuitePractice] 读取PracticeRecorder记录失败，尝试使用存储降级:', error);
-                    }
-                }
-
-                if (typeof storage?.get === 'function') {
-                    try {
-                        const fallbackRecords = await storage.get('practice_records', []);
-                        return normalizeList(fallbackRecords);
-                    } catch (error) {
-                        console.warn('[SuitePractice] 读取practice_records失败:', error);
-                    }
-                }
-
-                return [];
-            };
-
-            const existingRecords = await collectRecords();
-
-            const isSuiteRecord = record => {
-                if (!record) {
-                    return false;
-                }
-                if (record.suiteMode === true) {
-                    return true;
-                }
-                if (record.frequency === 'suite') {
-                    return true;
-                }
-                if (record.metadata && record.metadata.frequency === 'suite') {
-                    return true;
-                }
-                return false;
-            };
+            const existingRecords = await this._listPracticeRecordsWithFallback({ includeRecorder: true });
 
             const resolveRecordDate = record => {
                 const candidates = [
@@ -2160,7 +2371,7 @@
 
             let count = 0;
             for (const record of existingRecords) {
-                if (!isSuiteRecord(record)) {
+                if (!this._isSuitePracticeRecord(record)) {
                     continue;
                 }
 
@@ -2188,7 +2399,7 @@
 
             for (const entry of session.results) {
                 try {
-                    await this.saveRealPracticeData(entry.examId, entry.rawData, { forceIndividualSave: true });
+                    await this.saveRealPracticeData(entry.examId, this._buildSuiteEntryIndividualPayload(session, entry), { forceIndividualSave: true });
                     this.updateExamStatus && this.updateExamStatus(entry.examId, 'completed');
                 } catch (error) {
                     console.error('[SuitePractice] 保存单篇记录失败:', error);
@@ -2290,7 +2501,7 @@
                         continue;
                     }
                     try {
-                        await this.saveRealPracticeData(entry.examId, entry.rawData, { forceIndividualSave: true });
+                        await this.saveRealPracticeData(entry.examId, this._buildSuiteEntryIndividualPayload(session, entry), { forceIndividualSave: true });
                         this.updateExamStatus && this.updateExamStatus(entry.examId, 'completed');
                     } catch (error) {
                         console.error('[SuitePractice] 套题中断时保存记录失败:', error);

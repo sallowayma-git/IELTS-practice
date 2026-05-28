@@ -824,10 +824,17 @@
 
         resolvePracticeTiming: function () {
             const snapshot = this.getPracticeTimerSnapshot();
+            const startTime = Math.floor(Number(snapshot.effectiveStartTimeMs));
+            const duration = Math.max(0, Math.round(Number(snapshot.durationSeconds)));
+            const actualEndTimeMsRaw = Number(snapshot.actualEndTimeMs);
+            const endTime = Number.isFinite(actualEndTimeMsRaw)
+                ? Math.floor(actualEndTimeMsRaw)
+                : Date.now();
             return {
-                startTime: Math.floor(Number(snapshot.effectiveStartTimeMs)),
-                endTime: Math.floor(Number(snapshot.effectiveEndTimeMs)),
-                duration: Math.max(0, Math.round(Number(snapshot.durationSeconds)))
+                startTime,
+                endTime,
+                duration,
+                effectiveEndTime: Math.max(startTime, startTime + duration * 1000)
             };
         },
 
@@ -3307,6 +3314,7 @@
                 startTime: timing.startTime,
                 endTime: timing.endTime,
                 duration: timing.duration,
+                effectiveEndTime: timing.effectiveEndTime,
                 pageType: this.detectPageType(),
                 url: window.location.href,
                 title: document.title
@@ -4058,6 +4066,7 @@
                 startTime: timing.startTime,
                 endTime: timing.endTime,
                 duration: timing.duration,
+                effectiveEndTime: timing.effectiveEndTime,
                 answers: Object.assign({}, this.answers),
                 correctAnswers: Object.assign({}, this.correctAnswers),
                 answerComparison: answerComparison,

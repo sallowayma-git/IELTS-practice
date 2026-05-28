@@ -99,28 +99,15 @@
 
             fragment.appendChild(readingSection);
 
-            // [DISABLED] 听力入口已禁用
-            // const listeningEntries = (stats?.listening || []).filter((entry) => entry.total > 0);
-            // if (listeningEntries.length > 0) {
-            //     fragment.appendChild(this.createSection({
-            //         title: '听力',
-            //         icon: '🎧',
-            //         entries: listeningEntries,
-            //         style: { gridColumn: '1 / -1', marginTop: '40px' }
-            //     }));
-            // }
-
-            // [DISABLED] 听力练习 - 频率分类入口已禁用
-            // const specialListeningEntries = (stats?.specialListening || []).filter((entry) => entry.total > 0);
-            // if (specialListeningEntries.length > 0) {
-            //     fragment.appendChild(this.createSection({
-            //         title: '听力练习 - 频率分类',
-            //         icon: '🎧',
-            //         entries: specialListeningEntries,
-            //         style: { gridColumn: '1 / -1', marginTop: '40px' },
-            //         isSpecial: true
-            //     }));
-            // }
+            const listeningEntries = (stats?.listening || []).filter((entry) => entry.total > 0);
+            if (listeningEntries.length > 0) {
+                fragment.appendChild(this.createSection({
+                    title: '听力',
+                    icon: '🎧',
+                    entries: listeningEntries,
+                    style: { gridColumn: '1 / -1', marginTop: '40px' }
+                }));
+            }
 
             this.dom.replaceContent(container, fragment);
         }
@@ -250,21 +237,13 @@
 
         createSuiteModeButton() {
             return this.dom.create('button', {
-                className: 'btn btn-primary',
+                className: 'shui-glass-btn',
                 type: 'button',
                 dataset: {
                     action: 'start-suite-mode',
                     overviewAction: 'suite'
                 },
                 style: {
-                    padding: '8px 16px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    borderRadius: '6px',
-                    backgroundColor: '#646b20ff',
-                    border: 'none',
-                    color: 'white',
-                    cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px'
@@ -277,7 +256,7 @@
 
         createEndlessModeButton() {
             return this.dom.create('button', {
-                className: 'btn',
+                className: 'shui-glass-btn',
                 type: 'button',
                 id: 'endless-mode-btn',
                 dataset: {
@@ -285,14 +264,6 @@
                     overviewAction: 'endless'
                 },
                 style: {
-                    padding: '8px 16px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    borderRadius: '6px',
-                    backgroundColor: '#7c3aed',
-                    border: 'none',
-                    color: 'white',
-                    cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px'
