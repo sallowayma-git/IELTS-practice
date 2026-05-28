@@ -93,13 +93,19 @@ fi
 
 # 打包：只包含用户运行时需要的文件
 # js/bundles/ 包含了所有 JS 逻辑，js/app/ js/core/ 等源文件不进入分发包
+ZIP_INPUTS=(
+    index.html
+    css/
+    js/bundles/
+    assets/
+    ReadingPractice/
+)
+if [ ${#LISTENING_ZIP_INPUTS[@]} -gt 0 ]; then
+    ZIP_INPUTS+=("${LISTENING_ZIP_INPUTS[@]}")
+fi
+
 zip -r "${ZIP_PATH}" \
-    index.html \
-    css/ \
-    js/bundles/ \
-    assets/ \
-    ReadingPractice/ \
-    "${LISTENING_ZIP_INPUTS[@]}" \
+    "${ZIP_INPUTS[@]}" \
     -x "*.DS_Store" \
        '~$*' \
        "*.MOV" \
