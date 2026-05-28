@@ -1,0 +1,1045 @@
+// Auto-generated snapshot for offline E2E bootstrap.
+// Update when index.html structure changes.
+window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>考试总览系统</title>
+        <link
+            rel="icon"
+            type="image/svg+xml"
+            href="assets/images/favicon.svg"
+        />
+        <link rel="stylesheet" href="css/main.css" />
+        <link rel="stylesheet" href="css/heroui-bridge.css" />
+        <link rel="stylesheet" href="css/onboarding.css" />
+    </head>
+
+    <body class="hero-body boot-active" data-theme="heroui">
+        <div id="boot-overlay" role="status" aria-live="polite">
+            <div class="boot-panel">
+                <div class="boot-logo">SHUI · IELTS</div>
+                <p class="boot-status" id="boot-status-text">
+                    正在唤醒考试总览系统...
+                </p>
+                <div class="boot-progress">
+                    <span
+                        class="boot-progress__bar"
+                        id="boot-progress-bar"
+                    ></span>
+                </div>
+                <span class="boot-progress__text" id="boot-progress-text"
+                    >初始化资源...</span
+                >
+            </div>
+        </div>
+        <input
+            type="file"
+            id="folder-picker"
+            webkitdirectory
+            style="display: none"
+        />
+        <div class="message-container" id="message-container"></div>
+
+        <div class="container hero-shell">
+            <div class="hero-header">
+                <h1 style="width: 100%">
+                    📚 考试总览系统
+                    <span
+                        style="
+                            font-size: 0.35em;
+                            opacity: 0.6;
+                            font-weight: normal;
+                            margin-left: 12px;
+                            vertical-align: middle;
+                            display: inline-block;
+                        "
+                        >项目仅授权ZYZ Reading Walks
+                        提供分发，小红书号：276752989</span
+                    >
+                    <a
+                        href="https://www.xiaohongshu.com/user/profile/5b4d76744eacab058489e72f"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="hero-badge hero-badge--cta"
+                        style="
+                            background: #ff1c1c;
+                            box-shadow: 0 12px 30px rgba(255, 77, 79, 0.35);
+                            text-decoration: none;
+                            display: inline-flex;
+                            align-items: center;
+                            justify-content: center;
+                        "
+                        aria-label="小红书主页"
+                    >
+                        小红书
+                    </a>
+                    <a
+                        href="https://github.com/sallowayma-git/IELTS-practice"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-hover-link"
+                        aria-label="GitHub Repository"
+                        style="
+                            margin-left: auto;
+                            margin-right: 20px;
+                            color: inherit;
+                            display: flex;
+                            align-items: center;
+                            transition: opacity 0.2s;
+                        "
+                    >
+                        <svg
+                            viewBox="0 0 24 24"
+                            width="28"
+                            height="28"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            fill="none"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        >
+                            <path
+                                d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"
+                            ></path>
+                        </svg>
+                    </a>
+                </h1>
+            </div>
+
+            <nav class="main-nav hero-nav" data-nav-controller="legacy">
+                <button
+                    class="nav-btn hero-nav__btn active"
+                    type="button"
+                    data-view="overview"
+                >
+                    📊 总览
+                </button>
+                <button
+                    class="nav-btn hero-nav__btn"
+                    type="button"
+                    data-view="browse"
+                >
+                    📚 题库浏览
+                </button>
+                <button
+                    class="nav-btn hero-nav__btn"
+                    type="button"
+                    data-view="practice"
+                >
+                    📝 练习记录
+                </button>
+                <button
+                    class="nav-btn hero-nav__btn"
+                    type="button"
+                    data-view="more"
+                >
+                    ✨ 更多
+                </button>
+                <button
+                    class="nav-btn hero-nav__btn"
+                    type="button"
+                    data-view="settings"
+                >
+                    ⚙️ 设置
+                </button>
+            </nav>
+
+            <!-- 总览页面 -->
+            <div id="overview-view" class="view active hero-panel hero-section">
+                <div class="hero-panel__header">
+                    <h2 class="hero-panel__title" style="margin: 0;">📊 学习总览</h2>
+                </div>
+
+                <div class="category-grid" id="category-overview">
+                    <!-- 分类卡片将通过JavaScript动态生成 -->
+                </div>
+            </div>
+
+            <!-- 题库浏览页面 -->
+            <div id="browse-view" class="view hero-panel hero-section">
+                <div class="browse-title-bar hero-panel__header">
+                    <button
+                        class="browse-title-trigger"
+                        id="browse-title-trigger"
+                        type="button"
+                        aria-haspopup="true"
+                        aria-expanded="false"
+                        title="列表偏好"
+                    >
+                        📚<span
+                            class="browse-title-dot"
+                            aria-hidden="true"
+                        ></span>
+                    </button>
+                    <h2 id="browse-title" class="hero-panel__title" style="margin: 0;">题库浏览</h2>
+                    <div
+                        class="browse-preference-panel"
+                        id="browse-preference-panel"
+                        hidden
+                    >
+                        <label class="browse-preference-option">
+                            <input
+                                type="checkbox"
+                                id="browse-remember-position"
+                            />
+                            <span class="browse-preference-text"
+                                >列表位置记录</span
+                            >
+                        </label>
+                    </div>
+                    <div
+                        id="type-filter-buttons"
+                        class="hero-panel__actions shui-filter-group shui-segmented-control"
+                    >
+                        <button
+                            class="shui-segmented-btn active"
+                            type="button"
+                            aria-pressed="true"
+                            data-filter-type="all"
+                            data-index-action="filter-exams"
+                            data-action-value="all"
+                        >
+                            全部
+                        </button>
+                        <button
+                            class="shui-segmented-btn"
+                            type="button"
+                            aria-pressed="false"
+                            data-filter-type="reading"
+                            data-index-action="filter-exams"
+                            data-action-value="reading"
+                        >
+                            阅读
+                        </button>
+                        <button
+                            class="shui-segmented-btn"
+                            type="button"
+                            aria-pressed="false"
+                            data-filter-type="listening"
+                            data-index-action="filter-exams"
+                            data-action-value="listening"
+                        >
+                            听力
+                        </button>
+                    </div>
+                </div>
+
+                <div class="search-box">
+                    <div class="search-row">
+                        <div class="search-input-wrap">
+                            <input
+                                type="text"
+                                class="search-input"
+                                id="exam-search-input"
+                                placeholder="搜索题目..."
+                                aria-label="搜索题目"
+                                data-index-action="search-exams"
+                            />
+                            <button
+                                type="button"
+                                class="search-clear-btn"
+                                id="search-clear-btn"
+                                aria-label="清除搜索"
+                                hidden
+                                data-index-action="clear-search"
+                            >
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    width="16"
+                                    height="16"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    fill="none"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                >
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div
+                            class="browse-frequency-filter"
+                            id="browse-frequency-filter-buttons"
+                            aria-label="频率筛选"
+                        >
+                            <button
+                                class="browse-frequency-chip"
+                                type="button"
+                                aria-pressed="false"
+                                data-frequency-filter="high"
+                                data-index-action="filter-frequency"
+                                data-action-value="high"
+                            >
+                                高频
+                            </button>
+                            <button
+                                class="browse-frequency-chip"
+                                type="button"
+                                aria-pressed="false"
+                                data-frequency-filter="medium"
+                                data-index-action="filter-frequency"
+                                data-action-value="medium"
+                            >
+                                中频
+                            </button>
+                            <button
+                                class="browse-frequency-chip"
+                                type="button"
+                                aria-pressed="false"
+                                data-frequency-filter="low"
+                                data-index-action="filter-frequency"
+                                data-action-value="low"
+                            >
+                                低频
+                            </button>
+                        </div>
+                        <div class="browse-sort-wrapper">
+                            <select
+                                id="browse-sort-select"
+                                class="browse-sort-select"
+                                aria-label="题库排序"
+                            >
+                                <option value="default">默认排序</option>
+                                <option value="frequency-desc">
+                                    频率高→低
+                                </option>
+                                <option value="difficulty-desc">
+                                    难度高→低
+                                </option>
+                            </select>
+                            <div class="browse-sort-icon">
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 14 14"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                >
+                                    <path
+                                        d="M3.5 5.25L7 8.75L10.5 5.25"
+                                        stroke="currentColor"
+                                        stroke-width="1.5"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="exam-list-container"></div>
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>正在加载题目列表...</p>
+                </div>
+            </div>
+
+            <!-- 练习记录页面 -->
+            <div id="practice-view" class="view hero-panel hero-section">
+                <div class="hero-panel__header">
+                    <h2 class="hero-panel__title" style="margin: 0;">📝 练习记录</h2>
+                </div>
+
+                <div class="practice-stats hero-grid hero-grid--stats">
+                    <div class="hero-card hero-card--stat">
+                        <div class="hero-card__label">已练习题目</div>
+                        <div class="hero-card__value" id="total-practiced">
+                            0
+                        </div>
+                        <div class="hero-card__meta">累计巩固练习</div>
+                    </div>
+                    <div class="hero-card hero-card--stat">
+                        <div class="hero-card__label">平均正确率</div>
+                        <div class="hero-card__value" id="avg-score">0%</div>
+                        <div class="hero-card__meta">近期待练表现</div>
+                    </div>
+                    <div class="hero-card hero-card--stat">
+                        <div class="hero-card__label">学习时长(分钟)</div>
+                        <div class="hero-card__value" id="study-time">0</div>
+                        <div class="hero-card__meta">聚焦沉浸时长</div>
+                    </div>
+                    <div class="hero-card hero-card--stat">
+                        <div class="hero-card__label">连续学习天数</div>
+                        <div class="hero-card__value" id="streak-days">0</div>
+                        <div class="hero-card__meta">坚持天数</div>
+                    </div>
+                </div>
+
+                <div class="practice-history hero-panel hero-section">
+                    <div class="hero-panel__header">
+                        <h3 class="hero-panel__title">
+                            📈 练习历史
+                        </h3>
+                        <div
+                            id="record-type-filter-buttons"
+                            class="hero-panel__actions shui-filter-group shui-segmented-control"
+                        >
+                            <button
+                                class="shui-segmented-btn active"
+                                type="button"
+                                aria-pressed="true"
+                                data-filter-type="all"
+                                data-index-action="filter-records"
+                                data-action-value="all"
+                            >
+                                全部
+                            </button>
+                            <button
+                                class="shui-segmented-btn"
+                                type="button"
+                                aria-pressed="false"
+                                data-filter-type="reading"
+                                data-index-action="filter-records"
+                                data-action-value="reading"
+                            >
+                                阅读
+                            </button>
+                            <button
+                                class="shui-segmented-btn"
+                                type="button"
+                                aria-pressed="false"
+                                data-filter-type="listening"
+                                data-index-action="filter-records"
+                                data-action-value="listening"
+                            >
+                                听力
+                            </button>
+                        </div>
+                        <div class="hero-panel__actions">
+                            <button
+                                class="btn btn-secondary hero-btn hero-btn--ghost"
+                                data-index-action="export-practice-markdown"
+                            >
+                                📄 导出Markdown
+                            </button>
+                            <button
+                                class="btn btn-info hero-btn"
+                                data-index-action="toggle-bulk-delete"
+                                id="bulk-delete-btn"
+                            >
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    width="1em"
+                                    height="1em"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.8"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    class="ui-emoji-icon"
+                                    aria-hidden="true"
+                                >
+                                    <polyline
+                                        points="9 11 12 14 22 4"
+                                    ></polyline>
+                                    <path
+                                        d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
+                                    ></path>
+                                </svg>
+                                批量删除
+                            </button>
+                            <button
+                                class="btn btn-warning hero-btn hero-btn--warn"
+                                data-index-action="clear-practice-data"
+                            >
+                                🗑️ 清除记录
+                            </button>
+                        </div>
+                    </div>
+                    <div id="history-list" class="practice-history-list">
+                        <div
+                            style="
+                                text-align: center;
+                                padding: 40px;
+                                opacity: 0.7;
+                            "
+                        >
+                            <div style="font-size: 3em; margin-bottom: 15px">
+                                📋
+                            </div>
+                            <p>暂无练习记录</p>
+                            <p style="font-size: 0.9em; margin-top: 10px">
+                                开始练习后，记录将自动保存在这里
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 设置页面 -->
+            <div id="settings-view" class="view hero-panel hero-section">
+                <div class="hero-panel__header">
+                    <h2 class="hero-panel__title" style="margin: 0;">⚙️ 系统设置</h2>
+                </div>
+                <div class="hero-settings-group">
+                    <div
+                        class="hero-panel hero-section system-management-panel"
+                    >
+                        <h3>🔧 系统管理</h3>
+                        <p class="hero-panel__muted">系统工具和设置选项</p>
+                        <div class="hero-settings-actions">
+                            <button
+                                class="btn btn-warning hero-btn hero-btn--warn"
+                                id="clear-cache-btn"
+                            >
+                                🗑️ 清除缓存
+                            </button>
+                            <button
+                                class="btn btn-warning hero-btn hero-btn--warn"
+                                id="load-library-btn"
+                            >
+                                📂 加载题库
+                            </button>
+                            <button
+                                class="btn btn-warning hero-btn hero-btn--warn"
+                                id="theme-switcher-btn-entry"
+                            >
+                                🎨 主题切换
+                            </button>
+                            <button
+                                class="btn btn-warning hero-btn hero-btn--warn"
+                                id="show-onboarding-btn"
+                            >
+                                🎯 显示引导
+                            </button>
+                            <button
+                                class="btn btn-warning hero-btn hero-btn--warn"
+                                id="library-config-btn"
+                            >
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    width="1em"
+                                    height="1em"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.8"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    class="ui-emoji-icon"
+                                    aria-hidden="true"
+                                >
+                                    <line x1="4" y1="21" x2="4" y2="14"></line>
+                                    <line x1="4" y1="10" x2="4" y2="3"></line>
+                                    <line
+                                        x1="12"
+                                        y1="21"
+                                        x2="12"
+                                        y2="12"
+                                    ></line>
+                                    <line x1="12" y1="8" x2="12" y2="3"></line>
+                                    <line
+                                        x1="20"
+                                        y1="21"
+                                        x2="20"
+                                        y2="16"
+                                    ></line>
+                                    <line x1="20" y1="12" x2="20" y2="3"></line>
+                                    <line x1="1" y1="14" x2="7" y2="14"></line>
+                                    <line x1="9" y1="8" x2="15" y2="8"></line>
+                                    <line
+                                        x1="17"
+                                        y1="16"
+                                        x2="23"
+                                        y2="16"
+                                    ></line>
+                                </svg>
+                                题库配置切换
+                            </button>
+                            <button
+                                class="btn btn-warning hero-btn hero-btn--warn"
+                                id="force-refresh-btn"
+                            >
+                                🔄 强制刷新题库
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="hero-panel hero-section data-management-panel">
+                        <h3>💾 数据管理</h3>
+                        <p class="hero-panel__muted">
+                            数据备份、导入导出和完整性检查
+                        </p>
+                        <div class="hero-settings-actions">
+                            <button
+                                class="btn hero-btn data-mgmt-btn"
+                                id="create-backup-btn"
+                            >
+                                💾 创建备份
+                            </button>
+                            <button
+                                class="btn hero-btn data-mgmt-btn"
+                                id="backup-list-btn"
+                            >
+                                📋 备份列表
+                            </button>
+                            <button
+                                class="btn hero-btn data-mgmt-btn"
+                                id="export-data-btn"
+                            >
+                                📤 导出数据
+                            </button>
+                            <button
+                                class="btn hero-btn data-mgmt-btn"
+                                id="import-data-btn"
+                            >
+                                📥 导入数据
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="hero-panel hero-section">
+                        <h3>📊 系统信息</h3>
+                        <div
+                            class="hero-surface"
+                            style="
+                                margin-top: 15px;
+                                line-height: 1.8;
+                                font-weight: bold;
+                            "
+                        >
+                            <div style="color: #10b981">
+                                题库状态: 已加载完整索引
+                            </div>
+                            <div>
+                                题目总数: <span id="total-exams">192</span>
+                            </div>
+                            <div>
+                                HTML题目: <span id="html-exams">191</span>
+                            </div>
+                            <div>PDF题目: <span id="pdf-exams">190</span></div>
+                            <div>
+                                最后更新:
+                                <span id="last-update"
+                                    >2025/05/06 21:56:46</span
+                                >
+                            </div>
+                        </div>
+
+                        <!-- 开发团队链接 -->
+                        <div
+                            style="
+                                margin-top: 30px;
+                                text-align: center;
+                                padding-top: 20px;
+                                border-top: 1px solid rgba(255, 255, 255, 0.2);
+                            "
+                        >
+                            <a
+                                href="https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="inline-hover-link"
+                                style="
+                                    color: #ff1c1c;
+                                    text-decoration: none;
+                                    font-size: 0.9em;
+                                    font-weight: bold;
+                                    display: block;
+                                    margin-bottom: 12px;
+                                    transition: opacity 0.2s;
+                                "
+                            >
+                                问题反馈
+                            </a>
+                            <a
+                                href="https://github.com/sallowayma-git"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style="
+                                    color: gray;
+                                    text-decoration: none;
+                                    font-size: 0.9em;
+                                    transition: color 0.3s ease;
+                                "
+                            >
+                                Salloway呈现
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 更多页面 -->
+            <div id="more-view" class="view hero-panel hero-section">
+                <div class="hero-panel__header">
+                    <h2 class="hero-panel__title" style="margin: 0;">✨ 更多工具</h2>
+                </div>
+                <p class="more-view-subtitle">
+                    探索额外的学习辅助功能，助你高效备考。
+                </p>
+                <div class="more-tools-grid">
+                    <!-- <button class="tool-card tool-card--featured" type="button" id="writing-entry-btn">
+                    <div class="tool-card-icon">✍️</div>
+                    <div class="tool-card-content">
+                        <h3>写作评分</h3>
+                        <p>AI驱动的雅思写作评分系统，获取专业四维度评分与详细反馈。</p>
+                    </div>
+                    <div class="tool-card-arrow">进入</div>
+                </button> -->
+                    <button
+                        class="tool-card"
+                        type="button"
+                        data-action="open-clock"
+                    >
+                        <div class="tool-card-icon">🕒</div>
+                        <div class="tool-card-content">
+                            <h3>全屏时钟</h3>
+                            <p>
+                                沉浸式模拟指针时钟，实时同步系统时间，陪伴你的专注时刻。
+                            </p>
+                        </div>
+                        <div class="tool-card-arrow">进入</div>
+                    </button>
+                    <button
+                        class="tool-card"
+                        type="button"
+                        data-action="open-vocab"
+                    >
+                        <div class="tool-card-icon">🧠</div>
+                        <div class="tool-card-content">
+                            <h3>单词背诵</h3>
+                            <p>SM-2记忆算法，随时继续你的词汇任务。</p>
+                        </div>
+                        <div class="tool-card-arrow">进入</div>
+                    </button>
+                    <button
+                        class="tool-card"
+                        type="button"
+                        data-index-action="show-achievements"
+                    >
+                        <div class="tool-card-icon">🏆</div>
+                        <div class="tool-card-content">
+                            <h3>成就</h3>
+                            <p>查看你解锁的徽章和荣誉。</p>
+                        </div>
+                        <div class="tool-card-arrow">查看</div>
+                    </button>
+                </div>
+            </div>
+            <section id="vocab-view" class="view" data-view="vocab" hidden>
+                <div class="vocab-view-shell" data-vocab-role="root"></div>
+            </section>
+        </div>
+
+        <div
+            id="fullscreen-clock-overlay"
+            class="clock-overlay is-hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="全屏时钟"
+        >
+            <div
+                class="clock-overlay-inner controls-hidden"
+                data-clock-role="overlay-inner"
+            >
+                <button
+                    class="clock-action-btn clock-fullscreen-btn"
+                    type="button"
+                    data-action="toggle-clock-fullscreen"
+                    aria-label="切换全屏模式"
+                    aria-pressed="false"
+                >
+                    <svg
+                        class="fullscreen-icon icon-enter"
+                        viewBox="0 0 24 24"
+                        focusable="false"
+                        aria-hidden="true"
+                    >
+                        <polyline points="4 9 4 4 9 4"></polyline>
+                        <line x1="4" y1="4" x2="10" y2="10"></line>
+                        <polyline points="20 15 20 20 15 20"></polyline>
+                        <line x1="20" y1="20" x2="14" y2="14"></line>
+                    </svg>
+                    <svg
+                        class="fullscreen-icon icon-exit"
+                        viewBox="0 0 24 24"
+                        focusable="false"
+                        aria-hidden="true"
+                    >
+                        <polyline points="15 9 20 9 20 4"></polyline>
+                        <line x1="20" y1="4" x2="14" y2="10"></line>
+                        <polyline points="9 15 4 15 4 20"></polyline>
+                        <line x1="4" y1="20" x2="10" y2="14"></line>
+                        <polyline points="20 15 20 20 15 20"></polyline>
+                        <line x1="20" y1="20" x2="14" y2="14"></line>
+                        <polyline points="4 9 4 4 9 4"></polyline>
+                        <line x1="4" y1="4" x2="10" y2="10"></line>
+                    </svg>
+                </button>
+                <button
+                    class="clock-action-btn clock-close-btn"
+                    type="button"
+                    data-action="close-clock"
+                    aria-label="关闭时钟"
+                >
+                    <svg
+                        class="fullscreen-icon icon-close"
+                        viewBox="0 0 24 24"
+                        focusable="false"
+                        aria-hidden="true"
+                    >
+                        <line x1="8" y1="8" x2="16" y2="16"></line>
+                        <line x1="16" y1="8" x2="8" y2="16"></line>
+                    </svg>
+                </button>
+                <div class="clock-view-stack" data-clock-role="view-stack">
+                    <section
+                        class="clock-view is-active"
+                        data-clock-view="analog"
+                        aria-label="模拟指针时钟"
+                    >
+                        <canvas
+                            id="analog-clock-canvas"
+                            aria-hidden="true"
+                        ></canvas>
+                    </section>
+                    <section
+                        class="clock-view"
+                        data-clock-view="flip"
+                        aria-label="翻页时钟"
+                    >
+                        <div
+                            class="flip-clock"
+                            id="flip-clock"
+                            aria-live="polite"
+                        ></div>
+                    </section>
+                    <section
+                        class="clock-view"
+                        data-clock-view="digital"
+                        aria-label="数字时钟"
+                    >
+                        <div
+                            class="digital-clock"
+                            id="digital-clock"
+                            aria-live="polite"
+                        ></div>
+                    </section>
+                    <section
+                        class="clock-view"
+                        data-clock-view="ambient"
+                        aria-label="低对比度数字时钟"
+                    >
+                        <div
+                            class="ambient-clock"
+                            id="ambient-clock"
+                            aria-live="polite"
+                        ></div>
+                    </section>
+                </div>
+                <div
+                    class="clock-pagination"
+                    data-clock-role="pagination"
+                    aria-hidden="true"
+                >
+                    <button
+                        class="clock-dot is-active"
+                        type="button"
+                        data-target-view="analog"
+                        aria-label="切换到模拟指针时钟"
+                    ></button>
+                    <button
+                        class="clock-dot"
+                        type="button"
+                        data-target-view="flip"
+                        aria-label="切换到翻页时钟"
+                    ></button>
+                    <button
+                        class="clock-dot"
+                        type="button"
+                        data-target-view="digital"
+                        aria-label="切换到数字时钟"
+                    ></button>
+                    <button
+                        class="clock-dot"
+                        type="button"
+                        data-target-view="ambient"
+                        aria-label="切换到低对比度数字时钟"
+                    ></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主题切换弹窗 -->
+        <div id="theme-switcher-modal" class="theme-modal">
+            <div class="theme-modal-content">
+                <div class="theme-modal-header">
+                    <h3>🎨 主题切换</h3>
+                    <button
+                        class="theme-modal-close"
+                        data-index-action="hide-theme-switcher"
+                        aria-label="关闭"
+                    >
+                        ×
+                    </button>
+                </div>
+                <div class="theme-modal-body">
+                    <div class="theme-options-viewport" role="presentation">
+                        <div class="theme-options-glass">
+                            <!-- 晨雾群山 -->
+                            <div class="theme-card">
+                                <div class="theme-card-bg theme-bg-misty"></div>
+                                <div class="theme-card-glass-layer">
+                                    <div class="theme-card-header">
+                                        <h4 class="theme-card-title">
+                                            晨雾群山
+                                        </h4>
+                                        <div class="theme-card-subtitle">
+                                            <span style="opacity: 0.6"
+                                                >⛰️ Misty Mountain</span
+                                            >
+                                        </div>
+                                    </div>
+                                    <div class="theme-card-footer">
+                                        <span class="theme-card-tag">动态</span>
+                                        <button
+                                            class="theme-card-btn"
+                                            data-index-action="switch-bg-theme"
+                                            data-action-value="misty-mountain"
+                                        >
+                                            应用
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 深海孤航 -->
+                            <div class="theme-card">
+                                <div class="theme-card-bg theme-bg-ocean"></div>
+                                <div class="theme-card-glass-layer">
+                                    <div class="theme-card-header">
+                                        <h4 class="theme-card-title">
+                                            深海孤航
+                                        </h4>
+                                        <div class="theme-card-subtitle">
+                                            <span style="opacity: 0.6"
+                                                >⛵ Teal Ocean</span
+                                            >
+                                        </div>
+                                    </div>
+                                    <div class="theme-card-footer">
+                                        <span class="theme-card-tag">动态</span>
+                                        <button
+                                            class="theme-card-btn"
+                                            data-index-action="switch-bg-theme"
+                                            data-action-value="teal-ocean"
+                                        >
+                                            应用
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 落日雾花 -->
+                            <div class="theme-card">
+                                <div
+                                    class="theme-card-bg theme-bg-floral"
+                                ></div>
+                                <div class="theme-card-glass-layer">
+                                    <div class="theme-card-header">
+                                        <h4 class="theme-card-title">
+                                            落日雾花
+                                        </h4>
+                                        <div class="theme-card-subtitle">
+                                            <span style="opacity: 0.6"
+                                                >🌸 Floral Bloom</span
+                                            >
+                                        </div>
+                                    </div>
+                                    <div class="theme-card-footer">
+                                        <span class="theme-card-tag">静态</span>
+                                        <button
+                                            class="theme-card-btn"
+                                            data-index-action="switch-bg-theme"
+                                            data-action-value="floral-bloom"
+                                        >
+                                            应用
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 启动与懒加载工具 -->
+        <script src="assets/vendor/three.min.js"></script>
+        <script src="js/bundles/runtime-entry.bundle.js"></script>
+
+        <!-- 基础环境与日志 -->
+        <script src="js/bundles/core-foundation.bundle.js"></script>
+
+        <!-- 工具库与基础视图 -->
+        <script src="js/bundles/ui-shell.bundle.js"></script>
+
+        <!-- 入口与懒加载代理 -->
+        <script src="js/bundles/legacy-app.bundle.js"></script>
+
+        <!-- 成就系统模态框 -->
+        <div id="achievements-modal" class="theme-modal">
+            <div class="theme-modal-content" style="max-width: 600px">
+                <div class="theme-modal-header">
+                    <h3>🏆 我的成就</h3>
+                    <button
+                        class="theme-modal-close"
+                        data-index-action="hide-achievements"
+                        aria-label="关闭"
+                    >
+                        ×
+                    </button>
+                </div>
+                <div class="theme-modal-body">
+                    <div class="achievements-grid" id="achievements-list">
+                        <!-- JavaScript will populate this -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 首次开源许可弹窗 -->
+        <div id="license-modal">
+            <div class="lm-card">
+                <h2 class="lm-title">开源项目使用须知</h2>
+                <div class="lm-body">
+                    <p>
+                        感谢使用！本项目是免费软件，采用
+                        <strong>GPL-3.0 License</strong> 发布。
+                    </p>
+                    <p class="lm-warning">
+                        我们明确反对任何形式的倒卖、改名后二次分发、牟利、使用该项目商业引流等行为。
+                    </p>
+                    <p>
+                        本项目的初衷是自由使用、学习与改进，而不是作为倒卖工具获取不正当收益。
+                    </p>
+                    <p>
+                        腾讯文档：
+                        <a
+                            href="https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="lm-warning"
+                            style="text-decoration: underline"
+                            >问题反馈</a
+                        >
+                    </p>
+                    <div class="lm-info-box">
+                        <p>
+                            任何分发、修改或再发布行为，都必须遵守 GPL-3.0
+                            协议，包括<strong>公开源码、保留开源许可，并尊重用户的自由</strong>。
+                        </p>
+                    </div>
+                </div>
+                <div class="lm-footer">
+                    <button class="lm-btn" data-index-action="accept-license">
+                        我已了解
+                    </button>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
+`

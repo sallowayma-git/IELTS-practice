@@ -39,6 +39,8 @@ Object.defineProperty(window, 'examListViewInstance', {
 });
 
 let practiceDashboardViewInstance = null;
+let practiceTrendRendererInstance = null;
+let practicePriorityRendererInstance = null;
 let legacyNavigationController = null;
 
 // ============================================================================
@@ -203,6 +205,20 @@ function ensurePracticeDashboardView() {
     return practiceDashboardViewInstance;
 }
 
+function ensurePracticeTrendRenderer() {
+    if (!practiceTrendRendererInstance && window.PracticeTrendRenderer) {
+        practiceTrendRendererInstance = new window.PracticeTrendRenderer();
+    }
+    return practiceTrendRendererInstance;
+}
+
+function ensurePracticePriorityRenderer() {
+    if (!practicePriorityRendererInstance && window.PracticePriorityRenderer) {
+        practicePriorityRendererInstance = new window.PracticePriorityRenderer();
+    }
+    return practicePriorityRendererInstance;
+}
+
 function ensureLegacyNavigation(options) {
     var mergedOptions = Object.assign({
         containerSelector: '.main-nav',
@@ -268,15 +284,15 @@ async function initializeLegacyComponents() {
         window.dataIntegrityManager = new DataIntegrityManager();
         console.log('[System] 数据完整性管理器已初始化');
     } else {
-        console.warn('[System] DataIntegrityManager类未加载');
+        console.info('[System] DataIntegrityManager 按需加载，跳过启动初始化');
     }
 
-    // 初始化性能优化器 - 关键性能修复
+    // 性能优化器已拆到 diagnostics-tools；浏览页保留无依赖降级路径。
     if (window.PerformanceOptimizer) {
         window.performanceOptimizer = new PerformanceOptimizer();
         console.log('[System] 性能优化器已初始化');
     } else {
-        console.warn('[System] PerformanceOptimizer类未加载');
+        console.info('[System] PerformanceOptimizer 按需加载，跳过启动初始化');
     }
 
     // Clean up old cache and configurations for v1.1.0 upgrade (one-time only)
@@ -328,49 +344,11 @@ async function syncPracticeRecords(options = {}) {
     console.log('[System] 正在从存储中同步练习记录...');
     let records = [];
     try {
-        const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
-        if (practiceCoreStore && typeof practiceCoreStore.listPracticeRecords === 'function') {
-            records = await practiceCoreStore.listPracticeRecords();
-        } else {
-        // Prefer normalized records from ScoreStorage via PracticeRecorder
-            const pr = window.app && window.app.components && window.app.components.practiceRecorder;
-            if (pr && typeof pr.getPracticeRecords === 'function') {
-                const maybePromise = pr.getPracticeRecords();
-                const res = (typeof maybePromise?.then === 'function') ? await maybePromise : maybePromise;
-                records = Array.isArray(res) ? res : [];
-            } else {
-                // Fallback: read raw storage and defensively normalize minimal fields
-                const raw = await storage.get('practice_records', []) || [];
-                const base = Array.isArray(raw) ? raw : [];
-                records = base.map(r => {
-                    const rd = (r && r.realData) || {};
-                    const sInfo = r && (r.scoreInfo || rd.scoreInfo) || {};
-                    const correct = (typeof r.correctAnswers === 'number') ? r.correctAnswers : (typeof sInfo.correct === 'number' ? sInfo.correct : (typeof r.score === 'number' ? r.score : 0));
-                    const total = (typeof r.totalQuestions === 'number') ? r.totalQuestions : (typeof sInfo.total === 'number' ? sInfo.total : (rd.answers ? Object.keys(rd.answers).length : 0));
-                    const acc = (typeof r.accuracy === 'number') ? r.accuracy : (total > 0 ? (correct / total) : 0);
-                    const pct = (typeof r.percentage === 'number') ? r.percentage : Math.round(acc * 100);
-                    let dur = (typeof r.duration === 'number') ? r.duration : undefined;
-                    if (!(Number.isFinite(dur) && dur > 0)) {
-                        if (typeof rd.duration === 'number' && rd.duration > 0) {
-                            dur = rd.duration;
-                        } else {
-                            // try compute from timestamps if available
-                            const s = r.startTime ? new Date(r.startTime).getTime() : NaN;
-                            const e = r.endTime ? new Date(r.endTime).getTime() : NaN;
-                            if (Number.isFinite(s) && Number.isFinite(e) && e > s) {
-                                dur = Math.round((e - s) / 1000);
-                            } else {
-                                dur = 0;
-                            }
-                        }
-                    }
-                    return { ...r, accuracy: acc, percentage: pct, duration: dur, correctAnswers: (r.correctAnswers ?? correct), totalQuestions: (r.totalQuestions ?? total) };
-                });
-            }
-        }
+        records = await listCanonicalPracticeRecords();
     } catch (e) {
         console.warn('[System] 同步记录时发生错误，使用存储原始数据:', e);
-        const raw = await storage.get('practice_records', []);
+        const practiceKey = ['practice', 'records'].join('_');
+        const raw = await storage.get(practiceKey, []);
         records = Array.isArray(raw) ? raw : [];
     }
 
@@ -488,6 +466,11 @@ function startPracticeRecordsSyncInBackground(trigger = 'default') {
 
 async function listCanonicalPracticeRecords() {
     const practiceKey = ['practice', 'records'].join('_');
+    if (window.PracticeStore && typeof window.PracticeStore.list === 'function') {
+        const records = await window.PracticeStore.list();
+        return Array.isArray(records) ? records : [];
+    }
+
     const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
     if (practiceCoreStore && typeof practiceCoreStore.listPracticeRecords === 'function') {
         return await practiceCoreStore.listPracticeRecords();
@@ -509,6 +492,11 @@ async function listCanonicalPracticeRecords() {
 async function replaceCanonicalPracticeRecords(records) {
     const finalRecords = Array.isArray(records) ? records : [];
     const practiceKey = ['practice', 'records'].join('_');
+    if (window.PracticeStore && typeof window.PracticeStore.replace === 'function') {
+        await window.PracticeStore.replace(finalRecords);
+        return true;
+    }
+
     const practiceCoreStore = window.PracticeCore && window.PracticeCore.store;
 
     if (practiceCoreStore && typeof practiceCoreStore.replacePracticeRecords === 'function') {
@@ -581,17 +569,37 @@ function extractCompletionPayload(envelope) {
     if (!envelope || typeof envelope !== 'object') {
         return null;
     }
-    const candidates = [envelope.data, envelope.payload, envelope.results, envelope.detail, envelope];
+    const isCompletionPayload = (candidate) => {
+        if (!candidate || typeof candidate !== 'object') {
+            return false;
+        }
+        return Boolean(
+            candidate.scoreInfo
+            || Array.isArray(candidate.spellingErrors)
+            || typeof candidate.correctAnswers !== 'undefined'
+            || typeof candidate.totalQuestions !== 'undefined'
+            || (candidate.answers && typeof candidate.answers === 'object')
+        );
+    };
+    const candidates = [
+        envelope.data,
+        envelope.payload,
+        envelope.results,
+        envelope.detail,
+        envelope.realData,
+        envelope
+    ];
     for (let i = 0; i < candidates.length; i += 1) {
         const candidate = candidates[i];
         if (candidate && typeof candidate === 'object') {
-            if (
-                candidate.scoreInfo ||
-                typeof candidate.correctAnswers !== 'undefined' ||
-                typeof candidate.totalQuestions !== 'undefined' ||
-                (candidate.answers && typeof candidate.answers === 'object')
-            ) {
+            if (isCompletionPayload(candidate)) {
                 return candidate;
+            }
+            if (isCompletionPayload(candidate.realData)) {
+                if (typeof candidate.sessionId === 'string' && candidate.sessionId.trim() && !candidate.realData.sessionId) {
+                    candidate.realData.sessionId = candidate.sessionId.trim();
+                }
+                return candidate.realData;
             }
         }
     }
@@ -713,7 +721,65 @@ function showCompletionSummary(envelope) {
     showMessage(`📊 ${parts.join('，')}`, 'info');
 }
 
+async function saveReadingHighlightVocab(payload) {
+    if (!payload || typeof payload !== 'object') {
+        return null;
+    }
+    try {
+        if (!window.VocabStore && window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
+            await window.AppLazyLoader.ensureGroup('more-tools');
+        }
+        if (!window.VocabStore || typeof window.VocabStore.upsertReadingHighlightWord !== 'function') {
+            throw new Error('VocabStore 未就绪');
+        }
+        const saved = await window.VocabStore.upsertReadingHighlightWord(payload);
+        if (saved && typeof showMessage === 'function') {
+            showMessage(`已加入阅读高亮生词：${saved.word}`, 'success');
+        }
+        return saved;
+    } catch (error) {
+        console.warn('[VocabStore] 阅读高亮生词保存失败:', error);
+        if (typeof showMessage === 'function') {
+            showMessage('高亮生词已在阅读页本地缓存，主词表稍后同步', 'warning');
+        }
+        return null;
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.saveReadingHighlightVocab = saveReadingHighlightVocab;
+}
+
 function setupMessageListener() {
+    const findFallbackSessionByWindow = (sourceWindow) => {
+        if (!sourceWindow || !window.fallbackExamSessions || typeof fallbackExamSessions.entries !== 'function') {
+            return null;
+        }
+        try {
+            for (const [sid, rec] of fallbackExamSessions.entries()) {
+                if (rec && rec.win === sourceWindow) {
+                    return { sid, rec };
+                }
+            }
+        } catch (_) { }
+        return null;
+    };
+
+    const sendFallbackInit = (entry) => {
+        if (!entry || !entry.rec || !entry.rec.win || entry.rec.win.closed) {
+            return;
+        }
+        const payload = entry.rec.initPayload || {
+            examId: entry.rec.examId,
+            parentOrigin: window.location.origin,
+            sessionId: entry.rec.sessionId || entry.sid
+        };
+        try {
+            entry.rec.win.postMessage({ type: 'INIT_SESSION', data: payload }, '*');
+            entry.rec.win.postMessage({ type: 'init_exam_session', data: payload }, '*');
+        } catch (_) { }
+    };
+
     window.addEventListener('message', (event) => {
         // 更兼容的安全检查：允许同源或file协议下的子窗口
         try {
@@ -725,26 +791,42 @@ function setupMessageListener() {
         const data = event.data || {};
         const type = data.type;
         if (type === 'SESSION_READY') {
+            const payload = data && typeof data.data === 'object' ? data.data : data;
+            const matched = findFallbackSessionByWindow(event.source);
+            if (payload && payload.initialized === false) {
+                sendFallbackInit(matched);
+                return;
+            }
+
             // 子页未携带 sessionId，这里基于 event.source 匹配对应会话并停止握手重试
             try {
-                for (const [sid, rec] of fallbackExamSessions.entries()) {
-                    if (rec && rec.win === event.source) {
-                        if (rec.timer) clearInterval(rec.timer);
-                        console.log('[Fallback] 会话就绪(匹配到窗口):', sid);
-                        break;
-                    }
+                if (matched && matched.rec) {
+                    if (matched.rec.timer) clearInterval(matched.rec.timer);
+                    console.log('[Fallback] 会话就绪(匹配到窗口):', matched.sid);
                 }
             } catch (_) { }
+        } else if (type === 'REQUEST_INIT') {
+            sendFallbackInit(findFallbackSessionByWindow(event.source));
+        } else if (type === 'VOCAB_HIGHLIGHT_SAVE') {
+            const payload = data.data && typeof data.data === 'object' ? data.data : data;
+            saveReadingHighlightVocab(payload).catch((error) => {
+                console.warn('[VocabStore] 阅读高亮生词保存异常:', error);
+            });
         } else if (type === 'PRACTICE_COMPLETE' || type === 'practice_completed') {
             const payload = extractCompletionPayload(data) || {};
             const sessionId = extractCompletionSessionId(data);
-            const rec = sessionId ? fallbackExamSessions.get(sessionId) : null;
-            const shouldNotify = shouldAnnounceCompletion(sessionId);
+            const matchedByWindow = findFallbackSessionByWindow(event.source);
+            const rec = sessionId ? (fallbackExamSessions.get(sessionId) || (matchedByWindow && matchedByWindow.rec)) : (matchedByWindow && matchedByWindow.rec);
+            const recSessionId = rec && (rec.sessionId || (matchedByWindow && matchedByWindow.sid) || sessionId);
+            if (recSessionId && payload && typeof payload === 'object') {
+                payload.sessionId = recSessionId;
+            }
+            const shouldNotify = shouldAnnounceCompletion(recSessionId || sessionId);
             if (rec) {
                 console.log('[Fallback] 收到练习完成（降级路径），保存真实数据');
                 savePracticeRecordFallback(rec.examId, payload).finally(() => {
                     try { if (rec && rec.timer) clearInterval(rec.timer); } catch (_) { }
-                    try { fallbackExamSessions.delete(sessionId); } catch (_) { }
+                    try { fallbackExamSessions.delete(recSessionId || sessionId); } catch (_) { }
                     if (shouldNotify) {
                         showMessage('练习已完成，正在更新记录...', 'success');
                         showCompletionSummary(payload);
@@ -893,6 +975,65 @@ function normalizeFallbackAnswerComparison(existingComparison, answerMap, correc
     return normalized;
 }
 
+function normalizeFallbackSpellingErrors(examId, realData, exam = {}) {
+    const rawErrors = Array.isArray(realData?.spellingErrors)
+        ? realData.spellingErrors
+        : (Array.isArray(realData?.realData?.spellingErrors) ? realData.realData.spellingErrors : []);
+    if (!rawErrors.length) {
+        return [];
+    }
+
+    const resolvedExamId = exam?.id || realData?.examId || examId;
+    const collector = window.spellingErrorCollector;
+    const sourceProbe = [
+        resolvedExamId,
+        exam?.path,
+        exam?.category,
+        exam?.title,
+        realData?.source,
+        realData?.pageType,
+        realData?.type
+    ].filter(Boolean).join(' ');
+    const detectedSource = collector && typeof collector.detectSource === 'function'
+        ? collector.detectSource(sourceProbe)
+        : '';
+    const resolvedSessionId = realData?.sessionId || realData?.realData?.sessionId || '';
+    const suiteId = realData?.suiteId || realData?.suiteSessionId || realData?.realData?.suiteId || realData?.realData?.suiteSessionId || '';
+
+    return rawErrors.map((error) => {
+        if (!error || typeof error !== 'object') {
+            return null;
+        }
+        const normalized = Object.assign({}, error, { examId: resolvedExamId });
+        if (resolvedSessionId) {
+            normalized.sessionId = resolvedSessionId;
+        }
+        if (suiteId && !normalized.suiteId) {
+            normalized.suiteId = suiteId;
+        }
+        if ((detectedSource === 'p1' || detectedSource === 'p4') && (!normalized.source || normalized.source === 'other')) {
+            normalized.source = detectedSource;
+        }
+        return normalized;
+    }).filter(Boolean);
+}
+
+async function saveFallbackSpellingErrors(examId, realData, exam = {}) {
+    const collector = window.spellingErrorCollector;
+    if (!collector || typeof collector.saveErrors !== 'function') {
+        return;
+    }
+    const spellingErrors = normalizeFallbackSpellingErrors(examId, realData, exam);
+    if (!spellingErrors.length) {
+        return;
+    }
+    try {
+        await collector.saveErrors(spellingErrors);
+    } catch (error) {
+        console.warn('[Fallback] 保存拼写错误词表失败（不影响主流程）:', error);
+    }
+}
+
 // 降级保存：将 PRACTICE_COMPLETE 的真实数据写入 practice_records（与旧视图字段兼容）
 async function savePracticeRecordFallback(examId, realData) {
     try {
@@ -976,8 +1117,9 @@ async function savePracticeRecordFallback(examId, realData) {
         const normalizedAnswers = normalizeFallbackAnswerMap(realData.answers);
         const normalizedCorrectMap = normalizeFallbackAnswerMap(realData.correctAnswers);
         const total = typeof sInfo.total === 'number' ? sInfo.total : Object.keys(normalizedCorrectMap).length || Object.keys(normalizedAnswers).length;
-        const acc = typeof sInfo.accuracy === 'number' ? sInfo.accuracy : (total > 0 ? correct / total : 0);
-        const pct = typeof sInfo.percentage === 'number' ? sInfo.percentage : Math.round(acc * 100);
+        let acc = typeof sInfo.accuracy === 'number' ? sInfo.accuracy : (total > 0 ? correct / total : 0);
+        if (acc > 1 && acc <= 100) { acc = acc / 100; }
+        const pct = typeof sInfo.percentage === 'number' && sInfo.percentage >= 0 && sInfo.percentage <= 100 ? sInfo.percentage : Math.round(acc * 100);
 
         const answerDetails = buildFallbackAnswerDetails(normalizedAnswers, normalizedCorrectMap);
         const answerComparison = normalizeFallbackAnswerComparison(realData.answerComparison, normalizedAnswers, normalizedCorrectMap);
@@ -1027,11 +1169,19 @@ async function savePracticeRecordFallback(examId, realData) {
                 return null;
             }
 
-            await practiceCore.store.savePracticeRecord(canonicalRecord, {
-                currentVersion: canonicalRecord.version || ((window.scoreStorage && window.scoreStorage.currentVersion) || '1.0.0'),
-                maxRecords: (window.scoreStorage && window.scoreStorage.maxRecords) || 1000
-            });
+            if (window.PracticeStore && typeof window.PracticeStore.save === 'function') {
+                await window.PracticeStore.save(canonicalRecord, {
+                    currentVersion: canonicalRecord.version || ((window.scoreStorage && window.scoreStorage.currentVersion) || '1.0.0'),
+                    maxRecords: (window.scoreStorage && window.scoreStorage.maxRecords) || 1000
+                });
+            } else {
+                await practiceCore.store.savePracticeRecord(canonicalRecord, {
+                    currentVersion: canonicalRecord.version || ((window.scoreStorage && window.scoreStorage.currentVersion) || '1.0.0'),
+                    maxRecords: (window.scoreStorage && window.scoreStorage.maxRecords) || 1000
+                });
+            }
             console.log('[Fallback] 真实数据已通过 PracticeCore 保存');
+            await saveFallbackSpellingErrors(examId, realData, exam);
             return canonicalRecord;
         }
 
@@ -1074,17 +1224,20 @@ async function savePracticeRecordFallback(examId, realData) {
             endTime: new Date((realData.endTime ?? Date.now())).toISOString()
         };
 
-        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+        if (window.PracticeStore && typeof window.PracticeStore.save === 'function') {
+            await window.PracticeStore.save(record);
+        } else if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
             await window.PracticeCore.store.savePracticeRecord(record);
         } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
             await window.simpleStorageWrapper.addPracticeRecord(record);
         } else {
-            const records = await storage.get('practice_records', []);
+            const practiceKey = ['practice', 'records'].join('_');
+            const records = await storage.get(practiceKey, []);
             const arr = Array.isArray(records) ? records : [];
             arr.push(record);
-            const practiceKey = ['practice', 'records'].join('_');
             await storage.set(practiceKey, arr);
         }
+        await saveFallbackSpellingErrors(examId, realData, exam);
         console.log('[Fallback] 真实数据已保存到 practice_records');
     } catch (e) {
         console.error('[Fallback] 保存练习记录失败:', e);
@@ -1625,6 +1778,8 @@ function updatePracticeView() {
         }
     }
 
+    const recordsForInsights = recordsToShow.slice();
+
     const historyQuery = String(window.__practiceHistoryQuery || '').trim().toLowerCase();
     if (historyQuery) {
         recordsToShow = recordsToShow.filter((record) => {
@@ -1642,6 +1797,16 @@ function updatePracticeView() {
             ];
             return fields.some((field) => String(field || '').toLowerCase().includes(historyQuery));
         });
+    }
+
+    const trendRenderer = ensurePracticeTrendRenderer();
+    if (trendRenderer && typeof trendRenderer.update === 'function') {
+        trendRenderer.update(recordsToShow);
+    }
+
+    const priorityRenderer = ensurePracticePriorityRenderer();
+    if (priorityRenderer && typeof priorityRenderer.update === 'function') {
+        priorityRenderer.update(recordsForInsights, getExamIndexState(), { examType });
     }
 
     // --- 4. Render history list ---
@@ -1750,7 +1915,7 @@ function computePracticeSummaryFallback(records) {
         if (!record) {
             return;
         }
-        const percentage = typeof record.percentage === 'number' ? record.percentage : 0;
+        const percentage = typeof record.percentage === 'number' ? record.percentage : (typeof record.accuracy === 'number' ? Math.round(record.accuracy * 100) : 0);
         const duration = typeof record.duration === 'number' ? record.duration : 0;
         totalScore += percentage;
         totalDuration += duration;
@@ -1893,6 +2058,23 @@ function browseCategory(category, type = 'reading', filterMode = null, path = nu
 }
 
 function filterByType(type) {
+    const requestedType = type;
+    try {
+        const listeningAvailable = typeof window.hasActiveListeningLibrary === 'function'
+            ? window.hasActiveListeningLibrary()
+            : (Array.isArray(getExamIndexState()) && getExamIndexState().some((exam) => exam && exam.type === 'listening'));
+        if (requestedType === 'listening' && !listeningAvailable) {
+            type = 'all';
+            if (typeof window.showMessage === 'function') {
+                window.showMessage('听力题库尚未加载', 'warning');
+            }
+        }
+    } catch (_) {
+        if (requestedType === 'listening') {
+            type = 'all';
+        }
+    }
+
     // 重置筛选器状态
     setBrowseFilterState('all', type);
     setBrowseTitle(formatBrowseTitle('all', type));
@@ -1910,6 +2092,27 @@ function filterByType(type) {
         window.browseController.resetToDefault();
     }
 
+    // 更新题库浏览筛选按钮的 active 状态
+    var container = document.getElementById('type-filter-buttons');
+    if (container) {
+        var buttons = container.querySelectorAll('.shui-segmented-btn');
+        for (var i = 0; i < buttons.length; i++) {
+            var btn = buttons[i];
+            if (btn.dataset.filterType === type || btn.dataset.filterId === type) {
+                btn.classList.add('active');
+                btn.setAttribute('aria-pressed', 'true');
+            } else {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-pressed', 'false');
+            }
+        }
+    }
+
+    // 触发滑块指示器同步
+    if (typeof window.updateSegmentedIndicators === 'function') {
+        setTimeout(window.updateSegmentedIndicators, 10);
+    }
+
     // 刷新题库列表
     loadExamList();
 }
@@ -1917,6 +2120,13 @@ function filterByType(type) {
 // 应用分类筛选（供 App/总览调用）
 function applyBrowseFilter(category = 'all', type = null, filterMode = null, path = null) {
     try {
+        const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (memorizeSelectionActive) {
+            category = 'all';
+            type = 'reading';
+            filterMode = null;
+            path = null;
+        }
         // 归一化输入：兼容 "P1 阅读"/"P2 听力" 这类文案
         const raw = String(category || 'all');
         let normalizedCategory = 'all';
@@ -1942,19 +2152,24 @@ function applyBrowseFilter(category = 'all', type = null, filterMode = null, pat
 
         const normalizedType = normalizeExamType(type);
         const normalizedPath = (typeof path === 'string' && path.trim()) ? path.trim() : null;
+        const listeningAvailable = typeof window.hasActiveListeningLibrary === 'function'
+            ? window.hasActiveListeningLibrary()
+            : (Array.isArray(getExamIndexState()) && getExamIndexState().some((exam) => exam && exam.type === 'listening'));
+        const effectiveFilterMode = listeningAvailable ? filterMode : null;
+        const effectiveType = (!listeningAvailable && normalizedType === 'listening') ? 'all' : normalizedType;
 
         // 1. 先处理模式切换/重置
-        if (filterMode) {
-            const modeConfig = window.BROWSE_MODES && window.BROWSE_MODES[filterMode];
+        if (effectiveFilterMode) {
+            const modeConfig = window.BROWSE_MODES && window.BROWSE_MODES[effectiveFilterMode];
             const basePath = normalizedPath || (modeConfig && modeConfig.basePath) || null;
             window.__browsePath = basePath;
-            window.__browseFilterMode = filterMode;
+            window.__browseFilterMode = effectiveFilterMode;
             if (window.browseController) {
                 try {
                     if (!window.browseController.buttonContainer) {
                         window.browseController.initialize('type-filter-buttons');
                     }
-                    window.browseController.setMode(filterMode);
+                    window.browseController.setMode(effectiveFilterMode);
                 } catch (error) {
                     console.warn('[Browse] 切换浏览模式失败:', error);
                 }
@@ -1971,15 +2186,15 @@ function applyBrowseFilter(category = 'all', type = null, filterMode = null, pat
         }
 
         // 2. 再应用具体的分类和类型筛选（确保不被重置覆盖）
-        setBrowseFilterState(normalizedCategory, normalizedType);
+        setBrowseFilterState(normalizedCategory, effectiveType);
 
 
-        setBrowseTitle(formatBrowseTitle(normalizedCategory, normalizedType));
+        setBrowseTitle(memorizeSelectionActive ? '阅读背题选题' : formatBrowseTitle(normalizedCategory, effectiveType));
 
         // 3. 刷新题库列表
         // 如果是频率模式，setMode 已经处理了刷新，不需要再次调用 loadExamList
         // 只有在默认模式下才显式调用
-        if (!filterMode) {
+        if (!effectiveFilterMode) {
             loadExamList();
         }
 
@@ -2009,6 +2224,9 @@ function initializeBrowseView() {
     if (window.browseController && !window.browseController.buttonContainer) {
         window.browseController.initialize('type-filter-buttons');
     }
+    if (typeof window.refreshListeningAvailabilityUI === 'function') {
+        window.refreshListeningAvailabilityUI();
+    }
 
     const persisted = getPersistedBrowseFilter();
     if (persisted) {
@@ -2023,7 +2241,32 @@ function initializeBrowseView() {
         refreshBrowseProgressFromRecords();
     });
     setupBrowseSortControl();
+    setupBrowseFrequencyFilterControl();
     loadExamList();
+}
+
+function normalizeBrowseFrequencyFilter(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    return raw === 'high' || raw === 'medium' || raw === 'low' ? raw : 'all';
+}
+
+function getBrowseSearchQuery() {
+    const input = document.getElementById('exam-search-input') || document.querySelector('.search-input');
+    return input && typeof input.value === 'string' ? input.value.trim() : '';
+}
+
+function refreshBrowseResults() {
+    const query = getBrowseSearchQuery();
+    if (query) {
+        performSearch(query);
+        return;
+    }
+    loadExamList();
+}
+
+function setupBrowseControls() {
+    setupBrowseSortControl();
+    setupBrowseFrequencyFilterControl();
 }
 
 function setupBrowseSortControl() {
@@ -2031,6 +2274,10 @@ function setupBrowseSortControl() {
     if (!sortSelect || sortSelect.dataset.bound === 'true') {
         return;
     }
+    const normalizeSortMode = (value) => {
+        const mode = String(value || 'default').trim().toLowerCase();
+        return mode === 'frequency-desc' || mode === 'difficulty-desc' ? mode : 'default';
+    };
     let savedMode = String(window.__browseSortMode || '').trim().toLowerCase();
     if (!savedMode) {
         try {
@@ -2039,19 +2286,62 @@ function setupBrowseSortControl() {
             savedMode = 'default';
         }
     }
-    sortSelect.value = savedMode === 'frequency-desc' ? 'frequency-desc' : 'default';
+    sortSelect.value = normalizeSortMode(savedMode);
     window.__browseSortMode = sortSelect.value;
     sortSelect.addEventListener('change', () => {
-        const mode = String(sortSelect.value || 'default').trim().toLowerCase();
-        window.__browseSortMode = mode === 'frequency-desc' ? 'frequency-desc' : 'default';
+        window.__browseSortMode = normalizeSortMode(sortSelect.value);
         try {
             window.localStorage.setItem('browse_sort_mode', window.__browseSortMode);
         } catch (_) {
             // ignore storage failures
         }
-        loadExamList();
+        refreshBrowseResults();
     });
     sortSelect.dataset.bound = 'true';
+}
+
+function updateBrowseFrequencyButtons(filter) {
+    const activeFilter = normalizeBrowseFrequencyFilter(filter || window.__browseFrequencyFilter || 'all');
+    const container = document.getElementById('browse-frequency-filter-buttons');
+    if (!container) {
+        return;
+    }
+    container.querySelectorAll('[data-frequency-filter]').forEach((button) => {
+        const isActive = button.dataset.frequencyFilter === activeFilter;
+        button.classList.toggle('active', isActive);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+}
+
+function setupBrowseFrequencyFilterControl() {
+    const container = document.getElementById('browse-frequency-filter-buttons');
+    if (!container) {
+        return;
+    }
+    let savedFilter = normalizeBrowseFrequencyFilter(window.__browseFrequencyFilter || 'all');
+    if (savedFilter === 'all') {
+        try {
+            savedFilter = normalizeBrowseFrequencyFilter(window.localStorage.getItem('browse_frequency_filter') || 'all');
+        } catch (_) {
+            savedFilter = 'all';
+        }
+    }
+    window.__browseFrequencyFilter = savedFilter;
+    updateBrowseFrequencyButtons(savedFilter);
+}
+
+function filterByFrequency(filter) {
+    const requested = normalizeBrowseFrequencyFilter(filter);
+    const current = normalizeBrowseFrequencyFilter(window.__browseFrequencyFilter || 'all');
+    const next = requested !== 'all' && requested === current ? 'all' : requested;
+    window.__browseFrequencyFilter = next;
+    try {
+        window.localStorage.setItem('browse_frequency_filter', next);
+    } catch (_) {
+        // ignore storage failures
+    }
+    updateBrowseFrequencyButtons(next);
+    refreshBrowseResults();
 }
 
 // 全局桥接：HTML 按钮 onclick="browseCategory('P1','reading')"
@@ -2072,17 +2362,42 @@ if (typeof window.browseCategory !== 'function') {
 
 function filterRecordsByType(type) {
     setBrowseFilterState(getCurrentCategory(), type);
+
+    // 更新练习历史筛选按钮的 active 状态
+    var container = document.getElementById('record-type-filter-buttons');
+    if (container) {
+        var buttons = container.querySelectorAll('.shui-segmented-btn');
+        for (var i = 0; i < buttons.length; i++) {
+            var btn = buttons[i];
+            if (btn.dataset.filterType === type) {
+                btn.classList.add('active');
+                btn.setAttribute('aria-pressed', 'true');
+            } else {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-pressed', 'false');
+            }
+        }
+    }
+
+    // 触发滑块指示器同步
+    if (typeof window.updateSegmentedIndicators === 'function') {
+        setTimeout(window.updateSegmentedIndicators, 10);
+    }
+
     updatePracticeView();
 }
 
 
 function loadExamList() {
+    setupBrowseControls();
+
     if (window.ExamActions && typeof window.ExamActions.loadExamList === 'function') {
         return window.ExamActions.loadExamList();
     }
     console.warn('[main.js] ExamActions.loadExamList 未就绪，尝试加载 browse-view 组');
     if (window.AppLazyLoader && typeof window.AppLazyLoader.ensureGroup === 'function') {
         window.AppLazyLoader.ensureGroup('browse-view').then(function () {
+            setupBrowseControls();
             if (window.ExamActions && typeof window.ExamActions.loadExamList === 'function') {
                 window.ExamActions.loadExamList();
             } else {
@@ -2097,6 +2412,147 @@ function loadExamList() {
         // 无懒加载器，直接降级
         loadExamListFallback();
     }
+}
+
+function isReadingMemorizeBrowseMode() {
+    return window.__readingMemorizeBrowseMode === true
+        || String(window.__browseMemorizeFilterMode || '') === 'reading-memorize';
+}
+
+function isReadingMemorizeCandidateFallback(exam) {
+    if (typeof window.isReadingMemorizeCandidate === 'function') {
+        try {
+            return window.isReadingMemorizeCandidate(exam) === true;
+        } catch (_) {
+            // Fall back to local checks below.
+        }
+    }
+    if (!exam || !exam.id) {
+        return false;
+    }
+    if (exam.type && String(exam.type).toLowerCase() === 'listening') {
+        return false;
+    }
+    if (String(exam.id).toLowerCase().indexOf('listening-') === 0) {
+        return false;
+    }
+    if (exam.hasHtml === false) {
+        return false;
+    }
+    return !!(window.__READING_EXAM_MANIFEST__ && window.__READING_EXAM_MANIFEST__[exam.id]);
+}
+
+function filterReadingMemorizeExamsFallback(exams) {
+    return (Array.isArray(exams) ? exams : []).filter(isReadingMemorizeCandidateFallback);
+}
+
+function clearReadingMemorizeBrowseMode() {
+    window.__readingMemorizeBrowseMode = false;
+    window.__browseMemorizeFilterMode = null;
+}
+
+function selectReadingMemorizeExam(examId) {
+    if (window.ExamActions && typeof window.ExamActions.launchReadingMemorizeExam === 'function') {
+        return window.ExamActions.launchReadingMemorizeExam(examId);
+    }
+    const list = typeof getExamIndexState === 'function'
+        ? getExamIndexState()
+        : (Array.isArray(window.examIndex) ? window.examIndex : []);
+    const exam = Array.isArray(list)
+        ? list.find(function (item) { return item && String(item.id) === String(examId); })
+        : null;
+    if (!isReadingMemorizeCandidateFallback(exam)) {
+        if (typeof showMessage === 'function') {
+            showMessage('该题目无法使用统一阅读页背题，请选择有 HTML 数据的阅读题。', 'warning');
+        }
+        return null;
+    }
+    clearReadingMemorizeBrowseMode();
+    if (typeof setBrowseTitle === 'function') {
+        setBrowseTitle('阅读理解');
+    }
+    return openExam(examId, {
+        practiceMode: 'memorize',
+        target: 'tab',
+        windowName: 'ielts-reading-memorize'
+    });
+}
+
+window.selectReadingMemorizeExam = selectReadingMemorizeExam;
+
+function createFallbackExamCard(exam, options = {}) {
+    const item = document.createElement('div');
+    const memorizeSelectionActive = options.selectionMode === 'reading-memorize';
+    item.className = 'exam-item' + (memorizeSelectionActive ? ' exam-item--memorize-selecting' : '');
+    if (exam && exam.id) {
+        item.dataset.examId = exam.id;
+    }
+
+    const info = document.createElement('div');
+    info.className = 'exam-info';
+    const title = document.createElement('h4');
+    title.textContent = (exam && exam.title) || '';
+    info.appendChild(title);
+
+    if (options.showMeta) {
+        const meta = document.createElement('div');
+        meta.className = 'exam-meta';
+        meta.textContent = typeof window.formatExamMetaText === 'function'
+            ? window.formatExamMetaText(exam)
+            : [exam.category || '', exam.type || '', Number.isFinite(Number(exam.difficultyScore)) ? '难度 ' + Number(exam.difficultyScore) : '']
+                .filter(Boolean)
+                .join(' | ');
+        info.appendChild(meta);
+    }
+
+    if (memorizeSelectionActive) {
+        const badge = document.createElement('div');
+        badge.className = 'suite-custom-selection-badge';
+        badge.textContent = '背题模式';
+        info.appendChild(badge);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'exam-actions';
+
+    if (memorizeSelectionActive) {
+        const selectBtn = document.createElement('button');
+        selectBtn.className = 'btn exam-item-action-btn';
+        selectBtn.type = 'button';
+        selectBtn.dataset.action = 'reading-memorize-select';
+        if (exam && exam.id) {
+            selectBtn.dataset.examId = exam.id;
+        }
+        selectBtn.textContent = '选择背题';
+        selectBtn.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            selectReadingMemorizeExam(exam.id);
+        });
+        actions.appendChild(selectBtn);
+    } else {
+        const startBtn = document.createElement('button');
+        startBtn.className = 'btn exam-item-action-btn';
+        startBtn.type = 'button';
+        startBtn.textContent = '开始练习';
+        startBtn.addEventListener('click', function () {
+            openExam(exam.id);
+        });
+        actions.appendChild(startBtn);
+
+        const pdfBtn = document.createElement('button');
+        pdfBtn.className = 'btn btn-outline exam-item-action-btn';
+        pdfBtn.type = 'button';
+        pdfBtn.textContent = 'PDF';
+        pdfBtn.addEventListener('click', function () {
+            viewPDF(exam.id);
+        });
+        actions.appendChild(pdfBtn);
+    }
+
+    item.appendChild(info);
+    item.appendChild(actions);
+    return item;
 }
 
 function loadExamListFallback() {
@@ -2120,10 +2576,35 @@ function loadExamListFallback() {
         }
 
         // 应用当前筛选状态（修复 P2 bug）
-        const currentCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
-        const currentType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
+        let currentCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
+        let currentType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
+        const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (memorizeSelectionActive) {
+            currentCategory = 'all';
+            currentType = 'reading';
+            window.__browseFilterMode = 'default';
+            window.__browsePath = null;
+            if (typeof setBrowseFilterState === 'function') {
+                setBrowseFilterState('all', 'reading');
+            }
+            if (typeof setBrowseTitle === 'function') {
+                setBrowseTitle('阅读背题选题');
+            }
+        }
+        const hasListening = examIndex.some(function (exam) { return exam && exam.type === 'listening'; });
+        if (!hasListening && currentType === 'listening') {
+            currentType = 'all';
+            if (typeof setBrowseFilterState === 'function') {
+                setBrowseFilterState('all', 'all');
+            }
+        }
         const isFrequencyMode = window.__browseFilterMode && window.__browseFilterMode !== 'default';
-        const basePathFilter = isFrequencyMode && typeof window.__browsePath === 'string' && window.__browsePath.trim()
+        if (!hasListening && isFrequencyMode) {
+            window.__browseFilterMode = 'default';
+            window.__browsePath = null;
+        }
+        const effectiveFrequencyMode = window.__browseFilterMode && window.__browseFilterMode !== 'default';
+        const basePathFilter = effectiveFrequencyMode && typeof window.__browsePath === 'string' && window.__browsePath.trim()
             ? window.__browsePath.trim()
             : null;
 
@@ -2138,6 +2619,9 @@ function loadExamListFallback() {
             filtered = filtered.filter(function (exam) {
                 return typeof exam?.path === 'string' && exam.path.includes(basePathFilter);
             });
+        }
+        if (memorizeSelectionActive) {
+            filtered = filterReadingMemorizeExamsFallback(filtered);
         }
 
         if (window.ExamActions && typeof window.ExamActions.applyBrowsePostFilters === 'function') {
@@ -2160,14 +2644,10 @@ function loadExamListFallback() {
         list.className = 'exam-list';
         filtered.forEach(function (exam) {
             if (!exam) return;
-            const item = document.createElement('div');
-            item.className = 'exam-item';
-            item.innerHTML = '<div class="exam-info"><h4>' + (exam.title || '') + '</h4></div>' +
-                '<div class="exam-actions">' +
-                '<button class="btn" onclick="window.openExam(\'' + (exam.id || '') + '\')">开始练习</button>' +
-                '<button class="btn btn-outline" onclick="window.viewPDF(\'' + (exam.id || '') + '\')">PDF</button>' +
-                '</div>';
-            list.appendChild(item);
+            list.appendChild(createFallbackExamCard(exam, {
+                selectionMode: memorizeSelectionActive ? 'reading-memorize' : '',
+                showMeta: false
+            }));
         });
         container.innerHTML = '';
         container.appendChild(list);
@@ -2183,6 +2663,7 @@ function resetBrowseViewToAll() {
     console.warn('[main.js] ExamActions.resetBrowseViewToAll 未就绪');
 
     // 清除频率模式状态，确保回到默认列表
+    clearReadingMemorizeBrowseMode();
     window.__browseFilterMode = 'default';
     window.__browsePath = null;
 
@@ -2222,7 +2703,13 @@ function displayExams(exams) {
             loadingEl.style.display = 'none';
         }
         
-        const normalizedExams = Array.isArray(exams) ? exams : [];
+        const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        const normalizedExams = memorizeSelectionActive
+            ? filterReadingMemorizeExamsFallback(exams)
+            : (Array.isArray(exams) ? exams : []);
+        if (memorizeSelectionActive && typeof setBrowseTitle === 'function') {
+            setBrowseTitle('阅读背题选题');
+        }
         if (normalizedExams.length === 0) {
             container.innerHTML = '<div class="exam-list-empty"><p>未找到匹配的题目</p></div>';
             return;
@@ -2232,15 +2719,10 @@ function displayExams(exams) {
         list.className = 'exam-list';
         normalizedExams.forEach(function (exam) {
             if (!exam) return;
-            const item = document.createElement('div');
-            item.className = 'exam-item';
-            item.innerHTML = '<div class="exam-info"><h4>' + (exam.title || '') + '</h4>' +
-                '<div class="exam-meta">' + (exam.category || '') + ' | ' + (exam.type || '') + '</div></div>' +
-                '<div class="exam-actions">' +
-                '<button class="btn" onclick="window.openExam(\'' + (exam.id || '') + '\')">开始练习</button>' +
-                '<button class="btn btn-outline" onclick="window.viewPDF(\'' + (exam.id || '') + '\')">PDF</button>' +
-                '</div>';
-            list.appendChild(item);
+            list.appendChild(createFallbackExamCard(exam, {
+                selectionMode: memorizeSelectionActive ? 'reading-memorize' : '',
+                showMeta: true
+            }));
         });
         container.innerHTML = '';
         container.appendChild(list);
@@ -2310,66 +2792,17 @@ window.setActivePathMap = function (map) {
 };
 
 function openExam(examId, options = {}) {
-    // 优先使用App流程（带会话与通信）
     if (window.app && typeof window.app.openExam === 'function') {
         try {
-            window.app.openExam(examId, options || {});
-            return;
-        } catch (e) {
-            console.warn('[Main] app.openExam 调用失败，启用降级握手路径:', e);
+            return window.app.openExam(examId, options || {});
+        } catch (error) {
+            console.error('[Main] app.openExam 调用失败，已停止原始 HTML 兜底:', error);
+            return showMessage('统一练习入口启动失败：app.openExam 抛出异常，已阻止打开原始题源 HTML。', 'error');
         }
     }
 
-    // 降级：本地完成打开 + 握手重试，确保 sessionId 下发
-    const list = getExamIndexState();
-    const exam = list.find(e => e.id === examId);
-    if (!exam) return showMessage('未找到题目', 'error');
-    if (!exam.hasHtml) return viewPDF(examId);
-
-    const fullPath = window.buildResourcePath(exam, 'html');
-    const examWindow = window.open(fullPath, `exam_${exam.id}`, 'width=1200,height=800,scrollbars=yes,resizable=yes');
-    if (!examWindow) {
-        return showMessage('无法打开窗口，请检查弹窗设置', 'error');
-    }
-    showMessage('正在打开: ' + exam.title, 'success');
-
-    startHandshakeFallback(examWindow, examId);
-}
-
-// 降级握手：循环发送 INIT_SESSION，直至收到 SESSION_READY
-function startHandshakeFallback(examWindow, examId) {
-    try {
-        const sessionId = `${examId}_${Date.now()}`;
-        const initPayload = { examId, parentOrigin: window.location.origin, sessionId };
-        fallbackExamSessions.set(sessionId, { examId, timer: null, win: examWindow });
-
-        let attempts = 0;
-        const maxAttempts = 30; // ~9s
-        const tick = () => {
-            if (examWindow && !examWindow.closed) {
-                try {
-                    if (attempts === 0) {
-                        console.log('[Fallback] 发送初始化消息到练习页面:', { type: 'INIT_SESSION', data: initPayload });
-                    }
-                    examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                    examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
-                } catch (_) { }
-            }
-            attempts++;
-            if (attempts >= maxAttempts) {
-                const rec = fallbackExamSessions.get(sessionId);
-                if (rec && rec.timer) clearInterval(rec.timer);
-                fallbackExamSessions.delete(sessionId);
-                console.warn('[Fallback] 握手超时，练习页可能未加载增强器');
-            }
-        };
-        const timer = setInterval(tick, 300);
-        const rec = fallbackExamSessions.get(sessionId);
-        if (rec) rec.timer = timer;
-        tick();
-    } catch (e) {
-        console.warn('[Fallback] 启动握手失败:', e);
-    }
+    console.error('[Main] 统一练习入口未就绪，已阻止打开原始题源 HTML:', { examId });
+    return showMessage('统一练习入口未就绪：app.openExam 不可用，已阻止打开原始题源 HTML。', 'error');
 }
 
 function viewPDF(examId) {
@@ -2480,6 +2913,94 @@ if (typeof window !== 'undefined') {
     window.showMessage = showMessage;
 }
 
+function requestLibraryConfigDeleteConfirmation(configLabel) {
+    if (typeof document === 'undefined' || !document.body) {
+        return Promise.resolve(false);
+    }
+
+    return new Promise((resolve) => {
+        const existing = document.querySelector('.library-config-confirm-overlay');
+        if (existing) {
+            existing.remove();
+        }
+
+        const overlay = document.createElement('div');
+        overlay.className = 'library-config-confirm-overlay';
+        overlay.setAttribute('role', 'presentation');
+
+        const dialog = document.createElement('div');
+        dialog.className = 'library-config-confirm-dialog';
+        dialog.setAttribute('role', 'dialog');
+        dialog.setAttribute('aria-modal', 'true');
+        dialog.setAttribute('aria-labelledby', 'library-config-confirm-title');
+
+        const title = document.createElement('h3');
+        title.id = 'library-config-confirm-title';
+        title.className = 'library-config-confirm-title';
+        title.textContent = '删除题库配置';
+
+        const body = document.createElement('p');
+        body.className = 'library-config-confirm-body';
+        body.textContent = `将删除配置“${configLabel || '未命名题库'}”及其题库路径映射。练习记录不会被删除。`;
+
+        const actions = document.createElement('div');
+        actions.className = 'library-config-confirm-actions';
+
+        const cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'btn btn-secondary';
+        cancel.dataset.confirmAction = 'cancel';
+        cancel.textContent = '取消';
+
+        const confirm = document.createElement('button');
+        confirm.type = 'button';
+        confirm.className = 'btn btn-warning';
+        confirm.dataset.confirmAction = 'confirm';
+        confirm.textContent = '删除';
+
+        actions.appendChild(cancel);
+        actions.appendChild(confirm);
+        dialog.appendChild(title);
+        dialog.appendChild(body);
+        dialog.appendChild(actions);
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+
+        let settled = false;
+        const finish = (value) => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            overlay.removeEventListener('click', onClick);
+            document.removeEventListener('keydown', onKeydown);
+            overlay.remove();
+            resolve(value);
+        };
+        const onClick = (event) => {
+            const target = event.target && event.target.closest ? event.target.closest('[data-confirm-action]') : null;
+            if (target) {
+                finish(target.dataset.confirmAction === 'confirm');
+                return;
+            }
+            if (event.target === overlay) {
+                finish(false);
+            }
+        };
+        const onKeydown = (event) => {
+            if (event.key === 'Escape') {
+                finish(false);
+            }
+        };
+
+        overlay.addEventListener('click', onClick);
+        document.addEventListener('keydown', onKeydown);
+        setTimeout(() => {
+            try { cancel.focus(); } catch (_) { }
+        }, 0);
+    });
+}
+
 // Other functions from the original file (simplified or kept as is)
 async function getActiveLibraryConfigurationKey() {
     const manager = await ensureLibraryManagerReady();
@@ -2550,21 +3071,54 @@ function clearSearch() {
     searchExams('');
 }
 
+function getBrowseFilteredExamBase() {
+    const examIndex = getExamIndexState();
+    const activeCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
+    const activeExamType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
+    const isFrequencyMode = window.__browseFilterMode && window.__browseFilterMode !== 'default';
+    const basePathFilter = isFrequencyMode && typeof window.__browsePath === 'string' && window.__browsePath.trim()
+        ? window.__browsePath.trim()
+        : null;
+
+    if (window.ExamFilterService && typeof window.ExamFilterService.filterExams === 'function') {
+        return window.ExamFilterService.filterExams(examIndex, {
+            activeCategory,
+            activeExamType,
+            browseFilterMode: window.__browseFilterMode,
+            basePathFilter,
+            browsePath: window.__browsePath,
+            sortMode: window.__browseSortMode,
+            frequencyFilter: window.__browseFrequencyFilter
+        });
+    }
+
+    let list = Array.isArray(examIndex) ? examIndex.slice() : [];
+    if (activeExamType !== 'all') {
+        list = list.filter((exam) => exam && exam.type === activeExamType);
+    }
+    if (activeCategory !== 'all') {
+        list = list.filter((exam) => exam && exam.category === activeCategory);
+    }
+    if (basePathFilter) {
+        list = list.filter((exam) => typeof exam?.path === 'string' && exam.path.includes(basePathFilter));
+    }
+    if (window.ExamActions && typeof window.ExamActions.applyBrowsePostFilters === 'function') {
+        return window.ExamActions.applyBrowsePostFilters(list, window.__browseSortMode, window.__browseFrequencyFilter);
+    }
+    return list;
+}
+
 function performSearch(query) {
     const normalizedQuery = query.toLowerCase().trim();
     if (!normalizedQuery) {
-        const currentFiltered = getFilteredExamsState();
-        const baseList = currentFiltered.length ? currentFiltered : getExamIndexState();
-        displayExams(baseList);
+        loadExamList();
         return;
     }
 
     // 调试日志
     console.log('[Search] 执行搜索，查询词:', normalizedQuery);
-    const activeList = getFilteredExamsState();
-    console.log('[Search] 当前 filteredExams 数量:', activeList.length);
-
-    const searchBase = activeList.length ? activeList : getExamIndexState();
+    const searchBase = getBrowseFilteredExamBase();
+    console.log('[Search] 当前筛选后索引数量:', searchBase.length);
     const searchResults = searchBase.filter(exam => {
         if (exam.searchText) {
             return exam.searchText.includes(normalizedQuery);
@@ -2707,6 +3261,8 @@ async function clearCache() {
     try {
         if (window.storage && typeof storage.clear === 'function') {
             await storage.clear();
+        } else if (window.PracticeStore && typeof window.PracticeStore.clear === 'function') {
+            await window.PracticeStore.clear();
         } else if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
             await window.PracticeCore.store.replacePracticeRecords([]);
         } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
@@ -2961,6 +3517,14 @@ async function applyLibraryConfiguration(key, dataset, options = {}) {
     return false;
 }
 
+async function deleteLibraryConfiguration(key) {
+    const manager = await ensureLibraryManagerReady();
+    if (manager && typeof manager.deleteLibraryConfiguration === 'function') {
+        return await manager.deleteLibraryConfiguration(key);
+    }
+    return { deleted: false, reason: 'manager-unavailable' };
+}
+
 async function debugCompareActiveIndexWithDefault() {
     try {
         const activeKey = await getActiveLibraryConfigurationKey();
@@ -3012,6 +3576,29 @@ async function debugCompareActiveIndexWithDefault() {
 }
 
 function renderLibraryConfigFallback(container, configs, options) {
+    const formatConfigMeta = (config) => {
+        const counts = config && config.counts && typeof config.counts === 'object' ? config.counts : {};
+        const total = Number.isFinite(Number(config && config.examCount)) ? Number(config.examCount) : (Number(counts.total) || 0);
+        const parts = [];
+        try {
+            parts.push(new Date(config.timestamp).toLocaleString());
+        } catch (_) {
+            parts.push('未知时间');
+        }
+        parts.push(total + ' 个题目');
+        if (Number.isFinite(Number(counts.reading)) || Number.isFinite(Number(counts.listening))) {
+            parts.push('阅读 ' + (Number(counts.reading) || 0));
+            parts.push('听力 ' + (Number(counts.listening) || 0));
+        }
+        const lastImport = config && config.lastImport && typeof config.lastImport === 'object' ? config.lastImport : null;
+        if (lastImport && (lastImport.type || lastImport.mode)) {
+            const typeLabel = lastImport.type === 'reading' ? '阅读' : (lastImport.type === 'listening' ? '听力' : '题库');
+            const modeLabel = lastImport.mode === 'incremental' ? '增量' : (lastImport.mode === 'full' ? '全量' : '导入');
+            parts.push(typeLabel + modeLabel);
+        }
+        return parts.join(' · ');
+    };
+
     const hostClass = 'library-config-list';
     let host = container.querySelector('.' + hostClass);
     if (!host) {
@@ -3058,11 +3645,7 @@ function renderLibraryConfigFallback(container, configs, options) {
 
         const meta = document.createElement('div');
         meta.className = 'library-config-panel__meta';
-        try {
-            meta.textContent = new Date(config.timestamp).toLocaleString() + ' · ' + (config.examCount || 0) + ' 个题目';
-        } catch (_) {
-            meta.textContent = (config.examCount || 0) + ' 个题目';
-        }
+        meta.textContent = formatConfigMeta(config);
         info.appendChild(meta);
 
         const actions = document.createElement('div');
@@ -3270,35 +3853,61 @@ async function deleteLibraryConfig(configKey) {
     } catch (error) {
         console.warn('[LibraryConfig] 无法读取当前题库配置', error);
     }
-    if (confirm('确定要删除这个题库配置吗？此操作不可恢复。')) {
-        let configs = await getLibraryConfigurations();
-        configs = Array.isArray(configs)
-            ? configs.filter((config) => {
-                if (!config) {
+
+    let configLabel = key;
+    try {
+        const configs = await getLibraryConfigurations();
+        const config = Array.isArray(configs)
+            ? configs.find((item) => {
+                if (!item) {
                     return false;
                 }
-                if (typeof config === 'string') {
-                    return config.trim() !== key;
+                if (typeof item === 'string') {
+                    return item.trim() === key;
                 }
-                const cfgKey = typeof config.key === 'string' ? config.key.trim() : '';
-                return cfgKey && cfgKey !== key;
+                return typeof item.key === 'string' && item.key.trim() === key;
             })
-            : [];
-        await storage.set('exam_index_configurations', configs);
-        try {
-            await storage.remove(key);
-        } catch (error) {
-            console.warn('[LibraryConfig] 删除题库数据失败', error);
+            : null;
+        if (config && typeof config === 'object' && config.name) {
+            configLabel = config.name;
+        }
+    } catch (error) {
+        console.warn('[LibraryConfig] 无法读取题库配置名称', error);
+    }
+
+    const confirmed = await requestLibraryConfigDeleteConfirmation(configLabel);
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        const result = await deleteLibraryConfiguration(key);
+        if (result && result.deleted) {
+            showMessage('题库配置已删除，练习记录已保留', 'success');
+            await renderLibraryConfigList({ silentEmpty: true });
+            return;
         }
 
-        showMessage('题库配置已删除', 'success');
-        await renderLibraryConfigList({ silentEmpty: true });
+        const reason = result && result.reason;
+        if (reason === 'default-config') {
+            showMessage('默认题库不可删除', 'warning');
+        } else if (reason === 'active-config') {
+            showMessage('当前正在使用此题库，请先切换到其他配置', 'warning');
+        } else if (reason === 'not-found') {
+            showMessage('未找到这个题库配置', 'warning');
+        } else {
+            showMessage('题库配置删除失败', 'error');
+        }
+    } catch (error) {
+        console.warn('[LibraryConfig] 删除题库配置失败', error);
+        showMessage('题库配置删除失败：' + (error && error.message ? error.message : '未知错误'), 'error');
     }
 }
 
 if (typeof window !== 'undefined') {
     window.switchLibraryConfig = switchLibraryConfig;
     window.deleteLibraryConfig = deleteLibraryConfig;
+    window.setupBrowseControls = setupBrowseControls;
 }
 
 

@@ -1042,10 +1042,7 @@ class StorageManager {
 
             const practiceRecords = await this.get('practice_records', [], { skipReady });
             if (practiceRecords.length > 0) {
-                // 压缩练习记录数据，但保留所有记录
-                const compressedRecords = practiceRecords.map(record => this.compressObject(record));
-                await this.set('practice_records', compressedRecords, { skipReady });
-                console.log(`[Storage] 已压缩练习记录数据，保留${practiceRecords.length}条记录`);
+                console.log(`[Storage] 练习记录数据保留${practiceRecords.length}条记录，跳过压缩以保护答案数据完整性`);
             }
 
             // 清理错误日志
@@ -1524,6 +1521,7 @@ class StorageManager {
             P4_ERRORS: 'vocab_list_p4_errors',
             MASTER_ERRORS: 'vocab_list_master_errors',
             CUSTOM: 'vocab_list_custom',
+            READING_HIGHLIGHTS: 'vocab_list_reading_highlights',
             ACTIVE_LIST: 'vocab_active_list'
         };
     }
@@ -1621,6 +1619,9 @@ class StorageManager {
                 case 'user':
                     storageKey = keys.CUSTOM;
                     break;
+                case 'reading-highlight':
+                    storageKey = keys.READING_HIGHLIGHTS;
+                    break;
                 default:
                     storageKey = cleanedList.id;
             }
@@ -1660,6 +1661,8 @@ class StorageManager {
                 storageKey = keys.MASTER_ERRORS;
             } else if (listId === 'custom') {
                 storageKey = keys.CUSTOM;
+            } else if (listId === 'reading-highlights') {
+                storageKey = keys.READING_HIGHLIGHTS;
             } else {
                 storageKey = listId;
             }
@@ -1671,6 +1674,32 @@ class StorageManager {
             if (!vocabList) {
                 console.log(`[Storage] 词表不存在: ${storageKey}`);
                 return null;
+            }
+
+            if (Array.isArray(vocabList)) {
+                const now = new Date().toISOString();
+                const sourceMap = {
+                    'spelling-errors-p1': 'p1',
+                    'spelling-errors-p4': 'p4',
+                    'spelling-errors-master': 'all',
+                    'custom': 'user',
+                    'reading-highlights': 'reading-highlight'
+                };
+                const nameMap = {
+                    'spelling-errors-p1': 'P1 拼写错误',
+                    'spelling-errors-p4': 'P4 拼写错误',
+                    'spelling-errors-master': '综合错误词表',
+                    'custom': '自定义词表',
+                    'reading-highlights': '阅读高亮生词'
+                };
+                return {
+                    id: listId,
+                    name: nameMap[listId] || listId,
+                    source: sourceMap[listId] || listId,
+                    words: vocabList,
+                    createdAt: now,
+                    updatedAt: now
+                };
             }
 
             // 验证加载的数据

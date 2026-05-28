@@ -1,5 +1,7 @@
 # 忽略特定的文件夹
 /.kiro/
+
+# 构建产物 — 为保证 fresh checkout 可直接静态运行，js/bundles/*.bundle.js 需纳入版本控制
 /.qoder/
 /.vscode/
 /documents/
@@ -7,11 +9,14 @@
 /tools/
 /dist/
 /apps/
+/logs/
+/server/
 /ReadingPractice/
 
 
 # ListeningPractice 题源仅允许本地存在，禁止纳入 Git
 /ListeningPractice/
+/assets/generated/listening-exams/
 /睡着过项目组(9.4)[134篇]/
 /IELTS/
 /.claude/
@@ -27,6 +32,7 @@ package-lock.json
 # 忽略可能的系统文件
 .DS_Store
 Thumbs.db
+~$*
 .claude/settings.local.json
 
 # 使用通配符忽略特殊命名的目录

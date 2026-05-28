@@ -197,6 +197,25 @@
         return String(value).trim();
     }
 
+    function normalizeAnswerValueList(value) {
+        const sanitizer = global.AnswerSanitizer;
+        if (sanitizer && typeof sanitizer.normalizeValueList === 'function') {
+            return sanitizer.normalizeValueList(value);
+        }
+        const values = Array.isArray(value) ? value : (value === undefined || value === null ? [] : [value]);
+        const normalized = [];
+        values.forEach((item) => {
+            const text = normalizeAnswerValue(item);
+            if (!text) {
+                return;
+            }
+            if (!normalized.some((existing) => existing.toLowerCase() === text.toLowerCase())) {
+                normalized.push(text);
+            }
+        });
+        return normalized;
+    }
+
     function isNoiseKey(key) {
         if (!key) return true;
 
@@ -298,6 +317,14 @@
                 correctAnswer,
                 isCorrect: typeof entry.isCorrect === 'boolean' ? entry.isCorrect : null
             };
+            const acceptedAnswers = normalizeAnswerValueList(entry.acceptedAnswers);
+            if (acceptedAnswers.length) {
+                normalized[questionId].acceptedAnswers = acceptedAnswers;
+            }
+            const canonicalAnswer = normalizeAnswerValue(entry.canonicalAnswer);
+            if (canonicalAnswer) {
+                normalized[questionId].canonicalAnswer = canonicalAnswer;
+            }
         });
 
         return normalized;
@@ -346,7 +373,10 @@
             const correctAnswer = normalizeAnswerValue(correctMap[questionId]);
             let isCorrect = null;
             if (correctAnswer) {
-                isCorrect = userAnswer.toLowerCase() === correctAnswer.toLowerCase();
+                const matchCore = global.AnswerMatchCore;
+                isCorrect = matchCore && typeof matchCore.compareAnswers === 'function'
+                    ? matchCore.compareAnswers(userAnswer, correctAnswer) === true
+                    : userAnswer.toLowerCase() === correctAnswer.toLowerCase();
             }
             details[questionId] = {
                 userAnswer: userAnswer || '-',
@@ -555,6 +585,12 @@
                 || (entry.scoreInfo && entry.scoreInfo.details)
                 || (entry.rawData && entry.rawData.answerComparison)
                 || null;
+            const highlights = Array.isArray(entry.highlights)
+                ? entry.highlights.slice()
+                : (Array.isArray(entry.rawData && entry.rawData.highlights) ? entry.rawData.highlights.slice() : []);
+            const scrollY = Number.isFinite(Number(entry.scrollY))
+                ? Number(entry.scrollY)
+                : (Number.isFinite(Number(entry.rawData && entry.rawData.scrollY)) ? Number(entry.rawData.scrollY) : 0);
             return {
                 examId: entry.examId || null,
                 title: entry.title || entry.examTitle || `套题第${index + 1}篇`,
@@ -564,6 +600,8 @@
                 answers: answerMap,
                 answerComparison: clonePlainObject(answerComparisonSource) || null,
                 metadata: entry.metadata ? Object.assign({}, entry.metadata) : {},
+                highlights,
+                scrollY,
                 rawData: entry.rawData ? clonePlainObject(entry.rawData) : null
             };
         }).filter(Boolean);
@@ -665,6 +703,30 @@
         const normalizedComparison = comparisonSource && typeof comparisonSource === 'object'
             ? clonePlainObject(comparisonSource)
             : null;
+        const questionTypeMap = (recordData.questionTypeMap && typeof recordData.questionTypeMap === 'object')
+            ? clonePlainObject(recordData.questionTypeMap)
+            : ((recordData.realData && recordData.realData.questionTypeMap && typeof recordData.realData.questionTypeMap === 'object')
+                ? clonePlainObject(recordData.realData.questionTypeMap)
+                : {});
+        const questionTypePerformance = (recordData.questionTypePerformance && typeof recordData.questionTypePerformance === 'object')
+            ? clonePlainObject(recordData.questionTypePerformance)
+            : ((recordData.realData && recordData.realData.questionTypePerformance && typeof recordData.realData.questionTypePerformance === 'object')
+                ? clonePlainObject(recordData.realData.questionTypePerformance)
+                : {});
+        const highlights = Array.isArray(recordData.highlights)
+            ? recordData.highlights.slice()
+            : (Array.isArray(recordData.rawData && recordData.rawData.highlights)
+                ? recordData.rawData.highlights.slice()
+                : (Array.isArray(recordData.realData && recordData.realData.highlights)
+                    ? recordData.realData.highlights.slice()
+                    : []));
+        const scrollY = Number.isFinite(Number(recordData.scrollY))
+            ? Number(recordData.scrollY)
+            : (Number.isFinite(Number(recordData.rawData && recordData.rawData.scrollY))
+                ? Number(recordData.rawData.scrollY)
+                : (Number.isFinite(Number(recordData.realData && recordData.realData.scrollY))
+                    ? Number(recordData.realData.scrollY)
+                    : 0));
         const generateRecordId = typeof options.generateRecordId === 'function'
             ? options.generateRecordId
             : defaultGenerateRecordId;
@@ -687,12 +749,15 @@
             answers: normalizedAnswers,
             answerDetails: detailSource || null,
             correctAnswerMap: normalizedCorrectMap || {},
-            questionTypePerformance: recordData.questionTypePerformance || {},
+            questionTypeMap,
+            questionTypePerformance,
             metadata,
             frequency: recordData.frequency || metadata.frequency || null,
             suiteMode: Boolean(recordData.suiteMode || ((recordData.frequency || metadata.frequency || '').toLowerCase() === 'suite')),
             suiteSessionId: recordData.suiteSessionId || (metadata && metadata.suiteSessionId) || null,
             suiteEntries: normalizedSuiteEntries,
+            highlights,
+            scrollY,
             scoreInfo: recordData.scoreInfo
                 ? Object.assign({}, recordData.scoreInfo, {
                     details: recordData.scoreInfo.details || detailSource || null
@@ -707,9 +772,13 @@
                     }),
                     answerComparison: (recordData.realData && recordData.realData.answerComparison)
                         ? clonePlainObject(recordData.realData.answerComparison)
-                        : (normalizedComparison || null)
+                        : (normalizedComparison || null),
+                    questionTypeMap,
+                    questionTypePerformance,
+                    highlights,
+                    scrollY
                 })
-                : (normalizedComparison ? { answerComparison: normalizedComparison } : null),
+                : (normalizedComparison ? { answerComparison: normalizedComparison, questionTypeMap, questionTypePerformance } : null),
             answerComparison: normalizedComparison,
             version: options.currentVersion || recordData.version || '1.0.0',
             createdAt: recordData.createdAt || now,
@@ -925,6 +994,16 @@
             || '未命名练习';
         const suiteEntries = rawPayload.suiteEntries || metadata.suiteEntries || [];
         const suiteSessionId = rawPayload.suiteSessionId || metadata.suiteSessionId || sessionContext.suiteSessionId || null;
+        const questionTypeMap = (rawPayload.questionTypeMap && typeof rawPayload.questionTypeMap === 'object')
+            ? rawPayload.questionTypeMap
+            : ((rawPayload.realData && rawPayload.realData.questionTypeMap && typeof rawPayload.realData.questionTypeMap === 'object')
+                ? rawPayload.realData.questionTypeMap
+                : {});
+        const questionTypePerformance = (rawPayload.questionTypePerformance && typeof rawPayload.questionTypePerformance === 'object')
+            ? rawPayload.questionTypePerformance
+            : ((rawPayload.realData && rawPayload.realData.questionTypePerformance && typeof rawPayload.realData.questionTypePerformance === 'object')
+                ? rawPayload.realData.questionTypePerformance
+                : {});
 
         return standardizeRecord({
             id: rawPayload.id,
@@ -945,7 +1024,8 @@
             answerDetails,
             correctAnswerMap,
             answerComparison,
-            questionTypePerformance: rawPayload.questionTypePerformance || {},
+            questionTypeMap,
+            questionTypePerformance,
             metadata: Object.assign({}, metadata, {
                 examId: resolvedExamId,
                 examTitle: title,
@@ -956,6 +1036,12 @@
             suiteMode: Boolean(rawPayload.suiteMode || (String(rawPayload.practiceMode || metadata.practiceMode || '').toLowerCase() === 'suite')),
             suiteSessionId,
             suiteEntries,
+            highlights: Array.isArray(rawPayload.highlights)
+                ? rawPayload.highlights.slice()
+                : (Array.isArray(rawPayload.realData && rawPayload.realData.highlights) ? rawPayload.realData.highlights.slice() : []),
+            scrollY: Number.isFinite(Number(rawPayload.scrollY))
+                ? Number(rawPayload.scrollY)
+                : (Number.isFinite(Number(rawPayload.realData && rawPayload.realData.scrollY)) ? Number(rawPayload.realData.scrollY) : 0),
             scoreInfo: Object.assign({}, scoreInfo, {
                 correct: correctAnswers,
                 total: totalQuestions,
@@ -968,6 +1054,8 @@
                 answers: answerMap,
                 correctAnswers: correctAnswerMap,
                 answerComparison,
+                questionTypeMap,
+                questionTypePerformance,
                 scoreInfo: Object.assign({}, (rawPayload.realData && rawPayload.realData.scoreInfo) || scoreInfo, {
                     correct: correctAnswers,
                     total: totalQuestions,
@@ -979,7 +1067,13 @@
                 interactions: rawPayload.interactions || [],
                 isRealData: true,
                 source: scoreInfo.source || rawPayload.pageType || rawPayload.source || 'practice_page',
-                sessionId: rawPayload.sessionId || sessionContext.sessionId || null
+                sessionId: rawPayload.sessionId || sessionContext.sessionId || null,
+                highlights: Array.isArray(rawPayload.highlights)
+                    ? rawPayload.highlights.slice()
+                    : (Array.isArray(rawPayload.realData && rawPayload.realData.highlights) ? rawPayload.realData.highlights.slice() : []),
+                scrollY: Number.isFinite(Number(rawPayload.scrollY))
+                    ? Number(rawPayload.scrollY)
+                    : (Number.isFinite(Number(rawPayload.realData && rawPayload.realData.scrollY)) ? Number(rawPayload.realData.scrollY) : 0)
             })
         }, options);
     }
@@ -1192,6 +1286,7 @@
         resolveRecordDate,
         inferExamId,
         normalizeAnswerValue,
+        normalizeAnswerValueList,
         isNoiseKey,
         normalizeAnswerMap,
         normalizeAnswerComparison,

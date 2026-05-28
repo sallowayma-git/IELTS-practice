@@ -376,6 +376,7 @@ class DataIntegrityManager {
                     data.vocab_words = await metaRepo.get('vocab_words', []);
                     data.vocab_user_config = await metaRepo.get('vocab_user_config', null);
                     data.vocab_review_queue = await metaRepo.get('vocab_review_queue', []);
+                    data.vocab_list_reading_highlights = await metaRepo.get('vocab_list_reading_highlights', []);
                 }
             } catch (vocabError) {
                 console.warn('[DataIntegrityManager] 获取词汇数据失败:', vocabError);
