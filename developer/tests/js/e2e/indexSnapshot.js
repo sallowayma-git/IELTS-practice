@@ -59,7 +59,7 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                         提供分发，小红书号：276752989</span
                     >
                     <a
-                        href="https://www.xiaohongshu.com/user/profile/5b4d76744eacab058489e72f?xsec_token=ABlVO2QUdaoyzC6LYAHxh1yuvCcdFmZCFy-npJva106mg=&xsec_source=pc_search"
+                        href="https://www.xiaohongshu.com/user/profile/5b4d76744eacab058489e72f"
                         target="_blank"
                         rel="noopener noreferrer"
                         class="hero-badge hero-badge--cta"
