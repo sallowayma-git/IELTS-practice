@@ -2051,14 +2051,14 @@ class ExamSystemApp {
             console.log('\n=== 数据检查 ===');
             const practiceRecordsCount = this.getState('practice.records')?.length || 0;
             console.log(`practiceRecords: ${practiceRecordsCount} 条记录`);
-            try {
-                const records = window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function'
-                    ? await window.PracticeRecordAPI.list()
-                    : [];
-                const count = Array.isArray(records) ? records.length : 0;
-                console.log(`canonical practice records: ${count} 条记录`);
-            } catch (_) {
-                console.log('canonical practice records: 0 条记录');
+            if (window.storage) {
+                try {
+                    const arr = await window.storage.get('practice_records', []);
+                    const count = Array.isArray(arr) ? arr.length : 0;
+                    console.log(`storage.practice_records: ${count} 条记录`);
+                } catch (_) {
+                    console.log('storage.practice_records: 0 条记录');
+                }
             }
             console.log('\n=== 检查完成 ===');
             if (allLoaded) {
@@ -2166,11 +2166,21 @@ class ExamSystemApp {
                 startSession: (examId) => ({ examId: examId || '', startTime: Date.now(), sessionId: `fallback_${Date.now()}`, status: 'started' }),
                 handleRealPracticeData: async () => null,
                 savePracticeRecord: async (record) => {
+                    if (!window.storage || typeof window.storage.get !== 'function' || typeof window.storage.set !== 'function') {
+                        return record || null;
+                    }
                     try {
-                        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.saveRecord === 'function') {
-                            await window.PracticeRecordAPI.saveRecord(record);
+                        if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+                            await window.PracticeCore.store.savePracticeRecord(record);
+                        } else if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+                            await window.simpleStorageWrapper.addPracticeRecord(record);
                         } else {
-                            throw new Error('统一练习记录存储未就绪');
+                            const current = await window.storage.get('practice_records', []);
+                            const list = normalizeRecords(current);
+                            if (record && typeof record === 'object') {
+                                list.unshift(record);
+                            }
+                            await window.storage.set(['practice', 'records'].join('_'), list);
                         }
                     } catch (error) {
                         console.warn('[App] 降级记录器保存失败:', error);
@@ -2178,11 +2188,11 @@ class ExamSystemApp {
                     return record || null;
                 },
                 getPracticeRecords: async () => {
-                    try {
-                        if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
-                            return normalizeRecords(await window.PracticeRecordAPI.list());
-                        }
+                    if (!window.storage || typeof window.storage.get !== 'function') {
                         return [];
+                    }
+                    try {
+                        return normalizeRecords(await window.storage.get('practice_records', []));
                     } catch (error) {
                         console.warn('[App] 降级记录器读取失败:', error);
                         return [];
@@ -2808,9 +2818,7 @@ class ExamSystemApp {
                 if (Array.isArray(examIndex)) {
                     this.setState('exam.index', examIndex);
                 }
-                const practiceRecords = window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function'
-                    ? await window.PracticeRecordAPI.list()
-                    : [];
+                const practiceRecords = await storage.get('practice_records', []);
                 if (Array.isArray(practiceRecords)) {
                     this.setState('practice.records', practiceRecords);
                 }
@@ -2823,7 +2831,7 @@ class ExamSystemApp {
             }
         },
         async loadUserStats() {
-            const fallback = {
+            const stats = await storage.get('user_stats', {
                 totalPractices: 0,
                 totalTimeSpent: 0,
                 averageScore: 0,
@@ -2832,10 +2840,7 @@ class ExamSystemApp {
                 streakDays: 0,
                 lastPracticeDate: null,
                 achievements: []
-            };
-            const stats = window.PracticeRecordAPI && typeof window.PracticeRecordAPI.readStats === 'function'
-                ? await window.PracticeRecordAPI.readStats({ fallback })
-                : fallback;
+            });
             this.userStats = stats;
             return stats;
         },
@@ -3005,6 +3010,7 @@ class ExamSystemApp {
         destroy() {
             this.persistMultipleState({
                 'exam.index': 'exam_index',
+                'practice.records': 'practice_records',
                 'ui.browseFilter': 'browse_filter',
                 'exam.currentCategory': 'current_category',
                 'exam.currentExamType': 'current_exam_type'
@@ -4027,9 +4033,10 @@ window.addEventListener('beforeunload', () => {
         questions: []
       };
 
-      const api = window.PracticeRecordAPI;
-      if (api && typeof api.saveRecord === 'function') {
-        api.saveRecord(demoRecordObj, { updateStats: true }).then(() => {
+      // 注意：全局小写形式为 window.dataRepositories
+      const repos = window.dataRepositories;
+      if (repos && repos.practice) {
+        repos.practice.upsert(demoRecordObj).then(() => {
           // 尝试触发界面刷新
           if (typeof window.syncPracticeRecords === 'function') {
             window.syncPracticeRecords({ forceRender: true });
@@ -4043,14 +4050,14 @@ window.addEventListener('beforeunload', () => {
           console.error('[Onboarding] 注入示例记录失败:', err);
         });
       } else {
-        console.warn('[Onboarding] PracticeRecordAPI 不可用，无法注入示例记录');
+        console.warn('[Onboarding] window.dataRepositories.practice 不可用，无法注入示例记录');
       }
     }
 
     _cleanupDemoRecord() {
-      const api = window.PracticeRecordAPI;
-      if (api && typeof api.deleteById === 'function') {
-        api.deleteById('demo-onboarding-record', { updateStats: true }).then(() => {
+      const repos = window.dataRepositories;
+      if (repos && repos.practice) {
+        repos.practice.removeById('demo-onboarding-record').then(() => {
           if (typeof window.syncPracticeRecords === 'function') {
             window.syncPracticeRecords({ forceRender: true });
           } else if (window.app && typeof window.app.renderPracticeHistory === 'function') {
