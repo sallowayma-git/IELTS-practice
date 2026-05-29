@@ -3116,10 +3116,8 @@ async function clearCache() {
         'hasSeenGplLicense',
         'theme',
         'bloom-theme-mode',
-        'blue-theme-mode',
-        'hp.theme'
+        'blue-theme-mode'
     ];
-    const sessionLegacyKeys = ['hp.portal.pendingView'];
 
     try {
         if (window.storage && typeof storage.clear === 'function') {
@@ -3136,10 +3134,6 @@ async function clearCache() {
     localLegacyKeys.forEach((key) => {
         try { localStorage.removeItem(key); } catch (_) { }
     });
-    sessionLegacyKeys.forEach((key) => {
-        try { sessionStorage.removeItem(key); } catch (_) { }
-    });
-
     setPracticeRecordsState([]);
     processedSessions.clear();
     if (window.performanceOptimizer && typeof window.performanceOptimizer.cleanup === 'function') {

@@ -1,8 +1,7 @@
 # 忽略特定的文件夹
 /.kiro/
 
-# 构建产物 — 由 scripts/build-bundles.mjs 生成，发布前执行 node scripts/build-bundles.mjs 即可
-js/bundles/
+# 构建产物由 scripts/build-bundles.mjs 生成，运行时依赖这些 bundle，必须纳入版本控制
 /.qoder/
 /.vscode/
 /documents/

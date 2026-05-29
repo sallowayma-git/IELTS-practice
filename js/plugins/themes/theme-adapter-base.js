@@ -509,7 +509,7 @@
           throw new Error('Unified practice record store not ready');
         }
 
-        await window.PracticeRecordAPI.saveRecord(normalizedRecord, { maxRecords: 1000 });
+        await window.PracticeRecordAPI.saveRecord(normalizedRecord, { maxRecords: 1000, updateStats: true });
         await this._loadPracticeRecords();
         this._notifyDataUpdated({ practiceRecords: this._practiceRecords });
 
@@ -1037,11 +1037,6 @@
         return window._lastOpenedExamId;
       }
 
-      // 从 hpCore 获取
-      if (window.hpCore && window.hpCore.lastOpenedExamId) {
-        return window.hpCore.lastOpenedExamId;
-      }
-
       return null;
     },
 
@@ -1135,7 +1130,7 @@
         throw new Error('Unified practice record store not ready');
       }
 
-      await window.PracticeRecordAPI.replace(finalRecords, { maxRecords: 1000 });
+      await window.PracticeRecordAPI.replace(finalRecords, { maxRecords: 1000, updateStats: true });
       return true;
     },
 

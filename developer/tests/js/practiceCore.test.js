@@ -159,9 +159,26 @@ async function testPracticeRecordApiWritePath(sandbox, PracticeCore, practiceSta
     assert(second, '第二次保存应成功');
     assert.strictEqual(practiceState.length, 1, '相同 sessionId 的记录应只保留一条');
     assert.strictEqual(practiceState[0].id, 'record-reading-p1-retry', '应保留最新记录');
+    assert.strictEqual(metaState.get('user_stats').totalPractices, 1, 'saveRecord 默认应重算 user_stats');
 
     await api.writeStats({ totalPractices: 1 });
     assert.strictEqual(metaState.get('user_stats').totalPractices, 1, 'user_stats 应走统一 PracticeRecordAPI 写路径');
+
+    await assert.rejects(
+        () => api.saveRecord({
+            id: 'record-without-exam-id',
+            sessionId: 'session-without-exam-id',
+            title: 'Legacy title only',
+            type: 'reading',
+            date: new Date().toISOString(),
+            score: 1,
+            totalQuestions: 1,
+            correctAnswers: 1,
+            accuracy: 1
+        }, { maxRecords: 1000 }),
+        /canonical examId/,
+        '缺少 canonical examId 的记录不能用 title/sessionId 兜底保存'
+    );
 
     recordResult('PracticeRecordAPI 统一写路径', true, {
         savedRecordId: practiceState[0].id,

@@ -137,7 +137,12 @@ function readSource(relativePath) {
     if (!fs.existsSync(absolutePath)) {
         throw new Error(`Missing bundle input: ${relativePath}`);
     }
-    return fs.readFileSync(absolutePath, 'utf8').replace(/\s*$/, '\n');
+    return fs.readFileSync(absolutePath, 'utf8')
+        .replace(/\r\n?/g, '\n')
+        .split('\n')
+        .map((line) => line.replace(/[ \t]+$/g, ''))
+        .join('\n')
+        .replace(/\s*$/, '\n');
 }
 
 function renderBundle(outputPath, inputs) {
