@@ -401,3 +401,10 @@
 - The right data owner is the existing renderer preference key `browse_view_preferences_v2`. Adding Practice API fields or history metadata for list scroll state would be schema garbage.
 - Vue now saves the last started asset plus current category/type/frequency/search/sort state before route navigation, then restores those filters and scrolls the matching `.exam-item[data-reading-asset-id]` back into view when browse data/view state is ready.
 - This fix is renderer-only. It does not touch reading AI prompts, RAG payloads, backend submission schema, suite session schema, or coach persistence.
+
+## Slice 33 Custom Suite Selection Recovery
+- OpenSource custom suite selection is not a separate persistence model. It builds a P1/P2/P3 ordered sequence from the browse list, then starts a normal suite from that explicit sequence.
+- The correct backend home is the existing `/api/practice/reading-suite` create endpoint plus `ReadingSuiteSession.sequence`. Creating a new `customSequence`, `selectedAssets`, or separate custom-suite table would duplicate the same fact and become schema garbage.
+- The Practice API now accepts `frequencyScope: 'custom'` and optional `sequence` on suite create. The service validates exactly one practice-ready P1, P2, and P3 in order, then writes the same canonical `ReadingSuiteSession.sequence` rows used by random suite creation.
+- Vue now exposes the OpenSource selector option `自选套题（P1/P2/P3）`, enters browse selection mode, captures one asset per category, and confirms by posting `sequence: [p1, p2, p3]` through the same suite API.
+- Reading AI prompt, RAG retrieval, coach persistence, suite submit, and history replay remain untouched. This slice only repairs suite entry selection and sequence creation.

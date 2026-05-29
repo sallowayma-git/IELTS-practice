@@ -1360,3 +1360,25 @@
   - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
 - Notes:
   - This slice is renderer-only and leaves reading AI prompt/RAG/coach contracts untouched.
+
+### Slice 33: Custom Suite Selection Recovery
+- **Status:** checkpoint complete
+- Actions taken:
+  - Audited OpenSource `suitePracticeMixin.js` custom suite behavior and confirmed it collects explicit P1/P2/P3 choices from browse before launching a normal suite.
+  - Extended `ReadingSuiteFrequencyScope` to include `custom` and added optional `sequence` to `ReadingSuiteCreateRequest`.
+  - Changed `/api/practice/reading-suite` validation and `createReadingSuiteSession()` so explicit sequence requests validate exactly one practice-ready P1/P2/P3 asset in order and then reuse canonical `ReadingSuiteSession.sequence`.
+  - Added Vue custom suite selection state and browse selection UI under the existing suite selector modal.
+  - Kept the normal high/high_medium/all suite path unchanged and did not add backend tables or parallel suite fields.
+  - Added Practice API contract coverage for custom sequence creation and invalid-order rejection.
+  - Added Vue static contracts and extended Vue suite E2E to click custom suite selection before the regular suite progression flow.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `npm run build:server` passed.
+  - `npm run build:writing` passed.
+  - `node developer/tests/js/practiceApiFacade.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_suite_vue_flow.py` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+- Notes:
+  - A subagent spawn for this audit failed because the current thread agent limit is reached; the same audit was completed locally.
+  - The first custom-suite E2E update exposed a test-stub-only bug: the synthetic suite object reused custom sequence for the next normal suite create. The stub now resets sequence per create, matching real API behavior.

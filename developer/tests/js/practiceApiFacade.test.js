@@ -1204,6 +1204,43 @@ async function testReadingSuiteTimerCreateContract() {
     assert.strictEqual(Object.prototype.hasOwnProperty.call(created, 'suiteTimerAnchorMs'), false)
 }
 
+async function testReadingSuiteCustomSequenceContract() {
+    const { app } = await createApp()
+    const createResponse = await app.inject({
+        method: 'POST',
+        url: '/api/practice/reading-suite',
+        payload: {
+            flowMode: 'classic',
+            frequencyScope: 'custom',
+            sequence: ['p1-high-01', 'p2-low-148', 'p3-low-151']
+        }
+    })
+
+    assert.strictEqual(createResponse.statusCode, 200)
+    const created = createResponse.json().data
+    assert.strictEqual(created.frequencyScope, 'custom')
+    assert.strictEqual(created.flowMode, 'classic')
+    assert.deepStrictEqual(created.sequence.map((entry) => entry.assetId), ['p1-high-01', 'p2-low-148', 'p3-low-151'])
+    assert.deepStrictEqual(created.sequence.map((entry) => entry.category), ['P1', 'P2', 'P3'])
+    assert.deepStrictEqual(created.sequence.map((entry) => entry.status), ['active', 'pending', 'pending'])
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(created, 'customSequence'), false)
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(created, 'selectedAssets'), false)
+
+    const invalidOrderResponse = await app.inject({
+        method: 'POST',
+        url: '/api/practice/reading-suite',
+        payload: {
+            flowMode: 'classic',
+            frequencyScope: 'custom',
+            sequence: ['p2-low-148', 'p1-high-01', 'p3-low-151']
+        }
+    })
+    await app.close()
+
+    assert.strictEqual(invalidOrderResponse.statusCode, 409)
+    assert.strictEqual(invalidOrderResponse.json().error, 'reading_suite_custom_sequence_invalid')
+}
+
 async function testReadingSuitePersistsAcrossPracticeServiceInstances() {
     const db = createFakePracticeHistoryDb()
     try {
@@ -2680,6 +2717,7 @@ async function main() {
     await testReadingSessionSubmitScoreAndReview()
     await testReadingSuiteSessionLifecycle()
     await testReadingSuiteTimerCreateContract()
+    await testReadingSuiteCustomSequenceContract()
     await testReadingSuitePersistsAcrossPracticeServiceInstances()
     await testReadingHistoryPersistsAcrossPracticeServiceInstances()
     await testReadingHistoryDeleteAndClear()

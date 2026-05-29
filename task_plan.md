@@ -4,7 +4,7 @@
 把阅读业务链路重构为写作模块内的一等能力，使用 Vue renderer 统一实现，并收束 Electron/Server/API/设置入口，形成一个 AI native 的完整练习体验。
 
 ## Current Phase
-Slice 32 checkpoint complete: the Vue browse page now preserves the legacy/OpenSource list-position behavior using the existing `browse_view_preferences_v2` storage contract. Starting a reading asset records the current list/filter/sort/search context, and returning to browse restores that context and scrolls to the last started asset without adding backend fields or changing reading AI prompt/RAG behavior.
+Slice 33 checkpoint complete: OpenSource/legacy custom suite selection is restored in Vue. The suite selector can enter `custom` scope, the existing browse list captures one P1/P2/P3 asset each, and `/api/practice/reading-suite` creates the suite from an explicit canonical `sequence` while still using the same `ReadingSuiteSession.sequence` contract. No reading AI prompt/RAG code was changed.
 
 ## Phases
 
@@ -365,6 +365,7 @@ Slice 32 checkpoint complete: the Vue browse page now preserves the legacy/OpenS
 - [x] Add E2E parity tests that click the same user-visible controls as legacy: 总览 -> 浏览题库, 总览 -> 随机练习, 总览 -> 套题模式, 题库浏览 -> 开始练习, 题库浏览 -> PDF, 练习记录 -> 复盘.
 - [x] Preserve suite review return context from history list rows by reusing existing `metadata.suiteSessionId` in both Practice Library history and mixed History page review routes.
 - [x] Restore browse list-position memory by reusing `browse_view_preferences_v2` for last asset, filters, search, sort, and scroll restoration.
+- [x] Restore custom suite selection by reusing the existing suite create API and `ReadingSuiteSession.sequence` for explicit P1/P2/P3 selections.
 - **Status:** implementation in progress
 
 ## Errors Encountered
@@ -439,6 +440,8 @@ Slice 32 checkpoint complete: the Vue browse page now preserves the legacy/OpenS
 | New subagent spawn failed because the thread limit was reached | 5 | Reused existing completed subagent findings and continued locally; the active agent findings were sufficient to prioritize entry E2E parity and suite field contraction. |
 | New subagent spawn failed because the thread limit was reached | 6 | Completed the suite history replay context fix locally and covered it with static contracts plus Vue suite E2E. |
 | `practice_reading_suite_vue_flow.py` initially timed out waiting for `#/library` after clicking `返回练习库` | 1 | The `/library` route is an alias that redirects to the Practice Library root; changed the E2E to wait for `[data-practice-reading-home]` instead of the alias URL. |
+| New subagent spawn failed because the thread limit was reached | 7 | Completed the custom suite selection audit locally, using OpenSource `suitePracticeMixin.js` and current Vue/Practice API contracts as source evidence. |
+| `practice_reading_suite_vue_flow.py` initially timed out after custom suite creation because the E2E stub reused the same synthetic suite object for the next normal suite create | 1 | Reset the stub sequence on every create call, matching the real API behavior where each create returns a fresh session. |
 
 ## Notes
 - Do not touch the existing dirty `apps/writing-vue/src/views/SettingsPage.vue` or screenshot files unless the refactor plan requires reading them.

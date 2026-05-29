@@ -276,9 +276,9 @@
                 data-action="start"
                 :data-exam-id="asset.id"
                 :aria-label="`开始练习 ${asset.title}`"
-                @click="startReading(asset)"
+                @click="handleBrowsePrimaryAction(asset)"
               >
-                开始练习
+                {{ customSuiteDraft ? '选择此题' : '开始练习' }}
               </button>
               <button
                 class="btn btn-outline exam-item-action-btn"
@@ -291,6 +291,48 @@
                 PDF
               </button>
             </div>
+          </div>
+        </div>
+        <div
+          v-if="customSuiteDraft"
+          id="custom-suite-selection-bar"
+          class="custom-suite-selection-bar"
+          data-custom-suite-selection
+        >
+          <div class="custom-suite-selection-main">
+            <strong>套题自选</strong>
+            <span>请选择 {{ customSuiteCurrentCategory }} 阅读题目</span>
+          </div>
+          <div class="custom-suite-picked-list" aria-label="已选择套题">
+            <span
+              v-for="category in customSuiteCategories"
+              :key="category"
+              class="custom-suite-picked-chip"
+              :class="{ filled: Boolean(customSuitePickedByCategory[category]) }"
+              :data-custom-suite-category="category"
+            >
+              {{ category }} · {{ customSuitePickedByCategory[category]?.title || '待选' }}
+            </span>
+          </div>
+          <div class="custom-suite-selection-actions">
+            <button
+              class="btn btn-primary"
+              type="button"
+              data-custom-suite-confirm
+              :disabled="!customSuiteReady || creatingSuite"
+              @click="confirmCustomSuiteSelection"
+            >
+              确认套题
+            </button>
+            <button
+              class="btn btn-secondary"
+              type="button"
+              data-custom-suite-cancel
+              :disabled="creatingSuite"
+              @click="cancelCustomSuiteSelection"
+            >
+              取消自选
+            </button>
           </div>
         </div>
       </div>
@@ -1271,8 +1313,11 @@ const suiteFlowOptions = [
 const suiteFrequencyOptions = [
   { value: 'high_medium', label: '高频 + 次高频' },
   { value: 'high', label: '仅高频' },
-  { value: 'all', label: '全部频率（默认）' }
+  { value: 'all', label: '全部频率（默认）' },
+  { value: 'custom', label: '自选套题（P1/P2/P3）' }
 ]
+
+const customSuiteCategories = ['P1', 'P2', 'P3']
 
 const activeView = ref('overview')
 const selectedCategory = ref('all')
@@ -1293,6 +1338,7 @@ const libraryConfigOpen = ref(false)
 const suiteModeSelectorOpen = ref(false)
 const selectedSuiteFlowMode = ref(resolveSuitePreference().flowMode)
 const selectedSuiteFrequencyScope = ref(resolveSuitePreference().frequencyScope)
+const customSuiteDraft = ref(null)
 const heatmapMonth = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
 const readingAssets = ref([])
 const readingHistory = ref([])
@@ -1538,6 +1584,9 @@ const htmlAssetCount = computed(() => readingAssets.value.filter(hasReadingPract
 const pdfAssetCount = computed(() => readingAssets.value.filter((asset) => getPdfPath(asset)).length)
 const libraryStatusLabel = computed(() => readingAssets.value.length ? '已加载完整索引' : '等待加载')
 const latestAssetSyncLabel = computed(() => latestAssetSyncAt.value ? latestAssetSyncAt.value.toLocaleString() : '未同步')
+const customSuitePickedByCategory = computed(() => customSuiteDraft.value?.pickedByCategory || {})
+const customSuiteCurrentCategory = computed(() => customSuiteCategories[customSuiteDraft.value?.stageIndex || 0] || 'P1')
+const customSuiteReady = computed(() => customSuiteCategories.every((category) => Boolean(customSuitePickedByCategory.value[category]?.id)))
 
 onMounted(() => {
   syncViewFromRoute()
@@ -1861,6 +1910,14 @@ function startReading(asset) {
   })
 }
 
+function handleBrowsePrimaryAction(asset) {
+  if (customSuiteDraft.value) {
+    selectCustomSuiteAsset(asset)
+    return
+  }
+  startReading(asset)
+}
+
 function startRandomPractice(category = 'all') {
   const normalizedCategory = category === 'all' ? 'all' : normalizeCategory(category)
   const pool = readingAssets.value.filter((asset) => (
@@ -2158,6 +2215,7 @@ function normalizeSuiteFrequencyScope(value) {
     || normalized === '高频次高频'
   ) return 'high_medium'
   if (normalized === 'all' || normalized === 'default' || normalized === '全部' || normalized === '全部频率') return 'all'
+  if (normalized === 'custom' || normalized === '自选套题') return 'custom'
   return suiteFrequencyOptions.some((option) => option.value === normalized) ? normalized : ''
 }
 
@@ -2219,11 +2277,124 @@ function selectSuiteFlowMode(mode, options = {}) {
   if (!normalized) return
   selectedSuiteFlowMode.value = normalized
   if (options.start) {
-    void startReadingSuite()
+    if (selectedSuiteFrequencyScope.value === 'custom') {
+      startCustomSuiteSelection()
+    } else {
+      void startReadingSuite()
+    }
   }
 }
 
-async function startReadingSuite(event) {
+function buildCustomSuiteExamEntry(asset) {
+  if (!asset?.id) return null
+  return {
+    id: String(asset.id),
+    assetId: String(asset.id),
+    examId: String(asset.examId || asset.id),
+    title: String(asset.title || asset.id),
+    category: normalizeCategory(asset.category),
+    frequency: normalizeFrequency(asset),
+    type: 'reading'
+  }
+}
+
+function startCustomSuiteSelection() {
+  const preference = persistSuitePreference({
+    flowMode: selectedSuiteFlowMode.value,
+    frequencyScope: 'custom'
+  })
+  const missingCategory = customSuiteCategories.find((category) => !readingAssets.value.some((asset) => (
+    asset?.id
+    && asset.activity === 'reading'
+    && hasReadingPracticePayload(asset)
+    && normalizeCategory(asset.category) === category
+  )))
+  if (missingCategory) {
+    suiteError.value = `当前题库缺少 ${missingCategory} 阅读题目，无法启动自选流程。`
+    return
+  }
+  customSuiteDraft.value = {
+    status: 'selecting',
+    stageIndex: 0,
+    categories: customSuiteCategories.slice(),
+    pickedByCategory: {},
+    pickedOrder: [],
+    flowMode: preference.flowMode,
+    frequencyScope: 'custom',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+  suiteModeSelectorOpen.value = false
+  suiteError.value = ''
+  selectedCategory.value = 'P1'
+  selectedType.value = 'reading'
+  frequencyFilter.value = 'all'
+  keyword.value = ''
+  activeView.value = 'browse'
+}
+
+function selectCustomSuiteAsset(asset) {
+  const entry = buildCustomSuiteExamEntry(asset)
+  if (!entry || !hasReadingPracticePayload(asset)) {
+    showLocalMessage('自选套题只能选择可练习的阅读题目。')
+    return
+  }
+  const expectedCategory = customSuiteCurrentCategory.value
+  if (entry.category !== expectedCategory) {
+    showLocalMessage(`当前需要选择 ${expectedCategory} 阅读题目。`)
+    return
+  }
+  const draft = customSuiteDraft.value
+  if (!draft) return
+  const pickedByCategory = {
+    ...(draft.pickedByCategory || {}),
+    [expectedCategory]: entry
+  }
+  const pickedOrder = customSuiteCategories
+    .map((category) => pickedByCategory[category])
+    .filter(Boolean)
+  const nextStageIndex = Math.min(pickedOrder.length, customSuiteCategories.length - 1)
+  customSuiteDraft.value = {
+    ...draft,
+    status: pickedOrder.length === customSuiteCategories.length ? 'ready' : 'selecting',
+    stageIndex: nextStageIndex,
+    pickedByCategory,
+    pickedOrder,
+    updatedAt: new Date().toISOString()
+  }
+  const nextCategory = customSuiteCategories[nextStageIndex]
+  if (nextCategory && pickedOrder.length < customSuiteCategories.length) {
+    selectedCategory.value = nextCategory
+    selectedType.value = 'reading'
+  }
+  showLocalMessage(pickedOrder.length === customSuiteCategories.length
+    ? '三篇自选已完成，请确认套题。'
+    : `已选择 ${expectedCategory}，继续选择 ${nextCategory}。`)
+}
+
+async function confirmCustomSuiteSelection() {
+  const draft = customSuiteDraft.value
+  const pickedOrder = Array.isArray(draft?.pickedOrder) ? draft.pickedOrder : []
+  if (!draft || !customSuiteReady.value || pickedOrder.length !== customSuiteCategories.length) {
+    showLocalMessage('当前尚未完成三篇自选，请继续选择后再确认。')
+    return
+  }
+  await startReadingSuite(null, {
+    sequence: customSuiteCategories.map((category) => customSuitePickedByCategory.value[category].assetId),
+    frequencyScope: 'custom',
+    closeSelector: false
+  })
+}
+
+function cancelCustomSuiteSelection() {
+  customSuiteDraft.value = null
+  selectedCategory.value = 'all'
+  selectedType.value = 'all'
+  activeView.value = 'browse'
+  showLocalMessage('已取消自选套题。')
+}
+
+async function startReadingSuite(event, options = {}) {
   event?.preventDefault?.()
   event?.stopImmediatePropagation?.()
   creatingSuite.value = true
@@ -2231,17 +2402,24 @@ async function startReadingSuite(event) {
   try {
     const preference = persistSuitePreference({
       flowMode: selectedSuiteFlowMode.value,
-      frequencyScope: selectedSuiteFrequencyScope.value
+      frequencyScope: options.frequencyScope || selectedSuiteFrequencyScope.value
     })
-    const suite = await practiceReadingSuite.create({
+    const createPayload = {
       flowMode: preference.flowMode,
       frequencyScope: preference.frequencyScope
-    })
+    }
+    if (Array.isArray(options.sequence) && options.sequence.length) {
+      createPayload.sequence = options.sequence
+    }
+    const suite = await practiceReadingSuite.create(createPayload)
     const sessionId = String(suite?.sessionId || '').trim()
     if (!sessionId) {
       throw new Error('套题 session 创建失败')
     }
-    suiteModeSelectorOpen.value = false
+    if (options.closeSelector !== false) {
+      suiteModeSelectorOpen.value = false
+    }
+    customSuiteDraft.value = null
     router.push({
       name: 'PracticeReadingSuite',
       params: { sessionId }
@@ -4794,6 +4972,66 @@ function updateSegmentedIndicators() {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.practice-library-open-source .custom-suite-selection-bar {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0 18px;
+  padding: 14px 16px;
+  border-radius: var(--shui-radius-md);
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 12px 24px rgba(15, 23, 42, 0.08),
+    inset 0 1px 1px rgba(255, 255, 255, 0.74);
+}
+
+.practice-library-open-source .custom-suite-selection-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--shui-text-strong);
+  font-size: 0.92rem;
+}
+
+.practice-library-open-source .custom-suite-selection-main span {
+  color: var(--shui-text-muted);
+  font-weight: 700;
+}
+
+.practice-library-open-source .custom-suite-picked-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.practice-library-open-source .custom-suite-picked-chip {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 30px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.52);
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  color: var(--shui-text-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.practice-library-open-source .custom-suite-picked-chip.filled {
+  background: rgba(102, 126, 234, 0.12);
+  border-color: rgba(102, 126, 234, 0.38);
+  color: var(--shui-text-strong);
+}
+
+.practice-library-open-source .custom-suite-selection-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
   flex-wrap: wrap;
 }
 

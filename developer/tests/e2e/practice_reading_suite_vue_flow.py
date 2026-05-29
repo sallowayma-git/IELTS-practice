@@ -69,7 +69,10 @@ async def install_api_stub(page) -> None:
           const assets = [
             {{ id: 'p1-suite-e2e', activity: 'reading', title: 'Suite Passage 1', source: 'reading_exam', category: 'P1', payloadRef: 'p1-suite-e2e', metadata: {{ dataKey: 'p1-suite-e2e' }} }},
             {{ id: 'p2-suite-e2e', activity: 'reading', title: 'Suite Passage 2', source: 'reading_exam', category: 'P2', payloadRef: 'p2-suite-e2e', metadata: {{ dataKey: 'p2-suite-e2e' }} }},
-            {{ id: 'p3-suite-e2e', activity: 'reading', title: 'Suite Passage 3', source: 'reading_exam', category: 'P3', payloadRef: 'p3-suite-e2e', metadata: {{ dataKey: 'p3-suite-e2e' }} }}
+            {{ id: 'p3-suite-e2e', activity: 'reading', title: 'Suite Passage 3', source: 'reading_exam', category: 'P3', payloadRef: 'p3-suite-e2e', metadata: {{ dataKey: 'p3-suite-e2e' }} }},
+            {{ id: 'p1-custom-suite-e2e', activity: 'reading', title: 'Custom Suite Passage 1', source: 'reading_exam', category: 'P1', payloadRef: 'p1-custom-suite-e2e', metadata: {{ dataKey: 'p1-custom-suite-e2e' }} }},
+            {{ id: 'p2-custom-suite-e2e', activity: 'reading', title: 'Custom Suite Passage 2', source: 'reading_exam', category: 'P2', payloadRef: 'p2-custom-suite-e2e', metadata: {{ dataKey: 'p2-custom-suite-e2e' }} }},
+            {{ id: 'p3-custom-suite-e2e', activity: 'reading', title: 'Custom Suite Passage 3', source: 'reading_exam', category: 'P3', payloadRef: 'p3-custom-suite-e2e', metadata: {{ dataKey: 'p3-custom-suite-e2e' }} }}
           ];
           const writingAsset = {{ id: '7', activity: 'writing', title: 'Writing topic', source: 'writing_topic', category: 'education', difficulty: 3, payloadRef: '7', metadata: {{ taskType: 'task2' }} }};
           const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -102,6 +105,27 @@ async def install_api_stub(page) -> None:
           const parseJsonBody = (init) => {{
             try {{ return init && init.body ? JSON.parse(init.body) : {{}}; }} catch (_) {{ return {{}}; }}
           }};
+          const buildSuiteSequence = (assetIds) => assetIds.map((assetId, index) => {{
+            const asset = assets.find((item) => item.id === assetId);
+            return {{
+              index,
+              assetId,
+              examId: assetId,
+              title: asset?.title || assetId,
+              category: asset?.category || `P${{index + 1}}`,
+              status: index === 0 ? 'active' : 'pending',
+              sessionId: null,
+              submittedAt: null,
+              scoreInfo: null
+            }};
+          }});
+          const resetSuite = (assetIds) => {{
+            suite.sequence = buildSuiteSequence(assetIds);
+            suite.currentIndex = 0;
+            suite.status = 'active';
+            suite.aggregate = {{ submittedPassages: 0, totalPassages: 3, correct: 0, totalQuestions: 0, accuracy: 0, percentage: 0, duration: 0 }};
+            suite.completedAt = null;
+          }};
           const suite = {{
             sessionId: SUITE_SESSION_ID,
             activity: 'reading',
@@ -121,17 +145,7 @@ async def install_api_stub(page) -> None:
             }},
             currentIndex: 0,
             totalPassages: 3,
-            sequence: assets.map((asset, index) => ({{
-              index,
-              assetId: asset.id,
-              examId: asset.id,
-              title: asset.title,
-              category: asset.category,
-              status: index === 0 ? 'active' : 'pending',
-              sessionId: null,
-              submittedAt: null,
-              scoreInfo: null
-            }})),
+            sequence: buildSuiteSequence(['p1-suite-e2e', 'p2-suite-e2e', 'p3-suite-e2e']),
             aggregate: {{ submittedPassages: 0, totalPassages: 3, correct: 0, totalQuestions: 0, accuracy: 0, percentage: 0, duration: 0 }},
             createdAt: nowIso(),
             updatedAt: nowIso(),
@@ -314,6 +328,11 @@ async def install_api_stub(page) -> None:
             if (pathname === '/api/practice/reading-suite' && method === 'POST') {{
               suite.flowMode = String(body.flowMode || 'classic');
               suite.frequencyScope = String(body.frequencyScope || 'all');
+              if (Array.isArray(body.sequence) && body.sequence.length === 3) {{
+                resetSuite(body.sequence);
+              }} else {{
+                resetSuite(['p1-suite-e2e', 'p2-suite-e2e', 'p3-suite-e2e']);
+              }}
               suite.sequence.forEach((entry, index) => {{
                 if (index === 0) entry.status = 'active';
                 if (index > 0) entry.status = 'pending';
@@ -398,6 +417,26 @@ async def run_flow() -> dict:
 
         await page.goto(entry_url)
         await page.wait_for_selector('[data-practice-reading-home] h1:has-text("IELTS Atlas")', timeout=20000)
+        await page.locator('[data-start-reading-suite]').click()
+        await page.wait_for_selector('#suite-mode-selector-modal.show', timeout=10000)
+        await page.locator('#suite-frequency-scope').select_option('custom')
+        await page.locator('[data-suite-flow-mode="classic"]').click()
+        await page.wait_for_selector('[data-custom-suite-selection]', timeout=10000)
+        await page.wait_for_selector('#browse-view.active', timeout=10000)
+        for asset_id, category in [
+            ("p1-custom-suite-e2e", "P1"),
+            ("p2-custom-suite-e2e", "P2"),
+            ("p3-custom-suite-e2e", "P3"),
+        ]:
+            await page.wait_for_selector(f'#browse-title:has-text("{category}")', timeout=10000)
+            await page.locator(f'.exam-item[data-reading-asset-id="{asset_id}"] [data-action="start"]').click()
+        await page.wait_for_selector('[data-custom-suite-confirm]:not([disabled])', timeout=10000)
+        await page.locator('[data-custom-suite-confirm]').click()
+        await page.wait_for_url(f"**#/reading-suite/{SUITE_SESSION_ID}", timeout=10000)
+        await page.wait_for_selector('[data-reading-suite-passage="p1-custom-suite-e2e"][data-reading-suite-current="true"]', timeout=10000)
+        await page.locator('a:has-text("返回练习库")').click()
+        await page.wait_for_selector('[data-practice-reading-home]', timeout=10000)
+
         await page.locator('[data-start-reading-suite]').click()
         await page.wait_for_selector('#suite-mode-selector-modal.show', timeout=10000)
         await page.locator('#suite-frequency-scope').select_option('high_medium')
@@ -491,9 +530,15 @@ async def run_flow() -> dict:
               legacyCalls: window.__practiceReadingSuiteRequests.filter((item) => item.pathname.includes('legacy')).length
             })"""
         )
-        if requests.get("creates") != 1:
+        if requests.get("creates") != 2:
             raise AssertionError(f"suite_create_count_invalid:{requests}")
-        if requests.get("createBodies") != [{"flowMode": "simulation", "frequencyScope": "high_medium"}]:
+        expected_custom_body = {
+            "flowMode": "classic",
+            "frequencyScope": "custom",
+            "sequence": ["p1-custom-suite-e2e", "p2-custom-suite-e2e", "p3-custom-suite-e2e"],
+        }
+        expected_regular_body = {"flowMode": "simulation", "frequencyScope": "high_medium"}
+        if requests.get("createBodies") != [expected_custom_body, expected_regular_body]:
             raise AssertionError(f"suite_create_preference_invalid:{requests}")
         if requests.get("submits") != [
             "/api/practice/reading-suite/suite-e2e-1/passages/p1-suite-e2e",

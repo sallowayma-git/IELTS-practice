@@ -31,8 +31,16 @@ const createSessionSchema = z.object({
 
 const createReadingSuiteSchema = z.object({
   flowMode: z.enum(['classic', 'simulation', 'stationary']).optional(),
-  frequencyScope: z.enum(['high', 'high_medium', 'all']).optional(),
+  frequencyScope: z.enum(['high', 'high_medium', 'all', 'custom']).optional(),
   seed: z.string().trim().nullable().optional(),
+  sequence: z.array(z.union([
+    z.string().trim(),
+    z.object({
+      assetId: z.string().trim().nullable().optional(),
+      examId: z.string().trim().nullable().optional(),
+      id: z.string().trim().nullable().optional()
+    }).passthrough()
+  ])).nullable().optional(),
   timer: z.object({
     anchorMs: z.coerce.number().int().positive().optional(),
     effectiveStartTimeMs: z.coerce.number().int().positive().optional(),

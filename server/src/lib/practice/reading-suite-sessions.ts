@@ -26,7 +26,7 @@ function normalizeFlowMode(value: unknown): ReadingSuiteFlowMode {
 
 function normalizeFrequencyScope(value: unknown): ReadingSuiteFrequencyScope {
   const normalized = String(value || '').trim().toLowerCase()
-  return normalized === 'high' || normalized === 'high_medium' || normalized === 'all'
+  return normalized === 'high' || normalized === 'high_medium' || normalized === 'all' || normalized === 'custom'
     ? normalized
     : 'all'
 }
@@ -49,6 +49,7 @@ function normalizePositiveInteger(value: unknown): number | null {
 }
 
 function isFrequencyIncluded(frequency: unknown, scope: ReadingSuiteFrequencyScope): boolean {
+  if (scope === 'custom') return true
   const normalized = String(frequency == null ? '' : frequency).trim().toLowerCase()
   if (!normalized) return true
   if (scope === 'high') {
@@ -95,6 +96,69 @@ function toPassageEntry(index: number, manifestId: string, entry: ManifestEntry)
     submittedAt: null,
     scoreInfo: null
   }
+}
+
+function hasReadingPayload(entry: ManifestEntry): boolean {
+  return typeof entry.script === 'string' && entry.script.trim().length > 0
+}
+
+function normalizeRequestedSequenceId(value: unknown): string {
+  if (typeof value === 'string' || typeof value === 'number') {
+    return String(value).trim()
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return ''
+  }
+  const input = value as AnyRecord
+  return String(input.assetId || input.examId || input.id || '').trim()
+}
+
+function findManifestEntry(
+  manifest: ReadingManifest,
+  requestedId: string
+): [string, ManifestEntry] | null {
+  const direct = manifest[requestedId]
+  if (direct) return [requestedId, direct]
+  return Object.entries(manifest || {}).find(([manifestId, entry]) => (
+    manifestId === requestedId
+    || String(entry?.examId || '').trim() === requestedId
+    || String(entry?.dataKey || '').trim() === requestedId
+  )) || null
+}
+
+function createExplicitSequence(
+  manifest: ReadingManifest,
+  requestedSequence: unknown
+): ReadingSuitePassageEntry[] | null {
+  if (!Array.isArray(requestedSequence) || requestedSequence.length === 0) {
+    return null
+  }
+
+  const requestedIds = requestedSequence
+    .map(normalizeRequestedSequenceId)
+    .filter(Boolean)
+  const categories = ['P1', 'P2', 'P3']
+  if (requestedIds.length !== categories.length || new Set(requestedIds).size !== requestedIds.length) {
+    throw createHttpError('reading_suite_custom_sequence_invalid', 'Custom reading suite requires exactly one P1, P2, and P3 passage', 400)
+  }
+
+  return requestedIds.map((requestedId, index) => {
+    const found = findManifestEntry(manifest, requestedId)
+    if (!found) {
+      throw createHttpError('reading_suite_custom_asset_not_found', `Reading suite custom asset not found: ${requestedId}`, 404)
+    }
+    const [manifestId, entry] = found
+    const normalizedType = String(entry.type || 'reading').trim().toLowerCase()
+    const category = manifestCategory(entry)
+    if (normalizedType !== 'reading' || category !== categories[index] || !hasReadingPayload(entry)) {
+      throw createHttpError('reading_suite_custom_sequence_invalid', 'Custom reading suite sequence must be ordered as P1, P2, P3 and use practice-ready reading assets', 409, {
+        assetId: requestedId,
+        expectedCategory: categories[index],
+        actualCategory: category || null
+      })
+    }
+    return toPassageEntry(index, manifestId, entry)
+  })
 }
 
 function emptyAggregate(totalPassages: number) {
@@ -206,15 +270,17 @@ export function createReadingSuiteSession(
   const flowMode = normalizeFlowMode(request.flowMode)
   const frequencyScope = normalizeFrequencyScope(request.frequencyScope)
   const seed = String(request.seed || randomUUID()).trim()
+  const explicitSequence = createExplicitSequence(manifest, request.sequence)
   const entries = Object.entries(manifest || {}).filter(([, entry]) => (
     entry
     && typeof entry === 'object'
     && String(entry.type || 'reading').trim().toLowerCase() === 'reading'
+    && hasReadingPayload(entry)
     && isFrequencyIncluded(entry.frequency, frequencyScope)
   ))
 
   const categories = ['P1', 'P2', 'P3']
-  const sequence = categories.map((category, index) => {
+  const sequence = explicitSequence || categories.map((category, index) => {
     const picked = selectEntry(entries.filter(([, entry]) => manifestCategory(entry) === category), seed, category)
     return toPassageEntry(index, picked[0], picked[1])
   })

@@ -302,7 +302,7 @@ export interface ReadingPracticeSubmission {
 }
 
 export type ReadingSuiteFlowMode = 'classic' | 'simulation' | 'stationary'
-export type ReadingSuiteFrequencyScope = 'high' | 'high_medium' | 'all'
+export type ReadingSuiteFrequencyScope = 'high' | 'high_medium' | 'all' | 'custom'
 export type ReadingSuitePassageStatus = 'pending' | 'active' | 'submitted'
 export type ReadingSuiteSessionStatus = 'active' | 'completed' | 'cancelled'
 export type ReadingSuiteTimerMode = 'elapsed' | 'countdown'
@@ -362,6 +362,7 @@ export interface ReadingSuiteCreateRequest {
   frequencyScope?: ReadingSuiteFrequencyScope
   seed?: string | null
   timer?: Partial<ReadingSuiteTimerState> | null
+  sequence?: Array<string | { assetId?: string | null; examId?: string | null; id?: string | null }> | null
 }
 
 export interface ReadingSuiteSubmitResponse {
