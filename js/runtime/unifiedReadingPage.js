@@ -2853,6 +2853,74 @@
             .filter((entry) => entry.content.trim());
     }
 
+    function normalizeCoachQuestionNumber(value) {
+        const raw = String(value || '').trim();
+        if (!raw) {
+            return '';
+        }
+        const normalizedId = normalizeQuestionId(raw);
+        const label = normalizedId ? displayLabel(normalizedId) : raw;
+        const match = String(label || raw).match(/\d+/);
+        return match ? match[0] : '';
+    }
+
+    function resolveSelectionElement(selection) {
+        const nodes = [selection?.anchorNode, selection?.focusNode].filter(Boolean);
+        for (const node of nodes) {
+            const element = node && node.nodeType === 3 ? node.parentElement : node;
+            if (element && typeof element === 'object') {
+                return element;
+            }
+        }
+        return null;
+    }
+
+    function collectSelectedQuestionNumbers(element) {
+        if (!element || typeof element.closest !== 'function') {
+            return [];
+        }
+        const candidates = [];
+        const direct = element.closest('[data-question], [data-question-id], [name], [id]');
+        if (direct && typeof direct.getAttribute === 'function') {
+            candidates.push(
+                direct.getAttribute('data-question'),
+                direct.getAttribute('data-question-id'),
+                direct.getAttribute('name'),
+                direct.id
+            );
+        }
+        const group = element.closest('.unified-group[data-question-ids]');
+        if (group?.dataset?.questionIds) {
+            candidates.push(...String(group.dataset.questionIds).split(','));
+        }
+        return uniqueList(candidates.map((item) => normalizeCoachQuestionNumber(item)).filter(Boolean));
+    }
+
+    function collectSelectedParagraphLabels(element) {
+        if (!element || typeof element.closest !== 'function') {
+            return [];
+        }
+        const labels = [];
+        const paragraphSource = element.closest('[data-paragraph], .paragraph-wrapper');
+        if (paragraphSource) {
+            if (paragraphSource.dataset?.paragraph) {
+                labels.push(paragraphSource.dataset.paragraph);
+            }
+            if (typeof paragraphSource.querySelector === 'function') {
+                const dropzone = paragraphSource.querySelector('[data-paragraph]');
+                if (dropzone?.dataset?.paragraph) {
+                    labels.push(dropzone.dataset.paragraph);
+                }
+            }
+            const text = String(paragraphSource.textContent || '').trim();
+            const match = text.match(/^(?:Paragraph\s*)?([A-H])\b/i);
+            if (match?.[1]) {
+                labels.push(match[1]);
+            }
+        }
+        return uniqueList(labels.map((item) => String(item || '').trim().replace(/^paragraph\s*/i, '').toUpperCase()).filter(Boolean));
+    }
+
     function getSelectedContextForCoach() {
         const selection = global.getSelection ? global.getSelection() : null;
         const text = selection && typeof selection.toString === 'function'
@@ -2862,18 +2930,23 @@
             return null;
         }
         let scope = 'passage';
+        let questionNumbers = [];
+        let paragraphLabels = [];
         try {
-            const anchorNode = selection.anchorNode;
-            const parentEl = anchorNode && anchorNode.nodeType === 3 ? anchorNode.parentElement : anchorNode;
+            const parentEl = resolveSelectionElement(selection);
             if (parentEl && dom.groups && dom.groups.contains(parentEl)) {
                 scope = 'question';
             }
+            questionNumbers = collectSelectedQuestionNumbers(parentEl);
+            paragraphLabels = collectSelectedParagraphLabels(parentEl);
         } catch (_) {
             // ignore selection scope fallback
         }
         return {
             text: text.slice(0, 500),
-            scope
+            scope,
+            questionNumbers,
+            paragraphLabels
         };
     }
 
@@ -3203,7 +3276,12 @@
     function buildReadingCoachRequestPayload(query, options = {}) {
         const normalizedQuery = String(query || '').trim();
         const selectedContext = getSelectedContextForCoach();
-        const focusQuestionNumbers = resolveCoachFocusQuestionNumbers();
+        const selectedQuestionNumbers = Array.isArray(selectedContext?.questionNumbers)
+            ? selectedContext.questionNumbers
+            : [];
+        const focusQuestionNumbers = selectedQuestionNumbers.length
+            ? selectedQuestionNumbers
+            : resolveCoachFocusQuestionNumbers();
         const submitted = Boolean(options.forceSubmitted || isReadingCoachAvailable());
         const action = String(options.action || 'chat').trim() || 'chat';
         const explicitSurface = String(options.surface || '').trim();
@@ -3216,6 +3294,9 @@
             'locate_evidence'
         ].includes(action) && selectedContext && selectedContext.text;
         const answerComparison = resolveAnswerComparisonForCoach(state.lastResults);
+        const analysisInput = state.lastResults && typeof state.lastResults.singleAttemptAnalysisInput === 'object'
+            ? state.lastResults.singleAttemptAnalysisInput
+            : {};
         const wrongQuestions = [];
         const selectedAnswers = {};
 
@@ -3241,6 +3322,10 @@
 
         return {
             examId: state.examId,
+            sessionId: state.sessionId || '',
+            mode: state.reviewMode
+                ? 'review'
+                : (state.suiteSessionId ? 'suite' : (state.simulationMode ? 'simulation' : 'single')),
             query: normalizedQuery,
             locale: 'zh',
             surface: explicitSurface || (action === 'review_set'
@@ -3256,7 +3341,13 @@
                 submitted,
                 score: state.lastResults?.scoreInfo?.percentage || null,
                 wrongQuestions,
-                selectedAnswers
+                selectedAnswers,
+                analysisSignals: state.lastResults?.analysisSignals || analysisInput.analysisSignals || null,
+                markedQuestions: getPracticeMarkedQuestions(),
+                questionTimelineLite: Array.isArray(state.lastResults?.questionTimelineLite)
+                    ? state.lastResults.questionTimelineLite
+                    : (Array.isArray(analysisInput.questionTimelineLite) ? analysisInput.questionTimelineLite : []),
+                questionTypePerformance: state.lastResults?.questionTypePerformance || analysisInput.questionTypePerformance || {}
             }
         };
     }
@@ -5504,14 +5595,6 @@
 
     function navigateToLegacyHome() {
         const runtimeLegacyHomeUrl = resolveRuntimeParam('legacyHomeUrl');
-        if (global.electronAPI && typeof global.electronAPI.openLegacy === 'function') {
-            try {
-                global.electronAPI.openLegacy();
-                return true;
-            } catch (_) {
-                // ignore and continue fallback
-            }
-        }
         if (runtimeLegacyHomeUrl) {
             try {
                 if (global.location && typeof global.location.replace === 'function') {

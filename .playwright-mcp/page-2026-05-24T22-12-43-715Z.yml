@@ -1,0 +1,114 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "📚 考试总览系统 Practice Shell" [ref=e6] [cursor=pointer]:
+        - /url: "#/writing"
+        - strong [ref=e7]: 📚 考试总览系统
+        - generic [ref=e8]: Practice Shell
+      - generic [ref=e10]:
+        - link "写作" [ref=e11] [cursor=pointer]:
+          - /url: "#/writing"
+        - link "写作题库" [ref=e12] [cursor=pointer]:
+          - /url: "#/topics"
+        - link "写作记录" [ref=e13] [cursor=pointer]:
+          - /url: "#/history"
+        - link "设置" [ref=e14] [cursor=pointer]:
+          - /url: "#/settings"
+  - main [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - heading "⚙️ 系统设置" [level=2] [ref=e18]
+        - button "收起写作配置" [expanded] [ref=e56] [cursor=pointer]
+      - generic "设置主面板" [ref=e20]:
+        - generic [ref=e21]:
+          - heading "🔧 系统管理" [level=3] [ref=e22]
+          - paragraph [ref=e23]: 系统工具和设置选项
+          - generic [ref=e24]:
+            - button "🗑️ 清除缓存" [ref=e25] [cursor=pointer]
+            - button "📂 加载题库" [ref=e26] [cursor=pointer]
+            - button "🎨 主题切换" [ref=e27] [cursor=pointer]
+            - button "🎯 显示引导" [ref=e28] [cursor=pointer]
+            - button "题库配置切换" [ref=e29] [cursor=pointer]:
+              - img [ref=e30]
+              - text: 题库配置切换
+            - button "🔄 强制刷新题库" [ref=e31] [cursor=pointer]
+            - button "🔍 检查更新" [ref=e32] [cursor=pointer]
+        - generic [ref=e33]:
+          - heading "💾 数据管理" [level=3] [ref=e34]
+          - paragraph [ref=e35]: 数据备份、导入导出和完整性检查
+          - generic [ref=e36]:
+            - button "💾 创建备份" [ref=e37] [cursor=pointer]
+            - button "📋 备份列表" [active] [ref=e38] [cursor=pointer]
+            - button "📤 导出数据" [ref=e39] [cursor=pointer]
+            - button "📥 导入数据" [ref=e40] [cursor=pointer]
+            - button "Choose File"
+        - generic [ref=e41]:
+          - heading "📊 系统信息" [level=3] [ref=e42]
+          - generic [ref=e43]:
+            - generic [ref=e44]: "写作状态: 已连接设置服务"
+            - generic [ref=e45]: "启用 API: 0/0"
+            - generic [ref=e46]: "提示词版本: 0"
+            - generic [ref=e47]: "激活提示词: 0"
+            - generic [ref=e48]: "温度参数: 0.5 / 0.5"
+            - generic [ref=e49]: "历史保留: 100 条"
+            - generic [ref=e50]: "Electron版本: N/A"
+            - generic [ref=e51]: "Node版本: N/A"
+            - generic [ref=e52]: "数据目录: 仅在 Electron 中可用"
+          - generic [ref=e53]:
+            - link "问题反馈" [ref=e54] [cursor=pointer]:
+              - /url: https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT
+            - link "Salloway呈现" [ref=e55] [cursor=pointer]:
+              - /url: https://github.com/sallowayma-git
+      - generic [ref=e138]: 已切换到写作提示词与题库相关配置。
+      - region "写作设置明细" [ref=e57]:
+        - tablist "写作设置分类" [ref=e58]:
+          - button "API 配置" [ref=e59] [cursor=pointer]:
+            - img [ref=e61]
+            - text: API 配置
+          - button "提示词管理" [ref=e67] [cursor=pointer]:
+            - img [ref=e69]
+            - text: 提示词管理
+          - button "模型参数" [ref=e71] [cursor=pointer]:
+            - img [ref=e73]
+            - text: 模型参数
+          - button "数据管理" [ref=e77] [cursor=pointer]:
+            - img [ref=e79]
+            - text: 数据管理
+          - button "关于" [ref=e82] [cursor=pointer]:
+            - img [ref=e84]
+            - text: 关于
+        - generic [ref=e158]:
+          - generic [ref=e159]:
+            - generic [ref=e160]:
+              - heading "历史记录" [level=3] [ref=e161]
+              - paragraph [ref=e162]: 控制本地历史记录自动清理上限。
+            - generic [ref=e163]: 100 条
+          - generic [ref=e164]: "加载设置失败: Failed to fetch"
+          - generic [ref=e165]:
+            - generic [ref=e166]:
+              - strong [ref=e167]: 自动保留最近记录数量
+              - generic [ref=e168]: 超过上限后，系统自动清理最早记录，避免历史数据无限增长。
+            - generic [ref=e169]:
+              - spinbutton "条" [ref=e170]: "100"
+              - generic [ref=e171]: 条
+          - generic [ref=e172]:
+            - generic [ref=e173]: 允许范围 50-500，按 50 递增。
+            - button "保存" [ref=e174] [cursor=pointer]
+        - generic [ref=e175]:
+          - generic [ref=e176]:
+            - generic [ref=e177]:
+              - heading "设置备份列表" [level=3] [ref=e178]
+              - paragraph [ref=e179]: 最近 10 个写作设置备份保存在本机，可恢复、下载或删除。
+            - generic [ref=e180]: 0 个备份
+          - generic [ref=e181]: 暂无设置备份。
+        - generic [ref=e182]:
+          - generic [ref=e184]:
+            - heading "危险操作" [level=3] [ref=e185]
+            - paragraph [ref=e186]: 这些操作会影响本地历史数据。
+          - generic [ref=e187]:
+            - generic [ref=e188]:
+              - heading "清空所有历史记录" [level=4] [ref=e189]
+              - paragraph [ref=e190]: 此操作将删除所有评分历史，且不可恢复
+            - button "清空历史" [ref=e191] [cursor=pointer]:
+              - img [ref=e193]
+              - text: 清空历史

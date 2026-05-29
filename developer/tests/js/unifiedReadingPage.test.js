@@ -55,11 +55,40 @@ function createMinimalResults() {
             totalQuestions: 1,
             percentage: 0
         },
+        analysisSignals: {
+            questionCount: 1,
+            unansweredCount: 0,
+            changedAnswerCount: 1,
+            markedQuestionCount: 1,
+            interactionDensity: 0.6
+        },
+        questionTimelineLite: [
+            { questionId: 'q1', displayLabel: '1', changeCount: 2 }
+        ],
+        questionTypePerformance: {
+            matching: {
+                kind: 'matching',
+                total: 1,
+                correct: 0,
+                accuracy: 0,
+                questionIds: ['q1']
+            }
+        },
         singleAttemptAnalysisInput: {
             totalQuestions: 1,
-            analysisSignals: {},
-            questionTimelineLite: [],
-            questionTypePerformance: {}
+            analysisSignals: {
+                questionCount: 1,
+                unansweredCount: 0,
+                changedAnswerCount: 1,
+                markedQuestionCount: 1,
+                interactionDensity: 0.6
+            },
+            questionTimelineLite: [
+                { questionId: 'q1', displayLabel: '1', changeCount: 2 }
+            ],
+            questionTypePerformance: {
+                matching: { total: 1, correct: 0, accuracy: 0 }
+            }
         },
         singleAttemptAnalysis: {
             summary: {
@@ -97,8 +126,20 @@ function createHarness(options = {}) {
     const appNodes = new Map();
     appNodes.set('exam-title', { textContent: '' });
     appNodes.set('exam-subtitle', { textContent: '' });
-    appNodes.set('left', { innerHTML: '', textContent: '', contains: () => false, querySelectorAll() { return []; }, ownerDocument: null });
-    appNodes.set('question-groups', { innerHTML: '', textContent: '', contains: () => false, querySelectorAll() { return []; }, ownerDocument: null });
+    appNodes.set('left', {
+        innerHTML: '',
+        textContent: '',
+        contains: typeof options.leftContains === 'function' ? options.leftContains : (() => false),
+        querySelectorAll() { return []; },
+        ownerDocument: null
+    });
+    appNodes.set('question-groups', {
+        innerHTML: '',
+        textContent: '',
+        contains: typeof options.questionGroupsContains === 'function' ? options.questionGroupsContains : (() => false),
+        querySelectorAll() { return []; },
+        ownerDocument: null
+    });
     appNodes.set('results', resultsContainer);
     appNodes.set('question-nav', { innerHTML: '' });
     appNodes.set('submit-btn', submitBtn);
@@ -178,7 +219,9 @@ function createHarness(options = {}) {
         },
         addEventListener() {},
         removeEventListener() {},
-        getSelection() { return null; },
+        getSelection() {
+            return typeof options.getSelection === 'function' ? options.getSelection() : null;
+        },
         setTimeout,
         clearTimeout,
         setInterval,
@@ -265,10 +308,16 @@ async function testCoachQueryViaElectronLocalApi() {
             assert.ok(String(url).includes('/api/reading/assistant/query/stream'), '应请求新的阅读教练 assistant stream 接口');
             const payload = JSON.parse(init.body);
             assert.strictEqual(payload.examId, 'p1-high-01', '应透传 examId');
+            assert.strictEqual(payload.sessionId, 'session_1', '应透传 sessionId 以便后端回写练习记录');
+            assert.strictEqual(payload.mode, 'single', '应透传练习模式');
             assert.strictEqual(payload.surface, 'chat_widget', '浮动面板自由提问不应默认伪装成 review_workspace');
             assert.strictEqual(payload.attemptContext?.selectedAnswers?.['1'], 'A', '应把用户答案传给教练服务');
             assert.ok(Array.isArray(payload.attemptContext?.wrongQuestions), '应传递错题题号数组');
             assert.strictEqual(payload.attemptContext.wrongQuestions[0], '1', '应把错题题号传给教练服务');
+            assert.strictEqual(payload.attemptContext.analysisSignals.changedAnswerCount, 1, '应把行为分析信号传给教练服务');
+            assert.deepStrictEqual(payload.attemptContext.markedQuestions, ['q1'], '应把标记题传给教练服务');
+            assert.strictEqual(payload.attemptContext.questionTimelineLite[0].changeCount, 2, '应把答题时间线传给教练服务');
+            assert.strictEqual(payload.attemptContext.questionTypePerformance.matching.total, 1, '应把题型表现传给教练服务');
             return {
                 ok: true,
                 headers: {
@@ -294,6 +343,7 @@ async function testCoachQueryViaElectronLocalApi() {
             }
         }
     });
+    harness.hooks.setPracticeMarkedQuestions(['q1']);
 
     await harness.hooks.sendReadingCoachQuery('这题怎么做？', { action: 'chat', promptKind: 'freeform' });
 
@@ -358,6 +408,96 @@ async function testReviewPayloadUsesExplicitReviewWorkspaceOnly() {
 
     assert.strictEqual(freeformPayload.surface, 'chat_widget', '提交后自由提问仍应走 chat_widget');
     assert.strictEqual(reviewPayload.surface, 'review_workspace', '显式 review_set 才应走 review_workspace');
+}
+
+function testSelectionCoachPayloadCarriesQuestionContext() {
+    const groupNode = {
+        dataset: { questionIds: 'q11,q12' },
+        getAttribute() { return null; }
+    };
+    const questionNode = {
+        dataset: { questionId: 'q12' },
+        id: 'q12-anchor',
+        getAttribute(name) {
+            if (name === 'data-question-id') return 'q12';
+            if (name === 'id') return this.id;
+            return null;
+        },
+        closest(selector) {
+            if (selector === '[data-question], [data-question-id], [name], [id]') {
+                return questionNode;
+            }
+            if (selector === '.unified-group[data-question-ids]') {
+                return groupNode;
+            }
+            return null;
+        }
+    };
+    const textNode = { nodeType: 3, parentElement: questionNode };
+    const harness = createHarness({
+        runtime: 'web',
+        questionGroupsContains: (node) => node === questionNode,
+        getSelection: () => ({
+            toString: () => 'Animals were involved in importing tea.',
+            anchorNode: textNode,
+            focusNode: textNode
+        })
+    });
+    harness.hooks.state.dataset = {
+        questionDisplayMap: {
+            q11: '11',
+            q12: '12'
+        }
+    };
+
+    const payload = harness.hooks.buildReadingCoachRequestPayload('解释选中的句子', {
+        action: 'explain_selection',
+        promptKind: 'preset'
+    });
+
+    assert.strictEqual(payload.surface, 'selection_popover', '选中文本工具必须走 selection_popover');
+    assert.strictEqual(payload.selectedContext.scope, 'question', '题目区选中文本必须标记 question scope');
+    assert.deepStrictEqual(Array.from(payload.selectedContext.questionNumbers), ['12', '11'], '选中文本上下文必须携带直接题号和题组题号');
+    assert.deepStrictEqual(Array.from(payload.focusQuestionNumbers), ['12', '11'], '选区题号必须优先于旧错题焦点');
+}
+
+function testSelectionCoachPayloadCarriesPassageParagraphContext() {
+    const paragraphWrapper = {
+        dataset: {},
+        textContent: 'B Tea consumption spread throughout Chinese culture.',
+        getAttribute() { return null; },
+        querySelector(selector) {
+            if (selector === '[data-paragraph]') {
+                return { dataset: { paragraph: 'B' } };
+            }
+            return null;
+        },
+        closest(selector) {
+            if (selector === '[data-paragraph], .paragraph-wrapper') {
+                return paragraphWrapper;
+            }
+            return null;
+        }
+    };
+    const textNode = { nodeType: 3, parentElement: paragraphWrapper };
+    const harness = createHarness({
+        runtime: 'web',
+        leftContains: (node) => node === paragraphWrapper,
+        getSelection: () => ({
+            toString: () => 'Tea consumption spread throughout Chinese culture.',
+            anchorNode: textNode,
+            focusNode: textNode
+        })
+    });
+
+    const payload = harness.hooks.buildReadingCoachRequestPayload('定位这段证据', {
+        action: 'locate_evidence',
+        promptKind: 'preset'
+    });
+
+    assert.strictEqual(payload.surface, 'selection_popover', '原文选中文本工具必须走 selection_popover');
+    assert.strictEqual(payload.selectedContext.scope, 'passage', '原文选中文本必须标记 passage scope');
+    assert.deepStrictEqual(Array.from(payload.selectedContext.paragraphLabels), ['B'], '选中文本上下文必须携带段落 label');
 }
 
 function testHighlightHelpers() {
@@ -426,6 +566,8 @@ async function main() {
         await testCoachQueryViaElectronLocalApi();
         await testCoachQueryViaLocalApiSse();
         await testReviewPayloadUsesExplicitReviewWorkspaceOnly();
+        testSelectionCoachPayloadCarriesQuestionContext();
+        testSelectionCoachPayloadCarriesPassageParagraphContext();
         testHighlightHelpers();
         testMarkedQuestionsContractLivesInUnifiedPage();
         console.log(JSON.stringify({

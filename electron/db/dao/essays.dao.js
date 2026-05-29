@@ -47,7 +47,7 @@ class EssaysDAO {
             }
             if (filters.search && String(filters.search).trim().length > 0) {
                 const keyword = `%${String(filters.search).trim()}%`;
-                conditions.push('(t.title_json LIKE ? OR e.content LIKE ? OR e.evaluation_json LIKE ?)');
+                conditions.push('(t.title_json LIKE ? OR e.topic_text LIKE ? OR e.content LIKE ?)');
                 params.push(keyword, keyword, keyword);
             }
 
@@ -64,11 +64,23 @@ class EssaysDAO {
             `;
             const { total } = this.db.prepare(countSql).get(...params);
 
-            // 分页查询（包含题目标题）
+            // 分页查询只返回历史列表摘要；正文与评测 JSON 只允许详情/导出路径读取。
             const offset = (pagination.page - 1) * pagination.limit;
             const listSql = `
                 SELECT 
-                    e.*,
+                    e.id,
+                    e.topic_id,
+                    e.topic_text,
+                    e.task_type,
+                    e.word_count,
+                    e.llm_provider,
+                    e.model_name,
+                    e.total_score,
+                    e.task_achievement,
+                    e.coherence_cohesion,
+                    e.lexical_resource,
+                    e.grammatical_range,
+                    e.submitted_at,
                     t.title_json as topic_title
                 FROM essays e
                 LEFT JOIN topics t ON e.topic_id = t.id
@@ -118,6 +130,7 @@ class EssaysDAO {
      */
     create({
         topic_id,
+        topic_text,
         task_type,
         content,
         word_count,
@@ -133,14 +146,15 @@ class EssaysDAO {
         try {
             const result = this.db.prepare(`
                 INSERT INTO essays (
-                    topic_id, task_type, content, word_count,
+                    topic_id, topic_text, task_type, content, word_count,
                     llm_provider, model_name,
                     total_score, task_achievement, coherence_cohesion,
                     lexical_resource, grammatical_range,
                     evaluation_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
                 topic_id || null,
+                topic_text || null,
                 task_type,
                 content,
                 word_count,
@@ -273,7 +287,14 @@ class EssaysDAO {
                     AVG(grammatical_range) as average_grammatical_range,
                     COUNT(*) as count
                 FROM (
-                    SELECT * FROM essays
+                    SELECT
+                        total_score,
+                        task_achievement,
+                        coherence_cohesion,
+                        lexical_resource,
+                        grammatical_range,
+                        submitted_at
+                    FROM essays
                     ${whereClause}
                     ORDER BY submitted_at DESC
                     ${limitClause}
@@ -321,7 +342,7 @@ class EssaysDAO {
             }
             if (filters.search && String(filters.search).trim().length > 0) {
                 const keyword = `%${String(filters.search).trim()}%`;
-                conditions.push('(t.title_json LIKE ? OR e.content LIKE ? OR e.evaluation_json LIKE ?)');
+                conditions.push('(t.title_json LIKE ? OR e.topic_text LIKE ? OR e.content LIKE ?)');
                 params.push(keyword, keyword, keyword);
             }
 
@@ -331,8 +352,10 @@ class EssaysDAO {
 
             const sql = `
                 SELECT 
+                    e.topic_id,
                     e.submitted_at,
                     e.task_type,
+                    e.topic_text,
                     t.title_json as topic_title,
                     e.word_count,
                     e.total_score,
@@ -340,8 +363,7 @@ class EssaysDAO {
                     e.coherence_cohesion,
                     e.lexical_resource,
                     e.grammatical_range,
-                    e.model_name,
-                    e.evaluation_json
+                    e.model_name
                 FROM essays e
                 LEFT JOIN topics t ON e.topic_id = t.id
                 ${whereClause}

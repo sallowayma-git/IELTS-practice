@@ -955,11 +955,11 @@ python3 developer/tests/e2e/phase05_upload_flow_e2e.py --port 3000
 - **根因**：E2E 测试脚本是独立的 Python 进程，无法通过 IPC 获取端口信息
 - **修复建议**：服务器启动后将端口写入文件（如 `~/.ielts-practice/api-port.json`）
 
-#### 问题 #3：test_api_runner.js 与生产代码端口配置不一致（P1）
-- **文件**：[`electron/test_api_runner.js:66-85`](electron/test_api_runner.js:66)
-- **现象**：测试运行器硬编码端口 3000，与生产代码的动态端口逻辑不同
-- **根因**：测试运行器重写了 start 方法，使用固定端口 3000
-- **修复建议**：统一端口配置机制
+#### 问题 #3：独立 API 调试运行器与生产代码端口配置不一致（P1）
+- **文件**：已废弃的 Electron 独立 API 调试运行器；该脚本已在后续重构中删除
+- **现象**：调试运行器曾硬编码端口 3000，与生产代码的动态端口逻辑不同
+- **根因**：调试运行器重写了 start 方法，使用固定端口 3000
+- **修复建议**：统一端口配置机制；后续以本地 API 服务和 CI 契约测试为准
 
 #### 问题 #4：缺少端口发现机制（P1）
 - **文件**：多个测试脚本
@@ -979,7 +979,7 @@ python3 developer/tests/e2e/phase05_upload_flow_e2e.py --port 3000
 |------|------|------|------|------|
 | 1 | 端口动态分配与测试期望不匹配 | P0 | `electron/local-api-server.js:36` | 待修复 |
 | 2 | 端口信息传递机制存在但未被测试利用 | P1 | `electron/main.js`, `ipc-handlers.js`, `preload.js` | 待修复 |
-| 3 | test_api_runner.js 与生产代码端口配置不一致 | P1 | `electron/test_api_runner.js:66-85` | 待修复 |
+| 3 | 独立 API 调试运行器与生产代码端口配置不一致 | P1 | 已废弃调试脚本 | 已删除 |
 | 4 | 缺少端口发现机制 | P1 | 多个测试脚本 | 待修复 |
 | 5 | 文档与实际行为不一致 | P2 | `developer/docs/chat.md:823-828` | 待修复 |
 
@@ -998,7 +998,7 @@ python3 developer/tests/e2e/phase05_upload_flow_e2e.py --port 3000
 **给开发 AI 的修复建议**
 
 - 优先修复 P0 问题：将 `listen(0)` 改为 `listen(3000)`
-- 同步更新 test_api_runner.js 保持一致
+- 同步更新或删除独立调试运行器，避免与生产端口策略分叉
 - 考虑添加端口配置文件机制以支持未来扩展
 
 **注意**：本汇报仅记录问题分析结果，不执行代码修正。
@@ -1017,8 +1017,8 @@ python3 developer/tests/e2e/phase05_upload_flow_e2e.py --port 3000
    - 结果：`/health` 可在 `127.0.0.1:3000` 访问，E2E 不再被动态端口阻塞
 
 2. **测试运行器与生产逻辑对齐（已完成）**
-   - 文件：`electron/test_api_runner.js`
-   - 修复：删除自定义 `server.start` 覆盖，改为直接复用 `LocalApiServer.start()`
+   - 文件：已废弃的 Electron 独立 API 调试运行器
+   - 修复：先删除自定义 `server.start` 覆盖，后续重构中直接删除该独立调试脚本
    - 结果：消除“测试固定端口、生产动态端口”分叉
 
 3. **补充修复：上传删除文件残留（已完成）**
@@ -1426,7 +1426,7 @@ python3 developer/tests/e2e/phase05_upload_flow_e2e.py --port 3000
 1. **代码修改（已完成）**
    - 修改 `electron/services/upload.service.js` 构造函数，支持传入 `app` 对象或 `userDataPath` 字符串
    - 更新 `electron/ipc-handlers.js` 传入 `app` 对象
-   - 更新 `electron/test_api_runner.js` 传入 `mockUserDataPath`
+   - 更新当时的独立 API 调试运行器传入 `mockUserDataPath`；后续重构中该调试脚本已删除
    - 目的：使 UploadService 可在独立 Node.js 环境实例化（用于测试）
 
 2. **证据链完整性**
@@ -1466,4 +1466,3 @@ python3 developer/tests/e2e/phase05_upload_flow_e2e.py --port 3000
 - 报告已产出并包含硬证据字段 ✅
 
 ---
-

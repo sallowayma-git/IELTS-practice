@@ -24,7 +24,9 @@ const ReadingCoachService = require(path.join(repoRoot, 'electron/services/readi
 const {
     classifyReadingRoute,
     classifyReadingIntent,
-    resolveReadingContextRoute
+    resolveReadingContextRoute,
+    isReviewCoachRequest,
+    isPersistentReviewCoachRequest
 } = require(path.join(repoRoot, 'server/dist/lib/reading/router.js'));
 const {
     buildReadingCoachPrompt,
@@ -39,6 +41,10 @@ const {
     resolveReadingResponseKind,
     buildReadingRetrievalDiagnostics
 } = require(path.join(repoRoot, 'server/dist/lib/reading/contracts.js'));
+const {
+    parseReadingExamDataSource,
+    parseReadingExplanationDataSource
+} = require(path.join(repoRoot, 'server/dist/lib/shared/reading-generated-data.js'));
 
 const ROUTES = READING_ROUTES;
 const CONTEXT_ROUTES = READING_CONTEXT_ROUTES;
@@ -52,6 +58,48 @@ const ROUTER_FIXTURES = Object.freeze({
     wholeSetPatterns: [/整组|整篇|全文|这组题|全部题目|所有题|一起讲|整体思路|总览|复盘|错题|review\s+all|whole\s+set|all\s+questions|my\s+mistakes/i],
     questionRefPatternGlobal: /(?:第\s*(\d+)\s*题)|(?:question\s*(\d+))|(?:\bq(\d+)\b)|(?:paragraph\s*([a-h]))|(?:段落\s*([a-h]))/ig
 });
+
+function readRepo(relativePath) {
+    return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
+}
+
+function testReadingCoachGeneratedDataIsVmFree() {
+    const coachSource = readRepo('server/src/lib/reading/coach-service.ts');
+    const sharedSource = readRepo('server/src/lib/shared/reading-generated-data.ts');
+    const cacheSource = readRepo('server/src/lib/shared/cache.ts');
+    assert.ok(coachSource.includes("require('../shared/reading-generated-data.js')"), 'ReadingCoachService 必须复用 shared reading generated parser');
+    assert.ok(coachSource.includes("require('../shared/cache.js')"), 'ReadingCoachService 必须复用 shared bounded cache helper');
+    assert.ok(coachSource.includes('parseReadingExamDataSource'), 'ReadingCoachService 必须通过 parser 读取 exam data');
+    assert.ok(coachSource.includes('parseReadingExplanationDataSource'), 'ReadingCoachService 必须通过 parser 读取 explanation data');
+    assert.ok(coachSource.includes('const EXAM_BUNDLE_CACHE_LIMIT = 12'), 'ReadingCoachService exam bundle cache 必须有固定上限');
+    assert.ok(coachSource.includes('const QUERY_CACHE_LIMIT = 64'), 'ReadingCoachService query cache 必须有固定上限');
+    assert.ok(coachSource.includes('touchCacheEntry(this.examBundleCache, examId)'), 'ReadingCoachService exam bundle cache 命中必须刷新 LRU');
+    assert.ok(coachSource.includes('setBoundedCacheEntry(this.examBundleCache, examId, bundle, EXAM_BUNDLE_CACHE_LIMIT)'), 'ReadingCoachService exam bundle cache 写入必须有界');
+    assert.ok(coachSource.includes('setBoundedCacheEntry(this.queryCache, key'), 'ReadingCoachService query cache 写入必须有界');
+    assert.ok(!coachSource.includes("require('vm')"), 'ReadingCoachService 不得重新引入 VM');
+    assert.ok(!coachSource.includes('runInNewContext'), 'ReadingCoachService 不得执行 generated JS');
+    assert.ok(sharedSource.includes('__READING_EXAM_DATA__'), 'shared parser 必须覆盖 exam registry');
+    assert.ok(sharedSource.includes('__READING_EXPLANATION_DATA__'), 'shared parser 必须覆盖 explanation registry');
+    assert.ok(cacheSource.includes('export function touchCacheEntry'), 'shared cache 必须导出 LRU touch helper');
+    assert.ok(cacheSource.includes('export function setBoundedCacheEntry'), 'shared cache 必须导出 bounded set helper');
+    assert.ok(cacheSource.includes('while (cache.size > normalizedLimit)'), 'shared cache 必须执行容量淘汰');
+}
+
+function testReadingGeneratedDataParsers() {
+    const examSource = readRepo('assets/generated/reading-exams/p1-high-01.js');
+    const explanationSource = readRepo('assets/generated/reading-explanations/p1-high-01.js');
+    const exam = parseReadingExamDataSource(examSource);
+    const explanation = parseReadingExplanationDataSource(explanationSource);
+
+    assert.strictEqual(exam.key, 'p1-high-01', 'exam parser 必须提取 register key');
+    assert.strictEqual(exam.payload.examId, 'p1-high-01', 'exam parser 必须保留原始 examId');
+    assert.ok(Array.isArray(exam.payload.questionGroups) && exam.payload.questionGroups.length > 0, 'exam parser 必须保留 questionGroups');
+    assert.ok(exam.payload.answerKey && exam.payload.answerKey.q1, 'exam parser 必须保留 answerKey');
+    assert.strictEqual(explanation.key, 'p1-high-01', 'explanation parser 必须提取 register key');
+    assert.strictEqual(explanation.payload.examId, 'p1-high-01', 'explanation parser 必须保留原始 examId');
+    assert.ok(Array.isArray(explanation.payload.questionExplanations), 'explanation parser 必须保留 questionExplanations');
+    assert.ok(explanation.payload.questionExplanations.length > 0, 'explanation parser 必须保留解析条目');
+}
 
 async function testCoachQuerySuccessWithGroundedRetrieval() {
     const service = new ReadingCoachService({});
@@ -144,6 +192,85 @@ async function testReadingContractsBuildStableDiagnostics() {
     assert.strictEqual(diagnostics.cacheHit, false, '默认诊断不应标记缓存命中');
 }
 
+async function testSelectedContextDrivesSelectionRetrievalAndPrompt() {
+    const service = new ReadingCoachService({});
+    let capturedMessages = null;
+    service.providerOrchestrator = {
+        async streamCompletion(options = {}) {
+            capturedMessages = options.messages;
+            if (typeof options.onChunk === 'function') {
+                options.onChunk(JSON.stringify({
+                    answer: '选中的句子对应第 12 题和 B 段，需要回到原文限定词。',
+                    answerSections: [
+                        { type: 'direct_answer', text: '选中的句子对应第 12 题和 B 段，需要回到原文限定词。' },
+                        { type: 'evidence', text: '优先核对 B 段和 Q12 的题干关系。' }
+                    ],
+                    followUps: ['继续解释 Q12', '只看 B 段证据'],
+                    confidence: 'high',
+                    missingContext: []
+                }));
+            }
+            return {
+                usedConfig: { id: 1, provider: 'openai', default_model: 'gpt-test' },
+                providerPath: [{ provider: 'openai', model: 'gpt-test', status: 'success' }]
+            };
+        }
+    };
+
+    const result = await service.query({
+        examId: 'p1-high-01',
+        sessionId: 'reading-session-meta-1',
+        mode: 'review',
+        query: '解释选中的句子',
+        action: 'explain_selection',
+        surface: 'selection_popover',
+        promptKind: 'preset',
+        selectedContext: {
+            text: 'Animals were involved in importing tea.',
+            scope: 'question',
+            questionNumbers: ['q12'],
+            paragraphLabels: ['B']
+        },
+        attemptContext: {
+            submitted: true,
+            analysisSignals: {
+                unansweredCount: 2,
+                changedAnswerCount: 3,
+                markedQuestionCount: 1
+            },
+            markedQuestions: ['q12'],
+            questionTimelineLite: [
+                { questionId: 'q12', displayLabel: '12', changeCount: 2, visitCount: 4, elapsedMs: 15000 }
+            ],
+            questionTypePerformance: {
+                matching: { total: 4, correct: 2, accuracy: 0.5 }
+            }
+        }
+    });
+
+    const promptJoined = Array.isArray(capturedMessages)
+        ? capturedMessages.map((item) => String(item?.content || '')).join('\n')
+        : '';
+    assert.strictEqual(result.contextRoute, CONTEXT_ROUTES.SELECTION, '选中文本工具必须进入 selection contextRoute');
+    assert.strictEqual(result.intent.kind, INTENTS.SELECTION_TOOL_REQUEST, '选中文本工具必须识别为 selection tool request');
+    assert.deepStrictEqual(result.retrievalDiagnostics.focusQuestionNumbers, ['12'], 'selectedContext 题号必须进入 retrieval focus');
+    assert.ok(result.retrievalDiagnostics.focusParagraphLabels.includes('B'), 'selectedContext 段落必须进入 retrieval focus');
+    assert.ok(promptJoined.includes('scope: question'), 'prompt 必须保留 selectedContext scope');
+    assert.ok(promptJoined.includes('questionNumbers: q12') || promptJoined.includes('questionNumbers: 12'), 'prompt 必须保留 selectedContext questionNumbers');
+    assert.ok(promptJoined.includes('paragraphLabels: B'), 'prompt 必须保留 selectedContext paragraphLabels');
+    assert.ok(promptJoined.includes('sessionId: reading-session-meta-1'), 'prompt 必须保留 sessionId');
+    assert.ok(promptJoined.includes('mode: review'), 'prompt 必须保留 mode');
+    assert.ok(promptJoined.includes('surface: selection_popover'), 'prompt 必须保留 surface');
+    assert.ok(promptJoined.includes('action: explain_selection'), 'prompt 必须保留 action');
+    assert.ok(promptJoined.includes('promptKind: preset'), 'prompt 必须保留 promptKind');
+    assert.ok(promptJoined.includes('changedAnswerCount=3'), 'prompt 必须保留 analysisSignals');
+    assert.ok(promptJoined.includes('markedQuestions: q12'), 'prompt 必须保留 markedQuestions');
+    assert.ok(promptJoined.includes('Q12:changes=2,visits=4,elapsedMs=15000'), 'prompt 必须保留 questionTimelineLite');
+    assert.ok(promptJoined.includes('matching:2/4(50%)'), 'prompt 必须保留 questionTypePerformance');
+    assert.ok(promptJoined.includes('focusQuestionNumbers: 12'), 'retrieval summary 必须包含 selectedContext 题号');
+    assert.ok(promptJoined.includes('focusParagraphLabels: B'), 'retrieval summary 必须包含 selectedContext 段落');
+}
+
 async function testCoachCacheHitKeepsDiagnosticsContract() {
     const service = new ReadingCoachService({});
     let calls = 0;
@@ -188,6 +315,84 @@ async function testCoachCacheHitKeepsDiagnosticsContract() {
     assert.deepStrictEqual(second.contextDiagnostics.finalChunkTypeCounts, first.contextDiagnostics.finalChunkTypeCounts, '缓存响应不得丢失 chunk 类型统计');
 }
 
+async function testCoachQueryCacheRemainsBounded() {
+    const service = new ReadingCoachService({});
+    let calls = 0;
+    service.providerOrchestrator = {
+        async streamCompletion(options = {}) {
+            calls += 1;
+            if (typeof options.onChunk === 'function') {
+                options.onChunk(JSON.stringify({
+                    answer: `缓存容量测试回答 ${calls}。`,
+                    answerSections: [{ type: 'direct_answer', text: `缓存容量测试回答 ${calls}。` }],
+                    followUps: ['继续练习'],
+                    confidence: 'medium',
+                    missingContext: []
+                }));
+            }
+            return { usedConfig: null, providerPath: [] };
+        }
+    };
+
+    const payload = {
+        examId: 'p1-high-01',
+        query: '你好',
+        action: 'chat',
+        surface: 'chat_widget',
+        promptKind: 'cache-key-0',
+        attemptContext: { submitted: true }
+    };
+    await service.query(payload);
+    await service.query(payload);
+    assert.strictEqual(calls, 1, '相同 query cache key 必须命中缓存');
+
+    const limit = service.getCacheStats().queryLimit;
+    for (let index = 1; index < limit + 8; index += 1) {
+        await service.query({
+            ...payload,
+            promptKind: `cache-key-${index}`
+        });
+    }
+
+    const stats = service.getCacheStats();
+    assert.strictEqual(stats.queryLimit, 64, 'query cache 上限必须固定为 64');
+    assert.ok(stats.queryEntries <= stats.queryLimit, 'query cache 不能无界增长');
+    assert.strictEqual(stats.queryEntries, stats.queryLimit, '超过上限后 query cache 应保持满容量');
+
+    const callsBeforeReload = calls;
+    await service.query(payload);
+    assert.strictEqual(calls, callsBeforeReload + 1, '最老 query cache entry 被淘汰后应重新请求模型');
+}
+
+async function testCoachExamBundleCacheRemainsBounded() {
+    const service = new ReadingCoachService({});
+    service.clearCaches();
+    const examDir = path.join(repoRoot, 'assets', 'generated', 'reading-exams');
+    const examIds = fs.readdirSync(examDir)
+        .filter((fileName) => fileName.endsWith('.js') && fileName !== 'manifest.js')
+        .map((fileName) => fileName.replace(/\.js$/, ''))
+        .sort();
+    const limit = service.getCacheStats().examBundleLimit;
+    assert.ok(examIds.length > limit + 4, '生成题库数量必须足以验证 bundle cache 淘汰');
+
+    const firstBundle = await service._loadExamBundle(examIds[0]);
+    assert.strictEqual(await service._loadExamBundle(examIds[0]), firstBundle, '相同 examId 必须复用 bundle cache');
+
+    for (const examId of examIds.slice(1, limit + 5)) {
+        await service._loadExamBundle(examId);
+    }
+
+    const stats = service.getCacheStats();
+    assert.strictEqual(stats.examBundleLimit, 12, 'exam bundle cache 上限必须固定为 12');
+    assert.ok(stats.examBundleEntries <= stats.examBundleLimit, 'exam bundle cache 不能无界增长');
+    assert.strictEqual(stats.examBundleEntries, stats.examBundleLimit, '超过上限后 exam bundle cache 应保持满容量');
+    assert.ok(!stats.examIds.includes(examIds[0]), '最老 exam bundle cache entry 必须被淘汰');
+
+    const reloadedFirstBundle = await service._loadExamBundle(examIds[0]);
+    assert.notStrictEqual(reloadedFirstBundle, firstBundle, '被淘汰的 exam bundle 再次加载时应重新解析');
+    assert.ok(Array.isArray(reloadedFirstBundle.chunks) && reloadedFirstBundle.chunks.length > 0, '重新解析的 bundle 仍必须保留检索 chunks');
+}
+
 async function testCoachReviewPromptCarriesMistakeContext() {
     const service = new ReadingCoachService({});
     let capturedMessages = null;
@@ -203,7 +408,20 @@ async function testCoachReviewPromptCarriesMistakeContext() {
                     ],
                     followUps: ['这题证据在哪段', '我下次怎么排除'],
                     confidence: 'high',
-                    missingContext: []
+                    missingContext: [],
+                    reviewOverall: {
+                        primaryWeakness: '定位后没有复核题干限定条件。',
+                        patternSummary: '用户先匹配局部词，再判断选项，缺少二次核对。',
+                        teachingPlan: '每题先写题干约束，再回原文验证同义替换。'
+                    },
+                    reviewQuestionAnalyses: [{
+                        questionNumber: '1',
+                        likelyMistake: '把局部关键词当成完整证据。',
+                        whyUserChoseWrong: 'A 看起来和原文词汇相近，但没有覆盖题干限制。',
+                        whyCorrectAnswerWorks: '正确答案同时满足题干约束和段落证据。',
+                        whyWrongAnswerFails: '错误答案只命中局部信息。',
+                        nextRule: '定位后必须回到题干检查限定词。'
+                    }]
                 }));
             }
             return {
@@ -221,7 +439,18 @@ async function testCoachReviewPromptCarriesMistakeContext() {
         attemptContext: {
             submitted: true,
             wrongQuestions: ['1'],
-            selectedAnswers: { 1: 'A' }
+            selectedAnswers: { 1: 'A' },
+            markedQuestions: ['q1'],
+            questionTimelineLite: [
+                { questionId: 'q1', displayLabel: '1', changeCount: 2, visitCount: 3, elapsedMs: 12000 }
+            ],
+            questionTypePerformance: {
+                matching: { total: 4, correct: 2, accuracy: 0.5 }
+            },
+            analysisSignals: {
+                changedAnswerCount: 2,
+                markedQuestionCount: 1
+            }
         }
     });
 
@@ -231,7 +460,77 @@ async function testCoachReviewPromptCarriesMistakeContext() {
     assert.ok(promptJoined.includes('selectedAnswers: Q1=A'), '复盘提示词应包含用户作答');
     assert.ok(promptJoined.includes('[Review 1]'), '复盘提示词应包含结构化错题块');
     assert.ok(promptJoined.includes('correctAnswer:'), '复盘提示词应包含标准答案');
+    assert.ok(promptJoined.includes('passageEvidence1:'), '复盘提示词应包含每题原文证据');
+    assert.ok(promptJoined.includes('attemptSignals: marked=true'), '复盘提示词应包含每题标记状态');
+    assert.ok(promptJoined.includes('timeline=changes=2'), '复盘提示词应包含每题作答轨迹');
+    assert.ok(promptJoined.includes('visits=3'), '复盘提示词应包含题目访问次数');
+    assert.ok(promptJoined.includes('elapsedMs=12000'), '复盘提示词应包含题目停留时长');
+    assert.ok(promptJoined.includes('matching:2/4(50%)'), '复盘提示词应包含题型表现摘要');
+    assert.ok(promptJoined.includes('changedAnswerCount=2'), '复盘提示词应包含分析信号摘要');
     assert.deepStrictEqual(result.contextDiagnostics.focusQuestionNumbers, ['1'], '复盘检索应优先聚焦错题题号');
+}
+
+async function testReviewTargetsIgnoreNonWrongSelectedAnswers() {
+    const service = new ReadingCoachService({});
+    let capturedMessages = null;
+    service.providerOrchestrator = {
+        async streamCompletion(options = {}) {
+            capturedMessages = options.messages;
+            if (typeof options.onChunk === 'function') {
+                options.onChunk(JSON.stringify({
+                    answer: '只复盘错题，不把全量作答误当成复盘目标。',
+                    answerSections: [
+                        { type: 'direct_answer', text: '只复盘错题，不把全量作答误当成复盘目标。' }
+                    ],
+                    followUps: ['继续看 Q1'],
+                    confidence: 'high',
+                    missingContext: [],
+                    reviewOverall: {
+                        primaryWeakness: '错题定位后没有复核题干限定条件。',
+                        patternSummary: '复盘目标应来自错题和显式焦点。',
+                        teachingPlan: '先处理错题，再按需扩展到整篇。'
+                    },
+                    reviewQuestionAnalyses: [{
+                        questionNumber: '1',
+                        likelyMistake: '把局部关键词当成完整证据。',
+                        whyUserChoseWrong: 'A 看起来和原文词汇相近，但没有覆盖题干限制。',
+                        whyCorrectAnswerWorks: '正确答案同时满足题干约束和段落证据。',
+                        whyWrongAnswerFails: '错误答案只命中局部信息。',
+                        nextRule: '定位后必须回到题干检查限定词。'
+                    }]
+                }));
+            }
+            return {
+                usedConfig: { id: 1, provider: 'openai', default_model: 'gpt-test' },
+                providerPath: [{ provider: 'openai', model: 'gpt-test', status: 'success' }]
+            };
+        }
+    };
+
+    const selectedAnswers = Object.fromEntries(
+        Array.from({ length: 13 }, (_, index) => [String(index + 1), index === 0 ? 'A' : 'B'])
+    );
+    const result = await service.query({
+        examId: 'p1-high-01',
+        query: '请复盘我的错题',
+        action: 'review_set',
+        promptKind: 'preset',
+        attemptContext: {
+            submitted: true,
+            wrongQuestions: ['1'],
+            selectedAnswers
+        }
+    });
+
+    const promptJoined = Array.isArray(capturedMessages)
+        ? capturedMessages.map((item) => String(item?.content || '')).join('\n')
+        : '';
+    assert.ok(promptJoined.includes('selectedAnswers: Q1=A'), '复盘提示词仍应保留全量作答材料');
+    assert.ok(promptJoined.includes('Q13=B'), '复盘提示词仍应保留后段作答材料');
+    assert.ok(promptJoined.includes('[Review 1]'), '复盘目标必须包含错题 Q1');
+    assert.ok(!promptJoined.includes('[Review 2]'), '复盘目标不能被非错题 selectedAnswers 扩大到 Q2');
+    assert.ok(!promptJoined.includes('[Review 13]'), '复盘目标不能被非错题 selectedAnswers 扩大到全篇');
+    assert.deepStrictEqual(result.contextDiagnostics.focusQuestionNumbers, ['1'], '检索焦点只能来自错题和显式焦点');
 }
 
 async function testCoachQueryInvalidPayloadThrows() {
@@ -388,6 +687,41 @@ async function testReadingKernelModulesKeepContracts() {
         contextRoutes: CONTEXT_ROUTES,
         intents: INTENTS
     }), CONTEXT_ROUTES.REVIEW, '错题复盘必须使用 review contextRoute');
+    assert.strictEqual(isReviewCoachRequest({ action: 'recommend_drills' }), true, 'recommend_drills 必须进入 review 检索语义');
+    assert.strictEqual(isPersistentReviewCoachRequest({ action: 'recommend_drills' }), false, 'recommend_drills 不应覆盖持久复盘补丁');
+    assert.strictEqual(isPersistentReviewCoachRequest({ surface: 'review_workspace', action: 'chat' }), true, 'review_workspace 必须复用持久复盘谓词');
+
+    const workspacePayload = {
+        query: '继续复盘我的本次表现',
+        action: 'chat',
+        surface: 'review_workspace',
+        selectedText: '',
+        focusQuestionNumbers: [],
+        attemptContext: {
+            submitted: true,
+            wrongQuestions: ['27'],
+            selectedAnswers: { 27: 'A' }
+        }
+    };
+    const workspaceRoute = classifyReadingRoute(workspacePayload, {
+        routes: ROUTES,
+        socialPatterns: ROUTER_FIXTURES.socialPatterns,
+        weatherTimePatterns: ROUTER_FIXTURES.weatherTimePatterns,
+        ieltsGeneralPatterns: ROUTER_FIXTURES.ieltsGeneralPatterns,
+        pageGroundedHints: ROUTER_FIXTURES.pageGroundedHints
+    });
+    const workspaceIntent = classifyReadingIntent(workspacePayload, workspaceRoute.route, {
+        routes: ROUTES,
+        intents: INTENTS,
+        socialPatterns: ROUTER_FIXTURES.socialPatterns,
+        wholeSetPatterns: ROUTER_FIXTURES.wholeSetPatterns,
+        questionRefPatternGlobal: ROUTER_FIXTURES.questionRefPatternGlobal
+    });
+    assert.strictEqual(workspaceIntent.kind, INTENTS.REVIEW_COACH_REQUEST, 'review_workspace 即使 action=chat 也必须进入 review coach intent');
+    assert.strictEqual(resolveReadingContextRoute(workspacePayload, workspaceIntent, {
+        contextRoutes: CONTEXT_ROUTES,
+        intents: INTENTS
+    }), CONTEXT_ROUTES.REVIEW, 'review_workspace 即使 action=chat 也必须使用 review contextRoute');
 
     const messages = buildReadingCoachPrompt({
         payload: {
@@ -443,6 +777,7 @@ async function testReadingKernelModulesKeepContracts() {
     assert.ok(required.includes('reviewQuestionAnalyses'), 'review schema 必须强制逐题分析模块');
     const sectionTypeEnum = reviewFormat.json_schema.schema.properties.answerSections.items.properties.type.enum;
     assert.ok(!sectionTypeEnum.includes('evidence'), 'review schema 不应允许 evidence 段作为主输出');
+    assert.strictEqual(reviewFormat.json_schema.schema.properties.reviewQuestionAnalyses.minItems, 1, 'review schema 必须至少要求一条逐题分析');
 
     const parsed = normalizeReadingCoachModelResponse('```json\n{"answer":"ok","answerSections":[{"type":"direct_answer","text":"ok"}],"followUps":[],"confidence":"high","missingContext":[]}\n```');
     assert.strictEqual(parsed.confidence, 'high', 'response normalizer 应解析 fenced JSON');
@@ -471,6 +806,63 @@ async function testReadingKernelModulesKeepContracts() {
     assert.strictEqual(parsedReview.reviewOverall.primaryWeakness, '你容易把局部词匹配当成答案依据，忽略题干限制条件。', 'normalizer 应保留 reviewOverall');
     assert.strictEqual(parsedReview.reviewQuestionAnalyses[0].questionNumber, '27', 'normalizer 应规范化 Q 前缀题号');
     assert.ok(parsedReview.missingContext[0].includes('缺少原文证据与官方解析'), 'normalizer 应保留证据不足披露');
+}
+
+function testReviewResponseNormalizerRejectsNonReviewShape() {
+    assert.throws(
+        () => normalizeReadingCoachModelResponse(JSON.stringify({
+            answer: '这只是普通讲题，不是整组复盘。',
+            answerSections: [{ type: 'direct_answer', text: '普通讲题。' }],
+            followUps: [],
+            confidence: 'medium',
+            missingContext: []
+        }), null, { requireReviewSchema: true }),
+        (error) => error?.code === 'coach_parse_failed' && /reviewOverall/.test(error.message),
+        'review_set 后处理必须拒绝缺少 reviewOverall 的响应'
+    );
+
+    assert.throws(
+        () => normalizeReadingCoachModelResponse(JSON.stringify({
+            answer: '错误地把证据段落作为主输出。',
+            answerSections: [{ type: 'evidence', text: '原文片段。' }],
+            followUps: [],
+            confidence: 'high',
+            missingContext: [],
+            reviewOverall: {
+                primaryWeakness: '只看局部证据。',
+                patternSummary: '缺少题干约束复核。',
+                teachingPlan: '先核题干再定位。'
+            },
+            reviewQuestionAnalyses: [{
+                questionNumber: '27',
+                likelyMistake: '只看局部证据。',
+                whyUserChoseWrong: '错误选项含有局部原文词。',
+                whyCorrectAnswerWorks: '正确答案回应完整题干。',
+                whyWrongAnswerFails: '错误答案没有覆盖限定条件。',
+                nextRule: '每题先写出题干限定。'
+            }]
+        }), null, { requireReviewSchema: true }),
+        (error) => error?.code === 'coach_parse_failed' && /evidence/.test(error.message),
+        'review_set 后处理必须拒绝 evidence 主输出'
+    );
+
+    assert.throws(
+        () => normalizeReadingCoachModelResponse(JSON.stringify({
+            answer: '只有总评，没有逐题错因。',
+            answerSections: [{ type: 'direct_answer', text: '只有总评。' }],
+            followUps: [],
+            confidence: 'medium',
+            missingContext: [],
+            reviewOverall: {
+                primaryWeakness: '只看局部证据。',
+                patternSummary: '缺少题干约束复核。',
+                teachingPlan: '先核题干再定位。'
+            },
+            reviewQuestionAnalyses: []
+        }), null, { requireReviewSchema: true }),
+        (error) => error?.code === 'coach_parse_failed' && /逐题分析/.test(error.message),
+        'review_set 后处理必须拒绝空逐题分析'
+    );
 }
 
 async function testSubmittedSingleQuestionQuestionStaysGrounded() {
@@ -560,7 +952,20 @@ async function testReviewRetrievalInjectsOriginalPassageChunks() {
                     ],
                     followUps: ['这题证据在哪段', '我下次怎么排除'],
                     confidence: 'high',
-                    missingContext: []
+                    missingContext: [],
+                    reviewOverall: {
+                        primaryWeakness: '复盘时容易只看解析，不回到原文主旨。',
+                        patternSummary: '错题集中在段落功能和选项范围判断。',
+                        teachingPlan: '先找原文转折和段落功能，再逐项排除局部真实选项。'
+                    },
+                    reviewQuestionAnalyses: [{
+                        questionNumber: '27',
+                        likelyMistake: '把细节词汇当成主旨判断。',
+                        whyUserChoseWrong: 'A 可能含有原文局部词，所以容易被吸引。',
+                        whyCorrectAnswerWorks: '正确答案覆盖段落主旨和转折后的重点。',
+                        whyWrongAnswerFails: '错误答案只对应局部信息。',
+                        nextRule: '主旨题先判断段落功能，再看选项。'
+                    }]
                 }));
             }
             return {
@@ -613,7 +1018,14 @@ async function testReviewFallsBackToWholePassageWhenAttemptContextIsThin() {
                         patternSummary: '题干、答案和原文已经进入上下文，可做结构性复盘。',
                         teachingPlan: '按题型分组核对定位和排除逻辑。'
                     },
-                    reviewQuestionAnalyses: []
+                    reviewQuestionAnalyses: [{
+                        questionNumber: '1',
+                        likelyMistake: '薄记录下先按题干和答案做结构性判断。',
+                        whyUserChoseWrong: '用户答案缺失，只能提示先恢复作答记录。',
+                        whyCorrectAnswerWorks: '标准答案和题干仍可用于建立复盘起点。',
+                        whyWrongAnswerFails: '缺少用户答案时不能推断具体误选诱因。',
+                        nextRule: '补齐作答记录后再做逐题错因归因。'
+                    }]
                 }));
             }
             return {
@@ -665,7 +1077,14 @@ async function testReviewMapsInternalQuestionIdsToDisplayQuestionNumbers() {
                         patternSummary: 'q1/q2 已对应到 Q27/Q28。',
                         teachingPlan: '按显示题号复盘。'
                     },
-                    reviewQuestionAnalyses: []
+                    reviewQuestionAnalyses: [{
+                        questionNumber: '27',
+                        likelyMistake: '内部题号和显示题号混用。',
+                        whyUserChoseWrong: '用户可能按页面显示题号提问。',
+                        whyCorrectAnswerWorks: '映射后才能把答案和题干对齐。',
+                        whyWrongAnswerFails: '直接使用内部 q1 会污染复盘定位。',
+                        nextRule: '所有复盘输出都使用页面显示题号。'
+                    }]
                 }));
             }
             return {
@@ -701,6 +1120,86 @@ async function testReviewMapsInternalQuestionIdsToDisplayQuestionNumbers() {
     assert.ok(promptJoined.includes('sneeze'), 'Q28 题干/选项上下文必须进入 prompt');
     assert.ok(!promptJoined.includes('questionNumber: Q1'), 'P3 显示题号不应退化为内部 Q1');
     assert.deepStrictEqual(result.contextDiagnostics.focusQuestionNumbers.slice(0, 2), ['27', '28'], '检索焦点必须使用显示题号');
+}
+
+async function testReviewCapacityCoversLongestGeneratedPassage() {
+    const service = new ReadingCoachService({});
+    const examDir = path.join(repoRoot, 'assets', 'generated', 'reading-exams');
+    const examIds = fs.readdirSync(examDir)
+        .filter((fileName) => fileName.endsWith('.js') && fileName !== 'manifest.js')
+        .map((fileName) => fileName.replace(/\.js$/, ''))
+        .sort();
+    let longest = { examId: '', questionCount: 0 };
+
+    for (const examId of examIds) {
+        const bundle = await service._loadExamBundle(examId);
+        const questionCount = Array.isArray(bundle.examDataset?.questionOrder)
+            ? bundle.examDataset.questionOrder.length
+            : 0;
+        if (questionCount > longest.questionCount) {
+            longest = { examId, questionCount };
+        }
+    }
+
+    assert.ok(longest.questionCount > 20, '测试题库必须覆盖超过 20 题的单篇，防止 reviewTargets 被静默截断');
+
+    let capturedMessages = null;
+    let capturedResponseFormat = null;
+    service.providerOrchestrator = {
+        async streamCompletion(options = {}) {
+            capturedMessages = options.messages;
+            capturedResponseFormat = options.response_format;
+            if (typeof options.onChunk === 'function') {
+                options.onChunk(JSON.stringify({
+                    answer: '长篇复盘需要完整覆盖所有显示题号。',
+                    answerSections: [
+                        { type: 'direct_answer', text: '长篇复盘需要完整覆盖所有显示题号。' }
+                    ],
+                    followUps: ['继续看最高风险题', '给我训练建议'],
+                    confidence: 'medium',
+                    missingContext: [],
+                    reviewOverall: {
+                        primaryWeakness: '长篇题目不能被固定 14/20 题上限截断。',
+                        patternSummary: '完整复盘要先覆盖全篇题号，再归纳错因模式。',
+                        teachingPlan: '按题号完整复盘后再做题型训练。'
+                    },
+                    reviewQuestionAnalyses: [{
+                        questionNumber: '1',
+                        likelyMistake: '容量上限过低会漏掉后段题目。',
+                        whyUserChoseWrong: '用户后段作答没有进入模型上下文。',
+                        whyCorrectAnswerWorks: '完整题号进入上下文后才能逐题归因。',
+                        whyWrongAnswerFails: '截断会把未分析题目误当成无问题。',
+                        nextRule: '复盘容量必须覆盖 IELTS Reading 全套 40 题边界。'
+                    }]
+                }));
+            }
+            return {
+                usedConfig: { id: 1, provider: 'openai', default_model: 'gpt-test' },
+                providerPath: [{ provider: 'openai', model: 'gpt-test', status: 'success' }]
+            };
+        }
+    };
+
+    await service.query({
+        examId: longest.examId,
+        query: '请复盘我本次错题，按优先级给出训练建议',
+        action: 'review_set',
+        promptKind: 'preset',
+        attemptContext: {
+            submitted: true,
+            wrongQuestions: [],
+            selectedAnswers: {}
+        }
+    });
+
+    const promptJoined = Array.isArray(capturedMessages)
+        ? capturedMessages.map((item) => String(item?.content || '')).join('\n')
+        : '';
+    assert.ok(promptJoined.includes(`[Review ${longest.questionCount}]`), `长篇 reviewTargets 必须覆盖 ${longest.examId} 的 ${longest.questionCount} 题`);
+    assert.ok(
+        capturedResponseFormat.json_schema.schema.properties.reviewQuestionAnalyses.maxItems >= longest.questionCount,
+        'review schema 必须允许当前题库最长单篇完整逐题分析'
+    );
 }
 
 async function testAllGeneratedReadingQuestionChunksAreResolvable() {
@@ -744,10 +1243,16 @@ async function testAllGeneratedReadingQuestionChunksAreResolvable() {
 
 async function main() {
     try {
+        testReadingCoachGeneratedDataIsVmFree();
+        testReadingGeneratedDataParsers();
         await testCoachQuerySuccessWithGroundedRetrieval();
         await testReadingContractsBuildStableDiagnostics();
+        await testSelectedContextDrivesSelectionRetrievalAndPrompt();
         await testCoachCacheHitKeepsDiagnosticsContract();
+        await testCoachQueryCacheRemainsBounded();
+        await testCoachExamBundleCacheRemainsBounded();
         await testCoachReviewPromptCarriesMistakeContext();
+        await testReviewTargetsIgnoreNonWrongSelectedAnswers();
         await testCoachQueryInvalidPayloadThrows();
         await testCoachProviderFailureShouldThrow();
         await testCoachRouteUnrelatedChat();
@@ -756,11 +1261,13 @@ async function main() {
         await testDisplayQuestionNumbersStayAlignedWithReviewRetrieval();
         await testGroupedQuestionExtractionDoesNotLeakNeighborQuestions();
         await testReadingKernelModulesKeepContracts();
+        testReviewResponseNormalizerRejectsNonReviewShape();
         await testSubmittedSingleQuestionQuestionStaysGrounded();
         await testAnalyzeMistakeActionWithSpecificQuestionStaysGrounded();
         await testReviewRetrievalInjectsOriginalPassageChunks();
         await testReviewFallsBackToWholePassageWhenAttemptContextIsThin();
         await testReviewMapsInternalQuestionIdsToDisplayQuestionNumbers();
+        await testReviewCapacityCoversLongestGeneratedPassage();
         await testAllGeneratedReadingQuestionChunksAreResolvable();
         console.log(JSON.stringify({
             status: 'pass',

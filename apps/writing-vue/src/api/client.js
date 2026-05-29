@@ -184,7 +184,7 @@ function buildQuery(params = {}) {
     return serialized ? `?${serialized}` : ''
 }
 
-async function request(path, options = {}) {
+export async function request(path, options = {}) {
     const {
         method = 'GET',
         query,
@@ -233,6 +233,132 @@ async function request(path, options = {}) {
     }
 
     return payload
+}
+
+function parseSseBlock(block, fallbackType = 'message') {
+    const lines = String(block || '').split('\n')
+    let eventName = ''
+    let dataLine = ''
+    lines.forEach((line) => {
+        if (line.startsWith('event:')) {
+            eventName = line.slice(6).trim()
+        } else if (line.startsWith('data:')) {
+            dataLine += line.slice(5).trim()
+        }
+    })
+
+    let parsed = {}
+    try {
+        parsed = dataLine ? JSON.parse(dataLine) : {}
+    } catch (_) {
+        parsed = {}
+    }
+    if (!parsed || typeof parsed !== 'object') {
+        parsed = {}
+    }
+    return {
+        event: eventName || fallbackType,
+        data: parsed
+    }
+}
+
+function buildStreamError(payload, fallbackCode, fallbackMessage) {
+    const errorLike = payload?.error && typeof payload.error === 'object'
+        ? payload.error
+        : payload
+    return normalizeClientError({
+        code: errorLike?.code || payload?.error || fallbackCode,
+        message: errorLike?.message || payload?.message || fallbackMessage
+    }, fallbackCode, fallbackMessage)
+}
+
+export async function requestEventStream(path, options = {}) {
+    const {
+        method = 'POST',
+        query,
+        body,
+        headers = {},
+        onEvent
+    } = options
+    const eventHandler = typeof onEvent === 'function' ? onEvent : null
+
+    const baseUrl = await resolveLocalApiBaseUrl()
+    let response
+    try {
+        response = await fetch(`${baseUrl}${path}${buildQuery(query)}`, {
+            method,
+            headers: body === undefined ? headers : {
+                'Content-Type': 'application/json',
+                ...headers
+            },
+            body: body === undefined ? undefined : JSON.stringify(normalizeJsonPayload(body))
+        })
+    } catch (error) {
+        throw normalizeClientError(error, 'network_error', '网络连接失败，请检查网络设置')
+    }
+
+    const contentType = String(response.headers.get('content-type') || '').toLowerCase()
+    if (!response.ok) {
+        const payload = contentType.includes('application/json')
+            ? await response.json().catch(() => ({}))
+            : await response.text().catch(() => '')
+        const error = buildStreamError(payload, `http_${response.status}`, `HTTP_${response.status}`)
+        error.statusCode = response.status
+        throw error
+    }
+
+    if (!contentType.includes('text/event-stream') || !response.body) {
+        const payload = contentType.includes('application/json')
+            ? await response.json().catch(() => ({}))
+            : await response.text().catch(() => '')
+        if (payload && typeof payload === 'object' && payload.success === false) {
+            throw buildStreamError(payload, 'server_error', '服务请求失败')
+        }
+        return payload && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload, 'data')
+            ? payload.data
+            : payload
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+    let finalData = null
+    let streamError = null
+
+    while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const blocks = buffer.split('\n\n')
+        buffer = blocks.pop() || ''
+        blocks.forEach((block) => {
+            const parsed = parseSseBlock(block)
+            if (eventHandler) {
+                try {
+                    eventHandler(parsed)
+                } catch (error) {
+                    console.warn('流式事件监听器执行失败:', error)
+                }
+            }
+            if (parsed.event === 'error') {
+                streamError = buildStreamError(parsed.data, 'stream_error', '流式请求失败')
+            }
+            if (parsed.event === 'complete') {
+                finalData = parsed.data?.data || parsed.data || null
+            }
+        })
+    }
+
+    if (streamError) {
+        throw streamError
+    }
+    if (!finalData || typeof finalData !== 'object') {
+        throw normalizeClientError({
+            code: 'invalid_response_format',
+            message: '流式返回缺少 complete 数据'
+        }, 'invalid_response_format', '流式返回缺少 complete 数据')
+    }
+    return finalData
 }
 
 function emitEvaluationEvent(event) {

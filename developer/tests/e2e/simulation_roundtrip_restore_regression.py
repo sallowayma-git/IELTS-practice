@@ -18,7 +18,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-INDEX_URL = (REPO_ROOT / "index.html").as_uri()
+# This is an explicit legacy suite regression. Normal product suite launches are
+# Vue-primary and must not silently fall back to the old popup surface.
+INDEX_URL = f"{(REPO_ROOT / 'index.html').as_uri()}?suite_test=1"
 TARGET_EXAMS = ["p1-low-67", "p2-low-148", "p3-high-32"]
 UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -69,6 +71,45 @@ async def wait_exam_change(page, old_exam_id: str, timeout_ms: int = 25000) -> s
 async def click_and_wait_change(page, selector: str, old_exam_id: str) -> str:
     await page.click(selector)
     return await wait_exam_change(page, old_exam_id)
+
+
+async def preset_suite_simulation_preferences(page) -> None:
+    await page.evaluate(
+        """() => {
+            try {
+                localStorage.setItem('suite_flow_mode', 'simulation');
+                localStorage.setItem('suite_frequency_scope', 'all');
+                localStorage.setItem('suite_auto_advance_after_submit', 'true');
+            } catch (_) {
+                // ignore storage failures
+            }
+            if (!window.practiceConfig || typeof window.practiceConfig !== 'object') {
+                window.practiceConfig = {};
+            }
+            if (!window.practiceConfig.suite || typeof window.practiceConfig.suite !== 'object') {
+                window.practiceConfig.suite = {};
+            }
+            window.practiceConfig.suite.flowMode = 'simulation';
+            window.practiceConfig.suite.frequencyScope = 'all';
+            window.practiceConfig.suite.autoAdvanceAfterSubmit = true;
+        }"""
+    )
+
+
+async def wait_simulation_context(page, expected_exam_id: str, can_prev: bool, timeout_ms: int = 20000) -> None:
+    await page.wait_for_function(
+        """(expected) => {
+            const examId = new URL(location.href).searchParams.get('examId') || '';
+            const flowMode = new URL(location.href).searchParams.get('suiteFlowMode') || '';
+            return examId === expected.examId
+                && flowMode === 'simulation'
+                && window.__UNIFIED_READING_SIMULATION_MODE__ === true
+                && document.getElementById('reset-btn')?.textContent?.includes('上一题')
+                && Boolean(document.getElementById('reset-btn')?.disabled) !== expected.canPrev;
+        }""",
+        arg={"examId": expected_exam_id, "canPrev": can_prev},
+        timeout=timeout_ms,
+    )
 
 
 async def add_highlight(page) -> int:
@@ -186,6 +227,9 @@ async def ensure_fixed_suite_index(page) -> None:
                 window.__IELTS_FORCE_TEST_ENV__ = false;
                 if (window.EnvironmentDetector && typeof window.EnvironmentDetector.disableTestEnvironment === 'function') {
                     window.EnvironmentDetector.disableTestEnvironment();
+                }
+                if (window.EnvironmentDetector) {
+                    window.EnvironmentDetector.isInTestEnvironment = () => false;
                 }
                 if (window.localStorage) {
                     window.localStorage.removeItem('__ielts_test_env__');
@@ -346,6 +390,7 @@ async def run() -> Dict[str, Any]:
         await page.wait_for_function("() => window.app && window.app.isInitialized", timeout=60000)
         await dismiss_blocking_overlays(page)
         await ensure_fixed_suite_index(page)
+        await preset_suite_simulation_preferences(page)
         await force_suite_popup_mode(page)
 
         start_button = page.locator("button[data-action='start-suite-mode']").first
@@ -357,6 +402,7 @@ async def run() -> Dict[str, Any]:
         first_exam = await safe_exam_id(suite_page)
         if first_exam != TARGET_EXAMS[0]:
             raise RuntimeError(f"unexpected_first_exam:{first_exam}")
+        await wait_simulation_context(suite_page, first_exam, can_prev=False)
 
         marker_p1 = await mark_first_answer(suite_page, "p1")
         if marker_p1[0] == "none":
@@ -366,6 +412,7 @@ async def run() -> Dict[str, Any]:
         second_exam = await click_and_wait_change(suite_page, "#submit-btn", first_exam)
         if second_exam != TARGET_EXAMS[1]:
             raise RuntimeError(f"unexpected_second_exam:{second_exam}")
+        await wait_simulation_context(suite_page, second_exam, can_prev=True)
 
         await suite_page.wait_for_timeout(700)
         marker_p2 = await mark_first_answer(suite_page, "p2")
@@ -385,6 +432,7 @@ async def run() -> Dict[str, Any]:
         p1_back = await click_and_wait_change(suite_page, "#reset-btn", second_exam)
         if p1_back != TARGET_EXAMS[0]:
             raise RuntimeError(f"unexpected_back_to_p1:{p1_back}")
+        await wait_simulation_context(suite_page, p1_back, can_prev=False)
 
         await suite_page.wait_for_timeout(800)
         restored_p1 = await read_marker(suite_page, marker_p1)
@@ -393,6 +441,7 @@ async def run() -> Dict[str, Any]:
         p2_back = await click_and_wait_change(suite_page, "#submit-btn", p1_back)
         if p2_back != TARGET_EXAMS[1]:
             raise RuntimeError(f"unexpected_back_to_p2:{p2_back}")
+        await wait_simulation_context(suite_page, p2_back, can_prev=True)
 
         await suite_page.wait_for_timeout(800)
         restored_p2 = await read_marker(suite_page, marker_p2)
@@ -402,6 +451,7 @@ async def run() -> Dict[str, Any]:
         third_exam = await click_and_wait_change(suite_page, "#submit-btn", p2_back)
         if third_exam != TARGET_EXAMS[2]:
             raise RuntimeError(f"unexpected_third_exam:{third_exam}")
+        await wait_simulation_context(suite_page, third_exam, can_prev=True)
 
         nav_trace = []
         current = third_exam
@@ -410,10 +460,12 @@ async def run() -> Dict[str, Any]:
             nav_trace.append({"step": f"p3_to_p2_{index}", "from": current, "to": prev_exam})
             if prev_exam != TARGET_EXAMS[1]:
                 raise RuntimeError(f"p3_to_p2_failed:{prev_exam}")
+            await wait_simulation_context(suite_page, prev_exam, can_prev=True)
             next_exam = await click_and_wait_change(suite_page, "#submit-btn", prev_exam)
             nav_trace.append({"step": f"p2_to_p3_{index}", "from": prev_exam, "to": next_exam})
             if next_exam != TARGET_EXAMS[2]:
                 raise RuntimeError(f"p2_to_p3_failed:{next_exam}")
+            await wait_simulation_context(suite_page, next_exam, can_prev=True)
             current = next_exam
 
         button_state = await suite_page.evaluate(

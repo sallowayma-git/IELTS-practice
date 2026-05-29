@@ -554,6 +554,45 @@ async function main() {
   assert.strictEqual(sessionState.events[0].type, 'progress', 'cached state should preserve progress event');
   assert.strictEqual(sessionState.events[2].type, 'log', 'cached state should preserve later log events');
 
+  const eventLimitProbe = new EvaluateService({}, null);
+  for (let index = 0; index < eventLimitProbe.maxCachedEventsPerSession + 9; index += 1) {
+    eventLimitProbe._emitLog('event-limit-probe', 'scoring', `event ${index}`);
+  }
+  const eventLimitState = await eventLimitProbe.getSessionState('event-limit-probe');
+  assert.strictEqual(
+    eventLimitState.events.length,
+    eventLimitProbe.maxCachedEventsPerSession,
+    'session event replay should keep only the bounded tail per session'
+  );
+  assert.strictEqual(
+    eventLimitState.events[0].sequence,
+    10,
+    'session event replay should discard the oldest over-limit events'
+  );
+
+  const replayCacheProbe = new EvaluateService({}, null);
+  const replayLimit = replayCacheProbe.getRuntimeCacheStats().sessionEventCacheLimit;
+  for (let index = 0; index < replayLimit + 5; index += 1) {
+    const sessionId = `replay-session-${index}`;
+    replayCacheProbe._resetSessionEventCache(sessionId);
+    replayCacheProbe._emitLog(sessionId, 'system', `session ${index}`);
+    replayCacheProbe._cleanupSession(sessionId);
+  }
+  const replayStats = replayCacheProbe.getRuntimeCacheStats();
+  assert.strictEqual(
+    replayStats.sessionEventCacheEntries,
+    replayLimit,
+    'SSE replay cache must be bounded by session count'
+  );
+  assert(
+    replayStats.sessionProgressEntries <= replayStats.sessionEventCacheEntries,
+    'evicted inactive replay sessions must not leave stale progress entries'
+  );
+  const evictedReplayState = await replayCacheProbe.getSessionState('replay-session-0');
+  assert.strictEqual(evictedReplayState.events.length, 0, 'evicted replay session should not retain cached events');
+  const retainedReplayState = await replayCacheProbe.getSessionState(`replay-session-${replayLimit + 4}`);
+  assert.strictEqual(retainedReplayState.events.length, 1, 'recent replay session should remain available');
+
   process.stdout.write(JSON.stringify({
     status: 'pass',
     merged_contract_version: merged.contract_version,
@@ -569,6 +608,9 @@ async function main() {
     cancelled_event_types: cancelledEventTypes,
     timeout_event_types: timeoutEventTypes,
     session_state_last_sequence: sessionState.lastSequence,
+    session_event_cache_entries: replayStats.sessionEventCacheEntries,
+    session_event_cache_limit: replayStats.sessionEventCacheLimit,
+    session_event_tail_length: eventLimitState.events.length,
     success_progress_events: successProgressEvents.length
   }));
 }

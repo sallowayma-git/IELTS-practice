@@ -18,6 +18,7 @@ export function useDraft(draftId, getSnapshot = null) {
     let lastSnapshot = null
     let lastPersistedSignature = ''
     let persistenceEnabled = true
+    let saveGeneration = 0
     let storageAvailableCache = null
     let storageRetryAt = 0
 
@@ -173,7 +174,12 @@ export function useDraft(draftId, getSnapshot = null) {
             clearTimeout(saveTimeout)
         }
 
+        const generation = saveGeneration
         saveTimeout = setTimeout(() => {
+            if (generation !== saveGeneration || !persistenceEnabled) {
+                saveTimeout = null
+                return
+            }
             saveDraft(lastSnapshot)
             saveTimeout = null
         }, delay)
@@ -211,6 +217,7 @@ export function useDraft(draftId, getSnapshot = null) {
 
     function clearDraft() {
         try {
+            saveGeneration += 1
             if (saveTimeout) {
                 clearTimeout(saveTimeout)
                 saveTimeout = null
@@ -225,6 +232,10 @@ export function useDraft(draftId, getSnapshot = null) {
         } catch (error) {
             console.error('[Draft] Failed to clear:', error)
         }
+    }
+
+    function discardDraft() {
+        clearDraft()
     }
 
     function hasDraft() {
@@ -306,6 +317,7 @@ export function useDraft(draftId, getSnapshot = null) {
         scheduleSave,
         loadDraft,
         clearDraft,
+        discardDraft,
         hasDraft,
         stopAutoSave
     }

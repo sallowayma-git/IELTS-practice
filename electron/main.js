@@ -127,6 +127,59 @@ function resetBootRecoveryState() {
     rendererReadyReceived = false;
 }
 
+function normalizePracticeShellRoute(rawRoute) {
+    if (rawRoute == null) {
+        return '';
+    }
+
+    let candidate = String(rawRoute || '').trim();
+    if (!candidate) {
+        return '/';
+    }
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(candidate) || candidate.startsWith('//')) {
+        return null;
+    }
+    if (candidate.startsWith('#')) {
+        candidate = candidate.slice(1);
+    }
+    if (!candidate.startsWith('/')) {
+        candidate = `/${candidate}`;
+    }
+    if (candidate.includes('\\') || candidate.startsWith('//')) {
+        return null;
+    }
+
+    let parsed = null;
+    try {
+        parsed = new URL(candidate, 'app://app');
+    } catch (_) {
+        return null;
+    }
+    if (parsed.hash) {
+        return null;
+    }
+
+    const routePath = parsed.pathname || '/';
+    const routeAllowed = [
+        /^\/$/,
+        /^\/writing$/,
+        /^\/library$/,
+        /^\/topics$/,
+        /^\/history$/,
+        /^\/settings$/,
+        /^\/reading\/[A-Za-z0-9._-]+(?:\/review\/[A-Za-z0-9._-]+)?$/,
+        /^\/reading-suite\/[A-Za-z0-9._-]+$/,
+        /^\/evaluating\/[0-9a-fA-F-]{8}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{12}$/,
+        /^\/result\/[0-9a-fA-F-]{8}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{12}$/
+    ].some((pattern) => pattern.test(routePath));
+
+    if (!routeAllowed) {
+        return null;
+    }
+
+    return `${routePath}${parsed.search || ''}`;
+}
+
 function isMainWindowSender(sender) {
     return !!(mainWindow && !mainWindow.isDestroyed() && sender && sender === mainWindow.webContents);
 }
@@ -146,14 +199,14 @@ function emitUpdateState(state) {
     }
 }
 
-function loadLegacyPage() {
+function loadBootRecoveryPage() {
     if (!mainWindow || mainWindow.isDestroyed()) {
         return;
     }
     mainWindow.loadURL(getAppAssetUrl('index.html'));
 }
 
-function loadWritingPage() {
+function loadPracticeShellPage(route = null) {
     if (!mainWindow || mainWindow.isDestroyed()) {
         return;
     }
@@ -161,22 +214,26 @@ function loadWritingPage() {
     const writingRelativePath = path.join('dist', 'writing', 'index.html');
     const writingFilePath = resolveBundledPath(writingRelativePath);
     if (fs.existsSync(writingFilePath)) {
-        mainWindow.loadURL(getAppAssetUrl(writingRelativePath));
+        const normalizedRoute = normalizePracticeShellRoute(route);
+        const shellUrl = normalizedRoute
+            ? `${getAppAssetUrl(writingRelativePath)}#${normalizedRoute}`
+            : getAppAssetUrl(writingRelativePath);
+        mainWindow.loadURL(shellUrl);
         return;
     }
 
     console.error('[Navigation] Writing module build missing at:', writingFilePath);
     dialog.showMessageBox(mainWindow, {
         type: 'warning',
-        title: '写作模块未构建',
-        message: '写作模块构建文件缺失，将返回主界面',
-        detail: '请先构建写作模块，或检查发布产物是否完整。',
+        title: 'Practice Shell 未构建',
+        message: 'Vue Practice Shell 构建文件缺失，将打开启动恢复页',
+        detail: '请先构建 Vue Practice Shell，或检查发布产物是否完整。恢复页只用于启动诊断，不作为阅读产品入口。',
         buttons: ['确定']
     }).then(() => {
-        loadLegacyPage();
+        loadBootRecoveryPage();
     }).catch((error) => {
         console.error('[Navigation] Dialog error:', error);
-        loadLegacyPage();
+        loadBootRecoveryPage();
     });
 }
 
@@ -185,18 +242,27 @@ function registerNavigationHandlers() {
         return;
     }
 
-    ipcMain.on('navigate-to-legacy', (event) => {
+    ipcMain.handle('navigate-to-practice-route', async (event, route) => {
         if (!isValidNavigationSource(event)) {
-            return;
+            return {
+                success: false,
+                error: 'unauthorized_navigation_source'
+            };
         }
-        loadLegacyPage();
-    });
 
-    ipcMain.on('navigate-to-writing', (event) => {
-        if (!isValidNavigationSource(event)) {
-            return;
+        const normalizedRoute = normalizePracticeShellRoute(route);
+        if (!normalizedRoute) {
+            return {
+                success: false,
+                error: 'invalid_practice_route'
+            };
         }
-        loadWritingPage();
+
+        loadPracticeShellPage(normalizedRoute);
+        return {
+            success: true,
+            route: normalizedRoute
+        };
     });
 
     console.log('[Navigation] IPC handlers registered');
@@ -339,7 +405,7 @@ async function createMainWindow() {
             cleanupWindowServices();
         });
 
-        loadLegacyPage();
+        loadPracticeShellPage();
         return mainWindow;
     })().finally(() => {
         mainWindowCreation = null;

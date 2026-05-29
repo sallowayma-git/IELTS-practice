@@ -1,0 +1,34 @@
+- generic [ref=e3]:
+  - navigation [ref=e85]:
+    - generic [ref=e86]:
+      - link "📚 考试总览系统 Practice Shell" [ref=e87] [cursor=pointer]:
+        - /url: "#/writing"
+        - strong [ref=e88]: 📚 考试总览系统
+        - generic [ref=e89]: Practice Shell
+      - generic [ref=e91]:
+        - link "写作" [ref=e92] [cursor=pointer]:
+          - /url: "#/writing"
+        - link "写作题库" [ref=e93] [cursor=pointer]:
+          - /url: "#/topics"
+        - link "写作记录" [ref=e94] [cursor=pointer]:
+          - /url: "#/history"
+        - link "设置" [ref=e95] [cursor=pointer]:
+          - /url: "#/settings"
+  - main [ref=e15]:
+    - generic [ref=e70]:
+      - generic [ref=e71]:
+        - generic [ref=e72]:
+          - text: Reading Practice
+          - heading "阅读练习" [level=1] [ref=e73]
+          - paragraph [ref=e74]: 从统一 Practice API 加载阅读题目。
+        - generic [ref=e75]:
+          - link "返回练习库" [ref=e76] [cursor=pointer]:
+            - /url: "#/"
+          - button "保存作答快照" [disabled] [ref=e77]
+          - button "提交并复盘" [disabled] [ref=e78]
+      - generic [ref=e79]:
+        - generic [ref=e80]: 阅读资源加载失败：本地 API 不可用
+        - button "重试" [ref=e81] [cursor=pointer]
+      - generic [ref=e82]:
+        - strong [ref=e83]: 未找到阅读题目
+        - generic [ref=e84]: 返回练习库重新选择资源。

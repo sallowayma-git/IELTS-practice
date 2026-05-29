@@ -1,0 +1,74 @@
+- main [ref=e4]:
+  - generic [ref=e5]:
+    - heading "📚 考试总览系统 项目仅授权ZYZ Reading Walks 提供分发，小红书号：276752989 小红书主页 GitHub Repository" [level=1] [ref=e7]:
+      - text: 📚 考试总览系统
+      - generic [ref=e8]: 项目仅授权ZYZ Reading Walks 提供分发，小红书号：276752989
+      - link "小红书主页" [ref=e9] [cursor=pointer]:
+        - /url: https://www.xiaohongshu.com/user/profile/5b4d76744eacab058489e72f
+        - text: 小红书
+      - link "GitHub Repository" [ref=e10] [cursor=pointer]:
+        - /url: https://github.com/sallowayma-git/IELTS-practice
+        - img [ref=e11]
+    - navigation "主导航" [ref=e13]:
+      - button "总览" [ref=e14] [cursor=pointer]:
+        - img [ref=e16]
+        - text: 总览
+      - button "题库浏览" [ref=e18] [cursor=pointer]:
+        - img [ref=e20]
+        - text: 题库浏览
+      - button "练习记录" [ref=e23] [cursor=pointer]:
+        - img [ref=e25]
+        - text: 练习记录
+      - button "更多" [ref=e28] [cursor=pointer]:
+        - img [ref=e30]
+        - text: 更多
+      - button "设置" [ref=e34] [cursor=pointer]:
+        - img [ref=e36]
+        - text: 设置
+    - generic [ref=e39]:
+      - generic [ref=e40]:
+        - button "列表偏好" [ref=e41] [cursor=pointer]:
+          - img [ref=e43]
+        - heading "题库浏览" [level=2] [ref=e46]
+        - generic [ref=e47]:
+          - button "全部" [pressed] [ref=e48] [cursor=pointer]
+          - button "阅读" [ref=e49] [cursor=pointer]
+      - generic [ref=e51]:
+        - textbox "搜索题目" [ref=e53]:
+          - /placeholder: 搜索题目...
+        - generic "频率筛选" [ref=e54]:
+          - button "高频" [ref=e55] [cursor=pointer]
+          - button "中频" [ref=e56] [cursor=pointer]
+          - button "低频" [ref=e57] [cursor=pointer]
+        - generic [ref=e58]:
+          - combobox "题库排序" [ref=e59]:
+            - option "默认排序" [selected]
+            - option "频率高→低"
+          - generic:
+            - img
+      - generic [ref=e60]:
+        - generic [ref=e61]: 阅读题库加载失败：本地 API 不可用
+        - button "重试" [ref=e62] [cursor=pointer]
+      - status [ref=e64]:
+        - generic [ref=e65]: 🔍
+        - paragraph [ref=e66]: 未找到匹配的题目
+        - paragraph [ref=e67]: 请调整筛选条件或搜索词后再试
+    - generic [ref=e70]:
+      - heading "我的成就" [level=3] [ref=e71]:
+        - img [ref=e73]
+        - text: 我的成就
+      - button "关闭" [ref=e78]: ×
+    - dialog "全屏时钟" [ref=e79]:
+      - generic [ref=e80]:
+        - button "切换全屏模式" [ref=e81]
+        - button "关闭时钟" [ref=e94]
+        - generic [ref=e97]:
+          - region "模拟指针时钟" [ref=e98]
+          - region "翻页时钟"
+          - region "数字时钟"
+          - region "低对比度数字时钟"
+        - generic [ref=e100]:
+          - button [ref=e101]
+          - button [ref=e102]
+          - button [ref=e103]
+          - button [ref=e104]

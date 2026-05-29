@@ -41,6 +41,7 @@ BANK_ESSAY_TEXT = " ".join([
 BANK_SOCIETY_TOPIC_TEXT = "Some people believe remote work weakens communities, while others think it improves quality of life. Discuss both views and give your opinion."
 BANK_SOCIETY_TOPIC_LABEL_SNIPPET = "Some people believe remote work weakens communities"
 BANK_MISSING_TOPIC_TEXT = "Some people think online education platforms should replace physical classrooms. Discuss both views and give your opinion."
+COMPOSE_WAIT_COUNT = 0
 
 try:
     from playwright.async_api import async_playwright  # type: ignore[import-untyped]
@@ -251,9 +252,36 @@ async def install_api_stub(page) -> None:
 
 
 async def wait_for_compose(page) -> None:
+    global COMPOSE_WAIT_COUNT
+    COMPOSE_WAIT_COUNT += 1
     await page.wait_for_selector('h2:has-text("作文输入")', timeout=20000)
-    await page.wait_for_selector('#custom-topic-text', timeout=20000)
+    try:
+        await page.wait_for_selector('#custom-topic-text', timeout=20000)
+    except Exception as exc:  # noqa: BLE001
+        state = await page.evaluate(
+            """
+            () => ({
+              url: location.href,
+              modeButtons: Array.from(document.querySelectorAll('.mode-btn')).map((button) => ({
+                text: button.textContent.trim(),
+                className: button.className,
+                visible: !!(button.offsetWidth || button.offsetHeight || button.getClientRects().length)
+              })),
+              promptHtml: (document.querySelector('.prompt-display')?.innerHTML || '').slice(0, 800),
+              bodyText: document.body.innerText.slice(0, 800)
+            })
+            """
+        )
+        raise AssertionError(f"compose_custom_topic_not_visible:{COMPOSE_WAIT_COUNT}:{json.dumps(state, ensure_ascii=False)}") from exc
     await page.wait_for_selector('.essay-input', timeout=20000)
+
+
+async def open_compose_entry(page, entry_url: str) -> None:
+    if page.url == entry_url:
+        await page.reload()
+    else:
+        await page.goto(entry_url)
+    await wait_for_compose(page)
 
 
 async def read_draft(page):
@@ -267,7 +295,7 @@ async def set_start_mode(page, mode: str) -> None:
 
 async def run_regression() -> dict:
     ensure_bundle()
-    entry_url = DIST_ENTRY.as_uri()
+    entry_url = f"{DIST_ENTRY.as_uri()}#/writing"
 
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(
@@ -277,8 +305,7 @@ async def run_regression() -> dict:
         page = await browser.new_page()
         await install_api_stub(page)
 
-        await page.goto(entry_url)
-        await wait_for_compose(page)
+        await open_compose_entry(page, entry_url)
         await page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
         await page.reload()
         await wait_for_compose(page)
@@ -380,8 +407,7 @@ async def run_regression() -> dict:
         if int(payload.get("word_count") or 0) <= 0:
             raise AssertionError("submit_word_count_invalid")
 
-        await page.goto(entry_url)
-        await wait_for_compose(page)
+        await open_compose_entry(page, entry_url)
         if await read_draft(page) is not None:
             raise AssertionError("draft_not_cleared_after_success_submit")
         if await page.locator(".draft-notification").count() != 0:
@@ -434,8 +460,7 @@ async def run_regression() -> dict:
         if int(bank_payload.get("word_count") or 0) <= 0:
             raise AssertionError("bank_submit_word_count_invalid")
 
-        await page.goto(entry_url)
-        await wait_for_compose(page)
+        await open_compose_entry(page, entry_url)
         if await read_draft(page) is not None:
             raise AssertionError("draft_not_cleared_after_bank_submit")
 
@@ -456,7 +481,28 @@ async def run_regression() -> dict:
         race_task2_option = await page.locator(f'#topic-select option[value="{BANK_TOPIC_ID}"]').count()
         race_task1_option = await page.locator('#topic-select option[value="3001"]').count()
         if race_task2_option != 1:
-            raise AssertionError("topic_race_guard_failed_task2_option_missing")
+            race_state = await page.evaluate(
+                """
+                () => ({
+                  modeButtons: Array.from(document.querySelectorAll('.mode-btn')).map((button) => ({
+                    text: button.textContent.trim(),
+                    className: button.className
+                  })),
+                  taskButtons: Array.from(document.querySelectorAll('.task-btn')).map((button) => ({
+                    text: button.textContent.trim(),
+                    className: button.className
+                  })),
+                  topicOptions: Array.from(document.querySelectorAll('#topic-select option')).map((option) => ({
+                    value: option.value,
+                    text: option.textContent.trim()
+                  })),
+                  topicRequests: window.__topicListRequests || [],
+                  topicCategory: document.querySelector('#topic-category')?.value || null,
+                  topicSelect: document.querySelector('#topic-select')?.value || null
+                })
+                """
+            )
+            raise AssertionError(f"topic_race_guard_failed_task2_option_missing:{json.dumps(race_state, ensure_ascii=False)}")
         if race_task1_option != 0:
             raise AssertionError("topic_race_guard_failed_stale_task1_option_visible")
 
@@ -493,8 +539,7 @@ async def run_regression() -> dict:
         await page.fill("#custom-topic-text", "")
         await page.wait_for_timeout(700)
 
-        await page.goto(entry_url)
-        await wait_for_compose(page)
+        await open_compose_entry(page, entry_url)
         await page.evaluate(
             f"""() => localStorage.setItem('{DRAFT_KEY}', JSON.stringify({{
               task_type: 'task2',
@@ -525,8 +570,7 @@ async def run_regression() -> dict:
         if healed_bank_content != BANK_ESSAY_TEXT:
             raise AssertionError("invalid_bank_category_should_preserve_content")
 
-        await page.goto(entry_url)
-        await wait_for_compose(page)
+        await open_compose_entry(page, entry_url)
 
         await page.evaluate(
             f"""() => localStorage.setItem('{DRAFT_KEY}', JSON.stringify({{
@@ -577,8 +621,7 @@ async def run_regression() -> dict:
         if missing_topic_payload.get("topic_text") != BANK_MISSING_TOPIC_TEXT:
             raise AssertionError("missing_bank_topic_submit_text_mismatch")
 
-        await page.goto(entry_url)
-        await wait_for_compose(page)
+        await open_compose_entry(page, entry_url)
         if await read_draft(page) is not None:
             raise AssertionError("draft_not_cleared_after_missing_bank_topic_submit")
 
@@ -609,8 +652,7 @@ async def run_regression() -> dict:
         if healed_content != "self-heal probe content":
             raise AssertionError("self_healed_content_mismatch")
 
-        await page.goto(entry_url)
-        await wait_for_compose(page)
+        await open_compose_entry(page, entry_url)
         await page.evaluate(
             f"""() => localStorage.setItem('{DRAFT_KEY}', JSON.stringify({{
               task_type: 'task2',

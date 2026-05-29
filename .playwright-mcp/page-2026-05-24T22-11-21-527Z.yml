@@ -1,0 +1,17 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "📚 考试总览系统 Practice Shell" [ref=e6] [cursor=pointer]:
+        - /url: "#/writing"
+        - strong [ref=e7]: 📚 考试总览系统
+        - generic [ref=e8]: Practice Shell
+      - generic [ref=e10]:
+        - link "写作" [ref=e11] [cursor=pointer]:
+          - /url: "#/writing"
+        - link "写作题库" [ref=e12] [cursor=pointer]:
+          - /url: "#/topics"
+        - link "写作记录" [ref=e13] [cursor=pointer]:
+          - /url: "#/history"
+        - link "设置" [ref=e14] [cursor=pointer]:
+          - /url: "#/settings"
+  - main [ref=e15]

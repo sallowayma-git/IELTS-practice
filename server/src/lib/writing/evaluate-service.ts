@@ -8,6 +8,10 @@ const TopicService = require('../../../../electron/services/topic.service.js');
 const SettingsService = require('../../../../electron/services/settings.service.js');
 const { ProviderOrchestratorService } = require('../shared/provider-orchestrator.js');
 const {
+    setBoundedCacheEntry,
+    touchCacheEntry
+} = require('../shared/cache.js');
+const {
     buildFallbackReviewEvaluation,
     buildReviewResponseFormat,
     buildReviewStageExample,
@@ -20,6 +24,8 @@ const {
     validateScoringStage
 } = require('./contracts.js');
 const logger = require('../../../../electron/utils/logger.js');
+
+const SESSION_EVENT_CACHE_LIMIT = 24;
 
 /**
  * 评测服务
@@ -45,6 +51,7 @@ class EvaluateService {
         // 会话管理: sessionId -> { controller, timeout }
         this.sessions = new Map();
         this.sessionEventCache = new Map();
+        this.maxCachedEventSessions = SESSION_EVENT_CACHE_LIMIT;
         this.maxCachedEventsPerSession = 80;
         this.sessionCacheTtlMs = 15 * 60 * 1000;
         this.sessionProgress = new Map();
@@ -161,15 +168,26 @@ class EvaluateService {
     }
 
     async getSessionState(sessionId) {
-        const cache = this.sessionEventCache.get(sessionId) || { seq: 0, events: [], updatedAt: Date.now() };
-        const session = this.sessions.get(sessionId);
         this._pruneSessionEventCache();
+        const cache = touchCacheEntry(this.sessionEventCache, sessionId) || { seq: 0, events: [], updatedAt: Date.now() };
+        const session = this.sessions.get(sessionId);
         return {
             sessionId,
             active: this.sessions.has(sessionId),
             status: session ? 'running' : 'idle',
             lastSequence: cache.seq || 0,
             events: Array.isArray(cache.events) ? cache.events : []
+        };
+    }
+
+    getRuntimeCacheStats() {
+        this._pruneSessionEventCache();
+        return {
+            activeSessions: this.sessions.size,
+            sessionEventCacheEntries: this.sessionEventCache.size,
+            sessionEventCacheLimit: this.maxCachedEventSessions,
+            maxCachedEventsPerSession: this.maxCachedEventsPerSession,
+            sessionProgressEntries: this.sessionProgress.size
         };
     }
 
@@ -1224,6 +1242,7 @@ class EvaluateService {
 
         const essayId = await this.essayService.create({
             topic_id: topicId,
+            topic_text: session?.topic_text || null,
             task_type,
             content,
             word_count,
@@ -1314,7 +1333,7 @@ class EvaluateService {
 
     _resetSessionEventCache(sessionId) {
         this.sessionProgress.set(sessionId, 0);
-        this.sessionEventCache.set(sessionId, {
+        this._setBoundedSessionEventCache(sessionId, {
             seq: 0,
             updatedAt: Date.now(),
             events: []
@@ -1338,7 +1357,7 @@ class EvaluateService {
         if (cache.events.length > this.maxCachedEventsPerSession) {
             cache.events = cache.events.slice(-this.maxCachedEventsPerSession);
         }
-        this.sessionEventCache.set(sessionId, cache);
+        this._setBoundedSessionEventCache(sessionId, cache);
         return cache.seq;
     }
 
@@ -1347,7 +1366,26 @@ class EvaluateService {
         for (const [sessionId, cache] of this.sessionEventCache.entries()) {
             if ((cache?.updatedAt || 0) + this.sessionCacheTtlMs < now) {
                 this.sessionEventCache.delete(sessionId);
+                this._discardCachedSessionProgress(sessionId);
             }
+        }
+    }
+
+    _setBoundedSessionEventCache(sessionId, cache) {
+        const evictedSessionIds = setBoundedCacheEntry(
+            this.sessionEventCache,
+            sessionId,
+            cache,
+            this.maxCachedEventSessions
+        );
+        evictedSessionIds.forEach((evictedSessionId) => {
+            this._discardCachedSessionProgress(evictedSessionId);
+        });
+    }
+
+    _discardCachedSessionProgress(sessionId) {
+        if (!this.sessions.has(sessionId)) {
+            this.sessionProgress.delete(sessionId);
         }
     }
 

@@ -162,16 +162,7 @@
                 var preselectedPreference = resolveSuitePreference();
                 var preselected = preselectedPreference.flowMode || 'classic';
                 var preselectedScope = preselectedPreference.frequencyScope || 'all';
-                var search = '';
-                try {
-                    search = String(global.location && global.location.search || '').toLowerCase();
-                } catch (_) {
-                    search = '';
-                }
-                var isTestEnv = search.indexOf('test_env=1') !== -1
-                    || search.indexOf('suite_test=1') !== -1
-                    || search.indexOf('ci=1') !== -1;
-                if (isTestEnv) {
+                if (isExplicitSuiteLegacyRegressionMode()) {
                     resolve({
                         flowMode: preselected,
                         frequencyScope: preselectedScope
@@ -274,15 +265,87 @@
             });
         }
 
-        var ensureSuiteReady = (global.AppEntry && typeof global.AppEntry.ensureSessionSuiteReady === 'function')
-            ? global.AppEntry.ensureSessionSuiteReady()
-            : ensurePracticeSuite();
+        function isExplicitSuiteLegacyRegressionMode() {
+            try {
+                var search = String(global.location && global.location.search || '').toLowerCase();
+                return search.indexOf('test_env=1') !== -1
+                    || search.indexOf('suite_test=1') !== -1
+                    || search.indexOf('ci=1') !== -1;
+            } catch (_) {
+                return false;
+            }
+        }
 
-        return Promise.resolve(ensureSuiteReady).then(function afterReady() {
-            return promptSuiteModeSelection().then(function handleMode(selection) {
-                if (!selection || !selection.flowMode) {
-                    return undefined;
+        function resolveLocalApiBaseUrl() {
+            var api = global.electronAPI;
+            if (!api || typeof api.getLocalApiInfo !== 'function') {
+                return Promise.resolve('');
+            }
+            return Promise.resolve(api.getLocalApiInfo()).then(function handleLocalApiInfo(response) {
+                var baseUrl = response && response.data && typeof response.data.baseUrl === 'string'
+                    ? response.data.baseUrl.trim()
+                    : '';
+                return baseUrl;
+            }).catch(function handleLocalApiError(error) {
+                console.warn('[AppActions] 获取本地 Practice API 地址失败:', error);
+                return '';
+            });
+        }
+
+        function startVueReadingSuite(selection) {
+            var api = global.electronAPI;
+            if (!api || typeof api.openPracticeRoute !== 'function' || typeof global.fetch !== 'function') {
+                return Promise.reject(new Error('Vue Practice Shell 导航或本地 API 能力不可用'));
+            }
+            return resolveLocalApiBaseUrl().then(function createSuite(baseUrl) {
+                if (!baseUrl) {
+                    throw new Error('本地 Practice API 地址不可用');
                 }
+                return global.fetch(baseUrl + '/api/practice/reading-suite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        flowMode: selection.flowMode,
+                        frequencyScope: selection.frequencyScope || 'all'
+                    })
+                }).then(function handleSuiteResponse(response) {
+                    if (!response || !response.ok) {
+                        throw new Error('阅读套题 session 创建请求失败');
+                    }
+                    return response.json().then(function handleSuitePayload(payload) {
+                        if (payload && payload.success === false) {
+                            throw new Error(payload.error || payload.message || '阅读套题 session 创建失败');
+                        }
+                        var data = payload && payload.data && typeof payload.data === 'object'
+                            ? payload.data
+                            : payload;
+                        var sessionId = data && typeof data.sessionId === 'string'
+                            ? data.sessionId.trim()
+                            : '';
+                        if (!sessionId) {
+                            throw new Error('阅读套题 session 创建响应缺少 sessionId');
+                        }
+                        return Promise.resolve(api.openPracticeRoute('/reading-suite/' + encodeURIComponent(sessionId)))
+                            .then(function handleRouteResult(result) {
+                                if (result && result.success === false) {
+                                    throw new Error(result.error || 'Vue 阅读套题路由导航失败');
+                                }
+                                if (typeof global.showMessage === 'function') {
+                                    global.showMessage('正在进入 Vue 阅读套题。', 'info');
+                                }
+                                return true;
+                            });
+                    });
+                });
+            });
+        }
+
+        function startExplicitLegacySuiteRegression(selection) {
+            var ensureSuiteReady = (global.AppEntry && typeof global.AppEntry.ensureSessionSuiteReady === 'function')
+                ? global.AppEntry.ensureSessionSuiteReady()
+                : ensurePracticeSuite();
+
+            return Promise.resolve(ensureSuiteReady).then(function afterReady() {
                 var appInstance = global.app;
                 if (appInstance && typeof appInstance.startSuitePractice === 'function') {
                     try {
@@ -307,35 +370,22 @@
                 }
                 return undefined;
             });
+        }
+
+        return promptSuiteModeSelection().then(function handleMode(selection) {
+            if (!selection || !selection.flowMode) {
+                return undefined;
+            }
+            if (isExplicitSuiteLegacyRegressionMode()) {
+                return startExplicitLegacySuiteRegression(selection);
+            }
+            return startVueReadingSuite(selection);
         }).catch(function handleSuiteError(error) {
             console.error('[AppActions] 套题模块加载失败:', error);
             if (typeof global.showMessage === 'function') {
                 global.showMessage('套题模块加载失败，请稍后重试', 'error');
             }
             return undefined;
-        });
-    }
-
-    function continueSuitePractice() {
-        var ensureSuiteReady = (global.AppEntry && typeof global.AppEntry.ensureSessionSuiteReady === 'function')
-            ? global.AppEntry.ensureSessionSuiteReady()
-            : ensurePracticeSuite();
-
-        return Promise.resolve(ensureSuiteReady).then(function afterReady() {
-            var appInstance = global.app;
-            if (appInstance && typeof appInstance.continueSuitePractice === 'function') {
-                return appInstance.continueSuitePractice();
-            }
-            if (typeof global.showMessage === 'function') {
-                global.showMessage('当前没有可继续的套题会话。', 'warning');
-            }
-            return false;
-        }).catch(function handleSuiteError(error) {
-            console.error('[AppActions] 套题继续失败:', error);
-            if (typeof global.showMessage === 'function') {
-                global.showMessage('套题继续失败，请稍后重试', 'error');
-            }
-            return false;
         });
     }
 
@@ -652,7 +702,6 @@
         preloadMoreTools: triggerMorePrefetch,
         // Phase 3
         startSuitePractice: startSuitePractice,
-        continueSuitePractice: continueSuitePractice,
         openExamWithFallback: openExamWithFallback,
         startRandomPractice: startRandomPractice,
         // Phase 4
@@ -662,7 +711,6 @@
 
     // 挂载到全局（向后兼容）
     global.startSuitePractice = startSuitePractice;
-    global.continueSuitePractice = continueSuitePractice;
     global.openExamWithFallback = openExamWithFallback;
     global.startRandomPractice = startRandomPractice;
     global.startEndlessPractice = startEndlessPractice;

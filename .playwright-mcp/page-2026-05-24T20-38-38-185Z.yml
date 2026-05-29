@@ -1,0 +1,110 @@
+- main [ref=e4]:
+  - generic [ref=e5]:
+    - heading "📚 考试总览系统 项目仅授权ZYZ Reading Walks 提供分发，小红书号：276752989 小红书主页 GitHub Repository" [level=1] [ref=e7]:
+      - text: 📚 考试总览系统
+      - generic [ref=e8]: 项目仅授权ZYZ Reading Walks 提供分发，小红书号：276752989
+      - link "小红书主页" [ref=e9] [cursor=pointer]:
+        - /url: https://www.xiaohongshu.com/user/profile/5b4d76744eacab058489e72f
+        - text: 小红书
+      - link "GitHub Repository" [ref=e10] [cursor=pointer]:
+        - /url: https://github.com/sallowayma-git/IELTS-practice
+        - img [ref=e11]
+    - navigation "主导航" [ref=e13]:
+      - button "总览" [ref=e14] [cursor=pointer]:
+        - img [ref=e16]
+        - text: 总览
+      - button "题库浏览" [ref=e18] [cursor=pointer]:
+        - img [ref=e20]
+        - text: 题库浏览
+      - button "练习记录" [ref=e23] [cursor=pointer]:
+        - img [ref=e25]
+        - text: 练习记录
+      - button "更多" [ref=e28] [cursor=pointer]:
+        - img [ref=e30]
+        - text: 更多
+      - button "设置" [ref=e34] [cursor=pointer]:
+        - img [ref=e36]
+        - text: 设置
+    - generic [ref=e41]:
+      - heading "我的成就" [level=3] [ref=e42]:
+        - img [ref=e44]
+        - text: 我的成就
+      - button "关闭" [ref=e49]: ×
+    - dialog "全屏时钟" [ref=e50]:
+      - generic [ref=e51]:
+        - button "切换全屏模式" [ref=e52]
+        - button "关闭时钟" [ref=e65]
+        - generic [ref=e68]:
+          - region "模拟指针时钟" [ref=e69]
+          - region "翻页时钟"
+          - region "数字时钟"
+          - region "低对比度数字时钟"
+        - generic [ref=e71]:
+          - button [ref=e72]
+          - button [ref=e73]
+          - button [ref=e74]
+          - button [ref=e75]
+    - generic [ref=e76]:
+      - heading "⚙️ 系统设置" [level=2] [ref=e78]
+      - generic [ref=e79]:
+        - generic [ref=e80]:
+          - heading "🔧 系统管理" [level=3] [ref=e81]
+          - paragraph [ref=e82]: 系统工具和设置选项
+          - generic [ref=e83]:
+            - button "🗑️ 清除缓存" [ref=e84] [cursor=pointer]
+            - button "📂 加载题库" [ref=e85] [cursor=pointer]
+            - button "🎨 主题切换" [ref=e86] [cursor=pointer]
+            - button "🎯 显示引导" [ref=e87] [cursor=pointer]
+            - button "题库配置切换" [ref=e88] [cursor=pointer]:
+              - img [ref=e89]
+              - text: 题库配置切换
+            - button "🔄 强制刷新题库" [ref=e90] [cursor=pointer]
+        - generic [ref=e91]:
+          - heading "💾 数据管理" [level=3] [ref=e92]
+          - paragraph [ref=e93]: 数据备份、导入导出和完整性检查
+          - generic [ref=e94]:
+            - button "💾 创建备份" [ref=e95] [cursor=pointer]
+            - button "📋 备份列表" [ref=e96] [cursor=pointer]
+            - button "📤 导出数据" [ref=e97] [cursor=pointer]
+            - button "📥 导入数据" [ref=e98] [cursor=pointer]
+        - generic [ref=e99]:
+          - heading "📊 系统信息" [level=3] [ref=e100]
+          - generic [ref=e101]:
+            - generic [ref=e102]: "题库状态: 等待加载"
+            - generic [ref=e103]: "题目总数: 0"
+            - generic [ref=e104]: "HTML题目: 0"
+            - generic [ref=e105]: "PDF题目: 0"
+            - generic [ref=e106]: "最后更新: 未同步"
+          - button "查看更新" [ref=e108] [cursor=pointer]:
+            - generic [ref=e109]: 查看更新
+          - generic [ref=e110]:
+            - link "问题反馈" [ref=e111] [cursor=pointer]:
+              - /url: https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT
+            - link "Salloway呈现" [ref=e112] [cursor=pointer]:
+              - /url: https://github.com/sallowayma-git
+    - generic [ref=e114]:
+      - generic [ref=e115]:
+        - heading "🎨 主题切换" [level=3] [ref=e116]
+        - button "关闭" [ref=e117]: ×
+      - generic [ref=e119]:
+        - generic [ref=e121]:
+          - generic [ref=e122]:
+            - heading "晨雾群山" [level=4] [ref=e123]
+            - generic [ref=e124]: ⛰️ Misty Mountain
+          - generic [ref=e125]:
+            - text: 动态
+            - button "应用" [ref=e126]
+        - generic [ref=e128]:
+          - generic [ref=e129]:
+            - heading "深海孤航" [level=4] [ref=e130]
+            - generic [ref=e131]: ⛵ Teal Ocean
+          - generic [ref=e132]:
+            - text: 动态
+            - button "应用" [ref=e133]
+        - generic [ref=e135]:
+          - generic [ref=e136]:
+            - heading "落日雾花" [level=4] [ref=e137]
+            - generic [ref=e138]: 🌸 Floral Bloom
+          - generic [ref=e139]:
+            - text: 静态
+            - button "应用" [ref=e140]

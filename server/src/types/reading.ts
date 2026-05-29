@@ -1,5 +1,7 @@
 export interface ReadingAssistantQueryRequest {
-  examId: string
+  examId?: string
+  sessionId?: string
+  mode?: string
   query?: string
   userQuery?: string
   locale?: 'zh' | 'en'
@@ -23,6 +25,10 @@ export interface ReadingAssistantQueryRequest {
     score?: number | null
     wrongQuestions?: string[]
     selectedAnswers?: Record<string, string>
+    analysisSignals?: Record<string, unknown> | null
+    markedQuestions?: string[]
+    questionTimelineLite?: Array<Record<string, unknown>>
+    questionTypePerformance?: Record<string, Record<string, unknown>>
   }
 }
 

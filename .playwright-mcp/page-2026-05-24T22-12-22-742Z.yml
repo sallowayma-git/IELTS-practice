@@ -1,0 +1,97 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "📚 考试总览系统 Practice Shell" [ref=e6] [cursor=pointer]:
+        - /url: "#/writing"
+        - strong [ref=e7]: 📚 考试总览系统
+        - generic [ref=e8]: Practice Shell
+      - generic [ref=e10]:
+        - link "写作" [ref=e11] [cursor=pointer]:
+          - /url: "#/writing"
+        - link "写作题库" [ref=e12] [cursor=pointer]:
+          - /url: "#/topics"
+        - link "写作记录" [ref=e13] [cursor=pointer]:
+          - /url: "#/history"
+        - link "设置" [ref=e14] [cursor=pointer]:
+          - /url: "#/settings"
+  - main [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - heading "⚙️ 系统设置" [level=2] [ref=e18]
+        - button "收起写作配置" [expanded] [ref=e56] [cursor=pointer]
+      - generic "设置主面板" [ref=e20]:
+        - generic [ref=e21]:
+          - heading "🔧 系统管理" [level=3] [ref=e22]
+          - paragraph [ref=e23]: 系统工具和设置选项
+          - generic [ref=e24]:
+            - button "🗑️ 清除缓存" [ref=e25] [cursor=pointer]
+            - button "📂 加载题库" [ref=e26] [cursor=pointer]
+            - button "🎨 主题切换" [ref=e27] [cursor=pointer]
+            - button "🎯 显示引导" [ref=e28] [cursor=pointer]
+            - button "题库配置切换" [active] [ref=e29] [cursor=pointer]:
+              - img [ref=e30]
+              - text: 题库配置切换
+            - button "🔄 强制刷新题库" [ref=e31] [cursor=pointer]
+            - button "🔍 检查更新" [ref=e32] [cursor=pointer]
+        - generic [ref=e33]:
+          - heading "💾 数据管理" [level=3] [ref=e34]
+          - paragraph [ref=e35]: 数据备份、导入导出和完整性检查
+          - generic [ref=e36]:
+            - button "💾 创建备份" [ref=e37] [cursor=pointer]
+            - button "📋 备份列表" [ref=e38] [cursor=pointer]
+            - button "📤 导出数据" [ref=e39] [cursor=pointer]
+            - button "📥 导入数据" [ref=e40] [cursor=pointer]
+            - button "Choose File"
+        - generic [ref=e41]:
+          - heading "📊 系统信息" [level=3] [ref=e42]
+          - generic [ref=e43]:
+            - generic [ref=e44]: "写作状态: 已连接设置服务"
+            - generic [ref=e45]: "启用 API: 0/0"
+            - generic [ref=e46]: "提示词版本: 0"
+            - generic [ref=e47]: "激活提示词: 0"
+            - generic [ref=e48]: "温度参数: 0.5 / 0.5"
+            - generic [ref=e49]: "历史保留: 100 条"
+            - generic [ref=e50]: "Electron版本: N/A"
+            - generic [ref=e51]: "Node版本: N/A"
+            - generic [ref=e52]: "数据目录: 仅在 Electron 中可用"
+          - generic [ref=e53]:
+            - link "问题反馈" [ref=e54] [cursor=pointer]:
+              - /url: https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT
+            - link "Salloway呈现" [ref=e55] [cursor=pointer]:
+              - /url: https://github.com/sallowayma-git
+      - generic [ref=e138]: 已切换到写作提示词与题库相关配置。
+      - region "写作设置明细" [ref=e57]:
+        - tablist "写作设置分类" [ref=e58]:
+          - button "API 配置" [ref=e59] [cursor=pointer]:
+            - img [ref=e61]
+            - text: API 配置
+          - button "提示词管理" [ref=e67] [cursor=pointer]:
+            - img [ref=e69]
+            - text: 提示词管理
+          - button "模型参数" [ref=e71] [cursor=pointer]:
+            - img [ref=e73]
+            - text: 模型参数
+          - button "数据管理" [ref=e77] [cursor=pointer]:
+            - img [ref=e79]
+            - text: 数据管理
+          - button "关于" [ref=e82] [cursor=pointer]:
+            - img [ref=e84]
+            - text: 关于
+        - generic [ref=e139]:
+          - generic [ref=e140]:
+            - generic [ref=e141]:
+              - heading "提示词版本" [level=3] [ref=e142]
+              - paragraph [ref=e143]: 管理 Task 1 / Task 2 的评判提示词版本。
+            - generic [ref=e144]:
+              - generic [ref=e145]: 0 个版本
+              - generic [ref=e146]: 0 个激活
+          - generic [ref=e147]: "加载提示词失败: Failed to fetch"
+          - generic [ref=e148]: 暂无提示词版本。
+        - generic [ref=e149]:
+          - generic [ref=e151]:
+            - heading "导入/导出" [level=3] [ref=e152]
+            - paragraph [ref=e153]: 支持完整 JSON 配置或版本数组。
+          - 'textbox "粘贴 JSON（支持 {version,task1,task2} 或 [{task_type,...}]）" [ref=e154]'
+          - generic [ref=e155]:
+            - button "导入提示词" [ref=e156] [cursor=pointer]
+            - button "导出当前激活" [ref=e157] [cursor=pointer]

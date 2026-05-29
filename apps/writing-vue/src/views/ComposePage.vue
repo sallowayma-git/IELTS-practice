@@ -47,13 +47,13 @@
               <div class="toggle-group toggle-group--compact">
                 <button
                   :class="['toggle-item', 'task-btn', { active: taskType === 'task1' }]"
-                  @click="taskType = 'task1'"
+                  @click="selectTaskType('task1')"
                 >
                   <span class="toggle-item__label">Task 1</span>
                 </button>
                 <button
                   :class="['toggle-item', 'task-btn', { active: taskType === 'task2' }]"
-                  @click="taskType = 'task2'"
+                  @click="selectTaskType('task2')"
                 >
                   <span class="toggle-item__label">Task 2</span>
                 </button>
@@ -65,13 +65,13 @@
               <div class="toggle-group toggle-group--compact">
                 <button
                   :class="['toggle-item', 'mode-btn', { active: topicMode === 'free' }]"
-                  @click="topicMode = 'free'"
+                  @click="selectTopicMode('free')"
                 >
                   <span class="toggle-item__label">自由写作</span>
                 </button>
                 <button
                   :class="['toggle-item', 'mode-btn', { active: topicMode === 'bank' }]"
-                  @click="topicMode = 'bank'"
+                  @click="selectTopicMode('bank')"
                 >
                   <span class="toggle-item__label">从题库选择</span>
                 </button>
@@ -221,7 +221,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { evaluate, getErrorMessage, topics as topicsApi } from '@/api/client.js'
 import { useDraft } from '@/composables/useDraft.js'
 import { createRequestGate } from '@/utils/request-gate.js'
@@ -233,6 +233,7 @@ import {
 } from '@/utils/writing-categories.js'
 
 const router = useRouter()
+const route = useRoute()
 
 const taskType = ref('task2')
 const topicMode = ref('free')
@@ -261,6 +262,7 @@ const {
   scheduleSave,
   loadDraft,
   clearDraft,
+  discardDraft,
   hasDraft,
   stopAutoSave
 } = useDraft('compose-essay', () => ({
@@ -350,9 +352,93 @@ const canSubmit = computed(() => (
   !getSubmitBlockReason()
 ))
 
-onMounted(() => {
-  if (hasDraft()) {
+function getRouteTopicId() {
+  const rawTopicId = Array.isArray(route.query.topicId)
+    ? route.query.topicId[0]
+    : route.query.topicId
+  const topicId = Number(rawTopicId)
+  return Number.isInteger(topicId) && topicId > 0 ? topicId : null
+}
+
+function resetComposeWorkspace() {
+  isRestoringDraft.value = true
+  taskType.value = 'task2'
+  topicMode.value = 'free'
+  selectedCategory.value = ''
+  selectedTopicId.value = null
+  topicsList.value = []
+  topicLoading.value = false
+  topicError.value = ''
+  customTopicText.value = ''
+  content.value = ''
+  error.value = ''
+  restoreNotice.value = ''
+  showConfirmDialog.value = false
+  showDraftNotification.value = false
+  nextTick(() => {
+    isRestoringDraft.value = false
+  })
+}
+
+async function selectTaskType(nextTaskType) {
+  const normalizedTaskType = nextTaskType === 'task1' ? 'task1' : 'task2'
+  if (taskType.value === normalizedTaskType) return
+  taskType.value = normalizedTaskType
+  selectedTopicId.value = null
+  const normalizedCategory = normalizeWritingCategory(normalizedTaskType, selectedCategory.value)
+  if (normalizedCategory !== selectedCategory.value) {
+    selectedCategory.value = normalizedCategory
+  }
+  if (topicMode.value === 'bank') {
+    await loadTopics(normalizedTaskType)
+  }
+}
+
+async function selectTopicMode(nextMode) {
+  const normalizedMode = nextMode === 'bank' ? 'bank' : 'free'
+  if (topicMode.value === normalizedMode) return
+  topicMode.value = normalizedMode
+  selectedTopicId.value = null
+  restoreNotice.value = ''
+  if (normalizedMode === 'bank') {
+    await loadTopics(taskType.value)
+  } else {
+    invalidateTopicRequests()
+    topicError.value = ''
+  }
+  scheduleSave()
+}
+
+async function hydrateEntryState(options = {}) {
+  const hasExistingDraft = hasDraft()
+  if (getRouteTopicId()) {
+    await hydrateFromPracticeAssetQuery({ preserveExistingDraft: hasExistingDraft })
+  } else if (options.resetDefault && !hasExistingDraft) {
+    resetComposeWorkspace()
+  }
+
+  if (hasExistingDraft) {
     showDraftNotification.value = true
+  }
+}
+
+onMounted(async () => {
+  await hydrateEntryState()
+})
+
+watch(() => route.name, async (nextName, previousName) => {
+  if (nextName === 'Compose' && previousName && previousName !== 'Compose') {
+    await hydrateEntryState({ resetDefault: true })
+  }
+})
+
+watch(() => [route.query.topicId, route.query.taskType], async ([nextTopicId], [previousTopicId]) => {
+  if (getRouteTopicId()) {
+    await hydrateEntryState()
+    return
+  }
+  if (route.name === 'Compose' && previousTopicId && !nextTopicId && !hasDraft()) {
+    resetComposeWorkspace()
   }
 })
 
@@ -434,6 +520,32 @@ async function loadTopics(type = taskType.value) {
     if (topicsRequestGate.isCurrent(requestId)) {
       topicLoading.value = false
     }
+  }
+}
+
+async function hydrateFromPracticeAssetQuery(options = {}) {
+  const topicId = getRouteTopicId()
+  if (!topicId) {
+    return
+  }
+
+  try {
+    isRestoringDraft.value = true
+    const rawTaskType = Array.isArray(route.query.taskType)
+      ? route.query.taskType[0]
+      : route.query.taskType
+    const normalizedTaskType = String(rawTaskType || '').trim().toLowerCase()
+    taskType.value = normalizedTaskType === 'task1' ? 'task1' : 'task2'
+    topicMode.value = 'bank'
+    selectedCategory.value = ''
+    selectedTopicId.value = topicId
+    await loadTopics(taskType.value)
+  } finally {
+    isRestoringDraft.value = false
+  }
+
+  if (!options.preserveExistingDraft) {
+    scheduleSave()
   }
 }
 
@@ -543,7 +655,7 @@ async function submitEssay() {
       sessionStorage.setItem('temp_essay_' + result.sessionId, JSON.stringify(payload))
     } catch(err) { console.warn(err) }
 
-    clearDraft()
+    discardDraft()
     stopAutoSave()
 
     router.push({

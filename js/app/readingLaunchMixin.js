@@ -42,6 +42,45 @@
             return !!this._getUnifiedReadingManifestEntry(exam);
         },
 
+        _hasPracticeShellRouteApi() {
+            return !!(
+                typeof window !== 'undefined'
+                && window.electronAPI
+                && (
+                    typeof window.electronAPI.openPracticeRoute === 'function'
+                    || typeof window.electronAPI.openPracticeReading === 'function'
+                )
+            );
+        },
+
+        _isLegacyReadingLaunchContext(options = {}) {
+            if (!options || typeof options !== 'object') {
+                return false;
+            }
+            const practiceMode = typeof options.practiceMode === 'string'
+                ? options.practiceMode.trim().toLowerCase()
+                : '';
+            const flowMode = typeof options.suiteFlowMode === 'string'
+                ? options.suiteFlowMode.trim().toLowerCase()
+                : (typeof options.flowMode === 'string' ? options.flowMode.trim().toLowerCase() : '');
+
+            return Boolean(
+                options.forceLegacyReading
+                || options.reviewMode
+                || options.reviewSessionId
+                || options.suiteReviewMode
+                || options.suiteSessionId
+                || options.suiteFlowMode
+                || options.simulationMode
+                || practiceMode === 'suite'
+                || flowMode === 'classic'
+                || flowMode === 'simulation'
+                || flowMode === 'stationary'
+                || Number.isInteger(options.sequenceIndex)
+                || Number.isInteger(options.sequenceTotal)
+            );
+        },
+
         _buildUnifiedReadingUrl(exam) {
             const manifestEntry = this._getUnifiedReadingManifestEntry(exam);
             if (!manifestEntry) {
@@ -64,6 +103,19 @@
                 : url;
         },
 
+        _buildVuePracticeReadingRoute(exam, manifestEntry = null) {
+            const resolvedEntry = manifestEntry || this._getUnifiedReadingManifestEntry(exam);
+            const assetId = String(
+                (exam && exam.id)
+                || (resolvedEntry && (resolvedEntry.dataKey || resolvedEntry.examId))
+                || ''
+            ).trim();
+            if (!assetId || !/^[A-Za-z0-9._-]+$/.test(assetId)) {
+                return '';
+            }
+            return `/reading/${encodeURIComponent(assetId)}`;
+        },
+
         _buildReadingPdfUrl(exam) {
             if (!this._isReadingLibraryExam(exam) || !exam || !exam.pdfFilename) {
                 return '';
@@ -78,13 +130,29 @@
                 : pdfUrl;
         },
 
-        resolveReadingLaunchDescriptor(exam) {
+        resolveReadingLaunchDescriptor(exam, options = {}) {
             if (!this._isReadingLibraryExam(exam)) {
                 return null;
             }
 
             const manifestEntry = this._getUnifiedReadingManifestEntry(exam);
             if (manifestEntry) {
+                const route = this._buildVuePracticeReadingRoute(exam, manifestEntry);
+                if (
+                    route
+                    && this._hasPracticeShellRouteApi()
+                    && !this._isLegacyReadingLaunchContext(options)
+                ) {
+                    return {
+                        mode: 'vue_practice_reading',
+                        examId: exam.id,
+                        assetId: exam.id,
+                        dataKey: manifestEntry.dataKey || manifestEntry.examId || exam.id,
+                        manifestEntry,
+                        route
+                    };
+                }
+
                 return {
                     mode: 'unified_html',
                     examId: exam.id,

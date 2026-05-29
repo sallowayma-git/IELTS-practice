@@ -151,18 +151,29 @@
             event.preventDefault();
         }
 
-        if (global.electronAPI && typeof global.electronAPI.openWriting === 'function') {
-            global.electronAPI.openWriting();
+        if (global.electronAPI && typeof global.electronAPI.openPracticeRoute === 'function') {
+            Promise.resolve(global.electronAPI.openPracticeRoute('/writing')).then(function handleRouteResult(result) {
+                if (result && result.success === false && typeof global.showMessage === 'function') {
+                    global.showMessage('写作练习路由打开失败，请稍后重试。', 'error');
+                }
+            }).catch(function handleRouteError(error) {
+                if (typeof global.console !== 'undefined' && typeof global.console.warn === 'function') {
+                    global.console.warn('[MoreView] Practice writing route failed:', error);
+                }
+                if (typeof global.showMessage === 'function') {
+                    global.showMessage('写作练习路由打开失败，请稍后重试。', 'error');
+                }
+            });
             return;
         }
 
         if (typeof global.showMessage === 'function') {
-            global.showMessage('当前环境不支持打开写作模块，请在 Electron 应用中使用。', 'warning');
+            global.showMessage('当前环境不支持打开统一练习工作台，请在 Electron 应用中使用。', 'warning');
             return;
         }
 
         if (typeof global.console !== 'undefined' && typeof global.console.warn === 'function') {
-            global.console.warn('[MoreView] Writing entry is unavailable outside Electron.');
+            global.console.warn('[MoreView] Practice writing route is unavailable outside Electron.');
         }
     }
 
@@ -1056,4 +1067,6 @@
     }
 
     global.ensureMoreView = setupMoreViewInteractions;
+    global.openClockOverlay = openClockOverlay;
+    global.closeClockOverlay = closeClockOverlay;
 })(typeof window !== 'undefined' ? window : this);

@@ -1,0 +1,117 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "📚 考试总览系统 Practice Shell" [ref=e6] [cursor=pointer]:
+        - /url: "#/writing"
+        - strong [ref=e7]: 📚 考试总览系统
+        - generic [ref=e8]: Practice Shell
+      - generic [ref=e10]:
+        - link "写作" [ref=e11] [cursor=pointer]:
+          - /url: "#/writing"
+        - link "写作题库" [ref=e12] [cursor=pointer]:
+          - /url: "#/topics"
+        - link "写作记录" [ref=e13] [cursor=pointer]:
+          - /url: "#/history"
+        - link "设置" [ref=e14] [cursor=pointer]:
+          - /url: "#/settings"
+  - main [ref=e15]:
+    - generic [ref=e16]:
+      - heading "⚙️ 系统设置" [level=2] [ref=e18]
+      - generic "设置主面板" [ref=e19]:
+        - generic [ref=e20]:
+          - heading "🔧 系统管理" [level=3] [ref=e21]
+          - paragraph [ref=e22]: 系统工具和设置选项
+          - generic [ref=e23]:
+            - button "🗑️ 清除缓存" [ref=e24] [cursor=pointer]
+            - button "📂 加载题库" [ref=e25] [cursor=pointer]
+            - button "🎨 主题切换" [ref=e26] [cursor=pointer]
+            - button "🎯 显示引导" [ref=e27] [cursor=pointer]
+            - button "题库配置切换" [ref=e28] [cursor=pointer]:
+              - img [ref=e29]
+              - text: 题库配置切换
+            - button "🔄 强制刷新题库" [ref=e30] [cursor=pointer]
+            - button "🔍 检查更新" [ref=e31] [cursor=pointer]
+        - generic [ref=e32]:
+          - heading "💾 数据管理" [level=3] [ref=e33]
+          - paragraph [ref=e34]: 数据备份、导入导出和完整性检查
+          - generic [ref=e35]:
+            - button "💾 创建备份" [ref=e36] [cursor=pointer]
+            - button "📋 备份列表" [ref=e37] [cursor=pointer]
+            - button "📤 导出数据" [ref=e38] [cursor=pointer]
+            - button "📥 导入数据" [ref=e39] [cursor=pointer]
+            - button "Choose File"
+        - generic [ref=e40]:
+          - heading "📊 系统信息" [level=3] [ref=e41]
+          - generic [ref=e42]:
+            - generic [ref=e43]: "写作状态: 已连接设置服务"
+            - generic [ref=e44]: "启用 API: 0/0"
+            - generic [ref=e45]: "提示词版本: 0"
+            - generic [ref=e46]: "激活提示词: 0"
+            - generic [ref=e47]: "温度参数: 0.5 / 0.5"
+            - generic [ref=e48]: "历史保留: 100 条"
+            - generic [ref=e49]: "Electron版本: N/A"
+            - generic [ref=e50]: "Node版本: N/A"
+            - generic [ref=e51]: "数据目录: 仅在 Electron 中可用"
+          - generic [ref=e52]:
+            - link "问题反馈" [ref=e53] [cursor=pointer]:
+              - /url: https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT
+            - link "Salloway呈现" [ref=e54] [cursor=pointer]:
+              - /url: https://github.com/sallowayma-git
+      - region "写作设置明细" [ref=e55]:
+        - tablist "写作设置分类" [ref=e56]:
+          - button "API 配置" [ref=e57] [cursor=pointer]:
+            - img [ref=e59]
+            - text: API 配置
+          - button "提示词管理" [ref=e65] [cursor=pointer]:
+            - img [ref=e67]
+            - text: 提示词管理
+          - button "模型参数" [ref=e69] [cursor=pointer]:
+            - img [ref=e71]
+            - text: 模型参数
+          - button "数据管理" [ref=e75] [cursor=pointer]:
+            - img [ref=e77]
+            - text: 数据管理
+          - button "关于" [ref=e80] [cursor=pointer]:
+            - img [ref=e82]
+            - text: 关于
+        - generic [ref=e84]:
+          - generic [ref=e85]:
+            - generic [ref=e86]:
+              - heading "温度模式" [level=3] [ref=e87]
+              - paragraph [ref=e88]: 温度值影响 AI 评分的严格程度和反馈详细度。
+            - generic [ref=e89]: 0.5 / 0.5
+          - generic [ref=e90]: "加载设置失败: 本地 API 不可用"
+          - generic [ref=e91]:
+            - button "精确模式 适合客观评分，输出稳定一致 Task 1 0.3 / Task 2 0.3" [ref=e92] [cursor=pointer]:
+              - generic [ref=e93]:
+                - img [ref=e95]
+                - generic [ref=e97]:
+                  - generic [ref=e98]: 精确模式
+                  - generic [ref=e99]: 适合客观评分，输出稳定一致
+              - generic [ref=e100]: Task 1 0.3 / Task 2 0.3
+            - button "平衡模式 推荐使用，兼顾准确性与详细度 Task 1 0.5 / Task 2 0.5" [ref=e101] [cursor=pointer]:
+              - generic [ref=e102]:
+                - img [ref=e104]
+                - generic [ref=e107]:
+                  - generic [ref=e108]: 平衡模式
+                  - generic [ref=e109]: 推荐使用，兼顾准确性与详细度
+              - generic [ref=e110]: Task 1 0.5 / Task 2 0.5
+            - button "创意模式 详细反馈，适合学习分析 Task 1 0.8 / Task 2 0.8" [ref=e111] [cursor=pointer]:
+              - generic [ref=e112]:
+                - img [ref=e114]
+                - generic [ref=e117]:
+                  - generic [ref=e118]: 创意模式
+                  - generic [ref=e119]: 详细反馈，适合学习分析
+              - generic [ref=e120]: Task 1 0.8 / Task 2 0.8
+            - button "自定义模式 兼容旧设置并允许分别配置两个任务 Task 1 0.5 / Task 2 0.5" [ref=e121] [cursor=pointer]:
+              - generic [ref=e122]:
+                - img [ref=e124]
+                - generic [ref=e127]:
+                  - generic [ref=e128]: 自定义模式
+                  - generic [ref=e129]: 兼容旧设置并允许分别配置两个任务
+              - generic [ref=e130]: Task 1 0.5 / Task 2 0.5
+          - generic [ref=e131]:
+            - generic [ref=e132]:
+              - strong [ref=e133]: 平衡模式
+              - generic [ref=e134]: 推荐使用，兼顾准确性与详细度
+            - button "保存设置" [ref=e135] [cursor=pointer]

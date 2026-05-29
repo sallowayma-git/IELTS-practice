@@ -136,6 +136,48 @@ add_check(
     ) else "未检测",
 )
 add_check(
+    "EvaluateService SSE replay cache 具备 session 数上限",
+    contains_all(
+        ROOT / "server/src/lib/writing/evaluate-service.ts",
+        [
+            "const SESSION_EVENT_CACHE_LIMIT = 24",
+            "this.maxCachedEventSessions = SESSION_EVENT_CACHE_LIMIT",
+            "_setBoundedSessionEventCache(sessionId, cache)",
+            "setBoundedCacheEntry(",
+            "getRuntimeCacheStats()",
+        ],
+    ),
+    "已检测" if contains_all(
+        ROOT / "server/src/lib/writing/evaluate-service.ts",
+        [
+            "const SESSION_EVENT_CACHE_LIMIT = 24",
+            "this.maxCachedEventSessions = SESSION_EVENT_CACHE_LIMIT",
+            "_setBoundedSessionEventCache(sessionId, cache)",
+            "setBoundedCacheEntry(",
+            "getRuntimeCacheStats()",
+        ],
+    ) else "未检测",
+)
+add_check(
+    "EvaluateService SSE replay 淘汰同步清理 inactive progress",
+    contains_all(
+        ROOT / "server/src/lib/writing/evaluate-service.ts",
+        [
+            "_discardCachedSessionProgress(evictedSessionId)",
+            "this.sessionProgress.delete(sessionId)",
+            "if (!this.sessions.has(sessionId))",
+        ],
+    ),
+    "已检测" if contains_all(
+        ROOT / "server/src/lib/writing/evaluate-service.ts",
+        [
+            "_discardCachedSessionProgress(evictedSessionId)",
+            "this.sessionProgress.delete(sessionId)",
+            "if (!this.sessions.has(sessionId))",
+        ],
+    ) else "未检测",
+)
+add_check(
     "EvaluateService review 失败不会误报 completed",
     contains(ROOT / "server/src/lib/writing/evaluate-service.ts", "reviewStageDegraded"),
     "已检测" if contains(ROOT / "server/src/lib/writing/evaluate-service.ts", "reviewStageDegraded") else "未检测",
@@ -186,13 +228,24 @@ else:
     add_check("运行时探针: 评测结果 contract_version/scorecard/analysis/review 持久化稳定", False, "探针脚本缺失")
 add_check(
     "History 搜索 LIKE 支持",
-    contains(ROOT / "electron/db/dao/essays.dao.js", "t.title_json LIKE ? OR e.content LIKE ?"),
-    "已检测" if contains(ROOT / "electron/db/dao/essays.dao.js", "t.title_json LIKE ? OR e.content LIKE ?") else "未检测",
+    contains(ROOT / "electron/db/dao/essays.dao.js", "t.title_json LIKE ? OR e.topic_text LIKE ? OR e.content LIKE ?"),
+    "已检测" if contains(ROOT / "electron/db/dao/essays.dao.js", "t.title_json LIKE ? OR e.topic_text LIKE ? OR e.content LIKE ?") else "未检测",
 )
 add_check(
-    "History 搜索覆盖 evaluation_json",
-    contains(ROOT / "electron/db/dao/essays.dao.js", "e.evaluation_json LIKE ?"),
-    "已检测" if contains(ROOT / "electron/db/dao/essays.dao.js", "e.evaluation_json LIKE ?") else "未检测",
+    "History 列表不扫描 evaluation_json",
+    not_contains(ROOT / "electron/db/dao/essays.dao.js", "e.evaluation_json LIKE ?"),
+    "已检测" if not_contains(ROOT / "electron/db/dao/essays.dao.js", "e.evaluation_json LIKE ?") else "仍在扫描",
+)
+add_check(
+    "History 列表摘要不解析 evaluation_json",
+    (
+        contains(ROOT / "electron/services/essay.service.js", "_decorateEssaySummary")
+        and contains(ROOT / "electron/services/essay.service.js", "result.data.map((item) => this._decorateEssaySummary(item))")
+    ),
+    "已检测" if (
+        contains(ROOT / "electron/services/essay.service.js", "_decorateEssaySummary")
+        and contains(ROOT / "electron/services/essay.service.js", "result.data.map((item) => this._decorateEssaySummary(item))")
+    ) else "未检测",
 )
 add_check(
     "EssayService 暴露 display_topic_title",
@@ -214,15 +267,19 @@ add_check(
     (
         contains_all(
             ROOT / "electron/preload.js",
-            ["getLocalApiInfo", "openWriting", "openLegacy"]
+            ["getLocalApiInfo", "openPracticeRoute", "openPracticeReading"]
         )
+        and "openLegacy" not in (ROOT / "electron/preload.js").read_text(encoding="utf-8")
+        and "openWriting" not in (ROOT / "electron/preload.js").read_text(encoding="utf-8")
         and "writingAPI" not in (ROOT / "electron/preload.js").read_text(encoding="utf-8")
     ),
     "已检测" if (
         contains_all(
             ROOT / "electron/preload.js",
-            ["getLocalApiInfo", "openWriting", "openLegacy"]
+            ["getLocalApiInfo", "openPracticeRoute", "openPracticeReading"]
         )
+        and "openLegacy" not in (ROOT / "electron/preload.js").read_text(encoding="utf-8")
+        and "openWriting" not in (ROOT / "electron/preload.js").read_text(encoding="utf-8")
         and "writingAPI" not in (ROOT / "electron/preload.js").read_text(encoding="utf-8")
     ) else "未检测",
 )

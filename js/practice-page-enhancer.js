@@ -1577,16 +1577,6 @@
          * 解决方案：多布局容器解析 + 浮层兜底 + 样式自适应
          */
         injectBackToHomeButton: function () {
-            // 检查是否在 Electron 环境中
-            const hasElectronAPI = typeof window.electronAPI !== 'undefined'
-                && window.electronAPI
-                && typeof window.electronAPI.openLegacy === 'function';
-
-            if (!hasElectronAPI) {
-                console.log('[PracticeEnhancer] 非 Electron 环境，跳过返回按钮注入');
-                return;
-            }
-
             // 检查是否已经存在返回按钮
             if (document.getElementById('back-to-home-btn')) {
                 console.log('[PracticeEnhancer] 返回按钮已存在，跳过注入');
@@ -1663,6 +1653,15 @@
             };
 
             const styleConfig = getAdaptiveButtonStyle();
+            const resolveRuntimeParam = (name) => {
+                try {
+                    const params = new URLSearchParams(window.location && window.location.search ? window.location.search : '');
+                    const value = params.get(name);
+                    return value && String(value).trim() ? String(value).trim() : '';
+                } catch (_) {
+                    return '';
+                }
+            };
             const resolveLegacyIndexUrl = () => {
                 const href = window.location && typeof window.location.href === 'string'
                     ? String(window.location.href)
@@ -1691,6 +1690,19 @@
                 return '';
             };
             const navigateLegacyByLocation = () => {
+                const runtimeLegacyHomeUrl = resolveRuntimeParam('legacyHomeUrl');
+                if (runtimeLegacyHomeUrl) {
+                    try {
+                        if (window.location && typeof window.location.replace === 'function') {
+                            window.location.replace(runtimeLegacyHomeUrl);
+                        } else if (window.location) {
+                            window.location.href = runtimeLegacyHomeUrl;
+                        }
+                        return true;
+                    } catch (_) {
+                        // continue to file:// fallback
+                    }
+                }
                 const legacyIndexUrl = resolveLegacyIndexUrl();
                 if (!legacyIndexUrl) {
                     return false;
@@ -1746,25 +1758,19 @@
                     }
                 }
 
-                // 调用 Electron API 返回主页（统一入口）
-                try {
-                    window.electronAPI.openLegacy();
+                if (navigateLegacyByLocation()) {
                     console.log('[PracticeEnhancer] 正在返回主页...');
-                } catch (error) {
-                    console.error('[PracticeEnhancer] 返回主页失败:', error);
-                    if (navigateLegacyByLocation()) {
-                        return;
-                    }
-                    const opener = window.opener && !window.opener.closed ? window.opener : null;
-                    if (opener && typeof opener.postMessage === 'function') {
-                        try {
-                            opener.postMessage({ type: 'PRACTICE_EXIT', data: { source: 'practice_page' } }, '*');
-                        } catch (_) {
-                            // ignore opener communication errors
-                        }
-                    }
-                    window.close();
+                    return;
                 }
+                const opener = window.opener && !window.opener.closed ? window.opener : null;
+                if (opener && typeof opener.postMessage === 'function') {
+                    try {
+                        opener.postMessage({ type: 'PRACTICE_EXIT', data: { source: 'practice_page' } }, '*');
+                    } catch (_) {
+                        // ignore opener communication errors
+                    }
+                }
+                window.close();
             });
 
             // 将按钮插入到容器

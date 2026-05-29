@@ -36,6 +36,7 @@
             <option value="">全部</option>
             <option value="task1">Task 1</option>
             <option value="task2">Task 2</option>
+            <option value="reading">阅读</option>
           </select>
         </div>
 
@@ -95,9 +96,12 @@
     </div>
 
     <!-- 统计分析区域 -->
-    <div v-if="total > 0" class="statistics-section card">
-      <div v-if="statistics" class="statistics-content analytics-layout">
-        <section class="stat-chart analytics-radar-card">
+    <div v-if="showAnalyticsSection" class="statistics-section card">
+      <div
+        v-if="statistics || trendData.length > 0"
+        :class="['statistics-content', 'analytics-layout', { 'analytics-layout--trend-only': !hasWritingAnalytics }]"
+      >
+        <section v-if="hasWritingAnalytics" class="stat-chart analytics-radar-card">
           <div class="section-header">
             <h2>4-Dimensional Scoring Analysis</h2>
           </div>
@@ -124,7 +128,7 @@
         </section>
 
         <div class="analytics-side">
-          <section class="stat-comparison analytics-compare-card">
+          <section v-if="hasWritingAnalytics" class="stat-comparison analytics-compare-card">
             <div class="section-header">
               <h3>Detailed Comparison</h3>
               <div class="range-selector">
@@ -195,9 +199,16 @@
           <section class="trend-chart-container analytics-trend-card test-dashboard-card">
             <h3>
               <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-              Score Trend
+              {{ trendChartTitle }}
             </h3>
-            <LineChart :historyData="trendData" />
+            <LineChart
+              :historyData="trendData"
+              :min-score="trendChartMinScore"
+              :max-score="trendChartMaxScore"
+              :grid-lines="trendChartGridLines"
+              :score-suffix="trendChartScoreSuffix"
+              :axis-label-decimals="trendChartAxisLabelDecimals"
+            />
           </section>
         </div>
       </div>
@@ -227,7 +238,7 @@
     </div>
 
     <div v-else-if="essays.length === 0 && !hasActiveFilters" class="empty-state card">
-      <p>暂无历史记录，提交作文后查看评分历史</p>
+      <p>暂无历史记录，提交作文或完成阅读练习后查看历史</p>
     </div>
 
     <div v-else-if="essays.length === 0 && hasActiveFilters" class="empty-state card">
@@ -244,7 +255,7 @@
       <div class="essay-list">
         <div v-for="essay in essays" :key="essay.id" class="essay-item card">
           <div class="essay-checkbox">
-            <input 
+            <input
               type="checkbox"
               :checked="selectedIds.includes(essay.id)"
               @change="toggleSelection(essay.id)"
@@ -254,7 +265,7 @@
           <div class="essay-content" @click="viewDetail(essay.id)">
             <div class="essay-header">
               <span :class="['task-badge', essay.task_type]">
-                {{ essay.task_type === 'task1' ? 'Task 1' : 'Task 2' }}
+                {{ getRecordTypeLabel(essay) }}
               </span>
               <span class="essay-date">{{ formatDate(essay.submitted_at) }}</span>
             </div>
@@ -264,8 +275,8 @@
             </div>
 
             <div class="essay-stats">
-              <span class="stat-item">{{ essay.task_type === 'task1' ? '20 min' : '40 min' }}</span>
-              <span class="stat-item">字数 {{ essay.word_count }}</span>
+              <span class="stat-item">{{ getRecordDurationLabel(essay) }}</span>
+              <span class="stat-item">{{ getRecordSizeLabel(essay) }}</span>
               <span :class="['stat-item', 'score', getScoreClass(essay.total_score)]">
                 {{ formatDate(essay.submitted_at).split(' ')[0] }}
               </span>
@@ -274,8 +285,8 @@
 
           <div class="essay-right">
             <div class="essay-score-pod">
-              <span>Overall Score</span>
-              <strong>{{ Number(essay.total_score || 0).toFixed(1) }}</strong>
+              <span>{{ essay.activity === 'reading' ? 'Accuracy' : 'Overall Score' }}</span>
+              <strong>{{ formatRecordScore(essay) }}</strong>
             </div>
             <div class="essay-actions">
               <button class="btn-icon" @click.stop="viewDetail(essay.id)" title="查看详情">
@@ -478,7 +489,9 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { essays as essaysApi } from '@/api/client.js'
+import { practiceHistory } from '@/api/practice-client.js'
 import RadarChart from '@/components/RadarChart.vue'
 import LineChart from '@/components/LineChart.vue'
 import { debounce } from '@/utils/debounce.js'
@@ -493,10 +506,13 @@ import {
 } from '@/utils/evaluation-result.js'
 
 // 状态
+const router = useRouter()
 const loading = ref(false)
 const error = ref('')
 const essaysList = ref([])
 const total = ref(0)
+const writingHistoryTotal = ref(0)
+const readingHistoryTotal = ref(0)
 const pagination = ref({ page: 1, limit: 20 })
 const today = new Date().toISOString().split('T')[0]
 const pageNotice = ref({ type: '', message: '' })
@@ -505,22 +521,56 @@ const pageNotice = ref({ type: '', message: '' })
 const loadingStatistics = ref(false)
 const statistics = ref(null)
 const statisticsRange = ref('all')
+const HISTORY_CSV_HEADERS = [
+  '提交时间',
+  '题目类型',
+  '题目标题',
+  '字数',
+  '总分',
+  'Task Achievement',
+  'Coherence & Cohesion',
+  'Lexical Resource',
+  'Grammatical Range',
+  '模型名称'
+]
 
-const trendData = computed(() => {
+const trendRecords = computed(() => {
   if (!essaysList.value) return [];
-  const sorted = [...essaysList.value].sort((a, b) => {
+  return [...essaysList.value].sort((a, b) => {
     const ta = new Date(a.submitted_at || a.created_at || 0).getTime()
     const tb = new Date(b.submitted_at || b.created_at || 0).getTime()
     return ta - tb
-  })
-  return sorted.slice(-15).map(record => {
+  }).slice(-15)
+})
+
+const trendUsesPercentScale = computed(() => trendRecords.value.some((record) => record.activity === 'reading'))
+
+const trendData = computed(() => {
+  return trendRecords.value.map((record) => {
     const d = new Date(record.submitted_at || record.created_at);
+    const score = record.activity === 'reading'
+      ? Number(record.reading_accuracy || 0)
+      : Number(record.total_score ?? record.overall_score ?? 0) * (trendUsesPercentScale.value ? 10 : 1)
     return {
       date: `${d.getMonth() + 1}/${d.getDate()}`,
-      score: Number(record.total_score ?? record.overall_score ?? 0)
+      score
     };
   });
 })
+
+const hasWritingAnalytics = computed(() => writingHistoryTotal.value > 0 && statistics.value && statistics.value.count > 0)
+const showAnalyticsSection = computed(() => total.value > 0 && (hasWritingAnalytics.value || trendData.value.length > 0 || loadingStatistics.value))
+const trendIsReadingOnly = computed(() => trendRecords.value.length > 0 && trendRecords.value.every((record) => record.activity === 'reading'))
+const trendChartTitle = computed(() => {
+  if (trendIsReadingOnly.value) return 'Accuracy Trend'
+  if (trendUsesPercentScale.value) return 'Practice Trend'
+  return 'Score Trend'
+})
+const trendChartMinScore = computed(() => trendUsesPercentScale.value ? 0 : 4)
+const trendChartMaxScore = computed(() => trendUsesPercentScale.value ? 100 : 9)
+const trendChartGridLines = computed(() => trendUsesPercentScale.value ? [0, 20, 40, 60, 80, 100] : [4, 5, 6, 7, 8, 9])
+const trendChartScoreSuffix = computed(() => trendUsesPercentScale.value ? '%' : ' 分')
+const trendChartAxisLabelDecimals = computed(() => trendUsesPercentScale.value ? 0 : 1)
 
 // 筛选条件（严格按照后端契约）
 const filters = ref({
@@ -642,7 +692,7 @@ function clearPageNotice() {
 function buildApiFilters(source = filters.value) {
   const apiFilters = {}
 
-  if (source.task_type) apiFilters.task_type = source.task_type
+  if (source.task_type && source.task_type !== 'reading') apiFilters.task_type = source.task_type
   if (source.start_date) apiFilters.start_date = source.start_date
   if (source.end_date) apiFilters.end_date = source.end_date
   if (source.min_score !== null && source.min_score !== '') {
@@ -656,6 +706,14 @@ function buildApiFilters(source = filters.value) {
   }
 
   return apiFilters
+}
+
+function shouldLoadWritingHistory(source = filters.value) {
+  return source.task_type !== 'reading'
+}
+
+function shouldLoadReadingHistory(source = filters.value) {
+  return !source.task_type || source.task_type === 'reading'
 }
 
 function validateFilters(source = filters.value) {
@@ -677,6 +735,61 @@ function keepVisibleSelections() {
   selectedIds.value = selectedIds.value.filter((id) => visibleIds.has(id))
 }
 
+function normalizeWritingHistoryRecord(record) {
+  return {
+    ...record,
+    activity: record.activity || 'writing',
+    submitted_at: record.submitted_at || record.created_at || '',
+    total_score: Number(record.total_score ?? record.overall_score ?? 0)
+  }
+}
+
+function normalizeReadingHistoryRecord(record) {
+  const accuracy = Number(record.accuracy || 0)
+  const percentage = Math.round(accuracy * 100)
+  return {
+    id: record.id,
+    activity: 'reading',
+    task_type: 'reading',
+    sessionId: record.sessionId,
+    assetId: record.assetId || record.examId,
+    display_topic_title: record.title || record.examId || '阅读练习',
+    topic_title: record.title || record.examId || '阅读练习',
+    submitted_at: record.submittedAt || record.endTime || '',
+    word_count: Number(record.totalQuestions || 0),
+    duration: Number(record.duration || 0),
+    total_score: percentage / 10,
+    reading_accuracy: percentage,
+    correct_answers: Number(record.correctAnswers || record.score || 0),
+    total_questions: Number(record.totalQuestions || 0),
+    raw: record
+  }
+}
+
+function filterReadingHistory(records, source = filters.value) {
+  const query = String(source.search || '').trim().toLowerCase()
+  const minScore = source.min_score === null || source.min_score === '' ? null : Number(source.min_score)
+  const maxScore = source.max_score === null || source.max_score === '' ? null : Number(source.max_score)
+  return records.filter((record) => {
+    if (source.task_type && source.task_type !== 'reading') return false
+    if (source.start_date && String(record.submitted_at || '').slice(0, 10) < source.start_date) return false
+    if (source.end_date && String(record.submitted_at || '').slice(0, 10) > source.end_date) return false
+    if (minScore !== null && Number(record.total_score || 0) < minScore) return false
+    if (maxScore !== null && Number(record.total_score || 0) > maxScore) return false
+    if (!query) return true
+    return [
+      record.display_topic_title,
+      record.topic_title,
+      record.assetId,
+      record.sessionId
+    ].filter(Boolean).join(' ').toLowerCase().includes(query)
+  })
+}
+
+function compareHistoryRecords(left, right) {
+  return new Date(right.submitted_at || 0).getTime() - new Date(left.submitted_at || 0).getTime()
+}
+
 // 加载列表
 async function loadEssays() {
   const requestId = listRequestGate.begin()
@@ -693,6 +806,8 @@ async function loadEssays() {
       error.value = validationError
       essaysList.value = []
       total.value = 0
+      writingHistoryTotal.value = 0
+      readingHistoryTotal.value = 0
       clearSelection()
       statistics.value = null
       loading.value = false
@@ -703,14 +818,35 @@ async function loadEssays() {
   }
 
   try {
-    const result = await essaysApi.list(buildApiFilters(filtersSnapshot), paginationSnapshot)
+    const shouldLoadWriting = shouldLoadWritingHistory(filtersSnapshot)
+    const shouldLoadReading = shouldLoadReadingHistory(filtersSnapshot)
+    const mergedLimit = Math.max(1, paginationSnapshot.page * paginationSnapshot.limit)
+    const [writingResult, readingResult] = await Promise.all([
+      shouldLoadWriting
+        ? essaysApi.list(buildApiFilters(filtersSnapshot), { page: 1, limit: mergedLimit })
+        : Promise.resolve({ data: [], total: 0 }),
+      shouldLoadReading
+        ? practiceHistory.listAll({ activity: 'reading' })
+        : Promise.resolve({ data: [], total: 0 })
+    ])
     if (!listRequestGate.isCurrent(requestId)) return
 
-    essaysList.value = Array.isArray(result.data) ? result.data : []
-    total.value = Number(result.total) || 0
+    const writingRecords = (Array.isArray(writingResult.data) ? writingResult.data : []).map(normalizeWritingHistoryRecord)
+    const readingRecords = filterReadingHistory(
+      (Array.isArray(readingResult.data) ? readingResult.data : []).map(normalizeReadingHistoryRecord),
+      filtersSnapshot
+    )
+    const combined = [...writingRecords, ...readingRecords].sort(compareHistoryRecords)
+    const writingTotal = shouldLoadWriting ? Number(writingResult.total || writingRecords.length || 0) : 0
+    const readingTotal = shouldLoadReading ? readingRecords.length : 0
+    const offset = (paginationSnapshot.page - 1) * paginationSnapshot.limit
+    essaysList.value = combined.slice(offset, offset + paginationSnapshot.limit)
+    total.value = writingTotal + readingTotal
+    writingHistoryTotal.value = writingTotal
+    readingHistoryTotal.value = readingTotal
     keepVisibleSelections()
     await loadStatistics({
-      totalCount: total.value,
+      totalCount: writingTotal,
       rangeValue: statisticsRange.value,
       parentListRequestId: requestId
     })
@@ -719,6 +855,8 @@ async function loadEssays() {
     console.error('加载历史记录失败:', err)
     error.value = err.message || '加载失败，请重试'
     statistics.value = null
+    writingHistoryTotal.value = 0
+    readingHistoryTotal.value = 0
     loadingStatistics.value = false
     statisticsRequestGate.invalidate()
   } finally {
@@ -761,6 +899,21 @@ function clearSelection() {
 
 // 查看详情
 async function viewDetail(id) {
+  const listRecord = essaysList.value.find((record) => record.id === id)
+  if (listRecord?.activity === 'reading') {
+    const assetId = String(listRecord.assetId || '').trim()
+    const sessionId = String(listRecord.sessionId || '').trim()
+    if (!assetId || !sessionId) {
+      setPageNotice('error', '阅读记录缺少回顾所需的 assetId 或 sessionId')
+      return
+    }
+    router.push({
+      name: 'PracticeReadingReview',
+      params: { assetId, sessionId }
+    })
+    return
+  }
+
   const requestId = detailRequestGate.begin()
   detailModalEssay.value = id
   detailData.value = null
@@ -822,12 +975,30 @@ function confirmDeleteAll() {
 async function executeDelete() {
   try {
     if (deleteMode.value === 'single') {
-      await essaysApi.delete(deleteTarget.value)
+      const targetRecord = essaysList.value.find((record) => record.id === deleteTarget.value)
+      if (targetRecord?.activity === 'reading') {
+        await practiceHistory.delete('reading', deleteTarget.value)
+      } else {
+        await essaysApi.delete(deleteTarget.value)
+      }
     } else if (deleteMode.value === 'batch') {
-      await essaysApi.batchDelete(selectedIds.value)
+      const selectedRecords = essaysList.value.filter((record) => selectedIds.value.includes(record.id))
+      const readingIds = selectedRecords
+        .filter((record) => record.activity === 'reading')
+        .map((record) => record.id)
+      const writingIds = selectedRecords
+        .filter((record) => record.activity !== 'reading')
+        .map((record) => record.id)
+      await Promise.all([
+        writingIds.length ? essaysApi.batchDelete(writingIds) : Promise.resolve(null),
+        ...readingIds.map((id) => practiceHistory.delete('reading', id))
+      ])
       selectedIds.value = []
     } else if (deleteMode.value === 'all') {
-      await essaysApi.deleteAll()
+      await Promise.all([
+        shouldLoadWritingHistory(filters.value) ? essaysApi.deleteAll() : Promise.resolve(null),
+        shouldLoadReadingHistory(filters.value) ? practiceHistory.clear({ activity: 'reading' }) : Promise.resolve(null)
+      ])
     }
 
     const wasDeleteAll = deleteMode.value === 'all'
@@ -846,13 +1017,58 @@ async function executeDelete() {
   }
 }
 
+function escapeCsvCell(value) {
+  const text = String(value ?? '')
+  return `"${text.replace(/"/g, '""')}"`
+}
+
+function buildReadingHistoryCsvRows(records = []) {
+  return records.map((record) => [
+    record.submitted_at,
+    '阅读',
+    record.display_topic_title || record.topic_title || '阅读练习',
+    record.total_questions || record.word_count || 0,
+    `${Number(record.reading_accuracy || 0)}%`,
+    '',
+    '',
+    '',
+    '',
+    'Practice API'
+  ].map(escapeCsvCell).join(','))
+}
+
+function downloadCsvFile(filename, csvContent) {
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 // 导出CSV
 async function exportCSV() {
   clearPageNotice()
 
   try {
+    const filtersSnapshot = { ...filters.value }
+    const shouldExportWriting = shouldLoadWritingHistory(filtersSnapshot)
+    const shouldExportReading = shouldLoadReadingHistory(filtersSnapshot)
     // 导出"当前筛选结果全量"，非"当前页"
-    const csvContent = await essaysApi.exportCSV(buildApiFilters())
+    const [writingCsv, readingResult] = await Promise.all([
+      shouldExportWriting ? essaysApi.exportCSV(buildApiFilters(filtersSnapshot)) : Promise.resolve(''),
+      shouldExportReading ? practiceHistory.listAll({ activity: 'reading' }) : Promise.resolve({ data: [] })
+    ])
+    const writingLines = String(writingCsv || '').split(/\r?\n/).filter(Boolean)
+    const readingRows = shouldExportReading
+      ? buildReadingHistoryCsvRows(filterReadingHistory(
+        (Array.isArray(readingResult.data) ? readingResult.data : []).map(normalizeReadingHistoryRecord),
+        filtersSnapshot
+      ))
+      : []
+    const header = writingLines[0] || HISTORY_CSV_HEADERS.join(',')
+    const csvContent = [header, ...writingLines.slice(1), ...readingRows].join('\n')
 
     // 生成带筛选范围的文件名
     const dateStr = new Date().toISOString().split('T')[0]
@@ -863,13 +1079,7 @@ async function exportCSV() {
     const filename = `ielts-history-${dateStr}${filterSuffix.length > 0 ? '-' + filterSuffix.join('-') : ''}.csv`
 
     // 下载CSV文件
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    link.click()
-    URL.revokeObjectURL(url)
+    downloadCsvFile(filename, csvContent)
   } catch (err) {
     console.error('导出CSV失败:', err)
     setPageNotice('error', `导出失败：${err.message || '请重试'}`)
@@ -952,6 +1162,36 @@ function getTopicTitle(titleJson) {
   return getTopicTitlePreview(titleJson, { fallback: '自由写作', maxLength: 50 })
 }
 
+function getRecordTypeLabel(record) {
+  if (record?.activity === 'reading') return '阅读'
+  return record?.task_type === 'task1' ? 'Task 1' : 'Task 2'
+}
+
+function getRecordDurationLabel(record) {
+  if (record?.activity === 'reading') {
+    const duration = Number(record.duration || 0)
+    if (!duration) return '阅读练习'
+    const minutes = Math.floor(duration / 60)
+    const seconds = duration % 60
+    return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`
+  }
+  return record?.task_type === 'task1' ? '20 min' : '40 min'
+}
+
+function getRecordSizeLabel(record) {
+  if (record?.activity === 'reading') {
+    return `${Number(record.total_questions || record.word_count || 0)} 题`
+  }
+  return `字数 ${record?.word_count || 0}`
+}
+
+function formatRecordScore(record) {
+  if (record?.activity === 'reading') {
+    return `${Number(record.reading_accuracy || 0)}%`
+  }
+  return Number(record?.total_score || 0).toFixed(1)
+}
+
 function getTopicSourceLabel(source) {
   if (source === 'topic_bank') return '题库题目'
   if (source === 'custom_input') return '自定义题目'
@@ -998,7 +1238,7 @@ watch(() => pagination.value.page, () => {
 })
 
 watch(statisticsRange, (rangeValue) => {
-  loadStatistics({ totalCount: total.value, rangeValue })
+  loadStatistics({ totalCount: writingHistoryTotal.value, rangeValue })
 })
 
 // 初始化
@@ -1745,6 +1985,10 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
   gap: 18px;
+}
+
+.history-page .analytics-layout--trend-only {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .history-page .analytics-radar-card {

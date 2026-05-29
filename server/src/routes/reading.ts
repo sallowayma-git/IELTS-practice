@@ -1,12 +1,14 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { ServiceBundle } from '../types/api.js'
-import { ReadingAssistantService } from '../lib/reading/service.js'
+import { PracticeService } from '../lib/practice/service.js'
 import { beginSse } from '../lib/shared/sse.js'
 import { resolveHttpStatus, toErrorEnvelope } from '../lib/shared/errors.js'
 
 const requestSchema = z.object({
-  examId: z.string().trim().min(1),
+  examId: z.string().trim().min(1).optional(),
+  sessionId: z.string().trim().max(160).optional(),
+  mode: z.string().trim().max(80).optional(),
   query: z.string().trim().max(12000).optional(),
   userQuery: z.string().trim().max(12000).optional(),
   locale: z.enum(['zh', 'en']).default('zh').optional(),
@@ -42,17 +44,36 @@ const requestSchema = z.object({
     submitted: z.boolean().optional(),
     score: z.number().nullable().optional(),
     wrongQuestions: z.array(z.string().trim()).max(30).optional(),
-    selectedAnswers: z.record(z.string(), z.string()).optional()
-  }).optional()
+    selectedAnswers: z.record(z.string(), z.string()).optional(),
+    analysisSignals: z.record(z.string(), z.unknown()).nullable().optional(),
+    markedQuestions: z.array(z.string().trim()).max(40).optional(),
+    questionTimelineLite: z.array(z.record(z.string(), z.unknown())).max(40).optional(),
+    questionTypePerformance: z.record(z.string(), z.record(z.string(), z.unknown())).optional()
+  }).passthrough().optional()
 })
 
-export async function registerReadingRoutes(app: FastifyInstance, services: ServiceBundle) {
-  const service = new ReadingAssistantService(services)
+function getCoachSessionId(payload: { sessionId?: string }) {
+  return typeof payload.sessionId === 'string' && payload.sessionId.trim()
+    ? payload.sessionId.trim()
+    : null
+}
+
+function getLegacyRequestId(payload: { examId?: string; sessionId?: string }) {
+  return String(payload.examId || payload.sessionId || 'reading-coach')
+}
+
+export async function registerReadingRoutes(
+  app: FastifyInstance,
+  services: ServiceBundle,
+  service = new PracticeService(services)
+) {
 
   app.post('/api/reading/assistant/query', async (request, reply) => {
     try {
       const payload = requestSchema.parse(request.body || {})
-      const data = await service.query(payload)
+      const data = await service.coach('reading', payload, undefined, getCoachSessionId(payload), {
+        requirePersistedReviewSession: false
+      })
       reply.send({ success: true, data })
     } catch (error) {
       reply.code(resolveHttpStatus(error)).send(toErrorEnvelope(error))
@@ -69,18 +90,21 @@ export async function registerReadingRoutes(app: FastifyInstance, services: Serv
     }
 
     const stream = beginSse(reply)
-    stream.write('start', { ts: Date.now(), requestId: payload.examId })
+    const requestId = getLegacyRequestId(payload)
+    stream.write('start', { ts: Date.now(), requestId })
 
     try {
-      const data = await service.query(payload, (event) => {
+      const data = await service.coach('reading', payload, (event) => {
         stream.write(String(event.type || 'progress'), {
           ...event,
-          requestId: payload.examId
+          requestId
         })
+      }, getCoachSessionId(payload), {
+        requirePersistedReviewSession: false
       })
       stream.write('complete', {
         ts: Date.now(),
-        requestId: payload.examId,
+        requestId,
         success: true,
         data
       })
@@ -88,7 +112,7 @@ export async function registerReadingRoutes(app: FastifyInstance, services: Serv
       const envelope = toErrorEnvelope(error, 'reading_assistant_failed')
       stream.write('error', {
         ts: Date.now(),
-        requestId: payload.examId,
+        requestId,
         success: false,
         error: envelope
       })

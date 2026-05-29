@@ -1,0 +1,67 @@
+- main [ref=e4]:
+  - generic [ref=e5]:
+    - heading "📚 考试总览系统 项目仅授权ZYZ Reading Walks 提供分发，小红书号：276752989 小红书主页 GitHub Repository" [level=1] [ref=e7]:
+      - text: 📚 考试总览系统
+      - generic [ref=e8]: 项目仅授权ZYZ Reading Walks 提供分发，小红书号：276752989
+      - link "小红书主页" [ref=e9] [cursor=pointer]:
+        - /url: https://www.xiaohongshu.com/user/profile/5b4d76744eacab058489e72f
+        - text: 小红书
+      - link "GitHub Repository" [ref=e10] [cursor=pointer]:
+        - /url: https://github.com/sallowayma-git/IELTS-practice
+        - img [ref=e11]
+    - navigation "主导航" [ref=e13]:
+      - button "总览" [ref=e14] [cursor=pointer]:
+        - img [ref=e16]
+        - text: 总览
+      - button "题库浏览" [ref=e18] [cursor=pointer]:
+        - img [ref=e20]
+        - text: 题库浏览
+      - button "练习记录" [ref=e23] [cursor=pointer]:
+        - img [ref=e25]
+        - text: 练习记录
+      - button "更多" [ref=e28] [cursor=pointer]:
+        - img [ref=e30]
+        - text: 更多
+      - button "设置" [ref=e34] [cursor=pointer]:
+        - img [ref=e36]
+        - text: 设置
+    - generic [ref=e39]:
+      - heading "📊 学习总览" [level=2] [ref=e41]
+      - generic [ref=e42]:
+        - generic [ref=e43]:
+          - heading "阅读" [level=3] [ref=e44]
+          - generic [ref=e45]:
+            - button "无尽模式" [ref=e46] [cursor=pointer]:
+              - img [ref=e48]
+              - generic [ref=e51]: 无尽模式
+            - button "套题模式" [ref=e52] [cursor=pointer]:
+              - img [ref=e54]
+              - generic [ref=e58]: 套题模式
+        - generic [ref=e59]:
+          - generic [ref=e60]:
+            - generic [ref=e61]: 📖
+            - generic [ref=e62]:
+              - generic [ref=e63]: P1 阅读
+              - generic [ref=e64]: 0 篇
+          - generic [ref=e65]:
+            - button "📚 浏览题库" [ref=e66] [cursor=pointer]
+            - button "🎲 随机练习" [ref=e67] [cursor=pointer]
+        - generic [ref=e68]:
+          - generic [ref=e69]:
+            - generic [ref=e70]: 📖
+            - generic [ref=e71]:
+              - generic [ref=e72]: P2 阅读
+              - generic [ref=e73]: 0 篇
+          - generic [ref=e74]:
+            - button "📚 浏览题库" [ref=e75] [cursor=pointer]
+            - button "🎲 随机练习" [ref=e76] [cursor=pointer]
+        - generic [ref=e77]:
+          - generic [ref=e78]:
+            - generic [ref=e79]: 📖
+            - generic [ref=e80]:
+              - generic [ref=e81]: P3 阅读
+              - generic [ref=e82]: 0 篇
+          - generic [ref=e83]:
+            - button "📚 浏览题库" [ref=e84] [cursor=pointer]
+            - button "🎲 随机练习" [ref=e85] [cursor=pointer]
+      - generic [ref=e86]: 阅读题库加载失败：本地 API 不可用

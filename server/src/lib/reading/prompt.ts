@@ -18,6 +18,8 @@ function uniqueList(list = []) {
     return output;
 }
 
+const IELTS_READING_REVIEW_QUESTION_LIMIT = 40;
+
 function clampConfidence(value) {
     const normalized = String(value || '').trim().toLowerCase();
     if (normalized === 'high' || normalized === 'medium' || normalized === 'low') {
@@ -208,11 +210,51 @@ function formatAttemptContext(attemptContext = {}) {
     const wrongQuestions = Array.isArray(attemptContext.wrongQuestions) && attemptContext.wrongQuestions.length
         ? attemptContext.wrongQuestions.join(', ')
         : 'none';
+    const analysisSignals = isObject(attemptContext.analysisSignals)
+        ? Object.entries(attemptContext.analysisSignals)
+            .map(([key, value]) => `${key}=${value}`)
+            .join(' | ')
+        : 'none';
+    const markedQuestions = Array.isArray(attemptContext.markedQuestions) && attemptContext.markedQuestions.length
+        ? attemptContext.markedQuestions.join(', ')
+        : 'none';
+    const questionTimelineLite = Array.isArray(attemptContext.questionTimelineLite) && attemptContext.questionTimelineLite.length
+        ? attemptContext.questionTimelineLite
+            .slice(0, 12)
+            .map((entry) => {
+                if (!isObject(entry)) return null;
+                const label = String(entry.displayLabel || entry.questionId || '').trim().replace(/^q/i, '');
+                const changeCount = Number.isFinite(Number(entry.changeCount)) ? Number(entry.changeCount) : 0;
+                const visitCount = Number.isFinite(Number(entry.visitCount)) ? Number(entry.visitCount) : 0;
+                const elapsedMs = Number.isFinite(Number(entry.elapsedMs ?? entry.durationMs))
+                    ? Number(entry.elapsedMs ?? entry.durationMs)
+                    : 0;
+                return label ? `Q${label}:changes=${changeCount},visits=${visitCount},elapsedMs=${elapsedMs}` : null;
+            })
+            .filter(Boolean)
+            .join(' | ')
+        : 'none';
+    const questionTypePerformance = isObject(attemptContext.questionTypePerformance)
+        ? Object.entries(attemptContext.questionTypePerformance)
+            .map(([kind, entry]) => {
+                if (!isObject(entry)) return null;
+                const total = Number.isFinite(Number(entry.total)) ? Number(entry.total) : 0;
+                const correct = Number.isFinite(Number(entry.correct)) ? Number(entry.correct) : 0;
+                const accuracy = Number.isFinite(Number(entry.accuracy)) ? `${Math.round(Number(entry.accuracy) * 100)}%` : 'unknown';
+                return `${kind}:${correct}/${total}(${accuracy})`;
+            })
+            .filter(Boolean)
+            .join(' | ')
+        : 'none';
     return [
         `submitted: ${attemptContext.submitted ? 'yes' : 'no'}`,
         `score: ${attemptContext.score == null ? 'unknown' : attemptContext.score}`,
         `wrongQuestions: ${wrongQuestions}`,
-        `selectedAnswers: ${selectedAnswers}`
+        `selectedAnswers: ${selectedAnswers}`,
+        `analysisSignals: ${analysisSignals}`,
+        `markedQuestions: ${markedQuestions}`,
+        `questionTimelineLite: ${questionTimelineLite}`,
+        `questionTypePerformance: ${questionTypePerformance}`
     ].join('\n');
 }
 
@@ -253,14 +295,38 @@ function formatReviewTargets(reviewTargets = []) {
     if (!Array.isArray(reviewTargets) || reviewTargets.length === 0) {
         return 'none';
     }
-    return reviewTargets.map((item, index) => [
-        `[Review ${index + 1}]`,
-        `questionNumber: Q${item.questionNumber}`,
-        `questionStem: ${truncateText(item.questionStem || 'none', 520)}`,
-        `userAnswer: ${item.selectedAnswer || '未记录'}`,
-        `correctAnswer: ${item.correctAnswer || '未知'}`,
-        `officialExplanation: ${truncateText(item.officialExplanation || 'none', 900)}`
-    ].join('\n')).join('\n\n');
+    return reviewTargets.map((item, index) => {
+        const passageEvidence = Array.isArray(item.passageEvidence) && item.passageEvidence.length
+            ? item.passageEvidence.map((entry, evidenceIndex) => {
+                const labels = Array.isArray(entry?.paragraphLabels) && entry.paragraphLabels.length
+                    ? entry.paragraphLabels.join(',')
+                    : 'n/a';
+                return `passageEvidence${evidenceIndex + 1}: paragraphs=${labels}; text=${truncateText(entry?.text || '', 360)}`;
+            }).join('\n')
+            : 'passageEvidence: none';
+        const attemptSignals = item.attemptSignals && typeof item.attemptSignals === 'object'
+            ? item.attemptSignals
+            : {};
+        const timeline = attemptSignals.timeline && typeof attemptSignals.timeline === 'object'
+            ? `changes=${Number(attemptSignals.timeline.changeCount || 0)}, visits=${Number(attemptSignals.timeline.visitCount || 0)}, elapsedMs=${Number(attemptSignals.timeline.elapsedMs || 0)}`
+            : 'none';
+        const questionTypePerformance = Array.isArray(attemptSignals.questionTypePerformance) && attemptSignals.questionTypePerformance.length
+            ? attemptSignals.questionTypePerformance.join('; ')
+            : 'none';
+        const analysisSignals = Array.isArray(attemptSignals.analysisSignals) && attemptSignals.analysisSignals.length
+            ? attemptSignals.analysisSignals.join('; ')
+            : 'none';
+        return [
+            `[Review ${index + 1}]`,
+            `questionNumber: Q${item.questionNumber}`,
+            `questionStem: ${truncateText(item.questionStem || 'none', 520)}`,
+            `userAnswer: ${item.selectedAnswer || '未记录'}`,
+            `correctAnswer: ${item.correctAnswer || '未知'}`,
+            `officialExplanation: ${truncateText(item.officialExplanation || 'none', 900)}`,
+            passageEvidence,
+            `attemptSignals: marked=${attemptSignals.marked ? 'true' : 'false'}; timeline=${timeline}; questionTypePerformance=${questionTypePerformance}; analysisSignals=${analysisSignals}`
+        ].join('\n');
+    }).join('\n\n');
 }
 
 function formatContextChunks(chunks = [], chunkType = {}) {
@@ -302,6 +368,11 @@ function buildReadingCoachPrompt({ payload, routeDecision, intent, contextRoute,
             content: compactMultiline([
                 '[Request Meta]',
                 `examId: ${payload.examId}`,
+                `sessionId: ${payload.sessionId || 'none'}`,
+                `mode: ${payload.mode || 'none'}`,
+                `surface: ${payload.surface || 'none'}`,
+                `action: ${payload.action || 'chat'}`,
+                `promptKind: ${payload.promptKind || 'none'}`,
                 `route: ${routeDecision.route}`,
                 `routeReason: ${routeDecision.reason || 'none'}`,
                 `contextRoute: ${contextRoute}`,
@@ -386,8 +457,8 @@ function buildCoachResponseFormat({ contextRoute, contextRoutes } = {}) {
         },
         reviewQuestionAnalyses: {
             type: 'array',
-            minItems: 0,
-            maxItems: 14,
+            minItems: 1,
+            maxItems: IELTS_READING_REVIEW_QUESTION_LIMIT,
             items: {
                 type: 'object',
                 additionalProperties: false,
@@ -421,12 +492,17 @@ function buildCoachResponseFormat({ contextRoute, contextRoutes } = {}) {
     };
 }
 
-function normalizeReadingCoachModelResponse(rawContent, logger = null) {
+function createCoachParseError(message) {
+    const error = new Error(message);
+    error.code = 'coach_parse_failed';
+    return error;
+}
+
+function normalizeReadingCoachModelResponse(rawContent, logger = null, options = {}) {
+    const requireReviewSchema = Boolean(options && options.requireReviewSchema);
     const parsed = parseJsonObject(rawContent, logger);
     if (!isObject(parsed)) {
-        const error = new Error('阅读教练响应解析失败');
-        error.code = 'coach_parse_failed';
-        throw error;
+        throw createCoachParseError('阅读教练响应解析失败');
     }
 
     const sections = Array.isArray(parsed.answerSections)
@@ -455,9 +531,7 @@ function normalizeReadingCoachModelResponse(rawContent, logger = null) {
             : []);
 
     if (!fallbackSections.length) {
-        const error = new Error('阅读教练响应缺少有效 answerSections');
-        error.code = 'coach_parse_failed';
-        throw error;
+        throw createCoachParseError('阅读教练响应缺少有效 answerSections');
     }
 
     const followUps = uniqueList(
@@ -468,7 +542,7 @@ function normalizeReadingCoachModelResponse(rawContent, logger = null) {
 
     const defaultFollowUps = ['再给我一步提示', '这题证据在哪里', '我下一步该练什么'];
 
-    return {
+    const normalized = {
         answer,
         answerSections: fallbackSections,
         followUps: followUps.length ? followUps : defaultFollowUps,
@@ -481,6 +555,12 @@ function normalizeReadingCoachModelResponse(rawContent, logger = null) {
         reviewOverall: normalizeReviewOverall(parsed.reviewOverall),
         reviewQuestionAnalyses: normalizeReviewQuestionAnalyses(parsed.reviewQuestionAnalyses)
     };
+
+    if (requireReviewSchema) {
+        validateReviewCoachResponse(normalized, parsed);
+    }
+
+    return normalized;
 }
 
 function normalizeReviewOverall(value) {
@@ -523,6 +603,25 @@ function normalizeReviewQuestionAnalyses(value) {
         })
         .filter(Boolean)
         .slice(0, 14);
+}
+
+function validateReviewCoachResponse(value, rawParsed = {}) {
+    if (!isObject(rawParsed.reviewOverall) || !isObject(value.reviewOverall)) {
+        throw createCoachParseError('阅读教练复盘响应缺少 reviewOverall');
+    }
+    const { primaryWeakness, patternSummary, teachingPlan } = value.reviewOverall;
+    if (!primaryWeakness || !patternSummary || !teachingPlan) {
+        throw createCoachParseError('阅读教练复盘响应 reviewOverall 不完整');
+    }
+    if (!Array.isArray(rawParsed.reviewQuestionAnalyses) || !Array.isArray(value.reviewQuestionAnalyses)) {
+        throw createCoachParseError('阅读教练复盘响应缺少 reviewQuestionAnalyses');
+    }
+    if (value.reviewQuestionAnalyses.length === 0) {
+        throw createCoachParseError('阅读教练复盘响应缺少有效逐题分析');
+    }
+    if (value.answerSections.some((item) => item.type === 'evidence')) {
+        throw createCoachParseError('阅读教练复盘响应不允许 evidence 作为主输出段落');
+    }
 }
 
 function composeReadingCoachAnswer(answerSections, fallbackAnswer) {

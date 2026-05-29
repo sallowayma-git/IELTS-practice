@@ -1,0 +1,54 @@
+- main [ref=e15]:
+  - generic [ref=e17]:
+    - complementary [ref=e18]:
+      - generic [ref=e19]:
+        - generic [ref=e20]:
+          - generic [ref=e21]: Writing Task 2
+          - heading "Immersive Writing Practice" [level=1] [ref=e22]
+        - generic [ref=e23]:
+          - generic [ref=e24]:
+            - generic [ref=e25]: 建议字数
+            - strong [ref=e26]: 250 - 280
+          - generic [ref=e27]:
+            - generic [ref=e28]: 题目来源
+            - strong [ref=e29]: 自由写作
+          - generic [ref=e30]:
+            - generic [ref=e31]: 当前字数
+            - strong [ref=e32]: "0"
+      - generic [ref=e33]:
+        - generic [ref=e34]:
+          - generic [ref=e35]:
+            - generic [ref=e36]: 任务分配
+            - generic [ref=e37]:
+              - button "Task 1" [ref=e38] [cursor=pointer]:
+                - generic [ref=e39]: Task 1
+              - button "Task 2" [ref=e40] [cursor=pointer]:
+                - generic [ref=e41]: Task 2
+          - generic [ref=e42]:
+            - generic [ref=e43]: 题目来源
+            - generic [ref=e44]:
+              - button "自由写作" [ref=e45] [cursor=pointer]:
+                - generic [ref=e46]: 自由写作
+              - button "从题库选择" [ref=e47] [cursor=pointer]:
+                - generic [ref=e48]: 从题库选择
+        - textbox "请输入 Task 2 写作题目，例如：Some people think... To what extent do you agree or disagree?" [ref=e51]
+    - generic [ref=e52]:
+      - generic [ref=e53]:
+        - generic [ref=e54]:
+          - heading "作文输入" [level=2] [ref=e55]
+          - generic [ref=e56]:
+            - text: 目标
+            - strong [ref=e57]: "280"
+            - text: 词
+        - generic [ref=e59]:
+          - generic [ref=e60]: 字数
+          - strong [ref=e61]: "0"
+      - textbox "请输入您的 Task 2 作文... 介绍您的观点和论据..." [ref=e62]:
+        - /placeholder: "请输入您的 Task 2 作文...\n\n介绍您的观点和论据..."
+      - generic [ref=e63]:
+        - generic [ref=e64]:
+          - generic [ref=e65]: 提交限制
+          - strong [ref=e66]: 至少 250 词
+        - generic [ref=e67]:
+          - button "保存草稿" [ref=e68] [cursor=pointer]
+          - button "提交评分" [disabled] [ref=e69]

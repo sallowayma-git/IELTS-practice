@@ -14,6 +14,26 @@ function uniqueList(list = []) {
     return output;
 }
 
+function isObject(value) {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeQuestionNumbers(values = []) {
+    return uniqueList(
+        (Array.isArray(values) ? values : [])
+            .map((item) => String(item || '').trim().replace(/^q/i, ''))
+            .filter(Boolean)
+    );
+}
+
+function normalizeParagraphLabels(values = []) {
+    return uniqueList(
+        (Array.isArray(values) ? values : [])
+            .map((item) => String(item || '').trim().replace(/^paragraph\s*/i, '').toUpperCase())
+            .filter(Boolean)
+    );
+}
+
 function classifyReadingRoute(payload, { routes, socialPatterns, weatherTimePatterns, ieltsGeneralPatterns, pageGroundedHints }) {
     const query = payload.query;
     if (!query) {
@@ -35,9 +55,14 @@ function classifyReadingRoute(payload, { routes, socialPatterns, weatherTimePatt
         return pattern.test(normalized);
     }) || (ieltsGeneralPatterns[0].test(normalized) && ieltsGeneralPatterns[2].test(normalized));
 
+    const selectedContext = isObject(payload.selectedContext) ? payload.selectedContext : {};
+    const selectedQuestionNumbers = normalizeQuestionNumbers(selectedContext.questionNumbers);
+    const selectedParagraphLabels = normalizeParagraphLabels(selectedContext.paragraphLabels);
     const hasPageGroundedSignals = pageGroundedHints.some((pattern) => pattern.test(normalized))
         || payload.selectedText
         || payload.focusQuestionNumbers.length > 0
+        || selectedQuestionNumbers.length > 0
+        || selectedParagraphLabels.length > 0
         || payload.attemptContext.submitted;
 
     if (hasIeltsSignals && !hasPageGroundedSignals) {
@@ -96,6 +121,20 @@ function hasQuestionLevelDiagnosticSignal(query) {
     ].some((pattern) => pattern.test(normalized));
 }
 
+function isReviewCoachRequest(payload) {
+    const action = String(payload?.action || '').trim();
+    const surface = String(payload?.surface || '').trim();
+    return action === 'review_set'
+        || action === 'recommend_drills'
+        || surface === 'review_workspace';
+}
+
+function isPersistentReviewCoachRequest(payload) {
+    const action = String(payload?.action || '').trim();
+    const surface = String(payload?.surface || '').trim();
+    return action === 'review_set' || surface === 'review_workspace';
+}
+
 function classifyReadingIntent(payload, route, {
     routes,
     intents,
@@ -105,8 +144,16 @@ function classifyReadingIntent(payload, route, {
 }) {
     const query = payload.query;
     const extracted = extractQuestionRefs(query, questionRefPatternGlobal);
-    const questionNumbers = uniqueList([...payload.focusQuestionNumbers, ...extracted.questionNumbers]);
-    const paragraphLabels = extracted.paragraphLabels;
+    const selectedContext = isObject(payload.selectedContext) ? payload.selectedContext : {};
+    const questionNumbers = uniqueList([
+        ...normalizeQuestionNumbers(payload.focusQuestionNumbers),
+        ...normalizeQuestionNumbers(selectedContext.questionNumbers),
+        ...extracted.questionNumbers
+    ]);
+    const paragraphLabels = uniqueList([
+        ...normalizeParagraphLabels(selectedContext.paragraphLabels),
+        ...extracted.paragraphLabels
+    ]);
     const hasSpecificTargets = questionNumbers.length > 0 || paragraphLabels.length > 0;
     const explicitWholeSetReview = hasWholeSetReviewSignal(query, wholeSetPatterns) && !hasSpecificTargets;
     const questionLevelDiagnostic = hasQuestionLevelDiagnosticSignal(query);
@@ -115,17 +162,17 @@ function classifyReadingIntent(payload, route, {
         return {
             kind: intents.SELECTION_TOOL_REQUEST,
             confidence: 0.96,
-            questionNumbers: payload.focusQuestionNumbers.slice(),
-            paragraphLabels: []
+            questionNumbers,
+            paragraphLabels
         };
     }
 
-    if (payload.action === 'review_set' || payload.action === 'recommend_drills') {
+    if (isReviewCoachRequest(payload)) {
         return {
             kind: intents.REVIEW_COACH_REQUEST,
             confidence: 0.92,
-            questionNumbers: payload.focusQuestionNumbers.slice(),
-            paragraphLabels: []
+            questionNumbers,
+            paragraphLabels
         };
     }
 
@@ -150,8 +197,8 @@ function classifyReadingIntent(payload, route, {
         return {
             kind: intents.FOLLOWUP_REQUEST,
             confidence: 0.8,
-            questionNumbers: payload.focusQuestionNumbers.slice(),
-            paragraphLabels: []
+            questionNumbers,
+            paragraphLabels
         };
     }
 
@@ -207,5 +254,7 @@ export {
     classifyReadingRoute,
     classifyReadingIntent,
     resolveReadingContextRoute,
-    extractQuestionRefs
+    extractQuestionRefs,
+    isReviewCoachRequest,
+    isPersistentReviewCoachRequest
 };

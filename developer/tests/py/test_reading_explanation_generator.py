@@ -10,7 +10,14 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SCRIPT_PATH = REPO_ROOT / "assets" / "scripts" / "generate_reading_explanations_with_agent.py"
+SCRIPT_PATH = (
+    REPO_ROOT
+    / "developer"
+    / "tests"
+    / "tools"
+    / "reading-explanations"
+    / "generate_reading_explanations_with_agent.py"
+)
 
 
 def wrap_register(bundle_name: str, payload: dict) -> str:

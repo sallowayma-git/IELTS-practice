@@ -1,11 +1,11 @@
 <template>
   <div class="app-shell">
     <ShuiBackground />
-    <NavBar />
-    <main class="app-main">
+    <NavBar v-if="showShellNav" />
+    <main :class="['app-main', { 'app-main--frameless': !showShellNav }]">
       <router-view v-slot="{ Component }">
         <transition name="page" mode="out-in">
-          <component :is="Component" />
+          <component :is="Component" :key="routeViewKey" />
         </transition>
       </router-view>
     </main>
@@ -13,8 +13,21 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import NavBar from './components/NavBar.vue'
 import ShuiBackground from './components/ShuiBackground.vue'
+
+const route = useRoute()
+const framelessRouteNames = new Set([
+  'PracticeLibrary',
+  'PracticeLibraryAlias',
+  'PracticeReading',
+  'PracticeReadingSuite',
+  'PracticeReadingReview'
+])
+const showShellNav = computed(() => !framelessRouteNames.has(route.name))
+const routeViewKey = computed(() => route.path || String(route.name || route.fullPath))
 </script>
 
 <style scoped>
@@ -28,23 +41,18 @@ import ShuiBackground from './components/ShuiBackground.vue'
   isolation: isolate;
 }
 
-.app-shell::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 12% -8%, rgba(255, 236, 192, 0.35), transparent 55%),
-    radial-gradient(circle at 88% 8%, rgba(177, 232, 226, 0.28), transparent 48%),
-    linear-gradient(180deg, rgba(250, 249, 245, 0.54), rgba(250, 249, 245, 0.3));
-}
-
 .app-main {
   flex: 1;
   width: min(1520px, 100%);
   margin: 0 auto;
   padding: 24px 32px 48px;
+  position: relative;
+  z-index: 1;
+}
+
+.app-main--frameless {
+  width: 100%;
+  padding: 0;
 }
 
 .page-enter-active,

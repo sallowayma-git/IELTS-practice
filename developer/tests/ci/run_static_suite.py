@@ -636,6 +636,81 @@ def _ensure_exists(path: Path) -> Tuple[bool, str]:
     return exists, ("已找到" if exists else "文件缺失")
 
 
+def _check_runtime_asset_scripts_boundary() -> Tuple[bool, dict]:
+    scripts_dir = REPO_ROOT / "assets" / "scripts"
+    allowed_files = {
+        "complete-exam-data.js",
+        "listening-exam-data.js",
+    }
+    if not scripts_dir.exists():
+        return False, {"error": "assets/scripts 目录缺失"}
+
+    files = sorted(path.name for path in scripts_dir.iterdir() if path.is_file())
+    unexpected = [name for name in files if name not in allowed_files]
+    missing = sorted(name for name in allowed_files if name not in files)
+    non_js = [name for name in files if not name.endswith(".js")]
+    passed = not unexpected and not missing and not non_js
+    return passed, {
+        "allowed": sorted(allowed_files),
+        "files": files,
+        "unexpected": unexpected,
+        "missing": missing,
+        "nonJs": non_js,
+    }
+
+
+def _check_removed_e2e_script_boundary() -> Tuple[bool, dict]:
+    e2e_dir = REPO_ROOT / "developer" / "tests" / "e2e"
+    forbidden_relative_paths = [
+        "path_compatibility_playwright.py",
+        "mock_eval_flow.py",
+        "mock_upload_flow.py",
+        "fixtures/index.html",
+        "fixtures/睡着过项目组(9.4)[134篇]/2. 高频次高频文章[83篇]/placeholder.html",
+        "fixtures/睡着过项目组(9.4)[134篇]/3. 所有文章(9.4)[134篇]/placeholder.html",
+    ]
+    present = [
+        relative_path
+        for relative_path in forbidden_relative_paths
+        if (e2e_dir / relative_path).exists()
+    ]
+    return not present, {
+        "forbidden": forbidden_relative_paths,
+        "present": present,
+    }
+
+
+def _check_removed_electron_debug_script_boundary() -> Tuple[bool, dict]:
+    electron_dir = REPO_ROOT / "electron"
+    package_json = REPO_ROOT / "package.json"
+    forbidden_relative_paths = [
+        "test_main.js",
+        "test-electron-module.js",
+        "test_api_runner.js",
+    ]
+    present = [
+        relative_path
+        for relative_path in forbidden_relative_paths
+        if (electron_dir / relative_path).exists()
+    ]
+    try:
+        package_text = package_json.read_text(encoding="utf-8")
+    except Exception as exc:  # pragma: no cover - defensive guard
+        return False, {"error": f"无法读取 package.json：{exc}"}
+
+    stale_package_excludes = [
+        pattern
+        for pattern in ["!electron/test_*.js", "!electron/test-*.js"]
+        if pattern in package_text
+    ]
+    passed = not present and not stale_package_excludes
+    return passed, {
+        "forbidden": forbidden_relative_paths,
+        "present": present,
+        "stalePackageExcludes": stale_package_excludes,
+    }
+
+
 def _run_json_subprocess(
     command: List[str],
     timeout: int,
@@ -721,6 +796,14 @@ def run_checks() -> Tuple[List[dict], bool]:
 
     # End-to-end runner integrity checks
     e2e_runner = REPO_ROOT / "developer" / "tests" / "e2e" / "app-e2e-runner.html"
+    removed_e2e_passed, removed_e2e_detail = _check_removed_e2e_script_boundary()
+    results.append(_format_result("E2E 死脚本边界", removed_e2e_passed, removed_e2e_detail))
+    all_passed &= removed_e2e_passed
+
+    electron_debug_boundary_passed, electron_debug_boundary_detail = _check_removed_electron_debug_script_boundary()
+    results.append(_format_result("Electron 调试脚本边界", electron_debug_boundary_passed, electron_debug_boundary_detail))
+    all_passed &= electron_debug_boundary_passed
+
     passed, detail = _ensure_exists(e2e_runner)
     results.append(_format_result("E2E runner 文件存在性", passed, detail))
     all_passed &= passed
@@ -968,7 +1051,8 @@ def run_checks() -> Tuple[List[dict], bool]:
         required_more_view_snippets = [
             "#writing-entry-btn",
             "handleWritingEntry",
-            "electronAPI.openWriting"
+            "electronAPI.openPracticeRoute",
+            "openPracticeRoute('/writing')"
         ]
         missing_more_view_snippets = [snippet for snippet in required_more_view_snippets if snippet not in more_view_source]
         more_view_guard_passed = not missing_more_view_snippets
@@ -984,6 +1068,10 @@ def run_checks() -> Tuple[List[dict], bool]:
         REPO_ROOT / "assets" / "scripts" / "complete-exam-data.js",
         REPO_ROOT / "assets" / "scripts" / "listening-exam-data.js",
     ]
+    asset_scripts_boundary_passed, asset_scripts_boundary_detail = _check_runtime_asset_scripts_boundary()
+    results.append(_format_result("assets/scripts 运行时边界", asset_scripts_boundary_passed, asset_scripts_boundary_detail))
+    all_passed &= asset_scripts_boundary_passed
+
     for metadata_path in metadata_targets:
         meta_passed, meta_detail = _check_metadata_field(metadata_path)
         results.append(_format_result(f"{metadata_path.name} 根目录元数据", meta_passed, meta_detail))
@@ -1233,6 +1321,72 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("写作自由写作/题库模式草稿恢复回归测试", False, "测试脚本缺失"))
         all_passed = False
 
+    practice_reading_vue_test = REPO_ROOT / "developer" / "tests" / "e2e" / "practice_reading_vue_flow.py"
+    if practice_reading_vue_test.exists():
+        try:
+            completed_practice_reading_vue = subprocess.run(
+                ["python3", str(practice_reading_vue_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+        except subprocess.TimeoutExpired:
+            practice_reading_vue_passed = False
+            practice_reading_vue_detail = "执行超时（180秒）"
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            practice_reading_vue_passed = False
+            practice_reading_vue_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_practice_reading_vue = completed_practice_reading_vue.stdout.strip() or completed_practice_reading_vue.stderr.strip()
+            try:
+                practice_reading_vue_payload = json.loads(raw_practice_reading_vue or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_reading_vue_passed = False
+                practice_reading_vue_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_reading_vue_passed = practice_reading_vue_payload.get("status") == "pass"
+                practice_reading_vue_detail = practice_reading_vue_payload.get("detail", practice_reading_vue_payload)
+        results.append(_format_result("Vue 阅读练习链路 E2E 回归测试", practice_reading_vue_passed, practice_reading_vue_detail))
+        all_passed &= practice_reading_vue_passed
+    else:
+        results.append(_format_result("Vue 阅读练习链路 E2E 回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    practice_reading_suite_vue_test = REPO_ROOT / "developer" / "tests" / "e2e" / "practice_reading_suite_vue_flow.py"
+    if practice_reading_suite_vue_test.exists():
+        try:
+            completed_practice_reading_suite_vue = subprocess.run(
+                ["python3", str(practice_reading_suite_vue_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+        except subprocess.TimeoutExpired:
+            practice_reading_suite_vue_passed = False
+            practice_reading_suite_vue_detail = "执行超时（180秒）"
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            practice_reading_suite_vue_passed = False
+            practice_reading_suite_vue_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_practice_reading_suite_vue = completed_practice_reading_suite_vue.stdout.strip() or completed_practice_reading_suite_vue.stderr.strip()
+            try:
+                practice_reading_suite_vue_payload = json.loads(raw_practice_reading_suite_vue or "{}")
+            except json.JSONDecodeError as parse_error:
+                practice_reading_suite_vue_passed = False
+                practice_reading_suite_vue_detail = f"输出解析失败: {parse_error}"
+            else:
+                practice_reading_suite_vue_passed = practice_reading_suite_vue_payload.get("status") == "pass"
+                practice_reading_suite_vue_detail = practice_reading_suite_vue_payload.get("detail", practice_reading_suite_vue_payload)
+        results.append(_format_result("Vue 阅读套题链路 E2E 回归测试", practice_reading_suite_vue_passed, practice_reading_suite_vue_detail))
+        all_passed &= practice_reading_suite_vue_passed
+    else:
+        results.append(_format_result("Vue 阅读套题链路 E2E 回归测试", False, "测试脚本缺失"))
+        all_passed = False
+
     history_page_path = REPO_ROOT / "apps" / "writing-vue" / "src" / "views" / "HistoryPage.vue"
     try:
         history_page_source = history_page_path.read_text(encoding="utf-8")
@@ -1407,6 +1561,35 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("写作题库 DAO 兼容契约测试", False, "测试脚本缺失"))
         all_passed = False
 
+    writing_essay_history_contract = REPO_ROOT / "developer" / "tests" / "ci" / "writing_essay_history_contract.cjs"
+    if writing_essay_history_contract.exists():
+        try:
+            completed_essay_history_contract = subprocess.run(
+                ["node", str(writing_essay_history_contract)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            writing_essay_history_passed = False
+            writing_essay_history_detail = f"执行失败: {output_text.strip()}"
+        else:
+            raw_essay_history_output = completed_essay_history_contract.stdout.strip() or completed_essay_history_contract.stderr.strip()
+            try:
+                writing_essay_history_payload = json.loads(raw_essay_history_output or "{}")
+            except json.JSONDecodeError as parse_error:
+                writing_essay_history_passed = False
+                writing_essay_history_detail = f"输出解析失败: {parse_error}"
+            else:
+                writing_essay_history_passed = writing_essay_history_payload.get("status") == "pass"
+                writing_essay_history_detail = writing_essay_history_payload
+        results.append(_format_result("写作历史摘要数据契约测试", writing_essay_history_passed, writing_essay_history_detail))
+        all_passed &= writing_essay_history_passed
+    else:
+        results.append(_format_result("写作历史摘要数据契约测试", False, "测试脚本缺失"))
+        all_passed = False
+
     writing_contract_probe = REPO_ROOT / "developer" / "tests" / "ci" / "writing_contract_probe.cjs"
     if writing_contract_probe.exists():
         writing_contract_probe_passed, writing_contract_probe_payload = _run_json_subprocess(
@@ -1483,6 +1666,76 @@ def run_checks() -> Tuple[List[dict], bool]:
         )
     results.append(_format_result("写作设置页非阻塞反馈守卫", settings_page_guard_passed, settings_page_guard_detail))
     all_passed &= settings_page_guard_passed
+
+    practice_api_facade_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceApiFacade.test.js"
+    if practice_api_facade_test.exists():
+        try:
+            completed_practice_api = subprocess.run(
+                ["node", str(practice_api_facade_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except subprocess.TimeoutExpired:
+            practice_api_passed = False
+            practice_api_detail = "执行超时（120秒）"
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            practice_api_passed = False
+            practice_api_detail = f"执行失败: {output_text.strip()}"
+        else:
+            practice_api_passed = True
+            practice_api_detail = (completed_practice_api.stdout or completed_practice_api.stderr or "Practice API facade passed").strip()
+        results.append(_format_result("Practice API Facade 契约测试", practice_api_passed, practice_api_detail))
+        all_passed &= practice_api_passed
+    else:
+        results.append(_format_result("Practice API Facade 契约测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    practice_vue_shell_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceVueShell.test.js"
+    if practice_vue_shell_test.exists():
+        practice_vue_shell_passed, practice_vue_shell_payload = _run_json_subprocess(
+            ["node", str(practice_vue_shell_test)],
+            60,
+        )
+        results.append(_format_result("Vue Practice Shell 静态契约测试", practice_vue_shell_passed, practice_vue_shell_payload))
+        all_passed &= practice_vue_shell_passed
+    else:
+        results.append(_format_result("Vue Practice Shell 静态契约测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    reading_launch_vue_route_test = REPO_ROOT / "developer" / "tests" / "js" / "readingLaunchVueRoute.test.js"
+    if reading_launch_vue_route_test.exists():
+        reading_launch_vue_route_passed, reading_launch_vue_route_payload = _run_json_subprocess(
+            ["node", str(reading_launch_vue_route_test)],
+            60,
+        )
+        results.append(_format_result(
+            "Legacy 单篇阅读 Vue 路由契约测试",
+            reading_launch_vue_route_passed,
+            reading_launch_vue_route_payload,
+        ))
+        all_passed &= reading_launch_vue_route_passed
+    else:
+        results.append(_format_result("Legacy 单篇阅读 Vue 路由契约测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    legacy_suite_vue_route_test = REPO_ROOT / "developer" / "tests" / "js" / "legacySuiteVueRoute.test.js"
+    if legacy_suite_vue_route_test.exists():
+        legacy_suite_vue_route_passed, legacy_suite_vue_route_payload = _run_json_subprocess(
+            ["node", str(legacy_suite_vue_route_test)],
+            60,
+        )
+        results.append(_format_result(
+            "Legacy 套题入口 Vue 路由契约测试",
+            legacy_suite_vue_route_passed,
+            legacy_suite_vue_route_payload,
+        ))
+        all_passed &= legacy_suite_vue_route_passed
+    else:
+        results.append(_format_result("Legacy 套题入口 Vue 路由契约测试", False, "测试脚本缺失"))
+        all_passed = False
 
     inline_fallback_test = REPO_ROOT / "developer" / "tests" / "js" / "suiteInlineFallback.test.js"
     if inline_fallback_test.exists():

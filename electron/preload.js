@@ -28,14 +28,23 @@ function onUpdateStateChange(listener) {
     };
 }
 
+const PRACTICE_ASSET_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
+
 window.addEventListener('app-runtime-ready', reportRendererReady);
 
 contextBridge.exposeInMainWorld('electronAPI', {
-    openWriting: () => {
-        ipcRenderer.send('navigate-to-writing');
+    openPracticeRoute: (route) => {
+        return invoke('navigate-to-practice-route', route);
     },
-    openLegacy: () => {
-        ipcRenderer.send('navigate-to-legacy');
+    openPracticeReading: (assetId) => {
+        const normalizedAssetId = String(assetId || '').trim();
+        if (!PRACTICE_ASSET_ID_PATTERN.test(normalizedAssetId)) {
+            return Promise.resolve({
+                success: false,
+                error: 'invalid_practice_asset_id'
+            });
+        }
+        return invoke('navigate-to-practice-route', `/reading/${encodeURIComponent(normalizedAssetId)}`);
     },
     getVersions: () => {
         return {

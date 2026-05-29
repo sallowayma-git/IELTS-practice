@@ -9,7 +9,7 @@
       <!-- Grid Lines -->
       <g class="chart-grid">
         <line
-          v-for="y in gridLines"
+          v-for="y in gridLineValues"
           :key="'grid-' + y"
           x1="40"
           :y1="getYPos(y)"
@@ -22,13 +22,13 @@
       <!-- Y Axis Labels -->
       <g class="y-labels">
         <text
-          v-for="y in gridLines"
+          v-for="y in gridLineValues"
           :key="'label-' + y"
           x="30"
           :y="getYPos(y)"
           class="axis-label y-axis-label"
         >
-          {{ y.toFixed(1) }}
+          {{ formatAxisLabel(y) }}
         </text>
       </g>
 
@@ -48,7 +48,7 @@
           r="4"
           class="data-point"
         >
-          <title>{{ historyData[index].date }}: {{ historyData[index].score }} 分</title>
+          <title>{{ visibleHistoryData[index].date }}: {{ formatPointValue(visibleHistoryData[index].score) }}</title>
         </circle>
       </g>
     </svg>
@@ -66,35 +66,68 @@ const props = defineProps({
     type: Array,
     required: true,
     // Expected format: [{ date: '10/01', score: 6.5 }, { date: '10/02', score: 7.0 }]
+  },
+  minScore: {
+    type: Number,
+    default: 4.0
+  },
+  maxScore: {
+    type: Number,
+    default: 9.0
+  },
+  gridLines: {
+    type: Array,
+    default: null
+  },
+  scoreSuffix: {
+    type: String,
+    default: ' 分'
+  },
+  axisLabelDecimals: {
+    type: Number,
+    default: 1
   }
 })
 
 const width = 600
 const height = 240
 const padding = { top: 20, right: 20, bottom: 30, left: 40 }
-const minScore = 4.0
-const maxScore = 9.0
+const minScore = computed(() => Number.isFinite(props.minScore) ? props.minScore : 4.0)
+const maxScore = computed(() => Number.isFinite(props.maxScore) && props.maxScore > minScore.value ? props.maxScore : 9.0)
 
-const gridLines = [4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+const gridLineValues = computed(() => {
+  if (Array.isArray(props.gridLines) && props.gridLines.length) {
+    return props.gridLines
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value))
+  }
+  return [4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+})
 
 const getYPos = (val) => {
-  const range = maxScore - minScore
-  const ratio = (val - minScore) / range
+  const range = maxScore.value - minScore.value
+  const clamped = Math.max(minScore.value, Math.min(maxScore.value, Number(val) || minScore.value))
+  const ratio = (clamped - minScore.value) / range
   return height - padding.bottom - ratio * (height - padding.top - padding.bottom)
 }
 
+const formatAxisLabel = (value) => Number(value || 0).toFixed(Math.max(0, Number(props.axisLabelDecimals || 0)))
+
+const formatPointValue = (value) => `${Number(value || 0).toFixed(Math.max(0, Number(props.axisLabelDecimals || 0)))}${props.scoreSuffix}`
+
+const visibleHistoryData = computed(() => props.historyData.slice(-15))
+
 const points = computed(() => {
-  if (props.historyData.length === 0) return []
-  const validData = props.historyData.slice(-15) // Max 15 points
-  if (validData.length === 1) {
+  if (visibleHistoryData.value.length === 0) return []
+  if (visibleHistoryData.value.length === 1) {
     return [{
       x: width / 2,
-      y: getYPos(validData[0].score)
+      y: getYPos(visibleHistoryData.value[0].score)
     }]
   }
   
-  const step = (width - padding.left - padding.right) / (validData.length - 1)
-  return validData.map((d, i) => ({
+  const step = (width - padding.left - padding.right) / (visibleHistoryData.value.length - 1)
+  return visibleHistoryData.value.map((d, i) => ({
     x: padding.left + i * step,
     y: getYPos(d.score)
   }))

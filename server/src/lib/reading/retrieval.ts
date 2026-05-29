@@ -18,6 +18,8 @@ function uniqueList(list = []) {
     return output;
 }
 
+const IELTS_READING_REVIEW_QUESTION_LIMIT = 40;
+
 function formatAnswerValue(value) {
     if (Array.isArray(value)) {
         return uniqueList(value.map((item) => String(item || '').trim()).filter(Boolean)).join(' / ');
@@ -161,6 +163,16 @@ function scoreChunk(chunk, factors, { tokenize, contextRoutes, chunkType }) {
         score += 1.4;
     }
 
+    if (contextRoute === contextRoutes.SELECTION && factors.selectedContextScope === 'question') {
+        if (chunk.chunkType === chunkType.QUESTION || chunk.chunkType === chunkType.EXPLANATION) {
+            score += 2.4;
+        }
+    }
+
+    if (contextRoute === contextRoutes.SELECTION && factors.selectedContextScope === 'passage' && chunk.chunkType === chunkType.PASSAGE) {
+        score += 2.4;
+    }
+
     return score;
 }
 
@@ -247,17 +259,132 @@ function normalizeAttemptContextForBundle(bundle, attemptContext = {}) {
     };
 }
 
+function truncateText(value, limit) {
+    const text = String(value || '').trim().replace(/\s+/g, ' ');
+    const normalizedLimit = Math.max(1, Number(limit) || 240);
+    return text.length > normalizedLimit ? `${text.slice(0, normalizedLimit)}...` : text;
+}
+
+function normalizeAttemptQuestionRef(bundle, value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+    if (typeof value === 'object') {
+        const source = value;
+        return normalizeAttemptQuestionRef(
+            bundle,
+            source.questionNumber
+                || source.displayQuestionNumber
+                || source.displayLabel
+                || source.questionId
+                || source.id
+                || source.key
+        );
+    }
+    return resolveDisplayQuestionNumber(bundle, String(value || '').trim());
+}
+
+function normalizeAttemptQuestionSet(bundle, values = []) {
+    return uniqueList(
+        (Array.isArray(values) ? values : [])
+            .map((item) => normalizeAttemptQuestionRef(bundle, item))
+            .filter(Boolean)
+    );
+}
+
+function findTimelineSignal(bundle, timeline = [], questionNumber) {
+    if (!Array.isArray(timeline) || !questionNumber) {
+        return null;
+    }
+    return timeline.find((entry) => normalizeAttemptQuestionRef(bundle, entry) === questionNumber) || null;
+}
+
+function summarizeQuestionTypePerformance(questionTypePerformance) {
+    if (!isObject(questionTypePerformance)) {
+        return [];
+    }
+    return Object.entries(questionTypePerformance)
+        .map(([kind, value]) => {
+            if (!isObject(value)) {
+                return null;
+            }
+            const total = Number(value.total);
+            const correct = Number(value.correct ?? value.correctAnswers);
+            if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(correct)) {
+                return null;
+            }
+            const accuracy = Number.isFinite(Number(value.accuracy))
+                ? Math.round(Number(value.accuracy) * 100)
+                : Math.round((correct / total) * 100);
+            return `${kind}:${correct}/${total}(${accuracy}%)`;
+        })
+        .filter(Boolean)
+        .slice(0, 6);
+}
+
+function summarizeAnalysisSignals(analysisSignals) {
+    if (!isObject(analysisSignals)) {
+        return [];
+    }
+    return Object.entries(analysisSignals)
+        .filter(([, value]) => value !== null && value !== undefined && value !== '')
+        .map(([key, value]) => `${key}=${Array.isArray(value) ? value.length : value}`)
+        .slice(0, 8);
+}
+
+function buildAttemptSignals(bundle, attemptContext = {}, questionNumber) {
+    const source = isObject(attemptContext) ? attemptContext : {};
+    const markedQuestions = normalizeAttemptQuestionSet(bundle, source.markedQuestions || []);
+    const timelineEntry = findTimelineSignal(bundle, source.questionTimelineLite || [], questionNumber);
+    return {
+        marked: markedQuestions.includes(questionNumber),
+        timeline: timelineEntry ? {
+            changeCount: Number(timelineEntry.changeCount || 0),
+            visitCount: Number(timelineEntry.visitCount || 0),
+            elapsedMs: Number(timelineEntry.elapsedMs || timelineEntry.durationMs || 0),
+            displayLabel: String(timelineEntry.displayLabel || timelineEntry.questionNumber || questionNumber)
+        } : null,
+        questionTypePerformance: summarizeQuestionTypePerformance(source.questionTypePerformance),
+        analysisSignals: summarizeAnalysisSignals(source.analysisSignals)
+    };
+}
+
+function findPassageEvidenceForTarget(bundleChunks, targetChunks, chunkType) {
+    const passageChunks = bundleChunks.filter((chunk) => chunk.chunkType === chunkType.PASSAGE);
+    if (!passageChunks.length) {
+        return [];
+    }
+    const sources = (Array.isArray(targetChunks) ? targetChunks : [targetChunks]).filter(Boolean);
+    const targetLabels = uniqueList([
+        ...sources.flatMap((chunk) => Array.isArray(chunk?.paragraphLabels) ? chunk.paragraphLabels : []),
+        ...sources.flatMap((chunk) => Array.isArray(chunk?.linkedParagraphLabels) ? chunk.linkedParagraphLabels : []),
+        ...sources.flatMap((chunk) => Array.isArray(chunk?.sourceParagraphLabels) ? chunk.sourceParagraphLabels : []),
+        ...sources.flatMap((chunk) => Array.isArray(chunk?.explanationParagraphLabels) ? chunk.explanationParagraphLabels : [])
+    ]);
+    const matched = targetLabels.length
+        ? passageChunks.filter((chunk) => Array.isArray(chunk.paragraphLabels) && chunk.paragraphLabels.some((label) => targetLabels.includes(label)))
+        : [];
+    const candidates = matched.length ? matched : passageChunks;
+    return candidates.slice(0, 2).map((chunk) => ({
+        paragraphLabels: Array.isArray(chunk.paragraphLabels) ? chunk.paragraphLabels : [],
+        text: truncateText(chunk.content, 360)
+    }));
+}
+
 function buildReviewTargets(bundle, payload, focusQuestionNumbers = [], chunkType) {
     const bundleChunks = Array.isArray(bundle?.chunks) ? bundle.chunks : [];
     const normalizedAttempt = normalizeAttemptContextForBundle(bundle, payload?.attemptContext);
     const selectedAnswers = normalizedAttempt.selectedAnswers;
     const fallbackQuestions = normalizedAttempt.wrongQuestions;
-    const targetQuestionNumbers = uniqueList([
+    const primaryQuestionNumbers = uniqueList([
         ...normalizeQuestionNumbersForBundle(bundle, focusQuestionNumbers || []),
-        ...fallbackQuestions,
-        ...Object.keys(selectedAnswers),
-        ...resolveAllQuestionNumbers(bundle, chunkType)
-    ]).slice(0, 20);
+        ...fallbackQuestions
+    ]);
+    const targetQuestionNumbers = (
+        primaryQuestionNumbers.length
+            ? primaryQuestionNumbers
+            : resolveAllQuestionNumbers(bundle, chunkType)
+    ).slice(0, IELTS_READING_REVIEW_QUESTION_LIMIT);
 
     if (!targetQuestionNumbers.length) {
         return [];
@@ -272,12 +399,16 @@ function buildReviewTargets(bundle, payload, focusQuestionNumbers = [], chunkTyp
         const correctAnswerMatch = String(answerKeyChunk?.content || '').match(/正确答案[:：]\s*(.+)$/);
         const correctAnswer = String(correctAnswerMatch?.[1] || '').trim() || '未知';
         const officialExplanation = String(explanationChunk?.content || '').trim().slice(0, 900);
+        const passageEvidence = findPassageEvidenceForTarget(bundleChunks, [questionChunk, explanationChunk], chunkType);
+        const attemptSignals = buildAttemptSignals(bundle, payload?.attemptContext, questionNumber);
         return {
             questionNumber,
             questionStem,
             selectedAnswer,
             correctAnswer,
-            officialExplanation
+            officialExplanation,
+            passageEvidence,
+            attemptSignals
         };
     });
 }
@@ -296,8 +427,7 @@ function buildReadingRetrievalContext({
     const normalizedAttempt = normalizeAttemptContextForBundle(bundle, payload?.attemptContext);
     let focusQuestionNumbers = uniqueList([
         ...normalizeQuestionNumbersForBundle(bundle, intent.questionNumbers || []),
-        ...(contextRoute === contextRoutes.REVIEW ? normalizedAttempt.wrongQuestions : []),
-        ...(contextRoute === contextRoutes.REVIEW ? Object.keys(normalizedAttempt.selectedAnswers || {}) : [])
+        ...(contextRoute === contextRoutes.REVIEW ? normalizedAttempt.wrongQuestions : [])
     ]);
     if (contextRoute === contextRoutes.REVIEW && focusQuestionNumbers.length === 0) {
         focusQuestionNumbers = resolveAllQuestionNumbers(bundle, chunkType);
@@ -318,7 +448,8 @@ function buildReadingRetrievalContext({
             focusParagraphLabels,
             contextRoute,
             intent,
-            selectedText: payload.selectedText
+            selectedText: payload.selectedText,
+            selectedContextScope: payload?.selectedContext?.scope || ''
         }, { tokenize, contextRoutes, chunkType });
         return { chunk, score };
     });

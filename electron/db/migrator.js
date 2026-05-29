@@ -48,6 +48,9 @@ class Migrator {
             // 2. 执行增量迁移 (如果有)
             this._executeMigrations();
 
+            // 3. 压实当前 schema。基础 schema 只影响新库，旧库用这里补齐当前列。
+            this._ensureCurrentSchema();
+
             logger.info('Database migration completed successfully');
         } catch (error) {
             logger.error('Database migration failed', error);
@@ -140,6 +143,21 @@ class Migrator {
             migrate();
             logger.info(`Applied migration: ${version}`);
         }
+    }
+
+    _ensureCurrentSchema() {
+        this._ensureColumn('essays', 'topic_text', 'TEXT');
+    }
+
+    _ensureColumn(tableName, columnName, definition) {
+        const rows = this.db.prepare(`PRAGMA table_info(${tableName})`).all();
+        const columns = new Set(rows.map((row) => String(row.name || '')));
+        if (columns.has(columnName)) {
+            return;
+        }
+
+        this.db.prepare(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`).run();
+        logger.info(`Added missing column: ${tableName}.${columnName}`);
     }
 
     /**

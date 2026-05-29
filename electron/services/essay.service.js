@@ -21,7 +21,7 @@ class EssayService {
             return {
                 ...result,
                 data: Array.isArray(result.data)
-                    ? result.data.map((item) => this._decorateEssayRecord(item))
+                    ? result.data.map((item) => this._decorateEssaySummary(item))
                     : []
             };
         } catch (error) {
@@ -169,7 +169,14 @@ class EssayService {
             const limitClause = range === 'recent10' ? 'LIMIT 1 OFFSET 0' : 'LIMIT 1';
 
             const latest = this.dao.db.prepare(`
-                SELECT * FROM essays 
+                SELECT
+                    task_type,
+                    task_achievement,
+                    coherence_cohesion,
+                    lexical_resource,
+                    grammatical_range,
+                    submitted_at
+                FROM essays
                 ${whereClause}
                 ORDER BY submitted_at DESC 
                 ${limitClause}
@@ -210,7 +217,7 @@ class EssayService {
      */
     async exportCSV(filters = {}) {
         try {
-            const data = this.dao.exportData(filters).map((row) => this._decorateEssayRecord(row));
+            const data = this.dao.exportData(filters).map((row) => this._decorateEssaySummary(row));
 
             // 生成 CSV 内容
             const headers = [
@@ -354,22 +361,57 @@ class EssayService {
             : {};
 
         const topicTitleText = this._extractTextFromTiptap(record.topic_title).trim();
+        const rowTopicText = typeof record.topic_text === 'string'
+            ? record.topic_text.trim()
+            : '';
         const customTopicText = typeof inputContext.topic_text === 'string'
             ? inputContext.topic_text.trim()
             : '';
-        const resolvedTopicText = topicTitleText || customTopicText;
+        const resolvedTopicText = topicTitleText || rowTopicText || customTopicText;
         const topicSource = inputContext.topic_source
-            || (record.topic_id ? 'topic_bank' : (customTopicText ? 'custom_input' : null));
+            || (record.topic_id ? 'topic_bank' : ((rowTopicText || customTopicText) ? 'custom_input' : null));
 
         return {
             ...record,
             display_topic_title: resolvedTopicText || '自由写作',
             topic_text: resolvedTopicText || null,
-            custom_topic_text: customTopicText || null,
+            custom_topic_text: customTopicText || (!record.topic_id && rowTopicText ? rowTopicText : null),
             topic_source: topicSource,
             task_analysis: this._normalizeMap(analysis.task_analysis || evaluation?.task_analysis),
             band_rationale: this._normalizeMap(analysis.band_rationale || evaluation?.band_rationale),
             improvement_plan: this._normalizeList(analysis.improvement_plan || evaluation?.improvement_plan)
+        };
+    }
+
+    _decorateEssaySummary(record) {
+        if (!record || typeof record !== 'object') {
+            return record;
+        }
+
+        const topicTitleText = this._extractTextFromTiptap(record.topic_title).trim();
+        const rowTopicText = typeof record.topic_text === 'string'
+            ? record.topic_text.trim()
+            : '';
+        const resolvedTopicText = topicTitleText || rowTopicText;
+
+        return {
+            id: record.id,
+            topic_id: record.topic_id,
+            topic_title: record.topic_title,
+            task_type: record.task_type,
+            word_count: record.word_count,
+            llm_provider: record.llm_provider,
+            model_name: record.model_name,
+            total_score: record.total_score,
+            task_achievement: record.task_achievement,
+            coherence_cohesion: record.coherence_cohesion,
+            lexical_resource: record.lexical_resource,
+            grammatical_range: record.grammatical_range,
+            submitted_at: record.submitted_at,
+            display_topic_title: resolvedTopicText || '自由写作',
+            topic_text: resolvedTopicText || null,
+            custom_topic_text: !record.topic_id && rowTopicText ? rowTopicText : null,
+            topic_source: record.topic_id ? 'topic_bank' : (rowTopicText ? 'custom_input' : null)
         };
     }
 

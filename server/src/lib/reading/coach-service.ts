@@ -1,9 +1,16 @@
 // @ts-nocheck
 const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
 
 const { ProviderOrchestratorService } = require('../shared/provider-orchestrator.js');
+const {
+    parseReadingExamDataSource,
+    parseReadingExplanationDataSource
+} = require('../shared/reading-generated-data.js');
+const {
+    setBoundedCacheEntry,
+    touchCacheEntry
+} = require('../shared/cache.js');
 const {
     buildReadingCoachPrompt,
     buildCoachResponseFormat,
@@ -33,6 +40,8 @@ const {
 const logger = require('../../../../electron/utils/logger.js');
 
 const QUERY_CACHE_TTL_MS = 5 * 60 * 1000;
+const EXAM_BUNDLE_CACHE_LIMIT = 12;
+const QUERY_CACHE_LIMIT = 64;
 const REQUEST_TIMEOUT_MS = 45000;
 
 const ROUTES = READING_ROUTES;
@@ -111,6 +120,87 @@ function formatAnswerValue(value) {
     return String(value || '').trim();
 }
 
+function normalizeQuestionNumberList(values = []) {
+    return uniqueList(
+        (Array.isArray(values) ? values : [])
+            .map((item) => String(item || '').trim().replace(/^q/i, ''))
+            .filter(Boolean)
+    );
+}
+
+function normalizeParagraphLabelList(values = []) {
+    return uniqueList(
+        (Array.isArray(values) ? values : [])
+            .map((item) => String(item || '').trim().replace(/^paragraph\s*/i, '').toUpperCase())
+            .filter(Boolean)
+    );
+}
+
+function normalizeAnalysisSignals(value = {}) {
+    if (!isObject(value)) {
+        return null;
+    }
+    const output = {};
+    [
+        'questionCount',
+        'unansweredCount',
+        'changedAnswerCount',
+        'markedQuestionCount',
+        'highlightCount',
+        'interactionDensity'
+    ].forEach((key) => {
+        const numeric = Number(value[key]);
+        if (Number.isFinite(numeric)) {
+            output[key] = numeric;
+        }
+    });
+    return Object.keys(output).length ? output : null;
+}
+
+function normalizeQuestionTimelineLite(values = []) {
+    return (Array.isArray(values) ? values : [])
+        .map((item) => {
+            if (!isObject(item)) return null;
+            const questionId = String(item.questionId || '').trim();
+            const displayLabel = String(item.displayLabel || questionId || '').trim().replace(/^q/i, '');
+            const changeCount = Math.max(0, Number(item.changeCount) || 0);
+            const visitCount = Math.max(0, Number(item.visitCount) || 0);
+            const elapsedMs = Math.max(0, Number(item.elapsedMs ?? item.durationMs) || 0);
+            if (!questionId && !displayLabel && !changeCount && !visitCount && !elapsedMs) return null;
+            return {
+                questionId,
+                displayLabel,
+                changeCount,
+                visitCount,
+                elapsedMs,
+                durationMs: elapsedMs
+            };
+        })
+        .filter(Boolean)
+        .slice(0, 40);
+}
+
+function normalizeQuestionTypePerformance(value = {}) {
+    if (!isObject(value)) {
+        return {};
+    }
+    return Object.entries(value).reduce((accumulator, [kind, entry]) => {
+        if (!isObject(entry)) {
+            return accumulator;
+        }
+        const normalizedKind = String(entry.kind || kind || '').trim();
+        if (!normalizedKind) {
+            return accumulator;
+        }
+        accumulator[normalizedKind] = {
+            total: Number.isFinite(Number(entry.total)) ? Number(entry.total) : 0,
+            correct: Number.isFinite(Number(entry.correct)) ? Number(entry.correct) : 0,
+            accuracy: Number.isFinite(Number(entry.accuracy)) ? Number(entry.accuracy) : 0
+        };
+        return accumulator;
+    }, {});
+}
+
 class ReadingCoachService {
     constructor(configService) {
         this.providerOrchestrator = new ProviderOrchestratorService(configService);
@@ -119,6 +209,22 @@ class ReadingCoachService {
         this.assetsBaseDir = path.resolve(__dirname, '../../../../assets/generated');
         this.examsDir = path.resolve(this.assetsBaseDir, 'reading-exams');
         this.explanationsDir = path.resolve(this.assetsBaseDir, 'reading-explanations');
+    }
+
+    getCacheStats() {
+        this._pruneExpiredQueryCache();
+        return {
+            examBundleEntries: this.examBundleCache.size,
+            examBundleLimit: EXAM_BUNDLE_CACHE_LIMIT,
+            examIds: Array.from(this.examBundleCache.keys()),
+            queryEntries: this.queryCache.size,
+            queryLimit: QUERY_CACHE_LIMIT
+        };
+    }
+
+    clearCaches() {
+        this.examBundleCache.clear();
+        this.queryCache.clear();
     }
 
     async query(payload = {}, options = {}) {
@@ -213,7 +319,7 @@ class ReadingCoachService {
             usedConfig = streamResult?.usedConfig || null;
             providerPath = Array.isArray(streamResult?.providerPath) ? streamResult.providerPath : [];
 
-            const parsed = this._normalizeModelResponse(rawContent);
+            const parsed = this._normalizeModelResponse(rawContent, contextRoute);
             const citations = this._buildCitations(retrieval.finalChunks);
             const answerText = composeReadingCoachAnswer(parsed.answerSections, parsed.answer);
 
@@ -254,8 +360,19 @@ class ReadingCoachService {
     _normalizePayload(payload = {}) {
         const source = isObject(payload) ? payload : {};
         const query = String(source.query || source.userQuery || '').trim();
-        const selectedContext = isObject(source.selectedContext) ? source.selectedContext : {};
-        const selectedText = String(source.selectedText || selectedContext.text || '').trim();
+        const rawSelectedContext = isObject(source.selectedContext) ? source.selectedContext : {};
+        const selectedText = String(source.selectedText || rawSelectedContext.text || '').trim();
+        const selectedScope = String(rawSelectedContext.scope || source.selectedScope || '').trim().toLowerCase();
+        const selectedContextQuestionNumbers = normalizeQuestionNumberList(rawSelectedContext.questionNumbers);
+        const selectedContextParagraphLabels = normalizeParagraphLabelList(rawSelectedContext.paragraphLabels);
+        const selectedContext = selectedText || selectedScope || selectedContextQuestionNumbers.length || selectedContextParagraphLabels.length
+            ? {
+                text: selectedText,
+                scope: selectedScope === 'question' ? 'question' : (selectedScope === 'passage' ? 'passage' : ''),
+                questionNumbers: selectedContextQuestionNumbers,
+                paragraphLabels: selectedContextParagraphLabels
+            }
+            : null;
         const history = Array.isArray(source.history)
             ? source.history
                 .map((item) => {
@@ -276,7 +393,8 @@ class ReadingCoachService {
         const focusQuestionNumbers = uniqueList(
             [
                 ...(Array.isArray(source.focusQuestionNumbers) ? source.focusQuestionNumbers : []),
-                ...(Array.isArray(source.questionNumbers) ? source.questionNumbers : [])
+                ...(Array.isArray(source.questionNumbers) ? source.questionNumbers : []),
+                ...selectedContextQuestionNumbers
             ]
                 .map((item) => String(item || '').trim().replace(/^q/i, ''))
                 .filter(Boolean)
@@ -291,13 +409,16 @@ class ReadingCoachService {
 
         return {
             examId,
+            sessionId: String(source.sessionId || source.session_id || '').trim(),
+            mode: String(source.mode || '').trim().toLowerCase(),
             query,
             locale: String(source.locale || 'zh').trim().toLowerCase() === 'en' ? 'en' : 'zh',
             surface: String(source.surface || '').trim().toLowerCase(),
             action: String(source.action || 'chat').trim().toLowerCase(),
             promptKind: String(source.promptKind || '').trim().toLowerCase(),
             selectedText,
-            selectedScope: String(selectedContext.scope || source.selectedScope || '').trim().toLowerCase(),
+            selectedScope,
+            selectedContext,
             focusQuestionNumbers,
             history,
             attemptContext: {
@@ -316,7 +437,13 @@ class ReadingCoachService {
                         accumulator[normalizedQuestion] = answerText;
                         return accumulator;
                     }, {})
-                    : {}
+                    : {},
+                analysisSignals: normalizeAnalysisSignals(attemptContext.analysisSignals),
+                markedQuestions: Array.isArray(attemptContext.markedQuestions)
+                    ? attemptContext.markedQuestions.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 40)
+                    : [],
+                questionTimelineLite: normalizeQuestionTimelineLite(attemptContext.questionTimelineLite),
+                questionTypePerformance: normalizeQuestionTypePerformance(attemptContext.questionTypePerformance)
             },
             apiConfigId: source.api_config_id || source.config_id || source.apiConfigId || null
         };
@@ -325,23 +452,30 @@ class ReadingCoachService {
     _buildCacheKey(payload) {
         return JSON.stringify({
             examId: payload.examId,
+            sessionId: payload.sessionId,
+            mode: payload.mode,
             query: payload.query,
             locale: payload.locale,
             surface: payload.surface,
             action: payload.action,
             promptKind: payload.promptKind,
             selectedText: payload.selectedText,
+            selectedContext: payload.selectedContext,
             focusQuestionNumbers: payload.focusQuestionNumbers,
             submitted: payload.attemptContext.submitted,
             score: payload.attemptContext.score,
             wrongQuestions: payload.attemptContext.wrongQuestions,
             selectedAnswers: payload.attemptContext.selectedAnswers,
+            analysisSignals: payload.attemptContext.analysisSignals,
+            markedQuestions: payload.attemptContext.markedQuestions,
+            questionTimelineLite: payload.attemptContext.questionTimelineLite,
+            questionTypePerformance: payload.attemptContext.questionTypePerformance,
             history: payload.history
         });
     }
 
     _getCache(key) {
-        const entry = this.queryCache.get(key);
+        const entry = touchCacheEntry(this.queryCache, key);
         if (!entry) {
             return null;
         }
@@ -353,10 +487,20 @@ class ReadingCoachService {
     }
 
     _setCache(key, value) {
-        this.queryCache.set(key, {
+        this._pruneExpiredQueryCache();
+        setBoundedCacheEntry(this.queryCache, key, {
             value,
             expiresAt: Date.now() + QUERY_CACHE_TTL_MS
-        });
+        }, QUERY_CACHE_LIMIT);
+    }
+
+    _pruneExpiredQueryCache() {
+        const now = Date.now();
+        for (const [key, entry] of this.queryCache.entries()) {
+            if (!entry || entry.expiresAt <= now) {
+                this.queryCache.delete(key);
+            }
+        }
     }
 
     _classifyRoute(payload) {
@@ -413,8 +557,9 @@ class ReadingCoachService {
     }
 
     async _loadExamBundle(examId) {
-        if (this.examBundleCache.has(examId)) {
-            return this.examBundleCache.get(examId);
+        const cached = touchCacheEntry(this.examBundleCache, examId);
+        if (cached) {
+            return cached;
         }
 
         const examPath = path.resolve(this.examsDir, `${examId}.js`);
@@ -424,10 +569,10 @@ class ReadingCoachService {
             throw error;
         }
 
-        const examDataset = this._evaluateExamFile(examPath);
+        const examDataset = this._parseExamFile(examPath, examId);
         const explanationPath = path.resolve(this.explanationsDir, `${examId}.js`);
         const explanationDataset = fs.existsSync(explanationPath)
-            ? this._evaluateExplanationFile(explanationPath)
+            ? this._parseExplanationFile(explanationPath, examId)
             : null;
 
         const chunks = this._buildChunks(examId, examDataset, explanationDataset);
@@ -438,59 +583,40 @@ class ReadingCoachService {
             chunks
         };
 
-        this.examBundleCache.set(examId, bundle);
+        setBoundedCacheEntry(this.examBundleCache, examId, bundle, EXAM_BUNDLE_CACHE_LIMIT);
         return bundle;
     }
 
-    _evaluateExamFile(filePath) {
+    _parseExamFile(filePath, examId) {
         const source = fs.readFileSync(filePath, 'utf8');
-        let captured = null;
-        const host = {
-            __READING_EXAM_DATA__: {
-                register: (_key, payload) => {
-                    captured = payload;
-                }
-            }
-        };
-        const sandbox = {
-            window: host,
-            globalThis: host,
-            global: host,
-            console
-        };
-        vm.runInNewContext(source, sandbox, {
-            filename: filePath,
-            timeout: 3000
-        });
-        if (!isObject(captured)) {
+        const parsed = parseReadingExamDataSource(source);
+        if (parsed.key && parsed.key !== examId) {
+            const error = new Error(`阅读题数据 key 不匹配：${path.basename(filePath)}`);
+            error.code = 'exam_data_key_mismatch';
+            throw error;
+        }
+        if (!isObject(parsed.payload)) {
             const error = new Error(`读取阅读题数据失败：${path.basename(filePath)}`);
             error.code = 'exam_data_parse_failed';
             throw error;
         }
-        return captured;
+        return parsed.payload;
     }
 
-    _evaluateExplanationFile(filePath) {
+    _parseExplanationFile(filePath, examId) {
         const source = fs.readFileSync(filePath, 'utf8');
-        let captured = null;
-        const host = {
-            __READING_EXPLANATION_DATA__: {
-                register: (_key, payload) => {
-                    captured = payload;
-                }
-            }
-        };
-        const sandbox = {
-            window: host,
-            globalThis: host,
-            global: host,
-            console
-        };
-        vm.runInNewContext(source, sandbox, {
-            filename: filePath,
-            timeout: 3000
-        });
-        return isObject(captured) ? captured : null;
+        const parsed = parseReadingExplanationDataSource(source);
+        if (parsed.key && parsed.key !== examId) {
+            const error = new Error(`阅读解析数据 key 不匹配：${path.basename(filePath)}`);
+            error.code = 'explanation_data_key_mismatch';
+            throw error;
+        }
+        if (!isObject(parsed.payload)) {
+            const error = new Error(`读取阅读解析数据失败：${path.basename(filePath)}`);
+            error.code = 'explanation_data_parse_failed';
+            throw error;
+        }
+        return parsed.payload;
     }
 
     _buildChunks(examId, examDataset, explanationDataset) {
@@ -517,8 +643,10 @@ class ReadingCoachService {
         });
     }
 
-    _normalizeModelResponse(rawContent) {
-        return normalizeReadingCoachModelResponse(rawContent, logger);
+    _normalizeModelResponse(rawContent, contextRoute) {
+        return normalizeReadingCoachModelResponse(rawContent, logger, {
+            requireReviewSchema: contextRoute === CONTEXT_ROUTES.REVIEW
+        });
     }
 
     _buildCitations(chunks = []) {

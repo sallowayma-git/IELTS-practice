@@ -23,14 +23,42 @@ function hasValidEssayIdQuery(route) {
     return Number.isInteger(essayId) && essayId > 0
 }
 
-// 路由配置 (Hash 模式，file:// 兼容)
+// 路由配置。Hash 仍由 Electron 打包入口承载，业务路由按 Practice Shell 组织。
 const router = createRouter({
     history: createWebHashHistory(),
     routes: [
         {
             path: '/',
+            name: 'PracticeLibrary',
+            component: () => import('./views/PracticeLibraryPage.vue')
+        },
+        {
+            path: '/writing',
             name: 'Compose',
             component: () => import('./views/ComposePage.vue')
+        },
+        {
+            path: '/library',
+            name: 'PracticeLibraryAlias',
+            redirect: { name: 'PracticeLibrary' }
+        },
+        {
+            path: '/reading/:assetId',
+            name: 'PracticeReading',
+            component: () => import('./views/PracticeReadingPage.vue'),
+            props: true
+        },
+        {
+            path: '/reading-suite/:sessionId',
+            name: 'PracticeReadingSuite',
+            component: () => import('./views/PracticeReadingSuitePage.vue'),
+            props: true
+        },
+        {
+            path: '/reading/:assetId/review/:sessionId',
+            name: 'PracticeReadingReview',
+            component: () => import('./views/PracticeReadingPage.vue'),
+            props: true
         },
         {
             path: '/evaluating/:sessionId',
@@ -61,7 +89,7 @@ const router = createRouter({
         },
         {
             path: '/:pathMatch(.*)*',
-            redirect: { name: 'Compose' }
+            redirect: { name: 'PracticeLibrary' }
         }
     ]
 })
@@ -106,3 +134,11 @@ router.beforeEach((to, from, next) => {
 const app = createApp(App)
 app.use(router)
 app.mount('#app')
+
+if (typeof window !== 'undefined') {
+    try {
+        window.dispatchEvent(new CustomEvent('app-runtime-ready'))
+    } catch (error) {
+        console.warn('[PracticeShell] app-runtime-ready dispatch failed:', error)
+    }
+}

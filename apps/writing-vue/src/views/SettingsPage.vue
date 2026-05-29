@@ -1,56 +1,120 @@
 <template>
-  <div class="settings-page">
-    <header class="settings-hero">
-      <div class="settings-hero__copy">
-        <span class="settings-eyebrow">Writing Control Center</span>
-        <h1 class="heading-serif">写作设置</h1>
-        <p>集中管理评测通道、提示词版本、模型参数和历史数据策略。</p>
-      </div>
-      <div class="settings-hero__metrics" aria-label="设置概览">
-        <div class="settings-metric">
-          <span>{{ currentTemperatureSummary }}</span>
-          <small>当前温度</small>
-        </div>
-        <div class="settings-metric">
-          <span>{{ enabledConfigCount }}/{{ totalConfigCount }}</span>
-          <small>启用 API</small>
-        </div>
-        <div class="settings-metric">
-          <span>{{ dataSettings.history_limit }}</span>
-          <small>历史保留</small>
-        </div>
-      </div>
-    </header>
+  <div id="settings-view" class="settings-page view hero-panel hero-section active" data-writing-settings>
+    <div class="hero-panel__header">
+      <h2 class="hero-panel__title heading-serif">⚙️ 系统设置</h2>
+      <button
+        class="settings-detail-toggle"
+        type="button"
+        aria-controls="writing-settings-detail"
+        :aria-expanded="settingsDetailOpen ? 'true' : 'false'"
+        @click="toggleSettingsDetail"
+      >
+        {{ settingsDetailOpen ? '收起写作配置' : '写作配置' }}
+      </button>
+    </div>
 
-    <div class="settings-layout">
-      <aside class="settings-nav" aria-label="设置分区">
-        <div class="settings-nav__head">
-          <span>Settings</span>
-          <strong>{{ activeTabMeta.label }}</strong>
+    <div class="hero-settings-group" aria-label="设置主面板">
+      <section class="hero-panel hero-section system-management-panel">
+        <h3 class="heading-serif">🔧 系统管理</h3>
+        <p class="hero-panel__muted">系统工具和设置选项</p>
+        <div class="hero-settings-actions">
+          <button class="btn btn-warning hero-btn hero-btn--warn" id="clear-cache-btn" type="button" @click="clearAppCache">
+            🗑️ 清除缓存
+          </button>
+          <button class="btn btn-warning hero-btn hero-btn--warn" id="load-library-btn" type="button" @click="openWritingTopicLibrary">
+            📂 加载题库
+          </button>
+          <button class="btn btn-warning hero-btn hero-btn--warn" id="theme-switcher-btn-entry" type="button" @click="switchBackgroundTheme">
+            🎨 主题切换
+          </button>
+          <button class="btn btn-warning hero-btn hero-btn--warn" id="show-onboarding-btn" type="button" @click="startOnboardingTour">
+            🎯 显示引导
+          </button>
+          <button class="btn btn-warning hero-btn hero-btn--warn" id="library-config-btn" type="button" data-action="library-config" @click="openWritingLibraryConfig">
+            <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="ui-emoji-icon" aria-hidden="true">
+              <line x1="4" y1="21" x2="4" y2="14"></line>
+              <line x1="4" y1="10" x2="4" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12" y2="3"></line>
+              <line x1="20" y1="21" x2="20" y2="16"></line>
+              <line x1="20" y1="12" x2="20" y2="3"></line>
+              <line x1="1" y1="14" x2="7" y2="14"></line>
+              <line x1="9" y1="8" x2="15" y2="8"></line>
+              <line x1="17" y1="16" x2="23" y2="16"></line>
+            </svg>
+            题库配置切换
+          </button>
+          <button class="btn btn-warning hero-btn hero-btn--warn" id="force-refresh-btn" type="button" data-action="force-refresh" @click="refreshWritingLibrary">
+            🔄 强制刷新题库
+          </button>
+          <button class="btn btn-warning hero-btn hero-btn--warn" id="check-updates-btn" type="button" data-update-action="open-modal" @click="openUpdateManager">
+            🔍 检查更新
+          </button>
         </div>
+      </section>
+
+      <section class="hero-panel hero-section data-management-panel">
+        <h3 class="heading-serif">💾 数据管理</h3>
+        <p class="hero-panel__muted">数据备份、导入导出和完整性检查</p>
+        <div class="hero-settings-actions">
+          <button class="btn hero-btn data-mgmt-btn" id="create-backup-btn" type="button" @click="createSettingsBackup">
+            💾 创建备份
+          </button>
+          <button class="btn hero-btn data-mgmt-btn" id="backup-list-btn" type="button" @click="showSettingsBackupList">
+            📋 备份列表
+          </button>
+          <button class="btn hero-btn data-mgmt-btn" id="export-data-btn" type="button" @click="exportSettingsData">
+            📤 导出数据
+          </button>
+          <button class="btn hero-btn data-mgmt-btn" id="import-data-btn" type="button" @click="triggerSettingsImport">
+            📥 导入数据
+          </button>
+          <input ref="settingsImportInput" class="settings-file-input" type="file" accept="application/json,.json" @change="handleSettingsImport" />
+        </div>
+      </section>
+
+      <section class="hero-panel hero-section system-info-panel">
+        <h3 class="heading-serif">📊 系统信息</h3>
+        <div class="hero-surface system-info-surface">
+          <div class="system-info-status">写作状态: 已连接设置服务</div>
+          <div>启用 API: <span>{{ enabledConfigCount }}/{{ totalConfigCount }}</span></div>
+          <div>提示词版本: <span>{{ promptEntries.length }}</span></div>
+          <div>激活提示词: <span>{{ activePromptCount }}</span></div>
+          <div>温度参数: <span>{{ currentTemperatureSummary }}</span></div>
+          <div>历史保留: <span>{{ dataSettings.history_limit }} 条</span></div>
+          <div>Electron版本: <span>{{ electronVersion }}</span></div>
+          <div>Node版本: <span>{{ nodeVersion }}</span></div>
+          <div>数据目录: <span>{{ userDataPath || '加载中...' }}</span></div>
+        </div>
+        <div class="settings-credit">
+          <a href="https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT" target="_blank" rel="noopener noreferrer" class="inline-hover-link">问题反馈</a>
+          <a href="https://github.com/sallowayma-git" target="_blank" rel="noopener noreferrer">Salloway呈现</a>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="globalMessage.message" :class="['inline-message', `inline-message-${globalMessage.type}`]">
+      {{ globalMessage.message }}
+    </div>
+
+    <section
+      v-if="settingsDetailOpen"
+      id="writing-settings-detail"
+      class="settings-detail hero-panel hero-section"
+      aria-label="写作设置明细"
+    >
+      <div class="settings-tabs" role="tablist" aria-label="写作设置分类">
         <button
           v-for="tab in tabs"
           :key="tab.key"
           type="button"
-          :class="['settings-nav__item', { 'is-active': activeTab === tab.key }]"
+          :class="['settings-tab', { active: activeTab === tab.key }]"
           @click="activeTab = tab.key"
         >
-          <span class="settings-nav__icon" v-html="tab.icon"></span>
-          <span>
-            <strong>{{ tab.label }}</strong>
-            <small>{{ tab.summary }}</small>
-          </span>
+          <span class="settings-tab__icon" v-html="tab.icon"></span>
+          {{ tab.label }}
         </button>
-      </aside>
-
-      <main class="settings-workspace">
-        <div class="settings-workspace__head">
-          <div>
-            <span class="settings-eyebrow">{{ activeTabMeta.kicker }}</span>
-            <h2>{{ activeTabMeta.title }}</h2>
-            <p>{{ activeTabMeta.description }}</p>
-          </div>
-        </div>
+      </div>
 
       <!-- API 配置 -->
         <section v-if="activeTab === 'api'" class="settings-panel">
@@ -330,6 +394,36 @@
           </div>
         </section>
 
+        <section v-if="activeTab === 'data' && settingsBackupListOpen" class="settings-panel" data-writing-settings-backup-list>
+          <div class="settings-panel__head">
+            <div>
+              <h3>设置备份列表</h3>
+              <p>最近 10 个写作设置备份保存在本机，可恢复、下载或删除。</p>
+            </div>
+            <span class="settings-badge">{{ settingsBackups.length }} 个备份</span>
+          </div>
+          <div v-if="!settingsBackups.length" class="settings-empty">暂无设置备份。</div>
+          <div v-else class="settings-list">
+            <div v-for="backup in settingsBackups" :key="backup.id" class="settings-list__row">
+              <div class="settings-list__main">
+                <div class="settings-list__title">
+                  <strong>{{ backup.id }}</strong>
+                  <span class="settings-badge settings-badge--muted">{{ formatSettingsBackupDate(backup) }}</span>
+                </div>
+                <div class="settings-list__meta">
+                  <span>{{ backup.apiConfigCount }} 个 API 配置</span>
+                  <span>{{ backup.promptCount }} 个提示词版本</span>
+                </div>
+              </div>
+              <div class="settings-actions">
+                <button class="btn-text" type="button" @click="restoreSettingsBackup(backup)">恢复</button>
+                <button class="btn-text" type="button" @click="downloadSettingsBackup(backup)">下载</button>
+                <button class="btn-text danger" type="button" @click="deleteSettingsBackup(backup.id)">删除</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section v-if="activeTab === 'data'" class="settings-panel danger-zone">
           <div class="settings-panel__head">
             <div>
@@ -401,8 +495,7 @@
             </ul>
           </div>
         </section>
-      </main>
-    </div>
+    </section>
 
     <!-- 通用确认弹窗 -->
     <div v-if="confirmDialog.visible" class="dialog-overlay" @click.self="closeConfirmDialog">
@@ -439,6 +532,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import { settings, essays, configs, prompts } from '@/api/client.js'
 import { createRequestGate } from '@/utils/request-gate.js'
 import {
@@ -510,11 +604,19 @@ const tabs = [
 ]
 const appLogoSrc = '../../assets/images/herbal_green_flat_logo_1776094316057.png?v=20260414b'
 
+const router = useRouter()
+const WRITING_SETTINGS_BACKUP_STORAGE_KEY = 'ielts_writing_settings_backups_v1'
+const MAX_SETTINGS_BACKUPS = 10
 const activeTab = ref('model')
+const settingsDetailOpen = ref(false)
 const modelSaving = ref(false)
 const dataSaving = ref(false)
 const apiLoading = ref(false)
 const promptLoading = ref(false)
+const settingsImportInput = ref(null)
+const settingsBackupListOpen = ref(false)
+const settingsBackups = ref([])
+const globalMessage = reactive({ type: 'info', message: '' })
 const sectionMessages = reactive({
   api: { type: 'info', message: '' },
   prompts: { type: 'info', message: '' },
@@ -599,6 +701,10 @@ const confirmDialog = reactive({
 const apiRequestGate = createRequestGate()
 const promptRequestGate = createRequestGate()
 const settingsRequestGate = createRequestGate()
+const legacyStylePromises = new Map()
+const legacyScriptPromises = new Map()
+let legacyOnboardingPromise = null
+let legacyUpdateManagerPromise = null
 
 // 关于页面数据
 const electronVersion = ref('N/A')
@@ -1090,6 +1196,14 @@ async function executeConfirmAction() {
     } else if (kind === 'clear-history') {
       await essays.deleteAll()
       setSectionMessage('data', 'success', '已清空所有历史记录')
+    } else if (kind === 'restore-settings-backup') {
+      const normalized = normalizeSettingsBackupEntry(payload?.backup)
+      if (!normalized) {
+        throw new Error('备份数据无效')
+      }
+      const result = await applySettingsImportPayload(normalized.archive)
+      await loadApiConfigs()
+      setGlobalMessage('success', `备份已恢复：${result.settingsCount} 项设置，${result.promptCount} 个提示词版本。`)
     }
     closeConfirmDialog()
   } catch (error) {
@@ -1099,8 +1213,441 @@ async function executeConfirmAction() {
       ? '删除 API 配置失败'
       : kind === 'delete-prompt'
         ? '删除提示词失败'
-        : '清空失败'
+        : kind === 'restore-settings-backup'
+          ? '恢复备份失败'
+          : '清空失败'
     setSectionMessage(section, 'error', `${errorLabel}: ${error.message}`)
+  }
+}
+
+function setGlobalMessage(type, message) {
+  globalMessage.type = type
+  globalMessage.message = String(message || '').trim()
+}
+
+function downloadJsonFile(filename, payload) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+function clearAppCache() {
+  const removablePrefixes = [
+    'evaluation_',
+    'writing_draft_',
+    'practice_reading_answers_',
+    'practice_reading_submission_'
+  ]
+  let removed = 0
+  ;[window.sessionStorage, window.localStorage].forEach((store) => {
+    if (!store) return
+    for (let index = store.length - 1; index >= 0; index -= 1) {
+      const key = store.key(index) || ''
+      if (removablePrefixes.some((prefix) => key.startsWith(prefix))) {
+        store.removeItem(key)
+        removed += 1
+      }
+    }
+  })
+  setGlobalMessage('success', `缓存已清除：${removed} 项。`)
+}
+
+function switchBackgroundTheme() {
+  const themes = ['misty-mountain', 'teal-ocean', 'floral-bloom']
+  let current = 'misty-mountain'
+  try {
+    current = localStorage.getItem('three_bg_theme') || current
+  } catch (_) {}
+  const currentIndex = themes.indexOf(current)
+  const nextTheme = themes[(currentIndex + 1) % themes.length] || themes[0]
+  if (typeof window.switchBgTheme === 'function') {
+    window.switchBgTheme(nextTheme)
+  } else {
+    try {
+      localStorage.setItem('three_bg_theme', nextTheme)
+    } catch (_) {}
+    window.dispatchEvent(new CustomEvent('shui-bg-theme-change', { detail: { theme: nextTheme } }))
+  }
+  setGlobalMessage('success', `主题已切换：${nextTheme}`)
+}
+
+function resolveLegacyAssetUrl(relativePath) {
+  const normalized = String(relativePath || '').replace(/^\/+/, '')
+  try {
+    const currentUrl = new URL(window.location.href)
+    if (currentUrl.pathname.includes('/dist/writing/')) {
+      return new URL(`../../${normalized}`, currentUrl.href).href
+    }
+  } catch (_) {}
+  return `/${normalized}`
+}
+
+function loadLegacyStyle(relativePath) {
+  if (legacyStylePromises.has(relativePath)) return legacyStylePromises.get(relativePath)
+  const href = resolveLegacyAssetUrl(relativePath)
+  const existing = document.querySelector(`link[data-legacy-style="${relativePath}"]`)
+  if (existing) {
+    const promise = Promise.resolve()
+    legacyStylePromises.set(relativePath, promise)
+    return promise
+  }
+  const promise = new Promise((resolve, reject) => {
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = href
+    link.dataset.legacyStyle = relativePath
+    link.onload = () => resolve()
+    link.onerror = () => {
+      legacyStylePromises.delete(relativePath)
+      reject(new Error(`加载 legacy 样式失败：${relativePath}`))
+    }
+    document.head.appendChild(link)
+  })
+  legacyStylePromises.set(relativePath, promise)
+  return promise
+}
+
+function loadLegacyScript(relativePath) {
+  if (legacyScriptPromises.has(relativePath)) return legacyScriptPromises.get(relativePath)
+  const existing = document.querySelector(`script[data-legacy-script="${relativePath}"]`)
+  if (existing) {
+    const promise = Promise.resolve()
+    legacyScriptPromises.set(relativePath, promise)
+    return promise
+  }
+  const promise = new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = resolveLegacyAssetUrl(relativePath)
+    script.async = false
+    script.dataset.legacyScript = relativePath
+    script.onload = () => resolve()
+    script.onerror = () => {
+      legacyScriptPromises.delete(relativePath)
+      reject(new Error(`加载 legacy 脚本失败：${relativePath}`))
+    }
+    document.head.appendChild(script)
+  })
+  legacyScriptPromises.set(relativePath, promise)
+  return promise
+}
+
+function ensureLegacyOnboarding() {
+  if (window.OnboardingTour && typeof window.OnboardingTour.start === 'function') {
+    return Promise.resolve()
+  }
+  if (!legacyOnboardingPromise) {
+    legacyOnboardingPromise = loadLegacyStyle('css/onboarding.css')
+      .then(() => loadLegacyScript('js/components/onboardingTour.js'))
+      .then(() => {
+        window.OnboardingTour?.init?.()
+      })
+      .catch((error) => {
+        legacyOnboardingPromise = null
+        throw error
+      })
+  }
+  return legacyOnboardingPromise
+}
+
+async function startOnboardingTour(event) {
+  event?.preventDefault?.()
+  event?.stopImmediatePropagation?.()
+  try {
+    await ensureLegacyOnboarding()
+    if (!window.OnboardingTour || typeof window.OnboardingTour.start !== 'function') {
+      throw new Error('OnboardingTour 未加载')
+    }
+    window.OnboardingTour.start(true)
+  } catch (error) {
+    console.error('打开引导流程失败:', error)
+    setGlobalMessage('error', error?.message ? `引导打开失败：${error.message}` : '引导打开失败，请稍后重试。')
+  }
+}
+
+function ensureUpdateManagerInstance() {
+  if (window.appUpdateManager && typeof window.appUpdateManager.handleAction === 'function') {
+    return Promise.resolve(window.appUpdateManager)
+  }
+  if (typeof window.AppUpdateManager !== 'function') {
+    return Promise.reject(new Error('AppUpdateManager 未加载'))
+  }
+  const manager = new window.AppUpdateManager()
+  window.appUpdateManager = manager
+  return manager.init().then(() => manager)
+}
+
+function ensureLegacyUpdateManager() {
+  if (window.appUpdateManager && typeof window.appUpdateManager.handleAction === 'function') {
+    return Promise.resolve(window.appUpdateManager)
+  }
+  if (!legacyUpdateManagerPromise) {
+    legacyUpdateManagerPromise = loadLegacyStyle('css/main.css')
+      .then(() => loadLegacyScript('js/integration/updateManager.js'))
+      .then(() => ensureUpdateManagerInstance())
+      .catch((error) => {
+        legacyUpdateManagerPromise = null
+        throw error
+      })
+  }
+  return legacyUpdateManagerPromise
+}
+
+async function openUpdateManager(event) {
+  event?.preventDefault?.()
+  event?.stopImmediatePropagation?.()
+  try {
+    const manager = await ensureLegacyUpdateManager()
+    if (typeof manager.handleAction === 'function') {
+      await manager.handleAction('open-modal')
+      return
+    }
+    manager.showModal?.()
+    await manager.ensureAutoCheck?.()
+  } catch (error) {
+    console.error('打开更新管理失败:', error)
+    setGlobalMessage('error', error?.message ? `更新检查打开失败：${error.message}` : '更新检查打开失败，请稍后重试。')
+  }
+}
+
+function openWritingTopicLibrary() {
+  router.push({ name: 'TopicManage' })
+}
+
+function openSettingsDetail(tabKey = activeTab.value) {
+  if (tabs.some((tab) => tab.key === tabKey)) {
+    activeTab.value = tabKey
+  }
+  settingsDetailOpen.value = true
+}
+
+function toggleSettingsDetail() {
+  settingsDetailOpen.value = !settingsDetailOpen.value
+}
+
+function openWritingLibraryConfig() {
+  openSettingsDetail('prompts')
+  setGlobalMessage('success', '已切换到写作提示词与题库相关配置。')
+}
+
+function refreshWritingLibrary() {
+  try {
+    sessionStorage.removeItem('writing_topics_cache')
+    sessionStorage.removeItem('topic_bank_cache')
+    sessionStorage.removeItem('compose_topics_cache')
+  } catch (_) {}
+  setGlobalMessage('success', '写作题库缓存已刷新；进入写作题库时会重新拉取。')
+}
+
+function normalizeSettingsBackupEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null
+  const archive = entry.archive && typeof entry.archive === 'object' ? entry.archive : null
+  if (!archive) return null
+  const createdAt = String(entry.createdAt || archive.exportedAt || '').trim() || new Date().toISOString()
+  const id = String(entry.id || `writing-settings-${createdAt}`).trim()
+  return {
+    id,
+    createdAt,
+    archive,
+    apiConfigCount: Number.isFinite(Number(entry.apiConfigCount))
+      ? Number(entry.apiConfigCount)
+      : Array.isArray(archive.apiConfigs)
+        ? archive.apiConfigs.length
+        : 0,
+    promptCount: Number.isFinite(Number(entry.promptCount))
+      ? Number(entry.promptCount)
+      : Array.isArray(archive.prompts)
+        ? archive.prompts.length
+        : 0
+  }
+}
+
+function readSettingsBackups() {
+  try {
+    const raw = window.localStorage?.getItem(WRITING_SETTINGS_BACKUP_STORAGE_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((entry) => normalizeSettingsBackupEntry(entry))
+      .filter(Boolean)
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+      .slice(0, MAX_SETTINGS_BACKUPS)
+  } catch (error) {
+    console.warn('读取写作设置备份失败:', error)
+    return []
+  }
+}
+
+function persistSettingsBackups(backups) {
+  const normalized = Array.isArray(backups)
+    ? backups.map((entry) => normalizeSettingsBackupEntry(entry)).filter(Boolean)
+    : []
+  const nextBackups = normalized
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+    .slice(0, MAX_SETTINGS_BACKUPS)
+  settingsBackups.value = nextBackups
+  try {
+    window.localStorage?.setItem(WRITING_SETTINGS_BACKUP_STORAGE_KEY, JSON.stringify(nextBackups))
+  } catch (error) {
+    console.warn('保存写作设置备份索引失败:', error)
+    setGlobalMessage('error', '备份已生成，但本机备份索引保存失败: ' + error.message)
+  }
+  return nextBackups
+}
+
+function formatSettingsBackupDate(backup) {
+  const timestamp = new Date(backup?.createdAt || backup?.archive?.exportedAt || '')
+  if (Number.isNaN(timestamp.getTime())) return '时间未知'
+  return timestamp.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+async function collectSettingsExportPayload() {
+  const allSettings = await settings.getAll()
+  return {
+    exportedAt: new Date().toISOString(),
+    version: '0.3.1',
+    settings: allSettings,
+    apiConfigs: apiConfigs.value.map((item) => ({
+      id: item.id,
+      config_name: item.config_name,
+      provider: item.provider,
+      base_url: item.base_url,
+      default_model: item.default_model,
+      is_default: Boolean(item.is_default),
+      is_enabled: Boolean(item.is_enabled)
+    })),
+    prompts: promptEntries.value
+  }
+}
+
+async function applySettingsImportPayload(payload) {
+  const importedSettings = payload?.settings && typeof payload.settings === 'object'
+    ? payload.settings
+    : payload
+  const allowedKeys = ['temperature_mode', 'temperature_task1', 'temperature_task2', 'history_limit']
+  const updates = {}
+  allowedKeys.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(importedSettings || {}, key)) {
+      updates[key] = importedSettings[key]
+    }
+  })
+
+  const promptPayload = Array.isArray(payload?.prompts)
+    ? payload.prompts
+    : null
+  if (!Object.keys(updates).length && !promptPayload?.length) {
+    throw new Error('文件不包含可导入的写作设置或提示词')
+  }
+
+  if (Object.keys(updates).length) {
+    await settings.update(updates)
+    await loadSettings()
+  }
+  if (promptPayload?.length) {
+    await prompts.import(promptPayload)
+    await loadPromptList()
+  }
+
+  return {
+    settingsCount: Object.keys(updates).length,
+    promptCount: promptPayload?.length || 0
+  }
+}
+
+async function createSettingsBackup() {
+  try {
+    const archive = await collectSettingsExportPayload()
+    const backup = normalizeSettingsBackupEntry({
+      id: `writing-settings-${Date.now()}`,
+      createdAt: archive.exportedAt || new Date().toISOString(),
+      archive
+    })
+    persistSettingsBackups([backup, ...readSettingsBackups()])
+    settingsBackupListOpen.value = true
+    openSettingsDetail('data')
+    downloadJsonFile(`ielts-writing-settings-backup-${Date.now()}.json`, archive)
+    setGlobalMessage('success', '设置备份已创建并保存到本机列表。')
+  } catch (error) {
+    setGlobalMessage('error', '创建备份失败: ' + error.message)
+  }
+}
+
+function showSettingsBackupList() {
+  openSettingsDetail('data')
+  settingsBackups.value = readSettingsBackups()
+  settingsBackupListOpen.value = true
+}
+
+function downloadSettingsBackup(backup) {
+  const normalized = normalizeSettingsBackupEntry(backup)
+  if (!normalized) {
+    setGlobalMessage('error', '备份数据无效，无法下载。')
+    return
+  }
+  const safeId = normalized.id.replace(/[^a-zA-Z0-9._-]+/g, '-')
+  downloadJsonFile(`${safeId}.json`, normalized.archive)
+}
+
+function restoreSettingsBackup(backup) {
+  const normalized = normalizeSettingsBackupEntry(backup)
+  if (!normalized) {
+    setGlobalMessage('error', '备份数据无效，无法恢复。')
+    return
+  }
+  openConfirmDialog({
+    kind: 'restore-settings-backup',
+    section: 'data',
+    title: '恢复设置备份',
+    message: `恢复备份 ${formatSettingsBackupDate(normalized)}？当前写作设置和提示词版本会被导入记录覆盖。`,
+    confirmLabel: '确认恢复',
+    danger: false,
+    payload: { backup: normalized }
+  })
+}
+
+function deleteSettingsBackup(id) {
+  const normalizedId = String(id || '').trim()
+  if (!normalizedId) return
+  persistSettingsBackups(readSettingsBackups().filter((backup) => backup.id !== normalizedId))
+  setGlobalMessage('success', '设置备份已删除。')
+}
+
+async function exportSettingsData() {
+  try {
+    downloadJsonFile('ielts-writing-settings-export.json', await collectSettingsExportPayload())
+    setGlobalMessage('success', '设置数据已导出。')
+  } catch (error) {
+    setGlobalMessage('error', '导出数据失败: ' + error.message)
+  }
+}
+
+function triggerSettingsImport() {
+  settingsImportInput.value?.click()
+}
+
+async function handleSettingsImport(event) {
+  const file = event?.target?.files?.[0]
+  if (!file) return
+  try {
+    const raw = await file.text()
+    const parsed = JSON.parse(raw)
+    const result = await applySettingsImportPayload(parsed)
+    setGlobalMessage('success', `设置数据已导入：${result.settingsCount} 项设置，${result.promptCount} 个提示词版本。`)
+  } catch (error) {
+    setGlobalMessage('error', '导入数据失败: ' + error.message)
+  } finally {
+    if (event?.target) {
+      event.target.value = ''
+    }
   }
 }
 
@@ -1110,6 +1657,7 @@ onMounted(() => {
   getUserDataPath()
   loadApiConfigs()
   loadPromptList()
+  settingsBackups.value = readSettingsBackups()
 })
 
 onBeforeUnmount(() => {
@@ -2504,6 +3052,365 @@ onBeforeUnmount(() => {
   .info-row .value {
     max-width: 100%;
     text-align: left;
+  }
+}
+
+/* Open-source settings shell parity */
+.settings-page#settings-view {
+  --shui-panel-bg: rgba(255, 255, 255, 0.58);
+  --shui-panel-border: rgba(255, 255, 255, 0.7);
+  --shui-panel-shadow: 0 24px 70px rgba(31, 41, 55, 0.12);
+  --shui-surface-bg: rgba(255, 255, 255, 0.46);
+  --shui-surface-border: rgba(255, 255, 255, 0.58);
+  --shui-radius-xl: 28px;
+  --shui-radius-lg: 20px;
+  --shui-radius-md: 16px;
+  --shui-blur: 32px;
+  --bauhaus-text-main: #0f172a;
+  --bauhaus-text-muted: #64748b;
+  --bauhaus-accent-red: #dc2626;
+  --bauhaus-accent-blue: #2563eb;
+  --bauhaus-accent-dark: #334155;
+  max-width: 1320px;
+  margin: 20px auto 0;
+  padding: clamp(28px, 4vw, 48px);
+  border: 1px solid var(--shui-panel-border);
+  border-radius: var(--shui-radius-xl);
+  background: var(--shui-panel-bg);
+  box-shadow: var(--shui-panel-shadow);
+  backdrop-filter: blur(var(--shui-blur));
+  -webkit-backdrop-filter: blur(var(--shui-blur));
+  color: var(--bauhaus-text-main);
+  animation: rise-in 0.45s var(--ease-smooth);
+}
+
+.settings-page#settings-view *,
+.settings-page#settings-view *::before,
+.settings-page#settings-view *::after {
+  letter-spacing: 0;
+}
+
+.settings-page#settings-view > .hero-panel__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.settings-page#settings-view > .hero-panel__header .hero-panel__title {
+  margin: 0;
+  color: var(--bauhaus-text-main);
+  font-size: 1.45rem;
+  font-weight: 600;
+}
+
+.settings-page#settings-view .settings-detail-toggle {
+  min-height: 40px;
+  padding: 9px 16px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 999px;
+  color: var(--bauhaus-text-main);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.settings-page#settings-view .settings-detail-toggle:hover {
+  transform: translateY(-2px);
+  color: #fff;
+  border-color: transparent;
+  background: var(--bauhaus-accent-blue);
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.24);
+}
+
+.settings-page#settings-view .hero-settings-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.settings-page#settings-view .hero-settings-group > .hero-panel {
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+  padding: 32px;
+  border: 1px solid var(--shui-panel-border);
+  border-radius: var(--shui-radius-lg);
+  background: var(--shui-panel-bg);
+  box-shadow: var(--shui-panel-shadow);
+  backdrop-filter: blur(var(--shui-blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--shui-blur)) saturate(150%);
+  transition:
+    transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+    box-shadow 0.3s ease,
+    border-color 0.3s ease;
+}
+
+.settings-page#settings-view .hero-settings-group > .hero-panel:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+.settings-page#settings-view .hero-settings-group > .hero-panel::before,
+.settings-page#settings-view .settings-detail::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.settings-page#settings-view .hero-settings-group > .hero-panel > *,
+.settings-page#settings-view .settings-detail > * {
+  position: relative;
+  z-index: 1;
+}
+
+.settings-page#settings-view h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 0.5rem;
+  color: var(--bauhaus-text-main);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.settings-page#settings-view .hero-panel__muted {
+  margin: 0 0 24px;
+  color: var(--bauhaus-text-muted);
+  font-size: 0.9rem;
+}
+
+.settings-page#settings-view .hero-settings-actions {
+  display: flex;
+  flex-flow: row wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.settings-page#settings-view .hero-settings-actions .btn {
+  flex: 1 1 calc(50% - 5px);
+  min-width: 124px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+}
+
+.settings-page#settings-view .btn {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.settings-page#settings-view .btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.2), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.settings-page#settings-view .btn:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+}
+
+.settings-page#settings-view .btn:hover::after {
+  opacity: 1;
+}
+
+.settings-page#settings-view #clear-cache-btn {
+  color: var(--bauhaus-accent-red);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.settings-page#settings-view #clear-cache-btn:hover {
+  color: #fff;
+  background: var(--bauhaus-accent-red);
+  border-color: transparent;
+  box-shadow: 0 12px 24px rgba(220, 38, 38, 0.3);
+}
+
+.settings-page#settings-view #load-library-btn,
+.settings-page#settings-view #library-config-btn,
+.settings-page#settings-view #force-refresh-btn,
+.settings-page#settings-view #theme-switcher-btn-entry,
+.settings-page#settings-view #show-onboarding-btn,
+.settings-page#settings-view #check-updates-btn {
+  color: var(--bauhaus-text-main);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(15, 23, 42, 0.15);
+}
+
+.settings-page#settings-view #load-library-btn:hover,
+.settings-page#settings-view #library-config-btn:hover,
+.settings-page#settings-view #force-refresh-btn:hover,
+.settings-page#settings-view #theme-switcher-btn-entry:hover,
+.settings-page#settings-view #show-onboarding-btn:hover,
+.settings-page#settings-view #check-updates-btn:hover {
+  color: #fff;
+  background: var(--bauhaus-accent-blue);
+  border-color: transparent;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.3);
+}
+
+.settings-page#settings-view .data-mgmt-btn {
+  color: var(--bauhaus-accent-dark);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(15, 23, 42, 0.15);
+}
+
+.settings-page#settings-view .data-mgmt-btn:hover {
+  color: #fff;
+  background: var(--bauhaus-accent-dark);
+  border-color: transparent;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.25);
+}
+
+.settings-page#settings-view .system-info-surface {
+  display: grid;
+  gap: 6px;
+  margin-top: 15px;
+  padding: 18px;
+  border: 1px solid var(--shui-surface-border);
+  border-radius: var(--shui-radius-md);
+  background: var(--shui-surface-bg);
+  color: var(--bauhaus-text-main);
+  font-weight: 700;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.settings-page#settings-view .system-info-status {
+  color: #10b981;
+}
+
+.settings-page#settings-view .settings-credit {
+  display: grid;
+  gap: 12px;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  text-align: center;
+}
+
+.settings-page#settings-view .settings-credit a {
+  color: gray;
+  font-size: 0.9em;
+  font-weight: 700;
+  text-decoration: none;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.settings-page#settings-view .settings-credit .inline-hover-link {
+  color: #ff1c1c;
+}
+
+.settings-page#settings-view .settings-credit a:hover {
+  opacity: 0.72;
+}
+
+.settings-page#settings-view .settings-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.settings-page#settings-view .settings-detail {
+  position: relative;
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 24px;
+  border: 1px solid var(--shui-panel-border);
+  border-radius: var(--shui-radius-lg);
+  background: var(--shui-panel-bg);
+  box-shadow: var(--shui-panel-shadow);
+  backdrop-filter: blur(var(--shui-blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--shui-blur)) saturate(150%);
+}
+
+.settings-page#settings-view .settings-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.42);
+}
+
+.settings-page#settings-view .settings-tab {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 999px;
+  color: var(--bauhaus-text-main);
+  background: rgba(255, 255, 255, 0.52);
+  cursor: pointer;
+}
+
+.settings-page#settings-view .settings-tab:hover,
+.settings-page#settings-view .settings-tab.active {
+  color: #fff;
+  border-color: transparent;
+  background: var(--bauhaus-accent-blue);
+}
+
+.settings-page#settings-view .settings-tab__icon {
+  display: inline-flex;
+  font-size: 15px;
+}
+
+@media (max-width: 1080px) {
+  .settings-page#settings-view .hero-settings-group {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-page#settings-view {
+    padding: 20px;
+  }
+
+  .settings-page#settings-view > .hero-panel__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-page#settings-view .hero-settings-actions .btn,
+  .settings-page#settings-view .settings-tabs,
+  .settings-page#settings-view .settings-tab {
+    width: 100%;
   }
 }
 </style>

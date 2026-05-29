@@ -71,6 +71,7 @@ CREATE INDEX IF NOT EXISTS idx_topics_difficulty ON topics(difficulty);
 CREATE TABLE IF NOT EXISTS essays (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   topic_id INTEGER,
+  topic_text TEXT,
   task_type TEXT NOT NULL CHECK(task_type IN ('task1', 'task2')),
   content TEXT NOT NULL,
   word_count INTEGER NOT NULL,
@@ -108,6 +109,51 @@ CREATE TABLE IF NOT EXISTS evaluation_sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_eval_sessions_status ON evaluation_sessions(status);
 CREATE INDEX IF NOT EXISTS idx_eval_sessions_created_at ON evaluation_sessions(created_at DESC);
+
+-- 统一练习历史记录（Vue Practice Shell）
+CREATE TABLE IF NOT EXISTS practice_history_records (
+  id TEXT PRIMARY KEY,
+  activity TEXT NOT NULL CHECK(activity IN ('reading', 'writing')),
+  session_id TEXT NOT NULL UNIQUE,
+  asset_id TEXT,
+  exam_id TEXT,
+  title TEXT NOT NULL,
+  status TEXT NOT NULL,
+  score REAL NOT NULL DEFAULT 0,
+  total_questions INTEGER NOT NULL DEFAULT 0,
+  correct_answers REAL NOT NULL DEFAULT 0,
+  accuracy REAL NOT NULL DEFAULT 0,
+  duration INTEGER NOT NULL DEFAULT 0,
+  submitted_at TEXT NOT NULL,
+  started_at TEXT,
+  ended_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL,
+  submission_json TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_practice_history_activity_submitted_at
+  ON practice_history_records(activity, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_practice_history_session
+  ON practice_history_records(session_id);
+CREATE INDEX IF NOT EXISTS idx_practice_history_exam
+  ON practice_history_records(exam_id);
+
+-- 阅读套题会话（Vue Practice Shell）
+CREATE TABLE IF NOT EXISTS practice_reading_suite_sessions (
+  session_id TEXT PRIMARY KEY,
+  status TEXT NOT NULL CHECK(status IN ('active', 'completed', 'cancelled')),
+  flow_mode TEXT NOT NULL,
+  frequency_scope TEXT NOT NULL,
+  current_index INTEGER NOT NULL DEFAULT 0,
+  total_passages INTEGER NOT NULL DEFAULT 3,
+  session_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  completed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_practice_suite_status_updated_at
+  ON practice_reading_suite_sessions(status, updated_at DESC);
 
 -- 供应商健康状态（可选增强，与 api_configs.failure_count 协同）
 CREATE TABLE IF NOT EXISTS provider_health (

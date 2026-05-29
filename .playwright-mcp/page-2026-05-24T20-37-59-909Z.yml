@@ -1,0 +1,121 @@
+- generic [ref=e1]:
+  - generic [ref=e13]:
+    - heading "考试总览系统 项目仅授权ZYZ Reading Walks 提供分发，小红书号：276752989 小红书主页 GitHub Repository" [level=1] [ref=e15]:
+      - img [ref=e17]
+      - text: 考试总览系统
+      - generic [ref=e20]: 项目仅授权ZYZ Reading Walks 提供分发，小红书号：276752989
+      - link "小红书主页" [ref=e21] [cursor=pointer]:
+        - /url: https://www.xiaohongshu.com/user/profile/5b4d76744eacab058489e72f?xsec_token=ABlVO2QUdaoyzC6LYAHxh1yuvCcdFmZCFy-npJva106mg=&xsec_source=pc_search
+        - text: 小红书
+      - link "GitHub Repository" [ref=e22] [cursor=pointer]:
+        - /url: https://github.com/sallowayma-git/IELTS-practice
+        - img [ref=e23]
+    - navigation [ref=e24]:
+      - button "总览" [ref=e25] [cursor=pointer]:
+        - img [ref=e26]
+        - text: 总览
+      - button "题库浏览" [ref=e28] [cursor=pointer]:
+        - img [ref=e29]
+        - text: 题库浏览
+      - button "练习记录" [ref=e32] [cursor=pointer]:
+        - img [ref=e33]
+        - text: 练习记录
+      - button "更多" [ref=e36] [cursor=pointer]:
+        - img [ref=e37]
+        - text: 更多
+      - button "设置" [active] [ref=e41] [cursor=pointer]:
+        - img [ref=e42]
+        - text: 设置
+    - generic [ref=e244]:
+      - heading "系统设置" [level=2] [ref=e245]
+      - generic [ref=e246]:
+        - generic [ref=e247]:
+          - heading "系统管理" [level=3] [ref=e248]
+          - paragraph [ref=e249]: 系统工具和设置选项
+          - generic [ref=e250]:
+            - button "清除缓存" [ref=e251] [cursor=pointer]:
+              - img [ref=e252]
+              - text: 清除缓存
+            - button "加载题库" [ref=e253] [cursor=pointer]:
+              - img [ref=e254]
+              - text: 加载题库
+            - button "题库配置切换" [ref=e255] [cursor=pointer]:
+              - img [ref=e256]
+              - text: 题库配置切换
+            - button "强制刷新题库" [ref=e258] [cursor=pointer]:
+              - img [ref=e259]
+              - text: 强制刷新题库
+        - generic [ref=e262]:
+          - heading "数据管理" [level=3] [ref=e263]
+          - paragraph [ref=e264]: 数据备份、导入导出和完整性检查
+          - generic [ref=e265]:
+            - button "创建备份" [ref=e266] [cursor=pointer]:
+              - img [ref=e267]
+              - text: 创建备份
+            - button "备份列表" [ref=e271] [cursor=pointer]:
+              - img [ref=e272]
+              - text: 备份列表
+            - button "导出数据" [ref=e273] [cursor=pointer]:
+              - img [ref=e274]
+              - text: 导出数据
+            - button "导入数据" [ref=e277] [cursor=pointer]:
+              - img [ref=e278]
+              - text: 导入数据
+        - generic [ref=e281]:
+          - heading "系统信息" [level=3] [ref=e282]
+          - generic [ref=e283]:
+            - generic [ref=e285]:
+              - paragraph [ref=e287]: 题库状态：已加载完整索引
+              - generic [ref=e288]: 浏览器模式
+            - generic "更新摘要信息" [ref=e289]:
+              - generic [ref=e290]:
+                - generic [ref=e291]: 本地版本
+                - generic [ref=e292]:
+                  - generic [ref=e293]:
+                    - generic [ref=e294]: 应用
+                    - generic [ref=e295]: 浏览器模式
+                  - generic [ref=e296]:
+                    - generic [ref=e297]: 资源
+                    - generic [ref=e298]: 静态资源
+              - generic [ref=e299]:
+                - generic [ref=e300]: 最新 Release
+                - generic [ref=e301]: "--"
+              - generic [ref=e302]:
+                - generic [ref=e303]: 最后检查
+                - generic [ref=e304]: 未检查
+            - button "查看更新状态" [ref=e306] [cursor=pointer]:
+              - generic [ref=e307]: 查看更新状态
+            - group [ref=e308]:
+              - generic "▶查看详细系统信息" [ref=e309] [cursor=pointer]
+          - button "主题切换" [ref=e311] [cursor=pointer]:
+            - img [ref=e312]
+            - text: 主题切换
+          - button "重新显示引导" [ref=e315] [cursor=pointer]:
+            - img [ref=e316]
+            - text: 重新显示引导
+          - generic [ref=e320]:
+            - link "问题反馈" [ref=e321] [cursor=pointer]:
+              - /url: https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT
+            - link "GitHub 仓库" [ref=e322] [cursor=pointer]:
+              - /url: https://github.com/sallowayma-git/IELTS-practice
+  - generic:
+    - generic:
+      - heading "开源项目使用须知" [level=2]
+      - generic:
+        - paragraph:
+          - text: 感谢使用！本项目是免费软件，采用
+          - strong: GPL-3.0 License
+          - text: 发布。
+        - paragraph: 我们明确反对任何形式的倒卖、改名后二次分发、牟利、使用该项目商业引流等行为。
+        - paragraph: 本项目的初衷是自由使用、学习与改进，而不是作为倒卖工具获取不正当收益。
+        - paragraph:
+          - text: 腾讯文档：
+          - link "问题反馈":
+            - /url: https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT
+        - generic:
+          - paragraph:
+            - text: 任何分发、修改或再发布行为，都必须遵守 GPL-3.0 协议，包括
+            - strong: 公开源码、保留开源许可，并尊重用户的自由
+            - text: 。
+      - generic:
+        - button "我已了解"

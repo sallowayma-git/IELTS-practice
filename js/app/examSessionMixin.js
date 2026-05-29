@@ -83,6 +83,7 @@
         return {
             requestId,
             examId: payload.examId != null ? String(payload.examId).trim() : '',
+            sessionId: payload.sessionId != null ? String(payload.sessionId).trim() : '',
             query: typeof payload.query === 'string'
                 ? payload.query.trim()
                 : (typeof payload.userQuery === 'string' ? payload.userQuery.trim() : ''),
@@ -326,11 +327,17 @@
 
             try {
                 const readingLaunch = typeof this.resolveReadingLaunchDescriptor === 'function'
-                    ? this.resolveReadingLaunchDescriptor(exam)
+                    ? this.resolveReadingLaunchDescriptor(exam, options)
                     : null;
 
                 if (readingLaunch && readingLaunch.mode === 'pdf_manual' && readingLaunch.pdfUrl) {
                     return this._openPdfWindow(exam, readingLaunch.pdfUrl, options);
+                }
+
+                if (readingLaunch && readingLaunch.mode === 'vue_practice_reading') {
+                    const opened = await this._openVuePracticeReading(readingLaunch, exam);
+                    window.showMessage(`正在打开 Vue 阅读练习: ${exam.title}`, 'info');
+                    return opened;
                 }
 
                 // 若无HTML，直接打开PDF
@@ -448,12 +455,45 @@
             return pdfWin;
         },
 
+        async _openVuePracticeReading(readingLaunch, exam) {
+            const assetId = String(
+                (readingLaunch && (readingLaunch.assetId || readingLaunch.examId))
+                || (exam && exam.id)
+                || ''
+            ).trim();
+            const route = String(
+                (readingLaunch && readingLaunch.route)
+                || (assetId ? `/reading/${encodeURIComponent(assetId)}` : '')
+            ).trim();
+            if (!route) {
+                throw new Error('Vue 阅读路由缺失');
+            }
+
+            const api = (typeof window !== 'undefined') ? window.electronAPI : null;
+            if (api && typeof api.openPracticeRoute === 'function') {
+                const result = await api.openPracticeRoute(route);
+                if (result && result.success === false) {
+                    throw new Error(result.error || 'Vue 阅读路由导航失败');
+                }
+                return window;
+            }
+            if (api && typeof api.openPracticeReading === 'function') {
+                const result = await api.openPracticeReading(assetId);
+                if (result && result.success === false) {
+                    throw new Error(result.error || 'Vue 阅读路由导航失败');
+                }
+                return window;
+            }
+
+            throw new Error('Vue Practice Shell 导航能力不可用');
+        },
+
         /**
          * 构造题目URL
          */
         buildExamUrl(exam) {
             const readingLaunch = typeof this.resolveReadingLaunchDescriptor === 'function'
-                ? this.resolveReadingLaunchDescriptor(exam)
+                ? this.resolveReadingLaunchDescriptor(exam, { forceLegacyReading: true })
                 : null;
             if (readingLaunch && readingLaunch.mode === 'unified_html' && readingLaunch.url) {
                 return readingLaunch.url;
@@ -3384,6 +3424,7 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             examId: normalizedRequest.examId || examId,
+                            sessionId: normalizedRequest.sessionId || '',
                             query: normalizedRequest.query,
                             locale: normalizedRequest.locale,
                             surface: normalizedRequest.surface || 'chat_widget',
@@ -3816,12 +3857,31 @@
                     console.warn('[DataCollection] 兼容字段填充失败:', compatErr);
                 }
 
-                await savePracticeRecordWithFallback(practiceRecord, MAX_LEGACY_PRACTICE_RECORDS);
+                const savedPracticeRecord = await savePracticeRecordWithFallback(practiceRecord, MAX_LEGACY_PRACTICE_RECORDS);
 
                 // 立即验证保存是否成功
                 const verifyRecords = await listSavedPracticeRecords();
+                const expectedRecordIds = new Set([
+                    practiceRecord.id,
+                    savedPracticeRecord && savedPracticeRecord.id
+                ].filter(value => value !== undefined && value !== null && String(value).trim()).map(value => String(value)));
+                const expectedSessionId = String(
+                    practiceRecord.sessionId
+                    || (practiceRecord.realData && practiceRecord.realData.sessionId)
+                    || realData.sessionId
+                    || ''
+                ).trim();
                 const savedRecord = Array.isArray(verifyRecords)
-                    ? verifyRecords.find(r => r.id === practiceRecord.id)
+                    ? verifyRecords.find(r => {
+                        if (!r) return false;
+                        if (expectedRecordIds.has(String(r.id))) return true;
+                        const candidateSessionId = String(
+                            r.sessionId
+                            || (r.realData && r.realData.sessionId)
+                            || ''
+                        ).trim();
+                        return Boolean(expectedSessionId && candidateSessionId === expectedSessionId);
+                    })
                     : undefined;
 
                 if (!savedRecord) {

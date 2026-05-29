@@ -1,0 +1,101 @@
+- generic [ref=e1]:
+  - generic [ref=e13]:
+    - heading "考试总览系统 项目仅授权ZYZ Reading Walks 提供分发，小红书号：276752989 小红书主页 GitHub Repository" [level=1] [ref=e15]:
+      - img [ref=e17]
+      - text: 考试总览系统
+      - generic [ref=e20]: 项目仅授权ZYZ Reading Walks 提供分发，小红书号：276752989
+      - link "小红书主页" [ref=e21] [cursor=pointer]:
+        - /url: https://www.xiaohongshu.com/user/profile/5b4d76744eacab058489e72f?xsec_token=ABlVO2QUdaoyzC6LYAHxh1yuvCcdFmZCFy-npJva106mg=&xsec_source=pc_search
+        - text: 小红书
+      - link "GitHub Repository" [ref=e22] [cursor=pointer]:
+        - /url: https://github.com/sallowayma-git/IELTS-practice
+        - img [ref=e23]
+    - navigation [ref=e24]:
+      - button "总览" [ref=e25] [cursor=pointer]:
+        - img [ref=e26]
+        - text: 总览
+      - button "题库浏览" [ref=e28] [cursor=pointer]:
+        - img [ref=e29]
+        - text: 题库浏览
+      - button "练习记录" [ref=e32] [cursor=pointer]:
+        - img [ref=e33]
+        - text: 练习记录
+      - button "更多" [ref=e36] [cursor=pointer]:
+        - img [ref=e37]
+        - text: 更多
+      - button "设置" [ref=e41] [cursor=pointer]:
+        - img [ref=e42]
+        - text: 设置
+    - generic [ref=e44]:
+      - heading "学习总览" [level=2] [ref=e45]
+      - generic [ref=e46]:
+        - generic [ref=e153]:
+          - heading "阅读" [level=3] [ref=e154]
+          - generic [ref=e155]:
+            - button "无尽模式" [ref=e156] [cursor=pointer]:
+              - img [ref=e158]
+              - generic [ref=e161]: 无尽模式
+            - button "套题模式" [ref=e162] [cursor=pointer]:
+              - img [ref=e164]
+              - generic [ref=e168]: 套题模式
+        - generic [ref=e169]:
+          - generic [ref=e170]:
+            - img [ref=e173]
+            - generic [ref=e176]:
+              - generic [ref=e177]: P1 阅读
+              - generic [ref=e178]: 67 篇
+          - generic [ref=e179]:
+            - button "浏览题库" [ref=e180] [cursor=pointer]:
+              - img [ref=e182]
+              - text: 浏览题库
+            - button "随机练习" [ref=e185] [cursor=pointer]:
+              - img [ref=e187]
+              - text: 随机练习
+        - generic [ref=e194]:
+          - generic [ref=e195]:
+            - img [ref=e198]
+            - generic [ref=e201]:
+              - generic [ref=e202]: P2 阅读
+              - generic [ref=e203]: 70 篇
+          - generic [ref=e204]:
+            - button "浏览题库" [ref=e205] [cursor=pointer]:
+              - img [ref=e207]
+              - text: 浏览题库
+            - button "随机练习" [ref=e210] [cursor=pointer]:
+              - img [ref=e212]
+              - text: 随机练习
+        - generic [ref=e219]:
+          - generic [ref=e220]:
+            - img [ref=e223]
+            - generic [ref=e226]:
+              - generic [ref=e227]: P3 阅读
+              - generic [ref=e228]: 81 篇
+          - generic [ref=e229]:
+            - button "浏览题库" [ref=e230] [cursor=pointer]:
+              - img [ref=e232]
+              - text: 浏览题库
+            - button "随机练习" [ref=e235] [cursor=pointer]:
+              - img [ref=e237]
+              - text: 随机练习
+    - text: ▶
+  - generic:
+    - generic:
+      - heading "开源项目使用须知" [level=2]
+      - generic:
+        - paragraph:
+          - text: 感谢使用！本项目是免费软件，采用
+          - strong: GPL-3.0 License
+          - text: 发布。
+        - paragraph: 我们明确反对任何形式的倒卖、改名后二次分发、牟利、使用该项目商业引流等行为。
+        - paragraph: 本项目的初衷是自由使用、学习与改进，而不是作为倒卖工具获取不正当收益。
+        - paragraph:
+          - text: 腾讯文档：
+          - link "问题反馈":
+            - /url: https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT
+        - generic:
+          - paragraph:
+            - text: 任何分发、修改或再发布行为，都必须遵守 GPL-3.0 协议，包括
+            - strong: 公开源码、保留开源许可，并尊重用户的自由
+            - text: 。
+      - generic:
+        - button "我已了解" [active]
