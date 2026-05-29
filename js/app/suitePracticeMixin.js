@@ -1,5 +1,4 @@
 (function(global) {
-    const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
 
     function getSuitePreferenceUtils() {
@@ -428,12 +427,19 @@
                 return null;
             }
 
-            const answerComparison = result.answerComparison && typeof result.answerComparison === 'object'
+            const targetExamId = result.examId || examId;
+            const rawComparison = result.answerComparison && typeof result.answerComparison === 'object'
                 ? result.answerComparison
                 : {};
-            const answers = result.answers && typeof result.answers === 'object'
+            const rawAnswers = result.answers && typeof result.answers === 'object'
                 ? result.answers
                 : {};
+            const answerComparison = typeof this._normalizeReplayComparison === 'function'
+                ? this._normalizeReplayComparison(rawComparison, targetExamId, true)
+                : rawComparison;
+            const answers = typeof this._normalizeReplayAnswerMap === 'function'
+                ? this._normalizeReplayAnswerMap(rawAnswers, targetExamId, true)
+                : rawAnswers;
 
             const filteredComparison = {};
             const filteredAnswers = {};
@@ -449,7 +455,7 @@
                 if (!this._hasMeaningfulSuiteAnswer(userAnswer)) {
                     return;
                 }
-                filteredComparison[questionId] = comparisonEntry;
+                filteredComparison[questionId] = this._cloneSuitePlainObject(comparisonEntry);
                 filteredAnswers[questionId] = userAnswer;
             });
 
@@ -464,13 +470,27 @@
                 filteredAnswers[questionId] = value;
             });
 
-            const draft = this._resolveSuiteEntryDraft(session, result.examId || examId);
+            const draft = this._resolveSuiteEntryDraft(session, targetExamId);
+            const correctAnswerMap = typeof this._resolveReplayCorrectAnswerMap === 'function'
+                ? this._resolveReplayCorrectAnswerMap(result, { examId: targetExamId, comparison: rawComparison })
+                : {};
+            const finalizedComparison = typeof this._finalizeReplayComparison === 'function'
+                ? this._finalizeReplayComparison(filteredAnswers, correctAnswerMap, filteredComparison)
+                : filteredComparison;
+            const hasCompleteCorrectMap = typeof this._hasCompleteReplayCorrectAnswerMap === 'function'
+                ? this._hasCompleteReplayCorrectAnswerMap(correctAnswerMap, finalizedComparison, result.scoreInfo || {})
+                : false;
+            const finalizedScoreInfo = typeof this._deriveReplayScoreInfo === 'function'
+                ? this._deriveReplayScoreInfo(result.scoreInfo || {}, finalizedComparison, hasCompleteCorrectMap)
+                : (result.scoreInfo || {});
             return {
-                examId: result.examId,
+                examId: targetExamId,
                 title: result.title,
                 answers: filteredAnswers,
-                answerComparison: filteredComparison,
-                scoreInfo: result.scoreInfo || {},
+                correctAnswerMap,
+                correctAnswers: correctAnswerMap,
+                answerComparison: finalizedComparison,
+                scoreInfo: finalizedScoreInfo,
                 markedQuestions: Array.isArray(result.markedQuestions) ? result.markedQuestions.slice() : [],
                 highlights: this._resolveSuiteEntryHighlights(result, draft),
                 scrollY: this._resolveSuiteEntryScrollY(result, draft)
@@ -574,8 +594,8 @@
             if ((mappedSessionId && mappedSessionId !== session.id) || (targetSessionId && targetSessionId !== session.id)) {
                 return false;
             }
-            const inActiveSequence = session.sequence.some(item => item && item.examId === examId);
-            if (!inActiveSequence) {
+            const sequenceIndex = session.sequence.findIndex(item => item && item.examId === examId);
+            if (sequenceIndex < 0) {
                 return false;
             }
 
@@ -586,6 +606,7 @@
                 return false;
             }
 
+            session.currentIndex = sequenceIndex;
             session.activeExamId = examId;
             return this._sendSuiteReviewState(session, examId, resolvedWindow);
         },
@@ -606,7 +627,14 @@
                 return false;
             }
 
-            const currentIndex = session.sequence.findIndex(item => item && item.examId === examId);
+            const payloadExamId = data && data.examId != null ? String(data.examId).trim() : '';
+            const payloadIndex = payloadExamId
+                ? session.sequence.findIndex(item => item && item.examId === payloadExamId)
+                : -1;
+            const normalizedExamId = payloadIndex >= 0 ? payloadExamId : String(examId);
+            const currentIndex = payloadIndex >= 0
+                ? payloadIndex
+                : session.sequence.findIndex(item => item && item.examId === normalizedExamId);
             if (currentIndex < 0) {
                 return false;
             }
@@ -622,7 +650,7 @@
             }
 
             const hasCurrentResult = Array.isArray(session.results)
-                ? session.results.some(item => item && item.examId === examId)
+                ? session.results.some(item => item && item.examId === normalizedExamId)
                 : false;
             const requestedFinalizeOnNext = Boolean(
                 direction === 'next'
@@ -642,7 +670,7 @@
                     direction === 'next'
                     && currentIndex === session.sequence.length - 1
                     && session.pendingAdvance
-                    && session.pendingAdvance.completedExamId === examId
+                    && session.pendingAdvance.completedExamId === normalizedExamId
                     && session.pendingAdvance.finalReview === true
                 );
                 if (canFinalize) {
@@ -660,7 +688,14 @@
 
             let targetWindow = sourceWindow && !sourceWindow.closed ? sourceWindow : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
 
-            if (targetEntry.examId !== examId || !targetWindow) {
+            if (targetEntry.examId !== normalizedExamId || !targetWindow) {
+                if (targetEntry.examId !== normalizedExamId && typeof this.cleanupExamSession === 'function') {
+                    try {
+                        await this.cleanupExamSession(normalizedExamId);
+                    } catch (cleanupError) {
+                        console.warn('[SuitePractice] 清理回看切题旧会话失败:', cleanupError);
+                    }
+                }
                 targetWindow = await this.openExam(targetEntry.examId, {
                     target: 'tab',
                     windowName: session.windowName || 'ielts-suite-mode-tab',
@@ -677,7 +712,9 @@
             }
 
             session.windowRef = targetWindow;
+            session.currentIndex = targetIndex;
             session.activeExamId = targetEntry.examId;
+            this._mirrorSessionToStorage(session);
             this._focusSuiteWindow(targetWindow);
             await this._sendSuiteReviewState(session, targetEntry.examId, targetWindow);
             return true;
@@ -1028,9 +1065,6 @@
             if (!session || (session.status !== 'active' && session.status !== 'initializing') || !examId) {
                 return false;
             }
-            if (session.flowMode !== 'simulation') {
-                return false;
-            }
             if (!Array.isArray(session.sequence) || !session.sequence.length) {
                 return false;
             }
@@ -1047,12 +1081,6 @@
             const windowInfo = this.examWindows && this.examWindows.get(examId)
                 ? this.examWindows.get(examId)
                 : null;
-            const pageType = windowInfo && typeof windowInfo.pageType === 'string'
-                ? windowInfo.pageType.toLowerCase()
-                : '';
-            if (!pageType.includes('unified-reading')) {
-                return false;
-            }
             let targetWindow = session.windowRef && !session.windowRef.closed ? session.windowRef : null;
             if (windowInfo) {
                 const info = windowInfo;
@@ -1095,7 +1123,13 @@
             session.activeExamId = examId;
             session.windowRef = targetWindow;
             this._mirrorSessionToStorage(session);
-            return this._sendSimulationContext(session, examId, targetWindow);
+            if (session.flowMode === 'simulation') {
+                return this._sendSimulationContext(session, examId, targetWindow);
+            }
+            if (!this._shouldAutoAdvanceAfterSubmit()) {
+                return this._sendSuiteReviewState(session, examId, targetWindow);
+            }
+            return true;
         },
 
         /**
@@ -1126,10 +1160,14 @@
             }
 
             // 添加套题结果到会话
+            const suiteCorrectAnswerMap = typeof this._resolveReplayCorrectAnswerMap === 'function'
+                ? this._resolveReplayCorrectAnswerMap(suiteData, { examId, comparison: suiteData.answerComparison || {} })
+                : {};
             const suiteResult = {
                 suiteId: suiteData.suiteId,
                 examId: examId,
                 answers: suiteData.answers || {},
+                correctAnswerMap: suiteCorrectAnswerMap,
                 correctAnswers: suiteData.correctAnswers || {},
                 answerComparison: suiteData.answerComparison || {},
                 scoreInfo: suiteData.scoreInfo || { correct: 0, total: 0, accuracy: 0, percentage: 0 },
@@ -1236,7 +1274,7 @@
 
                 // 计算总时长
                 const totalDuration = session.suiteResults.reduce(
-                    (sum, result) => sum + (result.duration || 0), 
+                    (sum, result) => sum + (result.duration || 0),
                     0
                 );
 
@@ -1257,34 +1295,35 @@
                     startTime: new Date(startTime).toISOString(),
                     endTime: new Date(completionTime).toISOString(),
                     duration: totalDuration,
-                    
+
                     // 聚合的分数信息
                     scoreInfo: aggregatedScores,
                     totalQuestions: aggregatedScores.total,
                     correctAnswers: aggregatedScores.correct,
                     accuracy: aggregatedScores.accuracy,
                     percentage: aggregatedScores.percentage,
-                    
+
                     // 聚合的答案数据
                     answers: aggregatedAnswers,
                     answerComparison: aggregatedComparison,
-                    
+
                     // 套题详情
                     suiteEntries: session.suiteResults.map(result => ({
                         suiteId: result.suiteId,
                         examId: result.examId,
                         scoreInfo: result.scoreInfo,
                         answers: result.answers,
+                        correctAnswerMap: result.correctAnswerMap || {},
                         answerComparison: result.answerComparison,
                         spellingErrors: result.spellingErrors || [],
                         duration: result.duration || 0,
                         timestamp: result.timestamp,
                         rawData: result.rawData || null
                     })),
-                    
+
                     // 拼写错误汇总
                     spellingErrors: aggregatedSpellingErrors,
-                    
+
                     // 元数据
                     metadata: {
                         examTitle: displayTitle,
@@ -1297,7 +1336,7 @@
                         startedAt: new Date(startTime).toISOString(),
                         completedAt: new Date(completionTime).toISOString()
                     },
-                    
+
                     realData: {
                         isRealData: true,
                         source: 'multi_suite_mode',
@@ -1456,7 +1495,7 @@
 
             suiteResults.forEach(result => {
                 const errors = result.spellingErrors || [];
-                
+
                 errors.forEach(error => {
                     if (!error || !error.word) {
                         return;
@@ -1467,26 +1506,13 @@
                     if (errorMap.has(key)) {
                         // 更新已存在的错误记录
                         const existing = errorMap.get(key);
-                        const existingTimestamp = Number(existing.timestamp) || 0;
-                        const incomingTimestamp = Number(error.timestamp) || 0;
                         existing.errorCount = (existing.errorCount || 1) + 1;
+                        existing.timestamp = Math.max(existing.timestamp || 0, error.timestamp || 0);
 
                         // 保留最新的用户输入
-                        if (incomingTimestamp >= existingTimestamp) {
+                        if (error.timestamp > (existing.timestamp || 0)) {
                             existing.userInput = error.userInput;
-                            existing.questionId = error.questionId || existing.questionId;
-                            existing.suiteId = error.suiteId || result.suiteId || existing.suiteId;
-                            existing.examId = error.examId || result.examId || existing.examId;
-                            existing.acceptedAnswers = Array.isArray(error.acceptedAnswers)
-                                ? error.acceptedAnswers.slice()
-                                : existing.acceptedAnswers;
-                            existing.canonicalAnswer = error.canonicalAnswer || existing.canonicalAnswer;
-                            existing.reasonCode = error.reasonCode || existing.reasonCode;
-                            existing.confidence = typeof error.confidence === 'number' ? error.confidence : existing.confidence;
-                            existing.tokenIndex = Number.isFinite(error.tokenIndex) ? error.tokenIndex : existing.tokenIndex;
-                            existing.metadata = error.metadata || existing.metadata;
                         }
-                        existing.timestamp = Math.max(existingTimestamp, incomingTimestamp);
                     } else {
                         // 添加新的错误记录
                         errorMap.set(key, {
@@ -1497,13 +1523,7 @@
                             examId: error.examId || result.examId,
                             timestamp: error.timestamp || Date.now(),
                             errorCount: error.errorCount || 1,
-                            source: error.source || this._detectMultiSuiteSource(result.examId),
-                            acceptedAnswers: Array.isArray(error.acceptedAnswers) ? error.acceptedAnswers.slice() : undefined,
-                            canonicalAnswer: error.canonicalAnswer,
-                            reasonCode: error.reasonCode,
-                            confidence: typeof error.confidence === 'number' ? error.confidence : undefined,
-                            tokenIndex: Number.isFinite(error.tokenIndex) ? error.tokenIndex : undefined,
-                            metadata: error.metadata
+                            source: error.source || this._detectMultiSuiteSource(result.examId)
                         });
                     }
                 });
@@ -1534,6 +1554,7 @@
                         duration: entry.duration,
                         scoreInfo: entry.scoreInfo,
                         answers: entry.answers,
+                        correctAnswerMap: entry.correctAnswerMap || {},
                         answerComparison: entry.answerComparison,
                         markedQuestions: Array.isArray(entry.markedQuestions) ? entry.markedQuestions.slice() : [],
                         highlights: this._resolveSuiteEntryHighlights(entry, draft),
@@ -1667,91 +1688,23 @@
             return Array.isArray(list) ? list.filter(Boolean) : [];
         },
 
-        async _listPracticeRecordsWithFallback(options = {}) {
+        async _listPracticeRecordsViaAPI() {
             const normalizeList = (list) => (Array.isArray(list) ? list : []);
-            const includeRecorder = options && options.includeRecorder !== false;
 
-            if (
-                includeRecorder
-                && this.components
-                && this.components.practiceRecorder
-                && typeof this.components.practiceRecorder.getPracticeRecords === 'function'
-            ) {
-                try {
-                    return normalizeList(await this.components.practiceRecorder.getPracticeRecords());
-                } catch (error) {
-                    console.warn('[SuitePractice] 读取 PracticeRecorder 记录失败，尝试存储回退:', error);
-                }
-            }
-
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function') {
-                try {
-                    return normalizeList(await window.PracticeCore.store.listPracticeRecords());
-                } catch (error) {
-                    console.warn('[SuitePractice] 读取 PracticeCore 记录失败，尝试存储回退:', error);
-                }
-            }
-
-            if (window.PracticeStore && typeof window.PracticeStore.list === 'function') {
-                try {
-                    return normalizeList(await window.PracticeStore.list());
-                } catch (error) {
-                    console.warn('[SuitePractice] 读取 PracticeStore 记录失败，尝试存储回退:', error);
-                }
-            }
-
-            if (typeof storage?.get === 'function') {
-                try {
-                    return normalizeList(await storage.get('practice_records', []));
-                } catch (error) {
-                    console.warn('[SuitePractice] 读取 practice_records 失败:', error);
-                }
+            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
+                return normalizeList(await window.PracticeRecordAPI.list());
             }
 
             return [];
         },
 
-        async _replacePracticeRecordsWithFallback(records) {
-            const normalizedRecords = Array.isArray(records) ? records : [];
-            if (window.PracticeStore && typeof window.PracticeStore.replace === 'function') {
-                await window.PracticeStore.replace(normalizedRecords);
-                return;
+        async _recalculatePracticeStatsFromRecords() {
+            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.recalculateStats === 'function') {
+                await window.PracticeRecordAPI.recalculateStats();
+                return true;
             }
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
-                await window.PracticeCore.store.replacePracticeRecords(normalizedRecords);
-                return;
-            }
-            if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
-                await window.simpleStorageWrapper.savePracticeRecords(normalizedRecords);
-                return;
-            }
-            const practiceKey = ['practice', 'records'].join('_');
-            await storage.set(practiceKey, normalizedRecords);
-        },
-
-        async _saveSinglePracticeRecordWithFallback(record) {
-            if (window.PracticeStore && typeof window.PracticeStore.save === 'function') {
-                await window.PracticeStore.save(record);
-                return;
-            }
-            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
-                await window.PracticeCore.store.savePracticeRecord(record);
-                return;
-            }
-            if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
-                await window.simpleStorageWrapper.addPracticeRecord(record);
-                return;
-            }
-
-            let practiceRecords = await this._listPracticeRecordsWithFallback({ includeRecorder: false });
-            if (!Array.isArray(practiceRecords)) {
-                practiceRecords = [];
-            }
-            practiceRecords.unshift(record);
-            if (practiceRecords.length > MAX_LEGACY_PRACTICE_RECORDS) {
-                practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
-            }
-            await this._replacePracticeRecordsWithFallback(practiceRecords);
+            console.warn('[SuitePractice] 统一练习统计 API 未就绪');
+            return false;
         },
 
         _isSuitePracticeRecord(record) {
@@ -1767,7 +1720,7 @@
         },
 
         async _loadSuitePracticeRecordsForFiltering() {
-            return this._listPracticeRecordsWithFallback({ includeRecorder: true });
+            return this._listPracticeRecordsViaAPI();
         },
 
         _collectExamIdsFromPracticeRecord(record, collector) {
@@ -2156,6 +2109,9 @@
             const comparison = rawData && rawData.answerComparison
                 ? rawData.answerComparison
                 : (score && score.details ? score.details : {});
+            const correctAnswerMap = typeof this._resolveReplayCorrectAnswerMap === 'function'
+                ? this._resolveReplayCorrectAnswerMap(rawData, { examId: exam && exam.id, comparison })
+                : {};
 
             const correct = toNumber(score.correct, 0);
             const total = toNumber(score.total, Object.keys(answers).length);
@@ -2189,6 +2145,7 @@
                     source: score && score.source ? score.source : 'suite_mode_aggregated'
                 },
                 answers,
+                correctAnswerMap,
                 answerComparison: comparison,
                 markedQuestions: Array.isArray(rawData?.metadata?.markedQuestions)
                     ? rawData.metadata.markedQuestions.slice()
@@ -2196,29 +2153,11 @@
                 rawData: this._sanitizeSuiteRawData(rawData)
             };
         },
-
         async _saveSuitePracticeRecord(record) {
-            const recorderAvailable = this.components
-                && this.components.practiceRecorder
-                && typeof this.components.practiceRecorder.savePracticeRecord === 'function';
-
-            if (recorderAvailable) {
-                try {
-                    await this.components.practiceRecorder.savePracticeRecord(record);
-                    await this._cleanupSuiteEntryRecords(record).catch(error => {
-                        console.warn('[SuitePractice] 清理套题子记录失败:', error);
-                    });
-                    return;
-                } catch (error) {
-                    console.warn('[SuitePractice] PracticeRecorder 保存套题记录失败，改用降级存储:', error);
-                }
+            if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.saveRecord !== 'function') {
+                throw new Error('统一练习记录存储未就绪');
             }
-
-            await this._saveSuitePracticeRecordFallback(record);
-        },
-
-        async _saveSuitePracticeRecordFallback(record) {
-            await this._saveSinglePracticeRecordWithFallback(record);
+            await window.PracticeRecordAPI.saveRecord(record, { updateStats: true });
             await this._cleanupSuiteEntryRecords(record).catch(error => {
                 console.warn('[SuitePractice] 清理套题子记录失败:', error);
             });
@@ -2229,88 +2168,48 @@
                 return;
             }
 
-            let practiceRecords = await this._listPracticeRecordsWithFallback({ includeRecorder: false });
-            if (!Array.isArray(practiceRecords) || practiceRecords.length === 0) {
-                return;
-            }
-
             const entrySessionIds = new Set();
-            const entryExamIds = new Set();
-            const entryTimestamps = [];
 
             record.suiteEntries.forEach((entry) => {
                 if (!entry || typeof entry !== 'object') {
                     return;
                 }
-                if (entry.examId) {
-                    entryExamIds.add(entry.examId);
-                }
                 const raw = entry.rawData || {};
-                if (raw.sessionId) {
-                    entrySessionIds.add(raw.sessionId);
-                }
-                const ts = raw.completedAt || raw.endTime || raw.timestamp;
-                if (ts) {
-                    const parsed = new Date(ts).getTime();
-                    if (Number.isFinite(parsed)) {
-                        entryTimestamps.push(parsed);
-                    }
+                const sessionId = raw.sessionId || entry.sessionId || entry.suiteEntrySessionId || null;
+                if (sessionId) {
+                    entrySessionIds.add(String(sessionId));
                 }
             });
 
-            if (entrySessionIds.size === 0 && entryExamIds.size === 0) {
+            if (entrySessionIds.size === 0) {
+                console.warn('[SuitePractice] 跳过套题子记录清理：suiteEntries 缺少 sessionId，不能用 examId/时间窗口猜测删除');
                 return;
             }
 
-            const referenceTime = (() => {
-                if (entryTimestamps.length) {
-                    const sum = entryTimestamps.reduce((acc, value) => acc + value, 0);
-                    return sum / entryTimestamps.length;
-                }
-                const fallbackTs = new Date(record.endTime || record.date || record.createdAt || Date.now()).getTime();
-                return Number.isFinite(fallbackTs) ? fallbackTs : Date.now();
-            })();
-            const tolerance = 10 * 60 * 1000; // 10分钟
+            if (record.sessionId) {
+                entrySessionIds.delete(String(record.sessionId));
+            }
+            if (entrySessionIds.size === 0) {
+                return;
+            }
 
-            const before = practiceRecords.length;
-            practiceRecords = practiceRecords.filter((rec) => {
-                if (!rec || typeof rec !== 'object') {
-                    return true;
-                }
-                if (rec.sessionId === record.sessionId) {
-                    return true; // 保留聚合记录
-                }
-                const sessionMatch = rec.sessionId && entrySessionIds.has(rec.sessionId);
-                if (sessionMatch) {
-                    return false;
-                }
-                if (this._isSuitePracticeRecord(rec)) {
-                    return true;
-                }
-                const examMatch = rec.examId && entryExamIds.has(rec.examId);
-                if (!examMatch) {
-                    return true;
-                }
-                const recTime = new Date(rec.endTime || rec.date || rec.timestamp || rec.createdAt || Date.now()).getTime();
-                if (!Number.isFinite(recTime)) {
-                    return true;
-                }
-                const withinWindow = Math.abs(recTime - referenceTime) <= tolerance;
-                return !withinWindow;
-            });
-
-            if (practiceRecords.length !== before) {
-                await this._replacePracticeRecordsWithFallback(practiceRecords);
-                console.log('[SuitePractice] cleared ' + (before - practiceRecords.length) + ' suite child records');
+            if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.deleteMany !== 'function') {
+                throw new Error('统一练习记录删除 API 未就绪');
+            }
+            const result = await window.PracticeRecordAPI.deleteMany(Array.from(entrySessionIds), { updateStats: true });
+            const deletedCount = Number(result && result.deletedCount) || 0;
+            if (deletedCount > 0) {
+                console.log('[SuitePractice] cleared ' + deletedCount + ' suite child records');
             }
         },
 
         async _updatePracticeRecordsState() {
             try {
                 if (typeof window.syncPracticeRecords === 'function') {
-                    window.syncPracticeRecords();
+                    await window.syncPracticeRecords({ forceRender: true });
+                    return;
                 } else {
-                    const latest = await this._listPracticeRecordsWithFallback({ includeRecorder: false });
+                    const latest = await this._listPracticeRecordsViaAPI();
                     if (this.setState) {
                         this.setState('practice.records', Array.isArray(latest) ? latest : []);
                     }
@@ -2345,7 +2244,7 @@
             const targetMonth = date.getMonth();
             const targetDate = date.getDate();
 
-            const existingRecords = await this._listPracticeRecordsWithFallback({ includeRecorder: true });
+            const existingRecords = await this._listPracticeRecordsViaAPI();
 
             const resolveRecordDate = record => {
                 const candidates = [
