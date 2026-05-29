@@ -1344,3 +1344,19 @@
 - Notes:
   - A new subagent spawn for AI/RAG audit failed because the thread agent limit was reached; the current fix was completed locally with direct source inspection and regression coverage.
   - The first suite E2E update waited for the `/library` alias URL after `返回练习库`; this was corrected to wait for the actual Practice Library DOM because the route redirects to the root library route.
+
+### Slice 32: Browse Remember-Position Recovery
+- **Status:** checkpoint complete
+- Actions taken:
+  - Reused the existing `browse_view_preferences_v2` renderer preference key instead of adding API fields or backend schema.
+  - Added `saveBrowsePosition(asset)` before Vue reading navigation so starting an asset records `lastAssetId`, category, type, frequency filter, keyword, sort mode, and timestamp.
+  - Added `restoreBrowsePosition()` and a scheduled restore path after mount, asset load, browse activation, and filtered-list changes.
+  - Extended `practiceVueShell.test.js` with static guards for save/restore/scroll behavior.
+  - Extended `practice_reading_vue_flow.py` so the dynamic flow asserts browse position persistence after `开始练习` and restoration after returning to the library.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+- Notes:
+  - This slice is renderer-only and leaves reading AI prompt/RAG/coach contracts untouched.

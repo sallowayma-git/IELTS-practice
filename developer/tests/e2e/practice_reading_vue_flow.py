@@ -771,6 +771,11 @@ async def run_flow() -> dict:
         await page.click('[data-view="browse"]')
         await page.wait_for_selector(f'.exam-item[data-reading-asset-id="{ASSET_ID}"]', timeout=20000)
         await page.locator(f'.exam-item[data-reading-asset-id="{ASSET_ID}"] button:has-text("开始练习")').click()
+        browse_position_saved = await page.evaluate(
+            """() => JSON.parse(window.localStorage.getItem('browse_view_preferences_v2') || '{}')"""
+        )
+        if browse_position_saved.get("lastAssetId") != ASSET_ID or browse_position_saved.get("autoScrollEnabled") is not True:
+            raise AssertionError(f"browse_position_not_saved:{browse_position_saved}")
 
         await page.wait_for_url(f"**#/reading/{ASSET_ID}", timeout=10000)
         await page.wait_for_selector('[data-practice-reading-page]', timeout=20000)
@@ -1071,6 +1076,18 @@ async def run_flow() -> dict:
 
         await page.click('a:has-text("返回练习库")')
         await page.wait_for_url("**#/", timeout=10000)
+        await page.click('[data-view="browse"]')
+        await page.wait_for_selector(f'.exam-item[data-reading-asset-id="{ASSET_ID}"]', timeout=10000)
+        browse_restore_state = await page.evaluate(
+            f"""() => ({{
+              activeView: document.querySelector('#browse-view')?.classList.contains('active') === true,
+              targetPresent: Boolean(document.querySelector('.exam-item[data-reading-asset-id="{ASSET_ID}"]')),
+              selectedCategory: document.getElementById('browse-title')?.textContent?.trim() || '',
+              stored: JSON.parse(window.localStorage.getItem('browse_view_preferences_v2') || '{{}}')
+            }})"""
+        )
+        if not browse_restore_state.get("activeView") or not browse_restore_state.get("targetPresent") or browse_restore_state.get("stored", {}).get("lastAssetId") != ASSET_ID:
+            raise AssertionError(f"browse_position_not_restored:{browse_restore_state}")
         await page.click('[data-view="practice"]')
         await page.wait_for_selector('#history-list .history-item[data-record-id="reading-reading-session-e2e-1"]', timeout=10000)
         await page.locator('#history-list [data-record-action="details"][data-record-id="reading-reading-session-e2e-1"]').click()

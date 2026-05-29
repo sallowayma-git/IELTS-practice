@@ -1309,6 +1309,7 @@ const localMessage = ref('')
 const bulkDeleteMode = ref(false)
 const selectedHistoryIds = ref(new Set())
 const latestAssetSyncAt = ref(null)
+let pendingBrowsePositionRestore = false
 
 const readingCategoryEntries = computed(() => ['P1', 'P2', 'P3'].map((category) => ({
   category,
@@ -1543,6 +1544,7 @@ onMounted(() => {
   loadReadingData()
   updateLiquidIndicator()
   updateSegmentedIndicators()
+  scheduleBrowsePositionRestore()
 })
 
 watch(() => route.query.view, () => {
@@ -1554,11 +1556,20 @@ watch(activeView, (value) => {
   nextTick(() => {
     updateLiquidIndicator()
     updateSegmentedIndicators()
+    if (value === 'browse') {
+      restoreBrowsePosition()
+    }
   })
 })
 
 watch(selectedType, () => {
   nextTick(updateSegmentedIndicators)
+})
+
+watch(filteredReadingAssets, () => {
+  if (activeView.value === 'browse') {
+    scheduleBrowsePositionRestore()
+  }
 })
 
 async function loadReadingData() {
@@ -1575,6 +1586,7 @@ async function loadAssets() {
     const result = await practiceAssets.listAll({ activity: 'reading' })
     readingAssets.value = Array.isArray(result?.data) ? result.data : []
     latestAssetSyncAt.value = new Date()
+    scheduleBrowsePositionRestore()
   } catch (loadError) {
     console.error('加载阅读题库失败:', loadError)
     readingAssets.value = []
@@ -1674,25 +1686,33 @@ function getRecordFrequency(record) {
 }
 
 function readBrowseRememberPosition() {
-  try {
-    const raw = localStorage.getItem('browse_view_preferences_v2')
-    const parsed = raw ? JSON.parse(raw) : null
-    if (parsed && typeof parsed === 'object' && Object.prototype.hasOwnProperty.call(parsed, 'autoScrollEnabled')) {
-      return Boolean(parsed.autoScrollEnabled)
-    }
-  } catch (_) {}
+  const parsed = readBrowsePreferences()
+  if (Object.prototype.hasOwnProperty.call(parsed, 'autoScrollEnabled')) {
+    return Boolean(parsed.autoScrollEnabled)
+  }
   return true
 }
 
-function persistBrowsePreference() {
+function readBrowsePreferences() {
   try {
     const raw = localStorage.getItem('browse_view_preferences_v2')
-    const parsed = raw ? JSON.parse(raw) : {}
+    const parsed = raw ? JSON.parse(raw) : null
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch (_) {}
+  return {}
+}
+
+function writeBrowsePreferences(patch = {}) {
+  try {
     localStorage.setItem('browse_view_preferences_v2', JSON.stringify({
-      ...(parsed && typeof parsed === 'object' ? parsed : {}),
-      autoScrollEnabled: Boolean(browseRememberPosition.value)
+      ...readBrowsePreferences(),
+      ...(patch && typeof patch === 'object' ? patch : {})
     }))
   } catch (_) {}
+}
+
+function persistBrowsePreference() {
+  writeBrowsePreferences({ autoScrollEnabled: Boolean(browseRememberPosition.value) })
   browsePreferencePanelOpen.value = false
   showLocalMessage(browseRememberPosition.value
     ? '已开启列表位置记录，将自动恢复到上次答题的位置'
@@ -1772,12 +1792,69 @@ function clearSearch() {
   keyword.value = ''
 }
 
+function saveBrowsePosition(asset) {
+  if (!browseRememberPosition.value || !asset?.id) return
+  writeBrowsePreferences({
+    autoScrollEnabled: true,
+    lastAssetId: String(asset.id),
+    lastCategory: selectedCategory.value,
+    lastType: selectedType.value,
+    lastFrequencyFilter: frequencyFilter.value,
+    lastKeyword: keyword.value,
+    lastSortMode: sortMode.value,
+    lastUpdatedAt: new Date().toISOString()
+  })
+}
+
+function restoreBrowsePosition() {
+  if (!browseRememberPosition.value || activeView.value !== 'browse') return false
+  const prefs = readBrowsePreferences()
+  const assetId = String(prefs.lastAssetId || '').trim()
+  if (!assetId) return false
+  const targetAsset = readingAssets.value.find((asset) => String(asset?.id || '').trim() === assetId)
+  if (!targetAsset) return false
+
+  const normalizedType = prefs.lastType === 'reading' ? 'reading' : 'all'
+  const normalizedCategory = String(prefs.lastCategory || '').trim()
+  const normalizedFrequency = frequencyFilters.some((filter) => filter.value === prefs.lastFrequencyFilter)
+    ? prefs.lastFrequencyFilter
+    : 'all'
+  const normalizedSort = ['default', 'frequency-desc', 'difficulty-desc'].includes(prefs.lastSortMode)
+    ? prefs.lastSortMode
+    : 'default'
+
+  if (selectedType.value !== normalizedType) selectedType.value = normalizedType
+  if (selectedCategory.value !== (normalizedCategory || 'all')) selectedCategory.value = normalizedCategory || 'all'
+  if (frequencyFilter.value !== normalizedFrequency) frequencyFilter.value = normalizedFrequency
+  if (sortMode.value !== normalizedSort) sortMode.value = normalizedSort
+  if (keyword.value !== String(prefs.lastKeyword || '')) keyword.value = String(prefs.lastKeyword || '')
+
+  nextTick(() => {
+    const escapedAssetId = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+      ? CSS.escape(assetId)
+      : assetId.replace(/["\\]/g, '\\$&')
+    const target = document.querySelector(`.exam-item[data-reading-asset-id="${escapedAssetId}"]`)
+    target?.scrollIntoView?.({ block: 'center', behavior: 'auto' })
+  })
+  return true
+}
+
+function scheduleBrowsePositionRestore() {
+  if (pendingBrowsePositionRestore) return
+  pendingBrowsePositionRestore = true
+  nextTick(() => {
+    pendingBrowsePositionRestore = false
+    restoreBrowsePosition()
+  })
+}
+
 function startReading(asset) {
   if (!asset?.id) return
   if (!hasReadingPracticePayload(asset) && getPdfPath(asset)) {
     viewPdf(asset)
     return
   }
+  saveBrowsePosition(asset)
   router.push({
     name: 'PracticeReading',
     params: { assetId: asset.id }

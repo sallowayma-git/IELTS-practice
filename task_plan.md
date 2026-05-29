@@ -4,7 +4,7 @@
 把阅读业务链路重构为写作模块内的一等能力，使用 Vue renderer 统一实现，并收束 Electron/Server/API/设置入口，形成一个 AI native 的完整练习体验。
 
 ## Current Phase
-Slice 31 checkpoint complete: suite passage records opened from both the legacy-style Practice Library history panel and the mixed History page now preserve existing `metadata.suiteSessionId` when routing to Vue reading review. This restores the suite review return context without adding fields or touching the tuned reading AI prompt/RAG chain. The remaining migration work should continue extracting OpenSource/legacy behavior into Vue without copying legacy field aliases or redesigning user-visible flows.
+Slice 32 checkpoint complete: the Vue browse page now preserves the legacy/OpenSource list-position behavior using the existing `browse_view_preferences_v2` storage contract. Starting a reading asset records the current list/filter/sort/search context, and returning to browse restores that context and scrolls to the last started asset without adding backend fields or changing reading AI prompt/RAG behavior.
 
 ## Phases
 
@@ -364,6 +364,7 @@ Slice 31 checkpoint complete: suite passage records opened from both the legacy-
 - [x] Add API/static tests for latest OpenSource asset availability, official explanations, dictionary runtime loading, and field discipline.
 - [x] Add E2E parity tests that click the same user-visible controls as legacy: 总览 -> 浏览题库, 总览 -> 随机练习, 总览 -> 套题模式, 题库浏览 -> 开始练习, 题库浏览 -> PDF, 练习记录 -> 复盘.
 - [x] Preserve suite review return context from history list rows by reusing existing `metadata.suiteSessionId` in both Practice Library history and mixed History page review routes.
+- [x] Restore browse list-position memory by reusing `browse_view_preferences_v2` for last asset, filters, search, sort, and scroll restoration.
 - **Status:** implementation in progress
 
 ## Errors Encountered

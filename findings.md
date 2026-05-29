@@ -395,3 +395,9 @@
 - Both reading history entry points needed the same treatment: the legacy-style Practice Library history panel and the mixed writing/reading History page. Fixing only one would leave a real userspace regression.
 - The Vue reading review page already derives `activeSuiteSessionId` from the route query and changes `returnRoute` / `returnLabel` to `PracticeReadingSuite`. No reading AI prompt, RAG service, Practice API shape, or submission schema change was needed.
 - The Vue suite E2E now proves a completed suite passage can be reopened from the Practice Library history list with `?suiteSessionId=...`, and the review page still exposes `返回套题进度`.
+
+## Slice 32 Browse Remember-Position Recovery
+- The legacy/OpenSource browse preference was not just a toggle. It promised list-position recovery, but the Vue rewrite only persisted `autoScrollEnabled`, which was a fake feature and a direct userspace regression.
+- The right data owner is the existing renderer preference key `browse_view_preferences_v2`. Adding Practice API fields or history metadata for list scroll state would be schema garbage.
+- Vue now saves the last started asset plus current category/type/frequency/search/sort state before route navigation, then restores those filters and scrolls the matching `.exam-item[data-reading-asset-id]` back into view when browse data/view state is ready.
+- This fix is renderer-only. It does not touch reading AI prompts, RAG payloads, backend submission schema, suite session schema, or coach persistence.
