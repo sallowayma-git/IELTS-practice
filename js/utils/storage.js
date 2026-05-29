@@ -2882,11 +2882,9 @@ class StorageKeyRegistry {
             'blue-theme-mode',
             'browse_state',
             'hasSeenGplLicense',
-            'hp.theme',
             'preferred_theme_portal'
         ]);
         this.sessionKeys = new Set([
-            'hp.portal.pendingView',
             'preferred_theme_skip_session'
         ]);
     }

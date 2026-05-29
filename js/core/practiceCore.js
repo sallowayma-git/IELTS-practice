@@ -266,13 +266,7 @@
             }
         }
 
-        return firstStringCandidate(
-            recordData.examName,
-            recordData.examTitle,
-            recordData.title,
-            recordData.name,
-            recordData.sessionId
-        );
+        return null;
     }
 
     function normalizeAnswerValue(value) {

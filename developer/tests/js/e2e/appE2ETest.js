@@ -660,7 +660,7 @@ class AppE2ETestSuite {
                 controller.clearSessionSkip();
             }
 
-            const stored = controller.recordPortalNavigation('.superdesign/design_iterations/HP/Welcome.html', { label: 'HP Portal' });
+            const stored = controller.recordPortalNavigation('index.html#themes', { label: 'Theme Portal' });
             const simulation = controller.maybeAutoRedirect({ simulate: true });
             const preference = typeof controller.load === 'function' ? controller.load() : stored;
 
@@ -669,7 +669,7 @@ class AppE2ETestSuite {
             }
             const noRedirect = controller.maybeAutoRedirect({ simulate: true });
 
-            const shouldRedirect = !!(simulation && simulation.shouldRedirect && typeof simulation.targetUrl === 'string' && simulation.targetUrl.includes('HP/Welcome.html'));
+            const shouldRedirect = !!(simulation && simulation.shouldRedirect && typeof simulation.targetUrl === 'string' && simulation.targetUrl.includes('index.html#themes'));
             const internalBlocksRedirect = !noRedirect.shouldRedirect;
 
             this.recordResult(name, shouldRedirect && internalBlocksRedirect, {

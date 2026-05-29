@@ -475,7 +475,7 @@
         const store = getRecordStore();
         if (store && typeof store.replacePracticeRecords === 'function') {
             await store.replacePracticeRecords(finalRecords, saveOptions);
-            if (options.updateStats === true) {
+            if (options.updateStats !== false) {
                 await recalculateStats();
             }
             return finalRecords;
@@ -616,9 +616,6 @@
 
         if (deletedRecords.length > 0) {
             await replace(remainingRecords, options);
-            if (options.updateStats === true) {
-                await recalculateStats();
-            }
         }
 
         return {
@@ -647,9 +644,14 @@
         if (!store || typeof store.savePracticeRecord !== 'function') {
             throw new Error('PracticeRecordAPI.saveRecord: PracticeCore store not ready');
         }
-        const savedRecord = await store.savePracticeRecord(record, saveOptions);
+        const normalizedRecord = normalizeRecord(record, saveOptions);
+        if (!normalizedRecord || !normalizedRecord.examId) {
+            throw new Error('PracticeRecordAPI.saveRecord requires a canonical examId');
+        }
 
-        if (options.updateStats === true) {
+        const savedRecord = await store.savePracticeRecord(normalizedRecord, saveOptions);
+
+        if (options.updateStats !== false) {
             await updateStatsForSavedRecord(savedRecord, options);
         }
 
