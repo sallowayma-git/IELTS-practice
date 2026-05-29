@@ -84,6 +84,15 @@ async def install_api_stub(page) -> None:
             payloadRef: '{ASSET_ID}',
             metadata: {{ dataKey: '{ASSET_ID}', script: './p2-low-148.js', shuiPdf: 'assets/pdf/p2-low-148.pdf' }}
           }};
+          const pdfOnlyReadingAsset = {{
+            id: 'p2-pdf-only-e2e',
+            activity: 'reading',
+            title: 'PDF Only Reading Asset',
+            source: 'reading_pdf',
+            category: 'P2',
+            payloadRef: '',
+            metadata: {{ shuiPdf: 'assets/pdf/p2-pdf-only-e2e.pdf' }}
+          }};
           const writingAsset = {{
             id: '7',
             activity: 'writing',
@@ -527,12 +536,12 @@ async def install_api_stub(page) -> None:
             if (pathname === '/api/practice/assets' && method === 'GET') {{
               const activity = parsed.searchParams.get('activity');
               if (activity === 'reading') {{
-                return createJsonResponse({{ success: true, data: {{ data: [readingAsset], total: 1, page: 1, limit: 48 }} }});
+                return createJsonResponse({{ success: true, data: {{ data: [pdfOnlyReadingAsset, readingAsset], total: 2, page: 1, limit: 48 }} }});
               }}
               if (activity === 'writing') {{
                 return createJsonResponse({{ success: true, data: {{ data: [writingAsset], total: 1, page: 1, limit: 32 }} }});
               }}
-              return createJsonResponse({{ success: true, data: {{ data: [writingAsset, readingAsset], total: 2, page: 1, limit: 80 }} }});
+              return createJsonResponse({{ success: true, data: {{ data: [writingAsset, pdfOnlyReadingAsset, readingAsset], total: 3, page: 1, limit: 80 }} }});
             }}
 
             if (pathname === '/api/practice/assets/reading/{ASSET_ID}' && method === 'GET') {{
@@ -690,6 +699,19 @@ async def run_flow() -> dict:
         opened_windows = await page.evaluate("() => window.__openedWindows || []")
         if not opened_windows or "assets/pdf/p2-low-148.pdf" not in opened_windows[0].get("url", ""):
             raise AssertionError(f"overview_pdf_button_failed:{opened_windows}")
+        await page.wait_for_selector('.exam-item[data-reading-asset-id="p2-pdf-only-e2e"]', timeout=10000)
+        await page.locator('.exam-item[data-reading-asset-id="p2-pdf-only-e2e"] button[data-action="start"]').click()
+        pdf_only_state = await page.evaluate(
+            """() => ({
+              openedWindows: window.__openedWindows || [],
+              href: window.location.href,
+              pdfOnlyDetailGets: window.__practiceReadingRequests.filter((item) => item.pathname === '/api/practice/assets/reading/p2-pdf-only-e2e').length
+            })"""
+        )
+        if len(pdf_only_state.get("openedWindows", [])) < 2 or "assets/pdf/p2-pdf-only-e2e.pdf" not in pdf_only_state.get("openedWindows", [])[-1].get("url", ""):
+            raise AssertionError(f"pdf_only_start_did_not_open_pdf:{pdf_only_state}")
+        if "#/reading/p2-pdf-only-e2e" in pdf_only_state.get("href", "") or pdf_only_state.get("pdfOnlyDetailGets") != 0:
+            raise AssertionError(f"pdf_only_start_entered_empty_reading_page:{pdf_only_state}")
 
         await page.click('[data-view="overview"]')
         await page.wait_for_selector('[data-reading-overview]', timeout=10000)
@@ -711,6 +733,26 @@ async def run_flow() -> dict:
             timeout=10000,
         )
 
+        await page.locator('[data-action="start-endless-mode"]').click()
+        await page.wait_for_url(f"**#/reading/{ASSET_ID}?mode=endless", timeout=10000)
+        await page.wait_for_selector('[data-practice-reading-page]', timeout=20000)
+        await page.wait_for_selector('h1:has-text("Why do we need the arts")', timeout=20000)
+        endless_filter_state = await page.evaluate(
+            """() => ({
+              href: window.location.href,
+              state: JSON.parse(window.sessionStorage.getItem('practice_reading_endless_state_v1') || 'null'),
+              pdfOnlyDetailGets: window.__practiceReadingRequests.filter((item) => item.pathname === '/api/practice/assets/reading/p2-pdf-only-e2e').length
+            })"""
+        )
+        endless_pool_ids = [entry.get("id") for entry in (endless_filter_state.get("state") or {}).get("pool", [])]
+        if f"#/reading/{ASSET_ID}" not in endless_filter_state.get("href", "") or "mode=endless" not in endless_filter_state.get("href", ""):
+            raise AssertionError(f"endless_did_not_start_payload_asset:{endless_filter_state}")
+        if "p2-pdf-only-e2e" in endless_pool_ids or endless_filter_state.get("pdfOnlyDetailGets") != 0:
+            raise AssertionError(f"endless_pool_included_pdf_only_asset:{endless_filter_state}")
+
+        await page.goto(entry_url)
+        await page.wait_for_selector('[data-practice-reading-home] h1:has-text("IELTS Atlas")', timeout=20000)
+        await page.wait_for_selector('[data-reading-overview]', timeout=20000)
         await page.locator('button[data-action="start-random-practice"][data-category="P2"]').click()
         await page.wait_for_url(f"**#/reading/{ASSET_ID}", timeout=10000)
         await page.wait_for_selector('[data-practice-reading-page]', timeout=20000)

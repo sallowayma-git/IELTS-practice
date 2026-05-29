@@ -382,3 +382,9 @@
 - Static string presence is not enough for user experience parity. The new E2E waits for real route changes and rendered pages so future UI rewrites cannot keep selectors while breaking the click path.
 - The AI prompt/RAG chain remains untouched. This slice only protects route/API/payload behavior around already tuned `server/src/lib/reading/prompt.ts` and coach services.
 - Remaining observed risks are concrete, not theoretical: PDF-only assets need a no-empty-reading-page guard in random/endless pools; suite passage records opened from the library history should preserve enough suite context to return to suite progress; browse position memory and custom suite selection still need OpenSource parity work.
+
+## Slice 30 PDF-only Random/Endless Guard
+- `startReading()` already had the correct behavior for manually opened PDF-only assets: if there is no Practice payload but a PDF exists, open the PDF. The bug was that random and endless selected directly from `readingAssets`, so PDF-only entries could still be routed into `/reading/:assetId`.
+- The correct data rule is simple: PDF-only assets remain browseable resources, not practice-session candidates. Random practice and endless mode now filter with the existing `hasReadingPracticePayload(asset)` helper instead of introducing a new `isPdfOnly` field.
+- The dynamic E2E now uses a PDF-only asset at index 0 and forces `Math.random() === 0`. This catches the exact regression class: if a future rewrite forgets the payload filter, random/endless will select the PDF-only asset and fail the route/detail-request assertions.
+- This change does not touch AI prompt, RAG, history schema, or Practice API contracts. It is a renderer candidate-pool fix that preserves the existing manual PDF user path.

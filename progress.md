@@ -1312,3 +1312,18 @@
   - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
 - Notes:
   - Remaining priority debt from the audits: PDF-only/无尽模式 filtering, suite history replay preserving `suiteSessionId` from library history records, and deeper OpenSource browse position/custom-suite behavior. These should be handled as separate slices without adding parallel Practice fields.
+
+### Slice 30: PDF-only Random/Endless Guard
+- **Status:** checkpoint complete
+- Actions taken:
+  - Fixed `PracticeLibraryPage.vue` so random reading practice and endless mode build their candidate pools only from reading assets with a real Practice payload.
+  - Preserved the user-facing PDF path: manually starting a PDF-only reading asset still opens the PDF via the existing `metadata` PDF fields instead of routing to an empty Vue reading page.
+  - Extended `practice_reading_vue_flow.py` with a mocked PDF-only reading asset. The test now proves PDF-only start opens a PDF and does not request `/api/practice/assets/reading/:assetId`, while random and endless both skip the PDF-only asset even when `Math.random()` would otherwise pick index 0.
+  - Added Vue shell static guards so future rewrites cannot rebuild random/endless pools from unfiltered `readingAssets`.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+- Notes:
+  - Remaining priority debt is now narrower: suite passage records opened from the library history should preserve `suiteSessionId`/return context, and browse position memory/custom-suite selection still need OpenSource parity work.

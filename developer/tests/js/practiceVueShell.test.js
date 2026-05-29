@@ -200,6 +200,8 @@ function testPracticeLibraryView() {
     assertContains(source, 'window.open(', 'reading PDF entry opens actual PDF window')
     assertContains(source, 'function hasReadingPracticePayload(asset)', 'reading asset payload availability helper')
     assertContains(source, 'if (!hasReadingPracticePayload(asset) && getPdfPath(asset))', 'PDF-only reading assets open PDF instead of empty Vue reading page')
+    assertContains(source, '&& hasReadingPracticePayload(asset)\n    && (normalizedCategory === \'all\'', 'random reading practice filters out PDF-only assets')
+    assertContains(source, "function startEndlessMode() {\n  const pool = readingAssets.value.filter((asset) => (\n    asset?.id\n    && asset.activity === 'reading'\n    && hasReadingPracticePayload(asset)", 'endless reading practice filters out PDF-only assets')
     assertContains(source, 'metadata.script', 'reading payload helper reuses existing script metadata')
     assertContains(source, 'const htmlAssetCount = computed(() => readingAssets.value.filter(hasReadingPracticePayload).length)', 'library HTML asset count uses payload availability semantics')
     assertNotContains(source, 'PDF 入口已恢复', 'reading PDF entry must not be placeholder-only')

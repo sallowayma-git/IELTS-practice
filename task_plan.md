@@ -4,7 +4,7 @@
 把阅读业务链路重构为写作模块内的一等能力，使用 Vue renderer 统一实现，并收束 Electron/Server/API/设置入口，形成一个 AI native 的完整练习体验。
 
 ## Current Phase
-Slice 29 checkpoint complete: the Vue reading library now has dynamic E2E coverage for the OpenSource/legacy user click path from overview category cards through browse, PDF, suite selector, random practice, submit, replay, archive, and AI coach context. Suite creation payloads are contracted back to canonical `flowMode` / `frequencyScope` only; local auto-advance preference no longer leaks into the Practice API request. The remaining migration work should continue extracting OpenSource/legacy behavior into Vue without copying legacy field aliases or rewriting tuned AI prompts.
+Slice 30 checkpoint complete: PDF-only reading assets stay visible and manually open their PDF, but random practice and endless mode now filter them out and only route to payload-backed Vue reading practice. The Vue E2E path proves PDF-only start does not enter an empty `/reading/:assetId` page, and endless/random continue through the canonical payload-backed asset. The remaining migration work should continue extracting OpenSource/legacy behavior into Vue without copying legacy field aliases or rewriting tuned AI prompts.
 
 ## Phases
 
