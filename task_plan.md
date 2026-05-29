@@ -4,7 +4,7 @@
 把阅读业务链路重构为写作模块内的一等能力，使用 Vue renderer 统一实现，并收束 Electron/Server/API/设置入口，形成一个 AI native 的完整练习体验。
 
 ## Current Phase
-Slice 30 checkpoint complete: PDF-only reading assets stay visible and manually open their PDF, but random practice and endless mode now filter them out and only route to payload-backed Vue reading practice. The Vue E2E path proves PDF-only start does not enter an empty `/reading/:assetId` page, and endless/random continue through the canonical payload-backed asset. The remaining migration work should continue extracting OpenSource/legacy behavior into Vue without copying legacy field aliases or rewriting tuned AI prompts.
+Slice 31 checkpoint complete: suite passage records opened from both the legacy-style Practice Library history panel and the mixed History page now preserve existing `metadata.suiteSessionId` when routing to Vue reading review. This restores the suite review return context without adding fields or touching the tuned reading AI prompt/RAG chain. The remaining migration work should continue extracting OpenSource/legacy behavior into Vue without copying legacy field aliases or redesigning user-visible flows.
 
 ## Phases
 
@@ -362,7 +362,8 @@ Slice 30 checkpoint complete: PDF-only reading assets stay visible and manually 
 - [x] Keep dictionary/highlight data on existing frontend runtime and canonical `highlights` / vocab fallback paths; do not add Practice backend dictionary fields.
 - [x] Fix generated reading data blockers exposed by the VM-free Practice loader: `p3-high-192` exam payload is back to strict JSON data, and `p1-high-194` / `p3-low-151` explanations no longer contain invalid unescaped quotes.
 - [x] Add API/static tests for latest OpenSource asset availability, official explanations, dictionary runtime loading, and field discipline.
-- [ ] Add E2E parity tests that click the same user-visible controls as legacy: 总览 -> 浏览题库, 总览 -> 随机练习, 总览 -> 套题模式, 题库浏览 -> 开始练习, 题库浏览 -> PDF, 练习记录 -> 复盘.
+- [x] Add E2E parity tests that click the same user-visible controls as legacy: 总览 -> 浏览题库, 总览 -> 随机练习, 总览 -> 套题模式, 题库浏览 -> 开始练习, 题库浏览 -> PDF, 练习记录 -> 复盘.
+- [x] Preserve suite review return context from history list rows by reusing existing `metadata.suiteSessionId` in both Practice Library history and mixed History page review routes.
 - **Status:** implementation in progress
 
 ## Errors Encountered
@@ -435,6 +436,8 @@ Slice 30 checkpoint complete: PDF-only reading assets stay visible and manually 
 | `practiceApiFacade.test.js` failed on `p3-low-151` with `reading_explanation_parse_failed` | 1 | Fixed the same invalid generated explanation JSON issue in the remaining explanation text. |
 | `practiceApiFacade.test.js` failed on `p3-high-192` with `reading_asset_parse_failed` because the file had become an executable JS object literal instead of JSON data | 1 | Mechanically normalized the captured payload back into the strict generated JSON register format required by the VM-free Practice loader. |
 | New subagent spawn failed because the thread limit was reached | 5 | Reused existing completed subagent findings and continued locally; the active agent findings were sufficient to prioritize entry E2E parity and suite field contraction. |
+| New subagent spawn failed because the thread limit was reached | 6 | Completed the suite history replay context fix locally and covered it with static contracts plus Vue suite E2E. |
+| `practice_reading_suite_vue_flow.py` initially timed out waiting for `#/library` after clicking `返回练习库` | 1 | The `/library` route is an alias that redirects to the Practice Library root; changed the E2E to wait for `[data-practice-reading-home]` instead of the alias URL. |
 
 ## Notes
 - Do not touch the existing dirty `apps/writing-vue/src/views/SettingsPage.vue` or screenshot files unless the refactor plan requires reading them.

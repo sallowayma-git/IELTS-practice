@@ -747,12 +747,14 @@ function normalizeWritingHistoryRecord(record) {
 function normalizeReadingHistoryRecord(record) {
   const accuracy = Number(record.accuracy || 0)
   const percentage = Math.round(accuracy * 100)
+  const metadata = record?.metadata || record?.submission?.metadata || {}
   return {
     id: record.id,
     activity: 'reading',
     task_type: 'reading',
     sessionId: record.sessionId,
     assetId: record.assetId || record.examId,
+    metadata,
     display_topic_title: record.title || record.examId || '阅读练习',
     topic_title: record.title || record.examId || '阅读练习',
     submitted_at: record.submittedAt || record.endTime || '',
@@ -764,6 +766,11 @@ function normalizeReadingHistoryRecord(record) {
     total_questions: Number(record.totalQuestions || 0),
     raw: record
   }
+}
+
+function getReadingHistorySuiteSessionId(record) {
+  const metadata = record?.metadata || record?.raw?.metadata || record?.raw?.submission?.metadata || {}
+  return String(metadata.suiteSessionId || metadata.suite_session_id || '').trim()
 }
 
 function filterReadingHistory(records, source = filters.value) {
@@ -907,10 +914,15 @@ async function viewDetail(id) {
       setPageNotice('error', '阅读记录缺少回顾所需的 assetId 或 sessionId')
       return
     }
-    router.push({
+    const suiteSessionId = getReadingHistorySuiteSessionId(listRecord)
+    const target = {
       name: 'PracticeReadingReview',
       params: { assetId, sessionId }
-    })
+    }
+    if (suiteSessionId) {
+      target.query = { suiteSessionId }
+    }
+    router.push(target)
     return
   }
 

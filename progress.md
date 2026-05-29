@@ -1327,3 +1327,20 @@
   - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
 - Notes:
   - Remaining priority debt is now narrower: suite passage records opened from the library history should preserve `suiteSessionId`/return context, and browse position memory/custom-suite selection still need OpenSource parity work.
+
+### Slice 31: Suite History Replay Context
+- **Status:** checkpoint complete
+- Actions taken:
+  - Fixed `PracticeLibraryPage.vue` so `openReadingReview(record)` reads existing `record.metadata.suiteSessionId` / `suite_session_id` and carries it into the `PracticeReadingReview` route query.
+  - Fixed `HistoryPage.vue` so normalized reading summaries preserve `metadata`, and mixed history reading-detail navigation carries the same suite context query.
+  - Extended `practiceVueShell.test.js` to lock the suite-context helper and route query handoff in both history entry points.
+  - Extended `practice_reading_suite_vue_flow.py` so the suite mock history endpoint returns submitted passage summaries, then proves Practice Library history -> single passage review opens with `?suiteSessionId=suite-e2e-1` and shows `返回套题进度`.
+  - Left reading AI prompt/RAG services untouched; this slice only repairs the route/context handoff for already persisted submissions.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_suite_vue_flow.py` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+- Notes:
+  - A new subagent spawn for AI/RAG audit failed because the thread agent limit was reached; the current fix was completed locally with direct source inspection and regression coverage.
+  - The first suite E2E update waited for the `/library` alias URL after `返回练习库`; this was corrected to wait for the actual Practice Library DOM because the route redirects to the root library route.

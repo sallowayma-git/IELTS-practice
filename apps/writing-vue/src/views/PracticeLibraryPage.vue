@@ -2183,10 +2183,20 @@ function openReadingReview(record) {
   const assetId = String(record?.assetId || record?.examId || '').trim()
   const sessionId = String(record?.sessionId || '').trim()
   if (!assetId || !sessionId) return
-  router.push({
+  const suiteSessionId = getReadingHistorySuiteSessionId(record)
+  const target = {
     name: 'PracticeReadingReview',
     params: { assetId, sessionId }
-  })
+  }
+  if (suiteSessionId) {
+    target.query = { suiteSessionId }
+  }
+  router.push(target)
+}
+
+function getReadingHistorySuiteSessionId(record) {
+  const metadata = record?.metadata || record?.submission?.metadata || record?.raw?.metadata || {}
+  return String(metadata.suiteSessionId || metadata.suite_session_id || '').trim()
 }
 
 function handleHistoryItemClick(record, event) {

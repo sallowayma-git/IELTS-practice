@@ -173,6 +173,31 @@ async def install_api_stub(page) -> None:
             }}
           }};
           const submissionsBySessionId = new Map();
+          const buildHistoryRecord = (submission) => {{
+            const scoreInfo = submission?.scoreInfo || {{}};
+            return {{
+              id: `reading-${{submission.sessionId}}`,
+              activity: 'reading',
+              sessionId: submission.sessionId,
+              assetId: submission.assetId,
+              examId: submission.examId,
+              title: submission.metadata?.title || submission.assetId,
+              status: 'completed',
+              submittedAt: submission.submittedAt,
+              startTime: submission.startTime,
+              endTime: submission.endTime,
+              duration: Number(submission.duration || 0),
+              score: Number(scoreInfo.correct || 0),
+              totalQuestions: Number(scoreInfo.totalQuestions || scoreInfo.total || 0),
+              correctAnswers: Number(scoreInfo.correct || 0),
+              accuracy: Number(scoreInfo.accuracy || 0),
+              metadata: {{ ...(submission.metadata || {{}}), historyRecordId: `reading-${{submission.sessionId}}` }}
+            }};
+          }};
+          const getHistoryRecords = () => Array
+            .from(submissionsBySessionId.values())
+            .map((submission) => buildHistoryRecord(submission))
+            .sort((left, right) => new Date(right.submittedAt || 0).getTime() - new Date(left.submittedAt || 0).getTime());
           const suiteLlmPatch = {{
             diagnosis: [
               {{ code: 'suite_ai_review_done', reason: 'SUITE_CANONICAL_PATCH_ONLY: 套题单篇复盘已持久化', evidence: [] }}
@@ -280,7 +305,8 @@ async def install_api_stub(page) -> None:
               return createJsonResponse({{ success: true, data: clone(details[assetId]) }});
             }}
             if (pathname === '/api/practice/history' && method === 'GET') {{
-              return createJsonResponse({{ success: true, data: {{ data: [], total: 0, page: 1, limit: 5 }} }});
+              const data = getHistoryRecords();
+              return createJsonResponse({{ success: true, data: {{ data, total: data.length, page: 1, limit: data.length || 5 }} }});
             }}
             if (pathname === '/api/practice/migration-status' && method === 'GET') {{
               return createJsonResponse({{ success: true, data: {{ defaultRenderer: 'vue', legacyDeletionAllowed: false, capabilities: [], electronEntrypoints: {{}} }} }});
@@ -440,6 +466,17 @@ async def run_flow() -> dict:
         if not is_readonly:
             raise AssertionError("suite_review_replay_not_readonly")
 
+        await page.locator('a:has-text("返回套题进度")').click()
+        await page.wait_for_url(f"**#/reading-suite/{SUITE_SESSION_ID}", timeout=10000)
+        await page.locator('a:has-text("返回练习库")').click()
+        await page.wait_for_selector('[data-practice-reading-home]', timeout=10000)
+        await page.locator('.hero-nav__btn[data-view="practice"]').click()
+        await page.wait_for_selector('#history-list .history-item[data-record-id="reading-reading-suite-e2e-1-p1"]', timeout=10000)
+        await page.locator('#history-list [data-record-action="details"][data-record-id="reading-reading-suite-e2e-1-p1"]').click()
+        await page.wait_for_url(f"**#/reading/p1-suite-e2e/review/reading-{SUITE_SESSION_ID}-p1?suiteSessionId={SUITE_SESSION_ID}", timeout=10000)
+        await page.wait_for_selector('[data-reading-review-panel]', timeout=10000)
+        await page.wait_for_selector('a:has-text("返回套题进度")', timeout=10000)
+
         requests = await page.evaluate(
             """() => ({
               creates: window.__practiceReadingSuiteRequests.filter((item) => item.pathname === '/api/practice/reading-suite' && item.method === 'POST').length,
@@ -450,6 +487,7 @@ async def run_flow() -> dict:
               coachPayloads: window.__practiceReadingSuiteRequests.filter((item) => item.pathname === '/api/practice/coach/stream' && item.method === 'POST').map((item) => item.body?.payload || null),
               failedSuiteStateLoads: window.__practiceReadingSuiteFailedStateLoads,
               replaySessionLoads: window.__practiceReadingSuiteRequests.filter((item) => item.pathname === '/api/practice/sessions/reading/reading-suite-e2e-1-p1' && item.method === 'GET').length,
+              historyLoads: window.__practiceReadingSuiteRequests.filter((item) => item.pathname === '/api/practice/history' && item.method === 'GET').length,
               legacyCalls: window.__practiceReadingSuiteRequests.filter((item) => item.pathname.includes('legacy')).length
             })"""
         )
@@ -495,6 +533,8 @@ async def run_flow() -> dict:
             raise AssertionError(f"suite_review_replay_failed_state_not_exercised:{requests}")
         if requests.get("replaySessionLoads", 0) <= replay_counts_before.get("p1SessionLoads", 0):
             raise AssertionError(f"suite_review_replay_session_not_reloaded:{requests}")
+        if requests.get("historyLoads", 0) < 1:
+            raise AssertionError(f"suite_history_replay_not_exercised:{requests}")
         if requests.get("legacyCalls") != 0:
             raise AssertionError(f"legacy_calls_detected:{requests}")
 

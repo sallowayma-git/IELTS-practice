@@ -388,3 +388,10 @@
 - The correct data rule is simple: PDF-only assets remain browseable resources, not practice-session candidates. Random practice and endless mode now filter with the existing `hasReadingPracticePayload(asset)` helper instead of introducing a new `isPdfOnly` field.
 - The dynamic E2E now uses a PDF-only asset at index 0 and forces `Math.random() === 0`. This catches the exact regression class: if a future rewrite forgets the payload filter, random/endless will select the PDF-only asset and fail the route/detail-request assertions.
 - This change does not touch AI prompt, RAG, history schema, or Practice API contracts. It is a renderer candidate-pool fix that preserves the existing manual PDF user path.
+
+## Slice 31 Suite History Replay Context
+- The suite replay context was already present in canonical reading history summaries through `submission.metadata.suiteSessionId`; the broken part was the Vue route handoff from history rows to `PracticeReadingReview`.
+- The correct fix is to reuse `metadata.suiteSessionId` / `metadata.suite_session_id` and attach it as the existing review route query. Adding a new history field would duplicate the same fact and create another schema wart.
+- Both reading history entry points needed the same treatment: the legacy-style Practice Library history panel and the mixed writing/reading History page. Fixing only one would leave a real userspace regression.
+- The Vue reading review page already derives `activeSuiteSessionId` from the route query and changes `returnRoute` / `returnLabel` to `PracticeReadingSuite`. No reading AI prompt, RAG service, Practice API shape, or submission schema change was needed.
+- The Vue suite E2E now proves a completed suite passage can be reopened from the Practice Library history list with `?suiteSessionId=...`, and the review page still exposes `返回套题进度`.
