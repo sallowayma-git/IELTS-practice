@@ -367,6 +367,7 @@ Slice 34 checkpoint complete: OpenSource/legacy submitted-single reset behavior 
 - [x] Restore browse list-position memory by reusing `browse_view_preferences_v2` for last asset, filters, search, sort, and scroll restoration.
 - [x] Restore custom suite selection by reusing the existing suite create API and `ReadingSuiteSession.sequence` for explicit P1/P2/P3 selections.
 - [x] Restore submitted single-reading Reset/retry behavior without changing history schema: clear current review UI/session cache, re-enable controls, reset answer/timer/highlight state, and keep the persisted submission available in history/replay.
+- [x] Sync latest OpenSource reading explanation manifest/files and feed passage-note-only official explanations into existing ReadingCoach/RAG explanation chunks without changing prompt wording or API schema.
 - **Status:** implementation in progress
 
 ## Errors Encountered
@@ -433,6 +434,8 @@ Slice 34 checkpoint complete: OpenSource/legacy submitted-single reset behavior 
 | 5.3 Codex subagent spawn failed because the thread limit was reached | 3 | Completed the Slice 22 writing history hot-path audit locally instead of blocking on new agents. |
 | `writing_contract_probe.cjs` and `readingAnalysisService.test.js` were accidentally run in parallel while both can rebuild `server/dist`; one run failed with a transient `rm: server/dist/types/reading.js: Invalid argument` | 1 | Reran the affected contracts serially; both passed. Keep server-build-mutating tests serial. |
 | `python developer/tests/ci/run_static_suite.py` still fails because `python` is unavailable | 23 | Re-ran the same required static suite with `python3`; it passed with Slice 22 writing essay history summary coverage. |
+| `node developer/tests/js/readingAnalysisService.test.js` failed because OpenSource passage-note-only explanation chunks were generated but not selected into review prompt context | 24 | Added review-route deterministic injection for no-question official explanation chunks and reran the test; it passed. |
+| `node developer/tests/js/practiceVueShell.test.js` failed because the new static contract referenced `chunksSource` before reading `server/src/lib/reading/chunks.ts` | 24 | Added the missing source read and reran the test; it passed. |
 | `python developer/tests/e2e/suite_practice_flow.py` still fails because `python` is unavailable | 22 | Re-ran the same required E2E with `python3`; explicit legacy suite regression passed with 0 errors and 9 warnings after Slice 22. |
 | New subagent spawn failed because the thread limit was reached | 4 | Reused existing completed subagent findings and completed the OpenSource asset/dictionary slice locally. |
 | `practiceApiFacade.test.js` failed on `p1-high-194` with `reading_explanation_parse_failed` | 1 | Fixed invalid generated explanation JSON by replacing unescaped straight quotes inside JSON strings with valid Chinese quotes. |

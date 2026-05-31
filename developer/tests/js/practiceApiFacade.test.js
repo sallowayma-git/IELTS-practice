@@ -470,6 +470,7 @@ async function testOpenSourceLatestReadingAssetsFacade() {
     const { app } = await createApp()
     const latestAssetIds = ['p2-high-235', 'p2-high-236', 'p3-high-229']
     const latestExplanationAssetIds = ['p2-high-234', 'p2-high-235', 'p2-high-236', 'p3-high-229']
+    const latestPassageNoteOnlyExplanationAssetIds = ['p1-low-223', 'p2-low-148', 'p3-medium-197']
 
     try {
         for (const assetId of latestAssetIds) {
@@ -511,6 +512,20 @@ async function testOpenSourceLatestReadingAssetsFacade() {
             assert.ok(
                 Array.isArray(payload.reviewExplanations?.questionExplanations) && payload.reviewExplanations.questionExplanations.length > 0,
                 `${assetId} should expose official question explanations`
+            )
+        }
+
+        for (const assetId of latestPassageNoteOnlyExplanationAssetIds) {
+            const response = await app.inject({
+                method: 'GET',
+                url: `/api/practice/assets/reading/${encodeURIComponent(assetId)}`
+            })
+            assert.strictEqual(response.statusCode, 200, `${assetId} passage-note explanation asset should resolve`)
+            const payload = response.json().data.payload
+            assert.strictEqual(payload.reviewExplanations?.examId, assetId, `${assetId} should attach official explanation payload`)
+            assert.ok(
+                Array.isArray(payload.reviewExplanations?.passageNotes) && payload.reviewExplanations.passageNotes.length > 0,
+                `${assetId} should expose official passage notes`
             )
         }
     } finally {

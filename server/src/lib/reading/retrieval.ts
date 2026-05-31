@@ -478,6 +478,16 @@ function buildReadingRetrievalContext({
         deterministic.push(chunk);
     };
 
+    if (contextRoute === contextRoutes.REVIEW) {
+        sortedChunks
+            .filter((chunk) => (
+                chunk.chunkType === chunkType.EXPLANATION
+                && (!Array.isArray(chunk.questionNumbers) || chunk.questionNumbers.length === 0)
+            ))
+            .slice(0, 3)
+            .forEach(pushChunk);
+    }
+
     if (focusQuestionNumbers.length > 0) {
         sortedChunks.forEach((chunk) => {
             if (chunk.questionNumbers.some((qNum) => focusQuestionNumbers.includes(qNum))) {

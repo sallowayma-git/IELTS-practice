@@ -996,6 +996,74 @@ async function testReviewRetrievalInjectsOriginalPassageChunks() {
     assert.ok(Array.isArray(result.citations) && result.citations.some((item) => item.chunkType === 'passage_paragraph'), 'review 响应引用里必须保留原文 chunk');
 }
 
+async function testOpenSourcePassageNotesFeedCoachRetrieval() {
+    const service = new ReadingCoachService({});
+    const bundle = await service._loadExamBundle('p1-low-223');
+    const passageNoteChunk = bundle.chunks.find((chunk) => (
+        chunk.chunkType === CHUNK_TYPE.EXPLANATION
+        && String(chunk.id || '').includes('passage_explanation')
+        && String(chunk.content || '').includes('日内瓦湖')
+    ));
+    assert.ok(passageNoteChunk, 'OpenSource 新增 passageNotes 必须进入 AI Coach explanation chunk');
+    assert.deepStrictEqual(passageNoteChunk.questionNumbers, [], 'passageNotes 不得伪造成逐题解析');
+
+    let capturedMessages = null;
+    service.providerOrchestrator = {
+        async streamCompletion(options = {}) {
+            capturedMessages = options.messages;
+            if (typeof options.onChunk === 'function') {
+                options.onChunk(JSON.stringify({
+                    answer: '先按段落总结建立因果链，再回到题干定位。',
+                    answerSections: [
+                        { type: 'direct_answer', text: '先按段落总结建立因果链，再回到题干定位。' }
+                    ],
+                    followUps: ['继续看证据段', '给我同类训练'],
+                    confidence: 'high',
+                    missingContext: [],
+                    reviewOverall: {
+                        primaryWeakness: '因果链没有先搭起来。',
+                        patternSummary: '段落解析已经进入检索上下文。',
+                        teachingPlan: '先用段落解析梳理结构，再逐题核证据。'
+                    },
+                    reviewQuestionAnalyses: [{
+                        questionNumber: '1',
+                        likelyMistake: '直接找词，没先看因果链。',
+                        whyUserChoseWrong: '用户容易被局部名词吸引。',
+                        whyCorrectAnswerWorks: '正确答案符合全文因果结构。',
+                        whyWrongAnswerFails: '错误答案只覆盖局部事实。',
+                        nextRule: '先写出 cause/effect 关系再选。'
+                    }]
+                }));
+            }
+            return {
+                usedConfig: { id: 1, provider: 'openai', default_model: 'gpt-test' },
+                providerPath: [{ provider: 'openai', model: 'gpt-test', status: 'success' }]
+            };
+        }
+    };
+
+    const result = await service.query({
+        examId: 'p1-low-223',
+        query: '请复盘这篇的因果链和定位问题',
+        action: 'review_set',
+        promptKind: 'preset',
+        attemptContext: {
+            submitted: true,
+            wrongQuestions: [],
+            selectedAnswers: {}
+        }
+    });
+    const promptJoined = Array.isArray(capturedMessages)
+        ? capturedMessages.map((item) => String(item?.content || '')).join('\n')
+        : '';
+    assert.ok(promptJoined.includes('chunkType: answer_explanation'), 'review prompt 必须携带官方解析 chunk');
+    assert.ok(promptJoined.includes('日内瓦湖'), 'review prompt 必须携带 OpenSource passageNotes 内容');
+    assert.ok(
+        Array.isArray(result.citations) && result.citations.some((item) => item.chunkType === CHUNK_TYPE.EXPLANATION),
+        'review 响应引用里必须保留官方解析 chunk'
+    );
+}
+
 async function testReviewFallsBackToWholePassageWhenAttemptContextIsThin() {
     const service = new ReadingCoachService({});
     let capturedMessages = null;
@@ -1265,6 +1333,7 @@ async function main() {
         await testSubmittedSingleQuestionQuestionStaysGrounded();
         await testAnalyzeMistakeActionWithSpecificQuestionStaysGrounded();
         await testReviewRetrievalInjectsOriginalPassageChunks();
+        await testOpenSourcePassageNotesFeedCoachRetrieval();
         await testReviewFallsBackToWholePassageWhenAttemptContextIsThin();
         await testReviewMapsInternalQuestionIdsToDisplayQuestionNumbers();
         await testReviewCapacityCoversLongestGeneratedPassage();

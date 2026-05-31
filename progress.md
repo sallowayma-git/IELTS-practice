@@ -1400,3 +1400,23 @@
 - Notes:
   - `practiceApiFacade.test.js` rebuilds `server/dist`; keep it serial with other server-build-mutating tests when possible to avoid race noise.
   - No prompt wording, RAG router, coach service, Practice API schema, or history schema was changed.
+
+### Slice 35: OpenSource Explanation Manifest + RAG Passage Notes
+- **Status:** checkpoint complete
+- Actions taken:
+  - Fetched the latest `origin/opensource` and confirmed the current OpenSource delta is reading explanation coverage.
+  - Synced `assets/generated/reading-explanations/manifest.js` plus all 58 newly referenced generated explanation files so the manifest has no missing script targets.
+  - Added `buildPassageNoteExplanationChunks()` so passage-note-only official explanations become existing `answer_explanation` RAG chunks with stable `passage_explanation` ids and no fake question numbers.
+  - Added review-route deterministic injection for no-question official explanation chunks so whole-set review prompts receive OpenSource passageNotes even when the final context budget is crowded by question/answer chunks.
+  - Extended Practice API facade coverage for passage-note-only explanation assets and ReadingCoach/RAG coverage for `p1-low-223`.
+  - Added Vue shell static contracts that prevent `passageNotes` from being ignored by the Coach chunk builder.
+  - Left `server/src/lib/reading/prompt.ts`, Practice API schema, and history schema untouched.
+- Verification:
+  - `node developer/tests/js/readingAnalysisService.test.js` passed.
+  - `node developer/tests/js/practiceApiFacade.test.js` passed.
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+- Notes:
+  - The first reading analysis run failed because passage-note chunks existed but were not selected into review prompt context. Review deterministic injection fixed the real RAG omission.
+  - The settings UI side-audit found a separate remaining issue: `SettingsPage.vue` still uses a fake theme-switcher action instead of the OpenSource modal. That was not mixed into this AI/RAG data slice.

@@ -495,6 +495,29 @@ function buildQuestionChunk({ examId, questionId, questionGroups, questionDispla
     };
 }
 
+function buildPassageNoteExplanationChunks(examId, explanationDataset, chunkType) {
+    if (!explanationDataset || !Array.isArray(explanationDataset.passageNotes)) {
+        return [];
+    }
+    return explanationDataset.passageNotes
+        .map((note, index) => {
+            const label = cleanText(note?.label || `Passage note ${index + 1}`);
+            const text = cleanText(note?.text || '');
+            if (!text) {
+                return null;
+            }
+            const content = `${label ? `Passage note ${label}: ` : 'Passage note: '}${text}`.slice(0, 1600);
+            return {
+                id: `${examId}::passage_explanation::${index + 1}`,
+                chunkType: chunkType.EXPLANATION,
+                questionNumbers: [],
+                paragraphLabels: extractParagraphLabels(`${label} ${text}`),
+                content
+            };
+        })
+        .filter(Boolean);
+}
+
 function buildReadingChunks(examId, examDataset, explanationDataset, chunkType) {
     const chunks = [];
     const questionOrder = Array.isArray(examDataset.questionOrder) ? examDataset.questionOrder : [];
@@ -535,6 +558,8 @@ function buildReadingChunks(examId, examDataset, explanationDataset, chunkType) 
             content: `Q${normalizedQuestion} 正确答案：${String(answer || '').trim()}`
         });
     });
+
+    buildPassageNoteExplanationChunks(examId, explanationDataset, chunkType).forEach((chunk) => chunks.push(chunk));
 
     if (explanationDataset && Array.isArray(explanationDataset.questionExplanations)) {
         explanationDataset.questionExplanations.forEach((section, sectionIndex) => {
