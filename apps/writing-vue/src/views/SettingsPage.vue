@@ -2,15 +2,6 @@
   <div id="settings-view" class="settings-page view hero-panel hero-section active" data-writing-settings>
     <div class="hero-panel__header">
       <h2 class="hero-panel__title heading-serif">⚙️ 系统设置</h2>
-      <button
-        class="settings-detail-toggle"
-        type="button"
-        aria-controls="writing-settings-detail"
-        :aria-expanded="settingsDetailOpen ? 'true' : 'false'"
-        @click="toggleSettingsDetail"
-      >
-        {{ settingsDetailOpen ? '收起写作配置' : '写作配置' }}
-      </button>
     </div>
 
     <div class="hero-settings-group" aria-label="设置主面板">
@@ -75,13 +66,12 @@
 
       <section class="hero-panel hero-section system-info-panel">
         <h3 class="heading-serif">📊 系统信息</h3>
-        <div class="hero-surface system-info-surface">
-          <div class="system-info-status">写作状态: 已连接设置服务</div>
-          <div>启用 API: <span>{{ enabledConfigCount }}/{{ totalConfigCount }}</span></div>
-          <div>提示词版本: <span>{{ promptEntries.length }}</span></div>
-          <div>激活提示词: <span>{{ activePromptCount }}</span></div>
-          <div>温度参数: <span>{{ currentTemperatureSummary }}</span></div>
-          <div>历史保留: <span>{{ dataSettings.history_limit }} 条</span></div>
+        <div class="hero-surface settings-system-info system-info-surface">
+          <div class="settings-system-info__status system-info-status">题库状态: {{ topicLibraryStatus }}</div>
+          <div>总题目数: <span id="total-exams">{{ topicLibraryStats.total }}</span></div>
+          <div>Task 1: <span id="html-exams">{{ topicLibraryStats.task1 }}</span></div>
+          <div>Task 2: <span id="pdf-exams">{{ topicLibraryStats.task2 }}</span></div>
+          <div>最近更新: <span id="last-update">{{ topicLibraryStats.lastUpdate }}</span></div>
           <div>Electron版本: <span>{{ electronVersion }}</span></div>
           <div>Node版本: <span>{{ nodeVersion }}</span></div>
           <div>数据目录: <span>{{ userDataPath || '加载中...' }}</span></div>
@@ -97,24 +87,36 @@
       {{ globalMessage.message }}
     </div>
 
-    <section
+    <div
       v-if="settingsDetailOpen"
-      id="writing-settings-detail"
-      class="settings-detail hero-panel hero-section"
+      class="settings-detail-modal"
+      role="dialog"
+      aria-modal="true"
       aria-label="写作设置明细"
+      @click.self="hideSettingsDetail"
     >
-      <div class="settings-tabs" role="tablist" aria-label="写作设置分类">
-        <button
-          v-for="tab in tabs"
-          :key="tab.key"
-          type="button"
-          :class="['settings-tab', { active: activeTab === tab.key }]"
-          @click="activeTab = tab.key"
-        >
-          <span class="settings-tab__icon" v-html="tab.icon"></span>
-          {{ tab.label }}
-        </button>
-      </div>
+      <section class="settings-detail-panel hero-panel hero-section">
+        <div class="settings-detail-head">
+          <div>
+            <p class="settings-detail-eyebrow">{{ activeTabMeta.kicker }}</p>
+            <h3 class="heading-serif">{{ activeTabMeta.title }}</h3>
+            <p>{{ activeTabMeta.description }}</p>
+          </div>
+          <button class="settings-detail-close" type="button" aria-label="关闭写作设置" @click="hideSettingsDetail">×</button>
+        </div>
+
+        <div class="settings-tabs" role="tablist" aria-label="写作设置分类">
+          <button
+            v-for="tab in tabs"
+            :key="tab.key"
+            type="button"
+            :class="['settings-tab', { active: activeTab === tab.key }]"
+            @click="activeTab = tab.key"
+          >
+            <span class="settings-tab__icon" v-html="tab.icon"></span>
+            {{ tab.label }}
+          </button>
+        </div>
 
       <!-- API 配置 -->
         <section v-if="activeTab === 'api'" class="settings-panel">
@@ -495,7 +497,8 @@
             </ul>
           </div>
         </section>
-    </section>
+      </section>
+    </div>
 
     <div
       id="theme-switcher-modal"
@@ -518,7 +521,7 @@
         </div>
         <div class="theme-modal-body">
           <div class="theme-options-viewport" role="presentation">
-            <div class="theme-options theme-options-glass">
+            <div class="theme-options-glass">
               <div
                 v-for="theme in backgroundThemes"
                 :key="theme.value"
@@ -588,7 +591,7 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { settings, essays, configs, prompts } from '@/api/client.js'
+import { settings, essays, configs, prompts, topics } from '@/api/client.js'
 import { createRequestGate } from '@/utils/request-gate.js'
 import {
   isProviderDefaultUrl,
@@ -672,6 +675,12 @@ const settingsImportInput = ref(null)
 const settingsBackupListOpen = ref(false)
 const settingsBackups = ref([])
 const themeSwitcherOpen = ref(false)
+const topicLibraryStats = ref({
+  total: '加载中...',
+  task1: '加载中...',
+  task2: '加载中...',
+  lastUpdate: '加载中...'
+})
 const globalMessage = reactive({ type: 'info', message: '' })
 const sectionMessages = reactive({
   api: { type: 'info', message: '' },
@@ -914,6 +923,44 @@ const currentMode = computed(() => findTemperatureMode(modelSettings.value.tempe
 const currentTemperatureSummary = computed(() => (
   `${resolveModeTemperature('task1')} / ${resolveModeTemperature('task2')}`
 ))
+
+const topicLibraryStatus = computed(() => {
+  if (topicLibraryStats.value.total === '未连接') return '写作题库统计待同步'
+  if (topicLibraryStats.value.total === '加载中...') return '正在同步写作题库统计'
+  return '已加载写作题库索引'
+})
+
+function normalizeTopicLibraryStats(payload) {
+  const byTypeRows = Array.isArray(payload?.byType) ? payload.byType : []
+  const byType = byTypeRows.reduce((acc, row) => {
+    const key = String(row?.type || '').trim().toLowerCase()
+    const count = Number(row?.count)
+    if (key && Number.isFinite(count)) {
+      acc[key] = count
+    }
+    return acc
+  }, {})
+  return {
+    total: Number.isFinite(Number(payload?.total)) ? Number(payload.total) : 0,
+    task1: Number.isFinite(Number(byType.task1)) ? Number(byType.task1) : 0,
+    task2: Number.isFinite(Number(byType.task2)) ? Number(byType.task2) : 0,
+    lastUpdate: new Date().toLocaleString()
+  }
+}
+
+async function loadTopicLibraryStats() {
+  try {
+    topicLibraryStats.value = normalizeTopicLibraryStats(await topics.getStatistics())
+  } catch (error) {
+    console.error('加载写作题库统计失败:', error)
+    topicLibraryStats.value = {
+      total: '未连接',
+      task1: '未连接',
+      task2: '未连接',
+      lastUpdate: '等待本地服务'
+    }
+  }
+}
 
 function isToggleBlocked(item) {
   return Boolean(item.is_enabled && enabledConfigCount.value <= 1)
@@ -1306,8 +1353,11 @@ function setGlobalMessage(type, message) {
 }
 
 function handleSettingsKeydown(event) {
-  if (event?.key === 'Escape' && themeSwitcherOpen.value) {
+  if (event?.key !== 'Escape') return
+  if (themeSwitcherOpen.value) {
     hideThemeSwitcher()
+  } else if (settingsDetailOpen.value) {
+    hideSettingsDetail()
   }
 }
 
@@ -1516,8 +1566,8 @@ function openSettingsDetail(tabKey = activeTab.value) {
   settingsDetailOpen.value = true
 }
 
-function toggleSettingsDetail() {
-  settingsDetailOpen.value = !settingsDetailOpen.value
+function hideSettingsDetail() {
+  settingsDetailOpen.value = false
 }
 
 function openWritingLibraryConfig() {
@@ -1531,6 +1581,7 @@ function refreshWritingLibrary() {
     sessionStorage.removeItem('topic_bank_cache')
     sessionStorage.removeItem('compose_topics_cache')
   } catch (_) {}
+  loadTopicLibraryStats()
   setGlobalMessage('success', '写作题库缓存已刷新；进入写作题库时会重新拉取。')
 }
 
@@ -1747,6 +1798,7 @@ async function handleSettingsImport(event) {
 onMounted(() => {
   loadSettings()
   getUserDataPath()
+  loadTopicLibraryStats()
   loadApiConfigs()
   loadPromptList()
   settingsBackups.value = readSettingsBackups()
@@ -3200,28 +3252,6 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.settings-page#settings-view .settings-detail-toggle {
-  min-height: 40px;
-  padding: 9px 16px;
-  border: 1px solid rgba(15, 23, 42, 0.14);
-  border-radius: 999px;
-  color: var(--bauhaus-text-main);
-  background: rgba(255, 255, 255, 0.62);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
-  font-size: 0.88rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-}
-
-.settings-page#settings-view .settings-detail-toggle:hover {
-  transform: translateY(-2px);
-  color: #fff;
-  border-color: transparent;
-  background: var(--bauhaus-accent-blue);
-  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.24);
-}
-
 .settings-page#settings-view .hero-settings-group {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3254,7 +3284,7 @@ onBeforeUnmount(() => {
 }
 
 .settings-page#settings-view .hero-settings-group > .hero-panel::before,
-.settings-page#settings-view .settings-detail::before {
+.settings-page#settings-view .settings-detail-panel::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -3269,7 +3299,7 @@ onBeforeUnmount(() => {
 }
 
 .settings-page#settings-view .hero-settings-group > .hero-panel > *,
-.settings-page#settings-view .settings-detail > * {
+.settings-page#settings-view .settings-detail-panel > * {
   position: relative;
   z-index: 1;
 }
@@ -3387,6 +3417,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.25);
 }
 
+.settings-page#settings-view .settings-system-info,
 .settings-page#settings-view .system-info-surface {
   display: grid;
   gap: 6px;
@@ -3401,6 +3432,7 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
 }
 
+.settings-page#settings-view .settings-system-info__status,
 .settings-page#settings-view .system-info-status {
   color: #10b981;
 }
@@ -3533,7 +3565,7 @@ onBeforeUnmount(() => {
   padding: 32px;
 }
 
-.settings-page#settings-view .theme-options {
+.settings-page#settings-view .theme-options-glass {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 24px;
@@ -3643,11 +3675,26 @@ onBeforeUnmount(() => {
   transform: translateY(-2px);
 }
 
-.settings-page#settings-view .settings-detail {
+.settings-page#settings-view .settings-detail-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.settings-page#settings-view .settings-detail-panel {
   position: relative;
+  width: min(1120px, 94vw);
+  max-height: 88vh;
   display: grid;
   gap: 16px;
-  margin-top: 20px;
+  overflow-y: auto;
   padding: 24px;
   border: 1px solid var(--shui-panel-border);
   border-radius: var(--shui-radius-lg);
@@ -3655,6 +3702,54 @@ onBeforeUnmount(() => {
   box-shadow: var(--shui-panel-shadow);
   backdrop-filter: blur(var(--shui-blur)) saturate(150%);
   -webkit-backdrop-filter: blur(var(--shui-blur)) saturate(150%);
+}
+
+.settings-page#settings-view .settings-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.42);
+}
+
+.settings-page#settings-view .settings-detail-head h3 {
+  margin-bottom: 4px;
+}
+
+.settings-page#settings-view .settings-detail-head p {
+  margin: 0;
+  color: var(--bauhaus-text-muted);
+}
+
+.settings-page#settings-view .settings-detail-eyebrow {
+  margin: 0 0 4px;
+  color: var(--bauhaus-accent-blue);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.settings-page#settings-view .settings-detail-close {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  color: #64748b;
+  background: rgba(15, 23, 42, 0.06);
+  cursor: pointer;
+  font-size: 20px;
+  transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.settings-page#settings-view .settings-detail-close:hover {
+  color: #0f172a;
+  background: rgba(15, 23, 42, 0.12);
+  transform: rotate(90deg);
 }
 
 .settings-page#settings-view .settings-tabs {

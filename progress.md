@@ -1472,3 +1472,24 @@
 - Notes:
   - No backend, Practice API, history schema, AI prompt, or RAG code changed.
   - User explicitly raised that UI parity must be judged against OpenSource DOM/CSS/interaction and screenshots, not just selector presence. Next slices should use screenshot-level OpenSource-vs-Vue comparison for reading/settings/more surfaces.
+
+### Slice 39: Settings Three-Panel OpenSource Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Removed the default `写作配置` header toggle from `SettingsPage.vue`.
+  - Removed default `#writing-settings-detail` from the first-screen Settings DOM so `/settings` returns to the OpenSource three-panel structure.
+  - Moved advanced writing settings into `.settings-detail-modal` / `.settings-detail-panel`, opened by existing business actions such as `#library-config-btn` and backup-list actions.
+  - Restored OpenSource system info classes and metric ids: `.settings-system-info`, `.settings-system-info__status`, `#total-exams`, `#html-exams`, `#pdf-exams`, `#last-update`.
+  - Reused existing `topics.getStatistics()` for visible topic stats and changed offline fallback to “未连接/等待本地服务” instead of a hard failure label.
+  - Changed theme options to use the OpenSource `theme-options-glass` container without the old `theme-options` class.
+  - Strengthened `practiceVueShell.test.js` so the first-screen three-panel DOM, absence of the fake detail toggle, overlay close path, system info ids, and theme-options class cannot silently regress.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `npm run build:writing` passed.
+  - `git diff --check` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - Browser DOM check at `http://127.0.0.1:4177/#/settings` passed: three panels, no default detail toggle/panel, system-info metrics present, theme class correct, `#library-config-btn` opens the overlay without route drift.
+- Notes:
+  - No backend, Practice API, history schema, reading AI prompt, RAG, or coach service code changed.
+  - A new attempt to spawn parallel UI/test audit subagents failed because the thread agent limit is reached. Continue the reading page OpenSource parity audit locally.

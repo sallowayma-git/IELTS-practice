@@ -444,3 +444,10 @@
 - The dictionary bubble was also too reduced: it collapsed OpenSource metadata into one meaning string. The UI should preserve term metadata, phonetic, part of speech, source/license, examples, and compound lookup parts because these are visible user-facing learning affordances.
 - Saving a highlighted word can reuse the existing reading-highlight vocab fallback list. Do not introduce `dictionaryPayload`, `dictionarySnapshot`, or any new history submission fields for dictionary display state.
 - User feedback changed the acceptance bar: static selectors alone do not prove UI parity. Future reading/settings/more work should compare OpenSource and Vue screenshots for DOM structure, CSS, panel behavior, and visual hierarchy before declaring parity.
+
+## Slice 39 Settings Three-Panel OpenSource Parity
+- The Settings regression was not a missing setting; it was the wrong first-screen data structure. OpenSource Settings is three panels: system management, data management, and system info. A default “写作配置” toggle plus inline detail panel made the Vue page a new UI, not a Vue port.
+- Advanced writing configuration can stay in the product, but it must not become a fourth default Settings panel. The cleaner boundary is an overlay opened from existing business actions such as library config and backup actions.
+- The OpenSource system-info DOM uses stable classes/ids: `.settings-system-info`, `.settings-system-info__status`, `#total-exams`, `#html-exams`, `#pdf-exams`, and `#last-update`. Vue now maps these to existing `topics.getStatistics()` data instead of adding new fields.
+- Theme choices should use the OpenSource `theme-options-glass` container directly. Mixing old `theme-options` with OpenSource glass styles keeps two grid systems alive and creates visual drift.
+- This slice did not change backend APIs, history schema, reading AI prompts, RAG retrieval, or coach service behavior. The next high-value target remains the reading page DOM/CSS skeleton against `reading-practice-unified.html` and `unifiedReadingPage.js`.

@@ -4,7 +4,7 @@
 把阅读业务链路重构为写作模块内的一等能力，使用 Vue renderer 统一实现，并收束 Electron/Server/API/设置入口，形成一个 AI native 的完整练习体验。
 
 ## Current Phase
-Slice 38 checkpoint complete: Vue reading highlight dictionary now restores the OpenSource ECDICT bundle and richer bubble metadata while keeping dictionary state renderer-local. Next work should shift from selector-only checks to screenshot-level OpenSource UI/UX parity for reading/settings/more surfaces.
+Slice 39 checkpoint complete: Vue Settings now restores the OpenSource three-panel first screen, moves advanced writing configuration into an overlay opened only by existing business actions, and keeps the system info/theme modal DOM closer to the OpenSource contract. Next work should shift to screenshot/DOM-level OpenSource parity for the Vue reading page without touching Submit/history/AI Coach/RAG/prompt chains.
 
 ## Phases
 
@@ -371,6 +371,7 @@ Slice 38 checkpoint complete: Vue reading highlight dictionary now restores the 
 - [x] Restore the OpenSource Settings theme switcher modal in Vue instead of the fake direct theme rotation, preserving the existing theme application contract.
 - [x] Restore OpenSource reading memorize semantics: explicit `mode=memorize&practiceMode=memorize`, normalize old `mode=review` memorize links, and skip PDF-only assets.
 - [x] Restore OpenSource ECDICT dictionary bundle and richer reading highlight dictionary bubble metadata in Vue without adding backend/schema fields.
+- [x] Restore the OpenSource Settings three-panel first screen in Vue: remove the fake default writing-config panel/toggle, preserve `.settings-system-info` metrics, keep theme options on `theme-options-glass`, and move advanced writing settings into a modal overlay opened by existing actions.
 - **Status:** implementation in progress
 
 ## Errors Encountered
@@ -427,6 +428,7 @@ Slice 38 checkpoint complete: Vue reading highlight dictionary now restores the 
 | `python developer/tests/ci/run_static_suite.py` still fails because `python` is unavailable | 19 | Re-ran the same required static suite with `python3`; it passed with Slice 18 history summary coverage. |
 | `python developer/tests/e2e/suite_practice_flow.py` still fails because `python` is unavailable | 18 | Re-ran the same required E2E with `python3`; explicit legacy suite regression passed with 0 errors and 8 warnings after Slice 18. |
 | 5.3 Codex subagent spawn failed because the thread limit was reached | 1 | Completed the Slice 19 asset-cache audit locally instead of blocking on new agents. |
+| Reading/UI parity subagent spawn failed because the thread limit was reached | 1 | Continue the OpenSource reading DOM/CSS/test audit locally; do not block the Settings checkpoint or subsequent reading-page fix on unavailable agents. |
 | `python developer/tests/ci/run_static_suite.py` still fails because `python` is unavailable | 20 | Re-ran the same required static suite with `python3`; it passed with Slice 19 reading asset payload cache coverage. |
 | `python developer/tests/e2e/suite_practice_flow.py` still fails because `python` is unavailable | 19 | Re-ran the same required E2E with `python3`; explicit legacy suite regression passed with 0 errors and 9 warnings after Slice 19. |
 | 5.3 Codex subagent spawn failed because the thread limit was reached | 2 | Completed the Slice 20 ReadingCoach cache-bound audit locally instead of blocking on new agents. |
