@@ -1438,3 +1438,19 @@
 - Notes:
   - No backend, Practice API, history, AI prompt, or RAG code changed.
   - Remaining subagent-audited OpenSource gaps are deferred to later slices: Settings `library-config-btn`, reading `memorize` mode, ECDICT bundle parity, and learning-goal design.
+
+### Slice 37: Reading Memorize Mode Semantics
+- **Status:** checkpoint complete
+- Actions taken:
+  - Changed the More-page `阅读背题` entry to route with explicit `mode=memorize` and `practiceMode=memorize`.
+  - Reused `hasReadingPracticePayload()` so memorize entry skips PDF-only reading assets instead of opening an empty reading page.
+  - Split memorize detection away from `review`: Vue now treats only `memorize` / `practiceMode=memorize` as memorize mode.
+  - Added legacy query normalization so old `mode=review` memorize links are replaced with `mode=memorize&practiceMode=memorize`, then reloaded through the normal asset path.
+  - Strengthened static contracts and the Vue reading E2E so both legacy normalized links and the More-page entry render the memorize panel.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed with memorize route and entry coverage.
+- Notes:
+  - No backend, Practice API, history, AI prompt, or RAG code changed.
+  - The next OpenSource parity gap remains the offline ECDICT dictionary bundle or learning-goal design; Settings `library-config-btn` needs care because writing settings intentionally must not jump into reading pages.

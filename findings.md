@@ -430,3 +430,10 @@
 - Applying a theme should reuse the existing runtime contract: call `window.switchBgTheme(nextTheme)` when present, otherwise write `three_bg_theme` and dispatch `shui-bg-theme-change`. Adding a new settings field or API route would be schema garbage.
 - Modal close behavior belongs in the renderer only: close button, overlay click, and `Escape`, with the key listener removed on unmount.
 - Subagent OpenSource JS audit flagged the next real gaps as separate slices, not part of this small UI fix: `library-config-btn` semantics, reading `memorize` mode semantics, missing ECDICT dictionary bundle parity, and learning-goal design without new field sprawl.
+
+## Slice 37 Reading Memorize Mode Semantics
+- OpenSource treats reading memorize as `practiceMode=memorize`; `review` is a separate submitted/replay/AI review concept. Letting Vue use `mode=review` for memorize was semantic garbage and risked contaminating replay and AI review branches.
+- The More-page memorize entry should send both `mode=memorize` and `practiceMode=memorize`. This keeps router state explicit and matches the legacy unified reading page query contract.
+- Old `mode=review` memorize links should be normalized at the Vue route boundary into `mode=memorize&practiceMode=memorize`, then the page should reload from the normalized query. Otherwise the URL may be fixed while the page stays in the wrong mode.
+- Memorize entry candidates must reuse `hasReadingPracticePayload()`. PDF-only reading assets are browseable resources, not valid memorize practice pages.
+- No new Practice API field, history field, or prompt change is needed; this is renderer route semantics and candidate-pool cleanup.

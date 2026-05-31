@@ -692,6 +692,37 @@ async def run_flow() -> dict:
         await page.goto(entry_url)
         await page.wait_for_selector('[data-practice-reading-home] h1:has-text("IELTS Atlas")', timeout=20000)
         await page.wait_for_selector('[data-reading-overview]', timeout=20000)
+        await page.goto(f"{DIST_ENTRY.as_uri()}#/reading/{ASSET_ID}?mode=review")
+        await page.wait_for_url(f"**#/reading/{ASSET_ID}?mode=memorize&practiceMode=memorize", timeout=10000)
+        await page.wait_for_selector('.reading-page.reading-memorize-mode [data-practice-reading-page].memorize-mode', timeout=20000)
+        await page.wait_for_selector('[data-reading-memorize-panel]', timeout=10000)
+        legacy_memorize_state = await page.evaluate(
+            """() => ({
+              href: window.location.href,
+              readOnly: Boolean(document.querySelector('.reading-page')?.classList.contains('reading-memorize-mode'))
+                && Boolean(document.querySelector('[data-practice-reading-page]')?.classList.contains('memorize-mode')),
+              hasPanel: Boolean(document.querySelector('[data-reading-memorize-panel]')),
+              prefilledQ1: document.querySelector('[data-answer-question-id="q1"]')?.classList.contains('answered') === true,
+              submitDisabled: document.getElementById('submit-btn')?.disabled === false
+            })"""
+        )
+        if "mode=memorize" not in legacy_memorize_state.get("href", "") or "practiceMode=memorize" not in legacy_memorize_state.get("href", ""):
+            raise AssertionError(f"legacy_memorize_query_not_normalized:{legacy_memorize_state}")
+        if not legacy_memorize_state.get("readOnly") or not legacy_memorize_state.get("hasPanel") or not legacy_memorize_state.get("prefilledQ1"):
+            raise AssertionError(f"legacy_memorize_mode_not_rendered:{legacy_memorize_state}")
+
+        await page.goto(entry_url)
+        await page.wait_for_selector('[data-practice-reading-home] h1:has-text("IELTS Atlas")', timeout=20000)
+        await page.click('[data-view="more"]')
+        await page.wait_for_selector('[data-action="open-reading-memorize"]', timeout=10000)
+        await page.click('[data-action="open-reading-memorize"]')
+        await page.wait_for_url(f"**#/reading/{ASSET_ID}?mode=memorize&practiceMode=memorize", timeout=10000)
+        await page.wait_for_selector('.reading-page.reading-memorize-mode [data-practice-reading-page].memorize-mode', timeout=20000)
+        await page.wait_for_selector('[data-reading-memorize-panel]', timeout=10000)
+
+        await page.goto(entry_url)
+        await page.wait_for_selector('[data-practice-reading-home] h1:has-text("IELTS Atlas")', timeout=20000)
+        await page.wait_for_selector('[data-reading-overview]', timeout=20000)
         await page.locator('button[data-action="browse-category"][data-category="P2"]').click()
         await page.wait_for_selector('[data-reading-browse]', timeout=10000)
         await page.wait_for_selector(f'.exam-item[data-reading-asset-id="{ASSET_ID}"]', timeout=20000)

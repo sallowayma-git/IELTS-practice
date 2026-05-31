@@ -2171,16 +2171,19 @@ async function showAchievementsTool() {
 }
 
 function openReadingMemorize() {
-  const asset = filteredReadingAssets.value.find((entry) => entry?.id)
-    || readingAssets.value.find((entry) => entry?.id)
+  const asset = filteredReadingAssets.value.find((entry) => entry?.id && hasReadingPracticePayload(entry))
+    || readingAssets.value.find((entry) => entry?.id && hasReadingPracticePayload(entry))
   if (!asset) {
-    showLocalMessage('阅读背题：题库为空，请先加载题库。')
+    showLocalMessage('阅读背题：没有可用于背题的阅读题，请先加载题库。')
     return
   }
   router.push({
     name: 'PracticeReading',
     params: { assetId: asset.id },
-    query: { mode: 'review' }
+    query: {
+      mode: 'memorize',
+      practiceMode: 'memorize'
+    }
   })
 }
 

@@ -4,7 +4,7 @@
 把阅读业务链路重构为写作模块内的一等能力，使用 Vue renderer 统一实现，并收束 Electron/Server/API/设置入口，形成一个 AI native 的完整练习体验。
 
 ## Current Phase
-Slice 36 checkpoint complete: the writing Settings page theme switcher now restores the OpenSource modal UX instead of the broken direct theme rotation. The change is renderer-only, preserves existing `window.switchBgTheme` / `three_bg_theme` contracts, and does not touch reading AI prompts, Practice API schema, history schema, or RAG services.
+Slice 37 checkpoint complete: reading memorize mode now uses the OpenSource `memorize` / `practiceMode=memorize` semantics instead of masquerading as `review`, and the More-page memorize entry skips PDF-only assets. No backend schema, AI prompt, RAG, or history persistence contract was changed.
 
 ## Phases
 
@@ -369,6 +369,7 @@ Slice 36 checkpoint complete: the writing Settings page theme switcher now resto
 - [x] Restore submitted single-reading Reset/retry behavior without changing history schema: clear current review UI/session cache, re-enable controls, reset answer/timer/highlight state, and keep the persisted submission available in history/replay.
 - [x] Sync latest OpenSource reading explanation manifest/files and feed passage-note-only official explanations into existing ReadingCoach/RAG explanation chunks without changing prompt wording or API schema.
 - [x] Restore the OpenSource Settings theme switcher modal in Vue instead of the fake direct theme rotation, preserving the existing theme application contract.
+- [x] Restore OpenSource reading memorize semantics: explicit `mode=memorize&practiceMode=memorize`, normalize old `mode=review` memorize links, and skip PDF-only assets.
 - **Status:** implementation in progress
 
 ## Errors Encountered

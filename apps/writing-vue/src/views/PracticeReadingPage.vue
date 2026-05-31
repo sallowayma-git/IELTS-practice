@@ -787,14 +787,44 @@ const activeSuiteSessionId = computed(() => {
   return fromProp || String(fromQuery || '').trim()
 })
 const pageTitle = computed(() => payload.value?.meta?.title || asset.value?.title || '阅读练习')
+function readRouteQueryValue(key) {
+  const value = route.query?.[key]
+  return Array.isArray(value) ? value[0] : value
+}
+
+function normalizePracticeModeQueryValue(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function shouldNormalizeLegacyMemorizeQuery() {
+  return !String(props.sessionId || route.params.sessionId || '').trim()
+    && !activeSuiteSessionId.value
+    && normalizePracticeModeQueryValue(readRouteQueryValue('mode')) === 'review'
+    && !normalizePracticeModeQueryValue(readRouteQueryValue('practiceMode'))
+}
+
+function normalizeLegacyMemorizeQuery() {
+  if (!shouldNormalizeLegacyMemorizeQuery()) return false
+  router.replace({
+    name: route.name || 'PracticeReading',
+    params: route.params,
+    query: {
+      ...route.query,
+      mode: 'memorize',
+      practiceMode: 'memorize'
+    }
+  })
+  return true
+}
+
 const isEndlessMode = computed(() => {
-  const mode = Array.isArray(route.query.mode) ? route.query.mode[0] : route.query.mode
-  return String(mode || '').toLowerCase() === 'endless' && !activeSuiteSessionId.value
+  const mode = normalizePracticeModeQueryValue(readRouteQueryValue('mode'))
+  return mode === 'endless' && !activeSuiteSessionId.value
 })
 const isMemorizeMode = computed(() => {
-  const mode = Array.isArray(route.query.mode) ? route.query.mode[0] : route.query.mode
-  const practiceMode = Array.isArray(route.query.practiceMode) ? route.query.practiceMode[0] : route.query.practiceMode
-  return ['memorize', 'review'].includes(String(mode || practiceMode || '').trim().toLowerCase()) && !props.sessionId
+  const mode = normalizePracticeModeQueryValue(readRouteQueryValue('mode'))
+  const practiceMode = normalizePracticeModeQueryValue(readRouteQueryValue('practiceMode'))
+  return (mode === 'memorize' || practiceMode === 'memorize') && !props.sessionId
 })
 const headerSummary = computed(() => {
   if (!payload.value) return '从统一 Practice API 加载阅读题目。'
@@ -1001,6 +1031,10 @@ watch(() => activeSuiteSessionId.value, () => {
   loadAsset()
 })
 
+watch(() => [readRouteQueryValue('mode'), readRouteQueryValue('practiceMode')], () => {
+  loadAsset()
+})
+
 watch(() => [elapsedSeconds.value, timerRunning.value, startedAt.value, activeSuiteSessionId.value, suiteTimerState.value?.mode, suiteTimerState.value?.limitSeconds], () => {
   emitPracticeTimerStateChange()
 })
@@ -1010,6 +1044,9 @@ async function loadAsset() {
   const replaySessionId = String(props.sessionId || route.params.sessionId || '').trim()
   if (!normalizedAssetId) {
     error.value = '缺少阅读资源编号'
+    return
+  }
+  if (normalizeLegacyMemorizeQuery()) {
     return
   }
 
