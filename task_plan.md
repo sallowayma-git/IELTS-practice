@@ -4,7 +4,7 @@
 把阅读业务链路重构为写作模块内的一等能力，使用 Vue renderer 统一实现，并收束 Electron/Server/API/设置入口，形成一个 AI native 的完整练习体验。
 
 ## Current Phase
-Slice 34 checkpoint complete: OpenSource/legacy submitted-single reset behavior is restored in Vue. After a normal single-reading submit and AI review, `Reset` recycles the current page into a fresh editable attempt while preserving the already persisted history record. No reading AI prompt/RAG code or backend schema was changed.
+Slice 36 checkpoint complete: the writing Settings page theme switcher now restores the OpenSource modal UX instead of the broken direct theme rotation. The change is renderer-only, preserves existing `window.switchBgTheme` / `three_bg_theme` contracts, and does not touch reading AI prompts, Practice API schema, history schema, or RAG services.
 
 ## Phases
 
@@ -368,6 +368,7 @@ Slice 34 checkpoint complete: OpenSource/legacy submitted-single reset behavior 
 - [x] Restore custom suite selection by reusing the existing suite create API and `ReadingSuiteSession.sequence` for explicit P1/P2/P3 selections.
 - [x] Restore submitted single-reading Reset/retry behavior without changing history schema: clear current review UI/session cache, re-enable controls, reset answer/timer/highlight state, and keep the persisted submission available in history/replay.
 - [x] Sync latest OpenSource reading explanation manifest/files and feed passage-note-only official explanations into existing ReadingCoach/RAG explanation chunks without changing prompt wording or API schema.
+- [x] Restore the OpenSource Settings theme switcher modal in Vue instead of the fake direct theme rotation, preserving the existing theme application contract.
 - **Status:** implementation in progress
 
 ## Errors Encountered

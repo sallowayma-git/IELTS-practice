@@ -1420,3 +1420,21 @@
 - Notes:
   - The first reading analysis run failed because passage-note chunks existed but were not selected into review prompt context. Review deterministic injection fixed the real RAG omission.
   - The settings UI side-audit found a separate remaining issue: `SettingsPage.vue` still uses a fake theme-switcher action instead of the OpenSource modal. That was not mixed into this AI/RAG data slice.
+
+### Slice 36: Settings Theme Modal OpenSource Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Restored `#theme-switcher-modal` in `SettingsPage.vue` with the OpenSource card layout.
+  - Replaced the direct index-based theme rotation with an explicit modal-open handler plus per-card `applyBackgroundTheme(themeName)`.
+  - Preserved `window.switchBgTheme`, `three_bg_theme`, and `shui-bg-theme-change` so existing background behavior remains compatible.
+  - Added close-button, overlay-click, and `Escape` close paths with unmount cleanup.
+  - Strengthened `practiceVueShell.test.js` so Settings cannot regress to direct rotation or an empty modal shell.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `npm run build:writing` passed.
+  - Browser verification over `http://127.0.0.1:4177/#/settings` passed: clicking the theme button showed `theme-modal show` with 3 cards and action values `misty-mountain`, `teal-ocean`, `floral-bloom`.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+- Notes:
+  - No backend, Practice API, history, AI prompt, or RAG code changed.
+  - Remaining subagent-audited OpenSource gaps are deferred to later slices: Settings `library-config-btn`, reading `memorize` mode, ECDICT bundle parity, and learning-goal design.

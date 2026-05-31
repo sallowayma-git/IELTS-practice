@@ -423,3 +423,10 @@
 - Passage notes now enter the existing `answer_explanation` chunk stream with stable `passage_explanation` ids and empty `questionNumbers`. This reuses the current RAG/prompt contract instead of adding a new chunk type, schema field, or prompt wording.
 - Review retrieval now deterministically injects a small number of no-question official explanation chunks. Without that, whole-set review can fill the final context budget with question/answer chunks and drop the only official paragraph analysis for passage-note-only assets.
 - `server/src/lib/reading/prompt.ts` remains untouched. The fix improves data fed into the already tuned review prompt instead of rewriting prompt behavior.
+
+## Slice 36 Settings Theme Modal OpenSource Parity
+- The Settings theme button had regressed into an index-based direct rotation. That is fake parity: OpenSource presents a modal with three visible theme choices and stable `data-index-action` markers.
+- The correct Vue data structure is a small `backgroundThemes` list with the three OpenSource values: `misty-mountain`, `teal-ocean`, and `floral-bloom`. The click handler should open the modal; the card action should apply the chosen theme.
+- Applying a theme should reuse the existing runtime contract: call `window.switchBgTheme(nextTheme)` when present, otherwise write `three_bg_theme` and dispatch `shui-bg-theme-change`. Adding a new settings field or API route would be schema garbage.
+- Modal close behavior belongs in the renderer only: close button, overlay click, and `Escape`, with the key listener removed on unmount.
+- Subagent OpenSource JS audit flagged the next real gaps as separate slices, not part of this small UI fix: `library-config-btn` semantics, reading `memorize` mode semantics, missing ECDICT dictionary bundle parity, and learning-goal design without new field sprawl.

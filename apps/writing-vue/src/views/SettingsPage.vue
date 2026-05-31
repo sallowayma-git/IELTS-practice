@@ -497,6 +497,61 @@
         </section>
     </section>
 
+    <div
+      id="theme-switcher-modal"
+      class="theme-modal"
+      :class="{ show: themeSwitcherOpen }"
+      @click.self="hideThemeSwitcher"
+    >
+      <div class="theme-modal-content">
+        <div class="theme-modal-header">
+          <h3 class="heading-serif">🎨 主题切换</h3>
+          <button
+            class="theme-modal-close"
+            type="button"
+            data-index-action="hide-theme-switcher"
+            aria-label="关闭"
+            @click="hideThemeSwitcher"
+          >
+            ×
+          </button>
+        </div>
+        <div class="theme-modal-body">
+          <div class="theme-options-viewport" role="presentation">
+            <div class="theme-options theme-options-glass">
+              <div
+                v-for="theme in backgroundThemes"
+                :key="theme.value"
+                class="theme-card"
+              >
+                <div :class="['theme-card-bg', theme.previewClass]"></div>
+                <div class="theme-card-glass-layer">
+                  <div class="theme-card-header">
+                    <h4 class="theme-card-title">{{ theme.title }}</h4>
+                    <div class="theme-card-subtitle">
+                      <span>{{ theme.subtitle }}</span>
+                    </div>
+                  </div>
+                  <div class="theme-card-footer">
+                    <span class="theme-card-tag">{{ theme.tag }}</span>
+                    <button
+                      class="theme-card-btn"
+                      type="button"
+                      data-index-action="switch-bg-theme"
+                      :data-action-value="theme.value"
+                      @click="applyBackgroundTheme(theme.value)"
+                    >
+                      应用
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 通用确认弹窗 -->
     <div v-if="confirmDialog.visible" class="dialog-overlay" @click.self="closeConfirmDialog">
       <div class="dialog card">
@@ -616,6 +671,7 @@ const promptLoading = ref(false)
 const settingsImportInput = ref(null)
 const settingsBackupListOpen = ref(false)
 const settingsBackups = ref([])
+const themeSwitcherOpen = ref(false)
 const globalMessage = reactive({ type: 'info', message: '' })
 const sectionMessages = reactive({
   api: { type: 'info', message: '' },
@@ -657,6 +713,30 @@ const temperatureModes = [
     task1: null,
     task2: null,
     desc: '兼容旧设置并允许分别配置两个任务'
+  }
+]
+
+const backgroundThemes = [
+  {
+    value: 'misty-mountain',
+    title: '晨雾群山',
+    subtitle: '⛰️ Misty Mountain',
+    tag: '动态',
+    previewClass: 'theme-bg-misty'
+  },
+  {
+    value: 'teal-ocean',
+    title: '深海孤航',
+    subtitle: '⛵ Teal Ocean',
+    tag: '动态',
+    previewClass: 'theme-bg-ocean'
+  },
+  {
+    value: 'floral-bloom',
+    title: '落日雾花',
+    subtitle: '🌸 Floral Bloom',
+    tag: '静态',
+    previewClass: 'theme-bg-floral'
   }
 ]
 
@@ -1225,6 +1305,12 @@ function setGlobalMessage(type, message) {
   globalMessage.message = String(message || '').trim()
 }
 
+function handleSettingsKeydown(event) {
+  if (event?.key === 'Escape' && themeSwitcherOpen.value) {
+    hideThemeSwitcher()
+  }
+}
+
 function downloadJsonFile(filename, payload) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -1257,13 +1343,17 @@ function clearAppCache() {
 }
 
 function switchBackgroundTheme() {
-  const themes = ['misty-mountain', 'teal-ocean', 'floral-bloom']
-  let current = 'misty-mountain'
-  try {
-    current = localStorage.getItem('three_bg_theme') || current
-  } catch (_) {}
-  const currentIndex = themes.indexOf(current)
-  const nextTheme = themes[(currentIndex + 1) % themes.length] || themes[0]
+  themeSwitcherOpen.value = true
+}
+
+function hideThemeSwitcher() {
+  themeSwitcherOpen.value = false
+}
+
+function applyBackgroundTheme(themeName) {
+  const nextTheme = backgroundThemes.some((theme) => theme.value === themeName)
+    ? themeName
+    : 'misty-mountain'
   if (typeof window.switchBgTheme === 'function') {
     window.switchBgTheme(nextTheme)
   } else {
@@ -1272,7 +1362,9 @@ function switchBackgroundTheme() {
     } catch (_) {}
     window.dispatchEvent(new CustomEvent('shui-bg-theme-change', { detail: { theme: nextTheme } }))
   }
-  setGlobalMessage('success', `主题已切换：${nextTheme}`)
+  themeSwitcherOpen.value = false
+  const label = backgroundThemes.find((theme) => theme.value === nextTheme)?.title || nextTheme
+  setGlobalMessage('success', `主题已切换：${label}`)
 }
 
 function resolveLegacyAssetUrl(relativePath) {
@@ -1658,12 +1750,14 @@ onMounted(() => {
   loadApiConfigs()
   loadPromptList()
   settingsBackups.value = readSettingsBackups()
+  document.addEventListener('keydown', handleSettingsKeydown)
 })
 
 onBeforeUnmount(() => {
   apiRequestGate.invalidate()
   promptRequestGate.invalidate()
   settingsRequestGate.invalidate()
+  document.removeEventListener('keydown', handleSettingsKeydown)
 })
 </script>
 
@@ -3342,6 +3436,211 @@ onBeforeUnmount(() => {
   height: 1px;
   opacity: 0;
   pointer-events: none;
+}
+
+.settings-page#settings-view .theme-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.65);
+  opacity: 0;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: opacity 0.3s ease;
+}
+
+.settings-page#settings-view .theme-modal.show {
+  display: flex;
+  opacity: 1;
+}
+
+.settings-page#settings-view .theme-modal-content {
+  width: min(900px, 92vw);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.25),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  transform: scale(0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.settings-page#settings-view .theme-modal.show .theme-modal-content {
+  transform: scale(1);
+}
+
+.settings-page#settings-view .theme-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 32px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.settings-page#settings-view .theme-modal-header h3 {
+  margin: 0;
+  color: var(--bauhaus-text-main);
+  font-size: 1.75rem;
+  font-weight: 800;
+}
+
+.settings-page#settings-view .theme-modal-close {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.06);
+  color: #64748b;
+  cursor: pointer;
+  font-size: 20px;
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.settings-page#settings-view .theme-modal-close:hover {
+  color: #0f172a;
+  background: rgba(15, 23, 42, 0.12);
+  transform: rotate(90deg);
+}
+
+.settings-page#settings-view .theme-modal-body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.settings-page#settings-view .theme-options-viewport {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px;
+}
+
+.settings-page#settings-view .theme-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 24px;
+}
+
+.settings-page#settings-view .theme-card {
+  min-height: 260px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.16);
+  isolation: isolate;
+}
+
+.settings-page#settings-view .theme-card-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+}
+
+.settings-page#settings-view .theme-bg-misty {
+  background:
+    linear-gradient(160deg, rgba(14, 165, 233, 0.38), rgba(148, 163, 184, 0.22)),
+    radial-gradient(circle at 24% 28%, rgba(255, 255, 255, 0.72), transparent 38%),
+    linear-gradient(135deg, #dbeafe 0%, #e0f2fe 44%, #94a3b8 100%);
+}
+
+.settings-page#settings-view .theme-bg-ocean {
+  background:
+    linear-gradient(150deg, rgba(15, 118, 110, 0.72), rgba(8, 47, 73, 0.82)),
+    radial-gradient(circle at 70% 30%, rgba(153, 246, 228, 0.42), transparent 36%),
+    linear-gradient(135deg, #0f766e 0%, #155e75 100%);
+}
+
+.settings-page#settings-view .theme-bg-floral {
+  background:
+    linear-gradient(145deg, rgba(251, 207, 232, 0.76), rgba(254, 240, 138, 0.48)),
+    radial-gradient(circle at 30% 30%, rgba(244, 114, 182, 0.44), transparent 34%),
+    linear-gradient(135deg, #fdf2f8 0%, #fed7aa 100%);
+}
+
+.settings-page#settings-view .theme-card-glass-layer {
+  height: 100%;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08));
+  color: #0f172a;
+  backdrop-filter: blur(8px) saturate(140%);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+}
+
+.settings-page#settings-view .theme-card-title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.settings-page#settings-view .theme-card-subtitle {
+  margin-top: 6px;
+  color: rgba(15, 23, 42, 0.7);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.settings-page#settings-view .theme-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-page#settings-view .theme-card-tag {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.42);
+  color: rgba(15, 23, 42, 0.76);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.settings-page#settings-view .theme-card-btn {
+  min-width: 76px;
+  min-height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 800;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.22);
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.settings-page#settings-view .theme-card-btn:hover {
+  background: rgba(15, 23, 42, 0.94);
+  box-shadow: 0 14px 24px rgba(15, 23, 42, 0.26);
+  transform: translateY(-2px);
 }
 
 .settings-page#settings-view .settings-detail {
