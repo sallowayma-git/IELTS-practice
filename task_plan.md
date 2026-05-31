@@ -4,7 +4,7 @@
 把阅读业务链路重构为写作模块内的一等能力，使用 Vue renderer 统一实现，并收束 Electron/Server/API/设置入口，形成一个 AI native 的完整练习体验。
 
 ## Current Phase
-Slice 40 checkpoint complete: Vue reading bottom question navigation is tightened back to the OpenSource `practice-nav` / `.q-item` contract while preserving marked-question state, Submit/history/archive/AI Coach/RAG behavior, and existing Practice API fields. Next work should continue reading page screenshot/DOM parity, especially header action clutter and right-pane review/coach placement.
+Slice 41 checkpoint complete: Vue reading header controls are tightened back to the OpenSource timer/settings/note contract by moving return/snapshot/progress affordances to bottom controls, while preserving suite/single return routes and reading AI/history chains. Remote push is pending because GitHub HTTPS is currently unreachable from this environment.
 
 ## Phases
 
@@ -373,6 +373,7 @@ Slice 40 checkpoint complete: Vue reading bottom question navigation is tightene
 - [x] Restore OpenSource ECDICT dictionary bundle and richer reading highlight dictionary bubble metadata in Vue without adding backend/schema fields.
 - [x] Restore the OpenSource Settings three-panel first screen in Vue: remove the fake default writing-config panel/toggle, preserve `.settings-system-info` metrics, keep theme options on `theme-options-glass`, and move advanced writing settings into a modal overlay opened by existing actions.
 - [x] Restore the Vue reading bottom question nav toward OpenSource structure: `题目导航`, compact `.q-item` primary buttons under `#question-nav`, no redesigned answered/unanswered text, and marked-question affordance kept outside the `.q-item` button while preserving `markedQuestions` payloads.
+- [x] Restore Vue reading header controls toward OpenSource structure: header controls keep timer/settings/note, while return/progress/snapshot actions move into bottom `practice-nav` controls with the existing route and snapshot behavior intact.
 - **Status:** implementation in progress
 
 ## Errors Encountered

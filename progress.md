@@ -1513,3 +1513,23 @@
   - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
 - Notes:
   - No backend, Practice API, history schema, reading AI prompt, RAG, or coach service code changed.
+
+### Slice 41: Reading Header Control OpenSource Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Audited the OpenSource header: controls are `#timer`, `#settings-btn`, and `#note-btn`.
+  - Removed answer progress, return link, and snapshot action from the Vue header controls.
+  - Moved the return route into the bottom OpenSource `#exit-btn` slot while preserving `returnRoute` / `returnLabel`.
+  - Kept answer progress and snapshot as bottom `practice-nav` controls so behavior remains available without changing the header UI.
+  - Strengthened `practiceVueShell.test.js` to lock `#exit-btn` placement and forbid the redesigned header return/snapshot actions.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `git diff --check` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `python3 developer/tests/e2e/practice_reading_suite_vue_flow.py` passed.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+- Notes:
+  - No backend, Practice API, history schema, reading AI prompt, RAG, or coach service code changed.
+  - Commit `248bbd6` for Slice 40 exists locally, but pushing it failed because GitHub HTTPS returned `Empty reply from server` / port 443 connection failure. Remote branch currently remains at `d6b2e77`.

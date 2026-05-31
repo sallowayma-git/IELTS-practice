@@ -457,3 +457,9 @@
 - The product still needs `markedQuestions` because Submit, analysis artifacts, replay, and Coach payloads already use it. The fix should keep the mark affordance as an additive side control while restoring `.q-item` as the primary question navigation button.
 - `[data-answer-question-id]` remains a useful business/test anchor for status and replay checks, so the wrapper can carry status classes while the visible OpenSource-style `.q-item` remains the clicked question button.
 - This slice changes renderer DOM/CSS/test contracts only. It does not touch Practice API, history schema, submit scoring, AI prompts, RAG retrieval, or coach payload semantics.
+
+## Slice 41 Reading Header Control Parity
+- OpenSource reading header controls are intentionally sparse: `#timer`, `#settings-btn`, and `#note-btn`. The Vue header had accumulated return, answer progress, and snapshot actions, which recreated a new toolbar and visually diverged from the source page.
+- Return routes and snapshot are real product behavior, so deleting them would break userspace. The correct move is to place return in the OpenSource `#exit-btn` slot and keep snapshot in bottom `.practice-nav .controls`.
+- `data-reading-answer-progress` can remain as an internal/status affordance, but it should not sit next to the timer in the OpenSource header control cluster.
+- This slice is renderer placement only. It preserves `returnRoute`, `returnLabel`, `snapshotAnswers()`, suite return, single return, Submit, history, archive, AI review, and Coach payload behavior.

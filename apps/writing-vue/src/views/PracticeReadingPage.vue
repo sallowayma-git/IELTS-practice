@@ -19,13 +19,6 @@
         >
           {{ formattedTimer }}
         </button>
-        <span v-if="payload" class="reading-stat reading-progress" data-reading-answer-progress>
-          {{ answeredCount }}/{{ payload.questionCount }}
-        </span>
-        <router-link class="header-btn" :to="returnRoute">{{ returnLabel }}</router-link>
-        <button class="header-btn" type="button" :disabled="!asset || loading || submitting" @click="snapshotAnswers">
-          保存快照
-        </button>
         <button
           v-if="payload"
           class="header-btn"
@@ -675,6 +668,10 @@
             <strong>{{ suiteSession.aggregate.submittedPassages }}/{{ suiteSession.aggregate.totalPassages }} · {{ suiteSession.aggregate.percentage }}%</strong>
           </div>
         </div>
+        <span v-if="payload" class="reading-stat reading-progress" data-reading-answer-progress>
+          {{ answeredCount }}/{{ payload.questionCount }}
+        </span>
+        <router-link id="exit-btn" class="header-btn" :to="returnRoute">{{ returnLabel }}</router-link>
         <button id="reset-btn" class="header-btn" type="button" :disabled="resetButtonDisabled" @click="handleResetButton">{{ resetButtonLabel }}</button>
         <button class="header-btn" type="button" :disabled="!asset || loading || submitting" @click="snapshotAnswers">保存作答快照</button>
         <button id="submit-btn" class="submit-btn primary" type="button" :disabled="primaryButtonDisabled" @click="handlePrimaryButton">
