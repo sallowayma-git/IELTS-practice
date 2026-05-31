@@ -451,3 +451,9 @@
 - The OpenSource system-info DOM uses stable classes/ids: `.settings-system-info`, `.settings-system-info__status`, `#total-exams`, `#html-exams`, `#pdf-exams`, and `#last-update`. Vue now maps these to existing `topics.getStatistics()` data instead of adding new fields.
 - Theme choices should use the OpenSource `theme-options-glass` container directly. Mixing old `theme-options` with OpenSource glass styles keeps two grid systems alive and creates visual drift.
 - This slice did not change backend APIs, history schema, reading AI prompts, RAG retrieval, or coach service behavior. The next high-value target remains the reading page DOM/CSS skeleton against `reading-practice-unified.html` and `unifiedReadingPage.js`.
+
+## Slice 40 Reading Bottom Nav OpenSource Parity
+- OpenSource `reading-practice-unified.html` uses a fixed `.practice-nav` with `.title`, `#question-nav`, compact `.q-item` buttons, and `.controls`. The current Vue page had drifted into card-like nav entries with nested label wrappers, visible answered/unanswered text, and an embedded mark button. That is new UI, not a Vue port.
+- The product still needs `markedQuestions` because Submit, analysis artifacts, replay, and Coach payloads already use it. The fix should keep the mark affordance as an additive side control while restoring `.q-item` as the primary question navigation button.
+- `[data-answer-question-id]` remains a useful business/test anchor for status and replay checks, so the wrapper can carry status classes while the visible OpenSource-style `.q-item` remains the clicked question button.
+- This slice changes renderer DOM/CSS/test contracts only. It does not touch Practice API, history schema, submit scoring, AI prompts, RAG retrieval, or coach payload semantics.

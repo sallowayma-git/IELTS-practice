@@ -1493,3 +1493,23 @@
 - Notes:
   - No backend, Practice API, history schema, reading AI prompt, RAG, or coach service code changed.
   - A new attempt to spawn parallel UI/test audit subagents failed because the thread agent limit is reached. Continue the reading page OpenSource parity audit locally.
+
+### Slice 40: Reading Bottom Nav OpenSource Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Refreshed `origin/opensource` and confirmed latest OpenSource head is `44a552f Add new reading exam entries to manifest`.
+  - Audited `reading-practice-unified.html` and `unifiedReadingPage.js`: the bottom nav contract is `.practice-nav` with `.title`, `#question-nav`, compact `.q-item` buttons, and `.controls`.
+  - Changed Vue reading bottom nav title back to `题目导航`.
+  - Restored each visible question jump target to a compact `.q-item` button under `#question-nav`.
+  - Removed redesigned answered/unanswered text and label-card wrappers from the nav.
+  - Kept marked-question behavior as a side affordance and preserved `[data-answer-question-id]` status classes so Submit, replay, analysis, and Coach payloads still receive `markedQuestions`.
+  - Strengthened `practiceVueShell.test.js` to forbid the redesigned nav text/wrappers and lock the OpenSource-style `.q-item` contract.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `git diff --check` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including Submit, automatic AI review, history/replay, archive import/export, and AI Coach session context.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+- Notes:
+  - No backend, Practice API, history schema, reading AI prompt, RAG, or coach service code changed.

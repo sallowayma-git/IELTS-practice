@@ -627,13 +627,13 @@
       class="practice-nav answer-panel"
       data-reading-answer-nav
     >
-      <span class="title">Questions</span>
+      <div class="title">题目导航</div>
 
       <div class="questions answer-list" id="question-nav">
         <div
           v-for="questionId in payload.questionOrder"
           :key="questionId"
-          class="q-item answer-item"
+          class="question-nav-entry"
           :class="[
             { answered: hasAnswer(questionId), marked: isMarkedQuestion(questionId) },
             getReviewClass(questionId),
@@ -641,24 +641,30 @@
           ]"
           :data-answer-question-id="questionId"
           :data-question-id="questionId"
-          @click="scrollToQuestion(questionId)"
         >
-          <div class="answer-label-wrap">
-            <span class="answer-label">{{ getDisplayLabel(questionId) }}</span>
-            <button
-              type="button"
-              class="mark-question-button"
-              :class="{ active: isMarkedQuestion(questionId) }"
-              :disabled="readOnlyMode"
-              :aria-label="`${isMarkedQuestion(questionId) ? '取消标记' : '标记'} Question ${getDisplayLabel(questionId)}`"
-              @click.stop="toggleMarkedQuestion(questionId)"
-            >
-              !
-            </button>
-          </div>
-          <span class="answer-nav-state" :class="{ empty: !hasAnswer(questionId) }">
-            {{ hasAnswer(questionId) ? '已答' : '未答' }}
-          </span>
+          <button
+            type="button"
+            class="q-item answer-item"
+            :class="[
+              { answered: hasAnswer(questionId), marked: isMarkedQuestion(questionId) },
+              getReviewClass(questionId),
+              getLegacyNavStatus(questionId)
+            ]"
+            :data-question-id="questionId"
+            @click="scrollToQuestion(questionId)"
+          >
+            {{ getDisplayLabel(questionId) }}
+          </button>
+          <button
+            type="button"
+            class="mark-question-button"
+            :class="{ active: isMarkedQuestion(questionId) }"
+            :disabled="readOnlyMode"
+            :aria-label="`${isMarkedQuestion(questionId) ? '取消标记' : '标记'} Question ${getDisplayLabel(questionId)}`"
+            @click.stop="toggleMarkedQuestion(questionId)"
+          >
+            !
+          </button>
         </div>
       </div>
 
@@ -4388,22 +4394,6 @@ function getQuestionKindLabel(kind) {
   align-items: start;
 }
 
-.answer-label-wrap {
-  display: grid;
-  gap: 4px;
-}
-
-.answer-label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.34);
-  font-weight: 700;
-}
-
 .mark-question-button {
   min-height: 22px;
   border: 1px solid rgba(41, 39, 56, 0.14);
@@ -4425,19 +4415,6 @@ function getQuestionKindLabel(kind) {
 .mark-question-button:disabled {
   cursor: default;
   opacity: 0.7;
-}
-
-.answer-item.answered .answer-label {
-  color: var(--text-inverse);
-  background: var(--success-color);
-}
-
-.answer-item.review-correct .answer-label {
-  background: var(--success-color);
-}
-
-.answer-item.review-incorrect .answer-label {
-  background: var(--danger-color);
 }
 
 .answer-checkbox-list {
@@ -5571,6 +5548,13 @@ function getQuestionKindLabel(kind) {
   padding: 0;
 }
 
+.practice-nav .question-nav-entry {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
 .practice-nav .q-item {
   position: relative;
   display: inline-flex;
@@ -5632,25 +5616,10 @@ function getQuestionKindLabel(kind) {
   content: "";
 }
 
-.answer-label-wrap {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-.practice-nav .answer-label {
-  display: inline;
-  min-height: auto;
-  border-radius: 0;
-  background: transparent;
-  color: inherit;
-  font-weight: 700;
-}
-
 .mark-question-button {
   min-width: 18px;
   min-height: 18px;
+  margin-left: -4px;
   padding: 0 4px;
   border: 1px solid rgba(100, 116, 139, 0.45);
   border-radius: 6px;

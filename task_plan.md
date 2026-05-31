@@ -4,7 +4,7 @@
 把阅读业务链路重构为写作模块内的一等能力，使用 Vue renderer 统一实现，并收束 Electron/Server/API/设置入口，形成一个 AI native 的完整练习体验。
 
 ## Current Phase
-Slice 39 checkpoint complete: Vue Settings now restores the OpenSource three-panel first screen, moves advanced writing configuration into an overlay opened only by existing business actions, and keeps the system info/theme modal DOM closer to the OpenSource contract. Next work should shift to screenshot/DOM-level OpenSource parity for the Vue reading page without touching Submit/history/AI Coach/RAG/prompt chains.
+Slice 40 checkpoint complete: Vue reading bottom question navigation is tightened back to the OpenSource `practice-nav` / `.q-item` contract while preserving marked-question state, Submit/history/archive/AI Coach/RAG behavior, and existing Practice API fields. Next work should continue reading page screenshot/DOM parity, especially header action clutter and right-pane review/coach placement.
 
 ## Phases
 
@@ -372,6 +372,7 @@ Slice 39 checkpoint complete: Vue Settings now restores the OpenSource three-pan
 - [x] Restore OpenSource reading memorize semantics: explicit `mode=memorize&practiceMode=memorize`, normalize old `mode=review` memorize links, and skip PDF-only assets.
 - [x] Restore OpenSource ECDICT dictionary bundle and richer reading highlight dictionary bubble metadata in Vue without adding backend/schema fields.
 - [x] Restore the OpenSource Settings three-panel first screen in Vue: remove the fake default writing-config panel/toggle, preserve `.settings-system-info` metrics, keep theme options on `theme-options-glass`, and move advanced writing settings into a modal overlay opened by existing actions.
+- [x] Restore the Vue reading bottom question nav toward OpenSource structure: `题目导航`, compact `.q-item` primary buttons under `#question-nav`, no redesigned answered/unanswered text, and marked-question affordance kept outside the `.q-item` button while preserving `markedQuestions` payloads.
 - **Status:** implementation in progress
 
 ## Errors Encountered
