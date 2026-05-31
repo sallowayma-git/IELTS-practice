@@ -408,3 +408,10 @@
 - The Practice API now accepts `frequencyScope: 'custom'` and optional `sequence` on suite create. The service validates exactly one practice-ready P1, P2, and P3 in order, then writes the same canonical `ReadingSuiteSession.sequence` rows used by random suite creation.
 - Vue now exposes the OpenSource selector option `自选套题（P1/P2/P3）`, enters browse selection mode, captures one asset per category, and confirms by posting `sequence: [p1, p2, p3]` through the same suite API.
 - Reading AI prompt, RAG retrieval, coach persistence, suite submit, and history replay remain untouched. This slice only repairs suite entry selection and sequence creation.
+
+## Slice 34 Submitted Single Reset Recovery
+- OpenSource's submitted-single Reset behavior is real userspace, not a debug convenience. After a normal single-reading submit, users can reset the same page into a fresh editable attempt without losing the already persisted history record.
+- The correct data rule is to recycle renderer state only: `submission`, coach UI state, AI review status, highlights, answer/timeline metadata, DOM readonly flags, and the sessionStorage submission snapshot. Deleting the persisted history row or adding a backend retry field would be wrong.
+- This reset must not apply to suite, endless, or explicit history replay routes. Those flows have different ownership: suite progress belongs to `ReadingSuiteSession`, endless schedules the next asset, and replay is immutable history.
+- Clearing `practice_reading_submission_${assetId}` is necessary. Otherwise the visible UI can look fresh while the session cache still points at the old submitted review, which is hidden state garbage.
+- Reading AI prompt/RAG services remain untouched. The fix preserves the existing Submit -> history save -> automatic `review_set` AI review -> Coach/RAG context chain, then only allows the user to start a second local attempt from the same rendered asset.

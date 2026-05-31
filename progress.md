@@ -1382,3 +1382,21 @@
 - Notes:
   - A subagent spawn for this audit failed because the current thread agent limit is reached; the same audit was completed locally.
   - The first custom-suite E2E update exposed a test-stub-only bug: the synthetic suite object reused custom sequence for the next normal suite create. The stub now resets sequence per create, matching real API behavior.
+
+### Slice 34: Submitted Single Reset Recovery
+- **Status:** checkpoint complete
+- Actions taken:
+  - Audited `origin/opensource` recent reading JS changes and confirmed the submitted-single Reset/retry flow was not fully preserved in Vue: the Reset button existed, but `reviewMode` disabled it after submit.
+  - Added a Vue-only recycle gate for normal single-reading submissions. It explicitly excludes suite sessions, endless mode, and replay routes so those business chains keep their existing owners.
+  - Implemented `recycleSubmittedAttempt()` in `PracticeReadingPage.vue` to clear current review state, coach response/status, LLM review status, answer/timeline metadata, highlighter DOM, readonly controls, timer state, and the cached `practice_reading_submission_${assetId}` session snapshot.
+  - Kept the already persisted Practice history record untouched so records, replay, archive export/import, and AI coach transcript persistence remain valid.
+  - Extended `practiceVueShell.test.js` and `practice_reading_vue_flow.py` to lock the submitted reset behavior and prove it does not add backend fields or delete history.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `node developer/tests/js/practiceApiFacade.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+- Notes:
+  - `practiceApiFacade.test.js` rebuilds `server/dist`; keep it serial with other server-build-mutating tests when possible to avoid race noise.
+  - No prompt wording, RAG router, coach service, Practice API schema, or history schema was changed.

@@ -4,7 +4,7 @@
 把阅读业务链路重构为写作模块内的一等能力，使用 Vue renderer 统一实现，并收束 Electron/Server/API/设置入口，形成一个 AI native 的完整练习体验。
 
 ## Current Phase
-Slice 33 checkpoint complete: OpenSource/legacy custom suite selection is restored in Vue. The suite selector can enter `custom` scope, the existing browse list captures one P1/P2/P3 asset each, and `/api/practice/reading-suite` creates the suite from an explicit canonical `sequence` while still using the same `ReadingSuiteSession.sequence` contract. No reading AI prompt/RAG code was changed.
+Slice 34 checkpoint complete: OpenSource/legacy submitted-single reset behavior is restored in Vue. After a normal single-reading submit and AI review, `Reset` recycles the current page into a fresh editable attempt while preserving the already persisted history record. No reading AI prompt/RAG code or backend schema was changed.
 
 ## Phases
 
@@ -366,6 +366,7 @@ Slice 33 checkpoint complete: OpenSource/legacy custom suite selection is restor
 - [x] Preserve suite review return context from history list rows by reusing existing `metadata.suiteSessionId` in both Practice Library history and mixed History page review routes.
 - [x] Restore browse list-position memory by reusing `browse_view_preferences_v2` for last asset, filters, search, sort, and scroll restoration.
 - [x] Restore custom suite selection by reusing the existing suite create API and `ReadingSuiteSession.sequence` for explicit P1/P2/P3 selections.
+- [x] Restore submitted single-reading Reset/retry behavior without changing history schema: clear current review UI/session cache, re-enable controls, reset answer/timer/highlight state, and keep the persisted submission available in history/replay.
 - **Status:** implementation in progress
 
 ## Errors Encountered

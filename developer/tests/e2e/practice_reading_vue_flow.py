@@ -1074,6 +1074,49 @@ async def run_flow() -> dict:
         if auto_payload.get("mode") != "single" or manual_payload.get("mode") != "single":
             raise AssertionError(f"coach_mode_invalid:{coach_requests}")
 
+        await page.click('#reset-btn')
+        await page.wait_for_selector('text=已重置本篇练习，可重新作答。', timeout=10000)
+        reset_recycle_state = await page.evaluate(
+            """() => ({
+              reviewPanelGone: !document.querySelector('[data-reading-review-panel]'),
+              coachPanelGone: !document.querySelector('[data-reading-coach-panel]'),
+              submitCopy: document.getElementById('submit-btn')?.textContent?.trim() || '',
+              resetDisabled: document.getElementById('reset-btn')?.disabled === true,
+              nativeRadioDisabled: document.querySelector('input[type="radio"][name="q1"][value="A"]')?.disabled === true,
+              textValue: document.querySelector('input[type="text"][name="q6"]')?.value || '',
+              q12: document.querySelector('.match-dropzone[data-question="q12"]')?.dataset?.answerValue || '',
+              highlightCount: document.querySelectorAll('#left .hl').length,
+              cachedSubmission: window.sessionStorage.getItem('practice_reading_submission_p2-low-148'),
+              persistedHistoryCount: window.__getPracticeReadingHistoryCount ? window.__getPracticeReadingHistoryCount() : -1,
+              submitPosts: window.__practiceReadingRequests.filter((item) => item.pathname === '/api/practice/sessions' && item.method === 'POST').length
+            })"""
+        )
+        if (
+            not reset_recycle_state.get("reviewPanelGone")
+            or not reset_recycle_state.get("coachPanelGone")
+            or reset_recycle_state.get("submitCopy") != "Submit"
+            or reset_recycle_state.get("resetDisabled")
+            or reset_recycle_state.get("nativeRadioDisabled")
+            or reset_recycle_state.get("textValue")
+            or reset_recycle_state.get("q12")
+            or reset_recycle_state.get("highlightCount") != 0
+            or reset_recycle_state.get("cachedSubmission") is not None
+            or reset_recycle_state.get("persistedHistoryCount") != 1
+            or reset_recycle_state.get("submitPosts") != 1
+        ):
+            raise AssertionError(f"submitted_reset_recycle_invalid:{reset_recycle_state}")
+        await page.locator('input[type="radio"][name="q1"][value="A"]').check()
+        await page.fill('input[type="text"][name="q6"]', 'second attempt')
+        second_attempt_state = await page.evaluate(
+            """() => ({
+              q1Checked: document.querySelector('input[type="radio"][name="q1"][value="A"]')?.checked === true,
+              q6Value: document.querySelector('input[type="text"][name="q6"]')?.value || '',
+              answered: document.querySelector('[data-answer-question-id="q6"]')?.classList.contains('answered') === true
+            })"""
+        )
+        if not second_attempt_state.get("q1Checked") or second_attempt_state.get("q6Value") != "second attempt" or not second_attempt_state.get("answered"):
+            raise AssertionError(f"submitted_reset_recycle_not_editable:{second_attempt_state}")
+
         await page.click('a:has-text("返回练习库")')
         await page.wait_for_url("**#/", timeout=10000)
         await page.click('[data-view="browse"]')

@@ -817,6 +817,13 @@ const reviewMode = computed(() => Boolean(submission.value))
 const readOnlyMode = computed(() => reviewMode.value || isMemorizeMode.value)
 const canSubmit = computed(() => Boolean(asset.value && payload.value && !loading.value && !submitting.value && !readOnlyMode.value))
 const canAskCoach = computed(() => Boolean(submission.value && coachQuery.value.trim() && !coachLoading.value))
+const canRecycleSubmittedAttempt = computed(() => Boolean(
+  reviewMode.value
+  && !activeSuiteSessionId.value
+  && !isEndlessMode.value
+  && !String(props.sessionId || route.params.sessionId || '').trim()
+  && !submitting.value
+))
 const suiteTimerState = computed(() => normalizeSuiteTimerState(suiteSession.value?.timer))
 const timerDisplaySeconds = computed(() => {
   const timer = suiteTimerState.value
@@ -854,7 +861,8 @@ const resetButtonLabel = computed(() => {
 })
 const resetButtonDisabled = computed(() => {
   if (isMemorizeMode.value) return false
-  return reviewMode.value || submitting.value
+  if (reviewMode.value) return !canRecycleSubmittedAttempt.value
+  return submitting.value
 })
 const coachTranscript = computed(() => normalizeCoachTranscript(submission.value?.readingCoachTranscript))
 const coachFollowUps = computed(() => {
@@ -1824,6 +1832,35 @@ function resetAnswers() {
   snapshotMessage.value = '已清空本页作答。'
 }
 
+async function recycleSubmittedAttempt() {
+  if (!canRecycleSubmittedAttempt.value) {
+    return
+  }
+  submission.value = null
+  clearSubmissionSnapshot()
+  coachResponse.value = null
+  coachError.value = ''
+  coachStreamMessage.value = ''
+  coachLoading.value = false
+  llmReviewStatus.value = 'idle'
+  llmReviewMessage.value = ''
+  submitError.value = ''
+  snapshotMessage.value = ''
+  resetAttemptMetadata()
+  initializeAnswers(payload.value)
+  highlightSnapshot.value = []
+  closeSelectionToolbar()
+  closeDictionaryBubble()
+  await nextTick()
+  Object.values(getHighlightRoots()).forEach((root) => unwrapHighlights(root))
+  syncDomAnswers()
+  setReadOnlyDomControls(false)
+  elapsedSeconds.value = 0
+  startedAt.value = new Date().toISOString()
+  startPracticeTimer()
+  snapshotMessage.value = '已重置本篇练习，可重新作答。'
+}
+
 function snapshotAnswers() {
   if (!asset.value?.id) return
   const key = `practice_reading_answers_${asset.value.id}`
@@ -2697,6 +2734,15 @@ function snapshotSubmission() {
   }
 }
 
+function clearSubmissionSnapshot() {
+  if (!asset.value?.id) return
+  try {
+    window.sessionStorage?.removeItem(`practice_reading_submission_${asset.value.id}`)
+  } catch (_) {
+    // best-effort session cache cleanup
+  }
+}
+
 function clearEndlessTimer() {
   if (endlessTimer) {
     window.clearInterval(endlessTimer)
@@ -2909,6 +2955,10 @@ function handleResetButton() {
       params: { assetId: asset.value?.id || props.assetId },
       query: activeSuiteSessionId.value ? { suiteSessionId: activeSuiteSessionId.value } : {}
     })
+    return
+  }
+  if (canRecycleSubmittedAttempt.value) {
+    recycleSubmittedAttempt()
     return
   }
   resetAnswers()
