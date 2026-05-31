@@ -1532,4 +1532,22 @@
   - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
 - Notes:
   - No backend, Practice API, history schema, reading AI prompt, RAG, or coach service code changed.
-  - Commit `248bbd6` for Slice 40 exists locally, but pushing it failed because GitHub HTTPS returned `Empty reply from server` / port 443 connection failure. Remote branch currently remains at `d6b2e77`.
+  - Slice 40 and Slice 41 were later pushed together; `origin/codex/restore-vue-practice-reading` is at `b0b131c`.
+
+### Slice 42: Reading Results Container OpenSource Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Audited OpenSource `reading-practice-unified.html`: submitted results render in `#results` under `#right`, using `.results-table` and `.result-correct` / `.result-incorrect`.
+  - Changed the Vue submitted review panel to use `id="results"` while keeping `data-reading-review-panel` for current regression tests.
+  - Added `.results-table` to the review table and mapped result cells through `getLegacyResultClass(questionId)`.
+  - Kept the automatic AI review, analysis signals, LLM review panel, and AI Coach panel in the existing submitted lifecycle.
+  - Strengthened `practiceVueShell.test.js` to lock `#results`, `.results-table`, and legacy result classes.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `git diff --check` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including Submit, automatic AI review, replay, archive, and AI Coach session context.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+- Notes:
+  - No backend, Practice API, history schema, reading AI prompt, RAG, or coach service code changed.

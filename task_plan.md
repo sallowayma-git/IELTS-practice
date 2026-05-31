@@ -4,7 +4,7 @@
 把阅读业务链路重构为写作模块内的一等能力，使用 Vue renderer 统一实现，并收束 Electron/Server/API/设置入口，形成一个 AI native 的完整练习体验。
 
 ## Current Phase
-Slice 41 checkpoint complete: Vue reading header controls are tightened back to the OpenSource timer/settings/note contract by moving return/snapshot/progress affordances to bottom controls, while preserving suite/single return routes and reading AI/history chains. Remote push is pending because GitHub HTTPS is currently unreachable from this environment.
+Slice 42 checkpoint complete: Vue submitted reading review is attached back to the OpenSource `#results` / `.results-table` contract while preserving analysis, automatic AI review, replay, and Coach behavior without backend prompt/API/schema changes. Next work should continue reducing right-pane AI Coach/review visual drift and add stronger screenshot/DOM parity checks.
 
 ## Phases
 
@@ -374,6 +374,7 @@ Slice 41 checkpoint complete: Vue reading header controls are tightened back to 
 - [x] Restore the OpenSource Settings three-panel first screen in Vue: remove the fake default writing-config panel/toggle, preserve `.settings-system-info` metrics, keep theme options on `theme-options-glass`, and move advanced writing settings into a modal overlay opened by existing actions.
 - [x] Restore the Vue reading bottom question nav toward OpenSource structure: `题目导航`, compact `.q-item` primary buttons under `#question-nav`, no redesigned answered/unanswered text, and marked-question affordance kept outside the `.q-item` button while preserving `markedQuestions` payloads.
 - [x] Restore Vue reading header controls toward OpenSource structure: header controls keep timer/settings/note, while return/progress/snapshot actions move into bottom `practice-nav` controls with the existing route and snapshot behavior intact.
+- [x] Restore Vue submitted review container toward OpenSource structure: submitted results live in `#results`, the score table also uses `.results-table`, and correct/incorrect cells expose `.result-correct` / `.result-incorrect` while AI review/Coach chains remain intact.
 - **Status:** implementation in progress
 
 ## Errors Encountered

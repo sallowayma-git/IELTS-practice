@@ -330,7 +330,12 @@
           </div>
         </section>
 
-        <section v-if="submission" class="reading-panel review-panel" data-reading-review-panel>
+        <section
+          v-if="submission"
+          id="results"
+          class="reading-panel review-panel"
+          data-reading-review-panel
+        >
           <div class="panel-heading">
             <span class="panel-kicker">Review</span>
             <strong>{{ submission.scoreInfo.correct }} / {{ submission.scoreInfo.totalQuestions }} · {{ submission.scoreInfo.percentage }}%</strong>
@@ -501,7 +506,7 @@
               </div>
             </div>
           </section>
-          <table class="review-table">
+          <table class="review-table results-table">
             <thead>
               <tr>
                 <th>题号</th>
@@ -520,7 +525,7 @@
                 <td>{{ getDisplayLabel(questionId) }}</td>
                 <td>{{ formatReviewAnswer(submission.answerComparison[questionId]?.userAnswer) || '未作答' }}</td>
                 <td>{{ formatReviewAnswer(submission.answerComparison[questionId]?.correctAnswer) }}</td>
-                <td>{{ getReviewLabel(questionId) }}</td>
+                <td :class="getLegacyResultClass(questionId)">{{ getReviewLabel(questionId) }}</td>
               </tr>
             </tbody>
           </table>
@@ -3829,6 +3834,13 @@ function getLegacyNavStatus(questionId) {
   return hasAnswer(questionId) ? 'answered' : ''
 }
 
+function getLegacyResultClass(questionId) {
+  const entry = getReviewEntry(questionId)
+  if (entry?.isCorrect === true) return 'result-correct'
+  if (entry?.isCorrect === false) return 'result-incorrect'
+  return ''
+}
+
 function scrollToQuestion(questionId) {
   const normalized = normalizeQuestionId(questionId)
   if (!normalized) return
@@ -4692,32 +4704,38 @@ function getQuestionKindLabel(kind) {
   background: var(--success-color);
 }
 
-.review-table {
+.review-table,
+.results-table {
   width: 100%;
   border-collapse: collapse;
   overflow-wrap: anywhere;
 }
 
 .review-table th,
-.review-table td {
+.review-table td,
+.results-table th,
+.results-table td {
   padding: 10px;
   border-bottom: 1px solid var(--lg-border-subtle);
   text-align: left;
   vertical-align: top;
 }
 
-.review-table th {
+.review-table th,
+.results-table th {
   color: var(--text-muted);
   font-size: 0.78rem;
   font-weight: 700;
 }
 
-.review-correct td:last-child {
+.review-correct td:last-child,
+.result-correct {
   color: var(--success-color);
   font-weight: 700;
 }
 
-.review-incorrect td:last-child {
+.review-incorrect td:last-child,
+.result-incorrect {
   color: var(--danger-color);
   font-weight: 700;
 }
@@ -5830,7 +5848,8 @@ function getQuestionKindLabel(kind) {
   background: var(--reading-success);
 }
 
-.review-table {
+.review-table,
+.results-table {
   width: 100%;
   border-collapse: collapse;
   overflow-wrap: anywhere;
@@ -5838,19 +5857,23 @@ function getQuestionKindLabel(kind) {
 }
 
 .review-table th,
-.review-table td {
+.review-table td,
+.results-table th,
+.results-table td {
   padding: 8px 10px;
   border: 1px solid var(--reading-line);
   text-align: center;
   vertical-align: top;
 }
 
-.review-correct td:last-child {
+.review-correct td:last-child,
+.result-correct {
   color: var(--reading-success);
   font-weight: 700;
 }
 
-.review-incorrect td:last-child {
+.review-incorrect td:last-child,
+.result-incorrect {
   color: var(--reading-danger);
   font-weight: 700;
 }

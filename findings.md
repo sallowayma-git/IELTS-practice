@@ -463,3 +463,9 @@
 - Return routes and snapshot are real product behavior, so deleting them would break userspace. The correct move is to place return in the OpenSource `#exit-btn` slot and keep snapshot in bottom `.practice-nav .controls`.
 - `data-reading-answer-progress` can remain as an internal/status affordance, but it should not sit next to the timer in the OpenSource header control cluster.
 - This slice is renderer placement only. It preserves `returnRoute`, `returnLabel`, `snapshotAnswers()`, suite return, single return, Submit, history, archive, AI review, and Coach payload behavior.
+
+## Slice 42 Reading Results Container Parity
+- OpenSource submitted review is not a separate card system. It uses `#results` inside `#right`, with `.results-table` plus `.result-correct` / `.result-incorrect` cells.
+- Vue had a custom `.review-panel` / `.review-table` surface. That preserved function but weakened DOM/CSS parity and made screenshot comparison drift.
+- The correct low-risk fix is to attach the existing submitted review panel to `id="results"` and add legacy result table/classes, while leaving analysis, automatic LLM review, and Coach panels in the same right-pane lifecycle.
+- This slice is renderer DOM/CSS only. It does not change scoring, persistence, prompt wording, RAG retrieval, Practice API, or Coach payload construction.
