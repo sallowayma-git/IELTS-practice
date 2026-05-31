@@ -1454,3 +1454,21 @@
 - Notes:
   - No backend, Practice API, history, AI prompt, or RAG code changed.
   - The next OpenSource parity gap remains the offline ECDICT dictionary bundle or learning-goal design; Settings `library-config-btn` needs care because writing settings intentionally must not jump into reading pages.
+
+### Slice 38: OpenSource ECDICT Dictionary + Bubble UI Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Restored the OpenSource `assets/wordlists/ecdict_reading.bundle.js` and `ECDICT_LICENSE.txt` assets.
+  - Updated Vue reading highlight dictionary loading to load both ECDICT and IELTS core wordlist bundles before `DictionaryService`.
+  - Brought the Vue dictionary bubble closer to the OpenSource runtime structure: term metadata, phonetic, part of speech, source/license line, examples, and compound lookup parts.
+  - Preserved the existing renderer fallback key for reading-highlight vocabulary and did not add Practice API, history, or backend fields.
+  - Added `developer/tests/js/dictionaryService.test.js` and wired it into `run_static_suite.py` so offline ECDICT lookup is covered by the required static gate.
+- Verification:
+  - `node developer/tests/js/dictionaryService.test.js` passed with 20260 entries and 22945 variants.
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed and includes `阅读本地词典契约测试`.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+- Notes:
+  - No backend, Practice API, history schema, AI prompt, or RAG code changed.
+  - User explicitly raised that UI parity must be judged against OpenSource DOM/CSS/interaction and screenshots, not just selector presence. Next slices should use screenshot-level OpenSource-vs-Vue comparison for reading/settings/more surfaces.

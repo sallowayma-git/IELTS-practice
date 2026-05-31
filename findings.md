@@ -437,3 +437,10 @@
 - Old `mode=review` memorize links should be normalized at the Vue route boundary into `mode=memorize&practiceMode=memorize`, then the page should reload from the normalized query. Otherwise the URL may be fixed while the page stays in the wrong mode.
 - Memorize entry candidates must reuse `hasReadingPracticePayload()`. PDF-only reading assets are browseable resources, not valid memorize practice pages.
 - No new Practice API field, history field, or prompt change is needed; this is renderer route semantics and candidate-pool cleanup.
+
+## Slice 38 OpenSource ECDICT Dictionary + Bubble UI Parity
+- Current Vue already had `DictionaryService` support for `__LOCAL_DICTIONARIES__.ecdict`, but the reading page only loaded `ielts_core.bundle.js`. That made the OpenSource ECDICT feature effectively unreachable from Vue.
+- ECDICT is renderer data, not Practice API data. Loading `assets/wordlists/ecdict_reading.bundle.js` alongside the IELTS core bundle preserves the existing local runtime contract and avoids backend/schema drift.
+- The dictionary bubble was also too reduced: it collapsed OpenSource metadata into one meaning string. The UI should preserve term metadata, phonetic, part of speech, source/license, examples, and compound lookup parts because these are visible user-facing learning affordances.
+- Saving a highlighted word can reuse the existing reading-highlight vocab fallback list. Do not introduce `dictionaryPayload`, `dictionarySnapshot`, or any new history submission fields for dictionary display state.
+- User feedback changed the acceptance bar: static selectors alone do not prove UI parity. Future reading/settings/more work should compare OpenSource and Vue screenshots for DOM structure, CSS, panel behavior, and visual hierarchy before declaring parity.

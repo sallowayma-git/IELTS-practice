@@ -1705,6 +1705,18 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("Vue Practice Shell 静态契约测试", False, "测试脚本缺失"))
         all_passed = False
 
+    dictionary_service_test = REPO_ROOT / "developer" / "tests" / "js" / "dictionaryService.test.js"
+    if dictionary_service_test.exists():
+        dictionary_service_passed, dictionary_service_payload = _run_json_subprocess(
+            ["node", str(dictionary_service_test)],
+            60,
+        )
+        results.append(_format_result("阅读本地词典契约测试", dictionary_service_passed, dictionary_service_payload))
+        all_passed &= dictionary_service_passed
+    else:
+        results.append(_format_result("阅读本地词典契约测试", False, "测试脚本缺失"))
+        all_passed = False
+
     reading_launch_vue_route_test = REPO_ROOT / "developer" / "tests" / "js" / "readingLaunchVueRoute.test.js"
     if reading_launch_vue_route_test.exists():
         reading_launch_vue_route_passed, reading_launch_vue_route_payload = _run_json_subprocess(

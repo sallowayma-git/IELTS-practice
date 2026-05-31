@@ -162,13 +162,43 @@
       <div class="vocab-bubble-head">
         <div>
           <h4 class="vocab-term">{{ dictionaryBubble.term }}</h4>
-          <div class="vocab-meta">{{ dictionaryBubble.found ? '本地生词本' : '本地词典' }}</div>
+          <div v-if="dictionaryBubble.meta" class="vocab-meta">{{ dictionaryBubble.meta }}</div>
         </div>
         <button class="vocab-close" type="button" aria-label="关闭" @click="closeDictionaryBubble">×</button>
       </div>
-      <div class="vocab-section">
+      <template v-if="dictionaryBubble.parts.length">
+        <div
+          v-for="part in dictionaryBubble.parts"
+          :key="part.term + part.meaning"
+          class="vocab-part"
+        >
+          <div class="vocab-term vocab-part-term">{{ part.term }}</div>
+          <div v-if="part.meta" class="vocab-meta">{{ part.meta }}</div>
+          <div v-if="part.meaning" class="vocab-section">
+            <div class="vocab-label">中文释义</div>
+            <div class="vocab-text">{{ part.meaning }}</div>
+          </div>
+          <div v-if="part.definition" class="vocab-section">
+            <div class="vocab-label">英文释义</div>
+            <div class="vocab-text">{{ part.definition }}</div>
+          </div>
+        </div>
+      </template>
+      <div v-else class="vocab-section">
         <div class="vocab-label">{{ dictionaryBubble.found ? '释义' : '未收录' }}</div>
         <div class="vocab-text">{{ dictionaryBubble.meaning || '未找到该高亮内容。可先加入阅读高亮生词，后续在单词背诵中补充释义。' }}</div>
+      </div>
+      <div v-if="dictionaryBubble.definition" class="vocab-section">
+        <div class="vocab-label">英文释义</div>
+        <div class="vocab-text">{{ dictionaryBubble.definition }}</div>
+      </div>
+      <div v-if="dictionaryBubble.example" class="vocab-section">
+        <div class="vocab-label">例句</div>
+        <div class="vocab-text">{{ dictionaryBubble.example }}</div>
+      </div>
+      <div v-if="dictionaryBubble.sourceLine" class="vocab-section">
+        <div class="vocab-label">来源</div>
+        <div class="vocab-text">{{ dictionaryBubble.sourceLine }}</div>
       </div>
       <div class="vocab-actions">
         <button
@@ -667,7 +697,10 @@ const ENDLESS_COUNTDOWN_SEC = 5
 const READING_NOTES_STORAGE_PREFIX = 'practice_reading_notes_'
 const SUITE_AUTO_ADVANCE_STORAGE_KEY = 'suite_auto_advance_after_submit'
 const VOCAB_FALLBACK_STORAGE_KEY = 'exam_system_vocab_list_reading_highlights'
-const DICTIONARY_WORDLIST_SCRIPT = 'assets/wordlists/ielts_core.bundle.js'
+const DICTIONARY_WORDLIST_SCRIPTS = [
+  'assets/wordlists/ecdict_reading.bundle.js',
+  'assets/wordlists/ielts_core.bundle.js'
+]
 const DICTIONARY_SERVICE_SCRIPT = 'js/core/dictionaryService.js'
 const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__'
 const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange'
@@ -757,6 +790,15 @@ const dictionaryBubble = reactive({
   visible: false,
   term: '',
   meaning: '',
+  definition: '',
+  example: '',
+  meta: '',
+  sourceLine: '',
+  parts: [],
+  phonetic: '',
+  partOfSpeech: '',
+  sourceLabel: '',
+  license: '',
   found: false,
   saved: false,
   left: 0,
@@ -2517,6 +2559,15 @@ function closeDictionaryBubble() {
   dictionaryBubble.visible = false
   dictionaryBubble.term = ''
   dictionaryBubble.meaning = ''
+  dictionaryBubble.definition = ''
+  dictionaryBubble.example = ''
+  dictionaryBubble.meta = ''
+  dictionaryBubble.sourceLine = ''
+  dictionaryBubble.parts = []
+  dictionaryBubble.phonetic = ''
+  dictionaryBubble.partOfSpeech = ''
+  dictionaryBubble.sourceLabel = ''
+  dictionaryBubble.license = ''
   dictionaryBubble.found = false
   dictionaryBubble.saved = false
   currentHighlightNode = null
@@ -2528,6 +2579,15 @@ async function openDictionaryBubble(highlight) {
   const rect = highlight.getBoundingClientRect()
   dictionaryBubble.term = term
   dictionaryBubble.meaning = '正在加载本地词典...'
+  dictionaryBubble.definition = ''
+  dictionaryBubble.example = ''
+  dictionaryBubble.meta = '本地词典'
+  dictionaryBubble.sourceLine = ''
+  dictionaryBubble.parts = []
+  dictionaryBubble.phonetic = ''
+  dictionaryBubble.partOfSpeech = ''
+  dictionaryBubble.sourceLabel = ''
+  dictionaryBubble.license = ''
   dictionaryBubble.found = false
   dictionaryBubble.saved = false
   dictionaryBubble.left = Math.max(12, Math.round(Math.min(rect.left, window.innerWidth - 360)))
@@ -2543,9 +2603,7 @@ async function openDictionaryBubble(highlight) {
     return
   }
   const lookup = lookupLocalWord(term)
-  dictionaryBubble.term = lookup.term || term
-  dictionaryBubble.meaning = lookup.meaning || lookup.definition || ''
-  dictionaryBubble.found = Boolean(lookup.found)
+  applyDictionaryLookupToBubble(lookup, term)
 }
 
 function resolveRuntimeAssetUrl(relativePath) {
@@ -2584,11 +2642,15 @@ function loadRuntimeScript(relativePath) {
 }
 
 function ensureReviewDictionaryRuntime() {
-  if (window.DictionaryService?.lookup && window.__EMBEDDED_WORDLISTS__?.ielts_core?.length) {
+  if (
+    window.DictionaryService?.lookup
+    && window.__LOCAL_DICTIONARIES__?.ecdict?.entries?.length
+    && window.__EMBEDDED_WORDLISTS__?.ielts_core?.length
+  ) {
     return Promise.resolve()
   }
   if (!reviewDictionaryRuntimePromise) {
-    reviewDictionaryRuntimePromise = loadRuntimeScript(DICTIONARY_WORDLIST_SCRIPT)
+    reviewDictionaryRuntimePromise = Promise.all(DICTIONARY_WORDLIST_SCRIPTS.map(loadRuntimeScript))
       .then(() => loadRuntimeScript(DICTIONARY_SERVICE_SCRIPT))
       .then(() => {
         window.DictionaryService?.init?.()
@@ -2618,6 +2680,89 @@ function formatDictionaryLookupMeaning(result) {
   return normalizeComparableText(result.zh || result.meaning || result.en || result.definition || result.example)
 }
 
+function formatDictionaryLookupMeta(result) {
+  if (!result || typeof result !== 'object') {
+    return ''
+  }
+  return [
+    result.phonetic ? `/${normalizeComparableText(result.phonetic)}/` : '',
+    normalizeComparableText(result.pos || result.partOfSpeech),
+    normalizeComparableText(result.sourceLabel || (result.source === 'ecdict' ? 'ECDICT' : '本地词典'))
+  ].filter(Boolean).join(' · ')
+}
+
+function normalizeDictionaryLookupPart(part) {
+  if (!part || typeof part !== 'object') {
+    return null
+  }
+  const term = normalizeComparableText(part.term || part.lemma || part.requested)
+  const meaning = normalizeComparableText(part.zh || part.meaning)
+  const definition = normalizeComparableText(part.en || part.definition)
+  if (!term && !meaning && !definition) {
+    return null
+  }
+  return {
+    term: term || '高亮词',
+    meta: formatDictionaryLookupMeta(part),
+    meaning,
+    definition
+  }
+}
+
+function normalizeDictionaryLookupResult(result, fallbackTerm) {
+  if (!result || typeof result !== 'object') {
+    return {
+      found: false,
+      term: normalizeComparableText(fallbackTerm),
+      meaning: '',
+      definition: '',
+      example: '',
+      meta: '本地词典',
+      sourceLine: '',
+      parts: [],
+      phonetic: '',
+      partOfSpeech: '',
+      sourceLabel: '本地词典',
+      license: ''
+    }
+  }
+  const parts = Array.isArray(result.parts)
+    ? result.parts.map(normalizeDictionaryLookupPart).filter(Boolean)
+    : []
+  const sourceLabel = normalizeComparableText(result.sourceLabel || (result.source === 'ecdict' ? 'ECDICT' : '本地词典'))
+  const license = normalizeComparableText(result.license)
+  return {
+    found: Boolean(result.found),
+    term: normalizeComparableText(result.term || result.lemma || result.requested || fallbackTerm),
+    meaning: normalizeComparableText(result.zh || result.meaning),
+    definition: normalizeComparableText(result.en || result.definition),
+    example: normalizeComparableText(result.example),
+    meta: parts.length ? '' : formatDictionaryLookupMeta({ ...result, sourceLabel }),
+    sourceLine: sourceLabel ? [sourceLabel, license].filter(Boolean).join(' · ') : '',
+    parts,
+    phonetic: normalizeComparableText(result.phonetic),
+    partOfSpeech: normalizeComparableText(result.pos || result.partOfSpeech),
+    sourceLabel,
+    license
+  }
+}
+
+function applyDictionaryLookupToBubble(lookup, fallbackTerm) {
+  const normalized = normalizeDictionaryLookupResult(lookup, fallbackTerm)
+  dictionaryBubble.term = normalized.term || normalizeComparableText(fallbackTerm)
+  dictionaryBubble.meaning = normalized.meaning || (normalized.parts.length ? '' : normalized.definition)
+  dictionaryBubble.definition = normalized.parts.length ? '' : normalized.definition
+  dictionaryBubble.example = normalized.example
+  dictionaryBubble.meta = normalized.meta || (normalized.found ? normalized.sourceLabel : '本地词典')
+  dictionaryBubble.sourceLine = normalized.sourceLine
+  dictionaryBubble.parts = normalized.parts
+  dictionaryBubble.phonetic = normalized.phonetic
+  dictionaryBubble.partOfSpeech = normalized.partOfSpeech
+  dictionaryBubble.sourceLabel = normalized.sourceLabel
+  dictionaryBubble.license = normalized.license
+  dictionaryBubble.found = normalized.found
+}
+
 function lookupLocalWord(term) {
   const normalized = normalizeComparableText(term)
   try {
@@ -2625,19 +2770,21 @@ function lookupLocalWord(term) {
     if (service?.lookup) {
       const result = service.lookup(normalized)
       if (result?.found) {
-        return {
-          found: true,
-          term: result.term || normalized,
-          meaning: formatDictionaryLookupMeaning(result)
-        }
+        return normalizeDictionaryLookupResult(result, normalized)
       }
     }
   } catch (_) {}
   const list = readVocabFallbackList()
   const existing = list.words.find((word) => String(word.word || '').trim().toLowerCase() === normalized.toLowerCase())
   return existing
-    ? { found: true, term: existing.word, meaning: existing.meaning || existing.definition || existing.note || '' }
-    : { found: false, term: normalized, meaning: '' }
+    ? normalizeDictionaryLookupResult({
+      found: true,
+      term: existing.word,
+      meaning: existing.meaning || existing.definition || existing.note || '',
+      example: existing.example || '',
+      sourceLabel: '本地生词本'
+    }, normalized)
+    : normalizeDictionaryLookupResult({ found: false, term: normalized }, normalized)
 }
 
 function readVocabFallbackList() {
@@ -2676,9 +2823,14 @@ function saveDictionaryBubbleWord() {
   const record = {
     id: `reading-highlight-${normalizedKey.replace(/[^a-z0-9]+/g, '-')}`,
     word,
-    meaning: dictionaryBubble.meaning || '待补充释义',
-    example: '',
-    note: '来源: 阅读高亮',
+    meaning: dictionaryBubble.meaning || dictionaryBubble.definition || '待补充释义',
+    example: dictionaryBubble.example || '',
+    note: [
+      dictionaryBubble.phonetic ? `音标: ${dictionaryBubble.phonetic}` : '',
+      dictionaryBubble.partOfSpeech ? `词性: ${dictionaryBubble.partOfSpeech}` : '',
+      dictionaryBubble.sourceLabel ? `来源: ${dictionaryBubble.sourceLabel}` : '来源: 阅读高亮',
+      dictionaryBubble.license ? `许可: ${dictionaryBubble.license}` : ''
+    ].filter(Boolean).join('；'),
     timestamp: Date.now(),
     source: 'reading-highlight',
     createdAt: existingIndex >= 0 ? list.words[existingIndex].createdAt || now : now,
@@ -5019,12 +5171,37 @@ function getQuestionKindLabel(kind) {
   margin: 0;
   overflow-wrap: anywhere;
   font-size: 1rem;
+  font-weight: 700;
+}
+
+.vocab-part {
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+  padding-top: 7px;
+  margin-top: 7px;
+}
+
+.vocab-part:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.vocab-part-term {
+  font-size: 0.94rem;
 }
 
 .vocab-meta,
 .vocab-label {
   color: var(--reading-muted);
   font-size: 0.78rem;
+}
+
+.vocab-meta {
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+.vocab-label {
+  font-weight: 700;
 }
 
 .vocab-section {
