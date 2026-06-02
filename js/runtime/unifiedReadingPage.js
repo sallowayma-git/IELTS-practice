@@ -221,6 +221,7 @@
         const timer = document.getElementById('timer');
         if (!timer) return;
         var displaySeconds;
+        var limitSeconds = Number.isFinite(Number(state.suiteTimerLimitSeconds)) ? Number(state.suiteTimerLimitSeconds) : 3600;
         if (state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime)) {
             var remainingMs = state.endlessCountdownEndTime - Date.now();
             displaySeconds = Math.max(0, Math.ceil(remainingMs / 1000));
@@ -230,12 +231,11 @@
                 timer.classList.remove('endless-countdown');
             }
         } else {
-            displaySeconds = getPageElapsedSeconds();
-            if (state.suiteTimerMode === 'countdown' && Number.isFinite(Number(state.suiteTimerLimitSeconds))) {
-                displaySeconds = Math.max(0, Number(state.suiteTimerLimitSeconds) - displaySeconds);
-            }
+            var elapsed = getPageElapsedSeconds();
+            displaySeconds = Math.max(0, limitSeconds - elapsed);
         }
-        timer.textContent = formatTimerSeconds(displaySeconds);
+        var remainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
+        timer.textContent = remainingMinutes + ' minutes remaining';
         var hasEndlessCountdown = state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime);
         timer.classList.toggle('paused', !interaction.timerRunning && !hasEndlessCountdown);
         timer.style.opacity = (interaction.timerRunning || hasEndlessCountdown) ? '1' : '0.5';
@@ -934,6 +934,7 @@
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
         }
+        updateRedesignedSubHeader();
     }
 
     function resolveAllowOptionReuse(group) {
@@ -990,14 +991,223 @@
         return String(questionId).replace(/^q/i, '');
     }
 
-    function buildQuestionNav() {
-        if (!dom.nav) return;
+    function getQuestionRangeText() {
         const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
-        dom.nav.innerHTML = order.map((questionId) => {
-            const status = navStatus.get(questionId) || '';
-            const label = displayLabel(questionId);
-            return `<button class="q-item ${status}" data-question-id="${questionId}" type="button">${label}</button>`;
-        }).join('');
+        if (!order.length) return '';
+        const labels = order.map(qId => parseInt(displayLabel(qId))).filter(num => !isNaN(num));
+        if (!labels.length) return '';
+        const min = Math.min(...labels);
+        const max = Math.max(...labels);
+        return `${min}-${max}`;
+    }
+
+    function updateRedesignedSubHeader() {
+        const partEl = document.getElementById('sub-header-part');
+        const instEl = document.getElementById('sub-header-instruction');
+        if (partEl && instEl) {
+            const category = (state.dataset?.meta?.category || '').toUpperCase();
+            let partName = 'Part 1';
+            if (category === 'P2') partName = 'Part 2';
+            else if (category === 'P3') partName = 'Part 3';
+            partEl.textContent = partName;
+            
+            const range = getQuestionRangeText();
+            instEl.textContent = range ? `Read the text and answer questions ${range}.` : '';
+        }
+    }
+
+    function getPassageQuestionStates() {
+        const info = {
+            p1: { questions: [], answeredCount: 0, total: 13 },
+            p2: { questions: [], answeredCount: 0, total: 13 },
+            p3: { questions: [], answeredCount: 0, total: 14 }
+        };
+
+        const p1PlaceholderOrder = Array.from({ length: 13 }, (_, i) => `q${i + 1}`);
+        const p2PlaceholderOrder = Array.from({ length: 13 }, (_, i) => `q${i + 14}`);
+        const p3PlaceholderOrder = Array.from({ length: 14 }, (_, i) => `q${i + 27}`);
+
+        let sequenceExams = [];
+        let draftsByExam = {};
+        let resultsByExam = {};
+        try {
+            const raw = global.sessionStorage?.getItem('ielts_sim_session');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed) {
+                    if (Array.isArray(parsed.sequence)) sequenceExams = parsed.sequence;
+                    if (parsed.draftsByExam) draftsByExam = parsed.draftsByExam;
+                    if (Array.isArray(parsed.results)) {
+                        parsed.results.forEach(res => {
+                            if (res && res.examId) resultsByExam[res.examId] = res;
+                        });
+                    }
+                }
+            }
+        } catch (_) {}
+
+        const category = (state.dataset?.meta?.category || '').toUpperCase();
+        let currentPart = 'p1';
+        if (category === 'P2') currentPart = 'p2';
+        else if (category === 'P3') currentPart = 'p3';
+
+        // Part 1
+        if (currentPart === 'p1') {
+            const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+            info.p1.total = order.length;
+            info.p1.questions = order.map(qId => {
+                const label = displayLabel(qId);
+                const status = navStatus.get(qId) || '';
+                if (hasAnswer(qId)) info.p1.answeredCount++;
+                return { qId, label, status };
+            });
+        } else {
+            const examId = sequenceExams[0]?.examId;
+            const draft = examId ? draftsByExam[examId] : null;
+            const draftAnswers = draft ? (draft.answers || {}) : {};
+            const result = examId ? resultsByExam[examId] : null;
+            const comparison = result ? (result.answerComparison || {}) : {};
+            
+            info.p1.questions = p1PlaceholderOrder.map(qId => {
+                const label = qId.replace(/^q/i, '');
+                let status = '';
+                const answered = draftAnswers[qId] != null && String(draftAnswers[qId]).trim() !== '';
+                if (answered) {
+                    info.p1.answeredCount++;
+                    status = 'answered';
+                }
+                if (comparison[qId]) {
+                    status = comparison[qId].isCorrect ? 'correct' : 'incorrect';
+                }
+                return { qId, label, status };
+            });
+        }
+
+        // Part 2
+        if (currentPart === 'p2') {
+            const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+            info.p2.total = order.length;
+            info.p2.questions = order.map(qId => {
+                const label = displayLabel(qId);
+                const status = navStatus.get(qId) || '';
+                if (hasAnswer(qId)) info.p2.answeredCount++;
+                return { qId, label, status };
+            });
+        } else {
+            const examId = sequenceExams[1]?.examId;
+            const draft = examId ? draftsByExam[examId] : null;
+            const draftAnswers = draft ? (draft.answers || {}) : {};
+            const result = examId ? resultsByExam[examId] : null;
+            const comparison = result ? (result.answerComparison || {}) : {};
+            
+            info.p2.questions = p2PlaceholderOrder.map(qId => {
+                const label = qId.replace(/^q/i, '');
+                let status = '';
+                const answered = draftAnswers[qId] != null && String(draftAnswers[qId]).trim() !== '';
+                if (answered) {
+                    info.p2.answeredCount++;
+                    status = 'answered';
+                }
+                if (comparison[qId]) {
+                    status = comparison[qId].isCorrect ? 'correct' : 'incorrect';
+                }
+                return { qId, label, status };
+            });
+        }
+
+        // Part 3
+        if (currentPart === 'p3') {
+            const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+            info.p3.total = order.length;
+            info.p3.questions = order.map(qId => {
+                const label = displayLabel(qId);
+                const status = navStatus.get(qId) || '';
+                if (hasAnswer(qId)) info.p3.answeredCount++;
+                return { qId, label, status };
+            });
+        } else {
+            const examId = sequenceExams[2]?.examId;
+            const draft = examId ? draftsByExam[examId] : null;
+            const draftAnswers = draft ? (draft.answers || {}) : {};
+            const result = examId ? resultsByExam[examId] : null;
+            const comparison = result ? (result.answerComparison || {}) : {};
+            
+            info.p3.questions = p3PlaceholderOrder.map(qId => {
+                const label = qId.replace(/^q/i, '');
+                let status = '';
+                const answered = draftAnswers[qId] != null && String(draftAnswers[qId]).trim() !== '';
+                if (answered) {
+                    info.p3.answeredCount++;
+                    status = 'answered';
+                }
+                if (comparison[qId]) {
+                    status = comparison[qId].isCorrect ? 'correct' : 'incorrect';
+                }
+                return { qId, label, status };
+            });
+        }
+
+        return { info, currentPart };
+    }
+
+    function updateActiveQuestionHighlight(qId) {
+        state.currentActiveQuestionId = qId;
+        document.querySelectorAll('.q-item').forEach((item) => {
+            if (item.dataset.questionId === qId) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+    }
+
+    function buildQuestionNav() {
+        const { info, currentPart } = getPassageQuestionStates();
+        
+        const renderQuestionsHtml = (partKey, questions, isCurrent) => {
+            return questions.map(q => {
+                const segmentClass = q.status ? q.status : '';
+                const activeClass = (isCurrent && q.qId === state.currentActiveQuestionId) ? 'active' : '';
+                const disabledClass = isCurrent ? '' : 'disabled';
+                
+                return `
+                    <div class="q-column" data-question-id="${q.qId}" data-part="${partKey}">
+                        <div class="q-bar-segment ${segmentClass}"></div>
+                        <button class="q-item ${activeClass} ${q.status} ${disabledClass}" data-question-id="${q.qId}" type="button">${q.label}</button>
+                    </div>
+                `;
+            }).join('');
+        };
+        
+        const p1Status = document.getElementById('part1-status-text');
+        const p1QuestionsContainer = document.getElementById('part1-questions');
+        if (p1Status) p1Status.textContent = `${info.p1.answeredCount} of ${info.p1.total}`;
+        if (p1QuestionsContainer) {
+            p1QuestionsContainer.innerHTML = renderQuestionsHtml('p1', info.p1.questions, currentPart === 'p1');
+        }
+        
+        const p2Status = document.getElementById('part2-status-text');
+        const p2QuestionsContainer = document.getElementById('part2-questions');
+        if (p2Status) p2Status.textContent = `${info.p2.answeredCount} of ${info.p2.total}`;
+        if (p2QuestionsContainer) {
+            p2QuestionsContainer.innerHTML = renderQuestionsHtml('p2', info.p2.questions, currentPart === 'p2');
+        }
+        
+        const p3Status = document.getElementById('part3-status-text');
+        const p3QuestionsContainer = document.getElementById('part3-questions');
+        if (p3Status) p3Status.textContent = `${info.p3.answeredCount} of ${info.p3.total}`;
+        if (p3QuestionsContainer) {
+            p3QuestionsContainer.innerHTML = renderQuestionsHtml('p3', info.p3.questions, currentPart === 'p3');
+        }
+
+        const prevBtn = document.getElementById('float-prev-btn');
+        const nextBtn = document.getElementById('float-next-btn');
+        if (prevBtn && nextBtn) {
+            const hasPrev = state.simulationMode && state.simulationCtx && state.simulationCtx.canPrev;
+            const hasNext = state.simulationMode && state.simulationCtx && state.simulationCtx.canNext;
+            prevBtn.disabled = !hasPrev;
+            nextBtn.disabled = !hasNext;
+        }
     }
 
     function attachPaneResizer() {
@@ -1355,20 +1565,79 @@
         syncPrimaryActionButtons();
     }
 
-    function navClickHandler(event) {
-        const button = event.target.closest('.q-item[data-question-id]');
-        if (!button) return;
-        const questionId = button.dataset.questionId;
-        const target = findQuestionAnchor(questionId);
-        if (target && typeof global.scrollToElement === 'function') {
-            global.scrollToElement(target);
-            return;
-        }
-        target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    function attachNavListeners() {
+        const handler = (event) => {
+            const column = event.target.closest('.q-column');
+            if (!column) return;
+            const questionId = column.dataset.questionId;
+            const partKey = column.dataset.part;
+            
+            const category = (state.dataset?.meta?.category || '').toUpperCase();
+            let currentPartKey = 'p1';
+            if (category === 'P2') currentPartKey = 'p2';
+            else if (category === 'P3') currentPartKey = 'p3';
+            
+            if (partKey === currentPartKey) {
+                const target = findQuestionAnchor(questionId);
+                if (target && typeof global.scrollToElement === 'function') {
+                    global.scrollToElement(target);
+                } else {
+                    target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+                }
+                updateActiveQuestionHighlight(questionId);
+            } else {
+                if (state.simulationMode) {
+                    if (partKey === 'p1' && currentPartKey === 'p2') dispatchSimulationNavigate('prev');
+                    else if (partKey === 'p2' && currentPartKey === 'p3') dispatchSimulationNavigate('prev');
+                    else if (partKey === 'p2' && currentPartKey === 'p1') dispatchSimulationNavigate('next');
+                    else if (partKey === 'p3' && currentPartKey === 'p2') dispatchSimulationNavigate('next');
+                    else if (partKey === 'p3' && currentPartKey === 'p1') {
+                        dispatchSimulationNavigate('next');
+                    }
+                    else if (partKey === 'p1' && currentPartKey === 'p3') {
+                        dispatchSimulationNavigate('prev');
+                    }
+                }
+            }
+        };
+        
+        document.getElementById('part1-questions')?.addEventListener('click', handler);
+        document.getElementById('part2-questions')?.addEventListener('click', handler);
+        document.getElementById('part3-questions')?.addEventListener('click', handler);
+
+        dom.right?.addEventListener('focusin', (event) => {
+            const input = event.target.closest('input, select, textarea');
+            if (!input) return;
+            const name = input.getAttribute('name');
+            if (name) {
+                const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+                const cleanName = name.replace(/^q/i, '');
+                const matched = order.find(qId => {
+                    const cleanQId = qId.replace(/^q/i, '');
+                    return cleanQId === cleanName;
+                });
+                if (matched) {
+                    updateActiveQuestionHighlight(matched);
+                }
+            }
+        });
     }
 
-    function attachNavListeners() {
-        dom.nav?.addEventListener('click', navClickHandler);
+    function attachFloatingNavListeners() {
+        const prevBtn = document.getElementById('float-prev-btn');
+        const nextBtn = document.getElementById('float-next-btn');
+        
+        prevBtn?.addEventListener('click', () => {
+            if (state.simulationMode) {
+                handleReset();
+            }
+        });
+        
+        nextBtn?.addEventListener('click', () => {
+            if (state.simulationMode) {
+                handleSubmit();
+            }
+        });
     }
 
     function attachMemorizeLocatorListeners() {
@@ -2646,13 +2915,14 @@
         document.body.classList.toggle('review-readonly-mode', state.readOnly);
         if (dom.submitBtn) {
             if (!dom.submitBtn.dataset.defaultLabel) {
-                dom.submitBtn.dataset.defaultLabel = dom.submitBtn.textContent || 'Submit';
+                dom.submitBtn.dataset.defaultLabel = dom.submitBtn.title || 'Submit';
             }
             dom.submitBtn.disabled = state.readOnly;
-            if (state.readOnly) {
-                dom.submitBtn.textContent = '回顾模式';
+            const label = state.readOnly ? '回顾模式' : dom.submitBtn.dataset.defaultLabel;
+            if (dom.submitBtn.classList.contains('nav-submit-circle-btn')) {
+                dom.submitBtn.title = label;
             } else {
-                dom.submitBtn.textContent = dom.submitBtn.dataset.defaultLabel;
+                dom.submitBtn.textContent = label;
             }
         }
         if (dom.resetBtn) {
@@ -2706,7 +2976,9 @@
 
     function syncPrimaryActionButtons() {
         if (dom.submitBtn && !dom.submitBtn.dataset.defaultLabel) {
-            dom.submitBtn.dataset.defaultLabel = dom.submitBtn.textContent || 'Submit';
+            dom.submitBtn.dataset.defaultLabel = dom.submitBtn.classList.contains('nav-submit-circle-btn') 
+                ? 'Submit' 
+                : (dom.submitBtn.textContent || 'Submit');
         }
         if (dom.submitBtn && !dom.submitBtn.dataset.defaultType) {
             dom.submitBtn.dataset.defaultType = dom.submitBtn.getAttribute('type') || '';
@@ -2720,11 +2992,21 @@
         const ctx = state.simulationCtx && typeof state.simulationCtx === 'object' ? state.simulationCtx : null;
         const simulationEnabled = Boolean(state.simulationMode && ctx);
         syncSimulationRuntimeFlags();
+        
+        const setSubmitLabel = (label) => {
+            if (!dom.submitBtn) return;
+            if (dom.submitBtn.classList.contains('nav-submit-circle-btn')) {
+                dom.submitBtn.title = label;
+            } else {
+                dom.submitBtn.textContent = label;
+            }
+        };
+
         if (state.memorizeMode && !state.reviewMode && !simulationEnabled) {
             if (dom.submitBtn) {
                 dom.submitBtn.style.display = '';
                 dom.submitBtn.setAttribute('type', 'button');
-                dom.submitBtn.textContent = 'Exit';
+                setSubmitLabel('Exit');
                 dom.submitBtn.disabled = false;
             }
             if (dom.resetBtn) {
@@ -2749,7 +3031,7 @@
                     dom.submitBtn.setAttribute('type', dom.submitBtn.dataset.defaultType);
                 }
                 if (!state.readOnly || canResetSubmittedSingle) {
-                    dom.submitBtn.textContent = dom.submitBtn.dataset.defaultLabel || 'Submit';
+                    setSubmitLabel(dom.submitBtn.dataset.defaultLabel || 'Submit');
                 }
                 dom.submitBtn.disabled = state.readOnly;
             }
@@ -2774,7 +3056,7 @@
         if (dom.submitBtn) {
             dom.submitBtn.style.display = '';
             dom.submitBtn.setAttribute('type', 'button');
-            dom.submitBtn.textContent = ctx.isLast ? 'Submit' : '下一题';
+            setSubmitLabel(ctx.isLast ? 'Submit' : '下一题');
             dom.submitBtn.disabled = state.readOnly;
         }
     }
@@ -3876,8 +4158,10 @@
         captureDom();
         const dataset = await ensureDataset();
         renderDataset(dataset);
+        updateRedesignedSubHeader();
         buildQuestionNav();
         attachNavListeners();
+        attachFloatingNavListeners();
         attachMemorizeLocatorListeners();
         attachDragDrop();
         attachPaneResizer();

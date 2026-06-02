@@ -30,6 +30,39 @@ except ModuleNotFoundError:
     raise
 
 
+async def _dismiss_overlays(page) -> None:
+    try:
+        await page.evaluate(
+            """
+            () => {
+                try {
+                    localStorage.setItem('hasSeenGplLicense', 'true');
+                } catch (_) {}
+                if (typeof window.acceptGplLicense === 'function') {
+                    try { window.acceptGplLicense(); } catch (_) {}
+                }
+                const modal = document.getElementById('license-modal');
+                if (modal) {
+                    modal.classList.remove('show');
+                }
+            }
+            """
+        )
+    except Exception:
+        pass
+
+    overlay = page.locator("#library-loader-overlay")
+    if await overlay.count():
+        try:
+            await overlay.wait_for(state="visible", timeout=2000)
+            close_btn = overlay.locator("[data-library-action='close']")
+            if await close_btn.count():
+                await close_btn.first.click()
+                await overlay.wait_for(state="detached", timeout=5000)
+        except Exception:
+            pass
+
+
 async def run() -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     report = {"generatedAt": datetime.now().isoformat(), "status": "fail", "steps": [], "error": None}
@@ -44,6 +77,7 @@ async def run() -> None:
                 "() => window.app && window.app.isInitialized && window.storage && typeof window.storage.get === 'function'",
                 timeout=60000,
             )
+            await _dismiss_overlays(page)
 
             await page.locator("nav button[data-view='browse']").click()
             await page.wait_for_selector("#browse-view.active", timeout=15000)
