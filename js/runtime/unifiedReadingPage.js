@@ -1201,6 +1201,20 @@
             p3QuestionsContainer.innerHTML = renderQuestionsHtml('p3', info.p3.questions, currentPart === 'p3');
         }
 
+        const isSingleMode = !state.suiteSessionId;
+        const p1Name = document.querySelector('#part-section-1 .part-nav-name');
+        if (p1Name) {
+            p1Name.classList.toggle('inactive', isSingleMode && currentPart !== 'p1');
+        }
+        const p2Name = document.querySelector('#part-section-2 .part-nav-name');
+        if (p2Name) {
+            p2Name.classList.toggle('inactive', isSingleMode && currentPart !== 'p2');
+        }
+        const p3Name = document.querySelector('#part-section-3 .part-nav-name');
+        if (p3Name) {
+            p3Name.classList.toggle('inactive', isSingleMode && currentPart !== 'p3');
+        }
+
         const prevBtn = document.getElementById('float-prev-btn');
         const nextBtn = document.getElementById('float-next-btn');
         if (prevBtn && nextBtn) {

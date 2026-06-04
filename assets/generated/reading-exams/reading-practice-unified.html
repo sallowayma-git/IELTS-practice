@@ -1224,10 +1224,10 @@
             color: #0f172a;
         }
 
-        .nav-submit-circle-btn {
-            width: 36px;
+        .nav-submit-rect-btn {
             height: 36px;
-            border-radius: 50%;
+            padding: 0 20px;
+            border-radius: 6px;
             background-color: #0f172a;
             color: #ffffff;
             border: none;
@@ -1235,16 +1235,63 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background-color 0.15s, transform 0.1s;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.15s ease;
             box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
         }
 
-        .nav-submit-circle-btn:hover {
+        .nav-submit-rect-btn:hover {
             background-color: #1e293b;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2);
         }
 
-        .nav-submit-circle-btn:active {
-            transform: scale(0.95);
+        .nav-submit-rect-btn:active {
+            transform: scale(0.97);
+        }
+
+        .nav-submit-rect-btn:disabled {
+            background-color: #cbd5e1;
+            color: #94a3b8;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        #reset-btn, #exit-btn {
+            height: 36px;
+            padding: 0 16px;
+            border-radius: 6px;
+            background-color: transparent;
+            color: #475569;
+            border: 1.5px solid #cbd5e1;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.15s ease;
+        }
+
+        #reset-btn:hover, #exit-btn:hover {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            border-color: #94a3b8;
+        }
+
+        #reset-btn:active, #exit-btn:active {
+            transform: scale(0.97);
+        }
+
+        #reset-btn:disabled, #exit-btn:disabled {
+            color: #cbd5e1;
+            border-color: #e2e8f0;
+            cursor: not-allowed;
+            background-color: transparent;
+        }
+
+        .part-nav-name.inactive {
+            color: #94a3b8 !important;
         }
 
         /* Floating Navigation Box */
@@ -1398,13 +1445,51 @@
             color: #f8fafc;
         }
 
-        body.dark-mode .nav-submit-circle-btn {
+        body.dark-mode .nav-submit-rect-btn {
             background-color: #f8fafc;
             color: #0f172a;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
         }
 
-        body.dark-mode .nav-submit-circle-btn:hover {
+        body.dark-mode .nav-submit-rect-btn:hover {
             background-color: #e2e8f0;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+        }
+
+        body.dark-mode .nav-submit-rect-btn:disabled {
+            background-color: #334155;
+            color: #475569;
+            box-shadow: none;
+        }
+
+        body.dark-mode #reset-btn, body.dark-mode #exit-btn {
+            color: #cbd5e1;
+            border-color: #475569;
+            background-color: transparent;
+        }
+
+        body.dark-mode #reset-btn:hover, body.dark-mode #exit-btn:hover {
+            background-color: #334155;
+            color: #f8fafc;
+            border-color: #64748b;
+        }
+
+        body.dark-mode #reset-btn:disabled, body.dark-mode #exit-btn:disabled {
+            color: #475569;
+            border-color: #334155;
+            background-color: transparent;
+        }
+
+        body.dark-mode .part-nav-name.inactive {
+            color: #64748b !important;
+        }
+
+        #floating-passage-nav {
+            display: none !important;
+        }
+
+        body[data-suite-mode="true"] #floating-passage-nav {
+            display: flex !important;
         }
 
         body.dark-mode .floating-nav-box {
@@ -1551,41 +1636,9 @@
         </div>
 
         <div class="nav-controls-right">
-            <!-- Split layout SVG -->
-            <button class="nav-icon-btn" type="button" title="Layout Settings">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="8" y1="21" x2="8" y2="3"></line>
-                    <line x1="16" y1="21" x2="16" y2="3"></line>
-                </svg>
-            </button>
-            <!-- Keyboard SVG -->
-            <button class="nav-icon-btn" type="button" title="Keyboard Shortcuts">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect>
-                    <line x1="6" y1="8" x2="6" y2="8"></line>
-                    <line x1="10" y1="8" x2="10" y2="8"></line>
-                    <line x1="14" y1="8" x2="14" y2="8"></line>
-                    <line x1="18" y1="8" x2="18" y2="8"></line>
-                    <line x1="6" y1="12" x2="6" y2="12"></line>
-                    <line x1="18" y1="12" x2="18" y2="12"></line>
-                    <line x1="7" y1="16" x2="17" y2="16"></line>
-                    <line x1="10" y1="12" x2="14" y2="12"></line>
-                </svg>
-            </button>
-            <!-- Gear Settings SVG -->
-            <button class="nav-icon-btn" type="button" title="Preferences">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                </svg>
-            </button>
             <button id="exit-btn" type="button" style="display: none;">Exit</button>
             <button id="reset-btn" type="button" style="display: none;">Reset</button>
-            <button id="submit-btn" class="nav-submit-circle-btn" type="button">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-            </button>
+            <button id="submit-btn" class="nav-submit-rect-btn" type="button">Submit</button>
         </div>
     </div>
 
