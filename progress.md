@@ -58,6 +58,300 @@
 | Required suite E2E | `python3 developer/tests/e2e/suite_practice_flow.py` | Legacy explicit suite regression and replay-not-persisting check remain green | Passed, 0 errors, 8 warnings | Pass |
 | Diff whitespace check | `git diff --check` | No whitespace errors | Passed | Pass |
 
+### Taskbook CORE-01/02/03: Practice Core Convergence
+- **Status:** checkpoint complete
+- **Started:** 2026-06-04 Asia/Shanghai
+- Actions taken:
+  - Re-read `developer/doc/改造任务书.md` and confirmed first-stage boundary: core convergence only, no NAS, no authoring flow, no route envelope redesign.
+  - Added `ReadingLibraryStatus` and `ReadingAssetProvider` to `server/src/lib/practice/contracts.ts`.
+  - Added `server/src/lib/practice/reading/ReadingAssetProvider.ts`, `BuiltinReadingAssetProvider.ts`, and `reading-generated-loader.ts`.
+  - Reduced `server/src/lib/practice/reading-assets.ts` to a compatibility re-export.
+  - Routed reading asset list/detail, single reading submit, suite creation, and suite passage submit through the provider boundary.
+  - Updated `reading-suite-sessions.ts` to consume `PracticeAsset[]` instead of generated manifest entry structures.
+  - Split server Practice ownership into `PracticeAssetFacade`, `PracticeHistoryFacade`, `LegacyReadingHistoryAdapter`, `ReadingSuiteFacade`, and `ReadingCoachFacade`.
+  - Compressed `PracticeService` into a compatibility shell that wires facades and preserves public method names for existing routes.
+  - Updated `practiceApiFacade.test.js` and `practiceVueShell.test.js` to lock provider injection and facade ownership instead of old monolithic service internals.
+- Files modified/created:
+  - `server/src/lib/practice/contracts.ts`
+  - `server/src/lib/practice/service.ts`
+  - `server/src/lib/practice/migration-status.ts`
+  - `server/src/lib/practice/reading-assets.ts`
+  - `server/src/lib/practice/reading-suite-sessions.ts`
+  - `server/src/lib/practice/assets/PracticeAssetFacade.ts`
+  - `server/src/lib/practice/history/PracticeHistoryFacade.ts`
+  - `server/src/lib/practice/history/LegacyReadingHistoryAdapter.ts`
+  - `server/src/lib/practice/suite/ReadingSuiteFacade.ts`
+  - `server/src/lib/practice/coach/ReadingCoachFacade.ts`
+  - `server/src/lib/practice/reading/ReadingAssetProvider.ts`
+  - `server/src/lib/practice/reading/BuiltinReadingAssetProvider.ts`
+  - `server/src/lib/practice/reading/reading-generated-loader.ts`
+  - `developer/tests/js/practiceApiFacade.test.js`
+  - `developer/tests/js/practiceVueShell.test.js`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
+## Test Results: Taskbook CORE-01/02/03
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Server build | `npm run build:server` | TypeScript server compiles after provider/facade split | Passed after narrowing `PracticeHistoryFacade.getBySession()` activity type through `assertPracticeActivity()` | Pass |
+| Practice API facade contract | `node developer/tests/js/practiceApiFacade.test.js` | Existing Practice API behavior and injected provider fake remain green | Passed | Pass |
+| Vue Practice Shell contract | `node developer/tests/js/practiceVueShell.test.js` | Static contracts lock facade ownership and provider boundaries | Passed after moving old service-internal assertions to facade sources | Pass |
+| Required static suite | `python3 developer/tests/ci/run_static_suite.py` | Full static suite passes after provider/facade split | Passed | Pass |
+| Required suite E2E | `python3 developer/tests/e2e/suite_practice_flow.py` | Legacy explicit suite regression remains green | Passed, 0 errors, 8 warnings | Pass |
+| Writing Vue build | `npm run build:writing` | Vue Practice Shell bundle still compiles | Passed | Pass |
+| Diff whitespace check | `git diff --check` | No whitespace errors | Passed | Pass |
+
+### Taskbook CORE-04: Vue Practice Reading API Layer
+- **Status:** checkpoint complete
+- **Started:** 2026-06-04 Asia/Shanghai
+- Actions taken:
+  - Re-read CORE-04 requirements and current Vue app shape.
+  - Confirmed `apps/writing-vue` is a Vite/Vue app without an existing TypeScript config file, but Vite can load the new `.ts` module files directly.
+  - Added `apps/writing-vue/src/modules/practice-reading/contracts.ts`.
+  - Added `apps/writing-vue/src/modules/practice-reading/api.ts` as the sole reading module wrapper around raw `practice-client.js`.
+  - Added `useReadingLibrary.ts`, `useReadingHistory.ts`, `useReadingSuite.ts`, and `useReadingAttempt.ts`.
+  - Rewired `PracticeLibraryPage.vue` so reading asset/history/suite calls go through composables instead of directly importing `practiceAssets`, `practiceHistory`, and `practiceReadingSuite`.
+  - Kept UI state, template, legacy DOM ids/data attributes, and panel structure in `PracticeLibraryPage.vue`; CORE-05 panel extraction has not started.
+  - Updated `practiceVueShell.test.js` to lock the new module boundary and forbid raw Practice client imports inside `PracticeLibraryPage.vue`.
+- Files modified/created:
+  - `apps/writing-vue/src/modules/practice-reading/contracts.ts`
+  - `apps/writing-vue/src/modules/practice-reading/api.ts`
+  - `apps/writing-vue/src/modules/practice-reading/useReadingLibrary.ts`
+  - `apps/writing-vue/src/modules/practice-reading/useReadingHistory.ts`
+  - `apps/writing-vue/src/modules/practice-reading/useReadingSuite.ts`
+  - `apps/writing-vue/src/modules/practice-reading/useReadingAttempt.ts`
+  - `apps/writing-vue/src/views/PracticeLibraryPage.vue`
+  - `developer/tests/js/practiceVueShell.test.js`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
+## Test Results: Taskbook CORE-04
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Vue Practice Shell contract | `node developer/tests/js/practiceVueShell.test.js` | Static contracts lock reading module API/composable boundary | Passed | Pass |
+| Writing Vue build | `npm run build:writing` | Vite compiles new `.ts` reading module files and Practice Library imports | Passed | Pass |
+| Required static suite | `python3 developer/tests/ci/run_static_suite.py` | Full static suite passes after reading module API split | Passed | Pass |
+| Required suite E2E | `python3 developer/tests/e2e/suite_practice_flow.py` | Legacy explicit suite regression remains green | Passed, 0 errors, 8 warnings | Pass |
+| Diff whitespace check | `git diff --check` | No whitespace errors | Passed | Pass |
+
+### Taskbook CORE-05: PracticeLibraryPage Panel Split
+- **Status:** checkpoint complete
+- **Started:** 2026-06-04 Asia/Shanghai
+- Actions taken:
+  - Re-read CORE-05 requirements and confirmed the boundary: split the library page panels, preserve legacy DOM contracts, do not enter NAS or CORE-06.
+  - Added `ReadingOverviewPanel.vue`, `ReadingBrowsePanel.vue`, `ReadingHistoryPanel.vue`, `ReadingMoreToolsPanel.vue`, `ReadingSettingsPanel.vue`, `ReadingSuiteSelector.vue`, and `ReadingLibraryConfigPanel.vue`.
+  - Rewired `PracticeLibraryPage.vue` to render the extracted panels and pass data/actions through explicit props and emits.
+  - Kept `PracticeLibraryPage.vue` as the only owner of reading library state, history state, suite state, backup/archive side effects, legacy runtime loading, and router navigation for this checkpoint.
+  - Moved the stable archive import file input into `ReadingSettingsPanel.vue` and exposed a tiny `click()` method through the component ref so the parent trigger path still opens the same hidden input.
+  - Changed the page stylesheet from scoped to global because Vue scoped CSS in the parent does not match DOM rendered inside child components; the legacy selectors remain page-scoped by `.practice-library-open-source` / `.practice-library-legacy`.
+  - Updated `practiceVueShell.test.js` to read the extracted panel sources, assert parent imports/renders, assert child emits, and preserve legacy ids/data attributes across the library surface.
+- Files modified/created:
+  - `apps/writing-vue/src/views/PracticeLibraryPage.vue`
+  - `apps/writing-vue/src/modules/practice-reading/components/ReadingOverviewPanel.vue`
+  - `apps/writing-vue/src/modules/practice-reading/components/ReadingBrowsePanel.vue`
+  - `apps/writing-vue/src/modules/practice-reading/components/ReadingHistoryPanel.vue`
+  - `apps/writing-vue/src/modules/practice-reading/components/ReadingMoreToolsPanel.vue`
+  - `apps/writing-vue/src/modules/practice-reading/components/ReadingSettingsPanel.vue`
+  - `apps/writing-vue/src/modules/practice-reading/components/ReadingSuiteSelector.vue`
+  - `apps/writing-vue/src/modules/practice-reading/components/ReadingLibraryConfigPanel.vue`
+  - `developer/tests/js/practiceVueShell.test.js`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
+## Test Results: Taskbook CORE-05
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Vue Practice Shell contract | `node developer/tests/js/practiceVueShell.test.js` | Static contracts lock component extraction, parent event wiring, and legacy marker preservation | Passed | Pass |
+| Writing Vue build | `npm run build:writing` | Vite compiles extracted reading panel components and Practice Library imports | Passed | Pass |
+| Server build | `npm run build:server` | TypeScript server still compiles after the first-stage server facade/provider work | Passed | Pass |
+| Practice API facade contract | `node developer/tests/js/practiceApiFacade.test.js` | Practice provider/facade contracts remain green after frontend panel extraction | Passed | Pass |
+| Required static suite | `python3 developer/tests/ci/run_static_suite.py` | Full static suite passes and regenerates `developer/tests/e2e/reports/static-ci-report.json` | Passed | Pass |
+| Required suite E2E | `python3 developer/tests/e2e/suite_practice_flow.py` | Suite practice flow remains green after library panel extraction | Passed, 0 errors, 9 warnings | Pass |
+| Diff whitespace check | `git diff --check` | No whitespace errors | Passed | Pass |
+
+### Taskbook CORE-06: PracticeReadingPage API/loadAsset Split
+- **Status:** checkpoint complete
+- **Started:** 2026-06-04 Asia/Shanghai
+- Actions taken:
+  - Re-read CORE-06 and kept the required order: API/loadAsset first, then timer, then answer model, then Coach.
+  - Added `apps/writing-vue/src/modules/practice-reading/useReadingAsset.ts`.
+  - Moved reading asset detail state (`asset`, `payload`, `loading`, `error`) into `useReadingAsset()`.
+  - Rewired `PracticeReadingPage.vue` so `loadAsset()` calls `loadReadingAsset(normalizedAssetId, { afterLoad })` and keeps suite progress loading, replay loading, answer initialization, notes loading, DOM sync, and timer startup in the page-level state machine.
+  - Rewired endless mode pool refresh through `loadReadingAssetPool()` instead of direct `practiceAssets.listAll()`.
+  - Updated `practiceVueShell.test.js` so raw `practiceAssets` is forbidden in `PracticeReadingPage.vue` and only allowed through the reading module API/composable path.
+- Files modified/created:
+  - `apps/writing-vue/src/views/PracticeReadingPage.vue`
+  - `apps/writing-vue/src/modules/practice-reading/useReadingAsset.ts`
+  - `developer/tests/js/practiceVueShell.test.js`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
+## Test Results: Taskbook CORE-06 API/loadAsset
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Vue Practice Shell contract | `node developer/tests/js/practiceVueShell.test.js` | Static contracts lock `useReadingAsset()` ownership and forbid raw asset client calls in `PracticeReadingPage.vue` | Passed | Pass |
+| Writing Vue build | `npm run build:writing` | Vite compiles `useReadingAsset.ts` and the rewired reading page | Passed | Pass |
+| Required static suite | `python3 developer/tests/ci/run_static_suite.py` | Full static suite passes after reading asset composable extraction | Passed | Pass |
+| Required suite E2E | `python3 developer/tests/e2e/suite_practice_flow.py` | Suite practice flow remains green after reading asset composable extraction | Passed, 0 errors, 8 warnings | Pass |
+| Diff whitespace check | `git diff --check` | No whitespace errors | Passed | Pass |
+
+### Taskbook CORE-06: PracticeReadingPage Timer Split
+- **Status:** checkpoint complete
+- **Started:** 2026-06-04 Asia/Shanghai
+- Actions taken:
+  - Continued CORE-06 in the required order after the API/loadAsset slice.
+  - Added `apps/writing-vue/src/modules/practice-reading/useReadingTimer.ts`.
+  - Moved local elapsed timer state, running state, start anchor, formatted clock projection, suite timer normalization, suite timer application, Practice timer snapshot generation, trusted timing resolution, and the legacy `window.__IELTS_PRACTICE_TIMER__` bridge into `useReadingTimer()`.
+  - Rewired `PracticeReadingPage.vue` to use the timer composable for `formattedTimer`, pause/resume, suite timer state, submit timing, replay duration restore, reset, recycle, mount bridge install, and unmount cleanup.
+  - Removed page-local `formatClock()` and the direct `elapsedSeconds.value` / `startedAt.value` timer resets from `PracticeReadingPage.vue`.
+  - Updated `practiceVueShell.test.js` so timer implementation contracts are asserted against `useReadingTimer.ts`, while the page is forbidden from owning the timer formatter, suite timer normalization, window bridge, or timer event dispatch.
+- Files modified/created:
+  - `apps/writing-vue/src/views/PracticeReadingPage.vue`
+  - `apps/writing-vue/src/modules/practice-reading/useReadingTimer.ts`
+  - `developer/tests/js/practiceVueShell.test.js`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
+## Test Results: Taskbook CORE-06 Timer
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Vue Practice Shell contract | `node developer/tests/js/practiceVueShell.test.js` | Static contracts lock `useReadingTimer()` ownership and forbid page-local timer bridge implementation | Passed | Pass |
+| Writing Vue build | `npm run build:writing` | Vite compiles `useReadingTimer.ts` and the rewired reading page | Passed | Pass |
+| Required static suite | `python3 developer/tests/ci/run_static_suite.py` | Full static suite passes after reading timer composable extraction | Passed | Pass |
+| Required suite E2E | `python3 developer/tests/e2e/suite_practice_flow.py` | Suite practice flow remains green after reading timer composable extraction | Passed, 0 errors, 9 warnings | Pass |
+| Diff whitespace check | `git diff --check` | No whitespace errors | Passed | Pass |
+
+### Taskbook CORE-06: PracticeReadingPage Answer Model Split
+- **Status:** checkpoint complete
+- **Started:** 2026-06-04 Asia/Shanghai
+- Actions taken:
+  - Continued CORE-06 in the required order after the timer slice.
+  - Added `apps/writing-vue/src/modules/practice-reading/useReadingAnswers.ts`.
+  - Moved the session-scoped answer container, answer initialization, memorize-mode answer-key prefill, answer cloning, answer fingerprinting, answered-count projection, raw/value reads, option selection checks, answer mutation, checkbox answer toggles, and answer-map snapshots into `useReadingAnswers()`.
+  - Rewired `PracticeReadingPage.vue` so answer reads/writes go through the answer composable while page-owned lifecycle callbacks still handle timeline tracking, DOM/native control synchronization, submit messages, drag/drop behavior, highlights, and Coach.
+  - Removed page-local answer initialization, value reads, mutation, checkbox toggle, cloning, and fingerprinting implementations.
+  - Updated `practiceVueShell.test.js` so answer model contracts are asserted against `useReadingAnswers.ts`, while the page is forbidden from owning the answer container or answer model functions.
+- Files modified/created:
+  - `apps/writing-vue/src/views/PracticeReadingPage.vue`
+  - `apps/writing-vue/src/modules/practice-reading/useReadingAnswers.ts`
+  - `developer/tests/js/practiceVueShell.test.js`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
+## Test Results: Taskbook CORE-06 Answers
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Vue Practice Shell contract | `node developer/tests/js/practiceVueShell.test.js` | Static contracts lock `useReadingAnswers()` ownership and forbid page-local answer model implementation | Passed | Pass |
+| Writing Vue build | `npm run build:writing` | Vite compiles `useReadingAnswers.ts` and the rewired reading page | Passed | Pass |
+| Required static suite | `python3 developer/tests/ci/run_static_suite.py` | Full static suite passes after answer model composable extraction | Passed | Pass |
+| Required suite E2E | `python3 developer/tests/e2e/suite_practice_flow.py` | Suite practice flow remains green after answer model composable extraction | Passed, 0 errors, 9 warnings | Pass |
+| Diff whitespace check | `git diff --check` | No whitespace errors | Passed | Pass |
+
+### Taskbook CORE-10: Vue Reading Test Matrix Closure
+- **Status:** checkpoint complete
+- **Started:** 2026-06-05 Asia/Shanghai
+- Actions taken:
+  - Added explicit CORE-10 reading module tests and wired them into the static suite.
+  - Added explicit server-side reading provider/parser/sanitizer/suite/history contract coverage.
+  - Stabilized `practice_reading_vue_flow.py` by replacing brittle direct hash/button waits with stable library-view helpers, archive import completion checks based on real API/history effects, and richer failure diagnostics.
+  - Fixed a real renderer regression in `App.vue`: frameless practice routes no longer depend on `transition mode="out-in"` to remount, eliminating the `#/` empty-shell return bug.
+  - Fixed a real replay timing bug in `PracticeReadingPage.vue`: replay hydration now runs only after `loadReadingAsset()` has committed payload state, so `assignAnswer()` sees the correct `questionOrder` and dragdrop replay restores `q12` correctly.
+  - Added post-render answer/dropzone synchronization for practice reading, and broadened dropzone sync to cover all matching DOM nodes instead of the first accidental match.
+  - Updated static shell assertions to lock the new behavior boundary instead of the old `afterLoad` implementation detail.
+  - Stabilized `practice_reading_suite_vue_flow.py` against the current suite state machine: post-submit now accepts either review-stop or auto-advance, and returning to the library uses the same stable helper path as single-reading.
+- Files modified/created:
+  - `apps/writing-vue/src/App.vue`
+  - `apps/writing-vue/src/views/PracticeReadingPage.vue`
+  - `developer/tests/e2e/practice_reading_vue_flow.py`
+  - `developer/tests/e2e/practice_reading_suite_vue_flow.py`
+  - `developer/tests/js/practiceVueShell.test.js`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
+## Test Results: Taskbook CORE-10
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Vue Practice Shell contract | `node developer/tests/js/practiceVueShell.test.js` | Shell and reading-page contracts remain green after CORE-10 timing and E2E stabilization changes | Passed | Pass |
+| Reading CORE-10 module behavior | `node developer/tests/js/practiceReadingCore10.test.js` | Reading library/history/asset core behaviors stay green | Passed | Pass |
+| Vue single-reading E2E | `python3 developer/tests/e2e/practice_reading_vue_flow.py` | Reading single flow, replay, archive import/export, and coach context all pass | Passed | Pass |
+| Vue suite-reading E2E | `python3 developer/tests/e2e/practice_reading_suite_vue_flow.py` | Vue suite create/progress/review replay regression passes under current auto-advance suite behavior | Passed | Pass |
+| Required legacy suite E2E | `python3 developer/tests/e2e/suite_practice_flow.py` | Existing suite regression gate remains green | Passed, 0 errors, 9 warnings | Pass |
+| Required static suite | `python3 developer/tests/ci/run_static_suite.py` | Full static/contract/E2E matrix passes with Vue reading and Vue suite gates green | Passed | Pass |
+| Diff whitespace check | `git diff --check` | No whitespace errors | Passed | Pass |
+
+### Taskbook CORE-06: PracticeReadingPage Coach Split
+- **Status:** checkpoint complete
+- **Started:** 2026-06-04 Asia/Shanghai
+- Actions taken:
+  - Continued CORE-06 after the API/loadAsset, timer, and answer-model slices.
+  - Added `readingCoachApi` and `readingSessionApi` to `apps/writing-vue/src/modules/practice-reading/api.ts`.
+  - Added `apps/writing-vue/src/modules/practice-reading/useReadingCoach.ts`.
+  - Moved Coach query state, loading/error/response state, selected context state, stream status, floating panel state, LLM review status, transcript/follow-up projections, request sequencing, payload building, stream event mapping, automatic review, replay review refresh, canonical session-history hydration, and local transcript fallback merge into `useReadingCoach()`.
+  - Rewired `PracticeReadingPage.vue` to use `useReadingCoach()` and pass only page-owned dependencies: current submission, current asset id, mode resolver, DOM selection reader, answer display formatting, active-question visit flush, session cache snapshot callback, and submitted-metadata hydration callback.
+  - Kept DOM selection extraction in `PracticeReadingPage.vue` because it depends on rendered question/passage DOM; renamed the local question-number helper to `normalizeSelectedQuestionNumber()` so it is not a second Coach payload owner.
+  - Removed direct `practiceCoach` import and page-local Coach implementation blocks from `PracticeReadingPage.vue`.
+  - Updated `practiceVueShell.test.js` to assert the Coach ownership boundary against `useReadingCoach.ts` and forbid raw Coach request/payload/sequencing logic in the page.
+- Files modified/created:
+  - `apps/writing-vue/src/views/PracticeReadingPage.vue`
+  - `apps/writing-vue/src/modules/practice-reading/api.ts`
+  - `apps/writing-vue/src/modules/practice-reading/useReadingCoach.ts`
+  - `developer/tests/js/practiceVueShell.test.js`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
+## Test Results: Taskbook CORE-06 Coach
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Vue Practice Shell contract | `node developer/tests/js/practiceVueShell.test.js` | Static contracts lock `useReadingCoach()` ownership and forbid raw Coach lifecycle logic in `PracticeReadingPage.vue` | Passed | Pass |
+| Writing Vue build | `npm run build:writing` | Vite compiles the Coach composable extraction and reading page wiring | Passed | Pass |
+| Required static suite | `python3 developer/tests/ci/run_static_suite.py` | Full static suite passes after Coach composable extraction | Passed | Pass |
+| Required suite E2E | `python3 developer/tests/e2e/suite_practice_flow.py` | Suite practice flow remains green after Coach composable extraction | Passed, 0 errors, 8 warnings | Pass |
+| Diff whitespace check | `git diff --check` | No whitespace errors | Passed | Pass |
+
+### Taskbook CORE-06: PracticeReadingPage Display Component Split
+- **Status:** checkpoint complete
+- **Started:** 2026-06-04 Asia/Shanghai
+- Actions taken:
+  - Continued CORE-06 after API/loadAsset, timer, answer-model, and Coach composables were stable.
+  - Added and wired five pure display components:
+    - `apps/writing-vue/src/modules/practice-reading/components/ReadingPassagePane.vue`
+    - `apps/writing-vue/src/modules/practice-reading/components/ReadingQuestionPane.vue`
+    - `apps/writing-vue/src/modules/practice-reading/components/ReadingReviewPanel.vue`
+    - `apps/writing-vue/src/modules/practice-reading/components/ReadingCoachPanel.vue`
+    - `apps/writing-vue/src/modules/practice-reading/components/ReadingAnswerNav.vue`
+  - Rewired `PracticeReadingPage.vue` to render those components while keeping state/effects in the parent page and existing composables.
+  - Kept legacy DOM ids/data markers inside the display components: `left`, `right`, `question-groups`, `results`, `reading-coach-panel`, `question-nav`, `submit-btn`, `reset-btn`, `exit-btn`, and `data-reading-*` markers.
+  - Converted `PracticeReadingPage.vue` from scoped CSS to page-level CSS and removed `:deep()` selectors so child component DOM keeps the existing reading page styles.
+  - Fixed the Coach panel focus wiring by exposing `refreshSelectedContext` from the `useReadingCoach()` destructure used by the component event.
+  - Updated `practiceVueShell.test.js` to assert page imports/renders, child props/emits, legacy markers in child sources, and no Practice API imports inside display components.
+- Files modified/created:
+  - `apps/writing-vue/src/views/PracticeReadingPage.vue`
+  - `apps/writing-vue/src/modules/practice-reading/components/ReadingPassagePane.vue`
+  - `apps/writing-vue/src/modules/practice-reading/components/ReadingQuestionPane.vue`
+  - `apps/writing-vue/src/modules/practice-reading/components/ReadingReviewPanel.vue`
+  - `apps/writing-vue/src/modules/practice-reading/components/ReadingCoachPanel.vue`
+  - `apps/writing-vue/src/modules/practice-reading/components/ReadingAnswerNav.vue`
+  - `developer/tests/js/practiceVueShell.test.js`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
+## Test Results: Taskbook CORE-06 Display Components
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Vue Practice Shell contract | `node developer/tests/js/practiceVueShell.test.js` | Static contracts lock display component extraction and state/effect ownership boundary | Passed | Pass |
+| Writing Vue build | `npm run build:writing` | Vite compiles extracted display components and reading page wiring | Passed | Pass |
+| Required static suite | `python3 developer/tests/ci/run_static_suite.py` | Full static suite passes after display component extraction | Passed | Pass |
+| Required suite E2E | `python3 developer/tests/e2e/suite_practice_flow.py` | Suite practice flow remains green after display component extraction | Passed, 0 errors, 8 warnings | Pass |
+
 ### Phase 1: Discovery & Current Chain Audit
 - **Status:** complete
 - **Started:** 2026-05-21 Asia/Shanghai
@@ -2405,3 +2699,90 @@
   - `git diff --check` passed.
 - Notes:
   - OpenSource parity/userspace fix only. No Practice API shape, history schema, canonical submission fields, archive import/export path, AI Coach prompt/RAG behavior, scoring, replay submit behavior, or writing navigation changed.
+
+### Taskbook CORE-07: AI Coach Isolation
+- **Status:** checkpoint complete
+- **Started:** 2026-06-04 Asia/Shanghai
+- Actions taken:
+  - Used three parallel subagents with `gpt-5.4` and `xhigh` reasoning:
+    - backend worker for `ReadingCoachFacade` and server setting contract;
+    - frontend worker for Vue setting read/write, page lifecycle, and `useReadingCoach` gates;
+    - test worker for Practice API and Vue static contracts.
+  - Added the canonical server setting key `practice.readingCoach.enabled` and a server-side `normalizeReadingCoachEnabled()` defaulting missing/invalid values to enabled.
+  - Gated `ReadingCoachFacade.coach()` before session-context hydration and before `ReadingAssistantService.query()`, returning `practice_coach_disabled` when the setting is disabled.
+  - Let the same Practice service gate cover `/api/practice/coach`, `/api/practice/coach/stream`, `/api/reading/assistant/query`, and `/api/reading/assistant/query/stream`.
+  - Added `readingCoachSettingsApi` under `apps/writing-vue/src/modules/practice-reading/api.ts`, backed by the existing `/api/settings` client.
+  - Added the reading page AI Coach setting UI and made `PracticeReadingPage.vue` load the setting before loading assets/replay state.
+  - Wired `readingCoachEnabled` into `useReadingCoach()` so manual Coach actions, automatic review, replay refresh, panel open state, and in-flight result writes are all gated.
+  - Hid `ReadingCoachPanel` and skipped submit/replay automatic Coach calls when disabled, while leaving reading submit, history, and suite flows untouched.
+  - Updated `developer/tests/js/practiceApiFacade.test.js` and `developer/tests/js/practiceVueShell.test.js` for disabled Coach behavior and module boundaries.
+- Files modified/created for this checkpoint:
+  - `server/src/lib/practice/contracts.ts`
+  - `server/src/lib/practice/coach/ReadingCoachFacade.ts`
+  - `apps/writing-vue/src/modules/practice-reading/contracts.ts`
+  - `apps/writing-vue/src/modules/practice-reading/api.ts`
+  - `apps/writing-vue/src/modules/practice-reading/useReadingCoach.ts`
+  - `apps/writing-vue/src/views/PracticeReadingPage.vue`
+  - `developer/tests/js/practiceApiFacade.test.js`
+  - `developer/tests/js/practiceVueShell.test.js`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
+## Test Results: Taskbook CORE-07
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Vue Practice Shell contract | `node developer/tests/js/practiceVueShell.test.js` | Static contracts lock Coach setting module facade, page gates, and CORE-06 component/composable boundaries | Passed | Pass |
+| Practice API facade contract | `node developer/tests/js/practiceApiFacade.test.js` | Disabled Coach returns `practice_coach_disabled`, does not call ReadingCoach, and reading submit/history/suite stay available | Passed | Pass |
+| Writing Vue build | `npm run build:writing` | Vite compiles the reading Coach setting UI and module API | Passed | Pass |
+| Required static suite | `python3 developer/tests/ci/run_static_suite.py` | Full static suite passes and regenerates `developer/tests/e2e/reports/static-ci-report.json` | Passed | Pass |
+| Required suite E2E | `python3 developer/tests/e2e/suite_practice_flow.py` | Suite practice flow remains green with Coach isolation in place | Passed, 0 errors, 8 warnings | Pass |
+| Diff whitespace check | `git diff --check` | No whitespace errors | Passed | Pass |
+
+### Taskbook CORE-08/09: Legacy Bridge Convergence + Local API Guard
+- **Status:** checkpoint complete
+- **Started:** 2026-06-05 Asia/Shanghai
+- Actions taken:
+  - Completed the legacy bridge convergence requested by CORE-08.
+  - Added `apps/writing-vue/src/modules/legacy/legacyBridge.ts` as the single owner for:
+    - `__IELTS_PRACTICE_TIMER__` / `practiceTimerStateChange`
+    - More-tools legacy runtime loading and global tool entrypoints
+    - onboarding/update-manager bridge calls
+    - SHUI background global theme/background teardown hooks
+  - Added `apps/writing-vue/src/modules/legacy/legacyScriptLoader.ts` as the single owner of legacy script/style resolution, deduped loads, and DOM tag injection.
+  - Rewired `useReadingTimer.ts` to delegate timer bridge install/remove/event dispatch to `legacyBridge.ts` instead of writing `window[...]` directly.
+  - Confirmed `PracticeLibraryPage.vue`, `SettingsPage.vue`, and `ShuiBackground.vue` route legacy actions through bridge/loader APIs instead of owning duplicate loaders or direct `window.*` calls.
+  - Rebased `developer/tests/js/practiceVueShell.test.js` away from garbage white-box assertions on page-local loader/global details and onto bridge/loader module contracts.
+  - Completed CORE-09 local API boundary tightening:
+    - added `server/src/lib/shared/local-api-guard.ts`
+    - restricted reflected CORS origin to trusted local/Electron origins only
+    - blocked untrusted write-method requests by `Origin`/`Referer`
+    - blocked untrusted preflight requests
+    - removed SSE `Access-Control-Allow-Origin: *`
+  - Added Practice API contract coverage proving `https://evil.example` cannot preflight or delete `/api/practice/history`, while trusted `app://app` preflight remains allowed.
+- Files modified/created for this checkpoint:
+  - `apps/writing-vue/src/modules/legacy/legacyBridge.ts`
+  - `apps/writing-vue/src/modules/legacy/legacyScriptLoader.ts`
+  - `apps/writing-vue/src/modules/practice-reading/useReadingTimer.ts`
+  - `apps/writing-vue/src/views/PracticeLibraryPage.vue`
+  - `apps/writing-vue/src/views/SettingsPage.vue`
+  - `apps/writing-vue/src/components/ShuiBackground.vue`
+  - `server/src/app.ts`
+  - `server/src/lib/shared/local-api-guard.ts`
+  - `server/src/lib/shared/sse.ts`
+  - `developer/tests/js/practiceApiFacade.test.js`
+  - `developer/tests/js/practiceVueShell.test.js`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
+## Test Results: Taskbook CORE-08/09
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Vue Practice Shell contract | `node developer/tests/js/practiceVueShell.test.js` | Static contracts lock legacy bridge/loader ownership and forbid page-local timer/global/script implementations | Passed | Pass |
+| Practice API facade contract | `node developer/tests/js/practiceApiFacade.test.js` | Legacy bridge/timer/page contracts remain intact and untrusted write origins are rejected | Passed | Pass |
+| Server build | `npm run build:server` | TypeScript server compiles after local API guard and SSE boundary tightening | Passed | Pass |
+| Writing Vue build | `npm run build:writing` | Vite compiles legacy bridge/loader usage in reading/library/settings/background surfaces | Passed | Pass |
+| Required static suite | `python3 developer/tests/ci/run_static_suite.py` | Full static suite passes after CORE-08/09 convergence and regenerates static report | Passed | Pass |
+| Required suite E2E | `python3 developer/tests/e2e/suite_practice_flow.py` | Suite practice flow remains green after bridge convergence and local API guard | Passed, 0 errors, 8 warnings | Pass |
+| Diff whitespace check | `git diff --check` | No whitespace errors | Passed | Pass |

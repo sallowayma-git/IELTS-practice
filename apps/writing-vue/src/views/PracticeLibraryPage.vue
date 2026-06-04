@@ -51,835 +51,107 @@
       </button>
     </nav>
 
-    <div id="overview-view" :class="['view', 'hero-panel', 'hero-section', { active: activeView === 'overview' }]" data-reading-overview>
-      <div class="hero-panel__header">
-        <h2 class="hero-panel__title heading-serif">📊 学习总览</h2>
-      </div>
-      <div class="category-grid" id="category-overview">
-        <div class="overview-section-heading">
-          <h3 class="overview-section-title">阅读</h3>
-          <div class="overview-section-actions">
-            <button
-              class="btn shui-glass-btn"
-              type="button"
-              id="endless-mode-btn"
-              data-action="start-endless-mode"
-              data-overview-action="endless"
-              @click="startEndlessMode"
-            >
-              <span class="ui-emoji-icon" v-html="icons.endless"></span>
-              <span>无尽模式</span>
-            </button>
-            <button
-              class="btn shui-glass-btn"
-              type="button"
-              data-action="start-suite-mode"
-              data-overview-action="suite"
-              data-start-reading-suite
-              :disabled="creatingSuite"
-              @click="openSuiteModeSelector"
-            >
-              <span class="ui-emoji-icon" v-html="icons.suite"></span>
-              <span>{{ creatingSuite ? '创建中' : '套题模式' }}</span>
-            </button>
-          </div>
-        </div>
+    <ReadingOverviewPanel
+      :active-view="activeView"
+      :reading-category-entries="readingCategoryEntries"
+      :creating-suite="creatingSuite"
+      :error="error"
+      :suite-error="suiteError"
+      :icons="icons"
+      @start-endless-mode="startEndlessMode"
+      @open-suite-mode-selector="openSuiteModeSelector"
+      @browse-category="browseCategory"
+      @start-random-practice="startRandomPractice"
+    />
 
-        <div
-          v-for="entry in readingCategoryEntries"
-          :key="entry.category"
-          class="category-card"
-          :data-reading-category-card="entry.category"
-        >
-          <div class="category-header">
-            <div class="category-icon">📖</div>
-            <div>
-              <div class="category-title">{{ entry.category }} 阅读</div>
-              <div class="category-meta">{{ entry.total }} 篇</div>
-            </div>
-          </div>
-          <div class="category-actions">
-            <button
-              class="btn"
-              type="button"
-              data-action="browse-category"
-              :data-category="entry.category"
-              data-type="reading"
-              @click="browseCategory(entry.category, 'reading')"
-            >
-              📚 浏览题库
-            </button>
-            <button
-              class="btn btn-secondary"
-              type="button"
-              data-action="start-random-practice"
-              :data-category="entry.category"
-              data-type="reading"
-              @click="startRandomPractice(entry.category, 'reading')"
-            >
-              🎲 随机练习
-            </button>
-          </div>
-        </div>
-      </div>
-      <div v-if="error" class="inline-message inline-message-error">{{ error }}</div>
-      <div v-if="suiteError" class="inline-message inline-message-error" data-reading-suite-error>{{ suiteError }}</div>
-    </div>
+    <ReadingBrowsePanel
+      :active-view="activeView"
+      :browse-preference-panel-open="browsePreferencePanelOpen"
+      v-model:browse-remember-position="browseRememberPosition"
+      :browse-title="browseTitle"
+      :type-filters="typeFilters"
+      :selected-type="selectedType"
+      v-model:keyword="keyword"
+      :frequency-filters="frequencyFilters"
+      :frequency-filter="frequencyFilter"
+      v-model:sort-mode="sortMode"
+      :error="error"
+      :suite-error="suiteError"
+      :loading="loading"
+      :filtered-reading-assets="filteredReadingAssets"
+      :custom-suite-draft="customSuiteDraft"
+      :custom-suite-current-category="customSuiteCurrentCategory"
+      :custom-suite-categories="customSuiteCategories"
+      :custom-suite-picked-by-category="customSuitePickedByCategory"
+      :custom-suite-ready="customSuiteReady"
+      :creating-suite="creatingSuite"
+      :icons="icons"
+      :format-exam-meta-text="formatExamMetaText"
+      @toggle-browse-preference="toggleBrowsePreference"
+      @persist-browse-preference="persistBrowsePreference"
+      @filter-by-type="filterByType"
+      @clear-search="clearSearch"
+      @toggle-frequency-filter="toggleFrequencyFilter"
+      @retry-load="loadReadingData"
+      @browse-primary-action="handleBrowsePrimaryAction"
+      @view-pdf="viewPdf"
+      @confirm-custom-suite-selection="confirmCustomSuiteSelection"
+      @cancel-custom-suite-selection="cancelCustomSuiteSelection"
+    />
 
-    <div id="browse-view" :class="['view', 'hero-panel', 'hero-section', { active: activeView === 'browse' }]" data-reading-browse>
-      <div class="browse-title-bar hero-panel__header">
-        <button
-          class="browse-title-trigger"
-          id="browse-title-trigger"
-          type="button"
-          aria-haspopup="true"
-          :aria-expanded="browsePreferencePanelOpen ? 'true' : 'false'"
-          title="列表偏好"
-          @click="toggleBrowsePreference"
-        >
-          <span class="ui-emoji-icon" v-html="icons.book"></span>
-          <span class="browse-title-dot" aria-hidden="true"></span>
-        </button>
-        <h2 id="browse-title" class="hero-panel__title">{{ browseTitle }}</h2>
-        <div
-          class="browse-preference-panel"
-          id="browse-preference-panel"
-          :hidden="!browsePreferencePanelOpen"
-        >
-          <label class="browse-preference-option">
-            <input
-              id="browse-remember-position"
-              v-model="browseRememberPosition"
-              type="checkbox"
-              @change="persistBrowsePreference"
-            >
-            <span class="browse-preference-text">列表位置记录</span>
-          </label>
-        </div>
-        <div id="type-filter-buttons" class="hero-panel__actions shui-filter-group shui-segmented-control">
-          <span class="shui-segmented-indicator" aria-hidden="true"></span>
-          <button
-            v-for="filter in typeFilters"
-            :key="filter.value"
-            class="shui-segmented-btn shui-filter-btn"
-            :class="{ active: selectedType === filter.value }"
-            type="button"
-            :aria-pressed="selectedType === filter.value ? 'true' : 'false'"
-            :hidden="filter.hidden ? true : null"
-            :data-filter-type="filter.value"
-            data-index-action="filter-exams"
-            :data-action-value="filter.value"
-            data-action="filter-exam-type"
-            @click="filterByType(filter.value)"
-          >
-            {{ filter.label }}
-          </button>
-        </div>
-      </div>
+    <ReadingHistoryPanel
+      :active-view="activeView"
+      :practice-summary-expanded="practiceSummaryExpanded"
+      :history-stats="historyStats"
+      :practice-trend-summary="practiceTrendSummary"
+      :practice-trend-bars="practiceTrendBars"
+      :practice-trend-ranges="practiceTrendRanges"
+      :practice-trend-range="practiceTrendRange"
+      v-model:practice-widget-selector-open="practiceWidgetSelectorOpen"
+      :active-practice-widget="activePracticeWidget"
+      :active-practice-widget-meta="activePracticeWidgetMeta"
+      :heatmap-month-label="heatmapMonthLabel"
+      :practice-heatmap-days="practiceHeatmapDays"
+      :practice-heatmap-summary="practiceHeatmapSummary"
+      :priority-insight="priorityInsight"
+      :reading-radar-insight="readingRadarInsight"
+      :practice-widget-options="practiceWidgetOptions"
+      :selected-history-type="selectedHistoryType"
+      :history-busy="historyBusy"
+      :bulk-delete-button-label="bulkDeleteButtonLabel"
+      v-model:history-keyword="historyKeyword"
+      :history-error="historyError"
+      :loading-history="loadingHistory"
+      :filtered-history="filteredHistory"
+      :bulk-delete-mode="bulkDeleteMode"
+      :selected-history-ids="selectedHistoryIds"
+      :format-record-date="formatRecordDate"
+      :format-duration-short="formatDurationShort"
+      :get-score-color="getScoreColor"
+      :history-percentage="historyPercentage"
+      @toggle-practice-summary="togglePracticeSummary"
+      @select-practice-trend-range="selectPracticeTrendRange"
+      @shift-heatmap-month="shiftHeatmapMonth"
+      @select-practice-widget="selectPracticeWidget"
+      @filter-records="filterRecords"
+      @export-practice-markdown="exportPracticeMarkdown"
+      @toggle-bulk-delete-mode="toggleBulkDeleteMode"
+      @clear-practice-data="clearPracticeData"
+      @history-item-click="handleHistoryItemClick"
+      @toggle-history-selection="toggleHistorySelection"
+      @open-reading-review="openReadingReview"
+      @delete-history-record="deleteHistoryRecord"
+    />
 
-      <div class="search-box">
-        <div class="search-row">
-          <div class="search-input-wrap">
-            <input
-              v-model="keyword"
-              type="text"
-              class="search-input"
-              id="exam-search-input"
-              placeholder="搜索题目..."
-              aria-label="搜索题目"
-              data-index-action="search-exams"
-              data-input-action="search-exams"
-              data-input-event="keyup"
-            >
-            <button
-              type="button"
-              class="search-clear-btn"
-              id="search-clear-btn"
-              aria-label="清除搜索"
-              :hidden="!keyword"
-              data-index-action="clear-search"
-              data-action="clear-exam-search"
-              @click="clearSearch"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          </div>
-          <div
-            class="browse-frequency-filter"
-            id="browse-frequency-filter-buttons"
-            aria-label="频率筛选"
-          >
-            <button
-              v-for="filter in frequencyFilters"
-              :key="filter.value"
-              class="browse-frequency-chip"
-              :class="{ active: frequencyFilter === filter.value }"
-              type="button"
-              :aria-pressed="frequencyFilter === filter.value ? 'true' : 'false'"
-              :data-frequency-filter="filter.value"
-              data-index-action="filter-frequency"
-              :data-action-value="filter.value"
-              @click="toggleFrequencyFilter(filter.value)"
-            >
-              {{ filter.label }}
-            </button>
-          </div>
-          <div class="browse-sort-wrapper">
-            <select v-model="sortMode" id="browse-sort-select" class="browse-sort-select" aria-label="题库排序">
-              <option value="default">默认排序</option>
-              <option value="frequency-desc">频率高→低</option>
-              <option value="difficulty-desc">难度高→低</option>
-            </select>
-            <div class="browse-sort-icon" aria-hidden="true">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3.5 5.25L7 8.75L10.5 5.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="error" class="inline-message inline-message-error">
-        <span>{{ error }}</span>
-        <button class="btn-text" type="button" @click="loadReadingData">重试</button>
-      </div>
-      <div v-if="suiteError" class="inline-message inline-message-error" data-reading-suite-error>{{ suiteError }}</div>
-      <div id="exam-list-container">
-        <div v-if="loading" class="loading">
-          <div class="spinner"></div>
-          <p>正在加载题目列表...</p>
-        </div>
-        <div v-else-if="filteredReadingAssets.length === 0" class="exam-list-empty" role="status">
-          <div class="exam-list-empty-icon" aria-hidden="true">🔍</div>
-          <p class="exam-list-empty-text">未找到匹配的题目</p>
-          <p class="exam-list-empty-hint">请调整筛选条件或搜索词后再试</p>
-          <div v-if="keyword" class="exam-list-empty-actions">
-            <button class="btn btn-secondary exam-list-empty-action" type="button" @click="clearSearch">清除搜索</button>
-          </div>
-        </div>
-        <div v-else class="exam-list">
-          <div
-            v-for="asset in filteredReadingAssets"
-            :key="asset.id"
-            class="exam-item"
-            :data-exam-id="asset.id"
-            :data-reading-asset-id="asset.id"
-          >
-            <div class="exam-info">
-              <div>
-                <h4>{{ asset.title }}</h4>
-                <div class="exam-meta">{{ formatExamMetaText(asset) }}</div>
-              </div>
-            </div>
-            <div class="exam-actions">
-              <button
-                class="btn exam-item-action-btn"
-                type="button"
-                data-action="start"
-                :data-exam-id="asset.id"
-                :aria-label="`开始练习 ${asset.title}`"
-                @click="handleBrowsePrimaryAction(asset)"
-              >
-                {{ customSuiteDraft ? '选择此题' : '开始练习' }}
-              </button>
-              <button
-                class="btn btn-outline exam-item-action-btn"
-                type="button"
-                data-action="pdf"
-                :data-exam-id="asset.id"
-                :aria-label="`查看PDF ${asset.title}`"
-                @click="viewPdf(asset)"
-              >
-                PDF
-              </button>
-            </div>
-          </div>
-        </div>
-        <div
-          v-if="customSuiteDraft"
-          id="custom-suite-selection-bar"
-          class="custom-suite-selection-bar"
-          data-custom-suite-selection
-        >
-          <div class="custom-suite-selection-main">
-            <strong>套题自选</strong>
-            <span>请选择 {{ customSuiteCurrentCategory }} 阅读题目</span>
-          </div>
-          <div class="custom-suite-picked-list" aria-label="已选择套题">
-            <span
-              v-for="category in customSuiteCategories"
-              :key="category"
-              class="custom-suite-picked-chip"
-              :class="{ filled: Boolean(customSuitePickedByCategory[category]) }"
-              :data-custom-suite-category="category"
-            >
-              {{ category }} · {{ customSuitePickedByCategory[category]?.title || '待选' }}
-            </span>
-          </div>
-          <div class="custom-suite-selection-actions">
-            <button
-              class="btn btn-primary"
-              type="button"
-              data-custom-suite-confirm
-              :disabled="!customSuiteReady || creatingSuite"
-              @click="confirmCustomSuiteSelection"
-            >
-              确认套题
-            </button>
-            <button
-              class="btn btn-secondary"
-              type="button"
-              data-custom-suite-cancel
-              :disabled="creatingSuite"
-              @click="cancelCustomSuiteSelection"
-            >
-              取消自选
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="practice-view" :class="['view', 'hero-panel', 'hero-section', { active: activeView === 'practice' }]" data-reading-records>
-      <div class="hero-panel__header practice-view__header">
-        <div class="practice-view__title-row">
-          <h2 class="hero-panel__title heading-serif">📝 练习记录</h2>
-          <button
-            id="practice-summary-toggle"
-            class="practice-summary-toggle"
-            type="button"
-            data-index-action="toggle-practice-summary"
-            aria-controls="practice-summary-region"
-            :aria-expanded="practiceSummaryExpanded ? 'true' : 'false'"
-            :aria-label="practiceSummaryExpanded ? '折叠练习统计卡片' : '展开练习统计卡片'"
-            @click="togglePracticeSummary"
-          >
-            <span class="practice-summary-toggle__glyph" aria-hidden="true"></span>
-          </button>
-        </div>
-      </div>
-
-      <div id="practice-summary-region" class="practice-summary-region" :hidden="!practiceSummaryExpanded">
-        <div class="practice-stats hero-grid hero-grid--stats">
-          <div class="hero-card hero-card--stat stat-card">
-            <div class="hero-card__label stat-label">已练习题目</div>
-            <div class="hero-card__value stat-number" id="total-practiced">{{ historyStats.totalPracticed }}</div>
-            <div class="hero-card__meta">累计巩固练习</div>
-          </div>
-          <div class="hero-card hero-card--stat stat-card">
-            <div class="hero-card__label stat-label">平均正确率</div>
-            <div class="hero-card__value stat-number" id="avg-score">{{ historyStats.averageAccuracy }}%</div>
-            <div class="hero-card__meta">近期待练表现</div>
-          </div>
-          <div class="hero-card hero-card--stat stat-card">
-            <div class="hero-card__label stat-label">学习时长(分钟)</div>
-            <div class="hero-card__value stat-number" id="study-time">{{ historyStats.studyMinutes }}</div>
-            <div class="hero-card__meta">聚焦沉浸时长</div>
-          </div>
-          <div class="hero-card hero-card--stat stat-card">
-            <div class="hero-card__label stat-label">连续学习天数</div>
-            <div class="hero-card__value stat-number" id="streak-days">{{ historyStats.streakDays }}</div>
-            <div class="hero-card__meta">坚持天数</div>
-          </div>
-        </div>
-
-        <div class="practice-insights-grid">
-          <section
-            id="practice-trend-card"
-            class="practice-trend-card"
-            role="button"
-            tabindex="0"
-            aria-label="打开练习趋势筛选范围"
-            aria-pressed="false"
-          >
-            <div class="practice-trend-card__rotor">
-              <div class="practice-trend-card__face practice-trend-card__front">
-                <div class="practice-trend-card__header">
-                  <div class="practice-trend-card__title-line">
-                    <div>
-                      <p class="practice-trend-card__eyebrow">Trend</p>
-                      <h3 class="practice-trend-card__title">练习趋势</h3>
-                    </div>
-                    <div class="practice-trend-card__metrics">
-                      <div>
-                        <span class="practice-trend-card__metric-value" id="practice-trend-count">{{ practiceTrendSummary.count }}</span>
-                        <span class="practice-trend-card__metric-label">记录</span>
-                      </div>
-                      <div>
-                        <span class="practice-trend-card__metric-value" id="practice-trend-average">{{ practiceTrendSummary.averageAccuracy }}%</span>
-                        <span class="practice-trend-card__metric-label">均值</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="practice-trend-card__range" id="practice-trend-range-label">{{ practiceTrendSummary.rangeLabel }}</div>
-                </div>
-                <div class="practice-trend-chart-shell">
-                  <canvas id="practice-trend-canvas" aria-hidden="true"></canvas>
-                  <div v-if="practiceTrendBars.length === 0" id="practice-trend-empty" class="practice-trend-empty">
-                    暂无趋势数据
-                  </div>
-                  <div v-else class="practice-trend-bars" aria-label="练习正确率趋势">
-                    <span
-                      v-for="bar in practiceTrendBars"
-                      :key="bar.id"
-                      class="practice-trend-bar"
-                      :style="{ height: `${bar.height}%` }"
-                      :title="`${bar.label}: ${bar.accuracy}%`"
-                    ></span>
-                  </div>
-                </div>
-              </div>
-              <div class="practice-trend-card__face practice-trend-card__back">
-                <div class="practice-trend-card__header">
-                  <div>
-                    <p class="practice-trend-card__eyebrow">Range</p>
-                    <h3 class="practice-trend-card__title">筛选范围</h3>
-                  </div>
-                </div>
-                <div class="practice-trend-options" aria-label="练习趋势筛选范围">
-                  <button
-                    v-for="range in practiceTrendRanges"
-                    :key="range.value"
-                    class="practice-trend-option"
-                    :class="{ active: practiceTrendRange === range.value }"
-                    type="button"
-                    :data-practice-trend-range="range.value"
-                    :aria-pressed="practiceTrendRange === range.value ? 'true' : 'false'"
-                    @click.stop="selectPracticeTrendRange(range.value)"
-                  >
-                    {{ range.label }}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section
-            id="practice-custom-card"
-            class="practice-custom-card"
-            :class="{ 'is-flipped': practiceWidgetSelectorOpen }"
-            role="button"
-            tabindex="0"
-            aria-label="打开自定义练习组件选择"
-            :aria-pressed="practiceWidgetSelectorOpen ? 'true' : 'false'"
-          >
-            <div class="practice-custom-card__rotor">
-              <div class="practice-trend-card__face practice-custom-card__front">
-                <div class="practice-trend-card__header">
-                  <div>
-                    <p class="practice-trend-card__eyebrow">{{ activePracticeWidgetMeta.eyebrow }}</p>
-                    <h3 class="practice-trend-card__title" id="practice-custom-card-title">{{ activePracticeWidgetMeta.title }}</h3>
-                  </div>
-                  <div class="practice-custom-card__header-actions">
-                    <div
-                      v-if="activePracticeWidget === 'heatmap'"
-                      class="practice-heatmap-month-controls"
-                      id="practice-heatmap-month-controls"
-                      aria-label="切换热力图月份"
-                    >
-                      <button
-                        class="practice-custom-card__icon-btn"
-                        type="button"
-                        data-practice-heatmap-month="prev"
-                        aria-label="查看上个月"
-                        title="上个月"
-                        @click.stop="shiftHeatmapMonth(-1)"
-                      >
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                          <path d="m15 18-6-6 6-6"></path>
-                        </svg>
-                      </button>
-                      <span class="practice-heatmap-month-label" id="practice-heatmap-month-label" aria-live="polite">{{ heatmapMonthLabel }}</span>
-                      <button
-                        class="practice-custom-card__icon-btn"
-                        type="button"
-                        data-practice-heatmap-month="next"
-                        aria-label="查看下个月"
-                        title="下个月"
-                        @click.stop="shiftHeatmapMonth(1)"
-                      >
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                          <path d="m9 18 6-6-6-6"></path>
-                        </svg>
-                      </button>
-                    </div>
-                    <button
-                      class="practice-custom-card__flip-btn practice-custom-card__icon-btn"
-                      type="button"
-                      aria-label="配置自定义组件"
-                      title="配置自定义组件"
-                      :aria-pressed="practiceWidgetSelectorOpen ? 'true' : 'false'"
-                      @click.stop="practiceWidgetSelectorOpen = true"
-                    >
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"></path>
-                        <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>
-                        <path d="M12 2v2"></path>
-                        <path d="M12 20v2"></path>
-                        <path d="m4.93 4.93 1.41 1.41"></path>
-                        <path d="m17.66 17.66 1.41 1.41"></path>
-                        <path d="M2 12h2"></path>
-                        <path d="M20 12h2"></path>
-                        <path d="m6.34 17.66-1.41 1.41"></path>
-                        <path d="m19.07 4.93-1.41 1.41"></path>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <div v-show="activePracticeWidget === 'heatmap'" class="practice-custom-widget-content" data-widget-type="heatmap">
-                  <div class="practice-heatmap" id="practice-heatmap" aria-label="练习活动热力图">
-                    <span
-                      v-for="day in practiceHeatmapDays"
-                      :key="day.key"
-                      class="practice-heatmap__cell"
-                      :class="`practice-heatmap__cell--${day.level}`"
-                      :title="`${day.label}: ${day.count} 次练习`"
-                      :aria-label="`${day.label}: ${day.count} 次练习`"
-                    ></span>
-                  </div>
-                  <div class="practice-heatmap__footer">
-                    <span id="practice-heatmap-summary">{{ practiceHeatmapSummary }}</span>
-                    <div class="practice-heatmap__legend" aria-label="做题量颜色图例">
-                      <span>少</span>
-                      <i class="practice-heatmap__legend-cell practice-heatmap__legend-cell--0"></i>
-                      <i class="practice-heatmap__legend-cell practice-heatmap__legend-cell--1"></i>
-                      <i class="practice-heatmap__legend-cell practice-heatmap__legend-cell--2"></i>
-                      <i class="practice-heatmap__legend-cell practice-heatmap__legend-cell--3"></i>
-                      <i class="practice-heatmap__legend-cell practice-heatmap__legend-cell--4"></i>
-                      <span>多</span>
-                    </div>
-                  </div>
-                </div>
-                <div v-show="activePracticeWidget === 'priority'" class="practice-custom-widget-content" data-widget-type="priority">
-                  <div class="priority-progress-stack" aria-label="中高频练习进度">
-                    <div class="priority-progress priority-progress--high">
-                      <div class="priority-progress__head">
-                        <span>高频</span>
-                        <strong id="practice-priority-high-count">{{ priorityInsight.high.practiced }}/{{ priorityInsight.high.total }}</strong>
-                      </div>
-                      <div class="priority-progress__track" aria-hidden="true">
-                        <span
-                          class="priority-progress__fill"
-                          id="practice-priority-high-fill"
-                          :style="{ width: `${priorityInsight.high.percent}%` }"
-                        ></span>
-                      </div>
-                    </div>
-                    <div class="priority-progress priority-progress--medium">
-                      <div class="priority-progress__head">
-                        <span>中频</span>
-                        <strong id="practice-priority-medium-count">{{ priorityInsight.medium.practiced }}/{{ priorityInsight.medium.total }}</strong>
-                      </div>
-                      <div class="priority-progress__track" aria-hidden="true">
-                        <span
-                          class="priority-progress__fill"
-                          id="practice-priority-medium-fill"
-                          :style="{ width: `${priorityInsight.medium.percent}%` }"
-                        ></span>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="priority-accuracy" aria-label="中高频正确率">
-                    <div class="priority-accuracy__orb priority-accuracy__orb--high">
-                      <span id="practice-priority-high-accuracy">{{ priorityInsight.high.accuracy }}%</span>
-                      <small>高频正确率</small>
-                    </div>
-                    <div class="priority-accuracy__orb priority-accuracy__orb--medium">
-                      <span id="practice-priority-medium-accuracy">{{ priorityInsight.medium.accuracy }}%</span>
-                      <small>中频正确率</small>
-                    </div>
-                  </div>
-                </div>
-                <div v-show="activePracticeWidget === 'radar'" class="practice-custom-widget-content" data-widget-type="radar">
-                  <div class="practice-radar-chart-shell">
-                    <canvas id="practice-radar-canvas" aria-hidden="true"></canvas>
-                    <div
-                      v-if="readingRadarInsight.totalErrors === 0"
-                      id="practice-radar-empty"
-                      class="practice-trend-empty"
-                    >
-                      暂无阅读错题数据
-                    </div>
-                    <div v-else class="practice-radar-bars" aria-label="阅读错题题型分布">
-                      <div
-                        v-for="point in readingRadarInsight.dataPoints"
-                        :key="point.type"
-                        class="practice-radar-bar"
-                        :style="{ '--radar-value': `${point.percent}%` }"
-                      >
-                        <span class="practice-radar-bar__label">{{ point.label }}</span>
-                        <span class="practice-radar-bar__track" aria-hidden="true">
-                          <span class="practice-radar-bar__fill"></span>
-                        </span>
-                        <strong>{{ point.count }}</strong>
-                      </div>
-                    </div>
-                  </div>
-                  <p class="practice-radar-summary" id="practice-radar-summary">{{ readingRadarInsight.summary }}</p>
-                </div>
-              </div>
-              <div class="practice-trend-card__face practice-trend-card__back practice-custom-card__back">
-                <div class="practice-trend-card__header">
-                  <div>
-                    <p class="practice-trend-card__eyebrow">Widgets</p>
-                    <h3 class="practice-trend-card__title">自定义组件</h3>
-                  </div>
-                  <div class="practice-custom-card__header-actions">
-                    <button
-                      class="practice-custom-card__flip-btn practice-custom-card__icon-btn"
-                      type="button"
-                      aria-label="关闭自定义练习组件选择"
-                      title="关闭自定义练习组件选择"
-                      @click.stop="practiceWidgetSelectorOpen = false"
-                    >
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <div class="practice-custom-options" aria-label="自定义练习组件">
-                  <button
-                    v-for="widget in practiceWidgetOptions"
-                    :key="widget.value"
-                    class="practice-custom-option"
-                    :class="{ active: activePracticeWidget === widget.value }"
-                    type="button"
-                    :data-practice-widget="widget.value"
-                    :aria-pressed="activePracticeWidget === widget.value ? 'true' : 'false'"
-                    @click.stop="selectPracticeWidget(widget.value)"
-                  >
-                    <span class="practice-custom-option__icon" aria-hidden="true" v-html="widget.icon"></span>
-                    <span class="practice-custom-option__body">
-                      <strong>{{ widget.label }}</strong>
-                    </span>
-                    <span class="practice-custom-option__check" aria-hidden="true"></span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
-      </div>
-
-      <div class="practice-history hero-panel hero-section" data-reading-history-panel>
-        <div class="hero-panel__header practice-history-header">
-          <h3 class="hero-panel__title heading-serif">📈 练习历史</h3>
-          <div id="record-type-filter-buttons" class="hero-panel__actions shui-filter-group shui-segmented-control">
-            <span class="shui-segmented-indicator" aria-hidden="true"></span>
-            <button
-              class="shui-segmented-btn shui-filter-btn"
-              :class="{ active: selectedHistoryType === 'all' }"
-              type="button"
-              :aria-pressed="selectedHistoryType === 'all' ? 'true' : 'false'"
-              data-filter-type="all"
-              data-index-action="filter-records"
-              data-action-value="all"
-              data-action="filter-record-type"
-              @click="filterRecords('all')"
-            >
-              全部
-            </button>
-            <button
-              class="shui-segmented-btn shui-filter-btn"
-              :class="{ active: selectedHistoryType === 'reading' }"
-              type="button"
-              :aria-pressed="selectedHistoryType === 'reading' ? 'true' : 'false'"
-              data-filter-type="reading"
-              data-index-action="filter-records"
-              data-action-value="reading"
-              data-action="filter-record-type"
-              @click="filterRecords('reading')"
-            >
-              阅读
-            </button>
-          </div>
-          <div class="hero-panel__actions">
-            <button class="btn btn-secondary hero-btn hero-btn--ghost" type="button" data-index-action="export-practice-markdown" data-action="export-practice-markdown" :disabled="historyBusy" @click="exportPracticeMarkdown">
-              📄 导出Markdown
-            </button>
-            <button class="btn btn-info hero-btn" id="bulk-delete-btn" type="button" data-index-action="toggle-bulk-delete" data-action="toggle-bulk-delete" :disabled="historyBusy" @click="toggleBulkDeleteMode">
-              <svg
-                viewBox="0 0 24 24"
-                width="1em"
-                height="1em"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="ui-emoji-icon"
-                aria-hidden="true"
-              >
-                <polyline points="9 11 12 14 22 4"></polyline>
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-              </svg>
-              {{ bulkDeleteButtonLabel }}
-            </button>
-            <button class="btn btn-warning hero-btn hero-btn--warn" type="button" data-index-action="clear-practice-data" data-action="clear-practice-data" :disabled="historyBusy" @click="clearPracticeData">
-              🗑️ 清除记录
-            </button>
-          </div>
-        </div>
-        <div class="practice-history-search-row">
-          <div class="search-input-wrap">
-            <input
-              v-model="historyKeyword"
-              type="text"
-              class="search-input"
-              id="history-search-input"
-              placeholder="搜索练习记录（标题/分类/日期）..."
-              aria-label="搜索练习记录"
-              data-input-action="search-practice-history"
-              data-input-event="input"
-            >
-            <button
-              type="button"
-              class="search-clear-btn history-search-clear-btn"
-              id="history-search-clear-btn"
-              aria-label="清除练习记录搜索"
-              :hidden="!historyKeyword"
-              data-action="clear-history-search"
-              @click="historyKeyword = ''"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div v-if="historyError" class="inline-message inline-message-error">{{ historyError }}</div>
-        <div id="history-list" class="practice-history-list">
-          <div v-if="loadingHistory" class="loading">
-            <div class="spinner"></div>
-            <p>正在加载练习记录...</p>
-          </div>
-          <div v-else-if="filteredHistory.length === 0" class="history-empty-placeholder">
-            <div class="history-empty-placeholder__icon" aria-hidden="true">📋</div>
-            <p>暂无练习记录</p>
-            <p class="history-empty-placeholder__note">开始练习后，记录将自动保存在这里</p>
-          </div>
-          <div
-            v-for="record in filteredHistory"
-            v-else
-            :key="record.id"
-            class="history-item history-record-item"
-            :class="{ 'history-item-selectable': bulkDeleteMode, 'history-item-selected': selectedHistoryIds.has(record.id) }"
-            :data-record-id="record.id"
-            @click="handleHistoryItemClick(record, $event)"
-          >
-            <div :class="['record-selection', { 'record-selection-hidden': !bulkDeleteMode }]">
-              <input
-                type="checkbox"
-                :checked="selectedHistoryIds.has(record.id)"
-                :data-record-id="record.id"
-                :tabindex="bulkDeleteMode ? '0' : '-1'"
-                aria-label="选择练习记录"
-                @change.stop="toggleHistorySelection(record.id)"
-              >
-            </div>
-            <div :class="['record-info', { 'record-info-selectable': bulkDeleteMode }]">
-              <a
-                href="#"
-                class="practice-record-title"
-                data-record-action="details"
-                :data-record-id="record.id"
-                @click.prevent.stop="openReadingReview(record)"
-              >
-                <strong>{{ record.title || '无标题' }}</strong>
-              </a>
-              <div class="record-meta-line">
-                <small class="record-date">{{ formatRecordDate(record) }}</small>
-                <small class="record-duration-value">
-                  <strong>用时</strong>
-                  <strong class="duration-time">{{ formatDurationShort(record.duration) }}</strong>
-                </small>
-              </div>
-            </div>
-            <div class="record-percentage-container">
-              <div class="record-percentage" :style="{ color: getScoreColor(historyPercentage(record)) }">
-                {{ historyPercentage(record) }}%
-              </div>
-            </div>
-            <div v-if="!bulkDeleteMode" class="record-actions-container">
-              <button
-                type="button"
-                class="delete-record-btn"
-                title="删除此记录"
-                :aria-label="`删除练习记录: ${record.title || '无标题'}`"
-                data-record-action="delete"
-                :data-record-id="record.id"
-                :disabled="historyBusy"
-                @click.stop="deleteHistoryRecord(record)"
-              >
-                🗑️
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="more-view" :class="['view', 'hero-panel', 'hero-section', { active: activeView === 'more' }]" data-reading-more>
-      <div class="hero-panel__header">
-        <h2 class="hero-panel__title heading-serif">✨ 更多工具</h2>
-      </div>
-      <p class="more-view-subtitle">探索额外的学习辅助功能，助你高效备考。</p>
-      <div class="more-tools-grid">
-        <button class="tool-card tool-card--featured" type="button" id="writing-entry-btn" @click="openWritingEntry">
-          <div class="tool-card-icon" v-html="icons.editLarge"></div>
-          <div class="tool-card-content">
-            <h3>写作评分</h3>
-            <p>AI驱动的雅思写作评分系统，获取专业四维度评分与详细反馈。</p>
-          </div>
-          <div class="tool-card-arrow">进入</div>
-        </button>
-        <button class="tool-card" type="button" data-action="open-clock" @click="openClockTool">
-          <div class="tool-card-icon" v-html="icons.clockLarge"></div>
-          <div class="tool-card-content">
-            <h3>全屏时钟</h3>
-            <p>沉浸式模拟指针时钟，实时同步系统时间，陪伴你的专注时刻。</p>
-          </div>
-          <div class="tool-card-arrow">进入</div>
-        </button>
-        <button class="tool-card" type="button" data-action="open-vocab" @click="openVocabTool">
-          <div class="tool-card-icon" v-html="icons.vocabLarge"></div>
-          <div class="tool-card-content">
-            <h3>单词背诵</h3>
-            <p>SM-2记忆算法，随时继续你的词汇任务。</p>
-          </div>
-          <div class="tool-card-arrow">进入</div>
-        </button>
-        <button class="tool-card" type="button" data-action="open-reading-memorize" @click="openReadingMemorize">
-          <div class="tool-card-icon">🧩</div>
-          <div class="tool-card-content">
-            <h3>阅读背题</h3>
-            <p>复用统一阅读页，查看答案、解析与定位高亮，并可切换测试。</p>
-          </div>
-          <div class="tool-card-arrow">进入</div>
-        </button>
-        <button
-          class="tool-card"
-          type="button"
-          data-index-action="show-achievements"
-          data-action="show-achievements"
-          @click="showAchievementsTool"
-        >
-          <div class="tool-card-icon" v-html="icons.achievementLarge"></div>
-          <div class="tool-card-content">
-            <h3>成就</h3>
-            <p>查看你解锁的徽章和荣誉。</p>
-          </div>
-          <div class="tool-card-arrow">查看</div>
-        </button>
-      </div>
-    </div>
+    <ReadingMoreToolsPanel
+      :active-view="activeView"
+      :icons="icons"
+      @open-writing-entry="openWritingEntry"
+      @open-clock-tool="openClockTool"
+      @open-vocab-tool="openVocabTool"
+      @open-reading-memorize="openReadingMemorize"
+      @show-achievements-tool="showAchievementsTool"
+    />
 
     <section id="vocab-view" :class="['view', { active: activeView === 'vocab' }]" data-view="vocab" :hidden="activeView !== 'vocab'">
       <div class="vocab-view-shell" data-vocab-role="root"></div>
@@ -906,69 +178,15 @@
       </div>
     </div>
 
-    <div
-      id="suite-mode-selector-modal"
-      class="theme-modal suite-mode-selector-modal"
-      :class="{ show: suiteModeSelectorOpen }"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="suite-mode-selector-title"
-      @click.self="closeSuiteModeSelector"
-    >
-      <div class="theme-modal-content suite-mode-selector-content">
-        <div class="theme-modal-header">
-          <div>
-            <h3 id="suite-mode-selector-title">选择套题流程</h3>
-            <p class="suite-mode-selector-subtitle">本次会话将锁定所选流程，答题中不再切换。</p>
-          </div>
-          <button
-            class="theme-modal-close"
-            type="button"
-            data-suite-flow-cancel="1"
-            aria-label="取消套题流程选择"
-            @click="closeSuiteModeSelector"
-          >
-            ×
-          </button>
-        </div>
-        <div class="theme-modal-body suite-mode-selector-body">
-          <div class="suite-flow-options" aria-label="套题流程">
-            <button
-              v-for="option in suiteFlowOptions"
-              :key="option.value"
-              class="suite-flow-option"
-              :class="{ active: selectedSuiteFlowMode === option.value }"
-              type="button"
-              :data-suite-flow-mode="option.value"
-              :aria-pressed="selectedSuiteFlowMode === option.value ? 'true' : 'false'"
-              @click="selectSuiteFlowMode(option.value, { start: true })"
-            >
-              <span>{{ option.label }}</span>
-              <small>{{ option.description }}</small>
-            </button>
-          </div>
-          <label class="suite-frequency-selector" for="suite-frequency-scope">
-            <span>抽题范围</span>
-            <select
-              id="suite-frequency-scope"
-              v-model="selectedSuiteFrequencyScope"
-              class="suite-frequency-select"
-            >
-              <option
-                v-for="option in suiteFrequencyOptions"
-                :key="option.value"
-                :value="option.value"
-              >
-                {{ option.label }}
-              </option>
-            </select>
-          </label>
-          <div class="suite-mode-selector-actions">
-            <button class="btn btn-secondary" type="button" data-suite-flow-cancel="1" @click="closeSuiteModeSelector">取消</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <ReadingSuiteSelector
+      :suite-mode-selector-open="suiteModeSelectorOpen"
+      :suite-flow-options="suiteFlowOptions"
+      :selected-suite-flow-mode="selectedSuiteFlowMode"
+      :suite-frequency-options="suiteFrequencyOptions"
+      v-model:selected-suite-frequency-scope="selectedSuiteFrequencyScope"
+      @close-suite-mode-selector="closeSuiteModeSelector"
+      @select-suite-flow-mode="selectSuiteFlowMode"
+    />
 
     <div
       id="fullscreen-clock-overlay"
@@ -1036,151 +254,37 @@
       </div>
     </div>
 
-    <div id="settings-view" :class="['view', 'hero-panel', 'hero-section', { active: activeView === 'settings' }]" data-reading-settings>
-      <div class="hero-panel__header">
-        <h2 class="hero-panel__title heading-serif">⚙️ 系统设置</h2>
-      </div>
-      <div class="hero-settings-group">
-        <div class="hero-panel hero-section system-management-panel">
-          <h3 class="heading-serif">🔧 系统管理</h3>
-          <p class="hero-panel__muted">系统工具和设置选项</p>
-          <div class="hero-settings-actions">
-            <button class="btn btn-warning hero-btn hero-btn--warn" id="clear-cache-btn" type="button" @click="clearPracticeCache">
-              🗑️ 清除缓存
-            </button>
-            <button class="btn btn-warning hero-btn hero-btn--warn" id="load-library-btn" type="button" @click="loadReadingData">
-              📂 加载题库
-            </button>
-            <button class="btn btn-warning hero-btn hero-btn--warn" id="theme-switcher-btn-entry" type="button" @click="switchBackgroundTheme">
-              🎨 主题切换
-            </button>
-            <button class="btn btn-warning hero-btn hero-btn--warn" id="show-onboarding-btn" type="button" @click="startOnboardingTour">
-              🎯 显示引导
-            </button>
-            <button class="btn btn-warning hero-btn hero-btn--warn" id="library-config-btn" type="button" data-action="library-config" @click="showReadingLibraryConfigList">
-              <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="ui-emoji-icon" aria-hidden="true">
-                <line x1="4" y1="21" x2="4" y2="14"></line>
-                <line x1="4" y1="10" x2="4" y2="3"></line>
-                <line x1="12" y1="21" x2="12" y2="12"></line>
-                <line x1="12" y1="8" x2="12" y2="3"></line>
-                <line x1="20" y1="21" x2="20" y2="16"></line>
-                <line x1="20" y1="12" x2="20" y2="3"></line>
-                <line x1="1" y1="14" x2="7" y2="14"></line>
-                <line x1="9" y1="8" x2="15" y2="8"></line>
-                <line x1="17" y1="16" x2="23" y2="16"></line>
-              </svg>
-              题库配置切换
-            </button>
-            <button class="btn btn-warning hero-btn hero-btn--warn" id="force-refresh-btn" type="button" data-action="force-refresh" @click="forceRefreshReadingData">
-              🔄 强制刷新题库
-            </button>
-          </div>
-        </div>
+    <ReadingSettingsPanel
+      ref="readingSettingsPanel"
+      :active-view="activeView"
+      :history-busy="historyBusy"
+      :library-status-label="libraryStatusLabel"
+      :reading-assets="readingAssets"
+      :html-asset-count="htmlAssetCount"
+      :pdf-asset-count="pdfAssetCount"
+      :latest-asset-sync-label="latestAssetSyncLabel"
+      v-model:backup-list-open="backupListOpen"
+      :reading-backups="readingBackups"
+      v-model:library-config-open="libraryConfigOpen"
+      :loading="loading"
+      :format-backup-date="formatBackupDate"
+      @clear-practice-cache="clearPracticeCache"
+      @load-reading-data="loadReadingData"
+      @switch-background-theme="switchBackgroundTheme"
+      @start-onboarding-tour="startOnboardingTour"
+      @show-reading-library-config-list="showReadingLibraryConfigList"
+      @force-refresh-reading-data="forceRefreshReadingData"
+      @create-reading-backup="createReadingBackup"
+      @show-reading-backup-list="showReadingBackupList"
+      @export-reading-archive="exportReadingArchive"
+      @trigger-reading-archive-import="triggerReadingArchiveImport"
+      @reading-archive-import-change="handleReadingArchiveImportChange"
+      @open-update-manager="openUpdateManager"
+      @download-reading-backup="downloadReadingBackup"
+      @restore-reading-backup="restoreReadingBackup"
+      @delete-reading-backup="deleteReadingBackup"
+    />
 
-        <div class="hero-panel hero-section data-management-panel">
-          <h3 class="heading-serif">💾 数据管理</h3>
-          <p class="hero-panel__muted">数据备份、导入导出和完整性检查</p>
-          <div class="hero-settings-actions">
-            <button class="btn hero-btn data-mgmt-btn" id="create-backup-btn" type="button" :disabled="historyBusy" @click="createReadingBackup">
-              💾 创建备份
-            </button>
-            <button class="btn hero-btn data-mgmt-btn" id="backup-list-btn" type="button" @click="showReadingBackupList">
-              📋 备份列表
-            </button>
-            <button class="btn hero-btn data-mgmt-btn" id="export-data-btn" type="button" :disabled="historyBusy" @click="exportReadingArchive('export')">
-              📤 导出数据
-            </button>
-            <button class="btn hero-btn data-mgmt-btn" id="import-data-btn" type="button" :disabled="historyBusy" @click="triggerReadingArchiveImport">
-              📥 导入数据
-            </button>
-            <input
-              ref="readingArchiveImportInput"
-              class="settings-file-input"
-              data-reading-archive-import-input
-              type="file"
-              accept="application/json,.json"
-              @change="handleReadingArchiveImportChange"
-            />
-          </div>
-        </div>
-
-        <div class="hero-panel hero-section system-info-panel">
-          <h3 class="heading-serif">📊 系统信息</h3>
-          <div class="hero-surface settings-system-info system-info-surface">
-            <div class="settings-system-info__status system-info-status">题库状态: {{ libraryStatusLabel }}</div>
-            <div>题目总数: <span id="total-exams">{{ readingAssets.length }}</span></div>
-            <div>HTML题目: <span id="html-exams">{{ htmlAssetCount }}</span></div>
-            <div>PDF题目: <span id="pdf-exams">{{ pdfAssetCount }}</span></div>
-            <div>最后更新: <span id="last-update">{{ latestAssetSyncLabel }}</span></div>
-          </div>
-          <div class="app-update-actions">
-            <button class="btn btn-secondary hero-btn hero-btn--ghost" id="check-updates-btn" type="button" data-update-action="open-modal" @click="openUpdateManager">
-              <span data-update-field="entry-action-label">查看更新</span>
-            </button>
-          </div>
-          <div class="settings-footer hero-settings-links legacy-team-links">
-            <a href="https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT" target="_blank" rel="noopener noreferrer" class="inline-hover-link settings-footer__feedback hero-settings-links__feedback">问题反馈</a>
-            <a href="https://github.com/sallowayma-git" target="_blank" rel="noopener noreferrer" class="settings-footer__author hero-settings-links__github">Salloway呈现</a>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="backupListOpen" class="backup-list-container" data-reading-backup-list>
-        <div class="backup-list-card">
-          <div class="backup-list-header">
-            <h3 class="backup-list-title">
-              <span class="backup-list-title-icon" aria-hidden="true">📋</span>
-              <span class="backup-list-title-text">备份列表</span>
-            </h3>
-            <button class="btn btn-secondary backup-list-dismiss" type="button" @click="backupListOpen = false">收起</button>
-          </div>
-          <div class="backup-list-scroll">
-            <div v-if="!readingBackups.length" class="backup-list-empty">
-              <div class="backup-list-empty-icon" aria-hidden="true">📂</div>
-              <p class="backup-list-empty-text">暂无备份记录。</p>
-              <p class="backup-list-empty-hint">创建手动备份后将显示在此列表中。</p>
-            </div>
-            <div v-for="backup in readingBackups" :key="backup.id" class="backup-entry" :data-backup-id="backup.id">
-              <div class="backup-entry-info">
-                <strong class="backup-entry-id">{{ backup.id }}</strong>
-                <div class="backup-entry-meta">{{ formatBackupDate(backup) }}</div>
-                <div class="backup-entry-meta">记录: {{ backup.count }} 条 | {{ backup.schemaVersion }}</div>
-              </div>
-              <div class="backup-entry-actions">
-                <button class="btn btn-secondary" type="button" @click="downloadReadingBackup(backup)">下载</button>
-                <button class="btn btn-success backup-entry-restore" type="button" :disabled="historyBusy" @click="restoreReadingBackup(backup)">恢复</button>
-                <button class="btn btn-warning hero-btn--warn" type="button" :disabled="historyBusy" @click="deleteReadingBackup(backup.id)">删除</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="libraryConfigOpen" class="backup-list-container reading-library-config-list" data-reading-library-config-list>
-        <div class="backup-list-card">
-          <div class="backup-list-header">
-            <h3 class="backup-list-title">
-              <span class="backup-list-title-icon" aria-hidden="true">🗂️</span>
-              <span class="backup-list-title-text">题库配置</span>
-            </h3>
-            <button class="btn btn-secondary backup-list-dismiss" type="button" @click="libraryConfigOpen = false">收起</button>
-          </div>
-          <div class="backup-list-scroll reading-library-config-scroll">
-            <div class="backup-entry reading-library-config-entry" data-library-config-key="practice-reading-api">
-              <div class="backup-entry-info">
-                <strong class="backup-entry-id">默认阅读题库</strong>
-                <div class="backup-entry-meta">来源: Practice API / reading assets</div>
-                <div class="backup-entry-meta">题目: {{ readingAssets.length }} 条 | HTML: {{ htmlAssetCount }} | PDF: {{ pdfAssetCount }}</div>
-                <div class="backup-entry-meta">最后更新: {{ latestAssetSyncLabel }}</div>
-              </div>
-              <div class="backup-entry-actions">
-                <button class="btn btn-secondary" type="button" :disabled="loading" @click="loadReadingData">刷新</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <div id="theme-switcher-modal" class="theme-modal" :class="{ show: themeSwitcherOpen }">
       <div class="theme-modal-content">
@@ -1277,10 +381,49 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { practiceAssets, practiceHistory, practiceReadingSuite } from '@/api/practice-client.js'
+import {
+  hideLegacyAchievements,
+  mountLegacyVocabSessionView,
+  openLegacyClockOverlay,
+  openLegacyUpdateManager,
+  showLegacyAchievements,
+  startLegacyOnboardingTour,
+  switchLegacyBackgroundTheme
+} from '@/modules/legacy/legacyBridge'
+import { resolveLegacyAssetUrl } from '@/modules/legacy/legacyScriptLoader'
+import ReadingBrowsePanel from '@/modules/practice-reading/components/ReadingBrowsePanel.vue'
+import ReadingHistoryPanel from '@/modules/practice-reading/components/ReadingHistoryPanel.vue'
+import ReadingMoreToolsPanel from '@/modules/practice-reading/components/ReadingMoreToolsPanel.vue'
+import ReadingOverviewPanel from '@/modules/practice-reading/components/ReadingOverviewPanel.vue'
+import ReadingSettingsPanel from '@/modules/practice-reading/components/ReadingSettingsPanel.vue'
+import ReadingSuiteSelector from '@/modules/practice-reading/components/ReadingSuiteSelector.vue'
+import {
+  buildBrowseTitle,
+  filterReadingAssets,
+  normalizeCategory,
+  normalizeFrequency
+} from '@/modules/practice-reading/browseFilters'
+import { useReadingHistory } from '@/modules/practice-reading/useReadingHistory'
+import { useReadingLibrary } from '@/modules/practice-reading/useReadingLibrary'
+import { useReadingSuite } from '@/modules/practice-reading/useReadingSuite'
+import { historyPercentage, sortReadingHistory } from '@/modules/practice-reading/historyStats'
 
 const router = useRouter()
 const route = useRoute()
+const { loadReadingAssets } = useReadingLibrary()
+const {
+  loadReadingHistory,
+  deleteReadingHistoryRecord,
+  clearReadingHistory,
+  exportReadingHistoryArchive,
+  importReadingHistoryArchive,
+  filterReadingHistory,
+  computeHistoryStats,
+  getPracticeTrendRecords,
+  computePracticeTrendSummary,
+  computePracticeTrendBars
+} = useReadingHistory()
+const { createReadingSuite } = useReadingSuite()
 const ENDLESS_STATE_KEY = 'practice_reading_endless_state_v1'
 const READING_BACKUP_STORAGE_KEY = 'practice_reading_archive_backups_v1'
 const LICENSE_STORAGE_KEY = 'hasSeenGplLicense'
@@ -1288,22 +431,6 @@ const MAX_READING_BACKUPS = 10
 const SUITE_FLOW_MODE_STORAGE_KEY = 'suite_flow_mode'
 const SUITE_FREQUENCY_SCOPE_STORAGE_KEY = 'suite_frequency_scope'
 const SUITE_AUTO_ADVANCE_STORAGE_KEY = 'suite_auto_advance_after_submit'
-const legacyMoreToolScripts = [
-  'js/utils/vocabDataIO.js',
-  'js/core/vocabScheduler.js',
-  'js/core/vocabStore.js',
-  'js/app/vocabListSwitcher.js',
-  'js/components/vocabDashboardCards.js',
-  'js/components/vocabSessionView.js',
-  'js/services/achievementManager.js',
-  'js/presentation/moreView.js'
-]
-
-let legacyMoreToolsPromise = null
-let legacyOnboardingPromise = null
-let legacyUpdateManagerPromise = null
-const legacyStylePromises = new Map()
-const legacyScriptPromises = new Map()
 
 const icons = {
   overview: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>',
@@ -1436,7 +563,7 @@ const heatmapMonth = ref(new Date(new Date().getFullYear(), new Date().getMonth(
 const readingAssets = ref([])
 const readingHistory = ref([])
 const readingBackups = ref(readReadingBackups())
-const readingArchiveImportInput = ref(null)
+const readingSettingsPanel = ref(null)
 const loading = ref(false)
 const loadingHistory = ref(false)
 const historyBusy = ref(false)
@@ -1457,119 +584,39 @@ const readingCategoryEntries = computed(() => ['P1', 'P2', 'P3'].map((category) 
 })))
 
 const browseTitle = computed(() => {
-  if (selectedCategory.value === 'all' && selectedType.value === 'all') return '题库浏览'
-  if (selectedCategory.value === 'all') return '阅读题库'
-  return `${selectedCategory.value} 阅读`
+  return buildBrowseTitle(selectedCategory.value, selectedType.value)
 })
 
 const filteredReadingAssets = computed(() => {
-  const query = keyword.value.trim().toLowerCase()
-  const filtered = readingAssets.value.filter((asset) => {
-    if (selectedType.value !== 'all' && asset.activity !== selectedType.value) return false
-    if (selectedCategory.value !== 'all' && normalizeCategory(asset.category) !== selectedCategory.value) return false
-    if (frequencyFilter.value !== 'all' && normalizeFrequency(asset) !== frequencyFilter.value) return false
-    if (!query) return true
-    return [
-      asset.id,
-      asset.title,
-      asset.source,
-      asset.category,
-      asset.difficulty,
-      asset.payloadRef,
-      asset.metadata?.dataKey,
-      asset.metadata?.pdfFilename,
-      asset.metadata?.legacyFilename
-    ].filter(Boolean).join(' ').toLowerCase().includes(query)
-  })
-
-  return filtered.slice().sort((left, right) => {
-    if (sortMode.value === 'frequency-desc') {
-      return frequencyRank(right) - frequencyRank(left)
-        || String(left.category || '').localeCompare(String(right.category || ''), 'zh-Hans-CN')
-        || String(left.title || '').localeCompare(String(right.title || ''), 'zh-Hans-CN')
-    }
-    if (sortMode.value === 'difficulty-desc') {
-      return difficultyRank(right) - difficultyRank(left)
-        || frequencyRank(right) - frequencyRank(left)
-        || String(left.category || '').localeCompare(String(right.category || ''), 'zh-Hans-CN')
-        || String(left.title || '').localeCompare(String(right.title || ''), 'zh-Hans-CN')
-    }
-    return String(left.category || '').localeCompare(String(right.category || ''), 'zh-Hans-CN')
-      || String(left.title || '').localeCompare(String(right.title || ''), 'zh-Hans-CN')
+  return filterReadingAssets(readingAssets.value, {
+    keyword: keyword.value,
+    selectedType: selectedType.value,
+    selectedCategory: selectedCategory.value,
+    frequencyFilter: frequencyFilter.value,
+    sortMode: sortMode.value
   })
 })
 
-const sortedHistory = computed(() => readingHistory.value.slice().sort((left, right) => (
-  safeDateMs(right.submittedAt || right.endTime || right.startTime) - safeDateMs(left.submittedAt || left.endTime || left.startTime)
-)))
+const sortedHistory = computed(() => sortReadingHistory(readingHistory.value))
 
 const filteredHistory = computed(() => {
-  const query = historyKeyword.value.trim().toLowerCase()
-  return sortedHistory.value.filter((record) => {
-    if (!historyRecordMatchesType(record, selectedHistoryType.value)) return false
-    if (!query) return true
-    return [
-      record.id,
-      record.title,
-      record.assetId,
-      record.examId,
-      record.activity,
-      record.type,
-      record.metadata?.activity,
-      record.metadata?.type,
-      record.metadata?.category,
-      record.submittedAt,
-      record.endTime
-    ].filter(Boolean).join(' ').toLowerCase().includes(query)
+  return filterReadingHistory(readingHistory.value, {
+    keyword: historyKeyword.value,
+    selectedHistoryType: selectedHistoryType.value
   })
 })
 
-const historyStats = computed(() => {
-  const totalPracticed = readingHistory.value.length
-  const totalAccuracy = readingHistory.value.reduce((sum, record) => sum + Number(record.accuracy || 0), 0)
-  const totalDuration = readingHistory.value.reduce((sum, record) => sum + Number(record.duration || 0), 0)
-  return {
-    totalPracticed,
-    averageAccuracy: totalPracticed ? Math.round((totalAccuracy / totalPracticed) * 100) : 0,
-    studyMinutes: Math.round(totalDuration / 60),
-    streakDays: calculateStreakDays(readingHistory.value)
-  }
-})
+const historyStats = computed(() => computeHistoryStats(readingHistory.value))
 
 const practiceTrendRecords = computed(() => {
-  const config = practiceTrendRanges.find((range) => range.value === practiceTrendRange.value) || practiceTrendRanges[0]
-  if (config.days) {
-    const cutoff = Date.now() - config.days * 24 * 60 * 60 * 1000
-    return sortedHistory.value.filter((record) => {
-      return safeDateMs(record.submittedAt || record.endTime || record.startTime) >= cutoff
-    })
-  }
-  return sortedHistory.value.slice(0, config.limit || 10)
+  return getPracticeTrendRecords(readingHistory.value, practiceTrendRange.value, practiceTrendRanges)
 })
 
 const practiceTrendSummary = computed(() => {
-  const records = practiceTrendRecords.value
-  const totalAccuracy = records.reduce((sum, record) => sum + historyPercentage(record), 0)
-  const range = practiceTrendRanges.find((item) => item.value === practiceTrendRange.value) || practiceTrendRanges[0]
-  return {
-    count: records.length,
-    averageAccuracy: records.length ? Math.round(totalAccuracy / records.length) : 0,
-    rangeLabel: range.label
-  }
+  return computePracticeTrendSummary(readingHistory.value, practiceTrendRange.value, practiceTrendRanges)
 })
 
-const practiceTrendBars = computed(() => practiceTrendRecords.value
-  .slice()
-  .reverse()
-  .map((record, index) => {
-    const accuracy = historyPercentage(record)
-    return {
-      id: String(record.id || record.sessionId || index),
-      label: record.title || `记录 ${index + 1}`,
-      accuracy,
-      height: Math.max(8, Math.min(100, accuracy))
-    }
-  }))
+const practiceTrendBars = computed(() => computePracticeTrendBars(readingHistory.value, practiceTrendRange.value, practiceTrendRanges))
 
 const priorityInsight = computed(() => {
   const buckets = {
@@ -1737,9 +784,7 @@ async function loadAssets(options = {}) {
   loading.value = true
   error.value = ''
   try {
-    const result = await practiceAssets.listAll({ activity: 'reading' }, {
-      refresh: Boolean(options.refresh)
-    })
+    const result = await loadReadingAssets({ refresh: Boolean(options.refresh) })
     readingAssets.value = Array.isArray(result?.data) ? result.data : []
     latestAssetSyncAt.value = new Date()
     scheduleBrowsePositionRestore()
@@ -1767,7 +812,7 @@ async function loadHistory() {
   loadingHistory.value = true
   historyError.value = ''
   try {
-    const result = await practiceHistory.listAll({ activity: 'reading' })
+    const result = await loadReadingHistory()
     readingHistory.value = Array.isArray(result?.data) ? result.data : []
   } catch (loadError) {
     console.error('加载阅读练习记录失败:', loadError)
@@ -1833,33 +878,6 @@ function acceptGplLicense(event) {
     console.warn('LocalStorage error:', error)
   }
   licenseModalVisible.value = false
-}
-
-function normalizeCategory(category) {
-  const value = String(category || '').trim().toUpperCase()
-  if (value.includes('P1')) return 'P1'
-  if (value.includes('P2')) return 'P2'
-  if (value.includes('P3')) return 'P3'
-  return value || 'P1'
-}
-
-function normalizeFrequency(source) {
-  const value = [
-    source?.metadata?.frequency,
-    source?.frequency,
-    source?.difficulty,
-    source?.title,
-    source?.id,
-    source?.assetId,
-    source?.examId,
-    source?.metadata?.dataKey,
-    source?.metadata?.legacyFilename,
-    source?.metadata?.pdfFilename
-  ].filter(Boolean).join(' ').toLowerCase()
-  if (value.includes('medium') || value.includes('次高频') || value.includes('中频') || value.includes('-medium')) return 'medium'
-  if (value.includes('high') || value.includes('超高频') || value.includes('高频') || value.includes('-high')) return 'high'
-  if (value.includes('low') || value.includes('低频') || value.includes('-low')) return 'low'
-  return 'unknown'
 }
 
 function getRecordAssetKey(record) {
@@ -1934,11 +952,6 @@ function buildPriorityBucket(frequency) {
   }
 }
 
-function safeDateMs(value) {
-  const timestamp = Date.parse(value || '')
-  return Number.isFinite(timestamp) ? timestamp : 0
-}
-
 function countByCategory(category) {
   return readingAssets.value.filter((asset) => normalizeCategory(asset.category) === category).length
 }
@@ -1952,13 +965,6 @@ function filterByType(type) {
 
 function filterRecords(type) {
   selectedHistoryType.value = type === 'reading' ? 'reading' : 'all'
-}
-
-function historyRecordMatchesType(record, type) {
-  if (type !== 'reading') return true
-  const activity = String(record?.activity || record?.metadata?.activity || '').trim().toLowerCase()
-  const recordType = String(record?.type || record?.metadata?.type || '').trim().toLowerCase()
-  return activity === 'reading' || recordType === 'reading' || Boolean(record?.assetId || record?.examId)
 }
 
 function browseCategory(category, type = 'reading') {
@@ -2122,156 +1128,22 @@ function startEndlessMode() {
   })
 }
 
-function resolveLegacyAssetUrl(relativePath) {
-  const normalized = String(relativePath || '').replace(/^\/+/, '')
-  try {
-    const currentUrl = new URL(window.location.href)
-    if (currentUrl.pathname.includes('/dist/writing/')) {
-      return new URL(`../../${normalized}`, currentUrl.href).href
-    }
-  } catch (_) {}
-  return `/${normalized}`
-}
-
-function loadLegacyStyle(relativePath) {
-  if (legacyStylePromises.has(relativePath)) return legacyStylePromises.get(relativePath)
-  const href = resolveLegacyAssetUrl(relativePath)
-  const existing = document.querySelector(`link[data-legacy-style="${relativePath}"]`)
-  if (existing) {
-    const promise = Promise.resolve()
-    legacyStylePromises.set(relativePath, promise)
-    return promise
-  }
-  const promise = new Promise((resolve, reject) => {
-    const link = document.createElement('link')
-    link.rel = 'stylesheet'
-    link.href = href
-    link.dataset.legacyStyle = relativePath
-    link.onload = () => resolve()
-    link.onerror = () => {
-      legacyStylePromises.delete(relativePath)
-      reject(new Error(`加载 legacy 样式失败：${relativePath}`))
-    }
-    document.head.appendChild(link)
-  })
-  legacyStylePromises.set(relativePath, promise)
-  return promise
-}
-
-function loadLegacyScript(relativePath) {
-  if (legacyScriptPromises.has(relativePath)) return legacyScriptPromises.get(relativePath)
-  const existing = document.querySelector(`script[data-legacy-script="${relativePath}"]`)
-  if (existing) {
-    const promise = Promise.resolve()
-    legacyScriptPromises.set(relativePath, promise)
-    return promise
-  }
-  const promise = new Promise((resolve, reject) => {
-    const script = document.createElement('script')
-    script.src = resolveLegacyAssetUrl(relativePath)
-    script.async = false
-    script.dataset.legacyScript = relativePath
-    script.onload = () => resolve()
-    script.onerror = () => {
-      legacyScriptPromises.delete(relativePath)
-      reject(new Error(`加载 legacy 脚本失败：${relativePath}`))
-    }
-    document.head.appendChild(script)
-  })
-  legacyScriptPromises.set(relativePath, promise)
-  return promise
-}
-
-function ensureLegacyMoreTools() {
-  if (window.VocabSessionView && window.showAchievements && window.openClockOverlay) {
-    return Promise.resolve()
-  }
-  if (!legacyMoreToolsPromise) {
-    legacyMoreToolsPromise = loadLegacyStyle('css/main.css')
-      .then(() => legacyMoreToolScripts.reduce(
-        (chain, scriptPath) => chain.then(() => loadLegacyScript(scriptPath)),
-        Promise.resolve()
-      ))
-      .catch((error) => {
-        legacyMoreToolsPromise = null
-        throw error
-      })
-  }
-  return legacyMoreToolsPromise
-}
-
-function ensureLegacyOnboarding() {
-  if (window.OnboardingTour && typeof window.OnboardingTour.start === 'function') {
-    return Promise.resolve()
-  }
-  if (!legacyOnboardingPromise) {
-    legacyOnboardingPromise = loadLegacyStyle('css/onboarding.css')
-      .then(() => loadLegacyScript('js/components/onboardingTour.js'))
-      .then(() => {
-        window.OnboardingTour?.init?.()
-      })
-      .catch((error) => {
-        legacyOnboardingPromise = null
-        throw error
-      })
-  }
-  return legacyOnboardingPromise
-}
-
 async function startOnboardingTour(event) {
   event?.preventDefault?.()
   event?.stopImmediatePropagation?.()
   try {
-    await ensureLegacyOnboarding()
-    if (!window.OnboardingTour || typeof window.OnboardingTour.start !== 'function') {
-      throw new Error('OnboardingTour 未加载')
-    }
-    window.OnboardingTour.start(true)
+    await startLegacyOnboardingTour()
   } catch (error) {
     console.error('打开引导流程失败:', error)
     showLocalMessage(error?.message ? `引导打开失败：${error.message}` : '引导打开失败，请稍后重试。')
   }
 }
 
-function ensureUpdateManagerInstance() {
-  if (window.appUpdateManager && typeof window.appUpdateManager.handleAction === 'function') {
-    return Promise.resolve(window.appUpdateManager)
-  }
-  if (typeof window.AppUpdateManager !== 'function') {
-    return Promise.reject(new Error('AppUpdateManager 未加载'))
-  }
-  const manager = new window.AppUpdateManager()
-  window.appUpdateManager = manager
-  return manager.init().then(() => manager)
-}
-
-function ensureLegacyUpdateManager() {
-  if (window.appUpdateManager && typeof window.appUpdateManager.handleAction === 'function') {
-    return Promise.resolve(window.appUpdateManager)
-  }
-  if (!legacyUpdateManagerPromise) {
-    legacyUpdateManagerPromise = loadLegacyStyle('css/main.css')
-      .then(() => loadLegacyScript('js/integration/updateManager.js'))
-      .then(() => ensureUpdateManagerInstance())
-      .catch((error) => {
-        legacyUpdateManagerPromise = null
-        throw error
-      })
-  }
-  return legacyUpdateManagerPromise
-}
-
 async function openUpdateManager(event) {
   event?.preventDefault?.()
   event?.stopImmediatePropagation?.()
   try {
-    const manager = await ensureLegacyUpdateManager()
-    if (typeof manager.handleAction === 'function') {
-      await manager.handleAction('open-modal')
-      return
-    }
-    manager.showModal?.()
-    await manager.ensureAutoCheck?.()
+    await openLegacyUpdateManager()
   } catch (error) {
     console.error('打开更新管理失败:', error)
     showLocalMessage(error?.message ? `更新检查打开失败：${error.message}` : '更新检查打开失败，请稍后重试。')
@@ -2282,12 +1154,7 @@ async function openClockTool(event) {
   event?.preventDefault?.()
   event?.stopImmediatePropagation?.()
   try {
-    await ensureLegacyMoreTools()
-    window.ensureMoreView?.()
-    if (typeof window.openClockOverlay !== 'function') {
-      throw new Error('MoreView 时钟模块未加载')
-    }
-    window.openClockOverlay()
+    await openLegacyClockOverlay()
   } catch (error) {
     console.error('打开全屏时钟失败:', error)
     showLocalMessage(error?.message ? `全屏时钟打开失败：${error.message}` : '全屏时钟打开失败，请稍后重试。')
@@ -2300,12 +1167,7 @@ async function openVocabTool(event) {
   activeView.value = 'vocab'
   await nextTick()
   try {
-    await ensureLegacyMoreTools()
-    window.ensureMoreView?.()
-    if (!window.VocabSessionView || typeof window.VocabSessionView.mount !== 'function') {
-      throw new Error('VocabSessionView 未加载')
-    }
-    await window.VocabSessionView.mount('#vocab-view')
+    await mountLegacyVocabSessionView('#vocab-view')
   } catch (error) {
     console.error('打开单词背诵失败:', error)
     showLocalMessage(error?.message ? `单词背诵打开失败：${error.message}` : '单词背诵打开失败，请稍后重试。')
@@ -2316,11 +1178,7 @@ async function showAchievementsTool(event) {
   event?.preventDefault?.()
   event?.stopImmediatePropagation?.()
   try {
-    await ensureLegacyMoreTools()
-    if (typeof window.showAchievements !== 'function') {
-      throw new Error('AchievementManager 未加载')
-    }
-    await window.showAchievements()
+    await showLegacyAchievements()
   } catch (error) {
     console.error('打开成就面板失败:', error)
     showLocalMessage(error?.message ? `成就面板打开失败：${error.message}` : '成就面板打开失败，请稍后重试。')
@@ -2347,8 +1205,7 @@ function openReadingMemorize() {
 function hideAchievementsTool(event) {
   event?.preventDefault?.()
   event?.stopImmediatePropagation?.()
-  if (typeof window.hideAchievements === 'function') {
-    window.hideAchievements()
+  if (hideLegacyAchievements()) {
     return
   }
   document.getElementById('achievements-modal')?.classList.remove('show')
@@ -2573,7 +1430,7 @@ async function startReadingSuite(event, options = {}) {
     if (Array.isArray(options.sequence) && options.sequence.length) {
       createPayload.sequence = options.sequence
     }
-    const suite = await practiceReadingSuite.create(createPayload)
+    const suite = await createReadingSuite(createPayload)
     const sessionId = String(suite?.sessionId || '').trim()
     if (!sessionId) {
       throw new Error('套题 session 创建失败')
@@ -2661,7 +1518,7 @@ async function toggleBulkDeleteMode() {
 
   historyBusy.value = true
   try {
-    await Promise.all(selectedIds.map((recordId) => practiceHistory.delete('reading', recordId)))
+    await Promise.all(selectedIds.map((recordId) => deleteReadingHistoryRecord(recordId)))
     selectedHistoryIds.value = new Set()
     bulkDeleteMode.value = false
     await loadHistory()
@@ -2685,7 +1542,7 @@ async function deleteHistoryRecord(record) {
 
   historyBusy.value = true
   try {
-    await practiceHistory.delete('reading', recordId)
+    await deleteReadingHistoryRecord(recordId)
     selectedHistoryIds.value = new Set(Array.from(selectedHistoryIds.value).filter((id) => id !== recordId))
     await loadHistory()
     showLocalMessage('记录已删除')
@@ -2705,7 +1562,7 @@ async function clearPracticeData() {
 
   historyBusy.value = true
   try {
-    const result = await practiceHistory.clear({ activity: 'reading' })
+    const result = await clearReadingHistory()
     selectedHistoryIds.value = new Set()
     bulkDeleteMode.value = false
     await loadHistory()
@@ -2819,7 +1676,7 @@ async function createReadingBackup() {
   if (historyBusy.value) return
   historyBusy.value = true
   try {
-    const archive = await practiceHistory.exportArchive({ activity: 'reading' })
+    const archive = await exportReadingHistoryArchive()
     const createdAt = new Date().toISOString()
     const backup = normalizeReadingBackupEntry({
       id: `reading-backup-${createdAt.replace(/[:.]/g, '-')}`,
@@ -2873,8 +1730,8 @@ async function restoreReadingBackup(backup) {
 
   historyBusy.value = true
   try {
-    await practiceHistory.clear({ activity: 'reading' })
-    const result = await practiceHistory.importArchive('reading', normalized.archive)
+    await clearReadingHistory()
+    const result = await importReadingHistoryArchive(normalized.archive)
     selectedHistoryIds.value = new Set()
     bulkDeleteMode.value = false
     await loadHistory()
@@ -2901,7 +1758,7 @@ async function exportReadingArchive(mode = 'export') {
   if (historyBusy.value) return
   historyBusy.value = true
   try {
-    const archive = await practiceHistory.exportArchive({ activity: 'reading' })
+    const archive = await exportReadingHistoryArchive()
     const prefix = mode === 'backup' ? 'ielts-reading-practice-backup' : 'ielts-reading-practice-export'
     downloadJsonFile(`${prefix}-${new Date().toISOString().slice(0, 10)}.json`, archive)
     showLocalMessage(`阅读记录${mode === 'backup' ? '备份' : '导出'}完成：${archive?.count || 0} 条`)
@@ -2915,7 +1772,7 @@ async function exportReadingArchive(mode = 'export') {
 
 function triggerReadingArchiveImport() {
   if (historyBusy.value) return
-  readingArchiveImportInput.value?.click()
+  readingSettingsPanel.value?.click()
 }
 
 async function handleReadingArchiveImportChange(event) {
@@ -2936,7 +1793,7 @@ async function importReadingArchiveFile(file) {
   try {
     const text = await file.text()
     const payload = JSON.parse(text)
-    const result = await practiceHistory.importArchive('reading', payload)
+    const result = await importReadingHistoryArchive(payload)
     await loadHistory()
     showLocalMessage(`阅读记录导入完成：${result?.importedCount || 0} 条，跳过 ${result?.skippedCount || 0} 条`)
   } catch (error) {
@@ -2950,10 +1807,6 @@ async function importReadingArchiveFile(file) {
 function showReadingLibraryConfigList() {
   libraryConfigOpen.value = true
   backupListOpen.value = false
-}
-
-function historyPercentage(record) {
-  return Math.round(Number(record?.accuracy || 0) * 100)
 }
 
 function formatRecordDate(record) {
@@ -3039,31 +1892,6 @@ function formatExamMetaText(asset) {
   return `${category} | reading${label}`
 }
 
-function frequencyRank(asset) {
-  const ranks = { high: 3, medium: 2, low: 1, unknown: 0 }
-  return ranks[normalizeFrequency(asset)] || 0
-}
-
-function difficultyRank(asset) {
-  const value = [
-    asset?.metadata?.difficultyRank,
-    asset?.metadata?.difficulty,
-    asset?.difficulty,
-    asset?.metadata?.frequency,
-    asset?.frequency,
-    asset?.title,
-    asset?.id,
-    asset?.metadata?.dataKey,
-    asset?.metadata?.legacyFilename,
-    asset?.metadata?.pdfFilename
-  ].filter(Boolean).join(' ').toLowerCase()
-  if (/(\b|_)(hard|difficult|advanced|high)(\b|_|-)/.test(value) || value.includes('困难') || value.includes('高难') || value.includes('超高频') || value.includes('高频')) return 3
-  if (/(\b|_)(medium|intermediate|mid)(\b|_|-)/.test(value) || value.includes('中等') || value.includes('中频') || value.includes('次高频')) return 2
-  if (/(\b|_)(easy|basic|low)(\b|_|-)/.test(value) || value.includes('简单') || value.includes('低频')) return 1
-  const numeric = Number(asset?.metadata?.difficultyRank ?? asset?.difficultyRank ?? asset?.metadata?.difficultyScore)
-  return Number.isFinite(numeric) ? numeric : 0
-}
-
 function getPdfPath(asset) {
   return asset?.metadata?.shuiPdf
     || asset?.metadata?.legacyPath
@@ -3123,9 +1951,7 @@ function applyBackgroundTheme(themeName) {
   const nextTheme = backgroundThemes.some((theme) => theme.value === themeName)
     ? themeName
     : 'misty-mountain'
-  if (typeof window.switchBgTheme === 'function') {
-    window.switchBgTheme(nextTheme)
-  } else {
+  if (!switchLegacyBackgroundTheme(nextTheme)) {
     try {
       localStorage.setItem('three_bg_theme', nextTheme)
     } catch (_) {}
@@ -3134,25 +1960,6 @@ function applyBackgroundTheme(themeName) {
   themeSwitcherOpen.value = false
   const label = backgroundThemes.find((theme) => theme.value === nextTheme)?.title || nextTheme
   showLocalMessage(`主题已切换：${label}`)
-}
-
-function calculateStreakDays(records) {
-  const days = new Set(records.map((record) => {
-    const value = String(record.submittedAt || record.endTime || '').trim()
-    if (!value) return ''
-    return value.slice(0, 10)
-  }).filter(Boolean))
-  if (!days.size) return 0
-
-  let streak = 0
-  const cursor = new Date()
-  for (;;) {
-    const key = cursor.toISOString().slice(0, 10)
-    if (!days.has(key)) break
-    streak += 1
-    cursor.setDate(cursor.getDate() - 1)
-  }
-  return streak
 }
 
 function showLocalMessage(message) {
@@ -3192,7 +1999,7 @@ function updateSegmentedIndicators() {
 }
 </script>
 
-<style scoped>
+<style>
 .practice-library-legacy {
   --color-white: #fff;
   --color-gray-50: #f8fafc;

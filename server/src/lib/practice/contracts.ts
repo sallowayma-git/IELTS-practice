@@ -8,6 +8,7 @@ export const PRACTICE_SESSION_STATUSES = [
   'cancelled',
   'failed'
 ] as const
+export const READING_COACH_ENABLED_SETTING_KEY = 'practice.readingCoach.enabled'
 
 export type PracticeActivity = typeof PRACTICE_ACTIVITIES[number]
 export type PracticeSessionStatus = typeof PRACTICE_SESSION_STATUSES[number]
@@ -22,6 +23,24 @@ export interface PracticeAsset {
   payloadRef?: string | null
   metadata?: Record<string, unknown>
   payload?: ReadingPracticePayload | null
+}
+
+export interface ReadingLibraryStatus {
+  source: 'builtin' | 'nas-sqlite' | 'nas-js'
+  ready: boolean
+  assetCount: number
+  htmlCount?: number
+  pdfCount?: number
+  version?: string | null
+  lastLoadedAt?: string | null
+  error?: string | null
+}
+
+export interface ReadingAssetProvider {
+  listAssets(): Promise<PracticeAsset[]> | PracticeAsset[]
+  getAsset(assetId: string): Promise<PracticeAsset> | PracticeAsset
+  getStatus(): Promise<ReadingLibraryStatus> | ReadingLibraryStatus
+  refresh?(): Promise<ReadingLibraryStatus> | ReadingLibraryStatus
 }
 
 export interface ReadingPracticeMeta {
@@ -474,6 +493,31 @@ export interface PracticeSessionState {
   lastSequence?: number
   legacy?: Record<string, unknown>
   submission?: ReadingPracticeSubmission
+}
+
+export function normalizeReadingCoachEnabled(value: unknown, fallback = true): boolean {
+  if (value === null || value === undefined || value === '') {
+    return fallback
+  }
+  if (typeof value === 'boolean') {
+    return value
+  }
+  if (typeof value === 'number') {
+    return value !== 0
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (!normalized) {
+      return fallback
+    }
+    if (['1', 'true', 'yes', 'on', 'enabled'].includes(normalized)) {
+      return true
+    }
+    if (['0', 'false', 'no', 'off', 'disabled'].includes(normalized)) {
+      return false
+    }
+  }
+  return fallback
 }
 
 export function isPracticeActivity(value: unknown): value is PracticeActivity {

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type {
+  PracticeAsset,
   ReadingPracticePayload,
   ReadingPracticeSubmission,
   ReadingSuiteCreateRequest,
@@ -13,8 +14,6 @@ import type {
 import { createReadingPracticeSubmission } from './reading-sessions.js'
 import { createHttpError } from '../shared/http.js'
 
-type ManifestEntry = Record<string, unknown>
-type ReadingManifest = Record<string, ManifestEntry>
 type AnyRecord = Record<string, unknown>
 
 function normalizeFlowMode(value: unknown): ReadingSuiteFlowMode {
@@ -70,27 +69,27 @@ function stableHash(value: string): number {
   return hash >>> 0
 }
 
-function selectEntry(pool: Array<[string, ManifestEntry]>, seed: string, category: string): [string, ManifestEntry] {
+function selectEntry(pool: PracticeAsset[], seed: string, category: string): PracticeAsset {
   if (!pool.length) {
     throw createHttpError('reading_suite_category_missing', `Reading suite is missing category ${category}`, 409)
   }
-  const sorted = pool.slice().sort(([left], [right]) => left.localeCompare(right, 'en'))
+  const sorted = pool.slice().sort((left, right) => left.id.localeCompare(right.id, 'en'))
   const index = stableHash(`${seed}:${category}`) % sorted.length
   return sorted[index]
 }
 
-function manifestCategory(entry: ManifestEntry): string {
-  return typeof entry.category === 'string' ? entry.category.trim().toUpperCase() : ''
+function assetCategory(asset: PracticeAsset): string {
+  return typeof asset.category === 'string' ? asset.category.trim().toUpperCase() : ''
 }
 
-function toPassageEntry(index: number, manifestId: string, entry: ManifestEntry): ReadingSuitePassageEntry {
-  const examId = String(entry.examId || manifestId).trim()
+function toPassageEntry(index: number, asset: PracticeAsset): ReadingSuitePassageEntry {
+  const examId = String(asset.id || '').trim()
   return {
     index,
     assetId: examId,
     examId,
-    title: String(entry.title || examId),
-    category: manifestCategory(entry) || `P${index + 1}`,
+    title: String(asset.title || examId),
+    category: assetCategory(asset) || `P${index + 1}`,
     status: index === 0 ? 'active' : 'pending',
     sessionId: null,
     submittedAt: null,
@@ -98,8 +97,14 @@ function toPassageEntry(index: number, manifestId: string, entry: ManifestEntry)
   }
 }
 
-function hasReadingPayload(entry: ManifestEntry): boolean {
-  return typeof entry.script === 'string' && entry.script.trim().length > 0
+function hasReadingPayload(asset: PracticeAsset): boolean {
+  return Boolean(typeof asset.payloadRef === 'string' && asset.payloadRef.trim())
+}
+
+function assetMetadata(asset: PracticeAsset): Record<string, unknown> {
+  return asset.metadata && typeof asset.metadata === 'object' && !Array.isArray(asset.metadata)
+    ? asset.metadata
+    : {}
 }
 
 function normalizeRequestedSequenceId(value: unknown): string {
@@ -113,21 +118,21 @@ function normalizeRequestedSequenceId(value: unknown): string {
   return String(input.assetId || input.examId || input.id || '').trim()
 }
 
-function findManifestEntry(
-  manifest: ReadingManifest,
+function findReadingAsset(
+  assets: PracticeAsset[],
   requestedId: string
-): [string, ManifestEntry] | null {
-  const direct = manifest[requestedId]
-  if (direct) return [requestedId, direct]
-  return Object.entries(manifest || {}).find(([manifestId, entry]) => (
-    manifestId === requestedId
-    || String(entry?.examId || '').trim() === requestedId
-    || String(entry?.dataKey || '').trim() === requestedId
-  )) || null
+): PracticeAsset | null {
+  return assets.find((asset) => {
+    const metadata = assetMetadata(asset)
+    return asset.id === requestedId
+      || String(asset.payloadRef || '').trim() === requestedId
+      || String(metadata.dataKey || '').trim() === requestedId
+      || String(metadata.legacyFilename || '').trim() === requestedId
+  }) || null
 }
 
 function createExplicitSequence(
-  manifest: ReadingManifest,
+  assets: PracticeAsset[],
   requestedSequence: unknown
 ): ReadingSuitePassageEntry[] | null {
   if (!Array.isArray(requestedSequence) || requestedSequence.length === 0) {
@@ -143,22 +148,37 @@ function createExplicitSequence(
   }
 
   return requestedIds.map((requestedId, index) => {
-    const found = findManifestEntry(manifest, requestedId)
-    if (!found) {
+    const asset = findReadingAsset(assets, requestedId)
+    if (!asset) {
       throw createHttpError('reading_suite_custom_asset_not_found', `Reading suite custom asset not found: ${requestedId}`, 404)
     }
-    const [manifestId, entry] = found
-    const normalizedType = String(entry.type || 'reading').trim().toLowerCase()
-    const category = manifestCategory(entry)
-    if (normalizedType !== 'reading' || category !== categories[index] || !hasReadingPayload(entry)) {
+    const category = assetCategory(asset)
+    if (asset.activity !== 'reading' || category !== categories[index] || !hasReadingPayload(asset)) {
       throw createHttpError('reading_suite_custom_sequence_invalid', 'Custom reading suite sequence must be ordered as P1, P2, P3 and use practice-ready reading assets', 409, {
         assetId: requestedId,
         expectedCategory: categories[index],
         actualCategory: category || null
       })
     }
-    return toPassageEntry(index, manifestId, entry)
+    return toPassageEntry(index, asset)
   })
+}
+
+function getFrequency(asset: PracticeAsset): unknown {
+  return assetMetadata(asset).frequency
+}
+
+function getPracticeReadyReadingAssets(
+  assets: PracticeAsset[],
+  frequencyScope: ReadingSuiteFrequencyScope
+): PracticeAsset[] {
+  return assets.filter((asset) => (
+    asset
+    && asset.activity === 'reading'
+    && asset.source === 'reading_exam'
+    && hasReadingPayload(asset)
+    && isFrequencyIncluded(getFrequency(asset), frequencyScope)
+  ))
 }
 
 function emptyAggregate(totalPassages: number) {
@@ -264,25 +284,19 @@ function cloneSuiteSession(session: ReadingSuiteSession): ReadingSuiteSession {
 }
 
 export function createReadingSuiteSession(
-  manifest: ReadingManifest,
+  assets: PracticeAsset[],
   request: ReadingSuiteCreateRequest = {}
 ): ReadingSuiteSession {
   const flowMode = normalizeFlowMode(request.flowMode)
   const frequencyScope = normalizeFrequencyScope(request.frequencyScope)
   const seed = String(request.seed || randomUUID()).trim()
-  const explicitSequence = createExplicitSequence(manifest, request.sequence)
-  const entries = Object.entries(manifest || {}).filter(([, entry]) => (
-    entry
-    && typeof entry === 'object'
-    && String(entry.type || 'reading').trim().toLowerCase() === 'reading'
-    && hasReadingPayload(entry)
-    && isFrequencyIncluded(entry.frequency, frequencyScope)
-  ))
+  const explicitSequence = createExplicitSequence(assets, request.sequence)
+  const entries = getPracticeReadyReadingAssets(assets, frequencyScope)
 
   const categories = ['P1', 'P2', 'P3']
   const sequence = explicitSequence || categories.map((category, index) => {
-    const picked = selectEntry(entries.filter(([, entry]) => manifestCategory(entry) === category), seed, category)
-    return toPassageEntry(index, picked[0], picked[1])
+    const picked = selectEntry(entries.filter((asset) => assetCategory(asset) === category), seed, category)
+    return toPassageEntry(index, picked)
   })
   const nowMs = Date.now()
   const now = new Date(nowMs).toISOString()

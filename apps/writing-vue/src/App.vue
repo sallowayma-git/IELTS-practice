@@ -4,9 +4,10 @@
     <NavBar v-if="showShellNav" />
     <main :class="['app-main', { 'app-main--frameless': !showShellNav }]">
       <router-view v-slot="{ Component }">
-        <transition name="page" mode="out-in">
+        <transition v-if="showRouteTransition" name="page" mode="out-in">
           <component :is="Component" :key="routeViewKey" />
         </transition>
+        <component v-else :is="Component" :key="routeViewKey" />
       </router-view>
     </main>
   </div>
@@ -27,6 +28,7 @@ const framelessRouteNames = new Set([
   'PracticeReadingReview'
 ])
 const showShellNav = computed(() => !framelessRouteNames.has(route.name))
+const showRouteTransition = computed(() => showShellNav.value)
 const routeViewKey = computed(() => route.path || String(route.name || route.fullPath))
 </script>
 

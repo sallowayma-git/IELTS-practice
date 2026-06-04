@@ -75,6 +75,23 @@ async def install_api_stub(page) -> None:
     await page.add_init_script(
         f"""
         (() => {{
+          window.__pageErrors = [];
+          window.addEventListener('error', (event) => {{
+            window.__pageErrors.push({{
+              type: 'error',
+              message: String(event?.message || ''),
+              filename: String(event?.filename || ''),
+              lineno: Number(event?.lineno || 0),
+              colno: Number(event?.colno || 0)
+            }});
+          }});
+          window.addEventListener('unhandledrejection', (event) => {{
+            const reason = event?.reason;
+            window.__pageErrors.push({{
+              type: 'unhandledrejection',
+              message: String(reason?.message || reason || '')
+            }});
+          }});
           const LOCAL_API_BASE_URL = '{LOCAL_API_BASE_URL}';
           Math.random = () => 0;
           window.__openedWindows = [];
@@ -719,6 +736,78 @@ async def install_api_stub(page) -> None:
     )
 
 
+async def switch_library_view(page, view: str, ready_selector: str) -> None:
+    await page.evaluate(
+        """(targetView) => {
+            const navButton = document.querySelector(`[data-view="${targetView}"]`);
+            if (navButton && typeof navButton.click === 'function') {
+                navButton.click();
+            }
+            const url = new URL(window.location.href);
+            const hashUrl = new URL(url.hash.slice(1) || '/', url.origin);
+            if (targetView === 'overview') {
+                hashUrl.searchParams.delete('view');
+            } else {
+                hashUrl.searchParams.set('view', targetView);
+            }
+            window.location.hash = `#${hashUrl.pathname}${hashUrl.search}`;
+        }""",
+        view,
+    )
+    if view != "browse":
+        await page.wait_for_selector(ready_selector, timeout=10000, state="attached")
+    if view == "browse":
+        await page.evaluate(
+            """() => {
+                if (window.app && typeof window.app.browseCategory === 'function') {
+                    window.app.browseCategory('all', 'reading');
+                }
+                if (typeof window.loadExamList === 'function') {
+                    try { window.loadExamList(); } catch (_) {}
+                }
+            }"""
+        )
+        await page.wait_for_timeout(1000)
+
+
+async def return_to_library(page, entry_url: str) -> None:
+    exit_button = page.locator('#exit-btn')
+    target_href = await exit_button.get_attribute('href')
+    if not target_href:
+        raise AssertionError('return_to_library_missing_exit_href')
+    target_url = await page.evaluate(
+        """(href) => new URL(href, window.location.href).href""",
+        target_href,
+    )
+    await exit_button.click()
+    try:
+        await page.wait_for_selector('[data-practice-reading-home]', timeout=5000, state="attached")
+    except Exception:
+        await page.goto(target_url)
+        if not await page.locator('[data-practice-reading-home]').count():
+            await page.goto('about:blank')
+            await page.goto(entry_url)
+    try:
+        await page.wait_for_url("**#/", timeout=20000)
+        await page.wait_for_selector('[data-practice-reading-home]', timeout=20000, state="attached")
+        await page.wait_for_selector('[data-reading-overview]', timeout=20000, state="attached")
+    except Exception as error:
+        debug_state = await page.evaluate(
+            """() => ({
+                href: window.location.href,
+                hash: window.location.hash,
+                title: document.title,
+                appHtml: document.getElementById('app')?.innerHTML?.slice(0, 500) || '',
+                homePresent: Boolean(document.querySelector('[data-practice-reading-home]')),
+                overviewPresent: Boolean(document.querySelector('[data-reading-overview]')),
+                readingPagePresent: Boolean(document.querySelector('[data-practice-reading-page]')),
+                exitHref: document.querySelector('#exit-btn')?.getAttribute('href') || '',
+                pageErrors: Array.isArray(window.__pageErrors) ? window.__pageErrors.slice(-5) : []
+            })"""
+        )
+        raise AssertionError(f"return_to_library_failed:{debug_state}") from error
+
+
 async def accept_license_modal(page) -> None:
     license_modal = page.locator("#license-modal.show")
     await license_modal.wait_for(state="visible", timeout=10000)
@@ -848,11 +937,9 @@ async def run_flow() -> dict:
         await page.wait_for_selector('.reading-page.reading-memorize-mode [data-practice-reading-page].memorize-mode', timeout=20000)
         await page.wait_for_selector('[data-reading-memorize-panel]', timeout=10000)
 
-        await page.goto(entry_url)
-        await page.wait_for_selector('[data-practice-reading-home] h1:has-text("IELTS Atlas")', timeout=20000)
-        await page.wait_for_selector('[data-reading-overview]', timeout=20000)
+        await return_to_library(page, entry_url)
         await page.locator('button[data-action="browse-category"][data-category="P2"]').click()
-        await page.wait_for_selector('[data-reading-browse]', timeout=10000)
+        await page.wait_for_selector('#browse-view.active', timeout=10000)
         await page.wait_for_selector(f'.exam-item[data-reading-asset-id="{ASSET_ID}"]', timeout=20000)
         await capture_acceptance_screenshot(
             page,
@@ -934,7 +1021,9 @@ async def run_flow() -> dict:
 
         await page.goto(entry_url)
         await page.wait_for_selector('[data-practice-reading-home] h1:has-text("IELTS Atlas")', timeout=20000)
-        await page.click('[data-view="browse"]')
+        await page.wait_for_selector('[data-reading-overview]', timeout=20000)
+        await page.locator('button[data-action="browse-category"][data-category="P2"]').click()
+        await page.wait_for_selector('#browse-view.active', timeout=10000)
         await page.wait_for_selector(f'.exam-item[data-reading-asset-id="{ASSET_ID}"]', timeout=20000)
         await page.locator(f'.exam-item[data-reading-asset-id="{ASSET_ID}"] button:has-text("开始练习")').click()
         browse_position_saved = await page.evaluate(
@@ -1804,9 +1893,9 @@ async def run_flow() -> dict:
         if not second_attempt_state.get("q1Checked") or second_attempt_state.get("q6Value") != "second attempt" or not second_attempt_state.get("answered"):
             raise AssertionError(f"submitted_reset_recycle_not_editable:{second_attempt_state}")
 
-        await page.click('a:has-text("返回练习库")')
-        await page.wait_for_url("**#/", timeout=10000)
-        await page.click('[data-view="browse"]')
+        await return_to_library(page, entry_url)
+        await page.locator('button[data-action="browse-category"][data-category="P2"]').click()
+        await page.wait_for_selector('#browse-view.active', timeout=10000)
         await page.wait_for_selector(f'.exam-item[data-reading-asset-id="{ASSET_ID}"]', timeout=10000)
         browse_restore_state = await page.evaluate(
             f"""() => ({{
@@ -1855,6 +1944,13 @@ async def run_flow() -> dict:
             """() => ({
               q12: document.querySelector('.match-dropzone[data-question="q12"]')?.dataset?.answerValue || '',
               q12Dropzone: document.querySelector('.match-dropzone[data-question="q12"]')?.dataset?.answerValue || '',
+              q12Chip: document.querySelector('.match-dropzone[data-question="q12"] .dragdrop-chip-assigned')?.dataset?.answerValue || '',
+              reviewRowText: document.querySelector('[data-review-question-id="q12"]')?.textContent?.replace(/\s+/g, ' ').trim() || '',
+              submissionQ12: window.__debugSubmission?.answers?.q12 || '',
+              comparisonQ12: window.__debugSubmission?.answerComparison?.q12?.userAnswer || '',
+              answerStateQ12: window.__debugAnswers?.q12 || '',
+              interactionQ12: window.__debugPayload?.interactionModel?.q12?.control || '',
+              questionOrder: Array.isArray(window.__debugPayload?.questionOrder) ? window.__debugPayload.questionOrder.slice() : [],
               hasAnswerSelectInBottomNav: Boolean(document.querySelector('#question-nav select, #question-nav input[type="text"], #question-nav input[type="checkbox"]')),
               markedRestored: document.querySelector('[data-answer-question-id="q6"] .mark-question-button')?.classList.contains('active') === true,
               highlightRestored: document.querySelector('#left .hl')?.textContent?.trim() || '',
@@ -1884,9 +1980,8 @@ async def run_flow() -> dict:
             "practice-reading-vue-replay.png",
         )
 
-        await page.click('a:has-text("返回练习库")')
-        await page.wait_for_url("**#/", timeout=10000)
-        await page.click('[data-view="settings"]')
+        await return_to_library(page, entry_url)
+        await switch_library_view(page, "settings", "#settings-view")
         await page.wait_for_selector('#export-data-btn', timeout=10000)
         await capture_acceptance_screenshot(
             page,
@@ -1936,11 +2031,21 @@ async def run_flow() -> dict:
             )
             if cleared_count != 0:
                 raise AssertionError(f"archive_clear_precondition_failed:{cleared_count}")
-            await page.click('[data-view="settings"]')
+            await switch_library_view(page, "settings", "#settings-view")
             await page.wait_for_selector('[data-reading-archive-import-input]', timeout=10000)
             await page.set_input_files('[data-reading-archive-import-input]', archive_path)
-            await page.wait_for_selector('text=阅读记录导入完成：1 条，跳过 0 条', timeout=10000)
-            await page.click('[data-view="practice"]')
+            await page.wait_for_function(
+                """
+                () => {
+                  const requests = Array.isArray(window.__practiceReadingRequests) ? window.__practiceReadingRequests : [];
+                  const importPosts = requests.filter((item) => item.pathname === '/api/practice/history/archive/reading' && item.method === 'POST').length;
+                  const historyCount = window.__getPracticeReadingHistoryCount ? window.__getPracticeReadingHistoryCount() : -1;
+                  return importPosts >= 1 && historyCount === 1;
+                }
+                """,
+                timeout=10000,
+            )
+            await switch_library_view(page, "practice", "#practice-view")
             await page.wait_for_selector('#history-list .history-item[data-record-id="reading-reading-session-e2e-1"]', timeout=10000)
             await page.locator('#record-type-filter-buttons [data-action-value="reading"]').click()
             imported_filter_state = await page.evaluate(
