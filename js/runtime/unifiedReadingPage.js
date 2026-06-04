@@ -1169,11 +1169,12 @@
                 const segmentClass = q.status ? q.status : '';
                 const activeClass = (isCurrent && q.qId === state.currentActiveQuestionId) ? 'active' : '';
                 const disabledClass = isCurrent ? '' : 'disabled';
+                const qidAttr = isCurrent ? `data-question-id="${q.qId}"` : '';
                 
                 return `
                     <div class="q-column" data-question-id="${q.qId}" data-part="${partKey}">
                         <div class="q-bar-segment ${segmentClass}"></div>
-                        <button class="q-item ${activeClass} ${q.status} ${disabledClass}" data-question-id="${q.qId}" type="button">${q.label}</button>
+                        <button class="q-item ${activeClass} ${q.status} ${disabledClass}" ${qidAttr} type="button">${q.label}</button>
                     </div>
                 `;
             }).join('');

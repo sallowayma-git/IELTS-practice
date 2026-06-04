@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
 function read(relativePath) {
-    return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
+    return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8').replace(/\r\n/g, '\n');
 }
 
 const checks = [];
