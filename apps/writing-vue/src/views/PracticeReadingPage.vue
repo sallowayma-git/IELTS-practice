@@ -2,8 +2,33 @@
   <div class="reading-page" :class="readingPageClassList" :style="readingPageStyle">
     <header class="reading-header header">
       <div class="header-content">
-        <h1>{{ pageTitle }}</h1>
-        <p>{{ headerSummary }}</p>
+        <h1 id="exam-title">{{ pageTitle }}</h1>
+        <p id="exam-subtitle">{{ headerSummary }}</p>
+      </div>
+      <div
+        v-if="showSuiteReviewNav"
+        id="review-nav-bar"
+        class="review-nav-bar"
+        :data-review-index="suiteReviewNavIndex"
+        :data-review-total="suiteReviewNavTotal"
+        data-view-mode="review"
+      >
+        <button
+          type="button"
+          data-review-dir="prev"
+          :disabled="!canNavigateSuiteReviewPrev"
+          @click="navigateSuiteReview('prev')"
+        >
+          上一题
+        </button>
+        <button
+          type="button"
+          data-review-dir="next"
+          :disabled="!canNavigateSuiteReviewNext"
+          @click="navigateSuiteReview('next')"
+        >
+          下一题
+        </button>
       </div>
       <div class="reading-header-actions header-controls">
         <button
@@ -67,6 +92,7 @@
             :class="{ active: readingFontSize === option.value }"
             type="button"
             :data-size="option.value"
+            :style="option.style"
             @click="selectReadingFont(option.value)"
           >
             {{ option.label }}
@@ -122,9 +148,12 @@
       id="notes-panel"
       class="reading-floating-panel reading-notes-panel"
       v-show="notesPanelOpen"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="notes-panel-title"
     >
       <header>
-        <h3>Notes</h3>
+        <h3 id="notes-panel-title">Notes</h3>
         <button id="close-note" type="button" @click="closeFloatingPanels">Close</button>
       </header>
       <textarea v-model="notesText" aria-label="阅读笔记"></textarea>
@@ -253,6 +282,7 @@
 
       <div
         id="divider"
+        :class="{ 'is-dragging': dividerDragging }"
         role="separator"
         aria-orientation="vertical"
         aria-label="调整原文和题目宽度"
@@ -331,293 +361,336 @@
         </section>
 
         <section
-          v-if="submission"
           id="results"
           class="reading-panel review-panel"
-          data-reading-review-panel
+          :data-reading-review-panel="submission ? '' : null"
+          :hidden="!submission"
         >
-          <div class="panel-heading">
-            <span class="panel-kicker">Review</span>
-            <strong>{{ submission.scoreInfo.correct }} / {{ submission.scoreInfo.totalQuestions }} · {{ submission.scoreInfo.percentage }}%</strong>
-          </div>
-          <div class="score-grid">
-            <div>
-              <span>正确</span>
-              <strong>{{ submission.scoreInfo.correct }}</strong>
+          <template v-if="submission">
+            <div class="panel-heading">
+              <span class="panel-kicker">Review</span>
+              <strong>{{ submission.scoreInfo.correct }} / {{ submission.scoreInfo.totalQuestions }} · {{ submission.scoreInfo.percentage }}%</strong>
             </div>
-            <div>
-              <span>总分</span>
-              <strong>{{ submission.scoreInfo.totalQuestions }}</strong>
+            <div class="score-grid">
+              <div>
+                <span>正确</span>
+                <strong>{{ submission.scoreInfo.correct }}</strong>
+              </div>
+              <div>
+                <span>总分</span>
+                <strong>{{ submission.scoreInfo.totalQuestions }}</strong>
+              </div>
+              <div>
+                <span>正确率</span>
+                <strong>{{ submission.scoreInfo.percentage }}%</strong>
+              </div>
+              <div>
+                <span>耗时</span>
+                <strong>{{ formatDuration(submission.duration) }}</strong>
+              </div>
             </div>
-            <div>
-              <span>正确率</span>
-              <strong>{{ submission.scoreInfo.percentage }}%</strong>
-            </div>
-            <div>
-              <span>耗时</span>
-              <strong>{{ formatDuration(submission.duration) }}</strong>
-            </div>
-          </div>
-          <section
-            v-if="analysisSignals || singleAttemptAnalysis || singleAttemptAnalysisLlm || llmReviewStatus !== 'idle'"
-            class="review-analysis"
-            data-reading-analysis-panel
-          >
-            <div
-              v-if="llmReviewStatus !== 'idle'"
-              class="llm-review-status"
-              :data-reading-llm-review-status="llmReviewStatus"
+            <section
+              v-if="analysisSignals || singleAttemptAnalysis || singleAttemptAnalysisLlm || llmReviewStatus !== 'idle'"
+              class="review-analysis"
+              data-reading-analysis-panel
             >
-              <span>AI 复盘</span>
-              <strong>{{ llmReviewMessage }}</strong>
-              <button
-                v-if="llmReviewStatus === 'failed'"
-                class="btn-text llm-review-retry"
-                type="button"
-                data-reading-llm-review-retry
-                @click="runAutomaticReviewCoach"
-              >
-                重新复盘
-              </button>
-            </div>
-            <div v-if="analysisSignals" class="analysis-strip" data-reading-analysis-signals>
-              <div>
-                <span>未作答</span>
-                <strong>{{ analysisSignals.unansweredCount }}</strong>
-              </div>
-              <div>
-                <span>改答</span>
-                <strong>{{ analysisSignals.changedAnswerCount }}</strong>
-              </div>
-              <div>
-                <span>标记</span>
-                <strong>{{ analysisSignals.markedQuestionCount }}</strong>
-              </div>
-              <div>
-                <span>交互密度</span>
-                <strong>{{ formatDensity(analysisSignals.interactionDensity) }}</strong>
-              </div>
-            </div>
-            <div v-if="singleAttemptAnalysis" class="analysis-body">
-              <div>
-                <h3>复盘判断</h3>
-                <ul class="analysis-list">
-                  <li
-                    v-for="item in singleAttemptAnalysis.diagnosis"
-                    :key="item.type + item.message"
-                    :data-analysis-diagnosis-type="item.type"
-                  >
-                    <strong>{{ getSeverityLabel(item.severity) }}</strong>
-                    <span>{{ item.message }}</span>
-                  </li>
-                </ul>
-              </div>
-              <div>
-                <h3>下一步</h3>
-                <ul class="analysis-list">
-                  <li
-                    v-for="item in singleAttemptAnalysis.nextActions"
-                    :key="item.type + item.target"
-                    :data-analysis-action-type="item.type"
-                  >
-                    <strong>{{ item.target }}</strong>
-                    <span>{{ item.instruction }}</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-            <div v-if="singleAttemptAnalysisLlm" class="analysis-body llm-analysis-body" data-reading-llm-review-panel>
-              <div>
-                <h3>AI 错因复盘</h3>
-                <ul class="analysis-list">
-                  <li
-                    v-for="item in singleAttemptLlmDiagnosis"
-                    :key="item.code + item.reason"
-                    :data-reading-llm-diagnosis="item.code"
-                  >
-                    <strong>AI</strong>
-                    <span>{{ item.reason }}</span>
-                  </li>
-                </ul>
-              </div>
-              <div>
-                <h3>AI 下一步训练</h3>
-                <ul class="analysis-list">
-                  <li
-                    v-for="item in singleAttemptLlmActions"
-                    :key="item.type + item.target + item.instruction"
-                    :data-reading-llm-action="item.type"
-                  >
-                    <strong>{{ item.target }}</strong>
-                    <span>{{ item.instruction }}</span>
-                  </li>
-                </ul>
-              </div>
-              <section
-                v-if="singleAttemptLlmQuestionAnalyses.length"
-                class="llm-question-analysis-list"
-                data-reading-llm-question-analyses
-              >
-                <h3>逐题复盘</h3>
-                <article
-                  v-for="item in singleAttemptLlmQuestionAnalyses"
-                  :key="item.questionLabel + item.likelyMistake + item.nextRule"
-                  class="llm-question-analysis"
-                  :data-reading-llm-question-analysis="item.questionLabel"
-                >
-                  <strong>{{ item.questionLabel }}</strong>
-                  <dl>
-                    <template v-if="item.likelyMistake">
-                      <dt>错因</dt>
-                      <dd>{{ item.likelyMistake }}</dd>
-                    </template>
-                    <template v-if="item.whyUserChoseWrong">
-                      <dt>误选原因</dt>
-                      <dd>{{ item.whyUserChoseWrong }}</dd>
-                    </template>
-                    <template v-if="item.whyCorrectAnswerWorks">
-                      <dt>正确依据</dt>
-                      <dd>{{ item.whyCorrectAnswerWorks }}</dd>
-                    </template>
-                    <template v-if="item.whyWrongAnswerFails">
-                      <dt>排除理由</dt>
-                      <dd>{{ item.whyWrongAnswerFails }}</dd>
-                    </template>
-                    <template v-if="item.nextRule">
-                      <dt>下次规则</dt>
-                      <dd>{{ item.nextRule }}</dd>
-                    </template>
-                  </dl>
-                </article>
-              </section>
-            </div>
-            <div v-if="analysisKindRows.length" class="analysis-kind-bars" data-reading-kind-performance>
               <div
-                v-for="kind in analysisKindRows"
-                :key="kind.kind"
-                class="kind-bar-row"
-                :data-analysis-kind="kind.kind"
+                v-if="llmReviewStatus !== 'idle'"
+                class="llm-review-status"
+                :data-reading-llm-review-status="llmReviewStatus"
               >
-                <span>{{ getQuestionKindLabel(kind.kind) }}</span>
-                <div class="kind-bar-track">
-                  <i :style="{ width: `${Math.round(kind.accuracy * 100)}%` }" />
-                </div>
-                <strong>{{ kind.correct }}/{{ kind.total }}</strong>
+                <span>AI 复盘</span>
+                <strong>{{ llmReviewMessage }}</strong>
+                <button
+                  v-if="llmReviewStatus === 'failed'"
+                  class="btn-text llm-review-retry"
+                  type="button"
+                  data-reading-llm-review-retry
+                  @click="runAutomaticReviewCoach"
+                >
+                  重新复盘
+                </button>
               </div>
-            </div>
-          </section>
-          <table class="review-table results-table">
-            <thead>
-              <tr>
-                <th>题号</th>
-                <th>你的答案</th>
-                <th>正确答案</th>
-                <th>结果</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="questionId in payload.questionOrder"
-                :key="questionId"
-                :class="getReviewClass(questionId)"
-                :data-review-question-id="questionId"
-              >
-                <td>{{ getDisplayLabel(questionId) }}</td>
-                <td>{{ formatReviewAnswer(submission.answerComparison[questionId]?.userAnswer) || '未作答' }}</td>
-                <td>{{ formatReviewAnswer(submission.answerComparison[questionId]?.correctAnswer) }}</td>
-                <td :class="getLegacyResultClass(questionId)">{{ getReviewLabel(questionId) }}</td>
-              </tr>
-            </tbody>
-          </table>
+              <div v-if="analysisSignals" class="analysis-strip" data-reading-analysis-signals>
+                <div>
+                  <span>未作答</span>
+                  <strong>{{ analysisSignals.unansweredCount }}</strong>
+                </div>
+                <div>
+                  <span>改答</span>
+                  <strong>{{ analysisSignals.changedAnswerCount }}</strong>
+                </div>
+                <div>
+                  <span>标记</span>
+                  <strong>{{ analysisSignals.markedQuestionCount }}</strong>
+                </div>
+                <div>
+                  <span>交互密度</span>
+                  <strong>{{ formatDensity(analysisSignals.interactionDensity) }}</strong>
+                </div>
+              </div>
+              <div v-if="singleAttemptAnalysis" class="analysis-body">
+                <div>
+                  <h3>复盘判断</h3>
+                  <ul class="analysis-list">
+                    <li
+                      v-for="item in singleAttemptAnalysis.diagnosis"
+                      :key="item.type + item.message"
+                      :data-analysis-diagnosis-type="item.type"
+                    >
+                      <strong>{{ getSeverityLabel(item.severity) }}</strong>
+                      <span>{{ item.message }}</span>
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <h3>下一步</h3>
+                  <ul class="analysis-list">
+                    <li
+                      v-for="item in singleAttemptAnalysis.nextActions"
+                      :key="item.type + item.target"
+                      :data-analysis-action-type="item.type"
+                    >
+                      <strong>{{ item.target }}</strong>
+                      <span>{{ item.instruction }}</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div v-if="singleAttemptAnalysisLlm" class="analysis-body llm-analysis-body" data-reading-llm-review-panel>
+                <div>
+                  <h3>AI 错因复盘</h3>
+                  <ul class="analysis-list">
+                    <li
+                      v-for="item in singleAttemptLlmDiagnosis"
+                      :key="item.code + item.reason"
+                      :data-reading-llm-diagnosis="item.code"
+                    >
+                      <strong>AI</strong>
+                      <span>{{ item.reason }}</span>
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <h3>AI 下一步训练</h3>
+                  <ul class="analysis-list">
+                    <li
+                      v-for="item in singleAttemptLlmActions"
+                      :key="item.type + item.target + item.instruction"
+                      :data-reading-llm-action="item.type"
+                    >
+                      <strong>{{ item.target }}</strong>
+                      <span>{{ item.instruction }}</span>
+                    </li>
+                  </ul>
+                </div>
+                <section
+                  v-if="singleAttemptLlmQuestionAnalyses.length"
+                  class="llm-question-analysis-list"
+                  data-reading-llm-question-analyses
+                >
+                  <h3>逐题复盘</h3>
+                  <article
+                    v-for="item in singleAttemptLlmQuestionAnalyses"
+                    :key="item.questionLabel + item.likelyMistake + item.nextRule"
+                    class="llm-question-analysis"
+                    :data-reading-llm-question-analysis="item.questionLabel"
+                  >
+                    <strong>{{ item.questionLabel }}</strong>
+                    <dl>
+                      <template v-if="item.likelyMistake">
+                        <dt>错因</dt>
+                        <dd>{{ item.likelyMistake }}</dd>
+                      </template>
+                      <template v-if="item.whyUserChoseWrong">
+                        <dt>误选原因</dt>
+                        <dd>{{ item.whyUserChoseWrong }}</dd>
+                      </template>
+                      <template v-if="item.whyCorrectAnswerWorks">
+                        <dt>正确依据</dt>
+                        <dd>{{ item.whyCorrectAnswerWorks }}</dd>
+                      </template>
+                      <template v-if="item.whyWrongAnswerFails">
+                        <dt>排除理由</dt>
+                        <dd>{{ item.whyWrongAnswerFails }}</dd>
+                      </template>
+                      <template v-if="item.nextRule">
+                        <dt>下次规则</dt>
+                        <dd>{{ item.nextRule }}</dd>
+                      </template>
+                    </dl>
+                  </article>
+                </section>
+              </div>
+              <div v-if="analysisKindRows.length" class="analysis-kind-bars" data-reading-kind-performance>
+                <div
+                  v-for="kind in analysisKindRows"
+                  :key="kind.kind"
+                  class="kind-bar-row"
+                  :data-analysis-kind="kind.kind"
+                >
+                  <span>{{ getQuestionKindLabel(kind.kind) }}</span>
+                  <div class="kind-bar-track">
+                    <i :style="{ width: `${Math.round(kind.accuracy * 100)}%` }" />
+                  </div>
+                  <strong>{{ kind.correct }}/{{ kind.total }}</strong>
+                </div>
+              </div>
+            </section>
+            <table class="review-table results-table">
+              <thead>
+                <tr>
+                  <th>题号</th>
+                  <th>你的答案</th>
+                  <th>正确答案</th>
+                  <th>结果</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="questionId in payload.questionOrder"
+                  :key="questionId"
+                  :class="getReviewClass(questionId)"
+                  :data-review-question-id="questionId"
+                >
+                  <td>{{ getDisplayLabel(questionId) }}</td>
+                  <td>{{ formatReviewAnswer(submission.answerComparison[questionId]?.userAnswer) || '未作答' }}</td>
+                  <td>{{ formatReviewAnswer(submission.answerComparison[questionId]?.correctAnswer) }}</td>
+                  <td :class="getLegacyResultClass(questionId)">{{ getReviewLabel(questionId) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
         </section>
 
-        <section v-if="submission" class="coach-panel" data-reading-coach-panel>
-          <div class="answer-panel-head">
-            <div>
-              <span class="panel-kicker">AI Coach</span>
-              <h2>阅读教练</h2>
-            </div>
-            <span
-              class="coach-status"
-              :class="{ 'is-loading': coachLoading }"
-              data-reading-coach-stream-status
-            >
-              {{ coachLoading ? (coachStreamMessage || '思考中') : `${coachTranscript.length} 条` }}
-            </span>
-          </div>
-          <div v-if="selectedContext" class="coach-selected-context" data-reading-coach-selected-context>
-            <span>{{ selectedContext.scope === 'question' ? '已选题目' : '已选原文' }}</span>
-            <strong>{{ selectedContext.text }}</strong>
-            <button class="btn-text" type="button" @click="clearSelectedContext">清除</button>
-          </div>
-          <div class="coach-chip-row" data-reading-coach-actions>
-            <button
-              v-for="action in coachQuickActions"
-              :key="action.id"
-              class="coach-chip"
-              type="button"
-              :disabled="coachLoading"
-              :data-reading-coach-action="action.id"
-              @click="runCoachQuickAction(action.id)"
-            >
-              {{ action.label }}
-            </button>
-          </div>
-          <div v-if="selectedContext" class="coach-chip-row coach-selection-tools" data-reading-coach-selection-tools>
-            <button
-              v-for="action in coachSelectionActions"
-              :key="action.id"
-              class="coach-chip"
-              type="button"
-              :disabled="coachLoading"
-              :data-reading-coach-selection-action="action.id"
-              @click="runCoachSelectionAction(action.id)"
-            >
-              {{ action.label }}
-            </button>
-          </div>
-          <div class="coach-transcript" data-reading-coach-transcript>
-            <div v-if="!coachTranscript.length" class="coach-message assistant">
-              你可以先问：这题怎么定位证据？
-            </div>
-            <div
-              v-for="entry in coachTranscript"
-              :key="entry.id"
-              class="coach-message"
-              :class="[entry.role, { error: entry.isError }]"
-              :data-reading-coach-message="entry.role"
-            >
-              {{ entry.content }}
-            </div>
-          </div>
-          <div v-if="coachFollowUps.length" class="coach-chip-row coach-followups" data-reading-coach-followups>
-            <button
-              v-for="text in coachFollowUps"
-              :key="text"
-              class="coach-chip"
-              type="button"
-              :disabled="coachLoading"
-              @click="askCoachFollowUp(text)"
-            >
-              {{ text }}
-            </button>
-          </div>
-          <textarea
-            v-model="coachQuery"
-            rows="3"
-            placeholder="针对本次提交提问"
-            :disabled="coachLoading"
-            @focus="refreshSelectedContext"
-          />
-          <button class="btn btn-primary" type="button" :disabled="!canAskCoach" @click="askCoach">
-            {{ coachLoading ? '分析中...' : '询问教练' }}
-          </button>
-          <p v-if="coachError" class="coach-error">{{ coachError }}</p>
-          <div v-if="coachResponse" class="coach-response" data-reading-coach-answer>
-            {{ coachResponse.answer || coachResponse.message || '教练已返回结果。' }}
-          </div>
-        </section>
       </section>
+    </section>
+
+    <button
+      v-if="submission"
+      id="reading-coach-fab"
+      class="reading-coach-fab"
+      type="button"
+      data-reading-coach-fab
+      @click="toggleReadingCoachPanel"
+    >
+      AI 教练
+    </button>
+    <section
+      v-if="submission"
+      id="reading-coach-panel"
+      class="reading-coach-panel"
+      :class="{ 'is-open': readingCoachOpen }"
+      data-reading-coach-panel
+    >
+      <header class="reading-coach-panel__header">
+        <span class="reading-coach-panel__title">Reading AI Coach V2</span>
+        <button
+          id="reading-coach-close"
+          class="reading-coach-panel__close"
+          type="button"
+          aria-label="关闭"
+          @click="readingCoachOpen = false"
+        >
+          ×
+        </button>
+      </header>
+      <div
+        id="reading-coach-status"
+        class="reading-coach-panel__status"
+        :class="{ 'is-error': Boolean(coachError), 'is-loading': coachLoading }"
+        data-reading-coach-stream-status
+      >
+        {{ coachStatusText }}
+      </div>
+      <div v-if="selectedContext" class="reading-coach-panel__selected-context" data-reading-coach-selected-context>
+        <span>{{ selectedContext.scope === 'question' ? '已选题目' : '已选原文' }}</span>
+        <strong>{{ selectedContext.text }}</strong>
+        <button class="btn-text" type="button" @click="clearSelectedContext">清除</button>
+      </div>
+      <div
+        id="reading-coach-messages"
+        class="reading-coach-panel__messages"
+        data-reading-coach-transcript
+      >
+        <div v-if="!coachTranscript.length" class="reading-coach-msg assistant">
+          你可以先问：这题怎么定位证据？
+        </div>
+        <div
+          v-for="entry in coachTranscript"
+          :key="entry.id"
+          class="reading-coach-msg"
+          :class="[entry.role, { error: entry.isError }]"
+          :data-reading-coach-message="entry.role"
+        >
+          {{ entry.content }}
+        </div>
+        <div v-if="coachResponse" class="reading-coach-msg assistant coach-response" data-reading-coach-answer>
+          {{ coachResponse.answer || coachResponse.message || '教练已返回结果。' }}
+        </div>
+      </div>
+      <div id="reading-coach-actions" class="reading-coach-panel__actions" data-reading-coach-actions>
+        <button
+          v-for="action in coachQuickActions"
+          :key="action.id"
+          class="reading-coach-chip"
+          type="button"
+          :disabled="coachLoading"
+          :data-coach-action="action.id"
+          :data-reading-coach-action="action.id"
+          @click="runCoachQuickAction(action.id)"
+        >
+          {{ action.label }}
+        </button>
+      </div>
+      <div v-if="selectedContext" class="reading-coach-panel__actions" data-reading-coach-selection-tools>
+        <button
+          v-for="action in coachSelectionActions"
+          :key="action.id"
+          class="reading-coach-chip"
+          type="button"
+          :disabled="coachLoading"
+          :data-reading-coach-selection-action="action.id"
+          @click="runCoachSelectionAction(action.id)"
+        >
+          {{ action.label }}
+        </button>
+      </div>
+      <div v-if="coachFollowUps.length" id="reading-coach-followups" class="reading-coach-panel__followups" data-reading-coach-followups>
+        <button
+          v-for="text in coachFollowUps"
+          :key="text"
+          class="reading-coach-chip"
+          type="button"
+          :disabled="coachLoading"
+          data-coach-followup="1"
+          @click="askCoachFollowUp(text)"
+        >
+          {{ text }}
+        </button>
+      </div>
+      <div class="reading-coach-panel__composer">
+        <input
+          id="reading-coach-input"
+          v-model="coachQuery"
+          class="reading-coach-panel__input"
+          type="text"
+          placeholder="问我：这题如何定位证据？"
+          :disabled="coachLoading"
+          @focus="refreshSelectedContext"
+          @keydown.enter.prevent="askCoach"
+        />
+        <button
+          id="reading-coach-send"
+          class="reading-coach-panel__send"
+          type="button"
+          :disabled="!canAskCoach"
+          @click="askCoach"
+        >
+          {{ coachLoading ? '分析中...' : '询问教练' }}
+        </button>
+      </div>
+      <p v-if="coachError" class="reading-coach-panel__error">{{ coachError }}</p>
     </section>
 
     <nav
@@ -635,7 +708,8 @@
           :class="[
             { answered: hasAnswer(questionId), marked: isMarkedQuestion(questionId) },
             getReviewClass(questionId),
-            getLegacyNavStatus(questionId)
+            getLegacyNavStatus(questionId),
+            { active: isActiveQuestion(questionId) }
           ]"
           :data-answer-question-id="questionId"
           :data-question-id="questionId"
@@ -646,7 +720,8 @@
             :class="[
               { answered: hasAnswer(questionId), marked: isMarkedQuestion(questionId) },
               getReviewClass(questionId),
-              getLegacyNavStatus(questionId)
+              getLegacyNavStatus(questionId),
+              { active: isActiveQuestion(questionId) }
             ]"
             :data-question-id="questionId"
             @click="scrollToQuestion(questionId)"
@@ -731,8 +806,8 @@ const coachSelectionActions = [
 ]
 const fontSizeOptions = [
   { value: 'normal', label: 'A' },
-  { value: 'large', label: 'A+' },
-  { value: 'xlarge', label: 'A++' }
+  { value: 'large', label: 'A', style: { fontSize: '1.1rem' } },
+  { value: 'xlarge', label: 'A', style: { fontSize: '1.25rem' } }
 ]
 const themeModeOptions = [
   { value: 'light', label: '浅色' },
@@ -771,6 +846,7 @@ const coachError = ref('')
 const coachResponse = ref(null)
 const selectedContext = ref(null)
 const coachStreamMessage = ref('')
+const readingCoachOpen = ref(false)
 const llmReviewStatus = ref('idle')
 const llmReviewMessage = ref('')
 const answers = reactive({})
@@ -827,6 +903,7 @@ const activeQuestionVisit = {
   questionId: '',
   startedAtMs: 0
 }
+const activeQuestionId = ref('')
 
 const payload = computed(() => asset.value?.payload || null)
 const activeSuiteSessionId = computed(() => {
@@ -897,6 +974,11 @@ const reviewMode = computed(() => Boolean(submission.value))
 const readOnlyMode = computed(() => reviewMode.value || isMemorizeMode.value)
 const canSubmit = computed(() => Boolean(asset.value && payload.value && !loading.value && !submitting.value && !readOnlyMode.value))
 const canAskCoach = computed(() => Boolean(submission.value && coachQuery.value.trim() && !coachLoading.value))
+const coachStatusText = computed(() => {
+  if (coachLoading.value) return coachStreamMessage.value || 'AI 教练正在思考...'
+  if (coachError.value) return coachError.value
+  return ''
+})
 const canRecycleSubmittedAttempt = computed(() => Boolean(
   reviewMode.value
   && !activeSuiteSessionId.value
@@ -990,6 +1072,27 @@ const officialQuestionExplanationSections = computed(() => {
         .filter(Boolean)
     : []
 })
+const suiteSequence = computed(() => (
+  Array.isArray(suiteSession.value?.sequence) ? suiteSession.value.sequence : []
+))
+const currentSuitePassageIndex = computed(() => {
+  const currentAssetId = String(asset.value?.id || props.assetId || route.params.assetId || '').trim()
+  if (!currentAssetId) return -1
+  return suiteSequence.value.findIndex((entry) => (
+    String(entry?.assetId || '').trim() === currentAssetId
+    || String(entry?.examId || '').trim() === currentAssetId
+  ))
+})
+const suiteReviewNavIndex = computed(() => Math.max(0, currentSuitePassageIndex.value))
+const suiteReviewNavTotal = computed(() => suiteSequence.value.length || 0)
+const showSuiteReviewNav = computed(() => Boolean(
+  reviewMode.value
+  && activeSuiteSessionId.value
+  && suiteSequence.value.length > 1
+  && currentSuitePassageIndex.value >= 0
+))
+const canNavigateSuiteReviewPrev = computed(() => findSuiteReviewNavigationTarget('prev') !== null)
+const canNavigateSuiteReviewNext = computed(() => findSuiteReviewNavigationTarget('next') !== null)
 const analysisSignals = computed(() => submission.value?.analysisSignals || submission.value?.analysisArtifacts?.analysisSignals || null)
 const singleAttemptAnalysis = computed(() => submission.value?.singleAttemptAnalysis || submission.value?.analysisArtifacts?.singleAttemptAnalysis || null)
 const singleAttemptAnalysisLlm = computed(() => (
@@ -1111,6 +1214,7 @@ async function loadAsset() {
   coachResponse.value = null
   coachStreamMessage.value = ''
   coachLoading.value = false
+  readingCoachOpen.value = false
   llmReviewStatus.value = 'idle'
   llmReviewMessage.value = ''
   closeFloatingPanels()
@@ -1181,6 +1285,7 @@ async function loadSubmittedSession(sessionId) {
     throw new Error('阅读回放记录与当前题目不匹配')
   }
   submission.value = loadedSubmission
+  readingCoachOpen.value = true
   highlightSnapshot.value = normalizeHighlightSnapshot(loadedSubmission.highlights || loadedSubmission.analysisArtifacts?.highlights || [])
   coachResponse.value = loadedSubmission.readingCoachSnapshot || null
   if (loadedSubmission.singleAttemptAnalysisLlm || loadedSubmission.analysisArtifacts?.singleAttemptAnalysisLlm) {
@@ -1232,6 +1337,7 @@ function resetAttemptMetadata() {
   flushActiveQuestionVisit()
   activeQuestionVisit.questionId = ''
   activeQuestionVisit.startedAtMs = 0
+  activeQuestionId.value = ''
   Object.keys(answerTimeline).forEach((key) => {
     delete answerTimeline[key]
   })
@@ -1467,6 +1573,11 @@ function closeFloatingPanels() {
   notesPanelOpen.value = false
 }
 
+function toggleReadingCoachPanel() {
+  if (!submission.value) return
+  readingCoachOpen.value = !readingCoachOpen.value
+}
+
 function selectReadingFont(value) {
   if (!fontSizeOptions.some((option) => option.value === value)) {
     return
@@ -1482,6 +1593,8 @@ function selectReadingTheme(value) {
     return
   }
   readingThemeMode.value = value
+  syncDropzoneThemeStyles()
+  nextTick(() => syncDropzoneThemeStyles())
   try {
     window.localStorage?.setItem('reading_theme_mode', value)
   } catch (_) {}
@@ -1929,6 +2042,7 @@ async function recycleSubmittedAttempt() {
   coachError.value = ''
   coachStreamMessage.value = ''
   coachLoading.value = false
+  readingCoachOpen.value = false
   llmReviewStatus.value = 'idle'
   llmReviewMessage.value = ''
   submitError.value = ''
@@ -2088,6 +2202,7 @@ function syncDropzoneControl(questionId, explicitValue = answers[questionId]) {
   dropzone.classList.toggle('dropzone-filled', Boolean(value))
   dropzone.classList.toggle('dropzone-empty', !value)
   dropzone.setAttribute('aria-disabled', reviewMode.value ? 'true' : 'false')
+  applyDropzoneThemeStyle(dropzone)
 
   const holder = ensureDropzoneHolder(dropzone)
   if (!holder) {
@@ -2109,6 +2224,43 @@ function syncDropzoneControl(questionId, explicitValue = answers[questionId]) {
   chip.draggable = !reviewMode.value
   chip.disabled = reviewMode.value
   holder.appendChild(chip)
+}
+
+function applyDropzoneThemeStyle(dropzone) {
+  if (!dropzone) {
+    return
+  }
+  if (dropzone.classList?.contains('drop-target-summary')) {
+    dropzone.style.removeProperty('--reading-dropzone-bg')
+    dropzone.style.removeProperty('--reading-dropzone-border')
+    dropzone.style.backgroundColor = ''
+    dropzone.style.borderColor = ''
+    dropzone.querySelectorAll?.('.drag-item, .dragdrop-chip').forEach((chip) => {
+      chip.style.backgroundColor = ''
+      chip.style.borderColor = ''
+      chip.style.color = ''
+    })
+    return
+  }
+  const isDark = readingThemeMode.value === 'dark'
+  dropzone.style.setProperty('--reading-dropzone-bg', isDark ? '#1e293b' : '#eff6ff')
+  dropzone.style.setProperty('--reading-dropzone-border', isDark ? '#475569' : '#93c5fd')
+  dropzone.style.backgroundColor = isDark ? '#1e293b' : ''
+  dropzone.style.borderColor = isDark ? '#475569' : ''
+  dropzone.querySelectorAll?.('.drag-item, .dragdrop-chip').forEach((chip) => {
+    chip.style.backgroundColor = isDark ? '#334155' : ''
+    chip.style.borderColor = isDark ? '#64748b' : ''
+    chip.style.color = isDark ? '#f8fafc' : ''
+  })
+}
+
+function syncDropzoneThemeStyles() {
+  if (typeof document === 'undefined') {
+    return
+  }
+  document.querySelectorAll('.paragraph-dropzone, .match-dropzone, .drop-target-summary, [data-vue-dropzone="true"]').forEach((dropzone) => {
+    applyDropzoneThemeStyle(dropzone)
+  })
 }
 
 function ensureDropzoneHolder(dropzone) {
@@ -2893,6 +3045,7 @@ async function submitAnswers() {
         attempt
       })
     submission.value = result?.submission || null
+    readingCoachOpen.value = Boolean(submission.value)
     suiteSession.value = result?.suiteSession || suiteSession.value
     if (submission.value?.answers) {
       Object.entries(submission.value.answers).forEach(([questionId, value]) => {
@@ -3038,6 +3191,46 @@ async function scheduleEndlessNext() {
 function findNextSuitePassage() {
   const sequence = Array.isArray(suiteSession.value?.sequence) ? suiteSession.value.sequence : []
   return sequence.find((entry) => entry?.status === 'active' && String(entry.assetId || '').trim() !== String(asset.value?.id || '').trim()) || null
+}
+
+function findSuiteReviewNavigationTarget(direction) {
+  const currentIndex = currentSuitePassageIndex.value
+  const offset = direction === 'prev' ? -1 : 1
+  const targetIndex = currentIndex + offset
+  const entry = suiteSequence.value[targetIndex]
+  const assetId = String(entry?.assetId || entry?.examId || '').trim()
+  if (currentIndex < 0 || !assetId) {
+    return null
+  }
+  if (entry.status === 'submitted' && entry.sessionId) {
+    return {
+      name: 'PracticeReadingReview',
+      params: {
+        assetId,
+        sessionId: entry.sessionId
+      },
+      query: {
+        suiteSessionId: activeSuiteSessionId.value
+      }
+    }
+  }
+  if (entry.status === 'active') {
+    return {
+      name: 'PracticeReading',
+      params: { assetId },
+      query: {
+        suiteSessionId: activeSuiteSessionId.value
+      }
+    }
+  }
+  return null
+}
+
+function navigateSuiteReview(direction) {
+  const target = findSuiteReviewNavigationTarget(direction)
+  if (target) {
+    router.push(target)
+  }
 }
 
 function maybeAdvanceSuitePassage() {
@@ -3789,10 +3982,6 @@ function mergeCoachResultIntoSubmission(response, query, llmPatch = null, meta =
   }
   if (llmPatch && typeof llmPatch === 'object') {
     nextSubmission.singleAttemptAnalysisLlm = llmPatch
-    nextSubmission.analysisArtifacts = {
-      ...(submission.value.analysisArtifacts || {}),
-      singleAttemptAnalysisLlm: llmPatch
-    }
   }
   submission.value = nextSubmission
 }
@@ -3832,6 +4021,11 @@ function getLegacyNavStatus(questionId) {
   if (entry?.isCorrect === true) return 'correct'
   if (entry?.isCorrect === false) return 'incorrect'
   return hasAnswer(questionId) ? 'answered' : ''
+}
+
+function isActiveQuestion(questionId) {
+  const normalized = normalizeQuestionId(questionId)
+  return Boolean(normalized && activeQuestionId.value === normalized)
 }
 
 function getLegacyResultClass(questionId) {
@@ -3955,6 +4149,7 @@ function recordQuestionVisit(questionId) {
   }
   const normalized = normalizeQuestionId(questionId)
   if (!normalized) return
+  activeQuestionId.value = normalized
   const nowMs = Date.now()
   if (activeQuestionVisit.questionId && activeQuestionVisit.questionId !== normalized) {
     flushActiveQuestionVisit(nowMs)
@@ -4740,133 +4935,6 @@ function getQuestionKindLabel(kind) {
   font-weight: 700;
 }
 
-.coach-panel {
-  display: grid;
-  gap: 12px;
-  padding-top: 14px;
-  border-top: 1px solid var(--lg-border-subtle);
-}
-
-.coach-status {
-  flex: 0 0 auto;
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.coach-status.is-loading {
-  color: var(--primary-color);
-}
-
-.coach-selected-context {
-  display: grid;
-  gap: 6px;
-  padding: 10px;
-  border: 1px solid rgba(49, 95, 103, 0.2);
-  border-radius: var(--radius-md);
-  background: rgba(106, 204, 199, 0.1);
-}
-
-.coach-selected-context span {
-  color: var(--text-muted);
-  font-size: 0.74rem;
-  font-weight: 700;
-}
-
-.coach-selected-context strong {
-  max-height: 4.8em;
-  overflow: hidden;
-  color: var(--text-secondary);
-  font-size: 0.86rem;
-  font-weight: 600;
-  line-height: 1.6;
-}
-
-.coach-chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.coach-chip {
-  min-height: 30px;
-  padding: 5px 10px;
-  border: 1px solid rgba(41, 39, 56, 0.14);
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.5);
-  color: var(--text-secondary);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.coach-chip:hover:not(:disabled) {
-  border-color: rgba(201, 100, 66, 0.34);
-  color: var(--primary-color);
-}
-
-.coach-chip:disabled {
-  cursor: default;
-  opacity: 0.55;
-}
-
-.coach-transcript {
-  display: grid;
-  gap: 8px;
-  max-height: 260px;
-  overflow: auto;
-  padding: 10px;
-  border: 1px solid var(--lg-border-subtle);
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.28);
-}
-
-.coach-message {
-  max-width: 92%;
-  padding: 9px 10px;
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.56);
-  font-size: 0.86rem;
-  line-height: 1.55;
-  overflow-wrap: anywhere;
-}
-
-.coach-message.user {
-  justify-self: end;
-  color: var(--text-inverse);
-  background: var(--primary-color);
-}
-
-.coach-message.assistant {
-  justify-self: start;
-}
-
-.coach-message.error {
-  border: 1px solid rgba(194, 77, 77, 0.28);
-  color: var(--danger-color);
-}
-
-.coach-panel textarea {
-  width: 100%;
-  resize: vertical;
-}
-
-.coach-error {
-  color: var(--danger-color);
-  font-size: 0.86rem;
-}
-
-.coach-response {
-  padding: 12px;
-  border: 1px solid var(--lg-border-subtle);
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.4);
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-
 @media (max-width: 1100px) {
   .reading-header,
   .reading-workspace {
@@ -4903,14 +4971,22 @@ function getQuestionKindLabel(kind) {
   --reading-success: #15803d;
   --reading-danger: #b91c1c;
   --reading-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --reading-dropzone-bg: #eff6ff;
+  --reading-dropzone-border: #93c5fd;
+  --reading-dropzone-drag-bg: #dbeafe;
+  --reading-dropzone-drag-border: var(--reading-accent);
+  --reading-pool-drag-bg: rgba(37, 99, 235, 0.08);
+  --reading-drag-item-bg: #eff6ff;
+  --reading-drag-item-border: #bfdbfe;
   --reading-nav-height: 72px;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0;
   height: 100vh;
   min-height: 100vh;
   overflow: hidden;
-  padding-bottom: 0;
+  padding-bottom: var(--reading-nav-height);
   background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
   color: var(--reading-text);
   font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
@@ -4922,7 +4998,25 @@ function getQuestionKindLabel(kind) {
   box-sizing: border-box;
 }
 
+.reading-page.dark-mode {
+  --reading-line: #334155;
+  --reading-panel: #1e293b;
+  --reading-panel-alt: #0f172a;
+  --reading-text: #f8fafc;
+  --reading-muted: #cbd5e1;
+  --reading-dropzone-bg: #1e293b;
+  --reading-dropzone-border: #475569;
+  --reading-dropzone-drag-bg: #1e3a8a;
+  --reading-dropzone-drag-border: #3b82f6;
+  --reading-pool-drag-bg: rgba(59, 130, 246, 0.2);
+  --reading-drag-item-bg: #334155;
+  --reading-drag-item-border: #64748b;
+  background: #020617;
+  color: var(--reading-text);
+}
+
 .reading-header.header {
+  position: relative;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -4958,6 +5052,39 @@ function getQuestionKindLabel(kind) {
   font-size: 0.92rem;
 }
 
+#review-nav-bar {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transform: translate(-50%, -50%);
+}
+
+#review-nav-bar button {
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  border-radius: 6px;
+  padding: 4px 10px;
+  background: #fff;
+  color: #0f172a;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#review-nav-bar button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.reading-page.dark-mode #review-nav-bar button {
+  border-color: rgba(148, 163, 184, 0.42);
+  background: #1e293b;
+  color: #f8fafc;
+}
+
 .header-controls,
 .reading-header-actions,
 .answer-actions {
@@ -4973,7 +5100,7 @@ function getQuestionKindLabel(kind) {
 .submit-btn {
   min-height: 36px;
   border: 1px solid var(--reading-line);
-  border-radius: 8px;
+  border-radius: 4px;
   background: var(--reading-panel);
   color: var(--reading-text);
   cursor: pointer;
@@ -4989,6 +5116,23 @@ function getQuestionKindLabel(kind) {
   font-weight: 700;
 }
 
+.reading-timer:not(:disabled) {
+  cursor: pointer;
+  transition: opacity 0.2s ease, background 0.2s ease;
+}
+
+.reading-timer:not(:disabled):hover {
+  opacity: 0.85;
+}
+
+.reading-timer.paused {
+  opacity: 0.5;
+}
+
+.reading-timer:disabled {
+  cursor: default;
+}
+
 .header-btn:hover:not(:disabled),
 .practice-nav .controls button:hover:not(:disabled) {
   background: #f1f5f9;
@@ -5002,10 +5146,41 @@ function getQuestionKindLabel(kind) {
 }
 
 .submit-btn {
-  border-color: var(--reading-accent);
-  background: var(--reading-accent);
-  color: #ffffff;
+  border-color: var(--reading-accent) !important;
+  background: var(--reading-accent) !important;
+  color: #ffffff !important;
   font-weight: 600;
+}
+
+.reading-page.dark-mode .reading-header.header {
+  border-bottom-color: var(--reading-line);
+  background: rgba(30, 41, 59, 0.94);
+}
+
+.reading-page.dark-mode .reading-floating-panel {
+  border-color: var(--reading-line);
+  background: var(--reading-panel);
+  color: var(--reading-text);
+}
+
+.reading-page.dark-mode .reading-stat,
+.reading-page.dark-mode .header-btn,
+.reading-page.dark-mode .practice-nav .controls button,
+.reading-page.dark-mode .practice-nav .q-item {
+  border-color: var(--reading-line);
+  background: var(--reading-panel-alt);
+  color: #f8fafc;
+}
+
+.reading-page.dark-mode .header-btn:hover:not(:disabled),
+.reading-page.dark-mode .practice-nav .controls button:hover:not(:disabled),
+.reading-page.dark-mode .practice-nav .q-item:hover {
+  background: #334155;
+}
+
+.reading-page.dark-mode .submit-btn {
+  background: var(--reading-accent) !important;
+  color: #ffffff !important;
 }
 
 .overlay {
@@ -5026,54 +5201,63 @@ function getQuestionKindLabel(kind) {
 }
 
 .reading-settings-panel {
-  top: 78px;
-  right: 22px;
-  display: grid;
-  width: min(320px, calc(100vw - 28px));
-  gap: 14px;
-  padding: 14px;
+  top: 60px;
+  right: 20px;
+  display: block;
+  width: min(260px, calc(100vw - 28px));
+  padding: 16px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.reading-settings-panel .settings-section {
+  margin-bottom: 16px;
+}
+
+.reading-settings-panel .settings-section:last-child {
+  margin-bottom: 0;
 }
 
 .settings-title {
-  margin: 0 0 8px;
   color: var(--reading-muted);
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0 0 8px;
 }
 
 .settings-options {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
 }
 
 .settings-option {
-  min-height: 32px;
+  flex: 1;
   border: 1px solid var(--reading-line);
-  border-radius: 8px;
-  background: #f8fafc;
+  border-radius: 4px;
+  background: var(--reading-panel-alt);
   color: var(--reading-text);
   cursor: pointer;
   font: inherit;
   font-size: 0.86rem;
-  padding: 6px 10px;
+  padding: 8px;
+  text-align: center;
 }
 
 .settings-option.active {
-  border-color: #93c5fd;
-  background: #dbeafe;
-  color: #1d4ed8;
-  font-weight: 700;
+  border-color: var(--reading-accent);
+  background: var(--reading-accent);
+  color: #ffffff;
 }
 
 .reading-notes-panel {
-  top: 86px;
-  right: 22px;
+  top: 50%;
+  left: 50%;
   display: flex;
-  width: min(420px, calc(100vw - 28px));
-  max-height: min(520px, calc(100vh - 120px));
+  width: min(400px, calc(100vw - 28px));
+  height: min(300px, calc(100vh - 120px));
+  max-height: min(300px, calc(100vh - 120px));
   flex-direction: column;
-  padding: 14px;
+  padding: 0;
+  transform: translate(-50%, -50%);
 }
 
 .reading-notes-panel header {
@@ -5081,7 +5265,9 @@ function getQuestionKindLabel(kind) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--reading-line);
+  font-weight: 600;
 }
 
 .reading-notes-panel h3 {
@@ -5090,46 +5276,57 @@ function getQuestionKindLabel(kind) {
 }
 
 .reading-notes-panel textarea {
-  min-height: 280px;
-  resize: vertical;
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+  border: none;
+  background: transparent;
+  color: var(--reading-text);
+  font-family: inherit;
+  resize: none;
+}
+
+.reading-notes-panel textarea:focus {
+  outline: none;
 }
 
 .reading-selection-toolbar {
   position: absolute;
-  z-index: 2700;
+  z-index: 1000;
   display: flex;
-  gap: 6px;
-  padding: 6px;
-  border: 1px solid rgba(15, 23, 42, 0.16);
-  border-radius: 8px;
-  background: #111827;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.24);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 6px;
+  background: #1e293b;
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 .reading-selection-toolbar button {
-  min-height: 30px;
   border: 0;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #111827;
+  border-radius: 4px;
+  background: transparent;
+  color: white;
   cursor: pointer;
   font: inherit;
-  font-size: 0.82rem;
-  font-weight: 700;
-  padding: 5px 9px;
+  font-size: 0.85rem;
+  padding: 6px 12px;
+}
+
+.reading-selection-toolbar button:hover {
+  background: #334155;
 }
 
 .reading-html :deep(.hl),
 .review-dictionary-highlight {
-  border-radius: 3px;
-  background: rgba(253, 224, 71, 0.7);
-  box-shadow: inset 0 -2px 0 rgba(234, 179, 8, 0.42);
+  background-color: #72361c;
+  color: #fff;
   cursor: pointer;
 }
 
 .reading-html :deep(.hl[data-hl-type="note"]) {
-  background: rgba(191, 219, 254, 0.76);
-  box-shadow: inset 0 -2px 0 rgba(37, 99, 235, 0.34);
+  background-color: #0369d9;
+  color: #fff;
 }
 
 .reading-html :deep(.memorize-locator-highlight) {
@@ -5237,40 +5434,83 @@ function getQuestionKindLabel(kind) {
 }
 
 .reading-workspace.shell {
+  --reading-left-pane-width: clamp(360px, 50%, calc(100% - 360px));
+  --reading-divider-width: 10px;
   flex: 1 1 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns:
+    minmax(280px, var(--reading-left-pane-width))
+    var(--reading-divider-width)
+    minmax(320px, 1fr);
   width: 100%;
   min-height: 0;
   height: auto;
-  gap: 0;
-  align-items: stretch;
+  overflow: hidden;
 }
 
 .pane {
   overflow: auto;
   background: var(--reading-panel);
   padding: 22px;
+  min-width: 0;
 }
 
 #left {
-  width: 50%;
-  min-width: 320px;
-  flex: 0 0 50%;
+  min-width: 0;
 }
 
 #divider {
-  flex: 0 0 8px;
   border-right: 1px solid var(--reading-line);
   border-left: 1px solid var(--reading-line);
   background: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
   cursor: ew-resize;
+  outline: none;
+  position: relative;
+  touch-action: none;
+  user-select: none;
+}
+
+#divider::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 48px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.55);
+  box-shadow: -3px 0 0 rgba(100, 116, 139, 0.28), 3px 0 0 rgba(100, 116, 139, 0.28);
+  transform: translate(-50%, -50%);
+}
+
+#divider:hover,
+#divider:focus-visible,
+#divider.is-dragging {
+  border-color: #60a5fa;
+  background: linear-gradient(180deg, #dbeafe 0%, #93c5fd 100%);
 }
 
 #right {
-  min-width: 320px;
-  flex: 1;
+  min-width: 0;
   background: var(--reading-panel-alt);
-  padding: 16px 20px;
+  padding: 12px 14px;
+}
+
+.reading-page.dark-mode #divider {
+  border-color: var(--reading-line);
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+}
+
+.reading-page.dark-mode #divider::before {
+  background: rgba(203, 213, 225, 0.62);
+  box-shadow: -3px 0 0 rgba(203, 213, 225, 0.32), 3px 0 0 rgba(203, 213, 225, 0.32);
+}
+
+.reading-page.dark-mode #divider:hover,
+.reading-page.dark-mode #divider:focus-visible,
+.reading-page.dark-mode #divider.is-dragging {
+  border-color: #60a5fa;
+  background: linear-gradient(180deg, #1e3a8a 0%, #1d4ed8 100%);
 }
 
 .reading-html {
@@ -5297,6 +5537,40 @@ function getQuestionKindLabel(kind) {
   display: block;
   margin: 8px 0;
   line-height: 1.55;
+}
+
+.reading-html :deep(.choice-item label),
+.reading-html :deep(.checkbox-options label),
+.reading-html :deep(.options-list label),
+.reading-html :deep(.multiple-choice-options label),
+.reading-html :deep(.matching-options label),
+.reading-html :deep(.mcq-group label),
+.reading-html :deep(.radio-options label),
+.reading-html :deep(.radio-group label),
+.reading-html :deep(.multiple-choice label),
+.reading-html :deep(.true-false-ng label) {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  line-height: 1.5;
+}
+
+.reading-html :deep(.choice-item label input[type="checkbox"]),
+.reading-html :deep(.checkbox-options label input[type="checkbox"]),
+.reading-html :deep(.options-list label input[type="checkbox"]),
+.reading-html :deep(.choice-item label input[type="radio"]),
+.reading-html :deep(.multiple-choice-options label input[type="radio"]),
+.reading-html :deep(.matching-options label input[type="radio"]),
+.reading-html :deep(.mcq-group label input[type="radio"]),
+.reading-html :deep(.radio-options label input[type="radio"]),
+.reading-html :deep(.radio-group label input[type="radio"]),
+.reading-html :deep(.multiple-choice label input[type="radio"]),
+.reading-html :deep(.true-false-ng label input[type="radio"]) {
+  flex-shrink: 0;
+  margin-top: 4px;
+  cursor: pointer;
 }
 
 .reading-html :deep(input[type="text"]),
@@ -5329,6 +5603,20 @@ function getQuestionKindLabel(kind) {
   background: #ffffff;
 }
 
+.reading-page.dark-mode .reading-html :deep(input[type="text"]),
+.reading-page.dark-mode .reading-html :deep(textarea),
+.reading-page.dark-mode .reading-html :deep(select),
+.reading-page.dark-mode .practice-nav select,
+.reading-page.dark-mode .practice-nav input[type="text"] {
+  border-color: var(--reading-line);
+  background: var(--reading-panel-alt);
+  color: var(--reading-text);
+}
+
+.reading-page.dark-mode .reading-html :deep(table) {
+  background: var(--reading-panel);
+}
+
 .reading-html :deep(th),
 .reading-html :deep(td) {
   padding: 8px 10px;
@@ -5336,25 +5624,107 @@ function getQuestionKindLabel(kind) {
   vertical-align: top;
 }
 
+.reading-html :deep(.table-section) {
+  margin-top: 12px;
+  overflow-x: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--reading-line);
+  border-radius: 8px;
+  background: var(--reading-panel);
+}
+
+.reading-html :deep(.table-section table) {
+  width: 100%;
+  margin: 0;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.reading-html :deep(.table-section thead th) {
+  padding: 10px 8px;
+  border: 1px solid var(--reading-line);
+  background: var(--reading-panel-alt);
+  text-align: center;
+  font-weight: 700;
+}
+
+.reading-html :deep(.table-section tbody td) {
+  padding: 10px 10px;
+  border: 1px solid var(--reading-line);
+  vertical-align: top;
+  line-height: 1.45;
+}
+
+.reading-html :deep(.table-section thead th:first-child),
+.reading-html :deep(.table-section tbody td:first-child) {
+  width: 16%;
+}
+
+.reading-html :deep(.table-section thead th:nth-child(2)),
+.reading-html :deep(.table-section tbody td:nth-child(2)) {
+  width: 20%;
+}
+
+.reading-html :deep(.table-section thead th:nth-child(3)),
+.reading-html :deep(.table-section tbody td:nth-child(3)) {
+  width: 64%;
+}
+
+.reading-html :deep(.table-section ul) {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.reading-html :deep(.table-section li + li) {
+  margin-top: 6px;
+}
+
+.reading-html :deep(.table-section input.blank) {
+  display: inline-block;
+  min-width: 120px;
+  max-width: 180px;
+  width: 40%;
+  padding: 2px 6px;
+  border: 1px solid var(--reading-line);
+  border-radius: 4px;
+  background: var(--reading-panel);
+  color: var(--reading-text);
+  vertical-align: middle;
+}
+
 .unified-group.question-group {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   padding: 0;
   border: 0;
+  border-radius: 4px;
 }
 
 .unified-group__lead {
   margin-bottom: 12px;
 }
 
-.reading-html :deep(.group),
-.review-panel,
-.coach-panel {
-  margin-bottom: 24px;
-  padding: 24px 32px;
+.reading-html :deep(.group) {
+  margin-bottom: 0;
+  padding: 18px 22px;
   border: 1px solid var(--reading-line);
-  border-radius: 12px;
+  border-radius: 4px;
   background: var(--reading-panel);
   box-shadow: var(--reading-shadow);
+}
+
+#results.review-panel {
+  margin: 18px 0 0;
+  padding: 18px;
+  border: 1px solid var(--reading-line);
+  border-radius: 4px;
+  background: var(--reading-panel);
+  box-shadow: var(--reading-shadow);
+}
+
+.reading-page.dark-mode .reading-html :deep(.group),
+.reading-page.dark-mode #results.review-panel {
+  border-color: var(--reading-line);
+  background: var(--reading-panel);
 }
 
 .reading-explanation-panel {
@@ -5419,7 +5789,6 @@ function getQuestionKindLabel(kind) {
 
 .reading-html :deep(.paragraph-dropzone),
 .reading-html :deep(.match-dropzone),
-.reading-html :deep(.drop-target-summary),
 .dragdrop-slot {
   display: flex;
   min-height: 40px;
@@ -5428,28 +5797,98 @@ function getQuestionKindLabel(kind) {
   gap: 8px;
   margin: 0 0 8px;
   padding: 8px 10px;
-  border: 2px dashed #93c5fd;
-  border-radius: 10px;
-  background: #eff6ff;
+  border: 2px dashed var(--reading-dropzone-border);
+  border-radius: 4px;
+  background: var(--reading-dropzone-bg);
   color: var(--reading-muted);
   transition: border-color 0.16s ease, background 0.16s ease;
 }
 
+.reading-page.dark-mode .reading-html :deep(.paragraph-dropzone),
+.reading-page.dark-mode .reading-html :deep(.match-dropzone),
+.reading-page.dark-mode .reading-html :deep([data-vue-dropzone="true"]),
+.reading-page.dark-mode .dragdrop-slot {
+  border-color: #475569 !important;
+  background: #1e293b !important;
+  color: var(--reading-muted);
+}
+
 .reading-html :deep(.paragraph-dropzone.drag-over),
 .reading-html :deep(.match-dropzone.drag-over),
-.reading-html :deep(.drop-target-summary.drag-over),
 .reading-html :deep(.drag-over),
 .dragdrop-slot.drag-over {
-  border-color: var(--reading-accent);
-  background: #dbeafe;
+  border-color: var(--reading-dropzone-drag-border);
+  background: var(--reading-dropzone-drag-bg);
   box-shadow: none;
+}
+
+.reading-page.dark-mode .reading-html :deep(.paragraph-dropzone.drag-over),
+.reading-page.dark-mode .reading-html :deep(.match-dropzone.drag-over),
+.reading-page.dark-mode .reading-html :deep([data-vue-dropzone="true"].drag-over),
+.reading-page.dark-mode .reading-html :deep(.drag-over),
+.reading-page.dark-mode .dragdrop-slot.drag-over {
+  border-color: #3b82f6 !important;
+  background: #1e3a8a !important;
 }
 
 .reading-html :deep(.paragraph-dropzone.dropzone-filled),
 .reading-html :deep(.match-dropzone.dropzone-filled),
-.reading-html :deep(.drop-target-summary.dropzone-filled),
 .dragdrop-slot.filled {
   border-style: solid;
+}
+
+.reading-html :deep(.drop-target-summary) {
+  position: relative;
+  display: inline-flex;
+  min-width: 80px;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 4px;
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 2px solid var(--reading-muted);
+  border-radius: 4px 4px 0 0;
+  background: rgba(0, 0, 0, 0.02);
+  box-shadow: none;
+  vertical-align: bottom;
+  transition: all 0.2s ease;
+}
+
+.reading-html :deep(.drop-target-summary.drag-over) {
+  border-bottom-color: var(--reading-accent);
+  background: #dbeafe;
+}
+
+.reading-html :deep(.drop-target-summary.dropzone-filled) {
+  border-bottom-color: var(--reading-success);
+  background: #dcfce7;
+  color: var(--reading-success);
+  font-weight: 600;
+}
+
+.reading-html :deep(.drop-target-summary .drag-item),
+.reading-html :deep(.drop-target-summary .dragdrop-chip) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: grab;
+  font-weight: inherit;
+}
+
+.reading-page.dark-mode .reading-html :deep(.drop-target-summary) {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.reading-page.dark-mode .reading-html :deep(.drop-target-summary.drag-over) {
+  background: #1e3a8a;
+}
+
+.reading-page.dark-mode .reading-html :deep(.drop-target-summary.dropzone-filled) {
+  background: #064e3b;
+  color: #dcfce7;
 }
 
 .reading-html :deep(.paragraph-label) {
@@ -5475,8 +5914,15 @@ function getQuestionKindLabel(kind) {
 .reading-html :deep(.options-pool.drag-over),
 .reading-html :deep(.headings-pool.drag-over) {
   border-color: var(--reading-accent);
-  background: rgba(37, 99, 235, 0.08);
+  background: var(--reading-pool-drag-bg);
   box-shadow: none;
+}
+
+.reading-page.dark-mode .reading-html :deep(.pool-items.drag-over),
+.reading-page.dark-mode .reading-html :deep(.options-pool.drag-over),
+.reading-page.dark-mode .reading-html :deep(.headings-pool.drag-over) {
+  border-color: var(--reading-dropzone-drag-border);
+  background: var(--reading-pool-drag-bg);
 }
 
 .reading-html :deep(.dropped-items:empty::after) {
@@ -5485,15 +5931,19 @@ function getQuestionKindLabel(kind) {
   font-size: 0.82rem;
 }
 
+.reading-page.dark-mode .reading-html :deep(.dropped-items:empty::after) {
+  color: #94a3b8;
+}
+
 .reading-html :deep(.drag-item),
 .dragdrop-chip,
 .reading-html :deep(.dragdrop-chip) {
   min-height: 32px;
   max-width: 100%;
   padding: 6px 10px;
-  border: 1px solid #bfdbfe;
-  border-radius: 8px;
-  background: #eff6ff;
+  border: 1px solid var(--reading-drag-item-border);
+  border-radius: 4px;
+  background: var(--reading-drag-item-bg);
   color: var(--reading-text);
   cursor: grab;
   font: inherit;
@@ -5502,6 +5952,14 @@ function getQuestionKindLabel(kind) {
   overflow-wrap: anywhere;
   text-align: left;
   user-select: none;
+}
+
+.reading-page.dark-mode .reading-html :deep(.drag-item),
+.reading-page.dark-mode .dragdrop-chip,
+.reading-page.dark-mode .reading-html :deep(.dragdrop-chip) {
+  border-color: #64748b !important;
+  background: #334155 !important;
+  color: #f8fafc;
 }
 
 .reading-html :deep(.drag-item.dragging),
@@ -5514,13 +5972,26 @@ function getQuestionKindLabel(kind) {
 .dragdrop-chip-assigned,
 .reading-html :deep(.dragdrop-chip-assigned) {
   border-style: solid;
-  border-color: #bfdbfe;
-  background: #eff6ff;
+  border-color: var(--reading-drag-item-border);
+  background: var(--reading-drag-item-bg);
+}
+
+.reading-page.dark-mode .reading-html :deep(.drag-item--assigned),
+.reading-page.dark-mode .dragdrop-chip-assigned,
+.reading-page.dark-mode .reading-html :deep(.dragdrop-chip-assigned) {
+  border-color: #64748b !important;
+  background: #334155 !important;
 }
 
 .dragdrop-option.selected {
   border-color: #93c5fd;
   background: #dbeafe;
+}
+
+.reading-page.dark-mode .dragdrop-option.selected {
+  border-color: #3b82f6;
+  background: #1e40af;
+  color: #ffffff;
 }
 
 .dragdrop-option:disabled:not(.selected) {
@@ -5529,10 +6000,12 @@ function getQuestionKindLabel(kind) {
 }
 
 .practice-nav {
-  position: relative;
+  position: fixed;
   top: auto;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 2000;
-  flex: 0 0 var(--reading-nav-height);
   display: flex;
   align-items: center;
   gap: 16px;
@@ -5543,6 +6016,11 @@ function getQuestionKindLabel(kind) {
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.06);
   overflow: visible;
+}
+
+.reading-page.dark-mode .practice-nav {
+  border-color: var(--reading-line);
+  background: var(--reading-panel);
 }
 
 .practice-nav .title {
@@ -5574,13 +6052,11 @@ function getQuestionKindLabel(kind) {
   position: relative;
   display: inline-flex;
   flex: 0 0 auto;
-  min-width: 42px;
-  min-height: 34px;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  padding: 6px 12px;
   border: 1px solid var(--reading-line);
-  border-radius: 8px;
+  border-radius: 4px;
   background: var(--reading-panel);
   color: var(--reading-text);
   cursor: pointer;
@@ -5605,6 +6081,27 @@ function getQuestionKindLabel(kind) {
   background: #dbeafe;
 }
 
+.practice-nav .q-item.active,
+.practice-nav .q-item.answered.active {
+  border-color: var(--reading-accent);
+  background: #eff6ff;
+  color: var(--reading-accent);
+  font-weight: 600;
+}
+
+.reading-page.dark-mode .practice-nav .q-item.answered {
+  border-color: #3b82f6;
+  background: #1e3a8a;
+  color: #ffffff;
+}
+
+.reading-page.dark-mode .practice-nav .q-item.active,
+.reading-page.dark-mode .practice-nav .q-item.answered.active {
+  border-color: var(--reading-accent);
+  background: #1e40af;
+  color: #ffffff;
+}
+
 .practice-nav .q-item.correct,
 .practice-nav .q-item.review-correct {
   border-color: var(--reading-success);
@@ -5612,11 +6109,25 @@ function getQuestionKindLabel(kind) {
   color: var(--reading-success);
 }
 
+.reading-page.dark-mode .practice-nav .q-item.correct,
+.reading-page.dark-mode .practice-nav .q-item.review-correct {
+  border-color: var(--reading-success);
+  background: #064e3b;
+  color: #dcfce7;
+}
+
 .practice-nav .q-item.incorrect,
 .practice-nav .q-item.review-incorrect {
   border-color: var(--reading-danger);
   background: #fee2e2;
   color: var(--reading-danger);
+}
+
+.reading-page.dark-mode .practice-nav .q-item.incorrect,
+.reading-page.dark-mode .practice-nav .q-item.review-incorrect {
+  border-color: var(--reading-danger);
+  background: #7f1d1d;
+  color: #fee2e2;
 }
 
 .practice-nav .q-item.marked::after {
@@ -5645,6 +6156,12 @@ function getQuestionKindLabel(kind) {
   font-size: 0.72rem;
   font-weight: 800;
   line-height: 1;
+}
+
+.reading-page.dark-mode .mark-question-button {
+  border-color: #475569;
+  background: rgba(15, 23, 42, 0.82);
+  color: var(--reading-muted);
 }
 
 .mark-question-button.active {
@@ -5852,6 +6369,7 @@ function getQuestionKindLabel(kind) {
 .results-table {
   width: 100%;
   border-collapse: collapse;
+  margin-top: 12px;
   overflow-wrap: anywhere;
   font-size: 0.92rem;
 }
@@ -5878,119 +6396,222 @@ function getQuestionKindLabel(kind) {
   font-weight: 700;
 }
 
-.coach-panel {
-  display: grid;
-  gap: 12px;
-}
-
-.coach-status {
-  flex: 0 0 auto;
-  color: var(--reading-muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.coach-status.is-loading {
-  color: var(--reading-accent);
-}
-
-.coach-chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.coach-chip {
-  min-height: 30px;
-  padding: 5px 10px;
-  border: 1px solid var(--reading-line);
-  border-radius: 8px;
-  background: #ffffff;
-  color: #334155;
+.reading-coach-fab {
+  position: fixed;
+  right: 16px;
+  bottom: 20px;
+  z-index: 9999;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #0f766e, #0e7490);
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(15, 118, 110, 0.28);
   cursor: pointer;
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 13px;
   font-weight: 700;
+  touch-action: none;
+  user-select: none;
 }
 
-.coach-chip:hover:not(:disabled) {
-  border-color: #93c5fd;
-  background: #eff6ff;
-  color: var(--reading-accent);
+.reading-coach-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 70px;
+  z-index: 9999;
+  display: none;
+  overflow: hidden;
+  width: min(380px, calc(100vw - 24px));
+  max-height: min(68vh, 560px);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 22px 40px rgba(15, 23, 42, 0.24);
+  touch-action: none;
 }
 
-.coach-transcript {
-  display: grid;
-  gap: 8px;
-  max-height: 260px;
-  overflow: auto;
-  padding: 10px;
-  border: 1px solid var(--reading-line);
-  border-radius: 8px;
+.reading-coach-panel.is-open {
+  display: flex;
+  flex-direction: column;
+}
+
+.reading-coach-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.3);
   background: #f8fafc;
 }
 
-.coach-message {
-  max-width: 92%;
-  padding: 9px 10px;
-  border-radius: 8px;
-  background: #ffffff;
+.reading-coach-panel__title {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.reading-coach-panel__close {
+  border: 0;
+  background: transparent;
   color: #334155;
-  font-size: 0.86rem;
-  line-height: 1.55;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.reading-coach-panel__status,
+.reading-coach-panel__error {
+  min-height: 22px;
+  padding: 8px 12px 0;
+  color: #0f766e;
+  font-size: 12px;
+}
+
+.reading-coach-panel__status.is-error,
+.reading-coach-panel__error {
+  color: #b91c1c;
+}
+
+.reading-coach-panel__messages {
+  display: grid;
+  flex: 1;
+  gap: 8px;
+  overflow: auto;
+  padding: 10px 12px;
+  background: #f8fafc;
+}
+
+.reading-coach-msg {
+  padding: 8px 10px;
+  border-radius: 10px;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
-.coach-message.user {
+.reading-coach-msg.user {
   justify-self: end;
-  background: var(--reading-accent);
-  color: #ffffff;
+  background: #dbeafe;
+  color: #1e3a8a;
 }
 
-.coach-selected-context,
-.coach-response {
-  padding: 10px;
-  border: 1px solid #bfdbfe;
-  border-radius: 8px;
-  background: #eff6ff;
-  color: #334155;
+.reading-coach-msg.assistant {
+  justify-self: start;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  background: #ffffff;
+  color: #0f172a;
 }
 
-.coach-selected-context {
+.reading-coach-msg.error {
+  border-color: rgba(185, 28, 28, 0.35);
+  color: #991b1b;
+}
+
+.reading-coach-panel__actions,
+.reading-coach-panel__followups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px 0;
+}
+
+.reading-coach-chip {
+  padding: 4px 8px;
+  border: 1px solid rgba(15, 118, 110, 0.28);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #0f766e;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.reading-coach-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.reading-coach-panel__selected-context {
   display: grid;
   gap: 6px;
+  padding: 8px 12px 0;
+  color: #334155;
+  font-size: 12px;
 }
 
-.coach-selected-context span,
-.coach-error {
-  font-size: 0.86rem;
+.reading-coach-panel__selected-context span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
 }
 
-.coach-selected-context strong {
+.reading-coach-panel__selected-context strong {
   max-height: 4.8em;
   overflow: hidden;
-  color: #334155;
-  font-size: 0.86rem;
   font-weight: 600;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
-.coach-panel textarea {
-  width: 100%;
-  resize: vertical;
+.reading-coach-panel__composer {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.3);
+  background: #ffffff;
 }
 
-.coach-error {
-  color: var(--reading-danger);
+.reading-coach-panel__input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.reading-coach-panel__send {
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #0f766e;
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.reading-coach-panel__send:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 @media (max-width: 980px) {
+  .reading-coach-panel {
+    right: 8px;
+    left: 8px;
+    bottom: 64px;
+    width: auto;
+    max-height: 70vh;
+  }
+
+  .reading-coach-fab {
+    right: 10px;
+    bottom: 12px;
+  }
+
   .reading-page {
     --reading-nav-height: 112px;
     min-height: 100vh;
-    height: 100vh;
-    overflow: hidden;
-    padding-bottom: 0;
+    height: auto;
+    overflow: auto;
+    padding-bottom: var(--reading-nav-height);
   }
 
   .reading-header.header {
@@ -5999,8 +6620,9 @@ function getQuestionKindLabel(kind) {
   }
 
   .reading-workspace.shell {
-    display: flex;
-    flex-direction: column;
+    display: block;
+    height: auto;
+    overflow: visible;
     min-height: 0;
   }
 
@@ -6032,6 +6654,14 @@ function getQuestionKindLabel(kind) {
 
   .practice-nav .controls {
     margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .reading-html :deep(.table-section input.blank) {
+    width: 100%;
+    max-width: none;
+    margin-top: 4px;
   }
 
   .score-grid,

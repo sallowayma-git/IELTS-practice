@@ -24,6 +24,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DIST_ENTRY = REPO_ROOT / "dist" / "writing" / "index.html"
+WRITING_SOURCE_ROOT = REPO_ROOT / "apps" / "writing-vue" / "src"
 DRAFT_KEY = "ielts_writing_draft_compose-essay"
 SESSION_ID = "11111111-1111-4111-8111-111111111111"
 TOPIC_TEXT = "Some people think university education should be free for everyone. Discuss both views and give your own opinion."
@@ -55,8 +56,20 @@ except ModuleNotFoundError:
     raise SystemExit(json.dumps({"status": "fail", "detail": "playwright_python_missing"}, ensure_ascii=False))
 
 
+def is_bundle_stale() -> bool:
+    if not DIST_ENTRY.exists():
+        return True
+    bundle_mtime = DIST_ENTRY.stat().st_mtime
+    for source_path in WRITING_SOURCE_ROOT.rglob("*"):
+        if source_path.suffix not in {".vue", ".js", ".css"}:
+            continue
+        if source_path.stat().st_mtime > bundle_mtime:
+            return True
+    return False
+
+
 def ensure_bundle() -> None:
-    if DIST_ENTRY.exists():
+    if not is_bundle_stale():
         return
     completed = subprocess.run(
         ["npm", "run", "build:writing"],
@@ -109,6 +122,27 @@ async def install_api_stub(page) -> None:
             }
           ];
           const LOCAL_API_BASE_URL = 'http://127.0.0.1:3905';
+          const writingConfigFixtures = [
+            {
+              id: 1,
+              config_name: 'Default test provider',
+              provider: 'openai',
+              base_url: 'https://api.openai.com/v1',
+              default_model: 'gpt-4o-mini',
+              is_default: true,
+              is_enabled: true
+            }
+          ];
+          const promptFixtures = [
+            {
+              id: 1,
+              task_type: 'task2',
+              name: 'Default prompt',
+              version: 'test',
+              is_active: true,
+              created_at: '2026-01-01T00:00:00.000Z'
+            }
+          ];
 
           const createHeaders = (contentType = 'application/json') => ({
             get(name) {
@@ -229,6 +263,19 @@ async def install_api_stub(page) -> None:
               });
             }
 
+            if (pathname === '/api/topics/statistics' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: {
+                  total: topicFixtures.length,
+                  byType: [
+                    { type: 'task1', count: topicFixtures.filter((topic) => topic.type === 'task1').length },
+                    { type: 'task2', count: topicFixtures.filter((topic) => topic.type === 'task2').length }
+                  ]
+                }
+              });
+            }
+
             if (pathname.startsWith('/api/topics/') && method === 'GET') {
               const id = Number(pathname.split('/').pop());
               const topic = topicFixtures.find((item) => item.id === id);
@@ -241,6 +288,59 @@ async def install_api_stub(page) -> None:
               return createJsonResponse({
                 success: true,
                 data: topic
+              });
+            }
+
+            if (pathname === '/api/essays' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: { data: [], total: 0, page: 1, limit: Number(parsed.searchParams.get('limit') || 20) }
+              });
+            }
+
+            if (pathname === '/api/essays/statistics' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: {
+                  count: 0,
+                  average: { tr_ta: 0, cc: 0, lr: 0, gra: 0 },
+                  latest: { tr_ta: 0, cc: 0, lr: 0, gra: 0 },
+                  latest_task_type: 'task2',
+                  latest_date: null
+                }
+              });
+            }
+
+            if (pathname === '/api/practice/history' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: { data: [], total: 0, page: 1, limit: Number(parsed.searchParams.get('limit') || 200) }
+              });
+            }
+
+            if (pathname === '/api/settings' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: {
+                  temperature_mode: 'balanced',
+                  temperature_task1: 0.3,
+                  temperature_task2: 0.5,
+                  history_limit: 100
+                }
+              });
+            }
+
+            if (pathname === '/api/configs' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: writingConfigFixtures
+              });
+            }
+
+            if (pathname === '/api/prompts' && method === 'GET') {
+              return createJsonResponse({
+                success: true,
+                data: promptFixtures
               });
             }
 
@@ -293,6 +393,57 @@ async def set_start_mode(page, mode: str) -> None:
     await page.evaluate(f"(value) => {{ window.__writingStartMode = value; }}", mode)
 
 
+async def assert_not_reading_home(page, context: str) -> None:
+    reading_home_count = await page.locator("[data-practice-reading-home]").count()
+    if reading_home_count:
+        state = await page.evaluate(
+            """
+            () => ({
+              url: location.href,
+              navText: document.querySelector('.nav-shell')?.innerText || '',
+              heading: document.querySelector('h1, h2')?.textContent || '',
+              bodyText: document.body.innerText.slice(0, 500)
+            })
+            """
+        )
+        raise AssertionError(f"writing_nav_leaked_to_reading_home:{context}:{json.dumps(state, ensure_ascii=False)}")
+
+
+async def assert_writing_nav_target(page, nav_label: str, expected_hash: str, selector: str) -> None:
+    await page.click(f'.nav-item:has-text("{nav_label}")')
+    await page.wait_for_url(f"**#{expected_hash}", timeout=10000)
+    await page.wait_for_selector(selector, timeout=20000)
+    await assert_not_reading_home(page, nav_label)
+
+
+async def assert_writing_top_nav_stays_in_writing_module(page, entry_url: str) -> None:
+    await open_compose_entry(page, entry_url)
+    await assert_not_reading_home(page, "compose-entry")
+
+    await assert_writing_nav_target(page, "写作题库", "/topics", ".topic-manage-page")
+    topic_heading = await page.locator(".topic-manage-page .page-title").text_content()
+    if not topic_heading or "Question" not in topic_heading:
+        raise AssertionError(f"writing_topics_heading_mismatch:{topic_heading}")
+
+    await assert_writing_nav_target(page, "写作记录", "/history", ".history-page")
+    history_heading = await page.locator(".history-page .page-header").text_content()
+    if not history_heading or "Performance Analytics" not in history_heading:
+        raise AssertionError(f"writing_history_heading_mismatch:{history_heading}")
+
+    await assert_writing_nav_target(page, "设置", "/settings", "#settings-view")
+    settings_panels = await page.locator("#settings-view .hero-settings-group > .hero-panel").count()
+    if settings_panels < 3:
+        raise AssertionError(f"writing_settings_three_panel_missing:{settings_panels}")
+
+    await assert_writing_nav_target(page, "写作", "/writing", ".compose-page")
+    await wait_for_compose(page)
+
+    await page.click(".brand-block")
+    await page.wait_for_url("**#/writing", timeout=10000)
+    await wait_for_compose(page)
+    await assert_not_reading_home(page, "brand")
+
+
 async def run_regression() -> dict:
     ensure_bundle()
     entry_url = f"{DIST_ENTRY.as_uri()}#/writing"
@@ -309,6 +460,7 @@ async def run_regression() -> dict:
         await page.evaluate("() => { localStorage.clear(); sessionStorage.clear(); }")
         await page.reload()
         await wait_for_compose(page)
+        await assert_writing_top_nav_stays_in_writing_module(page, entry_url)
 
         await page.evaluate(f"() => localStorage.setItem('{DRAFT_KEY}', '{{bad-json')")  # malformed payload probe
         await page.reload()
@@ -692,6 +844,7 @@ async def run_regression() -> dict:
             "bankSocietyTopicId": BANK_SOCIETY_TOPIC_ID,
             "missingBankTopicId": BANK_MISSING_TOPIC_ID,
             "startCallCount": 1,
+            "topNavRoutes": ["#/writing", "#/topics", "#/history", "#/settings"],
         },
     }
 

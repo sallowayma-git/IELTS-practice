@@ -9,7 +9,14 @@ import { sendError, sendSuccess } from '../lib/shared/response.js'
 const listAssetsSchema = z.object({
   activity: z.enum(['reading', 'writing']).optional(),
   page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).default(20)
+  limit: z.coerce.number().int().min(1).default(20),
+  refresh: z.preprocess((value) => {
+    if (value === undefined || value === null || value === '') return undefined
+    if (typeof value === 'string') {
+      return ['1', 'true', 'yes', 'force', 'refresh'].includes(value.trim().toLowerCase())
+    }
+    return value === true || value === 1
+  }, z.boolean().default(false))
 })
 
 const listHistorySchema = z.object({
@@ -20,6 +27,16 @@ const listHistorySchema = z.object({
 
 const archiveHistorySchema = z.object({
   activity: z.enum(['reading']).default('reading')
+})
+
+const getAssetSchema = z.object({
+  refresh: z.preprocess((value) => {
+    if (value === undefined || value === null || value === '') return undefined
+    if (typeof value === 'string') {
+      return ['1', 'true', 'yes', 'force', 'refresh'].includes(value.trim().toLowerCase())
+    }
+    return value === true || value === 1
+  }, z.boolean().default(false))
 })
 
 const createSessionSchema = z.object({
@@ -99,7 +116,8 @@ export async function registerPracticeRoutes(
 
   app.get('/api/practice/assets/:activity/:assetId', async (request, reply) => {
     try {
-      const data = await service.getAsset(getParam(request, 'activity'), getParam(request, 'assetId'))
+      const query = getAssetSchema.parse(request.query || {})
+      const data = await service.getAsset(getParam(request, 'activity'), getParam(request, 'assetId'), query)
       sendSuccess(reply, data)
     } catch (error) {
       sendError(reply, error, 'practice_asset_failed')

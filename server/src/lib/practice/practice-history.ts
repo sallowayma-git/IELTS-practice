@@ -4,6 +4,7 @@ import type {
   PracticeHistoryImportResult,
   PracticeHistoryRecord,
   PracticeHistorySummary,
+  ReadingPracticeAnalysisArtifacts,
   ReadingPracticeSubmission
 } from './contracts.js'
 import { normalizePagination } from '../shared/http.js'
@@ -336,6 +337,36 @@ function resolveSingleAttemptLlmPatch(result: unknown, requestPayload: AnyRecord
     : null
 }
 
+function buildReadingAnalysisArtifacts(submission: ReadingPracticeSubmission): ReadingPracticeAnalysisArtifacts {
+  return {
+    ...(isRecord(submission.analysisArtifacts) ? submission.analysisArtifacts : {}),
+    highlights: submission.highlights,
+    markedQuestions: submission.markedQuestions,
+    analysisSignals: submission.analysisSignals,
+    questionTimelineLite: submission.questionTimelineLite,
+    singleAttemptAnalysisInput: submission.singleAttemptAnalysisInput,
+    singleAttemptAnalysis: submission.singleAttemptAnalysis,
+    singleAttemptAnalysisLlm: submission.singleAttemptAnalysisLlm
+  }
+}
+
+function withReadingAnalysisArtifacts(submission: ReadingPracticeSubmission): ReadingPracticeSubmission {
+  return {
+    ...submission,
+    analysisArtifacts: buildReadingAnalysisArtifacts(submission)
+  }
+}
+
+function canonicalizeReadingHistoryRecord(record: PracticeHistoryRecord): PracticeHistoryRecord {
+  if (record.activity !== 'reading' || !record.submission) {
+    return record
+  }
+  return {
+    ...record,
+    submission: withReadingAnalysisArtifacts(record.submission)
+  }
+}
+
 export function buildReadingHistoryRecord(submission: ReadingPracticeSubmission): PracticeHistoryRecord {
   const id = `reading-${submission.sessionId}`.replace(/[^a-zA-Z0-9_-]/g, '-')
   const metadata: AnyRecord = {
@@ -344,7 +375,7 @@ export function buildReadingHistoryRecord(submission: ReadingPracticeSubmission)
     historyRecordId: id
   }
   const canonicalSubmission: ReadingPracticeSubmission = {
-    ...submission,
+    ...withReadingAnalysisArtifacts(submission),
     metadata
   }
   return {
@@ -572,10 +603,7 @@ export class PracticeHistoryStore {
     }
     if (singleAttemptAnalysisLlm) {
       updatedSubmission.singleAttemptAnalysisLlm = singleAttemptAnalysisLlm
-      updatedSubmission.analysisArtifacts = {
-        ...record.submission.analysisArtifacts,
-        singleAttemptAnalysisLlm
-      }
+      updatedSubmission.analysisArtifacts = buildReadingAnalysisArtifacts(updatedSubmission)
     }
 
     const updated = {
@@ -683,8 +711,9 @@ export class PracticeHistoryStore {
   }
 
   private upsert(record: PracticeHistoryRecord) {
+    const canonicalRecord = canonicalizeReadingHistoryRecord(record)
     if (!this.db) {
-      this.memoryRecords.set(record.id, record)
+      this.memoryRecords.set(canonicalRecord.id, canonicalRecord)
       return
     }
 
@@ -719,23 +748,23 @@ export class PracticeHistoryStore {
         submission_json = excluded.submission_json,
         updated_at = excluded.updated_at
     `).run({
-      id: record.id,
-      activity: record.activity,
-      sessionId: record.sessionId,
-      assetId: record.assetId || null,
-      examId: record.examId || null,
-      title: record.title,
-      status: record.status,
-      score: normalizeNumber(record.score),
-      totalQuestions: Math.round(normalizeNumber(record.totalQuestions)),
-      correctAnswers: normalizeNumber(record.correctAnswers),
-      accuracy: normalizeNumber(record.accuracy),
-      duration: Math.round(normalizeNumber(record.duration)),
-      submittedAt: record.submittedAt,
-      startTime: record.startTime || null,
-      endTime: record.endTime,
-      metadataJson: safeJsonStringify(record.metadata),
-      submissionJson: safeJsonStringify(record.submission || null),
+      id: canonicalRecord.id,
+      activity: canonicalRecord.activity,
+      sessionId: canonicalRecord.sessionId,
+      assetId: canonicalRecord.assetId || null,
+      examId: canonicalRecord.examId || null,
+      title: canonicalRecord.title,
+      status: canonicalRecord.status,
+      score: normalizeNumber(canonicalRecord.score),
+      totalQuestions: Math.round(normalizeNumber(canonicalRecord.totalQuestions)),
+      correctAnswers: normalizeNumber(canonicalRecord.correctAnswers),
+      accuracy: normalizeNumber(canonicalRecord.accuracy),
+      duration: Math.round(normalizeNumber(canonicalRecord.duration)),
+      submittedAt: canonicalRecord.submittedAt,
+      startTime: canonicalRecord.startTime || null,
+      endTime: canonicalRecord.endTime,
+      metadataJson: safeJsonStringify(canonicalRecord.metadata),
+      submissionJson: safeJsonStringify(canonicalRecord.submission || null),
       updatedAt: new Date().toISOString()
     })
   }

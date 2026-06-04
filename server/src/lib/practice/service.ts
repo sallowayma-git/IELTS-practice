@@ -20,7 +20,7 @@ import {
 } from './contracts.js'
 import { getPracticeMigrationStatus } from './migration-status.js'
 import { PracticeHistoryStore } from './practice-history.js'
-import { loadReadingManifest, loadReadingPracticePayload } from './reading-assets.js'
+import { clearReadingAssetCaches, loadReadingManifest, loadReadingPracticePayload } from './reading-assets.js'
 import { ReadingSuiteSessionStore } from './reading-suite-store.js'
 import {
   createReadingSuiteSession,
@@ -32,6 +32,7 @@ interface ListAssetOptions {
   activity?: string | null
   page?: number
   limit?: number
+  refresh?: boolean
 }
 
 interface ListHistoryOptions {
@@ -523,6 +524,9 @@ export class PracticeService {
   async listAssets(options: ListAssetOptions = {}) {
     const activity = options.activity ? assertPracticeActivity(options.activity) : null
     const { page, limit } = normalizePagination(options.page, options.limit)
+    if (options.refresh && (!activity || activity === 'reading')) {
+      clearReadingAssetCaches()
+    }
 
     if (activity === 'reading') {
       return paginate(this.listReadingAssets(), page, limit)
@@ -540,7 +544,7 @@ export class PracticeService {
     ], page, limit)
   }
 
-  async getAsset(activity: string, assetId: string) {
+  async getAsset(activity: string, assetId: string, options: { refresh?: boolean } = {}) {
     const normalizedActivity = assertPracticeActivity(activity)
     const normalizedAssetId = String(assetId || '').trim()
     if (!normalizedAssetId) {
@@ -548,6 +552,9 @@ export class PracticeService {
     }
 
     if (normalizedActivity === 'reading') {
+      if (options.refresh) {
+        clearReadingAssetCaches()
+      }
       const manifestEntry = this.loadReadingManifest()[normalizedAssetId]
       if (!manifestEntry) {
         throw createHttpError('practice_asset_not_found', `Reading asset not found: ${normalizedAssetId}`, 404)
@@ -1003,10 +1010,6 @@ export class PracticeService {
       readingCoachSnapshot,
       readingCoachTranscript,
       singleAttemptAnalysisLlm,
-      analysisArtifacts: {
-        ...submission.analysisArtifacts,
-        singleAttemptAnalysisLlm
-      },
       legacy: {
         ...submission.legacy,
         renderMode: 'vue-reading'

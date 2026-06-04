@@ -2,6 +2,62 @@
 
 ## Session: 2026-05-21
 
+### Slice 84: Reading Settings Force Refresh Audit
+- **Status:** checkpoint complete
+- **Started:** 2026-06-01 Asia/Shanghai
+- Actions taken:
+  - Re-read planning files and latest handoff context.
+  - Confirmed `origin/opensource` / `FETCH_HEAD` stays at `44a552f265cfddeb844425200fcacfe665d1b340`.
+  - Compared OpenSource `index.html` settings/more DOM with Vue `PracticeLibraryPage.vue`.
+  - Determined More-page visible writing card is an intentional userspace bridge because the reading shell hides top writing nav on `PracticeLibrary`.
+  - Found a real settings bug: Vue `#force-refresh-btn` was only an alias of normal `loadReadingData()`, so it did not clear Practice reading asset caches.
+  - Added `refresh` query parsing to `/api/practice/assets` and `/api/practice/assets/:activity/:assetId`.
+  - Routed reading asset refresh through `PracticeService` to `clearReadingAssetCaches()` before list/detail loading.
+  - Updated `practiceAssets.listAll()` / `practiceAssets.get()` and `PracticeLibraryPage.vue` so only the Force Refresh button sends `refresh=true`.
+  - Refined `practiceAssets.listAll(..., { refresh: true })` so full-pagination refresh clears caches only on page 1; later pages reuse the refreshed manifest without repeating the side effect.
+  - Added API/static coverage for force-refresh cache clearing and Vue/client wiring.
+  - Re-ran required gates after the page-1-only refinement; all passed.
+- Files modified:
+  - `apps/writing-vue/src/api/practice-client.js`
+  - `apps/writing-vue/src/views/PracticeLibraryPage.vue`
+  - `developer/tests/js/practiceApiFacade.test.js`
+  - `developer/tests/js/practiceVueShell.test.js`
+  - `server/src/lib/practice/service.ts`
+  - `server/src/routes/practice.ts`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+
+## Test Results
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Vue Practice Shell contract | `node developer/tests/js/practiceVueShell.test.js` | Static Vue/client/server contracts pass after reading force-refresh wiring and page-1-only pagination refinement | Passed | Pass |
+| Practice API facade contract | `node developer/tests/js/practiceApiFacade.test.js` | Reading asset `refresh=true` clears loader cache and existing Practice contracts remain green | Passed | Pass |
+| Required static suite | `python3 developer/tests/ci/run_static_suite.py` | Full static suite passes after force-refresh refinement | Passed | Pass |
+| Reading Vue flow E2E | `python3 developer/tests/e2e/practice_reading_vue_flow.py` | Single-reading flow, Coach, replay, archive, and screenshots remain green | Passed | Pass |
+| Required suite E2E | `python3 developer/tests/e2e/suite_practice_flow.py` | Legacy explicit suite regression remains green | Passed, 0 errors, 8 warnings | Pass |
+| Diff whitespace check | `git diff --check` | No whitespace errors | Passed | Pass |
+
+### Slice 85: Static Guard Scope Contraction
+- **Status:** checkpoint complete
+- **Started:** 2026-06-01 Asia/Shanghai
+- Actions taken:
+  - Accepted the strategy pivot: future required guards should protect user flow, canonical data, and Coach/history/replay, not pixel/class/hidden-marker fidelity.
+  - Stopped the More/Settings micro-parity audit before adding more static locks.
+  - Removed low-signal static checks that only proved the migration matrix stayed out of UI surfaces.
+  - Removed low-signal static checks that only proved screenshot helper filenames and hidden overlay guards were present.
+  - Compressed `testPracticeLibraryView()` from a large OpenSource DOM/class/copy checklist into high-signal assertions for full pagination, reading history summary/detail separation, suite payload semantics, PDF-only routing, force-refresh, canonical archive/backup, writing entry, and More tools runtime handoff.
+  - Kept `practice_reading_vue_flow.py` screenshots as optional E2E evidence, but stopped statically requiring screenshot file names as a product contract.
+
+## Test Results: Slice 85
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Vue Practice Shell contract | `node developer/tests/js/practiceVueShell.test.js` | Contract remains green after deleting low-signal micro-fidelity guards | Passed | Pass |
+| Required static suite | `python3 developer/tests/ci/run_static_suite.py` | Full static suite remains green after static guard contraction | Passed | Pass |
+| Reading Vue flow E2E | `python3 developer/tests/e2e/practice_reading_vue_flow.py` | Single-reading flow, Coach, replay, archive, and screenshots remain green after guard contraction | Passed | Pass |
+| Required suite E2E | `python3 developer/tests/e2e/suite_practice_flow.py` | Legacy explicit suite regression and replay-not-persisting check remain green | Passed, 0 errors, 8 warnings | Pass |
+| Diff whitespace check | `git diff --check` | No whitespace errors | Passed | Pass |
+
 ### Phase 1: Discovery & Current Chain Audit
 - **Status:** complete
 - **Started:** 2026-05-21 Asia/Shanghai
@@ -1551,3 +1607,801 @@
   - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
 - Notes:
   - No backend, Practice API, history schema, reading AI prompt, RAG, or coach service code changed.
+
+### Slice 43: Writing Top Navigation No-Crossline Guard
+- **Status:** checkpoint complete
+- Actions taken:
+  - Audited `NavBar.vue`, `App.vue`, and `main.js`; writing shell navigation is visible only outside frameless reading routes.
+  - Confirmed static contracts already forbid reading labels and `/` reading-home links inside the writing top nav.
+  - Extended `developer/tests/e2e/writing_compose_draft_restore_e2e.py` so stale `dist/writing/index.html` is rebuilt when Vue source files are newer.
+  - Added dynamic click coverage for `写作题库`, `写作记录`, `设置`, `写作`, and the brand link, with assertions that each lands on the expected writing route and never renders `[data-practice-reading-home]`.
+  - Added minimal local API stubs for topics/statistics, essays/statistics, Practice reading history, settings, configs, and prompts so the navigation test runs real Vue pages without false network failures.
+- Verification so far:
+  - `python3 developer/tests/e2e/writing_compose_draft_restore_e2e.py` passed, including top nav routes `#/writing`, `#/topics`, `#/history`, and `#/settings`.
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed; the suite includes the updated writing file-runtime E2E, Vue reading flow, Vue suite flow, Practice API, and ReadingCoach/RAG contracts.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 10 warnings.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including Submit, automatic AI review, replay, archive import/export, and AI Coach session context.
+  - `git diff --check` passed.
+- Notes:
+  - Test-only change. No product navigation code, backend API, history schema, AI prompt, RAG, or Coach service code changed.
+
+### Slice 44: Migration Matrix Product UI Boundary
+- **Status:** checkpoint complete
+- Actions taken:
+  - Audited product Vue sources for migration/deletion/fallback matrix leakage.
+  - Confirmed `PracticeLibraryPage.vue`, `PracticeReadingPage.vue`, `PracticeReadingSuitePage.vue`, `HistoryPage.vue`, `SettingsPage.vue`, `App.vue`, and `NavBar.vue` do not import/use `practiceMigration` and do not render migration/deletion matrix copy.
+  - Confirmed `practice-client.js` still exposes `practiceMigration.getStatus()` and `server/src/lib/practice/migration-status.ts` still owns deletion criteria for API/dev/test contracts.
+  - Added `testMigrationStatusStaysOutOfProductUi()` in `practiceVueShell.test.js` to forbid migration matrix snippets in user-facing Vue sources while allowing the dev/API contract.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including Submit, automatic AI review, replay, archive import/export, and AI Coach session context.
+  - `git diff --check` passed.
+- Notes:
+  - Test-only change. No product UI code, Practice API schema, history schema, AI prompt, RAG, or Coach service code changed.
+
+### Slice 45: Practice Library Action Marker Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Compared `origin/opensource:index.html` browse/history controls with Vue `PracticeLibraryPage.vue`.
+  - Restored OpenSource `data-index-action` markers and `data-action-value` values on browse type filters, browse search, clear search, record filters, markdown export, bulk delete, and clear records.
+  - Preserved existing Vue handlers and local compatibility `data-action` / `data-input-action` markers where already present.
+  - Extended `practiceVueShell.test.js` to lock the OpenSource markers for browse and record controls.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including Submit, automatic AI review, replay, archive import/export, and AI Coach session context.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer DOM marker change only. No Practice API, history schema, AI prompt, RAG, or Coach service code changed.
+
+### Slice 46: Reading Results Injection Point Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Re-audited OpenSource `reading-practice-unified.html` and `reading-page.bundle.js`: `#results` is mounted after `#question-groups`, hidden/cleared during dataset render, and filled on submit.
+  - Changed Vue `PracticeReadingPage.vue` so `#results` is always mounted and hidden before submission.
+  - Kept review content, `data-reading-review-panel`, analysis, LLM review, and `.results-table` behind `submission`.
+  - Added static contract coverage for the `#question-groups -> #results` relationship and submitted-only review marker.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including Submit, automatic AI review, replay, archive import/export, and AI Coach session context.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer DOM lifecycle change only. No scoring, Practice API, history schema, AI prompt, RAG, or Coach service code changed.
+
+### Slice 47: Browse Filter Hidden Listening Marker Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Compared `origin/opensource:index.html` browse/history type filters with Vue `PracticeLibraryPage.vue`.
+  - Confirmed browse has an OpenSource hidden `听力` filter marker, while Vue only rendered `全部` and `阅读`.
+  - Confirmed Vue Practice Library history reads canonical reading history only, so adding a visible `听力` history filter would be a fake unsupported control.
+  - Added the hidden listening browse filter entry and bound the `hidden` attribute through the existing filter render loop.
+  - Strengthened `practiceVueShell.test.js` to lock the hidden marker and the existing non-reading normalization.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including Submit, automatic AI review, replay, archive import/export, and AI Coach session context.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer DOM parity change only. No listening business path, Practice API, history schema, AI prompt, RAG, or Coach service code changed.
+
+### Slice 48: Floating Reading Coach Host Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Audited `js/runtime/unifiedReadingPage.js` and confirmed the original Reading Coach host is floating `#reading-coach-fab` + `#reading-coach-panel`, not an inline right-pane card.
+  - Replaced the Vue inline `.coach-panel` sibling under `#right` with the legacy floating FAB/panel ids, title, composer ids, message/action/follow-up classes, and open class.
+  - Kept existing Vue `data-reading-coach-*` anchors so current E2E coverage still verifies automatic review, manual Coach, selected context, transcript, and snapshot restore.
+  - Added UI-only `readingCoachOpen` state, opened after submit/replay and closed on load/reset.
+  - Removed the inline card styling from Coach and restored legacy floating panel/fab CSS.
+  - Extended `practiceVueShell.test.js` to lock the legacy floating Coach host structure while leaving prompt/action/surface tests intact.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including Submit, automatic AI review, replay, archive import/export, and AI Coach session context.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer UI host parity change only. No Practice API, history schema, reading AI prompt, RAG route, or Coach service code changed.
+
+### Slice 49: Reading Notes Modal Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Re-audited OpenSource `reading-practice-unified.html`: notes use centered `#notes-panel` modal geometry with `#close-note`, textarea, and backdrop overlay.
+  - Changed Vue `PracticeReadingPage.vue` so `#notes-panel` is centered with OpenSource-style 400x300 modal sizing, header separator, fixed textarea, and dialog semantics.
+  - Preserved `notesText` localStorage persistence, `#note-btn`, `#notes-panel`, `#close-note`, and outside-overlay close behavior.
+  - Updated `practice_reading_vue_flow.py` to click a safe overlay coordinate instead of the modal center after the geometry fix.
+  - Extended `practiceVueShell.test.js` to lock the centered notes modal and forbid regression to the right-top floating panel.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` initially failed on the stale overlay-center click assumption, then passed after the E2E coordinate fix.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer notes modal parity and test fix only. No Practice API, history schema, reading submission payload, notes storage field, AI prompt, RAG, or Coach service code changed.
+
+### Slice 50: Reading Settings Panel Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Re-audited OpenSource `reading-practice-unified.html`: settings use compact `#settings-panel` geometry and `.settings-option` skin.
+  - Changed Vue `PracticeReadingPage.vue` so the settings panel matches OpenSource top/right position, 260px width, section spacing, equal-width buttons, and accent active state.
+  - Preserved existing setting state handlers, suite flow mode controls, overlay close behavior, and all Practice/Coach data paths.
+  - Extended `practiceVueShell.test.js` to lock the OpenSource settings panel geometry and forbid regression to the redesigned wider panel.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer CSS/static contract change only. No Practice API, history schema, reading submission payload, AI prompt, RAG, Coach service, or settings schema changed.
+
+### Slice 51: Reading Split Pane Grid Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Re-audited OpenSource `reading-practice-unified.html`: `.shell` is a three-column grid using `--reading-left-pane-width` and `--reading-divider-width`, with a visible `#divider::before` drag handle.
+  - Found a real Vue bug: `leftPanePercent` and `readingWorkspaceStyle` existed, but the flex shell ignored the CSS variable, so divider keyboard/drag state did not reliably resize the panes.
+  - Restored Vue `.reading-workspace.shell` to the OpenSource grid structure and 10px divider width while preserving existing pointer/keyboard handlers.
+  - Added `#divider.is-dragging` class binding and OpenSource divider handle/hover/focus/drag skin.
+  - Extended `practiceVueShell.test.js` to lock the grid/variable/handle contract.
+  - Extended `practice_reading_vue_flow.py` to press `End` on the divider and assert the left pane's real rendered width increases.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer layout/test change only. No Practice API, history schema, reading submission payload, AI prompt, RAG, Coach service, or answer/score logic changed.
+
+### Slice 52: Reading Selection Toolbar Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Re-audited OpenSource `reading-practice-unified.html`: `#selbar` is a compact dark floating toolbar with transparent white-text buttons.
+  - Restored Vue `.reading-selection-toolbar` and button CSS to the OpenSource dark toolbar skin.
+  - Preserved existing selection lifecycle, `#btnHL`, `#btnUH`, `#btnNote`, highlight/note behavior, dictionary bubble, and Coach selected-context behavior.
+  - Extended `practiceVueShell.test.js` to lock the OpenSource toolbar CSS and forbid the redesigned white button skin.
+  - Extended `practice_reading_vue_flow.py` to assert computed toolbar/button colors while `#selbar` is visible before applying a highlight.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer CSS/test change only. No Practice API, history schema, reading submission payload, AI prompt, RAG, Coach service, or highlight persistence field changed.
+
+### Slice 53: Reading Question Nav Item Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Re-audited OpenSource bottom nav CSS: `.q-item` uses `padding: 6px 12px`, not fixed square dimensions.
+  - Restored Vue `.practice-nav .q-item` padding and removed the fixed `min-width: 42px` / `min-height: 34px` tile sizing.
+  - Preserved the adjacent `.mark-question-button`, marked-question state, question jump behavior, answered/review classes, and all submit/replay payloads.
+  - Extended `practiceVueShell.test.js` to lock the OpenSource q-item padding and forbid the square sizing regression.
+  - Extended `practice_reading_vue_flow.py` to assert computed q-item padding/min-size on a live answered nav item before marking q6.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer CSS/test change only. No Practice API, history schema, reading submission payload, AI prompt, RAG, Coach service, or marked-question persistence changed.
+
+### Slice 54: Reading Results/Button Flattening Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Re-audited OpenSource `reading-practice-unified.html`: the base result panel uses `#results` with 18px padding/margin and `.results-table` 12px top margin, then the IELTS aesthetic pass flattens `#results`, `.q-item`, `.header-btn`, `.practice-nav .controls button`, `.paragraph-dropzone`, `.match-dropzone`, and `.drag-item` to 4px radius.
+  - Changed Vue `PracticeReadingPage.vue` so `#results.review-panel` has OpenSource spacing/radius and `.results-table` keeps its 12px top margin.
+  - Flattened reading bottom controls, q-items, dropzones, and drag chips to OpenSource 4px radius without changing answer state or drag/drop data flow.
+  - Fixed a live computed-style bug where `#submit-btn` rendered white because `.practice-nav .controls button` overrode `.submit-btn`; restored the OpenSource `!important` primary override.
+  - Extended `practiceVueShell.test.js` to lock the result panel/table spacing, bottom-control radius, q-item radius, and submit primary override.
+  - Extended `practice_reading_vue_flow.py` to assert computed nav item, bottom control, submit background, `#results`, and result table styles in the live browser.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - First `python3 developer/tests/e2e/practice_reading_vue_flow.py` failed on `legacy_bottom_controls_skin_regressed` because submit was white.
+  - After the submit override fix, `node developer/tests/js/practiceVueShell.test.js` passed.
+  - After the submit override fix, `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including Submit, automatic AI review failure/retry, replay, archive import/export, and AI Coach session context.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer CSS/test change only. No Practice API, history schema, reading submission payload, AI prompt, RAG, Coach service, drag/drop scoring, or replay persistence changed.
+
+### Slice 55: Reading Question Group Panel Parity
+- **Status:** checkpoint complete
+- Actions taken:
+  - Re-audited OpenSource `reading-practice-unified.html`: `.unified-group` is only a 16px rhythm wrapper, while inner `.group` carries the compact 18px/22px panel and is flattened to 4px.
+  - Found a real CSS ownership bug: Vue shared `.reading-html :deep(.group), .review-panel`, so question groups inherited the review panel's redesigned 24px/32px large-card spacing and 12px radius.
+  - Split question group CSS from submitted review result CSS. `#results.review-panel` now owns result-panel border/background/shadow separately.
+  - Extended `practiceVueShell.test.js` to lock compact question group CSS and forbid sharing `.group` with `.review-panel`.
+  - Extended `practice_reading_vue_flow.py` to assert computed wrapper margin/radius and inner group padding/radius/margin in the live browser.
+- Verification so far:
+  - First `node developer/tests/js/practiceVueShell.test.js` failed on a brittle `#results.review-panel` substring after adding a border declaration.
+  - Replaced that assertion with a regex that still locks the relevant CSS contract.
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer CSS/test change only. No Practice API, history schema, reading submission payload, AI prompt, RAG, Coach service, drag/drop scoring, or replay persistence changed.
+
+### Slice 56: Reading Dark Mode Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 04:58:02 CST
+- Actions taken:
+  - Re-audited OpenSource `reading-practice-unified.html` dark mode variables and dark skins for header, groups, dropzones, drag items, nav, and submit button.
+  - Added `.reading-page.dark-mode` OpenSource dark tokens in `PracticeReadingPage.vue` and dark skins for header, panels, divider, groups/results, nav states, dropzones, drag items, table/input surfaces, and submitted/review controls.
+  - Found a real userspace bug: Vue settings toggled `.dark-mode`, but computed colors for legacy dropzones stayed light; the old class-only E2E would have passed this broken state.
+  - Added `applyDropzoneThemeStyle()` / `syncDropzoneThemeStyles()` so Vue-owned legacy v-html dropzones update immediately on theme switch and when answer chips are synced.
+  - Extended `practiceVueShell.test.js` to lock dark variables, dark dropzone/drag-item skins, and the explicit dropzone theme sync lifecycle.
+  - Extended `practice_reading_vue_flow.py` to assert real computed dark colors for page, header, question group, bottom nav item, dropzone, and drag item after clicking settings dark mode.
+  - Added a unique `e2eBuild` query to the Vue E2E file URL to avoid stale file-module cache while validating freshly built bundles.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` initially failed on `dark_mode_theme_skin_regressed` because `.match-dropzone` remained `rgb(239, 246, 255)`.
+  - After explicit dropzone theme sync and E2E wait-for-color, `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer CSS/DOM lifecycle/test change only. No Practice API, history schema, reading submission payload, archive path, AI prompt, RAG, Coach service, or Coach persistence changed.
+
+### Slice 57: Reading Pane Density And Timer Affordance Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 05:17:08 CST
+- Actions taken:
+  - Re-audited OpenSource `reading-practice-unified.html` for `#right` pane padding and `#timer` interaction styling.
+  - Found a real visual/interaction drift: Vue rendered `#right` with `16px 20px` padding instead of OpenSource `12px 14px`, making the answer pane looser than the source UI.
+  - Found a real affordance bug: `#timer` has a click handler for pause/resume, but `.reading-stat { cursor: default; }` made the control look non-clickable.
+  - Restored `#right` compact padding and added `.reading-timer:not(:disabled)` pointer cursor, transition, hover opacity, and paused opacity while keeping non-clickable reading stats unchanged.
+  - Extended `practiceVueShell.test.js` to lock the right-pane padding and timer affordance CSS.
+  - Extended `practice_reading_vue_flow.py` to assert live computed `#right` padding and `#timer` cursor before submit.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer CSS/test change only. No Practice API, history schema, reading submission payload, archive path, AI prompt, RAG, Coach service, timer snapshot payload, or suite timer state changed.
+
+### Slice 58: Reading Mobile Shell Scroll Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 05:25:26 CST
+- Actions taken:
+  - Re-audited OpenSource `reading-practice-unified.html` mobile media query for `body`, `.shell`, `#left/#right`, `#divider`, and `.practice-nav .controls`.
+  - Found a real userspace bug: Vue kept `.reading-page` at `height: 100vh; overflow: hidden` on mobile and left the shell in a fixed-height flex column, which can clip stacked reading/question content.
+  - Restored OpenSource mobile scroll behavior: page `height: auto`, `overflow: auto`, bottom padding tied to `--reading-nav-height`, shell `display: block`, `height: auto`, `overflow: visible`.
+  - Restored OpenSource mobile controls alignment with full-width `.practice-nav .controls` and `justify-content: flex-end`.
+  - Extended `practiceVueShell.test.js` to lock the mobile breakpoint and scroll model.
+  - Extended `practice_reading_vue_flow.py` to switch to 820px width, assert computed mobile scroll/layout values, then return to desktop before continuing the full submit/replay/archive/Coach flow.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer CSS/test change only. No Practice API, history schema, reading submission payload, archive path, AI prompt, RAG, Coach service, timer snapshot payload, or suite timer state changed.
+
+### Slice 59: Reading Question Nav Active State Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 05:38:51 CST
+- Actions taken:
+  - Re-audited OpenSource `reading-practice-unified.html` question nav CSS and confirmed `.q-item.active` owns the current-question skin.
+  - Added UI-only `activeQuestionId` state in `PracticeReadingPage.vue`, updated through `recordQuestionVisit()`, and reset through `resetAttemptMetadata()`.
+  - Applied `{ active: isActiveQuestion(questionId) }` to question nav wrappers and `.q-item` buttons while preserving answered/review/marked classes and click behavior.
+  - Added light and dark `.q-item.active` plus `.q-item.answered.active` CSS so current-question state wins over answered state.
+  - Extended `practiceVueShell.test.js` to lock active state, class binding, resolver, visit update, and OpenSource CSS.
+  - Extended `practice_reading_vue_flow.py` to switch back from dark mode to light mode, click q6, and assert live computed active q-item skin.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` initially failed because the light active assertion ran while dark mode was still enabled; after switching back to light mode, it exposed a real `.answered` cascade override.
+  - After adding `answered.active` CSS ownership, `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer UI-state/CSS/test change only. No Practice API, history schema, canonical submission fields, archive path, AI prompt, RAG route, Coach service, answer payload, scoring, marked-question persistence, or replay persistence changed.
+
+### Slice 60: Reading Fixed Bottom Nav Safe Area Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 05:59:33 CST
+- Actions taken:
+  - Re-audited OpenSource `reading-practice-unified.html` and confirmed `.practice-nav` is fixed to the viewport bottom.
+  - Found a real Vue drift: `.practice-nav` had become `position: relative`, so the question nav and Submit/Reset controls could scroll with the page instead of staying docked.
+  - Restored fixed bottom docking on `.practice-nav` and added `top: auto` to cancel stale `.answer-panel { top: 92px; }` pollution.
+  - Moved fixed-nav safe-area ownership to `.reading-page` with `padding-bottom: var(--reading-nav-height)` and `box-sizing: border-box`, avoiding brittle hard-coded header height math in the shell.
+  - Extended `practiceVueShell.test.js` to lock fixed docking, safe-area ownership, and forbid relative nav/hard-coded shell height regression.
+  - Extended `practice_reading_vue_flow.py` to assert live fixed nav docking on desktop/mobile and real shell/nav non-overlap geometry.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` initially failed with nav covering the content because `.answer-panel` sticky top polluted `.practice-nav`; after `top:auto` and page safe-area ownership, it passed.
+  - `python3 developer/tests/e2e/practice_reading_suite_vue_flow.py` passed after the fixed-nav safe-area fix.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` initially failed on the suite E2E radio click interception, then passed after the CSS ownership fix.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer CSS/test change only. No Practice API, history schema, canonical submission fields, archive path, AI prompt, RAG route, Coach service, answer payload, scoring, marked-question persistence, replay persistence, or suite state changed.
+
+### Slice 61: Reading Highlight Visual Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 06:18:20 CST
+- Actions taken:
+  - Re-audited OpenSource `reading-practice-unified.html` highlight CSS and confirmed normal `.hl` is dark brown `#72361c` with white text, while note highlights use `#0369d9` with white text.
+  - Restored Vue `.reading-html :deep(.hl)` / `.review-dictionary-highlight` and `.hl[data-hl-type="note"]` colors to those OpenSource tokens.
+  - Preserved existing selection toolbar, `#btnHL`, `#btnUH`, `#btnNote`, note/highlight behavior, dictionary bubble, selected Coach context, canonical highlight persistence, replay, and archive behavior.
+  - Extended `practiceVueShell.test.js` to lock the OpenSource highlight/note tokens and forbid the old yellow/pale-blue redesigned skins.
+  - Extended `practice_reading_vue_flow.py` to assert computed highlight background and text color after applying a real Highlight action.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `npm run build:writing` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `git diff --check` passed after the planning-file update.
+- Notes:
+  - Renderer CSS/test change only. No Practice API, history schema, canonical submission fields, archive path, AI prompt, RAG route, Coach service, answer payload, scoring, marked-question persistence, replay persistence, or suite state changed.
+
+### Slice 62: Reading Option Label Layout Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 06:32:10 CST
+- Actions taken:
+  - Re-audited OpenSource `reading-practice-unified.html` exam option layout CSS.
+  - Found a real Vue drift: the question `v-html` surface only had generic block labels, while OpenSource option labels use flex rows and aligned input controls.
+  - Added the OpenSource option-label selector group to `PracticeReadingPage.vue` for radio, checkbox, multiple-choice, matching, and TFNG option wrappers.
+  - Kept the generic `.reading-html label` fallback for non-option labels, but made the OpenSource exam option selectors the stronger owner.
+  - Updated the Vue reading E2E fixture to use `.radio-options` and `.checkbox-options` wrappers so live computed-style checks exercise the same selector path as generated reading assets.
+  - Extended `practiceVueShell.test.js` and `practice_reading_vue_flow.py` to lock option-label flex layout and input alignment.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including answer sync, Submit, AI automatic review, replay, archive import/export, and Coach session context.
+  - `git diff --check` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+- Notes:
+  - Renderer CSS/test change only. No Practice API, history schema, canonical submission fields, archive path, AI prompt, RAG route, Coach service, answer payload, scoring, marked-question persistence, replay persistence, or suite state changed.
+
+### Slice 63: Reading Table And Summary Drop Target Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 06:47:40 CST
+- Actions taken:
+  - Re-audited OpenSource `reading-practice-unified.html` for `.table-section`, `input.blank`, and `.drop-target-summary`.
+  - Found a real Vue CSS ownership bug: summary drop targets were sharing the block dashed dropzone selector group, and table-completion content only had generic table/input styling.
+  - Added OpenSource table-section wrapper, fixed table, cell, list, and compact blank input CSS to `PracticeReadingPage.vue`.
+  - Split `.drop-target-summary` out of block dropzone selectors and restored the OpenSource inline underline blank skin, drag-over state, filled state, and transparent embedded chip styling.
+  - Updated `applyDropzoneThemeStyle()` so summary blanks are not force-painted with block dropzone dark-mode inline styles.
+  - Extended `practiceVueShell.test.js` to lock table-section, blank input, summary underline blank, and forbid sharing the block dashed dropzone selector.
+  - Extended `practice_reading_vue_flow.py` with live `.table-section input.blank` and `.drop-target-summary` computed-style checks while preserving answer sync.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including answer sync, Submit, AI automatic review, replay, archive import/export, and Coach session context.
+  - `git diff --check` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+- Notes:
+  - Renderer CSS/lifecycle/test change only. No Practice API, history schema, canonical submission fields, archive path, AI prompt, RAG route, Coach service, answer payload, scoring, marked-question persistence, replay persistence, or suite state changed.
+
+### Slice 64: Reading Settings Font Button Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 06:52:16 CST
+- Actions taken:
+  - Re-audited local `origin/opensource` (`44a552f`) reading unified HTML and confirmed the font-size settings buttons all render `A`, with the larger buttons using inline `font-size: 1.1rem` and `font-size: 1.25rem`.
+  - `git fetch origin opensource` failed again with `Error in the HTTP2 framing layer`; this is non-blocking because the local remote ref is available and already used by the current parity slices.
+  - Found a real Vue drift: `fontSizeOptions` rendered `A+` and `A++`, changing the OpenSource settings panel copy even though the setting values still worked.
+  - Updated `PracticeReadingPage.vue` so all three font-size options render label `A`, and the larger options apply OpenSource inline font-size cues through `:style="option.style"`.
+  - Extended `practiceVueShell.test.js` to forbid `A+` / `A++` and lock the inline-size option contract.
+  - Extended `practice_reading_vue_flow.py` to assert live settings-panel labels and computed font sizes while still verifying `font-large` and dark mode application.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including answer sync, Submit, AI automatic review, replay, archive import/export, and Coach session context.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer DOM/CSS/test change only. No Practice API, history schema, canonical submission fields, archive path, AI prompt, RAG route, Coach service, answer payload, scoring, marked-question persistence, replay persistence, or suite state changed.
+
+### Slice 65: More Vocab Card Copy Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 06:58:24 CST
+- Actions taken:
+  - Re-audited local `origin/opensource:index.html` and confirmed the More tools vocab card copy is `SM-2记忆算法，随时继续你的词汇任务。`.
+  - Found a real Vue copy drift: the card exposed `本地 Leitner 分箱 + 艾宾浩斯复习节奏`, which is implementation copy and not the OpenSource launcher text.
+  - Restored the OpenSource copy in `PracticeLibraryPage.vue` while preserving `data-action="open-vocab"` and `openVocabTool`.
+  - Extended `practiceVueShell.test.js` to lock the OpenSource copy and forbid the redesigned implementation-copy regression.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - First direct `python3 developer/tests/e2e/suite_practice_flow.py` run failed once in manual review mode because `#practice-review-nav button[data-review-nav="next"]` remained disabled until timeout; no console errors were recorded.
+  - Direct `python3 developer/tests/e2e/suite_practice_flow.py` retry passed with 0 errors and 8 warnings.
+  - `git diff --check` passed before the final planning-file status update.
+- Notes:
+  - Renderer copy/test change only. No vocab scheduler, Practice API, history schema, canonical reading submission fields, archive path, AI prompt, RAG route, Coach service, answer payload, scoring, replay, or suite state changed.
+
+### Slice 66: More Achievements DOM Contract Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 07:09:09 CST
+- Actions taken:
+  - Re-audited local `origin/opensource:index.html` and `origin/opensource:css/main.css` for the More achievements entry and modal contract.
+  - Found real Vue drift: achievements open/close controls only had Vue-local `data-action` markers, the modal content used inline `max-width: 600px`, and the modal heading used a redesigned SVG span instead of the OpenSource `🏆 我的成就` text.
+  - Added OpenSource `data-index-action="show-achievements"` and `data-index-action="hide-achievements"` while preserving existing `data-action` compatibility markers.
+  - Updated `showAchievementsTool(event)` and `hideAchievementsTool(event)` to stop the restored legacy action markers from causing double delegated handling.
+  - Restored `theme-modal-content achievements-modal-content`, the OpenSource `max-width: 720px`, compact achievements grid density, hidden scrollbar, and plain title copy.
+  - Extended `practiceVueShell.test.js` to lock the OpenSource markers/classes/CSS/title and forbid the old inline width/SVG heading regression.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including reading overview entry, answer sync, Submit, AI automatic review, replay, archive import/export, and Coach session context.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer DOM/CSS/test change only. No achievement data model, Practice API, history schema, canonical reading submission fields, archive path, AI prompt, RAG route, Coach service, vocab scheduler, answer payload, scoring, replay, or suite state changed.
+
+### Slice 67: First-Run GPL License Modal Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 07:22:41 CST
+- Actions taken:
+  - Re-audited local `origin/opensource:index.html`, `origin/opensource:css/main.css`, and `origin/opensource:js/presentation/indexInteractions.js` for the first-run GPL license modal.
+  - Found a real primary-renderer drift: Vue Practice Library had no `#license-modal`, `data-index-action="accept-license"`, or `hasSeenGplLicense` first-run gate even though Electron now defaults into Vue.
+  - Added the OpenSource modal DOM/copy, localStorage key, double-RAF reveal, accept behavior, and CSS tokens to `PracticeLibraryPage.vue`.
+  - Kept the action owner inside Vue and did not load `indexInteractions.js`, avoiding duplicate legacy delegated handlers in the Vue shell.
+  - Extended `practiceVueShell.test.js` to lock modal DOM/copy/storage/action/CSS contracts and forbid inline legacy `onclick`.
+  - Extended `practice_reading_vue_flow.py` to click the real accept button and verify `hasSeenGplLicense` before continuing the reading flow.
+  - After static suite exposed the same first-run modal blocking `practice_reading_suite_vue_flow.py`, extended the Vue suite E2E to accept the modal through the real button and added a static guard for that coverage.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including the first-run license accept path plus reading overview entry, answer sync, Submit, AI automatic review, replay, archive import/export, and Coach session context.
+  - Initial `python3 developer/tests/ci/run_static_suite.py` failed because the Vue suite E2E clicked suite start while `#license-modal.show` intercepted pointer events.
+  - After adding `accept_license_modal()` to `practice_reading_suite_vue_flow.py`, `node developer/tests/js/practiceVueShell.test.js` passed again.
+  - `python3 developer/tests/e2e/practice_reading_suite_vue_flow.py` passed.
+  - Second full gate run passed:
+    - `node developer/tests/js/practiceVueShell.test.js`
+    - `python3 developer/tests/ci/run_static_suite.py`
+    - `python3 developer/tests/e2e/practice_reading_vue_flow.py`
+    - `python3 developer/tests/e2e/suite_practice_flow.py` with 0 errors and 9 warnings
+    - `git diff --check`
+- Notes:
+  - Renderer DOM/CSS/lifecycle/test change only. No Practice API, history schema, canonical reading submission fields, archive path, AI prompt, RAG route, Coach service, vocab scheduler, answer payload, scoring, replay, suite state, or writing navigation changed.
+
+### Slice 68: Reading Header Title Marker Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 07:34:01 CST
+- Actions taken:
+  - Re-ran a filtered OpenSource/Vue marker comparison after Slice 67 and found the remaining reading-page id drift: `exam-title` and `exam-subtitle`.
+  - Added those ids to the existing Vue `pageTitle` and `headerSummary` nodes in `PracticeReadingPage.vue`.
+  - Extended `practiceVueShell.test.js` to lock the ids while preserving Vue dynamic state ownership.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - Full gate run passed:
+    - `node developer/tests/js/practiceVueShell.test.js`
+    - `python3 developer/tests/ci/run_static_suite.py`
+    - `python3 developer/tests/e2e/practice_reading_vue_flow.py`
+    - `python3 developer/tests/e2e/suite_practice_flow.py` with 0 errors and 8 warnings
+    - `git diff --check`
+- Notes:
+  - Renderer DOM-marker/test change only. No Practice API, history schema, canonical reading submission fields, archive path, AI prompt, RAG route, Coach service, answer payload, scoring, replay, suite state, or writing navigation changed.
+
+### Slice 69: AI Coach Surface Contract Compression
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 07:44:39 CST
+- Actions taken:
+  - Audited current AI Coach surface/action/promptKind owners in Vue `PracticeReadingPage.vue`, `js/runtime/unifiedReadingPage.js`, `server/src/routes/reading.ts`, `server/src/types/reading.ts`, `server/src/lib/reading/router.ts`, and existing API/E2E/static tests.
+  - Confirmed current canonical review surface is `review_workspace`; `review_panel` is not a valid current surface enum and only survived in one API facade test payload.
+  - Updated `practiceApiFacade.test.js` so the returned-patch preservation test uses `surface: 'review_workspace'`.
+  - Added a static guard in `practiceVueShell.test.js` so Vue reading Coach code cannot revive `review_panel`.
+  - Verified existing tests already cover successful `singleAttemptAnalysisLlm` persistence, stream/legacy stream canonical patch persistence, failed Coach error transcript/snapshot, follow-up history hydration, selectedContext prompt/retrieval flow, and frontend route/retrieval/generation status mapping.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `node developer/tests/js/practiceApiFacade.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including Submit, automatic AI review, manual Coach, replay, archive import/export, and Coach session context.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Test-contract change only. No Vue Coach UI redesign, no prompt/query rewrite, no RAG route change, no Practice API/schema/history implementation change, no answer/scoring/replay behavior changed.
+
+### Slice 70: Reading History Summary Ownership
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 08:34:24 CST
+- Actions taken:
+  - Audited `PracticeHistoryStore` list/detail/archive paths and confirmed the server list hot path already returns summaries without selecting `submission_json`.
+  - Found one renderer ownership leak: `PracticeLibraryPage.vue` history helper `getReadingHistorySuiteSessionId()` fell back to `record?.submission?.metadata` and `record?.raw?.metadata`, which are detail payload shapes and should not be part of the history list contract.
+  - Changed `getReadingHistorySuiteSessionId()` to read only `record.metadata`.
+  - Added static guards in `practiceVueShell.test.js` forbidding the detail-payload fallbacks from returning.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed, including history replay and archive import/export.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Renderer/test-only ownership contraction. No Practice API/schema/archive import-export/replay submit/Coach prompt/RAG/scoring behavior changed.
+
+### Slice 71: Writing Navigation Audit
+- **Status:** audit complete
+- Timestamp: 2026-06-01 08:42:41 CST
+- Actions taken:
+  - Audited `NavBar.vue`, `main.js`, and `App.vue` for writing route targets, labels, brand target, and reading/writing chrome boundary.
+  - Audited `practiceVueShell.test.js` and `writing_compose_draft_restore_e2e.py` for existing regression coverage.
+- Findings:
+  - Current implementation keeps writing nav in the writing module: brand goes to `/writing`; links go to `/writing`, `/topics`, `/history`, `/settings`; labels are writing-specific.
+  - Reading surfaces are frameless from the writing nav via `framelessRouteNames`.
+  - Static tests already forbid reading labels/query routes and brand-to-`/` leakage.
+  - Browser E2E already clicks all top writing nav targets and fails if the reading Practice Library marker appears.
+- Verification:
+  - No code change made in this audit slice; no new gate run required beyond the Slice 70 full gate already completed immediately before this audit.
+- Notes:
+  - This is a no-op audit by design. No route, UI, Practice API, history, writing evaluation, Coach prompt/RAG, or schema changed.
+
+### Slice 72: AI Coach Failure Transcript E2E Contract
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 09:05:00 CST
+- Actions taken:
+  - Audited current Vue automatic review failure handling in `PracticeReadingPage.vue`.
+  - Confirmed backend/API coverage already proves `attachReadingCoachFailure()` writes error snapshot and transcript into canonical history.
+  - Found the browser E2E mock did not mimic that production failure write; it only returned an SSE error before retry.
+  - Updated `practice_reading_vue_flow.py` so the mock failed automatic review writes a `readingCoachSnapshot.error`, `review_set` user turn, and error assistant turn into the same mocked submission.
+  - Added E2E assertions before retry that the failed assistant turn is visible in `[data-reading-coach-transcript]` and persisted in the cached canonical submission snapshot.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - Full gate run passed:
+    - `node developer/tests/js/practiceVueShell.test.js`
+    - `python3 developer/tests/ci/run_static_suite.py`
+    - `python3 developer/tests/e2e/practice_reading_vue_flow.py`
+    - `python3 developer/tests/e2e/suite_practice_flow.py` with 0 errors and 9 warnings
+    - `git diff --check`
+- Notes:
+  - Test-only Phase 4 hardening. No production Vue, Practice API, history schema, archive import/export, AI prompt/query, RAG route, Coach service, scoring, replay, suite state, or writing navigation changed.
+
+### Slice 73: AI Coach Stream Progress Visibility
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 14:43:00 CST
+- Actions taken:
+  - Audited current static coverage for `route`, `retrieval`, `generation_start`, and completion/error stream event mappings.
+  - Found the browser E2E emitted successful Coach SSE events in one synchronous chunk, so it did not prove users can observe intermediate RAG/generation status.
+  - Added a delayed SSE helper to `practice_reading_vue_flow.py` for successful Coach streams.
+  - Expanded the successful automatic review retry stream to emit `route`, `retrieval` with `chunkCount: 2`, `generation_start`, `generation_complete`, and `complete`.
+  - Added browser assertions that the review status panel visibly enters each running state before success.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Test-only Phase 4 visibility hardening. No production Vue, Practice API, history schema, archive import/export, AI prompt/query, RAG route, Coach service, scoring, replay, suite state, or writing navigation changed.
+
+### Slice 74: Manual Coach Stream Progress Visibility
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 14:55:00 CST
+- Actions taken:
+  - Audited manual Coach coverage after Slice 73 and confirmed payload/final-answer assertions existed, but browser E2E did not wait for manual `chat_widget` stream progress states.
+  - Reused the delayed SSE stream from Slice 73.
+  - Added E2E assertions after clicking `询问教练` that `[data-reading-coach-stream-status]` visibly shows route, retrieval, generation, and completion-sync status before the final answer appears.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Test-only Phase 4 visibility hardening. No production Vue, Practice API, history schema, archive import/export, AI prompt/query, RAG route, Coach service, scoring, replay, suite state, or writing navigation changed.
+
+### Slice 75: Canonical Archive Field Roundtrip
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 15:24:00 CST
+- Actions taken:
+  - Audited `PracticeHistoryStore` and `PracticeService` archive paths.
+  - Confirmed the implementation already uses summary rows for history lists and `submission_json` for detail/replay/archive.
+  - Confirmed archive import reuses `PracticeHistoryStore.saveReadingSubmission()` for canonical submissions.
+  - Strengthened `testReadingHistoryArchiveRoundTrip()` so the archive export and imported replay assert canonical `answers`, `scoreInfo`, `answerComparison`, duration, `timerSnapshot`, `markedQuestions`, `highlights`, `questionTimelineLite`, `analysisArtifacts`, `readingCoachSnapshot`, and `readingCoachTranscript`.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `node developer/tests/js/practiceApiFacade.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Test-only Phase 3 hardening. No production Practice API, schema, archive implementation, legacy import compatibility, AI prompt/query, RAG route, Coach service, scoring, replay behavior, suite state, or writing navigation changed.
+
+### Slice 76: Replay No-Resubmit Audit
+- **Status:** audit complete
+- Timestamp: 2026-06-01 15:45:00 CST
+- Actions taken:
+  - Audited `PracticeReadingPage.vue` replay loader and submit path.
+  - Confirmed replay route calls `practiceSessions.getState('reading', sessionId)` through `loadSubmittedSession()`.
+  - Confirmed submit path is gated by `canSubmit`, which requires `!readOnlyMode`.
+  - Confirmed single-reading E2E counts `POST /api/practice/sessions` and fails if replay or archive-import replay creates another submission.
+  - Confirmed suite E2E counts passage submit endpoints, session replay GETs, history GETs, and legacy calls.
+- Verification:
+  - No code change made in this audit slice.
+  - Evidence comes from the Slice 75 full gate that just passed:
+    - `node developer/tests/js/practiceVueShell.test.js`
+    - `python3 developer/tests/ci/run_static_suite.py`
+    - `python3 developer/tests/e2e/practice_reading_vue_flow.py`
+    - `python3 developer/tests/e2e/suite_practice_flow.py`
+    - `git diff --check`
+- Notes:
+  - No production Practice API, Vue route, history schema, archive path, AI prompt/query, RAG route, Coach service, scoring, replay behavior, suite state, or writing navigation changed.
+
+### Slice 77: Practice History Action Button Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 15:55:00 CST
+- Actions taken:
+  - Compared OpenSource `index.html` practice history toolbar with Vue `PracticeLibraryPage.vue`.
+  - Found visible UI drift: Vue history toolbar had plain `导出Markdown` / `清除记录` text and no checkmark SVG on the bulk-delete action.
+  - Restored OpenSource `📄 导出Markdown`, the bulk-delete checkmark SVG, and `🗑️ 清除记录` while keeping existing Vue handlers and dynamic selected-count label.
+  - Added static guards in `practiceVueShell.test.js`.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - UI/DOM parity only. No Practice API, history schema, archive import/export, deletion logic, replay behavior, AI prompt/query, RAG route, Coach service, suite state, or writing navigation changed.
+
+### Slice 78: Practice History Empty-State Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 16:19:44 CST
+- Actions taken:
+  - Fetched `origin/opensource` and confirmed the latest available head is `44a552f`.
+  - Compared OpenSource practice history empty state with Vue `PracticeLibraryPage.vue`.
+  - Found visible UI drift: Vue used a redesigned `.practice-history-empty` card with `📂`, `暂无任何练习记录`, and a `去题库练习` CTA.
+  - Restored OpenSource `history-empty-placeholder`, `history-empty-placeholder__icon`, `history-empty-placeholder__note`, `📋`, `暂无练习记录`, and the original note copy.
+  - Removed the Vue-only empty-card CSS owner from Practice Library and added the OpenSource placeholder CSS.
+  - Added static guards in `practiceVueShell.test.js`.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - UI/DOM parity only. No Practice API, history schema, archive import/export, replay behavior, delete/clear behavior, AI prompt/query, RAG route, Coach service, suite state, or writing navigation changed.
+
+### Slice 79: Reading Vue Screenshot Acceptance Evidence
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 16:56:00 CST
+- Actions taken:
+  - Audited current screenshot artifacts and confirmed single-reading Vue acceptance screenshots were missing while suite legacy screenshots already existed.
+  - Added `REPORT_DIR` and `capture_acceptance_screenshot()` to `developer/tests/e2e/practice_reading_vue_flow.py`.
+  - Captured six Phase 5 acceptance screenshots during the existing single-reading flow:
+    - `developer/tests/e2e/reports/practice-reading-vue-home.png`
+    - `developer/tests/e2e/reports/practice-reading-vue-browse.png`
+    - `developer/tests/e2e/reports/practice-reading-vue-answer.png`
+    - `developer/tests/e2e/reports/practice-reading-vue-result.png`
+    - `developer/tests/e2e/reports/practice-reading-vue-replay.png`
+    - `developer/tests/e2e/reports/practice-reading-vue-settings.png`
+  - Added static guards in `developer/tests/js/practiceVueShell.test.js` for the report directory, helper, non-empty screenshot check, filenames, and JSON evidence.
+  - `practiceVueShell.test.js` exposed a real canonical persistence regression: `attachReadingCoachResult()` no longer copied `singleAttemptAnalysisLlm` into `analysisArtifacts.singleAttemptAnalysisLlm`.
+  - `practiceApiFacade.test.js` exposed another real canonical persistence regression: `createReadingPracticeSubmission()` built `analysisArtifacts` but did not return it on the canonical submission.
+  - Restored both canonical writebacks in `server/src/lib/practice/practice-history.ts` and `server/src/lib/practice/reading-sessions.ts`.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` initially failed on the missing `updatedSubmission.analysisArtifacts = {` static guard.
+  - After restoring the writeback, `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed and returned all six screenshot paths in JSON evidence.
+  - Local file check confirmed all six screenshots are non-empty.
+  - `node developer/tests/js/practiceApiFacade.test.js` passed after canonical `analysisArtifacts` was restored.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Screenshot evidence and canonical Coach artifact repair only. No product UI redesign, no AI prompt rewrite, no RAG route change, no schema expansion, no second history/archive path.
+
+### Slice 80: Screenshot Hidden-Layer Sanity And Canonical Artifact Lock
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 21:40:54 CST
+- Actions taken:
+  - Opened `developer/tests/e2e/reports/practice-reading-vue-home.png` and found the screenshot was non-empty but visually invalid: hidden OpenSource modal/tool shells leaked into the page.
+  - Restored OpenSource modal visibility contracts in `apps/writing-vue/src/views/PracticeLibraryPage.vue`: `.theme-modal`, `.theme-modal.show`, `.theme-modal-content`, `#license-modal` hidden/visible states, `.is-hidden`, and `.clock-overlay.is-hidden`.
+  - Updated `accept_license_modal()` in `developer/tests/e2e/practice_reading_vue_flow.py` to wait for computed hidden state before capturing homepage evidence.
+  - Added static guards in `developer/tests/js/practiceVueShell.test.js` so hidden modal/clock shell styles and screenshot evidence cannot be removed silently.
+  - Converted old API/static assertions that stripped `analysisArtifacts` into the correct canonical contract: the submission keeps typed `analysisArtifacts` through submit, Coach writeback, history detail/replay, archive export/import, and legacy import.
+  - Restored `ReadingPracticeAnalysisArtifacts` return/assignment in `server/src/lib/practice/reading-sessions.ts`.
+  - Added typed `buildReadingAnalysisArtifacts()` in `server/src/lib/practice/practice-history.ts` and used it for canonical persistence and Coach LLM patch mirroring.
+  - Preserved legacy import by mirroring imported `singleAttemptAnalysisLlm` into `analysisArtifacts.singleAttemptAnalysisLlm` in `server/src/lib/practice/service.ts`.
+- Visual verification:
+  - Regenerated `developer/tests/e2e/reports/practice-reading-vue-home.png`.
+  - Manually inspected the regenerated homepage screenshot; hidden GPL/license, suite/theme/achievements modal content and clock overlay controls are no longer visible.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `node developer/tests/js/practiceApiFacade.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed and returned all six screenshot paths.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - This fixes real UI leakage and canonical persistence. No AI Coach prompt rewrite, no RAG route change, no schema expansion, no second history/archive path, and no replay resubmit behavior changed.
+
+### Slice 81: Acceptance Screenshot Guard Hardening
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 21:57:55 CST
+- Actions taken:
+  - Reviewed `practice-reading-vue-browse.png`, `practice-reading-vue-answer.png`, `practice-reading-vue-result.png`, `practice-reading-vue-replay.png`, and `practice-reading-vue-settings.png`.
+  - Found no new hidden modal/tool leakage after Slice 80.
+  - Confirmed visible Coach panel in result/replay screenshots is intentional AI Coach exposure evidence, not an accidental hidden layer.
+  - Confirmed bottom nav overlap is already guarded by E2E geometry assertions; no production change was justified from the answer screenshot alone.
+  - Added a hidden-shell sanity check to `capture_acceptance_screenshot()` in `developer/tests/e2e/practice_reading_vue_flow.py`.
+  - The screenshot helper now fails if closed `#license-modal`, `#suite-mode-selector-modal`, `#theme-switcher-modal`, `#achievements-modal`, or `#fullscreen-clock-overlay` remains visible/interactable.
+  - Added static guards in `developer/tests/js/practiceVueShell.test.js` for the hidden-shell screenshot leak check and key modal/clock selectors.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed and returned all six screenshot paths.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - Test/acceptance hardening only. No product UI redesign, no Practice API change, no history schema change, no AI prompt/RAG change, no replay submit behavior change, and no writing navigation change.
+
+### Slice 82: Practice History Filter Semantics
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 22:18:00 CST
+- Actions taken:
+  - Attempted `git fetch origin opensource` twice. Both attempts failed because GitHub was unreachable from the environment (`Failed to connect to github.com port 443 after 75002 ms`), so the comparison used the latest local `origin/opensource@44a552f`.
+  - Compared OpenSource practice history filter controls with Vue `PracticeLibraryPage.vue`.
+  - Found a real UI semantics regression: the Vue `全部 / 阅读` record filter kept OpenSource markers but was static; clicking `阅读` did not update active state or filter the list.
+  - Added `selectedHistoryType`, active/`aria-pressed` bindings, `filterRecords()`, and `historyRecordMatchesType()` to `PracticeLibraryPage.vue`.
+  - Kept the history list on summary data only; no submission/detail payload parsing was introduced.
+  - Added static guards in `developer/tests/js/practiceVueShell.test.js`.
+  - Added browser E2E assertions in `developer/tests/e2e/practice_reading_vue_flow.py`:
+    - after normal submit, click `阅读`, verify active state and visible record count, then click `全部`;
+    - after archive import, click `阅读` again before replay.
+- Verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed and returned all six screenshot paths.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 9 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - OpenSource parity/userspace semantics fix only. No Practice API shape, history schema, archive import/export path, AI Coach prompt/RAG behavior, scoring, replay submit behavior, suite state, or writing navigation changed.
+
+### Slice 83: Reading Suite Review Nav Parity
+- **Status:** checkpoint complete
+- Timestamp: 2026-06-01 22:44:00 CST
+- Actions taken:
+  - Confirmed latest fetched OpenSource reference: `origin/opensource` and `FETCH_HEAD` both at `44a552f265cfddeb844425200fcacfe665d1b340`.
+  - Audited OpenSource `assets/generated/reading-exams/reading-practice-unified.html` and `js/runtime/unifiedReadingPage.js` against Vue `PracticeReadingPage.vue`.
+  - Confirmed most reading-page controls are already present and guarded in Vue: timer, settings, notes, selection toolbar, divider, question nav, reset, submit, exit, results, memorize/endless, and Coach.
+  - Identified a real suite replay parity gap: OpenSource review context injects `#review-nav-bar` with `上一题` / `下一题`, but Vue suite replay had no same-page nav.
+  - Added `#review-nav-bar` to `PracticeReadingPage.vue`, visible only for submitted suite replay with a loaded canonical suite sequence.
+  - Derived previous/next routes from `suiteSession.sequence` and routed through Vue `PracticeReadingReview` / `PracticeReading`, without legacy `REVIEW_NAVIGATE` postMessage.
+  - Added static guards in `practiceVueShell.test.js`.
+  - Extended `practice_reading_suite_vue_flow.py` to assert the review nav DOM, disabled/enabled state, P1 -> P2 review navigation, and P2 -> P1 navigation.
+- Verification so far:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/e2e/practice_reading_suite_vue_flow.py` initially failed when the nav assertion was placed in the forced suite-state-failure branch; moved it to the normal suite replay path.
+  - `python3 developer/tests/e2e/practice_reading_suite_vue_flow.py` then failed after `page.goto(file://...)` reset the stateful mock; changed the test to keep navigation inside the SPA page/hash.
+  - `python3 developer/tests/e2e/practice_reading_suite_vue_flow.py` passed after the test correction.
+- Full verification:
+  - `node developer/tests/js/practiceVueShell.test.js` passed.
+  - `python3 developer/tests/ci/run_static_suite.py` passed.
+  - `python3 developer/tests/e2e/practice_reading_vue_flow.py` passed and returned all six screenshot paths.
+  - `python3 developer/tests/e2e/practice_reading_suite_vue_flow.py` passed.
+  - `python3 developer/tests/e2e/suite_practice_flow.py` passed with 0 errors and 8 warnings.
+  - `git diff --check` passed.
+- Notes:
+  - OpenSource parity/userspace fix only. No Practice API shape, history schema, canonical submission fields, archive import/export path, AI Coach prompt/RAG behavior, scoring, replay submit behavior, or writing navigation changed.

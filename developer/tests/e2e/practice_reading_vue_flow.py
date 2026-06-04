@@ -24,6 +24,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DIST_ENTRY = REPO_ROOT / "dist" / "writing" / "index.html"
+REPORT_DIR = REPO_ROOT / "developer" / "tests" / "e2e" / "reports"
 LOCAL_API_BASE_URL = "http://127.0.0.1:3917"
 ASSET_ID = "p2-low-148"
 
@@ -62,6 +63,12 @@ def ensure_bundle() -> None:
     if completed.returncode != 0:
         detail = completed.stdout or completed.stderr or "unknown build failure"
         raise SystemExit(json.dumps({"status": "fail", "detail": f"build_failed: {detail.strip()}"}, ensure_ascii=False))
+
+
+def entry_url_for(route: str = "/", run_id: int | None = None) -> str:
+    normalized = route if route.startswith("/") else f"/{route}"
+    suffix = f"?e2eBuild={run_id}" if run_id is not None else ""
+    return f"{DIST_ENTRY.as_uri()}{suffix}#{normalized}"
 
 
 async def install_api_stub(page) -> None:
@@ -128,19 +135,19 @@ async def install_api_stub(page) -> None:
                   groupId: 'group-radio',
                   kind: 'table_completion',
                   questionIds: ['q1'],
-                  bodyHtml: '<div class="group"><h4>Questions 14</h4><label><input type="radio" name="q1" value="A"> A paragraph A</label><label><input type="radio" name="q1" value="B"> B paragraph B</label></div>'
+                  bodyHtml: '<div class="group"><h4>Questions 14</h4><div class="question-item"><div class="radio-options"><label><input type="radio" name="q1" value="A"> A paragraph A</label><label><input type="radio" name="q1" value="B"> B paragraph B</label></div></div></div>'
                 }},
                 {{
                   groupId: 'group-text',
                   kind: 'summary_completion',
                   questionIds: ['q6'],
-                  bodyHtml: '<div class="group"><h4>Question 19</h4><p>The arts and <input type="text" name="q6"> can work together.</p></div>'
+                  bodyHtml: '<div class="group"><h4>Question 19</h4><div class="table-section"><table><thead><tr><th>Question</th><th>Answer</th><th>Context</th></tr></thead><tbody><tr><td>19</td><td><input class="blank" type="text" name="q6"></td><td>The arts and performance can work together.</td></tr></tbody></table></div><p class="summary-text">A summary blank <span class="drop-target-summary" data-question="q99"></span> remains inline.</p></div>'
                 }},
                 {{
                   groupId: 'group-checkbox',
                   kind: 'multi_choice',
                   questionIds: ['q10', 'q11'],
-                  bodyHtml: '<div class="group"><h4>Questions 23 and 24</h4><label><input type="checkbox" name="q10_11" value="B"> B fresh perspective</label><label><input type="checkbox" name="q10_11" value="D"> D reactions to things</label><label><input type="checkbox" name="q10_11" value="E"> E global issues</label></div>'
+                  bodyHtml: '<div class="group"><h4>Questions 23 and 24</h4><div class="checkbox-options"><label><input type="checkbox" name="q10_11" value="B"> B fresh perspective</label><label><input type="checkbox" name="q10_11" value="D"> D reactions to things</label><label><input type="checkbox" name="q10_11" value="E"> E global issues</label></div></div>'
                 }},
                 {{
                   groupId: 'group-dropzone',
@@ -279,6 +286,25 @@ async def install_api_stub(page) -> None:
               async text() {{ return payload; }}
             }};
           }};
+          const createDelayedSseResponse = (events, delayMs = 320, ok = true, status = 200) => {{
+            const encoder = new TextEncoder();
+            return {{
+              ok,
+              status,
+              headers: createHeaders('text/event-stream'),
+              body: new ReadableStream({{
+                async start(controller) {{
+                  for (const entry of events) {{
+                    controller.enqueue(encoder.encode(encodeSse([entry])));
+                    await new Promise((resolve) => setTimeout(resolve, delayMs));
+                  }}
+                  controller.close();
+                }}
+              }}),
+              async json() {{ return {{}}; }},
+              async text() {{ return encodeSse(events); }}
+            }};
+          }};
           const parseJsonBody = (init) => {{
             try {{
               return init && init.body ? JSON.parse(init.body) : {{}};
@@ -364,6 +390,32 @@ async def install_api_stub(page) -> None:
             confidence: 0.86,
             model_trace: {{ source: 'reading_coach_v2', degraded: false }}
           }};
+          const buildCoachFailureSnapshot = (failure) => ({{
+            error: true,
+            code: String(failure?.code || 'practice_coach_failed'),
+            message: String(failure?.message || 'simulated automatic review failure')
+          }});
+          const attachCoachFailure = (requestBody, failure) => {{
+            if (!lastSubmission) {{
+              return null;
+            }}
+            const snapshot = buildCoachFailureSnapshot(failure);
+            const transcript = Array.isArray(lastSubmission.readingCoachTranscript)
+              ? lastSubmission.readingCoachTranscript.slice()
+              : [];
+            const query = String(requestBody?.payload?.query || '').trim();
+            if (query) {{
+              transcript.push({{ role: 'user', content: query, createdAt: '2026-05-21T00:02:00.000Z', surface: requestBody?.payload?.surface || null, action: requestBody?.payload?.action || null }});
+            }}
+            transcript.push({{ role: 'assistant', content: `阅读教练请求失败：${{snapshot.message}}`, createdAt: '2026-05-21T00:02:00.000Z', isError: true, snapshot }});
+            lastSubmission = {{
+              ...lastSubmission,
+              readingCoachSnapshot: snapshot,
+              readingCoachTranscript: transcript
+            }};
+            upsertHistorySubmission(lastSubmission);
+            return snapshot;
+          }};
           const buildHistoryRecord = (submission) => ({{
             id: `reading-${{submission.sessionId}}`,
             activity: 'reading',
@@ -447,15 +499,6 @@ async def install_api_stub(page) -> None:
               nextActions: [{{ type: 'maintain_strength', target: 'mixed_review', instruction: '保留混合题复盘节奏，重点提炼本套题可复用的定位规则。', evidence: {{ accuracy: correct / 5 }} }}],
               confidence: 0.75
             }};
-            const analysisArtifacts = {{
-              highlights,
-              markedQuestions,
-              analysisSignals,
-              questionTimelineLite,
-              singleAttemptAnalysisInput,
-              singleAttemptAnalysis,
-              singleAttemptAnalysisLlm: null
-            }};
             const submission = {{
               sessionId,
               activity: 'reading',
@@ -477,8 +520,7 @@ async def install_api_stub(page) -> None:
                 accuracy: correct / 5,
                 percentage: Math.round((correct / 5) * 100),
                 duration: Number(requestBody?.attempt?.durationSec || 90),
-                source: 'practice_reading_session',
-                details: comparison
+                source: 'practice_reading_session'
               }},
               questionTypePerformance,
               highlights,
@@ -488,7 +530,6 @@ async def install_api_stub(page) -> None:
               singleAttemptAnalysisInput,
               singleAttemptAnalysis,
               singleAttemptAnalysisLlm: null,
-              analysisArtifacts,
               coachContext: {{
                 submitted: true,
                 score: Math.round((correct / 5) * 100),
@@ -635,11 +676,7 @@ async def install_api_stub(page) -> None:
                   ...lastSubmission,
                   readingCoachSnapshot: response,
                   readingCoachTranscript: transcript,
-                  singleAttemptAnalysisLlm: llmPatch,
-                  analysisArtifacts: {{
-                    ...lastSubmission.analysisArtifacts,
-                    singleAttemptAnalysisLlm: llmPatch
-                  }}
+                  singleAttemptAnalysisLlm: llmPatch
                 }};
                 upsertHistorySubmission(lastSubmission);
               }}
@@ -652,17 +689,22 @@ async def install_api_stub(page) -> None:
                 && window.__practiceAutoReviewFailuresRemaining > 0
               ) {{
                 window.__practiceAutoReviewFailuresRemaining -= 1;
+                const failure = {{ code: 'practice_coach_failed', message: 'simulated automatic review failure' }};
+                const snapshot = attachCoachFailure(body, failure) || buildCoachFailureSnapshot(failure);
                 return createSseResponse([
                   {{ event: 'start', data: {{ success: true, sessionId: body?.sessionId || '' }} }},
-                  {{ event: 'error', data: {{ success: false, error: {{ code: 'network_error', message: 'simulated automatic review failure' }} }} }}
+                  {{ event: 'error', data: {{ success: false, error: {{ code: snapshot.code, message: snapshot.message }} }} }}
                 ]);
               }}
               const response = buildCoachResponse(body);
-              return createSseResponse([
+              return createDelayedSseResponse([
                 {{ event: 'start', data: {{ success: true, sessionId: body?.sessionId || '' }} }},
-                {{ event: 'retrieval', data: {{ type: 'retrieval', data: {{ focusQuestionNumbers: body?.payload?.focusQuestionNumbers || [] }} }} }},
+                {{ event: 'route', data: {{ type: 'route', data: {{ route: 'review_set', intent: 'review' }} }} }},
+                {{ event: 'retrieval', data: {{ type: 'retrieval', data: {{ focusQuestionNumbers: body?.payload?.focusQuestionNumbers || [], chunkCount: 2 }} }} }},
+                {{ event: 'generation_start', data: {{ type: 'generation_start', data: {{ model: 'e2e-review-model' }} }} }},
+                {{ event: 'generation_complete', data: {{ type: 'generation_complete', data: {{ tokenCount: 128 }} }} }},
                 {{ event: 'complete', data: {{ success: true, data: response }} }}
-              ]);
+              ], 320);
             }}
 
             if (pathname === '/api/practice/coach' && method === 'POST') {{
@@ -677,9 +719,87 @@ async def install_api_stub(page) -> None:
     )
 
 
+async def accept_license_modal(page) -> None:
+    license_modal = page.locator("#license-modal.show")
+    await license_modal.wait_for(state="visible", timeout=10000)
+    await license_modal.locator('[data-index-action="accept-license"]').click()
+    await page.wait_for_function(
+        "() => !document.getElementById('license-modal')?.classList.contains('show')",
+        timeout=10000,
+    )
+    await page.wait_for_function(
+        """
+        () => {
+          const modal = document.getElementById('license-modal');
+          if (!modal) {
+            return true;
+          }
+          const style = window.getComputedStyle(modal);
+          return style.visibility === 'hidden' && Number(style.opacity) === 0 && style.pointerEvents === 'none';
+        }
+        """,
+        timeout=10000,
+    )
+    accepted = await page.evaluate("() => window.localStorage.getItem('hasSeenGplLicense')")
+    if accepted != "true":
+        raise AssertionError(f"license_accept_not_persisted:{accepted}")
+
+
+async def capture_acceptance_screenshot(page, screenshots: dict[str, str], key: str, selector: str, filename: str) -> None:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    path = REPORT_DIR / filename
+    target = page.locator(selector).first
+    await target.wait_for(state="visible", timeout=10000)
+    hidden_shell_state = await page.evaluate(
+        """
+        () => {
+          const selectors = [
+            '#license-modal',
+            '#suite-mode-selector-modal',
+            '#theme-switcher-modal',
+            '#achievements-modal',
+            '#fullscreen-clock-overlay'
+          ];
+          return selectors.map((selector) => {
+            const node = document.querySelector(selector);
+            if (!node) {
+              return { selector, missing: true };
+            }
+            const style = window.getComputedStyle(node);
+            return {
+              selector,
+              className: String(node.className || ''),
+              display: style.display,
+              visibility: style.visibility,
+              opacity: style.opacity,
+              pointerEvents: style.pointerEvents
+            };
+          });
+        }
+        """
+    )
+    leaking_shells = [
+        item for item in hidden_shell_state
+        if not item.get("missing")
+        and "show" not in str(item.get("className", "")).split()
+        and "is-hidden" not in str(item.get("className", "")).split()
+        and item.get("display") != "none"
+        and item.get("visibility") != "hidden"
+        and item.get("pointerEvents") != "none"
+    ]
+    if leaking_shells:
+        raise AssertionError(f"acceptance_screenshot_hidden_shell_leak:{filename}:{leaking_shells}")
+    await target.screenshot(path=str(path))
+    if not path.exists() or path.stat().st_size <= 0:
+        raise AssertionError(f"screenshot_missing_or_empty:{filename}")
+    screenshots[key] = str(path)
+
+
 async def run_flow() -> dict:
     ensure_bundle()
-    entry_url = f"{DIST_ENTRY.as_uri()}#/"
+    run_id = DIST_ENTRY.stat().st_mtime_ns
+    entry_url = entry_url_for("/", run_id)
+    screenshots: dict[str, str] = {}
 
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(
@@ -692,7 +812,15 @@ async def run_flow() -> dict:
         await page.goto(entry_url)
         await page.wait_for_selector('[data-practice-reading-home] h1:has-text("IELTS Atlas")', timeout=20000)
         await page.wait_for_selector('[data-reading-overview]', timeout=20000)
-        await page.goto(f"{DIST_ENTRY.as_uri()}#/reading/{ASSET_ID}?mode=review")
+        await accept_license_modal(page)
+        await capture_acceptance_screenshot(
+            page,
+            screenshots,
+            "home",
+            "[data-practice-reading-home]",
+            "practice-reading-vue-home.png",
+        )
+        await page.goto(entry_url_for(f"/reading/{ASSET_ID}?mode=review", run_id))
         await page.wait_for_url(f"**#/reading/{ASSET_ID}?mode=memorize&practiceMode=memorize", timeout=10000)
         await page.wait_for_selector('.reading-page.reading-memorize-mode [data-practice-reading-page].memorize-mode', timeout=20000)
         await page.wait_for_selector('[data-reading-memorize-panel]', timeout=10000)
@@ -726,6 +854,13 @@ async def run_flow() -> dict:
         await page.locator('button[data-action="browse-category"][data-category="P2"]').click()
         await page.wait_for_selector('[data-reading-browse]', timeout=10000)
         await page.wait_for_selector(f'.exam-item[data-reading-asset-id="{ASSET_ID}"]', timeout=20000)
+        await capture_acceptance_screenshot(
+            page,
+            screenshots,
+            "browse",
+            "#browse-view",
+            "practice-reading-vue-browse.png",
+        )
         await page.locator(f'.exam-item[data-reading-asset-id="{ASSET_ID}"] button[data-action="pdf"]').click()
         opened_windows = await page.evaluate("() => window.__openedWindows || []")
         if not opened_windows or "assets/pdf/p2-low-148.pdf" not in opened_windows[0].get("url", ""):
@@ -822,19 +957,69 @@ async def run_flow() -> dict:
         await page.wait_for_selector('#submit-btn', timeout=10000)
         await page.wait_for_selector('.options-pool .drag-item[data-option="C"]', timeout=10000)
         await page.wait_for_selector('.match-dropzone[data-question="q12"]', timeout=10000)
+        await capture_acceptance_screenshot(
+            page,
+            screenshots,
+            "answer",
+            ".reading-page",
+            "practice-reading-vue-answer.png",
+        )
 
         legacy_shell_state = await page.evaluate(
             """() => ({
               dividerRole: document.getElementById('divider')?.getAttribute('role') || '',
               dividerValue: Number(document.getElementById('divider')?.getAttribute('aria-valuenow') || 0),
+              shellHeight: getComputedStyle(document.querySelector('.reading-workspace.shell')).height,
+              shellBottom: document.querySelector('.reading-workspace.shell')?.getBoundingClientRect?.().bottom || 0,
+              navPosition: getComputedStyle(document.querySelector('.practice-nav')).position,
+              navBottom: getComputedStyle(document.querySelector('.practice-nav')).bottom,
+              navTop: document.querySelector('.practice-nav')?.getBoundingClientRect?.().top || 0,
+              rightPaddingTop: getComputedStyle(document.getElementById('right')).paddingTop,
+              rightPaddingRight: getComputedStyle(document.getElementById('right')).paddingRight,
+              timerCursor: getComputedStyle(document.getElementById('timer')).cursor,
               hasAnswerControlsInBottomNav: Boolean(document.querySelector('#question-nav select, #question-nav input[type="text"], #question-nav input[type="checkbox"]')),
               submitCopy: document.getElementById('submit-btn')?.textContent?.trim() || ''
             })"""
         )
         if legacy_shell_state.get("dividerRole") != "separator" or not 0 <= legacy_shell_state.get("dividerValue", -1) <= 100:
             raise AssertionError(f"legacy_divider_contract_missing:{legacy_shell_state}")
+        if (
+            legacy_shell_state.get("navPosition") != "fixed"
+            or legacy_shell_state.get("navBottom") != "0px"
+            or float(legacy_shell_state.get("shellBottom") or 0) > float(legacy_shell_state.get("navTop") or 0) + 1
+        ):
+            raise AssertionError(f"legacy_fixed_bottom_nav_layout_regressed:{legacy_shell_state}")
+        if legacy_shell_state.get("rightPaddingTop") != "12px" or legacy_shell_state.get("rightPaddingRight") != "14px":
+            raise AssertionError(f"legacy_right_pane_density_regressed:{legacy_shell_state}")
+        if legacy_shell_state.get("timerCursor") != "pointer":
+            raise AssertionError(f"legacy_timer_click_affordance_regressed:{legacy_shell_state}")
         if legacy_shell_state.get("hasAnswerControlsInBottomNav") or legacy_shell_state.get("submitCopy") != "Submit":
             raise AssertionError(f"legacy_bottom_nav_contract_regressed:{legacy_shell_state}")
+        divider_resize_state = await page.evaluate(
+            """async () => {
+              const shell = document.querySelector('.reading-workspace.shell');
+              const left = document.getElementById('left');
+              const divider = document.getElementById('divider');
+              if (!shell || !left || !divider) {
+                return { ok: false, reason: 'missing-shell' };
+              }
+              const before = left.getBoundingClientRect().width;
+              divider.focus();
+              divider.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+              await new Promise((resolve) => requestAnimationFrame(resolve));
+              const after = left.getBoundingClientRect().width;
+              return {
+                ok: after > before + 20,
+                before,
+                after,
+                gridTemplateColumns: getComputedStyle(shell).gridTemplateColumns,
+                dividerWidth: getComputedStyle(divider).width,
+                ariaValue: divider.getAttribute('aria-valuenow')
+              };
+            }"""
+        )
+        if not divider_resize_state.get("ok"):
+            raise AssertionError(f"legacy_divider_resize_not_applied:{divider_resize_state}")
         timer_bridge_state = await page.evaluate(
             """() => ({
               hasBridge: Boolean(window.__IELTS_PRACTICE_TIMER__ && typeof window.__IELTS_PRACTICE_TIMER__.getSnapshot === 'function'),
@@ -855,6 +1040,51 @@ async def run_flow() -> dict:
         await page.wait_for_function("() => window.__IELTS_PRACTICE_TIMER__.getSnapshot().running === false", timeout=10000)
         await page.evaluate("() => window.__IELTS_PRACTICE_TIMER__.resume()")
         await page.wait_for_function("() => window.__IELTS_PRACTICE_TIMER__.getSnapshot().running === true", timeout=10000)
+        await page.set_viewport_size({"width": 820, "height": 900})
+        mobile_shell_state = await page.evaluate(
+            """() => {
+              const pageRoot = document.querySelector('.reading-page');
+              const shell = document.querySelector('.reading-workspace.shell');
+              const nav = document.querySelector('.practice-nav');
+              const navControls = document.querySelector('.practice-nav .controls');
+              const pageStyle = pageRoot ? getComputedStyle(pageRoot) : null;
+              const shellStyle = shell ? getComputedStyle(shell) : null;
+              const navStyle = nav ? getComputedStyle(nav) : null;
+              const controlsStyle = navControls ? getComputedStyle(navControls) : null;
+              return {
+                pageHeight: pageStyle?.height || '',
+                pageOverflowY: pageStyle?.overflowY || '',
+                pagePaddingBottom: pageStyle?.paddingBottom || '',
+                shellDisplay: shellStyle?.display || '',
+                shellHeight: shellStyle?.height || '',
+                shellOverflowY: shellStyle?.overflowY || '',
+                navPosition: navStyle?.position || '',
+                navBottom: navStyle?.bottom || '',
+                navLeft: navStyle?.left || '',
+                navRight: navStyle?.right || '',
+                controlsWidth: controlsStyle?.width || '',
+                controlsJustify: controlsStyle?.justifyContent || ''
+              };
+            }"""
+        )
+        if (
+            mobile_shell_state.get("pageHeight") == "900px"
+            or mobile_shell_state.get("pageOverflowY") == "hidden"
+            or mobile_shell_state.get("pagePaddingBottom") != "112px"
+            or mobile_shell_state.get("shellDisplay") != "block"
+            or mobile_shell_state.get("shellOverflowY") != "visible"
+            or mobile_shell_state.get("navPosition") != "fixed"
+            or mobile_shell_state.get("navBottom") != "0px"
+            or mobile_shell_state.get("navLeft") != "0px"
+            or mobile_shell_state.get("navRight") != "0px"
+            or mobile_shell_state.get("controlsJustify") != "flex-end"
+        ):
+            raise AssertionError(f"legacy_mobile_shell_scroll_model_regressed:{mobile_shell_state}")
+        await page.set_viewport_size({"width": 1366, "height": 900})
+        await page.wait_for_function(
+            """() => getComputedStyle(document.querySelector('.reading-workspace.shell')).display === 'grid'""",
+            timeout=10000,
+        )
 
         await page.click('#settings-btn')
         await page.wait_for_selector('#settings-panel:visible', timeout=10000)
@@ -863,13 +1093,229 @@ async def run_flow() -> dict:
         settings_state = await page.evaluate(
             """() => ({
               large: document.querySelector('.reading-page')?.classList.contains('font-large') === true,
-              dark: document.querySelector('.reading-page')?.classList.contains('dark-mode') === true
+              dark: document.querySelector('.reading-page')?.classList.contains('dark-mode') === true,
+              normalLabel: document.querySelector('#settings-panel [data-size="normal"]')?.textContent?.trim() || '',
+              largeLabel: document.querySelector('#settings-panel [data-size="large"]')?.textContent?.trim() || '',
+              xlargeLabel: document.querySelector('#settings-panel [data-size="xlarge"]')?.textContent?.trim() || '',
+              normalFontSize: getComputedStyle(document.querySelector('#settings-panel [data-size="normal"]')).fontSize,
+              largeFontSize: getComputedStyle(document.querySelector('#settings-panel [data-size="large"]')).fontSize,
+              xlargeFontSize: getComputedStyle(document.querySelector('#settings-panel [data-size="xlarge"]')).fontSize
             })"""
         )
-        if not settings_state.get("large") or not settings_state.get("dark"):
+        if (
+            not settings_state.get("large")
+            or not settings_state.get("dark")
+            or settings_state.get("normalLabel") != "A"
+            or settings_state.get("largeLabel") != "A"
+            or settings_state.get("xlargeLabel") != "A"
+            or settings_state.get("normalFontSize") != "13.76px"
+            or settings_state.get("largeFontSize") != "17.6px"
+            or settings_state.get("xlargeFontSize") != "20px"
+        ):
             raise AssertionError(f"settings_panel_not_applied:{settings_state}")
+        await page.wait_for_function(
+            """() => getComputedStyle(document.querySelector('.match-dropzone')).backgroundColor === 'rgb(30, 41, 59)'""",
+            timeout=10000,
+        )
+        theme_styles = await page.evaluate(
+            """() => {
+              const pageRoot = document.querySelector('.reading-page');
+              const header = document.querySelector('.reading-header.header');
+              const group = document.querySelector('#question-groups .group');
+              const navItem = document.querySelector('#question-nav .q-item');
+              const dropzone = document.querySelector('.match-dropzone');
+              const dragItem = document.querySelector('.options-pool .drag-item');
+              const pageStyle = pageRoot ? getComputedStyle(pageRoot) : null;
+              const headerStyle = header ? getComputedStyle(header) : null;
+              const groupStyle = group ? getComputedStyle(group) : null;
+              const navStyle = navItem ? getComputedStyle(navItem) : null;
+              const dropzoneStyle = dropzone ? getComputedStyle(dropzone) : null;
+              const dragItemStyle = dragItem ? getComputedStyle(dragItem) : null;
+              return {
+                pageBackground: pageStyle?.backgroundColor || '',
+                headerBackground: headerStyle?.backgroundColor || '',
+                groupBackground: groupStyle?.backgroundColor || '',
+                navBackground: navStyle?.backgroundColor || '',
+                dropzoneBackground: dropzoneStyle?.backgroundColor || '',
+                dragItemBackground: dragItemStyle?.backgroundColor || ''
+              };
+            }"""
+        )
+        if (
+            theme_styles.get("pageBackground") != "rgb(2, 6, 23)"
+            or theme_styles.get("headerBackground") != "rgba(30, 41, 59, 0.94)"
+            or theme_styles.get("groupBackground") != "rgb(30, 41, 59)"
+            or theme_styles.get("navBackground") != "rgb(15, 23, 42)"
+            or theme_styles.get("dropzoneBackground") != "rgb(30, 41, 59)"
+            or theme_styles.get("dragItemBackground") != "rgb(51, 65, 85)"
+        ):
+            raise AssertionError(f"dark_mode_theme_skin_regressed:{theme_styles}")
         await page.click('.overlay')
         await page.wait_for_selector('#settings-panel', state="hidden", timeout=10000)
+        await page.click('#settings-btn')
+        await page.wait_for_selector('#settings-panel:visible', timeout=10000)
+        await page.click('#settings-panel [data-mode="light"]')
+        await page.click('.overlay')
+        await page.wait_for_selector('#settings-panel', state="hidden", timeout=10000)
+        await page.wait_for_function(
+            """() => !document.querySelector('.reading-page')?.classList.contains('dark-mode')""",
+            timeout=10000,
+        )
+        group_panel_style = await page.evaluate(
+            """() => {
+              const wrapper = document.querySelector('#question-groups .unified-group');
+              const group = document.querySelector('#question-groups .group');
+              const wrapperStyle = wrapper ? getComputedStyle(wrapper) : null;
+              const groupStyle = group ? getComputedStyle(group) : null;
+              return {
+                wrapperMarginBottom: wrapperStyle?.marginBottom || '',
+                wrapperBorderRadius: wrapperStyle?.borderRadius || '',
+                groupPaddingTop: groupStyle?.paddingTop || '',
+                groupPaddingRight: groupStyle?.paddingRight || '',
+                groupBorderRadius: groupStyle?.borderRadius || '',
+                groupMarginBottom: groupStyle?.marginBottom || ''
+              };
+            }"""
+        )
+        if (
+            group_panel_style.get("wrapperMarginBottom") != "16px"
+            or group_panel_style.get("wrapperBorderRadius") != "4px"
+            or group_panel_style.get("groupPaddingTop") != "18px"
+            or group_panel_style.get("groupPaddingRight") != "22px"
+            or group_panel_style.get("groupBorderRadius") != "4px"
+            or group_panel_style.get("groupMarginBottom") != "0px"
+        ):
+            raise AssertionError(f"legacy_question_group_skin_regressed:{group_panel_style}")
+
+        option_label_style = await page.evaluate(
+            """() => {
+              const radioLabel = document.querySelector('.radio-options label');
+              const checkboxLabel = document.querySelector('.checkbox-options label');
+              const radioInput = document.querySelector('.radio-options label input[type="radio"]');
+              const checkboxInput = document.querySelector('.checkbox-options label input[type="checkbox"]');
+              const radioStyle = radioLabel ? getComputedStyle(radioLabel) : null;
+              const checkboxStyle = checkboxLabel ? getComputedStyle(checkboxLabel) : null;
+              const radioInputStyle = radioInput ? getComputedStyle(radioInput) : null;
+              const checkboxInputStyle = checkboxInput ? getComputedStyle(checkboxInput) : null;
+              return {
+                radioDisplay: radioStyle?.display || '',
+                radioAlignItems: radioStyle?.alignItems || '',
+                radioGap: radioStyle?.gap || '',
+                radioMarginBottom: radioStyle?.marginBottom || '',
+                radioCursor: radioStyle?.cursor || '',
+                radioLineHeight: radioStyle?.lineHeight || '',
+                checkboxDisplay: checkboxStyle?.display || '',
+                checkboxAlignItems: checkboxStyle?.alignItems || '',
+                checkboxGap: checkboxStyle?.gap || '',
+                checkboxMarginBottom: checkboxStyle?.marginBottom || '',
+                checkboxCursor: checkboxStyle?.cursor || '',
+                radioInputMarginTop: radioInputStyle?.marginTop || '',
+                radioInputFlexShrink: radioInputStyle?.flexShrink || '',
+                radioInputCursor: radioInputStyle?.cursor || '',
+                checkboxInputMarginTop: checkboxInputStyle?.marginTop || '',
+                checkboxInputFlexShrink: checkboxInputStyle?.flexShrink || '',
+                checkboxInputCursor: checkboxInputStyle?.cursor || ''
+              };
+            }"""
+        )
+        if (
+            option_label_style.get("radioDisplay") != "flex"
+            or option_label_style.get("radioAlignItems") != "flex-start"
+            or option_label_style.get("radioGap") != "8px"
+            or option_label_style.get("radioMarginBottom") != "12px"
+            or option_label_style.get("radioCursor") != "pointer"
+            or option_label_style.get("checkboxDisplay") != "flex"
+            or option_label_style.get("checkboxAlignItems") != "flex-start"
+            or option_label_style.get("checkboxGap") != "8px"
+            or option_label_style.get("checkboxMarginBottom") != "12px"
+            or option_label_style.get("checkboxCursor") != "pointer"
+            or option_label_style.get("radioInputMarginTop") != "4px"
+            or option_label_style.get("radioInputFlexShrink") != "0"
+            or option_label_style.get("radioInputCursor") != "pointer"
+            or option_label_style.get("checkboxInputMarginTop") != "4px"
+            or option_label_style.get("checkboxInputFlexShrink") != "0"
+            or option_label_style.get("checkboxInputCursor") != "pointer"
+        ):
+            raise AssertionError(f"legacy_option_label_layout_regressed:{option_label_style}")
+
+        table_summary_style = await page.evaluate(
+            """() => {
+              const section = document.querySelector('.table-section');
+              const table = document.querySelector('.table-section table');
+              const head = document.querySelector('.table-section thead th');
+              const cell = document.querySelector('.table-section tbody td');
+              const blank = document.querySelector('.table-section input.blank[name="q6"]');
+              const summary = document.querySelector('.drop-target-summary[data-question="q99"]');
+              const sectionStyle = section ? getComputedStyle(section) : null;
+              const tableStyle = table ? getComputedStyle(table) : null;
+              const headStyle = head ? getComputedStyle(head) : null;
+              const cellStyle = cell ? getComputedStyle(cell) : null;
+              const blankStyle = blank ? getComputedStyle(blank) : null;
+              const summaryStyle = summary ? getComputedStyle(summary) : null;
+              return {
+                sectionMarginTop: sectionStyle?.marginTop || '',
+                sectionPaddingTop: sectionStyle?.paddingTop || '',
+                sectionPaddingRight: sectionStyle?.paddingRight || '',
+                sectionBorderRadius: sectionStyle?.borderRadius || '',
+                sectionOverflowX: sectionStyle?.overflowX || '',
+                tableMarginTop: tableStyle?.marginTop || '',
+                tableLayout: tableStyle?.tableLayout || '',
+                headBackground: headStyle?.backgroundColor || '',
+                headTextAlign: headStyle?.textAlign || '',
+                cellPaddingTop: cellStyle?.paddingTop || '',
+                cellLineHeight: cellStyle?.lineHeight || '',
+                blankDisplay: blankStyle?.display || '',
+                blankMinWidth: blankStyle?.minWidth || '',
+                blankMaxWidth: blankStyle?.maxWidth || '',
+                blankPaddingTop: blankStyle?.paddingTop || '',
+                blankPaddingRight: blankStyle?.paddingRight || '',
+                blankBorderRadius: blankStyle?.borderRadius || '',
+                summaryDisplay: summaryStyle?.display || '',
+                summaryMinWidth: summaryStyle?.minWidth || '',
+                summaryMinHeight: summaryStyle?.minHeight || '',
+                summaryMarginLeft: summaryStyle?.marginLeft || '',
+                summaryPaddingLeft: summaryStyle?.paddingLeft || '',
+                summaryBorderTopWidth: summaryStyle?.borderTopWidth || '',
+                summaryBorderLeftWidth: summaryStyle?.borderLeftWidth || '',
+                summaryBorderBottomWidth: summaryStyle?.borderBottomWidth || '',
+                summaryBorderBottomStyle: summaryStyle?.borderBottomStyle || '',
+                summaryBorderRadius: summaryStyle?.borderRadius || '',
+                summaryVerticalAlign: summaryStyle?.verticalAlign || '',
+                summaryBoxShadow: summaryStyle?.boxShadow || ''
+              };
+            }"""
+        )
+        if (
+            table_summary_style.get("sectionMarginTop") != "12px"
+            or table_summary_style.get("sectionPaddingTop") != "10px"
+            or table_summary_style.get("sectionPaddingRight") != "12px"
+            or table_summary_style.get("sectionBorderRadius") != "8px"
+            or table_summary_style.get("sectionOverflowX") != "auto"
+            or table_summary_style.get("tableMarginTop") != "0px"
+            or table_summary_style.get("tableLayout") != "fixed"
+            or table_summary_style.get("headBackground") != "rgb(237, 242, 249)"
+            or table_summary_style.get("headTextAlign") != "center"
+            or table_summary_style.get("cellPaddingTop") != "10px"
+            or table_summary_style.get("blankDisplay") != "inline-block"
+            or table_summary_style.get("blankMinWidth") != "120px"
+            or table_summary_style.get("blankMaxWidth") != "180px"
+            or table_summary_style.get("blankPaddingTop") != "2px"
+            or table_summary_style.get("blankPaddingRight") != "6px"
+            or table_summary_style.get("blankBorderRadius") != "4px"
+            or table_summary_style.get("summaryDisplay") != "inline-flex"
+            or table_summary_style.get("summaryMinWidth") != "80px"
+            or table_summary_style.get("summaryMinHeight") != "30px"
+            or table_summary_style.get("summaryMarginLeft") != "4px"
+            or table_summary_style.get("summaryPaddingLeft") != "8px"
+            or table_summary_style.get("summaryBorderTopWidth") != "0px"
+            or table_summary_style.get("summaryBorderLeftWidth") != "0px"
+            or table_summary_style.get("summaryBorderBottomWidth") != "2px"
+            or table_summary_style.get("summaryBorderBottomStyle") != "solid"
+            or table_summary_style.get("summaryBorderRadius") != "4px 4px 0px 0px"
+            or table_summary_style.get("summaryVerticalAlign") != "bottom"
+            or table_summary_style.get("summaryBoxShadow") != "none"
+        ):
+            raise AssertionError(f"legacy_table_summary_skin_regressed:{table_summary_style}")
 
         await page.locator('input[type="radio"][name="q1"][value="A"]').check()
         await page.locator('input[type="radio"][name="q1"][value="B"]').check()
@@ -886,6 +1332,55 @@ async def run_flow() -> dict:
         await page.wait_for_selector('[data-answer-question-id="q10"].answered', timeout=10000)
         await page.wait_for_selector('[data-answer-question-id="q11"].answered', timeout=10000)
         await page.wait_for_selector('[data-answer-question-id="q12"].answered', timeout=10000)
+        await page.click('[data-answer-question-id="q6"] .q-item')
+        nav_item_style = await page.evaluate(
+            """() => {
+              const item = document.querySelector('[data-answer-question-id="q6"] .q-item');
+              const style = item ? getComputedStyle(item) : null;
+              return {
+                paddingLeft: style?.paddingLeft || '',
+                paddingRight: style?.paddingRight || '',
+                borderRadius: style?.borderRadius || '',
+                minWidth: style?.minWidth || '',
+                minHeight: style?.minHeight || '',
+                borderColor: style?.borderColor || '',
+                backgroundColor: style?.backgroundColor || '',
+                color: style?.color || '',
+                fontWeight: style?.fontWeight || ''
+              };
+            }"""
+        )
+        if (
+            nav_item_style.get("paddingLeft") != "12px"
+            or nav_item_style.get("paddingRight") != "12px"
+            or nav_item_style.get("borderRadius") != "4px"
+            or nav_item_style.get("minWidth") not in ("0px", "auto")
+            or nav_item_style.get("minHeight") not in ("0px", "auto")
+            or nav_item_style.get("borderColor") != "rgb(37, 99, 235)"
+            or nav_item_style.get("backgroundColor") != "rgb(239, 246, 255)"
+            or nav_item_style.get("color") != "rgb(37, 99, 235)"
+            or nav_item_style.get("fontWeight") != "600"
+        ):
+            raise AssertionError(f"legacy_question_nav_item_skin_regressed:{nav_item_style}")
+        bottom_control_style = await page.evaluate(
+            """() => {
+              const reset = document.getElementById('reset-btn');
+              const submit = document.getElementById('submit-btn');
+              const resetStyle = reset ? getComputedStyle(reset) : null;
+              const submitStyle = submit ? getComputedStyle(submit) : null;
+              return {
+                resetRadius: resetStyle?.borderRadius || '',
+                submitRadius: submitStyle?.borderRadius || '',
+                submitBackground: submitStyle?.backgroundColor || ''
+              };
+            }"""
+        )
+        if (
+            bottom_control_style.get("resetRadius") != "4px"
+            or bottom_control_style.get("submitRadius") != "4px"
+            or bottom_control_style.get("submitBackground") != "rgb(37, 99, 235)"
+        ):
+            raise AssertionError(f"legacy_bottom_controls_skin_regressed:{bottom_control_style}")
         await page.locator('[data-answer-question-id="q6"] .mark-question-button').click()
         await page.wait_for_selector('[data-answer-question-id="q6"] .mark-question-button.active', timeout=10000)
 
@@ -926,8 +1421,45 @@ async def run_flow() -> dict:
         if not highlight_result.get("ok"):
             raise AssertionError(f"highlight_selection_failed:{highlight_result}")
         await page.wait_for_selector('#selbar:visible', timeout=10000)
+        selbar_style = await page.evaluate(
+            """() => {
+              const bar = document.getElementById('selbar');
+              const button = document.getElementById('btnHL');
+              const barStyle = bar ? getComputedStyle(bar) : null;
+              const buttonStyle = button ? getComputedStyle(button) : null;
+              return {
+                barBackground: barStyle?.backgroundColor || '',
+                barColor: barStyle?.color || '',
+                buttonBackground: buttonStyle?.backgroundColor || '',
+                buttonColor: buttonStyle?.color || ''
+              };
+            }"""
+        )
+        if (
+            selbar_style.get("barBackground") != "rgb(30, 41, 59)"
+            or selbar_style.get("buttonBackground") != "rgba(0, 0, 0, 0)"
+            or selbar_style.get("buttonColor") != "rgb(255, 255, 255)"
+        ):
+            raise AssertionError(f"selection_toolbar_skin_regressed:{selbar_style}")
         await page.click('#btnHL')
         await page.wait_for_selector('#left .hl:has-text("Art changes")', timeout=10000)
+        highlight_style = await page.evaluate(
+            """() => {
+              const highlight = document.querySelector('#left .hl');
+              const style = highlight ? getComputedStyle(highlight) : null;
+              return {
+                backgroundColor: style?.backgroundColor || '',
+                color: style?.color || '',
+                text: highlight?.textContent?.trim() || ''
+              };
+            }"""
+        )
+        if (
+            highlight_style.get("text") != "Art changes"
+            or highlight_style.get("backgroundColor") != "rgb(114, 54, 28)"
+            or highlight_style.get("color") != "rgb(255, 255, 255)"
+        ):
+            raise AssertionError(f"highlight_skin_regressed:{highlight_style}")
         await page.evaluate("() => window.scrollTo(0, 180)")
         await page.click('#left .hl')
         await page.wait_for_selector('#review-highlight-dictionary-bubble:visible', timeout=10000)
@@ -936,7 +1468,7 @@ async def run_flow() -> dict:
         await page.click('#note-btn')
         await page.wait_for_selector('#notes-panel:visible', timeout=10000)
         await page.fill('#notes-panel textarea', 'manual reading note')
-        await page.click('.overlay')
+        await page.locator('.overlay').click(position={"x": 8, "y": 8})
         await page.wait_for_selector('#notes-panel', state="hidden", timeout=10000)
 
         await page.click('button:has-text("保存作答快照")')
@@ -965,11 +1497,101 @@ async def run_flow() -> dict:
         await page.wait_for_selector('[data-reading-official-question-explanation="q10"]:has-text("OFFICIAL_Q23_ONLY")', timeout=10000)
         await page.wait_for_selector('[data-reading-llm-review-status="failed"]', timeout=10000)
         await page.wait_for_selector('[data-reading-llm-review-retry]', timeout=10000)
+        await page.wait_for_selector('[data-reading-coach-transcript] [data-reading-coach-message="assistant"]:has-text("simulated automatic review failure")', timeout=10000)
+        failed_review_state = await page.evaluate(
+            """() => {
+              const cached = JSON.parse(window.sessionStorage.getItem('practice_reading_submission_p2-low-148') || 'null');
+              const transcript = Array.isArray(cached?.readingCoachTranscript) ? cached.readingCoachTranscript : [];
+              return {
+                snapshotError: cached?.readingCoachSnapshot?.error === true,
+                snapshotCode: cached?.readingCoachSnapshot?.code || '',
+                snapshotMessage: cached?.readingCoachSnapshot?.message || '',
+                hasUserReviewTurn: transcript.some((entry) => entry.role === 'user' && entry.action === 'review_set' && entry.surface === 'review_workspace' && String(entry.content || '').includes('复盘')),
+                hasAssistantErrorTurn: transcript.some((entry) => entry.role === 'assistant' && entry.isError === true && String(entry.content || '').includes('simulated automatic review failure') && entry.snapshot?.error === true),
+                coachTranscriptText: document.querySelector('[data-reading-coach-transcript]')?.textContent || ''
+              };
+            }"""
+        )
+        if (
+            not failed_review_state.get("snapshotError")
+            or failed_review_state.get("snapshotCode") != "practice_coach_failed"
+            or "simulated automatic review failure" not in failed_review_state.get("snapshotMessage", "")
+            or not failed_review_state.get("hasUserReviewTurn")
+            or not failed_review_state.get("hasAssistantErrorTurn")
+            or "simulated automatic review failure" not in failed_review_state.get("coachTranscriptText", "")
+        ):
+            raise AssertionError(f"auto_review_failure_not_persisted:{failed_review_state}")
+        await page.evaluate(
+            """() => {
+              const target = document.querySelector('[data-reading-llm-review-status]');
+              window.__readingLlmReviewStatuses = [];
+              window.__readingLlmReviewStatusObserver?.disconnect?.();
+              const capture = () => {
+                const text = target?.textContent?.replace(/\\s+/g, ' ').trim() || '';
+                if (text && !window.__readingLlmReviewStatuses.includes(text)) {
+                  window.__readingLlmReviewStatuses.push(text);
+                }
+              };
+              if (target) {
+                window.__readingLlmReviewStatusObserver = new MutationObserver(capture);
+                window.__readingLlmReviewStatusObserver.observe(target, {
+                  attributes: true,
+                  childList: true,
+                  characterData: true,
+                  subtree: true
+                });
+                capture();
+              }
+            }"""
+        )
         await page.click('[data-reading-llm-review-retry]')
         await page.wait_for_selector('[data-reading-llm-review-status="success"]', timeout=10000)
+        llm_statuses = await page.evaluate(
+            """() => window.__readingLlmReviewStatuses || []"""
+        )
+        for expected_status in (
+            '正在判断问题意图...',
+            'RAG 已检索 2 条证据...',
+            '正在生成错因复盘...',
+            '复盘生成完成，正在落库...',
+        ):
+            if not any(expected_status in status for status in llm_statuses):
+                raise AssertionError(f"auto_review_stream_status_missing:{expected_status}:{llm_statuses}")
         await page.wait_for_selector('[data-reading-llm-review-panel]', timeout=10000)
         await page.wait_for_selector('[data-reading-llm-diagnosis="coach_review_primary_weakness"]', timeout=10000)
         await page.wait_for_selector('[data-reading-llm-action="coach_review_next_rule"]', timeout=10000)
+        results_panel_style = await page.evaluate(
+            """() => {
+              const results = document.getElementById('results');
+              const table = document.querySelector('#results .results-table');
+              const resultsStyle = results ? getComputedStyle(results) : null;
+              const tableStyle = table ? getComputedStyle(table) : null;
+              return {
+                display: resultsStyle?.display || '',
+                borderRadius: resultsStyle?.borderRadius || '',
+                paddingTop: resultsStyle?.paddingTop || '',
+                marginTop: resultsStyle?.marginTop || '',
+                tableMarginTop: tableStyle?.marginTop || '',
+                cellTextAlign: getComputedStyle(document.querySelector('#results .results-table td'))?.textAlign || ''
+              };
+            }"""
+        )
+        if (
+            results_panel_style.get("display") == "none"
+            or results_panel_style.get("borderRadius") != "4px"
+            or results_panel_style.get("paddingTop") != "18px"
+            or results_panel_style.get("marginTop") != "18px"
+            or results_panel_style.get("tableMarginTop") != "12px"
+            or results_panel_style.get("cellTextAlign") != "center"
+        ):
+            raise AssertionError(f"legacy_results_panel_skin_regressed:{results_panel_style}")
+        await capture_acceptance_screenshot(
+            page,
+            screenshots,
+            "result",
+            ".reading-page",
+            "practice-reading-vue-result.png",
+        )
 
         submit_request = await page.evaluate(
             """() => window.__practiceReadingRequests.find((item) => item.pathname === '/api/practice/sessions' && item.method === 'POST') || null"""
@@ -1058,8 +1680,42 @@ async def run_flow() -> dict:
             raise AssertionError(f"submission_snapshot_invalid:{readonly_state}")
 
         await page.wait_for_selector('[data-reading-coach-panel]', timeout=10000)
+        await page.evaluate(
+            """() => {
+              const target = document.querySelector('[data-reading-coach-stream-status]');
+              window.__readingCoachStreamStatuses = [];
+              window.__readingCoachStreamStatusObserver?.disconnect?.();
+              const capture = () => {
+                const text = target?.textContent?.replace(/\\s+/g, ' ').trim() || '';
+                if (text && !window.__readingCoachStreamStatuses.includes(text)) {
+                  window.__readingCoachStreamStatuses.push(text);
+                }
+              };
+              if (target) {
+                window.__readingCoachStreamStatusObserver = new MutationObserver(capture);
+                window.__readingCoachStreamStatusObserver.observe(target, {
+                  attributes: true,
+                  childList: true,
+                  characterData: true,
+                  subtree: true
+                });
+                capture();
+              }
+            }"""
+        )
         await page.click('button:has-text("询问教练")')
         await page.wait_for_selector('[data-reading-coach-answer]:has-text("Review question 14 evidence first.")', timeout=10000)
+        manual_statuses = await page.evaluate(
+            """() => window.__readingCoachStreamStatuses || []"""
+        )
+        for expected_status in (
+            '正在判断问题意图...',
+            'RAG 已检索 2 条证据...',
+            '正在生成教练回答...',
+            '回答生成完成，正在同步记录...',
+        ):
+            if not any(expected_status in status for status in manual_statuses):
+                raise AssertionError(f"manual_coach_stream_status_missing:{expected_status}:{manual_statuses}")
         coach_requests = await page.evaluate(
             """() => window.__practiceReadingRequests.filter((item) => item.pathname === '/api/practice/coach/stream')"""
         )
@@ -1164,6 +1820,28 @@ async def run_flow() -> dict:
             raise AssertionError(f"browse_position_not_restored:{browse_restore_state}")
         await page.click('[data-view="practice"]')
         await page.wait_for_selector('#history-list .history-item[data-record-id="reading-reading-session-e2e-1"]', timeout=10000)
+        await page.locator('#record-type-filter-buttons [data-action-value="reading"]').click()
+        record_filter_state = await page.evaluate(
+            """() => ({
+              activeValue: document.querySelector('#record-type-filter-buttons .shui-filter-btn.active')?.dataset?.actionValue || '',
+              readingPressed: document.querySelector('#record-type-filter-buttons [data-action-value="reading"]')?.getAttribute('aria-pressed') || '',
+              allPressed: document.querySelector('#record-type-filter-buttons [data-action-value="all"]')?.getAttribute('aria-pressed') || '',
+              visibleRecords: document.querySelectorAll('#history-list .history-item').length
+            })"""
+        )
+        if record_filter_state.get("activeValue") != "reading" or record_filter_state.get("readingPressed") != "true" or record_filter_state.get("allPressed") != "false" or record_filter_state.get("visibleRecords") != 1:
+            raise AssertionError(f"history_record_filter_reading_inactive:{record_filter_state}")
+        await page.locator('#record-type-filter-buttons [data-action-value="all"]').click()
+        record_filter_reset_state = await page.evaluate(
+            """() => ({
+              activeValue: document.querySelector('#record-type-filter-buttons .shui-filter-btn.active')?.dataset?.actionValue || '',
+              readingPressed: document.querySelector('#record-type-filter-buttons [data-action-value="reading"]')?.getAttribute('aria-pressed') || '',
+              allPressed: document.querySelector('#record-type-filter-buttons [data-action-value="all"]')?.getAttribute('aria-pressed') || '',
+              visibleRecords: document.querySelectorAll('#history-list .history-item').length
+            })"""
+        )
+        if record_filter_reset_state.get("activeValue") != "all" or record_filter_reset_state.get("readingPressed") != "false" or record_filter_reset_state.get("allPressed") != "true" or record_filter_reset_state.get("visibleRecords") != 1:
+            raise AssertionError(f"history_record_filter_all_inactive:{record_filter_reset_state}")
         await page.locator('#history-list [data-record-action="details"][data-record-id="reading-reading-session-e2e-1"]').click()
 
         await page.wait_for_url(f"**#/reading/{ASSET_ID}/review/reading-session-e2e-1", timeout=10000)
@@ -1198,11 +1876,25 @@ async def run_flow() -> dict:
         if replay_state.get("submitPosts") != 1 or replay_state.get("replayGets", 0) < 1:
             raise AssertionError(f"replay_used_wrong_api:{replay_state}")
         baseline_submit_posts = int(replay_state.get("submitPosts") or 0)
+        await capture_acceptance_screenshot(
+            page,
+            screenshots,
+            "replay",
+            ".reading-page",
+            "practice-reading-vue-replay.png",
+        )
 
         await page.click('a:has-text("返回练习库")')
         await page.wait_for_url("**#/", timeout=10000)
         await page.click('[data-view="settings"]')
         await page.wait_for_selector('#export-data-btn', timeout=10000)
+        await capture_acceptance_screenshot(
+            page,
+            screenshots,
+            "settings",
+            "#settings-view",
+            "practice-reading-vue-settings.png",
+        )
         await page.click('#export-data-btn')
         await page.wait_for_selector('text=阅读记录导出完成：1 条', timeout=10000)
         archive = None
@@ -1250,6 +1942,15 @@ async def run_flow() -> dict:
             await page.wait_for_selector('text=阅读记录导入完成：1 条，跳过 0 条', timeout=10000)
             await page.click('[data-view="practice"]')
             await page.wait_for_selector('#history-list .history-item[data-record-id="reading-reading-session-e2e-1"]', timeout=10000)
+            await page.locator('#record-type-filter-buttons [data-action-value="reading"]').click()
+            imported_filter_state = await page.evaluate(
+                """() => ({
+                  activeValue: document.querySelector('#record-type-filter-buttons .shui-filter-btn.active')?.dataset?.actionValue || '',
+                  visibleRecords: document.querySelectorAll('#history-list .history-item').length
+                })"""
+            )
+            if imported_filter_state.get("activeValue") != "reading" or imported_filter_state.get("visibleRecords") != 1:
+                raise AssertionError(f"archive_import_history_filter_regressed:{imported_filter_state}")
             await page.locator('#history-list [data-record-action="details"][data-record-id="reading-reading-session-e2e-1"]').click()
             await page.wait_for_url(f"**#/reading/{ASSET_ID}/review/reading-session-e2e-1", timeout=10000)
             await page.wait_for_selector('[data-reading-review-panel]', timeout=10000)
@@ -1287,6 +1988,7 @@ async def run_flow() -> dict:
             "assetId": ASSET_ID,
             "entry": str(DIST_ENTRY),
             "answered": expected,
+            "screenshots": screenshots,
         },
     }
 

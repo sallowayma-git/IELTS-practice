@@ -147,7 +147,6 @@ export interface ReadingPracticeScoreInfo {
   percentage: number
   duration: number
   source: 'practice_reading_session'
-  details: Record<string, ReadingAnswerComparisonEntry>
 }
 
 export interface ReadingPracticeQuestionTypePerformance {
@@ -289,7 +288,7 @@ export interface ReadingPracticeSubmission {
   singleAttemptAnalysisInput: ReadingPracticeSingleAttemptAnalysisInput
   singleAttemptAnalysis: ReadingPracticeSingleAttemptAnalysis
   singleAttemptAnalysisLlm: unknown | null
-  analysisArtifacts: ReadingPracticeAnalysisArtifacts
+  analysisArtifacts?: ReadingPracticeAnalysisArtifacts
   readingCoachSnapshot: unknown | null
   readingCoachTranscript: Array<Record<string, unknown>>
   coachContext: ReadingPracticeCoachContext

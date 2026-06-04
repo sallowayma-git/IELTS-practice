@@ -10,13 +10,16 @@ function practicePath(...segments) {
 async function listAllPracticePages(listPage, filters = {}, options = {}) {
     const limit = Math.max(1, Math.min(Number(options.limit || 200), 200))
     const maxPages = Math.max(1, Number(options.maxPages || 1000))
+    const resolveFilters = typeof options.resolveFilters === 'function'
+        ? options.resolveFilters
+        : () => filters
     const rows = []
     let page = 1
     let total = 0
     let lastResult = null
 
     while (page <= maxPages) {
-        const result = await listPage(filters, { page, limit })
+        const result = await listPage(resolveFilters(page, filters), { page, limit })
         lastResult = result
         const pageRows = Array.isArray(result?.data) ? result.data : []
         rows.push(...pageRows)
@@ -49,11 +52,22 @@ export const practiceAssets = {
     },
 
     async listAll(filters = {}, options = {}) {
-        return listAllPracticePages(practiceAssets.list, filters, options)
+        const { refresh = false, ...paginationOptions } = options || {}
+        return listAllPracticePages(practiceAssets.list, filters, {
+            ...paginationOptions,
+            resolveFilters: (page) => ({
+                ...filters,
+                refresh: refresh && page === 1 ? 'true' : undefined
+            })
+        })
     },
 
-    async get(activity, assetId) {
-        return request(practicePath('assets', activity, assetId))
+    async get(activity, assetId, options = {}) {
+        return request(practicePath('assets', activity, assetId), {
+            query: {
+                refresh: options.refresh ? 'true' : undefined
+            }
+        })
     }
 }
 

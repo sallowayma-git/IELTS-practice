@@ -249,7 +249,7 @@ async def install_api_stub(page) -> None:
               answerComparison: {{
                 q1: {{ questionId: 'q1', displayLabel: '1', userAnswer: answer, correctAnswer: 'A', normalizedUserAnswer: [answer], normalizedCorrectAnswer: ['A'], isCorrect: answer === 'A', weight: 1, control: 'radio', source: 'native_input', questionKind: 'single_choice', matchMode: 'single' }}
               }},
-              scoreInfo: {{ correct, total: 1, totalQuestions: 1, accuracy: correct, percentage: correct * 100, duration: Number(body?.attempt?.durationSec || 30), source: 'practice_reading_session', details: {{}} }},
+              scoreInfo: {{ correct, total: 1, totalQuestions: 1, accuracy: correct, percentage: correct * 100, duration: Number(body?.attempt?.durationSec || 30), source: 'practice_reading_session' }},
               questionTypePerformance,
               highlights,
               markedQuestions: [],
@@ -258,7 +258,6 @@ async def install_api_stub(page) -> None:
               singleAttemptAnalysisInput: {{ version: '1.0.0', generatedAt: endTime, examId: assetId, sessionId, type: 'reading', category: asset.category, totalQuestions: 1, correctAnswers: correct, accuracy: correct, durationSec: Number(body?.attempt?.durationSec || 30), dataQuality: {{ confidence: 0.75, source: 'practice_reading_session' }}, analysisSignals, questionTimelineLite, questionTypePerformance, unknownQuestions: 0, missingKindRatio: 0, confidence: 0.75, markedQuestions: [], highlights }},
               singleAttemptAnalysis: {{ summary: {{ accuracy: correct, durationSec: Number(body?.attempt?.durationSec || 30), unansweredRate: answer ? 0 : 1, changedAnswerRate: 0 }}, radar: {{ byQuestionKind: [], byPassageCategory: [{{ category: asset.category, total: 1, correct, accuracy: correct, confidence: 0.75 }}] }}, diagnosis: [{{ type: 'suite_passage', severity: 'low', message: '套题单篇已提交。', evidence: {{ assetId }} }}], nextActions: [{{ type: 'continue_suite', target: asset.category, instruction: '继续完成下一篇。', evidence: {{ suiteSessionId: SUITE_SESSION_ID }} }}], confidence: 0.75 }},
               singleAttemptAnalysisLlm: null,
-              analysisArtifacts: {{ highlights, markedQuestions: [], analysisSignals, questionTimelineLite, singleAttemptAnalysisInput: {{}}, singleAttemptAnalysis: {{}}, singleAttemptAnalysisLlm: null }},
               coachContext: {{ submitted: true, score: correct * 100, wrongQuestions: answer === 'A' ? [] : ['1'], selectedAnswers: {{ '1': answer }} }},
               metadata: {{ examId: assetId, title: asset.title, category: asset.category, type: 'reading', renderMode: 'vue-reading', practiceMode: 'suite', suiteSessionId: SUITE_SESSION_ID, suitePassageIndex: index, suitePassageTotal: 3, timerSnapshot: body?.attempt?.timerSnapshot || null }},
               legacy: {{ eventType: 'PRACTICE_COMPLETE', renderMode: 'vue-reading', practiceMode: 'suite' }}
@@ -283,11 +282,7 @@ async def install_api_stub(page) -> None:
                 ...storedSubmission,
                 readingCoachSnapshot: response,
                 readingCoachTranscript: transcript,
-                singleAttemptAnalysisLlm: suiteLlmPatch,
-                analysisArtifacts: {{
-                  ...storedSubmission.analysisArtifacts,
-                  singleAttemptAnalysisLlm: suiteLlmPatch
-                }}
+                singleAttemptAnalysisLlm: suiteLlmPatch
               }});
             }}
             return response;
@@ -406,6 +401,19 @@ async def install_api_stub(page) -> None:
     )
 
 
+async def accept_license_modal(page) -> None:
+    license_modal = page.locator("#license-modal.show")
+    await license_modal.wait_for(state="visible", timeout=10000)
+    await license_modal.locator('[data-index-action="accept-license"]').click()
+    await page.wait_for_function(
+        "() => !document.getElementById('license-modal')?.classList.contains('show')",
+        timeout=10000,
+    )
+    accepted = await page.evaluate("() => window.localStorage.getItem('hasSeenGplLicense')")
+    if accepted != "true":
+        raise AssertionError(f"license_accept_not_persisted:{accepted}")
+
+
 async def run_flow() -> dict:
     ensure_bundle()
     entry_url = f"{DIST_ENTRY.as_uri()}#/"
@@ -417,6 +425,7 @@ async def run_flow() -> dict:
 
         await page.goto(entry_url)
         await page.wait_for_selector('[data-practice-reading-home] h1:has-text("IELTS Atlas")', timeout=20000)
+        await accept_license_modal(page)
         await page.locator('[data-start-reading-suite]').click()
         await page.wait_for_selector('#suite-mode-selector-modal.show', timeout=10000)
         await page.locator('#suite-frequency-scope').select_option('custom')
@@ -490,6 +499,28 @@ async def run_flow() -> dict:
         await page.wait_for_selector('[data-reading-suite-summary]:has-text("3/3")', timeout=10000)
         await page.wait_for_selector('[data-reading-suite-summary]:has-text("100%")', timeout=10000)
 
+        await page.goto(f"{DIST_ENTRY.as_uri()}#/reading/p1-suite-e2e/review/reading-{SUITE_SESSION_ID}-p1?suiteSessionId={SUITE_SESSION_ID}")
+        await page.wait_for_url(f"**#/reading/p1-suite-e2e/review/reading-{SUITE_SESSION_ID}-p1?suiteSessionId={SUITE_SESSION_ID}", timeout=10000)
+        await page.wait_for_selector('[data-reading-review-panel]', timeout=10000)
+        await page.wait_for_selector('#review-nav-bar[data-review-index="0"][data-review-total="3"]', timeout=10000)
+        first_review_nav_state = await page.evaluate(
+            """() => ({
+              prevDisabled: document.querySelector('#review-nav-bar [data-review-dir="prev"]')?.disabled === true,
+              nextDisabled: document.querySelector('#review-nav-bar [data-review-dir="next"]')?.disabled === true,
+              viewMode: document.getElementById('review-nav-bar')?.dataset.viewMode || ''
+            })"""
+        )
+        if not first_review_nav_state.get("prevDisabled") or first_review_nav_state.get("nextDisabled") or first_review_nav_state.get("viewMode") != "review":
+            raise AssertionError(f"suite_review_nav_first_state_invalid:{first_review_nav_state}")
+        await page.locator('#review-nav-bar [data-review-dir="next"]').click()
+        await page.wait_for_url(f"**#/reading/p2-suite-e2e/review/reading-{SUITE_SESSION_ID}-p2?suiteSessionId={SUITE_SESSION_ID}", timeout=10000)
+        await page.wait_for_selector('#review-nav-bar[data-review-index="1"][data-review-total="3"]', timeout=10000)
+        await page.locator('#review-nav-bar [data-review-dir="prev"]').click()
+        await page.wait_for_url(f"**#/reading/p1-suite-e2e/review/reading-{SUITE_SESSION_ID}-p1?suiteSessionId={SUITE_SESSION_ID}", timeout=10000)
+        await page.wait_for_selector('#review-nav-bar[data-review-index="0"][data-review-total="3"]', timeout=10000)
+        await page.locator('a:has-text("返回套题进度")').click()
+        await page.wait_for_url(f"**#/reading-suite/{SUITE_SESSION_ID}", timeout=10000)
+
         replay_counts_before = await page.evaluate(
             """() => ({
               failedSuiteStateLoads: window.__practiceReadingSuiteFailedStateLoads,
@@ -497,7 +528,11 @@ async def run_flow() -> dict:
             })"""
         )
         await page.evaluate("() => { window.__practiceReadingSuiteFailNextState = true; }")
-        await page.locator('[data-reading-suite-passage="p1-suite-e2e"] button:has-text("复盘")').click()
+        await page.evaluate(
+            f"""() => {{
+              window.location.hash = '#/reading/p1-suite-e2e/review/reading-{SUITE_SESSION_ID}-p1?suiteSessionId={SUITE_SESSION_ID}';
+            }}"""
+        )
         await page.wait_for_url(f"**#/reading/p1-suite-e2e/review/reading-{SUITE_SESSION_ID}-p1?suiteSessionId={SUITE_SESSION_ID}", timeout=10000)
         await page.wait_for_selector('[data-reading-review-panel]', timeout=10000)
         await page.wait_for_selector('text=1 / 1 · 100%', timeout=10000)

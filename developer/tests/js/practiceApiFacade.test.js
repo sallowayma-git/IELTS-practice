@@ -668,6 +668,52 @@ async function testReadingAssetPayloadCacheHotPath() {
     }
 }
 
+async function testReadingAssetForceRefreshClearsLoaderCache() {
+    const runtime = require(path.join(repoRoot, 'server/dist/lib/practice/reading-assets.js'))
+    runtime.clearReadingAssetCaches()
+    const { app } = await createApp()
+    try {
+        let response = await app.inject({
+            method: 'GET',
+            url: '/api/practice/assets/reading/p2-low-148'
+        })
+        assert.strictEqual(response.statusCode, 200)
+        let stats = runtime.getReadingAssetCacheStats()
+        assert.strictEqual(stats.manifestCached, true)
+        assert.strictEqual(stats.payloadEntries, 1)
+        assert.deepStrictEqual(stats.payloadAssetIds, ['p2-low-148'])
+
+        response = await app.inject({
+            method: 'GET',
+            url: '/api/practice/assets?activity=reading&page=1&limit=20&refresh=true'
+        })
+        assert.strictEqual(response.statusCode, 200)
+        stats = runtime.getReadingAssetCacheStats()
+        assert.strictEqual(stats.manifestCached, true)
+        assert.strictEqual(stats.payloadEntries, 0)
+
+        response = await app.inject({
+            method: 'GET',
+            url: '/api/practice/assets/reading/p2-low-148'
+        })
+        assert.strictEqual(response.statusCode, 200)
+        assert.strictEqual(runtime.getReadingAssetCacheStats().payloadEntries, 1)
+
+        response = await app.inject({
+            method: 'GET',
+            url: '/api/practice/assets/reading/p2-low-148?refresh=1'
+        })
+        assert.strictEqual(response.statusCode, 200)
+        stats = runtime.getReadingAssetCacheStats()
+        assert.strictEqual(stats.manifestCached, true)
+        assert.strictEqual(stats.payloadEntries, 1)
+        assert.deepStrictEqual(stats.payloadAssetIds, ['p2-low-148'])
+    } finally {
+        await app.close()
+        runtime.clearReadingAssetCaches()
+    }
+}
+
 async function testReadingInteractionCoverage() {
     const { app } = await createApp()
     const assets = []
@@ -999,7 +1045,10 @@ async function testReadingSessionSubmitScoreAndReview() {
     assert.ok(Array.isArray(data.submission.singleAttemptAnalysis.radar.byQuestionKind))
     assert.ok(Array.isArray(data.submission.singleAttemptAnalysis.nextActions))
     assert.strictEqual(data.submission.singleAttemptAnalysisInput.analysisSignals.changedAnswerCount, 1)
-    assert.strictEqual(data.submission.analysisArtifacts.analysisSignals.markedQuestionCount, 2)
+    assert.strictEqual(data.submission.analysisArtifacts.analysisSignals.changedAnswerCount, 1)
+    assert.strictEqual(data.submission.analysisArtifacts.highlights[0].text, data.submission.highlights[0].text)
+    assert.strictEqual(data.submission.analysisArtifacts.questionTimelineLite.find((item) => item.questionId === 'q1').durationMs, 12000)
+    assert.strictEqual(data.submission.analysisArtifacts.singleAttemptAnalysis.summary.accuracy, 1)
     assert.strictEqual(data.historyRecord.activity, 'reading')
     assert.strictEqual(data.historyRecord.sessionId, data.sessionId)
     assert.strictEqual(Object.prototype.hasOwnProperty.call(data.historyRecord, 'legacyRecord'), false)
@@ -1443,6 +1492,7 @@ async function testReadingHistoryPersistsAcrossPracticeServiceInstances() {
         assert.strictEqual(detail.submission.readingCoachSnapshot.answer, 'Use paragraph evidence first.')
         assert.ok(detail.submission.readingCoachTranscript.length >= 2)
         assert.strictEqual(detail.submission.singleAttemptAnalysisLlm.diagnosis[0].reason, '定位后没有复核限定词。')
+        assert.strictEqual(detail.submission.singleAttemptAnalysisLlm.nextActions[0].instruction, '先定位，再核对限定词，最后排除局部真实但不答题的选项。')
         assert.strictEqual(detail.submission.analysisArtifacts.singleAttemptAnalysisLlm.nextActions[0].instruction, '先定位，再核对限定词，最后排除局部真实但不答题的选项。')
         await second.app.close()
     } finally {
@@ -1559,7 +1609,47 @@ async function testReadingHistoryArchiveRoundTrip() {
                         q6: 'dancing'
                     },
                     markedQuestions: ['q6'],
-                    durationSec: 96
+                    highlights: [
+                        {
+                            scope: 'passage',
+                            text: 'archive canonical highlight',
+                            kind: 'note',
+                            startOffset: 4,
+                            endOffset: 31,
+                            before: 'Before',
+                            after: 'After',
+                            occurrence: 1
+                        }
+                    ],
+                    questionTimelineLite: [
+                        {
+                            questionId: 'q6',
+                            firstAnsweredAt: '2026-05-21T00:00:20.000Z',
+                            lastAnsweredAt: '2026-05-21T00:01:20.000Z',
+                            changeCount: 2,
+                            visitCount: 5,
+                            elapsedMs: 42000
+                        }
+                    ],
+                    interactionCount: 6,
+                    startTime: '2026-05-21T00:00:00.000Z',
+                    endTime: '2026-05-21T00:01:36.000Z',
+                    durationSec: 96,
+                    timerSnapshot: {
+                        running: false,
+                        elapsedSeconds: 96,
+                        durationSeconds: 96,
+                        displaySeconds: 96,
+                        effectiveStartTimeMs: 1779321600000,
+                        effectiveEndTimeMs: 1779321696000,
+                        anchorMs: 1779321600000,
+                        mode: 'elapsed',
+                        limitSeconds: null,
+                        source: 'local',
+                        actualEndTimeMs: 1779321696000,
+                        pausedAtMs: 1779321696000,
+                        pausedOffsetMs: 0
+                    }
                 },
                 settings: {
                     sessionId
@@ -1568,6 +1658,22 @@ async function testReadingHistoryArchiveRoundTrip() {
         })
         assert.strictEqual(createResponse.statusCode, 200)
         const created = createResponse.json().data
+
+        const coachResponse = await source.app.inject({
+            method: 'POST',
+            url: '/api/practice/coach',
+            payload: {
+                activity: 'reading',
+                sessionId,
+                payload: {
+                    query: 'Archive this automatic review.',
+                    surface: 'review_workspace',
+                    action: 'review_set',
+                    promptKind: 'preset'
+                }
+            }
+        })
+        assert.strictEqual(coachResponse.statusCode, 200)
 
         const archiveResponse = await source.app.inject({
             method: 'GET',
@@ -1581,7 +1687,28 @@ async function testReadingHistoryArchiveRoundTrip() {
         assert.strictEqual(archive.submissions.length, 1)
         assert.strictEqual(archive.submissions[0].sessionId, sessionId)
         assert.strictEqual(archive.submissions[0].answers.q1, 'B')
-        assert.strictEqual(archive.submissions[0].analysisArtifacts.analysisSignals.markedQuestionCount, 1)
+        assert.strictEqual(archive.submissions[0].answerComparison.q1.normalizedUserAnswer[0], 'B')
+        assert.strictEqual(archive.submissions[0].scoreInfo.duration, 96)
+        assert.strictEqual(archive.submissions[0].metadata.timerSnapshot.durationSeconds, 96)
+        assert.strictEqual(archive.submissions[0].metadata.timerSnapshot.source, 'local')
+        assert.strictEqual(archive.submissions[0].highlights[0].text, 'archive canonical highlight')
+        assert.strictEqual(archive.submissions[0].highlights[0].kind, 'note')
+        assert.strictEqual(archive.submissions[0].questionTimelineLite.find((item) => item.questionId === 'q6').visitCount, 5)
+        assert.strictEqual(archive.submissions[0].questionTimelineLite.find((item) => item.questionId === 'q6').durationMs, 42000)
+        assert.strictEqual(archive.submissions[0].analysisSignals.markedQuestionCount, 1)
+        assert.strictEqual(archive.submissions[0].questionTimelineLite.find((item) => item.questionId === 'q6').changeCount, 2)
+        assert.strictEqual(archive.submissions[0].readingCoachSnapshot.answer, 'Use paragraph evidence first.')
+        assert.ok(
+            archive.submissions[0].readingCoachTranscript.some((entry) => entry.role === 'user' && entry.content === 'Archive this automatic review.'),
+            'archive export must keep review_set user turn in canonical transcript'
+        )
+        assert.ok(
+            archive.submissions[0].readingCoachTranscript.some((entry) => entry.role === 'assistant' && entry.content === 'Use paragraph evidence first.'),
+            'archive export must keep review_set assistant turn in canonical transcript'
+        )
+        assert.strictEqual(archive.submissions[0].singleAttemptAnalysisLlm.diagnosis[0].reason, '定位后没有复核限定词。')
+        assert.strictEqual(archive.submissions[0].singleAttemptAnalysisLlm.nextActions[0].instruction, '先定位，再核对限定词，最后排除局部真实但不答题的选项。')
+        assert.strictEqual(archive.submissions[0].analysisArtifacts.singleAttemptAnalysisLlm.nextActions[0].instruction, '先定位，再核对限定词，最后排除局部真实但不答题的选项。')
         assert.strictEqual(Object.prototype.hasOwnProperty.call(archive.submissions[0], 'legacyRecord'), false)
         await source.app.close()
 
@@ -1609,7 +1736,22 @@ async function testReadingHistoryArchiveRoundTrip() {
         assert.strictEqual(replay.submission.sessionId, sessionId)
         assert.strictEqual(replay.submission.answers.q6, 'dancing')
         assert.strictEqual(replay.submission.scoreInfo.totalQuestions, created.submission.scoreInfo.totalQuestions)
+        assert.strictEqual(replay.submission.scoreInfo.duration, 96)
+        assert.strictEqual(replay.submission.answerComparison.q1.normalizedUserAnswer[0], 'B')
+        assert.strictEqual(replay.submission.metadata.timerSnapshot.durationSeconds, 96)
         assert.deepStrictEqual(replay.submission.markedQuestions, ['q6'])
+        assert.strictEqual(replay.submission.highlights[0].text, 'archive canonical highlight')
+        assert.strictEqual(replay.submission.questionTimelineLite.find((item) => item.questionId === 'q6').visitCount, 5)
+        assert.strictEqual(replay.submission.highlights[0].kind, 'note')
+        assert.strictEqual(replay.submission.questionTimelineLite.find((item) => item.questionId === 'q6').durationMs, 42000)
+        assert.strictEqual(replay.submission.readingCoachSnapshot.answer, 'Use paragraph evidence first.')
+        assert.ok(
+            replay.submission.readingCoachTranscript.some((entry) => entry.role === 'user' && entry.content === 'Archive this automatic review.'),
+            'archive import/replay must keep review_set user turn in canonical transcript'
+        )
+        assert.strictEqual(replay.submission.singleAttemptAnalysisLlm.diagnosis[0].reason, '定位后没有复核限定词。')
+        assert.strictEqual(replay.submission.singleAttemptAnalysisLlm.nextActions[0].instruction, '先定位，再核对限定词，最后排除局部真实但不答题的选项。')
+        assert.strictEqual(replay.submission.analysisArtifacts.singleAttemptAnalysisLlm.nextActions[0].instruction, '先定位，再核对限定词，最后排除局部真实但不答题的选项。')
 
         const invalidImportResponse = await target.app.inject({
             method: 'POST',
@@ -1983,11 +2125,13 @@ async function testPracticeCoachKeepsFullGeneratedQuestionAnalyses() {
     assert.strictEqual(detailResponse.statusCode, 200)
     const detail = detailResponse.json().data
     assert.strictEqual(detail.submission.singleAttemptAnalysisLlm.reviewQuestionAnalyses.length, 6)
+    assert.strictEqual(detail.submission.singleAttemptAnalysisLlm.reviewQuestionAnalyses[5].nextRule, 'Q19 下次规则')
     assert.strictEqual(detail.submission.analysisArtifacts.singleAttemptAnalysisLlm.reviewQuestionAnalyses[5].nextRule, 'Q19 下次规则')
 
     assert.strictEqual(replayResponse.statusCode, 200)
     const replay = replayResponse.json().data
     assert.strictEqual(replay.submission.singleAttemptAnalysisLlm.reviewQuestionAnalyses.length, 6)
+    assert.strictEqual(replay.submission.singleAttemptAnalysisLlm.reviewQuestionAnalyses[5].whyWrongAnswerFails, 'Q19 排除理由')
     assert.strictEqual(replay.submission.analysisArtifacts.singleAttemptAnalysisLlm.reviewQuestionAnalyses[5].whyWrongAnswerFails, 'Q19 排除理由')
 }
 
@@ -2149,7 +2293,7 @@ async function testPracticeCoachPreservesReturnedSingleAttemptLlm() {
             sessionId,
             payload: {
                 query: 'Run the automatic review.',
-                surface: 'review_panel',
+                surface: 'review_workspace',
                 action: 'review_set',
                 promptKind: 'preset'
             }
@@ -2503,6 +2647,7 @@ async function testPracticeCoachReviewWorkspaceChatExposesPersistedPatch() {
     assert.strictEqual(detailResponse.statusCode, 200)
     const detail = detailResponse.json().data
     assert.strictEqual(detail.submission.singleAttemptAnalysisLlm.model_trace.source, 'reading_coach_v2')
+    assert.strictEqual(detail.submission.singleAttemptAnalysisLlm.diagnosis[0].evidence.source, 'reading_coach_review_overall')
     assert.strictEqual(detail.submission.analysisArtifacts.singleAttemptAnalysisLlm.diagnosis[0].evidence.source, 'reading_coach_review_overall')
 }
 
@@ -2685,7 +2830,9 @@ async function testPracticeCoachFailureKeepsSubmittedReadingSession() {
     assert.strictEqual(detailResponse.statusCode, 200)
     const detail = detailResponse.json().data
     assert.strictEqual(detail.submission.sessionId, sessionId)
+    assert.ok(detail.submission.analysisSignals, 'history detail must keep canonical analysis signals after coach failure')
     assert.ok(detail.submission.analysisArtifacts.analysisSignals, 'history detail must keep base analysis artifacts after coach failure')
+    assert.strictEqual(detail.submission.analysisArtifacts.singleAttemptAnalysisLlm, null)
     assert.ok(
         detail.submission.readingCoachTranscript.some((entry) => entry.role === 'assistant' && entry.isError === true && entry.snapshot?.error === true),
         'history detail must persist coach failure snapshot for replay'
@@ -2725,6 +2872,7 @@ async function main() {
     await testReadingAssetDetailMinifiedWrapperFacade()
     await testMissingReadingAssetDetail()
     await testReadingAssetPayloadCacheHotPath()
+    await testReadingAssetForceRefreshClearsLoaderCache()
     await testReadingInteractionCoverage()
     await testPracticeMigrationStatusFacade()
     await testWritingAssetFacade()

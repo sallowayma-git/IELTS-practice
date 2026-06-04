@@ -165,7 +165,10 @@
             :class="{ active: selectedType === filter.value }"
             type="button"
             :aria-pressed="selectedType === filter.value ? 'true' : 'false'"
+            :hidden="filter.hidden ? true : null"
             :data-filter-type="filter.value"
+            data-index-action="filter-exams"
+            :data-action-value="filter.value"
             data-action="filter-exam-type"
             @click="filterByType(filter.value)"
           >
@@ -184,6 +187,7 @@
               id="exam-search-input"
               placeholder="搜索题目..."
               aria-label="搜索题目"
+              data-index-action="search-exams"
               data-input-action="search-exams"
               data-input-event="keyup"
             >
@@ -193,6 +197,7 @@
               id="search-clear-btn"
               aria-label="清除搜索"
               :hidden="!keyword"
+              data-index-action="clear-search"
               data-action="clear-exam-search"
               @click="clearSearch"
             >
@@ -666,22 +671,57 @@
           <h3 class="hero-panel__title heading-serif">📈 练习历史</h3>
           <div id="record-type-filter-buttons" class="hero-panel__actions shui-filter-group shui-segmented-control">
             <span class="shui-segmented-indicator" aria-hidden="true"></span>
-            <button class="shui-segmented-btn shui-filter-btn active" type="button" aria-pressed="true" data-filter-type="all" data-action="filter-record-type">
+            <button
+              class="shui-segmented-btn shui-filter-btn"
+              :class="{ active: selectedHistoryType === 'all' }"
+              type="button"
+              :aria-pressed="selectedHistoryType === 'all' ? 'true' : 'false'"
+              data-filter-type="all"
+              data-index-action="filter-records"
+              data-action-value="all"
+              data-action="filter-record-type"
+              @click="filterRecords('all')"
+            >
               全部
             </button>
-            <button class="shui-segmented-btn shui-filter-btn" type="button" aria-pressed="false" data-filter-type="reading" data-action="filter-record-type">
+            <button
+              class="shui-segmented-btn shui-filter-btn"
+              :class="{ active: selectedHistoryType === 'reading' }"
+              type="button"
+              :aria-pressed="selectedHistoryType === 'reading' ? 'true' : 'false'"
+              data-filter-type="reading"
+              data-index-action="filter-records"
+              data-action-value="reading"
+              data-action="filter-record-type"
+              @click="filterRecords('reading')"
+            >
               阅读
             </button>
           </div>
           <div class="hero-panel__actions">
-            <button class="btn btn-secondary hero-btn hero-btn--ghost" type="button" data-action="export-practice-markdown" :disabled="historyBusy" @click="exportPracticeMarkdown">
-              导出Markdown
+            <button class="btn btn-secondary hero-btn hero-btn--ghost" type="button" data-index-action="export-practice-markdown" data-action="export-practice-markdown" :disabled="historyBusy" @click="exportPracticeMarkdown">
+              📄 导出Markdown
             </button>
-            <button class="btn btn-info hero-btn" id="bulk-delete-btn" type="button" data-action="toggle-bulk-delete" :disabled="historyBusy" @click="toggleBulkDeleteMode">
+            <button class="btn btn-info hero-btn" id="bulk-delete-btn" type="button" data-index-action="toggle-bulk-delete" data-action="toggle-bulk-delete" :disabled="historyBusy" @click="toggleBulkDeleteMode">
+              <svg
+                viewBox="0 0 24 24"
+                width="1em"
+                height="1em"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="ui-emoji-icon"
+                aria-hidden="true"
+              >
+                <polyline points="9 11 12 14 22 4"></polyline>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+              </svg>
               {{ bulkDeleteButtonLabel }}
             </button>
-            <button class="btn btn-warning hero-btn hero-btn--warn" type="button" data-action="clear-practice-data" :disabled="historyBusy" @click="clearPracticeData">
-              清除记录
+            <button class="btn btn-warning hero-btn hero-btn--warn" type="button" data-index-action="clear-practice-data" data-action="clear-practice-data" :disabled="historyBusy" @click="clearPracticeData">
+              🗑️ 清除记录
             </button>
           </div>
         </div>
@@ -720,11 +760,10 @@
             <div class="spinner"></div>
             <p>正在加载练习记录...</p>
           </div>
-          <div v-else-if="filteredHistory.length === 0" class="practice-history-empty">
-            <div class="practice-history-empty-icon" aria-hidden="true">📂</div>
-            <p class="practice-history-empty-text">暂无任何练习记录</p>
-            <p>开始练习后，记录将自动保存在这里</p>
-            <button class="btn btn-primary" type="button" @click="browseCategory('all', 'reading')">去题库练习</button>
+          <div v-else-if="filteredHistory.length === 0" class="history-empty-placeholder">
+            <div class="history-empty-placeholder__icon" aria-hidden="true">📋</div>
+            <p>暂无练习记录</p>
+            <p class="history-empty-placeholder__note">开始练习后，记录将自动保存在这里</p>
           </div>
           <div
             v-for="record in filteredHistory"
@@ -813,7 +852,7 @@
           <div class="tool-card-icon" v-html="icons.vocabLarge"></div>
           <div class="tool-card-content">
             <h3>单词背诵</h3>
-            <p>本地 Leitner 分箱 + 艾宾浩斯复习节奏，随时继续你的词汇任务。</p>
+            <p>SM-2记忆算法，随时继续你的词汇任务。</p>
           </div>
           <div class="tool-card-arrow">进入</div>
         </button>
@@ -825,7 +864,13 @@
           </div>
           <div class="tool-card-arrow">进入</div>
         </button>
-        <button class="tool-card" type="button" data-action="show-achievements" @click="showAchievementsTool">
+        <button
+          class="tool-card"
+          type="button"
+          data-index-action="show-achievements"
+          data-action="show-achievements"
+          @click="showAchievementsTool"
+        >
           <div class="tool-card-icon" v-html="icons.achievementLarge"></div>
           <div class="tool-card-content">
             <h3>成就</h3>
@@ -841,13 +886,19 @@
     </section>
 
     <div id="achievements-modal" class="theme-modal">
-      <div class="theme-modal-content" style="max-width: 600px;">
+      <div class="theme-modal-content achievements-modal-content">
         <div class="theme-modal-header">
-          <h3 class="heading-serif">
-            <span class="ui-emoji-icon" v-html="icons.achievementSmall"></span>
-            我的成就
-          </h3>
-          <button class="theme-modal-close" type="button" data-action="hide-achievements" aria-label="关闭" @click="hideAchievementsTool">×</button>
+          <h3>🏆 我的成就</h3>
+          <button
+            class="theme-modal-close"
+            type="button"
+            data-index-action="hide-achievements"
+            data-action="hide-achievements"
+            aria-label="关闭"
+            @click="hideAchievementsTool"
+          >
+            ×
+          </button>
         </div>
         <div class="theme-modal-body">
           <div class="achievements-grid" id="achievements-list"></div>
@@ -1020,7 +1071,7 @@
               </svg>
               题库配置切换
             </button>
-            <button class="btn btn-warning hero-btn hero-btn--warn" id="force-refresh-btn" type="button" data-action="force-refresh" @click="loadReadingData">
+            <button class="btn btn-warning hero-btn hero-btn--warn" id="force-refresh-btn" type="button" data-action="force-refresh" @click="forceRefreshReadingData">
               🔄 强制刷新题库
             </button>
           </div>
@@ -1181,6 +1232,44 @@
       </div>
     </div>
 
+    <div id="license-modal" :class="{ show: licenseModalVisible }">
+      <div class="lm-card">
+        <h2 class="lm-title">开源项目使用须知</h2>
+        <div class="lm-body">
+          <p>
+            感谢使用！本项目是免费软件，采用 <strong>GPL-3.0 License</strong> 发布。
+          </p>
+          <p class="lm-warning">
+            我们明确反对任何形式的倒卖、改名后二次分发、牟利、使用该项目商业引流等行为。
+          </p>
+          <p>
+            本项目的初衷是自由使用、学习与改进，而不是作为倒卖工具获取不正当收益。
+          </p>
+          <p>
+            腾讯文档：
+            <a
+              href="https://docs.qq.com/doc/DSXZhWUtqeVN0d1ZT"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="lm-warning"
+            >
+              问题反馈
+            </a>
+          </p>
+          <div class="lm-info-box">
+            <p>
+              任何分发、修改或再发布行为，都必须遵守 GPL-3.0 协议，包括<strong>公开源码、保留开源许可，并尊重用户的自由</strong>。
+            </p>
+          </div>
+        </div>
+        <div class="lm-footer">
+          <button class="lm-btn" type="button" data-index-action="accept-license" @click="acceptGplLicense">
+            我已了解
+          </button>
+        </div>
+      </div>
+    </div>
+
     <p v-if="localMessage" class="practice-local-message" role="status">{{ localMessage }}</p>
   </div>
 </template>
@@ -1194,6 +1283,7 @@ const router = useRouter()
 const route = useRoute()
 const ENDLESS_STATE_KEY = 'practice_reading_endless_state_v1'
 const READING_BACKUP_STORAGE_KEY = 'practice_reading_archive_backups_v1'
+const LICENSE_STORAGE_KEY = 'hasSeenGplLicense'
 const MAX_READING_BACKUPS = 10
 const SUITE_FLOW_MODE_STORAGE_KEY = 'suite_flow_mode'
 const SUITE_FREQUENCY_SCOPE_STORAGE_KEY = 'suite_frequency_scope'
@@ -1240,7 +1330,8 @@ const legacyViews = [
 
 const typeFilters = [
   { value: 'all', label: '全部' },
-  { value: 'reading', label: '阅读' }
+  { value: 'reading', label: '阅读' },
+  { value: 'listening', label: '听力', hidden: true }
 ]
 
 const frequencyFilters = [
@@ -1320,8 +1411,10 @@ const suiteFrequencyOptions = [
 const customSuiteCategories = ['P1', 'P2', 'P3']
 
 const activeView = ref('overview')
+const licenseModalVisible = ref(false)
 const selectedCategory = ref('all')
 const selectedType = ref('all')
+const selectedHistoryType = ref('all')
 const frequencyFilter = ref('all')
 const keyword = ref('')
 const historyKeyword = ref('')
@@ -1412,16 +1505,23 @@ const sortedHistory = computed(() => readingHistory.value.slice().sort((left, ri
 
 const filteredHistory = computed(() => {
   const query = historyKeyword.value.trim().toLowerCase()
-  if (!query) return sortedHistory.value
-  return sortedHistory.value.filter((record) => [
-    record.id,
-    record.title,
-    record.assetId,
-    record.examId,
-    record.metadata?.category,
-    record.submittedAt,
-    record.endTime
-  ].filter(Boolean).join(' ').toLowerCase().includes(query))
+  return sortedHistory.value.filter((record) => {
+    if (!historyRecordMatchesType(record, selectedHistoryType.value)) return false
+    if (!query) return true
+    return [
+      record.id,
+      record.title,
+      record.assetId,
+      record.examId,
+      record.activity,
+      record.type,
+      record.metadata?.activity,
+      record.metadata?.type,
+      record.metadata?.category,
+      record.submittedAt,
+      record.endTime
+    ].filter(Boolean).join(' ').toLowerCase().includes(query)
+  })
 })
 
 const historyStats = computed(() => {
@@ -1591,6 +1691,7 @@ const customSuiteReady = computed(() => customSuiteCategories.every((category) =
 onMounted(() => {
   syncViewFromRoute()
   loadReadingData()
+  initLicenseModal()
   updateLiquidIndicator()
   updateSegmentedIndicators()
   scheduleBrowsePositionRestore()
@@ -1615,27 +1716,36 @@ watch(selectedType, () => {
   nextTick(updateSegmentedIndicators)
 })
 
+watch(selectedHistoryType, () => {
+  nextTick(updateSegmentedIndicators)
+})
+
 watch(filteredReadingAssets, () => {
   if (activeView.value === 'browse') {
     scheduleBrowsePositionRestore()
   }
 })
 
-async function loadReadingData() {
+async function loadReadingData(options = {}) {
   await Promise.all([
-    loadAssets(),
+    loadAssets(options),
     loadHistory()
   ])
 }
 
-async function loadAssets() {
+async function loadAssets(options = {}) {
   loading.value = true
   error.value = ''
   try {
-    const result = await practiceAssets.listAll({ activity: 'reading' })
+    const result = await practiceAssets.listAll({ activity: 'reading' }, {
+      refresh: Boolean(options.refresh)
+    })
     readingAssets.value = Array.isArray(result?.data) ? result.data : []
     latestAssetSyncAt.value = new Date()
     scheduleBrowsePositionRestore()
+    if (options.refresh) {
+      showLocalMessage('题库刷新完成')
+    }
   } catch (loadError) {
     console.error('加载阅读题库失败:', loadError)
     readingAssets.value = []
@@ -1645,6 +1755,12 @@ async function loadAssets() {
   } finally {
     loading.value = false
   }
+}
+
+async function forceRefreshReadingData(event) {
+  event?.preventDefault?.()
+  event?.stopImmediatePropagation?.()
+  await loadReadingData({ refresh: true })
 }
 
 async function loadHistory() {
@@ -1689,6 +1805,34 @@ function updateRouteView(view) {
 function showView(view) {
   if (!legacyViews.some((item) => item.value === view)) return
   activeView.value = view
+}
+
+function hasAcceptedLicense() {
+  try {
+    return window.localStorage?.getItem(LICENSE_STORAGE_KEY) === 'true'
+  } catch (_) {
+    return true
+  }
+}
+
+function initLicenseModal() {
+  if (hasAcceptedLicense()) return
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      licenseModalVisible.value = true
+    })
+  })
+}
+
+function acceptGplLicense(event) {
+  event?.preventDefault?.()
+  event?.stopImmediatePropagation?.()
+  try {
+    window.localStorage?.setItem(LICENSE_STORAGE_KEY, 'true')
+  } catch (error) {
+    console.warn('LocalStorage error:', error)
+  }
+  licenseModalVisible.value = false
 }
 
 function normalizeCategory(category) {
@@ -1804,6 +1948,17 @@ function filterByType(type) {
   if (selectedType.value === 'all') {
     selectedCategory.value = 'all'
   }
+}
+
+function filterRecords(type) {
+  selectedHistoryType.value = type === 'reading' ? 'reading' : 'all'
+}
+
+function historyRecordMatchesType(record, type) {
+  if (type !== 'reading') return true
+  const activity = String(record?.activity || record?.metadata?.activity || '').trim().toLowerCase()
+  const recordType = String(record?.type || record?.metadata?.type || '').trim().toLowerCase()
+  return activity === 'reading' || recordType === 'reading' || Boolean(record?.assetId || record?.examId)
 }
 
 function browseCategory(category, type = 'reading') {
@@ -2157,7 +2312,9 @@ async function openVocabTool(event) {
   }
 }
 
-async function showAchievementsTool() {
+async function showAchievementsTool(event) {
+  event?.preventDefault?.()
+  event?.stopImmediatePropagation?.()
   try {
     await ensureLegacyMoreTools()
     if (typeof window.showAchievements !== 'function') {
@@ -2187,7 +2344,9 @@ function openReadingMemorize() {
   })
 }
 
-function hideAchievementsTool() {
+function hideAchievementsTool(event) {
+  event?.preventDefault?.()
+  event?.stopImmediatePropagation?.()
   if (typeof window.hideAchievements === 'function') {
     window.hideAchievements()
     return
@@ -2453,7 +2612,7 @@ function openReadingReview(record) {
 }
 
 function getReadingHistorySuiteSessionId(record) {
-  const metadata = record?.metadata || record?.submission?.metadata || record?.raw?.metadata || {}
+  const metadata = record?.metadata || {}
   return String(metadata.suiteSessionId || metadata.suite_session_id || '').trim()
 }
 
@@ -3623,8 +3782,7 @@ function updateSegmentedIndicators() {
   box-shadow: 0 8px 20px rgba(215, 180, 140, 0.14), 0 4px 10px rgba(53, 192, 161, 0.12);
 }
 
-.exam-list-empty,
-.practice-history-empty {
+.exam-list-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3638,13 +3796,11 @@ function updateSegmentedIndicators() {
   color: var(--color-gray-700);
 }
 
-.exam-list-empty-icon,
-.practice-history-empty-icon {
+.exam-list-empty-icon {
   font-size: 2.5rem;
 }
 
-.exam-list-empty-text,
-.practice-history-empty-text {
+.exam-list-empty-text {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
 }
@@ -3652,6 +3808,22 @@ function updateSegmentedIndicators() {
 .exam-list-empty-hint {
   font-size: var(--font-size-sm);
   color: var(--color-gray-500);
+}
+
+.history-empty-placeholder {
+  text-align: center;
+  padding: 40px;
+  opacity: 0.7;
+}
+
+.history-empty-placeholder__icon {
+  font-size: 3em;
+  margin-bottom: 15px;
+}
+
+.history-empty-placeholder__note {
+  font-size: 0.9em;
+  margin-top: 10px;
 }
 
 .practice-stats {
@@ -3804,6 +3976,23 @@ function updateSegmentedIndicators() {
   margin: 0;
 }
 
+.achievements-modal-content {
+  max-width: 720px;
+}
+
+.achievements-grid {
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 12px;
+  padding: 18px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.achievements-grid::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 .hero-settings-group {
   display: grid;
   gap: var(--space-xl);
@@ -3892,6 +4081,266 @@ function updateSegmentedIndicators() {
   background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow-lg);
   border: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+.theme-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.3s ease, visibility 0s linear 0.3s;
+  z-index: 2000;
+}
+
+.theme-modal.show {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 0.3s ease;
+}
+
+.theme-modal-content {
+  width: min(900px, 92vw);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 24px;
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.25),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transform: scale(0.95);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.theme-modal.show .theme-modal-content {
+  transform: scale(1);
+}
+
+.theme-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 32px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.theme-modal-header h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.theme-modal-close {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  color: #64748b;
+  background: rgba(0, 0, 0, 0.05);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.theme-modal-close:hover {
+  color: #0f172a;
+  background: rgba(0, 0, 0, 0.1);
+  transform: rotate(90deg);
+}
+
+.theme-modal-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#license-modal {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(245, 244, 239, 0.88);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.35s ease, visibility 0s linear 0.35s;
+  z-index: 9999;
+}
+
+#license-modal.show {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 0.35s ease;
+}
+
+#license-modal .lm-card {
+  max-width: 480px;
+  width: calc(100% - 48px);
+  background: #fffefb;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.07),
+    0 24px 48px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-sizing: border-box;
+  transform: translateY(8px);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#license-modal.show .lm-card {
+  transform: translateY(0);
+}
+
+.clock-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  z-index: 1200;
+  transition:
+    opacity var(--transition-normal),
+    visibility var(--transition-normal);
+}
+
+.clock-overlay.is-hidden {
+  display: none !important;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+#license-modal .lm-title {
+  color: #1a1614;
+  font-size: 22px;
+  line-height: 32px;
+  font-weight: 600;
+  margin: 0 0 24px 0;
+}
+
+#license-modal .lm-body {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: left;
+}
+
+#license-modal .lm-body p {
+  margin: 0;
+  color: #5a534e;
+  font-size: 15px;
+  line-height: 24px;
+}
+
+#license-modal .lm-body .lm-warning {
+  color: #c06025;
+  font-weight: 600;
+}
+
+#license-modal .lm-body strong {
+  color: #1a1614;
+  font-weight: 600;
+}
+
+#license-modal .lm-info-box {
+  padding: 14px 16px;
+  background: #f8f5f0;
+  border: 1px solid #ede7dc;
+  border-radius: 10px;
+}
+
+#license-modal .lm-footer {
+  margin-top: 24px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+#license-modal .lm-btn {
+  background: #1a1614;
+  color: #fffefb;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 40px;
+  font-size: 15px;
+  line-height: 24px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 2px 4px rgba(0, 0, 0, 0.2),
+    0 4px 8px rgba(0, 0, 0, 0.1);
+  transition:
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.12s ease;
+}
+
+#license-modal .lm-btn:hover {
+  background: #2e2521;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.1) inset,
+    0 4px 10px rgba(0, 0, 0, 0.22),
+    0 8px 20px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+
+#license-modal .lm-btn:active {
+  background: #0f0c0b;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 1px 3px rgba(0, 0, 0, 0.2);
+  transform: translateY(0);
 }
 
 @keyframes spin {

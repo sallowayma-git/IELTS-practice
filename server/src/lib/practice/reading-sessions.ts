@@ -5,6 +5,8 @@ import type {
   ReadingPracticeAnalysisSignals,
   ReadingPracticeAnswers,
   ReadingPracticeHighlightRecord,
+  ReadingPracticeSingleAttemptAnalysis,
+  ReadingPracticeSingleAttemptAnalysisInput,
   ReadingPracticePayload,
   ReadingPracticeQuestionTypePerformance,
   ReadingPracticeSubmission,
@@ -400,14 +402,14 @@ function getWeakestKind(questionTypePerformance: Record<string, ReadingPracticeQ
 }
 
 function buildSingleAttemptAnalysis(
-  input: ReadingPracticeAnalysisArtifacts['singleAttemptAnalysisInput'],
+  input: ReadingPracticeSingleAttemptAnalysisInput,
   wrongQuestions: string[]
-): ReadingPracticeAnalysisArtifacts['singleAttemptAnalysis'] {
+): ReadingPracticeSingleAttemptAnalysis {
   const rateDenominator = input.analysisSignals.questionCount > 0 ? input.analysisSignals.questionCount : 1
   const unansweredRate = clampNumber(input.analysisSignals.unansweredCount / rateDenominator, 0, 1)
   const changedAnswerRate = clampNumber(input.analysisSignals.changedAnswerCount / rateDenominator, 0, 1)
   const weakestKind = getWeakestKind(input.questionTypePerformance)
-  const diagnosis: ReadingPracticeAnalysisArtifacts['singleAttemptAnalysis']['diagnosis'] = []
+  const diagnosis: ReadingPracticeSingleAttemptAnalysis['diagnosis'] = []
 
   if (input.accuracy < 0.6) {
     diagnosis.push({
@@ -450,7 +452,7 @@ function buildSingleAttemptAnalysis(
     })
   }
 
-  const nextActions: ReadingPracticeAnalysisArtifacts['singleAttemptAnalysis']['nextActions'] = []
+  const nextActions: ReadingPracticeSingleAttemptAnalysis['nextActions'] = []
   if (wrongQuestions.length) {
     nextActions.push({
       type: 'review_wrong_questions',
@@ -507,7 +509,7 @@ function buildSingleAttemptAnalysis(
   }
 }
 
-function buildAnalysisArtifacts(params: {
+function buildSubmissionAnalysisFields(params: {
   payload: ReadingPracticePayload
   attempt: AnyRecord
   sessionId: string
@@ -546,7 +548,7 @@ function buildAnalysisArtifacts(params: {
   const baseConfidence = 0.75
   const confidence = roundNumber(clampNumber(baseConfidence * (1 - missingKindRatio), 0.2, 0.9), 4)
   const questionTypePerformance = cloneQuestionTypePerformance(params.questionTypePerformance, confidence)
-  const input: ReadingPracticeAnalysisArtifacts['singleAttemptAnalysisInput'] = {
+  const input: ReadingPracticeSingleAttemptAnalysisInput = {
     version: '1.0.0',
     generatedAt: params.endTime,
     examId: params.payload.examId,
@@ -675,7 +677,7 @@ export function createReadingPracticeSubmission(
   const effectiveEndTime = normalizeIsoTimestamp(attempt.effectiveEndTime)
     || (effectiveEndTimeMs !== null ? new Date(effectiveEndTimeMs).toISOString() : null)
   const scrollY = normalizeScrollY(attempt.scrollY)
-  const analysisArtifacts = buildAnalysisArtifacts({
+  const analysisFields = buildSubmissionAnalysisFields({
     payload,
     attempt,
     sessionId,
@@ -690,7 +692,7 @@ export function createReadingPracticeSubmission(
     wrongQuestions
   })
 
-  return {
+  const submission: ReadingPracticeSubmission = {
     sessionId,
     activity: 'reading',
     status: 'submitted',
@@ -711,18 +713,17 @@ export function createReadingPracticeSubmission(
       accuracy,
       percentage: Math.round(accuracy * 100),
       duration,
-      source: 'practice_reading_session',
-      details: answerComparison
+      source: 'practice_reading_session'
     },
     questionTypePerformance,
-    highlights: analysisArtifacts.highlights,
-    markedQuestions: analysisArtifacts.markedQuestions,
-    analysisSignals: analysisArtifacts.analysisSignals,
-    questionTimelineLite: analysisArtifacts.questionTimelineLite,
-    singleAttemptAnalysisInput: analysisArtifacts.singleAttemptAnalysisInput,
-    singleAttemptAnalysis: analysisArtifacts.singleAttemptAnalysis,
-    singleAttemptAnalysisLlm: analysisArtifacts.singleAttemptAnalysisLlm,
-    analysisArtifacts,
+    highlights: analysisFields.highlights,
+    markedQuestions: analysisFields.markedQuestions,
+    analysisSignals: analysisFields.analysisSignals,
+    questionTimelineLite: analysisFields.questionTimelineLite,
+    singleAttemptAnalysisInput: analysisFields.singleAttemptAnalysisInput,
+    singleAttemptAnalysis: analysisFields.singleAttemptAnalysis,
+    singleAttemptAnalysisLlm: analysisFields.singleAttemptAnalysisLlm,
+    analysisArtifacts: analysisFields,
     readingCoachSnapshot: null,
     readingCoachTranscript: [],
     coachContext: {
@@ -753,4 +754,5 @@ export function createReadingPracticeSubmission(
       practiceMode: 'single'
     }
   }
+  return submission
 }
