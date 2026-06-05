@@ -20,7 +20,8 @@ function ensureServerBundle() {
 function createMockServices(options = {}) {
     const calls = {
         writingStarts: [],
-        readingCoachQueries: []
+        readingCoachQueries: [],
+        settingsQueries: []
     }
 
     return {
@@ -29,7 +30,27 @@ function createMockServices(options = {}) {
             db: options.db || {},
             configService: {},
             promptService: {},
-            settingsService: {},
+            settingsService: {
+                async get(key) {
+                    calls.settingsQueries.push(key)
+                    if (typeof options.settingsGet === 'function') {
+                        return options.settingsGet(key)
+                    }
+                    if (Object.prototype.hasOwnProperty.call(options, 'readingCoachEnabled') && key === 'practice.readingCoach.enabled') {
+                        return options.readingCoachEnabled
+                    }
+                    return true
+                },
+                async getAll() {
+                    return {}
+                },
+                async update(payload = {}) {
+                    return payload
+                },
+                async reset() {
+                    return true
+                }
+            },
             uploadService: {},
             essayService: {},
             topicService: {
@@ -392,21 +413,173 @@ async function testReadingAssetFacade() {
     assert.strictEqual(payload.data.data[0].payloadRef, payload.data.data[0].metadata.dataKey)
 }
 
-async function testReadingPdfOnlyAssetSummaryDoesNotInventPayloadRef() {
+function createProviderReadingPayload(assetId, category) {
+    return {
+        schemaVersion: 'ReadingExamSourceV1',
+        examId: assetId,
+        meta: {
+            title: `Provider ${category}`,
+            category,
+            frequency: 'high',
+            pdfFilename: null,
+            legacyPath: null,
+            legacyFilename: null,
+            questionIntroHtml: null
+        },
+        passage: {
+            blocks: [
+                {
+                    blockId: `${assetId}-passage`,
+                    kind: 'html',
+                    html: `<p>${assetId} passage</p>`
+                }
+            ]
+        },
+        questionGroups: [
+            {
+                groupId: `${assetId}-group`,
+                kind: 'provider-test',
+                questionIds: ['q1'],
+                bodyHtml: '<input name="q1" type="text" />',
+                leadHtml: null,
+                allowOptionReuse: false
+            }
+        ],
+        answerKey: {
+            q1: 'A'
+        },
+        questionOrder: ['q1'],
+        questionDisplayMap: {
+            q1: '1'
+        },
+        questionCount: 1,
+        interactionModel: {
+            q1: {
+                questionId: 'q1',
+                displayLabel: '1',
+                control: 'text',
+                source: 'fallback',
+                name: 'q1'
+            }
+        }
+    }
+}
+
+function createInjectedReadingAssetProvider() {
+    const calls = {
+        listAssets: 0,
+        getAsset: [],
+        getStatus: 0,
+        refresh: 0
+    }
+    const assets = ['P1', 'P2', 'P3'].map((category) => {
+        const id = `provider-${category.toLowerCase()}`
+        return {
+            id,
+            activity: 'reading',
+            title: `Provider ${category}`,
+            source: 'reading_exam',
+            category,
+            payloadRef: id,
+            metadata: {
+                dataKey: id,
+                frequency: 'high'
+            },
+            payload: createProviderReadingPayload(id, category)
+        }
+    })
+    const summaries = assets.map(({ payload, ...asset }) => asset)
+    return {
+        calls,
+        provider: {
+            listAssets() {
+                calls.listAssets += 1
+                return summaries.map((asset) => ({ ...asset, metadata: { ...asset.metadata } }))
+            },
+            getAsset(assetId) {
+                calls.getAsset.push(assetId)
+                const asset = assets.find((entry) => entry.id === assetId)
+                if (!asset) {
+                    const error = new Error(`not found: ${assetId}`)
+                    error.statusCode = 404
+                    error.code = 'practice_asset_not_found'
+                    throw error
+                }
+                return {
+                    ...asset,
+                    metadata: { ...asset.metadata },
+                    payload: JSON.parse(JSON.stringify(asset.payload))
+                }
+            },
+            getStatus() {
+                calls.getStatus += 1
+                return {
+                    source: 'builtin',
+                    ready: true,
+                    assetCount: assets.length,
+                    htmlCount: assets.length,
+                    pdfCount: 0,
+                    version: 'provider-test',
+                    lastLoadedAt: '2026-06-04T00:00:00.000Z',
+                    error: null
+                }
+            },
+            refresh() {
+                calls.refresh += 1
+                return this.getStatus()
+            }
+        }
+    }
+}
+
+async function testPracticeServiceUsesInjectedReadingAssetProvider() {
     const { PracticeService } = require(path.join(repoRoot, 'server/dist/lib/practice/service.js'))
-    const service = Object.create(PracticeService.prototype)
-    const asset = service.toReadingAsset('pdf-only-reading', {
-        examId: 'pdf-only-reading',
-        title: 'PDF only reading',
-        category: 'P1',
-        shuiPdf: 'assets/pdf/pdf-only-reading.pdf'
+    const bundle = createMockServices()
+    const injected = createInjectedReadingAssetProvider()
+    const service = new PracticeService(bundle.services, {
+        readingAssetProvider: injected.provider
     })
 
-    assert.strictEqual(asset.id, 'pdf-only-reading')
-    assert.strictEqual(asset.payloadRef, null)
-    assert.strictEqual(asset.metadata.dataKey, null)
-    assert.strictEqual(asset.metadata.script, null)
-    assert.strictEqual(asset.metadata.shuiPdf, 'assets/pdf/pdf-only-reading.pdf')
+    const listed = await service.listAssets({ activity: 'reading', page: 1, limit: 10, refresh: true })
+    assert.strictEqual(injected.calls.refresh, 1)
+    assert.strictEqual(listed.total, 3)
+    assert.deepStrictEqual(listed.data.map((asset) => asset.id), ['provider-p1', 'provider-p2', 'provider-p3'])
+    assert.strictEqual(listed.data[0].payload, undefined)
+
+    const detail = await service.getAsset('reading', 'provider-p1')
+    assert.strictEqual(detail.id, 'provider-p1')
+    assert.strictEqual(detail.payload.examId, 'provider-p1')
+
+    const session = await service.createSession({
+        activity: 'reading',
+        assetId: 'provider-p1',
+        attempt: {
+            answers: {
+                q1: 'A'
+            },
+            durationSec: 9
+        }
+    })
+    assert.strictEqual(session.status, 'submitted')
+    assert.strictEqual(session.submission.examId, 'provider-p1')
+    assert.strictEqual(session.submission.scoreInfo.correct, 1)
+
+    const suite = await service.createReadingSuite({
+        frequencyScope: 'custom',
+        sequence: ['provider-p1', 'provider-p2', 'provider-p3']
+    })
+    assert.deepStrictEqual(suite.sequence.map((entry) => entry.assetId), ['provider-p1', 'provider-p2', 'provider-p3'])
+    assert.deepStrictEqual(suite.sequence.map((entry) => entry.category), ['P1', 'P2', 'P3'])
+
+    const suiteSubmit = await service.submitReadingSuitePassage(suite.sessionId, 'provider-p1', {
+        answers: {
+            q1: 'A'
+        },
+        durationSec: 11
+    })
+    assert.strictEqual(suiteSubmit.suiteSession.currentIndex, 1)
+    assert.strictEqual(suiteSubmit.submission.metadata.practiceMode, 'suite')
+    assert.ok(injected.calls.getAsset.filter((assetId) => assetId === 'provider-p1').length >= 3)
 }
 
 async function testPracticePaginationClamp() {
@@ -812,8 +985,10 @@ async function testPracticeMigrationStatusFacade() {
     assert.strictEqual(capabilities.get('single-reading-practice').support, 'primary')
     assert.ok(capabilities.get('single-reading-practice').routePattern.includes('/reading/:assetId'))
     assert.ok(!capabilities.get('single-reading-practice').routePattern.includes('legacy fallback start'))
-    assert.ok(capabilities.get('single-reading-practice').apiSurface.includes('server/src/lib/practice/reading-assets.ts VM-free JSON parser'))
-    assert.ok(capabilities.get('single-reading-practice').apiSurface.includes('server/src/lib/practice/reading-assets.ts bounded payload cache'))
+    assert.ok(capabilities.get('single-reading-practice').apiSurface.includes('server/src/lib/practice/reading/ReadingAssetProvider.ts reading library provider contract'))
+    assert.ok(capabilities.get('single-reading-practice').apiSurface.includes('server/src/lib/practice/reading/BuiltinReadingAssetProvider.ts builtin provider'))
+    assert.ok(capabilities.get('single-reading-practice').apiSurface.includes('server/src/lib/practice/reading/reading-generated-loader.ts VM-free JSON parser'))
+    assert.ok(capabilities.get('single-reading-practice').apiSurface.includes('server/src/lib/practice/reading/reading-generated-loader.ts bounded payload cache'))
     assert.ok(capabilities.get('single-reading-practice').apiSurface.includes('PracticeHistorySummary list without submission_json parsing'))
     assert.ok(capabilities.get('single-reading-practice').apiSurface.includes('practice_history_records submission_json-only session replay'))
     assert.ok(capabilities.get('single-reading-practice').apiSurface.includes('server/src/lib/reading/coach-service.ts bounded coach caches'))
@@ -1589,6 +1764,41 @@ async function testReadingHistoryDeleteAndClear() {
     } finally {
         db.close()
     }
+}
+
+async function testLocalApiRejectsUntrustedWriteOrigin() {
+    const { app } = await createApp()
+    const response = await app.inject({
+        method: 'DELETE',
+        url: '/api/practice/history?activity=reading',
+        headers: {
+            origin: 'https://evil.example'
+        }
+    })
+    const optionsResponse = await app.inject({
+        method: 'OPTIONS',
+        url: '/api/practice/history?activity=reading',
+        headers: {
+            origin: 'https://evil.example',
+            'access-control-request-method': 'DELETE'
+        }
+    })
+    const trustedResponse = await app.inject({
+        method: 'OPTIONS',
+        url: '/api/practice/history?activity=reading',
+        headers: {
+            origin: 'app://app',
+            'access-control-request-method': 'DELETE'
+        }
+    })
+    await app.close()
+
+    assert.strictEqual(response.statusCode, 403)
+    assert.strictEqual(response.json().error, 'local_api_forbidden_origin')
+    assert.strictEqual(optionsResponse.statusCode, 403)
+    assert.strictEqual(optionsResponse.json().error, 'local_api_forbidden_origin')
+    assert.strictEqual(trustedResponse.statusCode, 204)
+    assert.strictEqual(trustedResponse.headers['access-control-allow-origin'], 'app://app')
 }
 
 async function testReadingHistoryArchiveRoundTrip() {
@@ -2756,6 +2966,214 @@ async function testPracticeCoachReviewRequiresPersistedSession() {
     assert.strictEqual(calls.readingCoachQueries[0].sessionId, 'missing-reading-session')
 }
 
+async function testPracticeCoachRejectsDisabledSettingWithoutCallingReadingCoach() {
+    const { app, calls } = await createApp({
+        readingCoachEnabled: false
+    })
+
+    const sessionResponse = await app.inject({
+        method: 'POST',
+        url: '/api/practice/sessions',
+        payload: {
+            activity: 'reading',
+            assetId: 'p2-low-148',
+            attempt: {
+                answers: {
+                    q1: 'A'
+                },
+                durationSec: 61
+            },
+            settings: {
+                sessionId: 'disabled-coach-reading-session'
+            }
+        }
+    })
+    assert.strictEqual(sessionResponse.statusCode, 200)
+    const sessionId = sessionResponse.json().data.sessionId
+
+    const coachResponse = await app.inject({
+        method: 'POST',
+        url: '/api/practice/coach',
+        payload: {
+            activity: 'reading',
+            sessionId,
+            payload: {
+                query: 'This must be rejected when coach is disabled.',
+                surface: 'review_workspace',
+                action: 'review_set',
+                promptKind: 'preset'
+            }
+        }
+    })
+    assert.strictEqual(coachResponse.statusCode, 403)
+    assert.strictEqual(coachResponse.json().error, 'practice_coach_disabled')
+    assert.strictEqual(coachResponse.json().details.settingKey, 'practice.readingCoach.enabled')
+    assert.strictEqual(coachResponse.json().details.enabled, false)
+
+    const streamResponse = await app.inject({
+        method: 'POST',
+        url: '/api/practice/coach/stream',
+        payload: {
+            activity: 'reading',
+            sessionId,
+            payload: {
+                query: 'This stream must be rejected when coach is disabled.',
+                surface: 'review_workspace',
+                action: 'review_set',
+                promptKind: 'preset'
+            }
+        }
+    })
+    assert.strictEqual(streamResponse.statusCode, 200)
+    assert.match(String(streamResponse.headers['content-type'] || ''), /text\/event-stream/)
+    const practiceStreamEvents = parseSseEvents(streamResponse.payload)
+    const practiceStreamError = practiceStreamEvents.find((entry) => entry.event === 'error')
+    assert.ok(practiceStreamError, 'practice coach SSE should emit disabled error event')
+    assert.strictEqual(practiceStreamError.data.error.error, 'practice_coach_disabled')
+    assert.strictEqual(practiceStreamError.data.error.details.settingKey, 'practice.readingCoach.enabled')
+
+    const legacyResponse = await app.inject({
+        method: 'POST',
+        url: '/api/reading/assistant/query',
+        payload: {
+            sessionId,
+            query: 'Legacy reading assistant must also reject disabled coach.',
+            surface: 'review_workspace',
+            action: 'review_set',
+            promptKind: 'preset'
+        }
+    })
+    assert.strictEqual(legacyResponse.statusCode, 403)
+    assert.strictEqual(legacyResponse.json().error, 'practice_coach_disabled')
+    assert.strictEqual(legacyResponse.json().details.settingKey, 'practice.readingCoach.enabled')
+
+    const legacyStreamResponse = await app.inject({
+        method: 'POST',
+        url: '/api/reading/assistant/query/stream',
+        payload: {
+            sessionId,
+            query: 'Legacy reading assistant SSE must also reject disabled coach.',
+            surface: 'review_workspace',
+            action: 'review_set',
+            promptKind: 'preset'
+        }
+    })
+    assert.strictEqual(legacyStreamResponse.statusCode, 200)
+    assert.match(String(legacyStreamResponse.headers['content-type'] || ''), /text\/event-stream/)
+    const legacyStreamEvents = parseSseEvents(legacyStreamResponse.payload)
+    const legacyStreamError = legacyStreamEvents.find((entry) => entry.event === 'error')
+    assert.ok(legacyStreamError, 'legacy reading assistant SSE should emit disabled error event')
+    assert.strictEqual(legacyStreamError.data.error.error, 'practice_coach_disabled')
+    assert.strictEqual(legacyStreamError.data.error.details.settingKey, 'practice.readingCoach.enabled')
+
+    const replayResponse = await app.inject({
+        method: 'GET',
+        url: `/api/practice/sessions/reading/${encodeURIComponent(sessionId)}`
+    })
+    await app.close()
+
+    assert.strictEqual(replayResponse.statusCode, 200)
+    assert.strictEqual(calls.readingCoachQueries.length, 0, 'disabled coach must not call ReadingCoach service at all')
+    assert.ok(
+        calls.settingsQueries.every((key) => key === 'practice.readingCoach.enabled'),
+        'coach setting lookup must use the canonical practice.readingCoach.enabled key only'
+    )
+    assert.ok(
+        calls.settingsQueries.length >= 4,
+        'practice coach and legacy coach routes should all consult the canonical disabled setting'
+    )
+    assert.strictEqual(replayResponse.json().data.submission.answers.q1, 'A')
+    assert.strictEqual(replayResponse.json().data.submission.singleAttemptAnalysisLlm, null)
+}
+
+async function testReadingSubmitHistoryAndSuiteRemainAvailableWhenCoachDisabled() {
+    const { app, calls } = await createApp({
+        readingCoachEnabled: false
+    })
+
+    const sessionResponse = await app.inject({
+        method: 'POST',
+        url: '/api/practice/sessions',
+        payload: {
+            activity: 'reading',
+            assetId: 'p2-low-148',
+            attempt: {
+                answers: {
+                    q1: 'A',
+                    q6: 'dancing'
+                },
+                markedQuestions: ['q6'],
+                durationSec: 88
+            },
+            settings: {
+                sessionId: 'reading-disabled-coach-history'
+            }
+        }
+    })
+    assert.strictEqual(sessionResponse.statusCode, 200)
+    const submissionData = sessionResponse.json().data
+
+    const replayResponse = await app.inject({
+        method: 'GET',
+        url: `/api/practice/sessions/reading/${encodeURIComponent(submissionData.sessionId)}`
+    })
+    assert.strictEqual(replayResponse.statusCode, 200)
+
+    const historyListResponse = await app.inject({
+        method: 'GET',
+        url: '/api/practice/history?activity=reading&page=1&limit=20'
+    })
+    assert.strictEqual(historyListResponse.statusCode, 200)
+
+    const historyDetailResponse = await app.inject({
+        method: 'GET',
+        url: `/api/practice/history/reading/${encodeURIComponent(`reading-${submissionData.sessionId}`)}`
+    })
+    assert.strictEqual(historyDetailResponse.statusCode, 200)
+
+    const suiteCreateResponse = await app.inject({
+        method: 'POST',
+        url: '/api/practice/reading-suite',
+        payload: {
+            flowMode: 'simulation',
+            frequencyScope: 'all',
+            seed: 'disabled-coach-suite-seed'
+        }
+    })
+    assert.strictEqual(suiteCreateResponse.statusCode, 200)
+    const suite = suiteCreateResponse.json().data
+
+    const suiteGetResponse = await app.inject({
+        method: 'GET',
+        url: `/api/practice/reading-suite/${encodeURIComponent(suite.sessionId)}`
+    })
+    await app.close()
+
+    assert.strictEqual(suiteGetResponse.statusCode, 200)
+    assert.strictEqual(calls.readingCoachQueries.length, 0, 'reading submit/history/suite must not be statically coupled to coach runtime')
+
+    const replay = replayResponse.json().data
+    assert.strictEqual(replay.submission.answers.q1, 'A')
+    assert.strictEqual(replay.submission.answers.q6, 'dancing')
+    assert.ok(replay.submission.analysisSignals, 'reading replay should preserve base analysis when coach is disabled')
+    assert.ok(replay.submission.singleAttemptAnalysis?.summary, 'reading replay should preserve base single attempt analysis when coach is disabled')
+    assert.strictEqual(replay.submission.singleAttemptAnalysisLlm, null)
+
+    const historyList = historyListResponse.json().data
+    assert.ok(Array.isArray(historyList.data) && historyList.data.length >= 1, 'reading history list remains available when coach is disabled')
+    assert.strictEqual(historyList.data[0].sessionId, submissionData.sessionId)
+
+    const detail = historyDetailResponse.json().data
+    assert.strictEqual(detail.submission.sessionId, submissionData.sessionId)
+    assert.ok(detail.submission.analysisArtifacts.analysisSignals, 'reading history detail should preserve base analysis artifacts when coach is disabled')
+    assert.strictEqual(detail.submission.singleAttemptAnalysisLlm, null)
+
+    const restoredSuite = suiteGetResponse.json().data
+    assert.strictEqual(restoredSuite.sessionId, suite.sessionId)
+    assert.strictEqual(restoredSuite.sequence.length, 3)
+    assert.strictEqual(restoredSuite.sequence[0].status, 'active')
+}
+
 async function testPracticeCoachFailureKeepsSubmittedReadingSession() {
     const { app } = await createApp({
         readingCoachResponse() {
@@ -2864,7 +3282,7 @@ async function testWritingSessionStateFacade() {
 async function main() {
     ensureServerBundle()
     await testReadingAssetFacade()
-    await testReadingPdfOnlyAssetSummaryDoesNotInventPayloadRef()
+    await testPracticeServiceUsesInjectedReadingAssetProvider()
     await testPracticePaginationClamp()
     await testReadingAssetDetailFacade()
     await testOpenSourceLatestReadingAssetsFacade()
@@ -2884,6 +3302,7 @@ async function main() {
     await testReadingSuitePersistsAcrossPracticeServiceInstances()
     await testReadingHistoryPersistsAcrossPracticeServiceInstances()
     await testReadingHistoryDeleteAndClear()
+    await testLocalApiRejectsUntrustedWriteOrigin()
     await testReadingHistoryArchiveRoundTrip()
     await testReadingSessionAnswerNormalization()
     await testReadingSessionCheckboxSetScoring()
@@ -2898,6 +3317,8 @@ async function main() {
     await testPracticeCoachReviewWorkspaceChatExposesPersistedPatch()
     await testPracticeCoachHydratesSubmittedSessionHistory()
     await testPracticeCoachReviewRequiresPersistedSession()
+    await testPracticeCoachRejectsDisabledSettingWithoutCallingReadingCoach()
+    await testReadingSubmitHistoryAndSuiteRemainAvailableWhenCoachDisabled()
     await testPracticeCoachFailureKeepsSubmittedReadingSession()
     await testWritingSessionStateFacade()
     console.log('practiceApiFacade.test.js passed')

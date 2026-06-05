@@ -1164,6 +1164,26 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("AnswerSanitizer 单元测试", False, "测试脚本缺失"))
         all_passed = False
 
+    core10_test = REPO_ROOT / "developer" / "tests" / "js" / "serverReadingCore10.test.js"
+    if core10_test.exists():
+        core10_ok, core10_payload_or_error = _run_json_subprocess(
+            ["node", str(core10_test)],
+            timeout=180,
+            parse_mode="last-line",
+        )
+        if not core10_ok:
+            core10_passed = False
+            core10_detail = core10_payload_or_error
+        else:
+            core10_payload = core10_payload_or_error if isinstance(core10_payload_or_error, dict) else {}
+            core10_passed = core10_payload.get("status") == "pass"
+            core10_detail = core10_payload
+        results.append(_format_result("Reading CORE-10 显式契约测试", core10_passed, core10_detail))
+        all_passed &= core10_passed
+    else:
+        results.append(_format_result("Reading CORE-10 显式契约测试", False, "测试脚本缺失"))
+        all_passed = False
+
     suite_flow_test = REPO_ROOT / "developer" / "tests" / "js" / "suiteModeFlow.test.js"
     if suite_flow_test.exists():
         try:
@@ -1691,6 +1711,36 @@ def run_checks() -> Tuple[List[dict], bool]:
         all_passed &= practice_api_passed
     else:
         results.append(_format_result("Practice API Facade 契约测试", False, "测试脚本缺失"))
+        all_passed = False
+
+    practice_reading_core10_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceReadingCore10.test.js"
+    if practice_reading_core10_test.exists():
+        try:
+            completed_practice_reading_core10 = subprocess.run(
+                ["node", str(practice_reading_core10_test)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except subprocess.TimeoutExpired:
+            practice_reading_core10_passed = False
+            practice_reading_core10_detail = "执行超时（120秒）"
+        except subprocess.CalledProcessError as exc:
+            output_text = exc.stdout or exc.stderr or str(exc)
+            practice_reading_core10_passed = False
+            practice_reading_core10_detail = f"执行失败: {output_text.strip()}"
+        else:
+            practice_reading_core10_passed = True
+            practice_reading_core10_detail = (
+                completed_practice_reading_core10.stdout
+                or completed_practice_reading_core10.stderr
+                or "Practice reading CORE-10 passed"
+            ).strip()
+        results.append(_format_result("Practice Reading CORE-10 模块行为测试", practice_reading_core10_passed, practice_reading_core10_detail))
+        all_passed &= practice_reading_core10_passed
+    else:
+        results.append(_format_result("Practice Reading CORE-10 模块行为测试", False, "测试脚本缺失"))
         all_passed = False
 
     practice_vue_shell_test = REPO_ROOT / "developer" / "tests" / "js" / "practiceVueShell.test.js"

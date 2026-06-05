@@ -8,10 +8,15 @@
 
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import {
+  destroyLegacyShuiBackground,
+  ensureLegacyShuiBackgroundScripts,
+  installLegacyBackgroundThemeSwitcher,
+  removeLegacyBackgroundThemeSwitcher,
+  switchLegacyBackgroundTheme
+} from '@/modules/legacy/legacyBridge'
 
 const STORAGE_KEY = 'three_bg_theme'
-const THREE_VENDOR_SCRIPT = 'assets/vendor/three.min.js'
-const THREE_BACKGROUND_SCRIPT = 'js/presentation/threeBackground.js'
 
 const themes = {
   'misty-mountain': {
@@ -49,31 +54,6 @@ function getStoredTheme() {
   }
 }
 
-function resolveLegacyAssetUrl(relativePath) {
-  const normalized = String(relativePath || '').replace(/^\/+/, '')
-  try {
-    const currentUrl = new URL(window.location.href)
-    if (currentUrl.pathname.includes('/dist/writing/')) {
-      return new URL(`../../${normalized}`, currentUrl.href).href
-    }
-  } catch (_) {}
-  return `/${normalized}`
-}
-
-function loadLegacyScript(relativePath) {
-  const existing = document.querySelector(`script[data-shui-bg-script="${relativePath}"]`)
-  if (existing) return Promise.resolve()
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script')
-    script.src = resolveLegacyAssetUrl(relativePath)
-    script.async = false
-    script.dataset.shuiBgScript = relativePath
-    script.onload = () => resolve()
-    script.onerror = () => reject(new Error(`加载背景脚本失败：${relativePath}`))
-    document.head.appendChild(script)
-  })
-}
-
 function applyFallbackTheme(themeName) {
   const nextThemeName = normalizeThemeName(themeName)
   const theme = themes[nextThemeName]
@@ -89,9 +69,7 @@ function applyFallbackTheme(themeName) {
 function switchTheme(themeName) {
   const nextThemeName = normalizeThemeName(themeName)
   applyFallbackTheme(nextThemeName)
-  if (window.switchBgTheme && window.switchBgTheme !== switchTheme) {
-    window.switchBgTheme(nextThemeName)
-  }
+  switchLegacyBackgroundTheme(nextThemeName, { skipIfMatches: switchTheme })
 }
 
 function handleThemeChange(event) {
@@ -100,9 +78,7 @@ function handleThemeChange(event) {
 
 function startLegacyBackground() {
   if (!legacyLoaderPromise) {
-    legacyLoaderPromise = Promise.resolve()
-      .then(() => (window.THREE ? undefined : loadLegacyScript(THREE_VENDOR_SCRIPT)))
-      .then(() => loadLegacyScript(THREE_BACKGROUND_SCRIPT))
+    legacyLoaderPromise = ensureLegacyShuiBackgroundScripts()
       .catch((error) => {
         console.warn('[SHUI Three Background] fallback applied:', error)
         legacyLoaderPromise = null
@@ -113,22 +89,15 @@ function startLegacyBackground() {
     if (!mounted) return
     const themeName = getStoredTheme()
     applyFallbackTheme(themeName)
-    if (typeof window.switchBgTheme === 'function') {
-      window.switchBgTheme(themeName)
-    }
+    switchLegacyBackgroundTheme(themeName)
   })
 }
 
 function destroy() {
   mounted = false
   window.removeEventListener('shui-bg-theme-change', handleThemeChange)
-  if (window.switchBgTheme === switchTheme) {
-    delete window.switchBgTheme
-  }
-  if (window.SHUIThreeBackground && typeof window.SHUIThreeBackground.destroy === 'function') {
-    window.SHUIThreeBackground.destroy()
-    window.SHUIThreeBackground = null
-  }
+  removeLegacyBackgroundThemeSwitcher(switchTheme)
+  destroyLegacyShuiBackground()
   document.body.classList.remove('hero-body', 'shui-gradient-active', 'three-bg-active', 'three-bg-fallback')
   delete document.documentElement.dataset.shuiBgTheme
   document.documentElement.style.removeProperty('--shui-gradient-start')
@@ -139,9 +108,7 @@ onMounted(() => {
   mounted = true
   applyFallbackTheme(getStoredTheme())
   window.addEventListener('shui-bg-theme-change', handleThemeChange)
-  if (typeof window.switchBgTheme !== 'function') {
-    window.switchBgTheme = switchTheme
-  }
+  installLegacyBackgroundThemeSwitcher(switchTheme)
   document.body.classList.add('hero-body', 'shui-gradient-active')
   startLegacyBackground()
 })

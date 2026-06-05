@@ -26,8 +26,10 @@ export const PRACTICE_MIGRATION_STATUS: PracticeMigrationStatus = {
       routePattern: '/library -> /reading/:assetId',
       apiSurface: [
         '/api/practice/assets/reading/:assetId',
-        'server/src/lib/practice/reading-assets.ts VM-free JSON parser',
-        'server/src/lib/practice/reading-assets.ts bounded payload cache',
+        'server/src/lib/practice/reading/ReadingAssetProvider.ts reading library provider contract',
+        'server/src/lib/practice/reading/BuiltinReadingAssetProvider.ts builtin provider',
+        'server/src/lib/practice/reading/reading-generated-loader.ts VM-free JSON parser',
+        'server/src/lib/practice/reading/reading-generated-loader.ts bounded payload cache',
         'server/src/lib/shared/reading-generated-data.ts shared parser',
         '/api/practice/sessions',
         '/api/practice/history',

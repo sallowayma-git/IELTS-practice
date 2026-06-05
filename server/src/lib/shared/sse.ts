@@ -6,7 +6,6 @@ export function beginSse(reply: FastifyReply) {
   raw.setHeader('Content-Type', 'text/event-stream')
   raw.setHeader('Cache-Control', 'no-cache')
   raw.setHeader('Connection', 'keep-alive')
-  raw.setHeader('Access-Control-Allow-Origin', '*')
   raw.flushHeaders?.()
 
   let closed = false

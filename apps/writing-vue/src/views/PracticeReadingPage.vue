@@ -115,6 +115,34 @@
           </button>
         </div>
       </div>
+      <div class="settings-section" id="reading-coach-setting-section">
+        <h3 class="settings-title">AI 教练</h3>
+        <div class="settings-options">
+          <button
+            class="settings-option"
+            type="button"
+            data-reading-coach-enabled="true"
+            :class="{ active: readingCoachEnabled === true }"
+            :disabled="readingCoachSettingSaving"
+            @click="updateReadingCoachEnabled(true)"
+          >
+            开启
+          </button>
+          <button
+            class="settings-option"
+            type="button"
+            data-reading-coach-enabled="false"
+            :class="{ active: readingCoachEnabled === false }"
+            :disabled="readingCoachSettingSaving"
+            @click="updateReadingCoachEnabled(false)"
+          >
+            关闭
+          </button>
+        </div>
+        <p v-if="readingCoachSettingError" class="settings-help settings-help-error">
+          {{ readingCoachSettingError }}
+        </p>
+      </div>
       <div
         v-if="activeSuiteSessionId"
         class="settings-section"
@@ -255,30 +283,10 @@
       @dragleave="handleDragLeave"
       @drop="handleDrop"
     >
-      <main id="left" class="pane reading-pane passage-panel">
-        <article class="reading-html passage-html">
-          <section
-            v-for="block in payload.passage.blocks"
-            :key="block.blockId"
-            class="passage-block"
-            v-html="block.html"
-          />
-        </article>
-        <section
-          v-if="officialPassageNotes.length"
-          class="reading-explanation-panel reading-passage-explanations"
-          data-reading-official-passage-explanations
-        >
-          <div
-            v-for="note in officialPassageNotes"
-            :key="note.label + note.text"
-            class="reading-explanation-card reading-passage-explanation"
-          >
-            <div class="reading-explanation-card__label">{{ note.label }}</div>
-            <div class="reading-explanation-card__text">{{ note.text }}</div>
-          </div>
-        </section>
-      </main>
+      <ReadingPassagePane
+        :passage-blocks="payload.passage.blocks"
+        :official-passage-notes="officialPassageNotes"
+      />
 
       <div
         id="divider"
@@ -294,473 +302,96 @@
         @keydown="handleDividerKeydown"
       ></div>
 
-      <section id="right" class="pane reading-pane question-panel" @input="handleQuestionInput" @change="handleQuestionInput">
-        <div id="question-groups">
-          <article
-            v-for="group in payload.questionGroups"
-            :key="group.groupId"
-            class="unified-group question-group"
-            :data-group-id="group.groupId"
-            :data-question-group-id="group.groupId"
-            :data-question-ids="(group.questionIds || []).join(',')"
-            :data-group-kind="group.kind"
-            :data-allow-option-reuse="group.allowOptionReuse === true ? 'true' : null"
-          >
-            <div v-if="group.leadHtml" class="reading-html unified-group__lead group-lead" v-html="group.leadHtml" />
-            <div class="reading-html group-body" v-html="group.bodyHtml" />
-            <section
-              v-if="getGroupOfficialExplanations(group).length"
-              class="reading-question-explanation-list"
-              data-reading-official-explanations
-            >
-              <h5>{{ getGroupRange(group) }} 官方解析</h5>
-              <article
-                v-for="section in getGroupOfficialExplanations(group)"
-                :key="group.groupId + ':' + section.sectionTitle"
-                class="reading-explanation-section"
-              >
-                <div
-                  v-if="section.text && !section.items.length"
-                  class="reading-explanation-card reading-group-explanation"
-                >
-                  <div class="reading-explanation-card__label">{{ section.sectionTitle }}</div>
-                  <div class="reading-explanation-card__text">{{ section.text }}</div>
-                </div>
-                <template v-else>
-                  <div
-                    v-for="item in section.items"
-                    :key="section.sectionTitle + ':' + item.questionNumber"
-                    class="reading-explanation-card reading-question-explanation-item"
-                    :data-reading-official-question-explanation="normalizeQuestionId(item.questionId || item.questionNumber)"
-                  >
-                    <div class="reading-explanation-card__label">Q{{ item.questionNumber }} 讲解</div>
-                    <div class="reading-explanation-card__text">{{ item.text }}</div>
-                  </div>
-                </template>
-              </article>
-            </section>
-          </article>
-        </div>
-
-        <section v-if="isMemorizeMode" class="reading-panel memorize-panel" data-reading-memorize-panel>
-          <div class="panel-heading">
-            <span class="panel-kicker">Memorize</span>
-            <strong>背题模式 · {{ payload.questionCount }} 题</strong>
-          </div>
-          <div class="memorize-answer-grid">
-            <div
-              v-for="questionId in payload.questionOrder"
-              :key="questionId"
-              class="memorize-answer-card"
-              :data-memorize-answer-question-id="questionId"
-            >
-              <span>{{ getDisplayLabel(questionId) }}</span>
-              <strong>{{ formatReviewAnswer(payload.answerKey?.[questionId]) || '未提供' }}</strong>
-            </div>
-          </div>
-        </section>
-
-        <section
-          id="results"
-          class="reading-panel review-panel"
-          :data-reading-review-panel="submission ? '' : null"
-          :hidden="!submission"
-        >
-          <template v-if="submission">
-            <div class="panel-heading">
-              <span class="panel-kicker">Review</span>
-              <strong>{{ submission.scoreInfo.correct }} / {{ submission.scoreInfo.totalQuestions }} · {{ submission.scoreInfo.percentage }}%</strong>
-            </div>
-            <div class="score-grid">
-              <div>
-                <span>正确</span>
-                <strong>{{ submission.scoreInfo.correct }}</strong>
-              </div>
-              <div>
-                <span>总分</span>
-                <strong>{{ submission.scoreInfo.totalQuestions }}</strong>
-              </div>
-              <div>
-                <span>正确率</span>
-                <strong>{{ submission.scoreInfo.percentage }}%</strong>
-              </div>
-              <div>
-                <span>耗时</span>
-                <strong>{{ formatDuration(submission.duration) }}</strong>
-              </div>
-            </div>
-            <section
-              v-if="analysisSignals || singleAttemptAnalysis || singleAttemptAnalysisLlm || llmReviewStatus !== 'idle'"
-              class="review-analysis"
-              data-reading-analysis-panel
-            >
-              <div
-                v-if="llmReviewStatus !== 'idle'"
-                class="llm-review-status"
-                :data-reading-llm-review-status="llmReviewStatus"
-              >
-                <span>AI 复盘</span>
-                <strong>{{ llmReviewMessage }}</strong>
-                <button
-                  v-if="llmReviewStatus === 'failed'"
-                  class="btn-text llm-review-retry"
-                  type="button"
-                  data-reading-llm-review-retry
-                  @click="runAutomaticReviewCoach"
-                >
-                  重新复盘
-                </button>
-              </div>
-              <div v-if="analysisSignals" class="analysis-strip" data-reading-analysis-signals>
-                <div>
-                  <span>未作答</span>
-                  <strong>{{ analysisSignals.unansweredCount }}</strong>
-                </div>
-                <div>
-                  <span>改答</span>
-                  <strong>{{ analysisSignals.changedAnswerCount }}</strong>
-                </div>
-                <div>
-                  <span>标记</span>
-                  <strong>{{ analysisSignals.markedQuestionCount }}</strong>
-                </div>
-                <div>
-                  <span>交互密度</span>
-                  <strong>{{ formatDensity(analysisSignals.interactionDensity) }}</strong>
-                </div>
-              </div>
-              <div v-if="singleAttemptAnalysis" class="analysis-body">
-                <div>
-                  <h3>复盘判断</h3>
-                  <ul class="analysis-list">
-                    <li
-                      v-for="item in singleAttemptAnalysis.diagnosis"
-                      :key="item.type + item.message"
-                      :data-analysis-diagnosis-type="item.type"
-                    >
-                      <strong>{{ getSeverityLabel(item.severity) }}</strong>
-                      <span>{{ item.message }}</span>
-                    </li>
-                  </ul>
-                </div>
-                <div>
-                  <h3>下一步</h3>
-                  <ul class="analysis-list">
-                    <li
-                      v-for="item in singleAttemptAnalysis.nextActions"
-                      :key="item.type + item.target"
-                      :data-analysis-action-type="item.type"
-                    >
-                      <strong>{{ item.target }}</strong>
-                      <span>{{ item.instruction }}</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              <div v-if="singleAttemptAnalysisLlm" class="analysis-body llm-analysis-body" data-reading-llm-review-panel>
-                <div>
-                  <h3>AI 错因复盘</h3>
-                  <ul class="analysis-list">
-                    <li
-                      v-for="item in singleAttemptLlmDiagnosis"
-                      :key="item.code + item.reason"
-                      :data-reading-llm-diagnosis="item.code"
-                    >
-                      <strong>AI</strong>
-                      <span>{{ item.reason }}</span>
-                    </li>
-                  </ul>
-                </div>
-                <div>
-                  <h3>AI 下一步训练</h3>
-                  <ul class="analysis-list">
-                    <li
-                      v-for="item in singleAttemptLlmActions"
-                      :key="item.type + item.target + item.instruction"
-                      :data-reading-llm-action="item.type"
-                    >
-                      <strong>{{ item.target }}</strong>
-                      <span>{{ item.instruction }}</span>
-                    </li>
-                  </ul>
-                </div>
-                <section
-                  v-if="singleAttemptLlmQuestionAnalyses.length"
-                  class="llm-question-analysis-list"
-                  data-reading-llm-question-analyses
-                >
-                  <h3>逐题复盘</h3>
-                  <article
-                    v-for="item in singleAttemptLlmQuestionAnalyses"
-                    :key="item.questionLabel + item.likelyMistake + item.nextRule"
-                    class="llm-question-analysis"
-                    :data-reading-llm-question-analysis="item.questionLabel"
-                  >
-                    <strong>{{ item.questionLabel }}</strong>
-                    <dl>
-                      <template v-if="item.likelyMistake">
-                        <dt>错因</dt>
-                        <dd>{{ item.likelyMistake }}</dd>
-                      </template>
-                      <template v-if="item.whyUserChoseWrong">
-                        <dt>误选原因</dt>
-                        <dd>{{ item.whyUserChoseWrong }}</dd>
-                      </template>
-                      <template v-if="item.whyCorrectAnswerWorks">
-                        <dt>正确依据</dt>
-                        <dd>{{ item.whyCorrectAnswerWorks }}</dd>
-                      </template>
-                      <template v-if="item.whyWrongAnswerFails">
-                        <dt>排除理由</dt>
-                        <dd>{{ item.whyWrongAnswerFails }}</dd>
-                      </template>
-                      <template v-if="item.nextRule">
-                        <dt>下次规则</dt>
-                        <dd>{{ item.nextRule }}</dd>
-                      </template>
-                    </dl>
-                  </article>
-                </section>
-              </div>
-              <div v-if="analysisKindRows.length" class="analysis-kind-bars" data-reading-kind-performance>
-                <div
-                  v-for="kind in analysisKindRows"
-                  :key="kind.kind"
-                  class="kind-bar-row"
-                  :data-analysis-kind="kind.kind"
-                >
-                  <span>{{ getQuestionKindLabel(kind.kind) }}</span>
-                  <div class="kind-bar-track">
-                    <i :style="{ width: `${Math.round(kind.accuracy * 100)}%` }" />
-                  </div>
-                  <strong>{{ kind.correct }}/{{ kind.total }}</strong>
-                </div>
-              </div>
-            </section>
-            <table class="review-table results-table">
-              <thead>
-                <tr>
-                  <th>题号</th>
-                  <th>你的答案</th>
-                  <th>正确答案</th>
-                  <th>结果</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="questionId in payload.questionOrder"
-                  :key="questionId"
-                  :class="getReviewClass(questionId)"
-                  :data-review-question-id="questionId"
-                >
-                  <td>{{ getDisplayLabel(questionId) }}</td>
-                  <td>{{ formatReviewAnswer(submission.answerComparison[questionId]?.userAnswer) || '未作答' }}</td>
-                  <td>{{ formatReviewAnswer(submission.answerComparison[questionId]?.correctAnswer) }}</td>
-                  <td :class="getLegacyResultClass(questionId)">{{ getReviewLabel(questionId) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </template>
-        </section>
-
-      </section>
-    </section>
-
-    <button
-      v-if="submission"
-      id="reading-coach-fab"
-      class="reading-coach-fab"
-      type="button"
-      data-reading-coach-fab
-      @click="toggleReadingCoachPanel"
-    >
-      AI 教练
-    </button>
-    <section
-      v-if="submission"
-      id="reading-coach-panel"
-      class="reading-coach-panel"
-      :class="{ 'is-open': readingCoachOpen }"
-      data-reading-coach-panel
-    >
-      <header class="reading-coach-panel__header">
-        <span class="reading-coach-panel__title">Reading AI Coach V2</span>
-        <button
-          id="reading-coach-close"
-          class="reading-coach-panel__close"
-          type="button"
-          aria-label="关闭"
-          @click="readingCoachOpen = false"
-        >
-          ×
-        </button>
-      </header>
-      <div
-        id="reading-coach-status"
-        class="reading-coach-panel__status"
-        :class="{ 'is-error': Boolean(coachError), 'is-loading': coachLoading }"
-        data-reading-coach-stream-status
+      <ReadingQuestionPane
+        :payload="payload"
+        :is-memorize-mode="isMemorizeMode"
+        :get-group-official-explanations="getGroupOfficialExplanations"
+        :get-group-range="getGroupRange"
+        :normalize-question-id="normalizeQuestionId"
+        :get-display-label="getDisplayLabel"
+        :format-review-answer="formatReviewAnswer"
+        @question-input="handleQuestionInput"
       >
-        {{ coachStatusText }}
-      </div>
-      <div v-if="selectedContext" class="reading-coach-panel__selected-context" data-reading-coach-selected-context>
-        <span>{{ selectedContext.scope === 'question' ? '已选题目' : '已选原文' }}</span>
-        <strong>{{ selectedContext.text }}</strong>
-        <button class="btn-text" type="button" @click="clearSelectedContext">清除</button>
-      </div>
-      <div
-        id="reading-coach-messages"
-        class="reading-coach-panel__messages"
-        data-reading-coach-transcript
-      >
-        <div v-if="!coachTranscript.length" class="reading-coach-msg assistant">
-          你可以先问：这题怎么定位证据？
-        </div>
-        <div
-          v-for="entry in coachTranscript"
-          :key="entry.id"
-          class="reading-coach-msg"
-          :class="[entry.role, { error: entry.isError }]"
-          :data-reading-coach-message="entry.role"
-        >
-          {{ entry.content }}
-        </div>
-        <div v-if="coachResponse" class="reading-coach-msg assistant coach-response" data-reading-coach-answer>
-          {{ coachResponse.answer || coachResponse.message || '教练已返回结果。' }}
-        </div>
-      </div>
-      <div id="reading-coach-actions" class="reading-coach-panel__actions" data-reading-coach-actions>
-        <button
-          v-for="action in coachQuickActions"
-          :key="action.id"
-          class="reading-coach-chip"
-          type="button"
-          :disabled="coachLoading"
-          :data-coach-action="action.id"
-          :data-reading-coach-action="action.id"
-          @click="runCoachQuickAction(action.id)"
-        >
-          {{ action.label }}
-        </button>
-      </div>
-      <div v-if="selectedContext" class="reading-coach-panel__actions" data-reading-coach-selection-tools>
-        <button
-          v-for="action in coachSelectionActions"
-          :key="action.id"
-          class="reading-coach-chip"
-          type="button"
-          :disabled="coachLoading"
-          :data-reading-coach-selection-action="action.id"
-          @click="runCoachSelectionAction(action.id)"
-        >
-          {{ action.label }}
-        </button>
-      </div>
-      <div v-if="coachFollowUps.length" id="reading-coach-followups" class="reading-coach-panel__followups" data-reading-coach-followups>
-        <button
-          v-for="text in coachFollowUps"
-          :key="text"
-          class="reading-coach-chip"
-          type="button"
-          :disabled="coachLoading"
-          data-coach-followup="1"
-          @click="askCoachFollowUp(text)"
-        >
-          {{ text }}
-        </button>
-      </div>
-      <div class="reading-coach-panel__composer">
-        <input
-          id="reading-coach-input"
-          v-model="coachQuery"
-          class="reading-coach-panel__input"
-          type="text"
-          placeholder="问我：这题如何定位证据？"
-          :disabled="coachLoading"
-          @focus="refreshSelectedContext"
-          @keydown.enter.prevent="askCoach"
+        <ReadingReviewPanel
+          :submission="submission"
+          :payload="payload"
+          :analysis-signals="analysisSignals"
+          :single-attempt-analysis="singleAttemptAnalysis"
+          :single-attempt-analysis-llm="singleAttemptAnalysisLlm"
+          :llm-review-status="llmReviewStatus"
+          :llm-review-message="llmReviewMessage"
+          :single-attempt-llm-diagnosis="singleAttemptLlmDiagnosis"
+          :single-attempt-llm-actions="singleAttemptLlmActions"
+          :single-attempt-llm-question-analyses="singleAttemptLlmQuestionAnalyses"
+          :analysis-kind-rows="analysisKindRows"
+          :format-duration="formatDuration"
+          :format-density="formatDensity"
+          :get-severity-label="getSeverityLabel"
+          :get-question-kind-label="getQuestionKindLabel"
+          :get-review-class="getReviewClass"
+          :get-display-label="getDisplayLabel"
+          :format-review-answer="formatReviewAnswer"
+          :get-legacy-result-class="getLegacyResultClass"
+          :get-review-label="getReviewLabel"
+          @retry-review="runAutomaticReviewCoach"
         />
-        <button
-          id="reading-coach-send"
-          class="reading-coach-panel__send"
-          type="button"
-          :disabled="!canAskCoach"
-          @click="askCoach"
-        >
-          {{ coachLoading ? '分析中...' : '询问教练' }}
-        </button>
-      </div>
-      <p v-if="coachError" class="reading-coach-panel__error">{{ coachError }}</p>
+      </ReadingQuestionPane>
     </section>
 
-    <nav
+    <ReadingCoachPanel
+      v-if="readingCoachEnabled"
+      :submission="submission"
+      :reading-coach-open="readingCoachOpen"
+      :coach-error="coachError"
+      :coach-loading="coachLoading"
+      :coach-status-text="coachStatusText"
+      :selected-context="selectedContext"
+      :coach-transcript="coachTranscript"
+      :coach-response="coachResponse"
+      :coach-quick-actions="coachQuickActions"
+      :coach-selection-actions="coachSelectionActions"
+      :coach-follow-ups="coachFollowUps"
+      :coach-query="coachQuery"
+      :can-ask-coach="canAskCoach"
+      @toggle-panel="toggleReadingCoachPanel"
+      @update:reading-coach-open="setReadingCoachOpen"
+      @clear-selected-context="clearSelectedContext"
+      @quick-action="runCoachQuickAction"
+      @selection-action="runCoachSelectionAction"
+      @follow-up="askCoachFollowUp"
+      @update:coach-query="coachQuery = $event"
+      @refresh-selected-context="refreshSelectedContext"
+      @ask="askCoach"
+    />
+
+    <ReadingAnswerNav
       v-if="!loading && asset && payload"
-      class="practice-nav answer-panel"
-      data-reading-answer-nav
-    >
-      <div class="title">题目导航</div>
-
-      <div class="questions answer-list" id="question-nav">
-        <div
-          v-for="questionId in payload.questionOrder"
-          :key="questionId"
-          class="question-nav-entry"
-          :class="[
-            { answered: hasAnswer(questionId), marked: isMarkedQuestion(questionId) },
-            getReviewClass(questionId),
-            getLegacyNavStatus(questionId),
-            { active: isActiveQuestion(questionId) }
-          ]"
-          :data-answer-question-id="questionId"
-          :data-question-id="questionId"
-        >
-          <button
-            type="button"
-            class="q-item answer-item"
-            :class="[
-              { answered: hasAnswer(questionId), marked: isMarkedQuestion(questionId) },
-              getReviewClass(questionId),
-              getLegacyNavStatus(questionId),
-              { active: isActiveQuestion(questionId) }
-            ]"
-            :data-question-id="questionId"
-            @click="scrollToQuestion(questionId)"
-          >
-            {{ getDisplayLabel(questionId) }}
-          </button>
-          <button
-            type="button"
-            class="mark-question-button"
-            :class="{ active: isMarkedQuestion(questionId) }"
-            :disabled="readOnlyMode"
-            :aria-label="`${isMarkedQuestion(questionId) ? '取消标记' : '标记'} Question ${getDisplayLabel(questionId)}`"
-            @click.stop="toggleMarkedQuestion(questionId)"
-          >
-            !
-          </button>
-        </div>
-      </div>
-
-      <div class="controls answer-actions">
-        <div v-if="suiteSession" class="suite-progress-mini" data-reading-suite-progress-mini>
-          <div>
-            <span>套题</span>
-            <strong>{{ suiteSession.aggregate.submittedPassages }}/{{ suiteSession.aggregate.totalPassages }} · {{ suiteSession.aggregate.percentage }}%</strong>
-          </div>
-        </div>
-        <span v-if="payload" class="reading-stat reading-progress" data-reading-answer-progress>
-          {{ answeredCount }}/{{ payload.questionCount }}
-        </span>
-        <router-link id="exit-btn" class="header-btn" :to="returnRoute">{{ returnLabel }}</router-link>
-        <button id="reset-btn" class="header-btn" type="button" :disabled="resetButtonDisabled" @click="handleResetButton">{{ resetButtonLabel }}</button>
-        <button class="header-btn" type="button" :disabled="!asset || loading || submitting" @click="snapshotAnswers">保存作答快照</button>
-        <button id="submit-btn" class="submit-btn primary" type="button" :disabled="primaryButtonDisabled" @click="handlePrimaryButton">
-          {{ primaryButtonLabel }}
-        </button>
-      </div>
-
-      <p v-if="snapshotMessage" class="snapshot-message">{{ snapshotMessage }}</p>
-    </nav>
+      :asset="asset"
+      :payload="payload"
+      :suite-session="suiteSession"
+      :answered-count="answeredCount"
+      :return-route="returnRoute"
+      :return-label="returnLabel"
+      :reset-button-disabled="resetButtonDisabled"
+      :reset-button-label="resetButtonLabel"
+      :primary-button-disabled="primaryButtonDisabled"
+      :primary-button-label="primaryButtonLabel"
+      :loading="loading"
+      :submitting="submitting"
+      :read-only-mode="readOnlyMode"
+      :snapshot-message="snapshotMessage"
+      :has-answer="hasAnswer"
+      :is-marked-question="isMarkedQuestion"
+      :get-review-class="getReviewClass"
+      :get-legacy-nav-status="getLegacyNavStatus"
+      :is-active-question="isActiveQuestion"
+      :get-display-label="getDisplayLabel"
+      @scroll-to-question="scrollToQuestion"
+      @toggle-marked-question="toggleMarkedQuestion"
+      @reset="handleResetButton"
+      @snapshot="snapshotAnswers"
+      @primary="handlePrimaryButton"
+    />
 
     <section v-if="!loading && !asset" class="surface empty-state">
       <strong>未找到阅读题目</strong>
@@ -770,11 +401,21 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { practiceAssets, practiceCoach, practiceReadingSuite, practiceSessions } from '@/api/practice-client.js'
+import { practiceReadingSuite, practiceSessions } from '@/api/practice-client.js'
+import { readingCoachSettingsApi } from '@/modules/practice-reading/api'
+import ReadingAnswerNav from '@/modules/practice-reading/components/ReadingAnswerNav.vue'
+import ReadingCoachPanel from '@/modules/practice-reading/components/ReadingCoachPanel.vue'
+import ReadingPassagePane from '@/modules/practice-reading/components/ReadingPassagePane.vue'
+import ReadingQuestionPane from '@/modules/practice-reading/components/ReadingQuestionPane.vue'
+import ReadingReviewPanel from '@/modules/practice-reading/components/ReadingReviewPanel.vue'
+import { useReadingAsset } from '@/modules/practice-reading/useReadingAsset'
+import { useReadingAnswers } from '@/modules/practice-reading/useReadingAnswers'
+import { useReadingCoach } from '@/modules/practice-reading/useReadingCoach'
+import { useReadingHighlights } from '@/modules/practice-reading/useReadingHighlights'
+import { useReadingTimer } from '@/modules/practice-reading/useReadingTimer'
 
-const AUTOMATIC_REVIEW_QUERY = '请复盘我本次错题，按优先级给出训练建议'
 const ENDLESS_STATE_KEY = 'practice_reading_endless_state_v1'
 const ENDLESS_COUNTDOWN_SEC = 5
 const READING_NOTES_STORAGE_PREFIX = 'practice_reading_notes_'
@@ -785,8 +426,6 @@ const DICTIONARY_WORDLIST_SCRIPTS = [
   'assets/wordlists/ielts_core.bundle.js'
 ]
 const DICTIONARY_SERVICE_SCRIPT = 'js/core/dictionaryService.js'
-const PRACTICE_TIMER_BRIDGE_KEY = '__IELTS_PRACTICE_TIMER__'
-const PRACTICE_TIMER_EVENT = 'practiceTimerStateChange'
 const EXPLANATION_SPLIT_KINDS = new Set([
   'single_choice',
   'multi_choice',
@@ -831,72 +470,42 @@ const props = defineProps({
 
 const route = useRoute()
 const router = useRouter()
-const asset = ref(null)
-const loading = ref(false)
+const {
+  asset,
+  payload,
+  loading,
+  error,
+  loadReadingAsset,
+  loadReadingAssetPool,
+  clearReadingAssetError
+} = useReadingAsset()
 const submitting = ref(false)
-const error = ref('')
 const submitError = ref('')
 const snapshotMessage = ref('')
 const submission = ref(null)
 const suiteSession = ref(null)
-const startedAt = ref('')
-const coachQuery = ref('这题怎么定位证据？')
-const coachLoading = ref(false)
-const coachError = ref('')
-const coachResponse = ref(null)
-const selectedContext = ref(null)
-const coachStreamMessage = ref('')
-const readingCoachOpen = ref(false)
-const llmReviewStatus = ref('idle')
-const llmReviewMessage = ref('')
-const answers = reactive({})
 const answerTimeline = reactive({})
 const markedQuestions = ref([])
 const interactionCount = ref(0)
 const currentDragPayload = ref(null)
 const endlessCountdown = ref(0)
 const endlessNextAssetId = ref('')
-const elapsedSeconds = ref(0)
-const timerRunning = ref(false)
 const settingsPanelOpen = ref(false)
 const notesPanelOpen = ref(false)
 const notesText = ref('')
 const readingFontSize = ref('normal')
 const readingThemeMode = ref('light')
+const readingCoachEnabled = ref(true)
+const readingCoachSettingSaving = ref(false)
+const readingCoachSettingError = ref('')
 const suiteAutoAdvance = ref(true)
 const leftPanePercent = ref(50)
 const dividerDragging = ref(false)
-const selectionToolbarVisible = ref(false)
-const selectionToolbarStyle = reactive({ top: '0px', left: '0px' })
-const keepSelectionToolbar = ref(false)
-const highlightSnapshot = ref([])
-const dictionaryBubble = reactive({
-  visible: false,
-  term: '',
-  meaning: '',
-  definition: '',
-  example: '',
-  meta: '',
-  sourceLine: '',
-  parts: [],
-  phonetic: '',
-  partOfSpeech: '',
-  sourceLabel: '',
-  license: '',
-  found: false,
-  saved: false,
-  left: 0,
-  top: 0
-})
 let endlessTimer = null
-let practiceTimer = null
-let coachRequestSequence = 0
 let lastSelectionRange = null
 let currentHighlightNode = null
 let dividerPointerId = null
 let suppressReadingNotesPersist = false
-let practiceTimerBridgeInstalled = false
-const practiceTimerBridgeOwner = {}
 let reviewDictionaryRuntimePromise = null
 const runtimeScriptPromises = new Map()
 const activeQuestionVisit = {
@@ -905,7 +514,6 @@ const activeQuestionVisit = {
 }
 const activeQuestionId = ref('')
 
-const payload = computed(() => asset.value?.payload || null)
 const activeSuiteSessionId = computed(() => {
   const fromProp = String(props.suiteSessionId || '').trim()
   const fromQuery = Array.isArray(route.query.suiteSessionId)
@@ -967,18 +575,113 @@ const returnRoute = computed(() => (
     : { name: 'PracticeLibrary' }
 ))
 const returnLabel = computed(() => (activeSuiteSessionId.value ? '返回套题进度' : '返回练习库'))
-const answeredCount = computed(() => (
-  payload.value?.questionOrder?.filter((questionId) => hasAnswer(questionId)).length || 0
-))
 const reviewMode = computed(() => Boolean(submission.value))
 const readOnlyMode = computed(() => reviewMode.value || isMemorizeMode.value)
-const canSubmit = computed(() => Boolean(asset.value && payload.value && !loading.value && !submitting.value && !readOnlyMode.value))
-const canAskCoach = computed(() => Boolean(submission.value && coachQuery.value.trim() && !coachLoading.value))
-const coachStatusText = computed(() => {
-  if (coachLoading.value) return coachStreamMessage.value || 'AI 教练正在思考...'
-  if (coachError.value) return coachError.value
-  return ''
+const {
+  answeredCount,
+  initializeAnswers: initializeReadingAnswers,
+  assignAnswer,
+  setAnswer,
+  toggleAnswerOption,
+  getAnswerValue,
+  getRawAnswer,
+  getAnswerEntries,
+  hasAnswer,
+  isOptionSelected,
+  snapshotAnswers: snapshotAnswerMap,
+  getAnswerFingerprint
+} = useReadingAnswers({
+  payloadSource: () => payload.value,
+  readOnlySource: reviewMode,
+  onTrack: recordAnswerTimeline,
+  onSyncNative: syncNativeControl,
+  onMutate: () => {
+    snapshotMessage.value = ''
+    submitError.value = ''
+  }
 })
+const {
+  elapsedSeconds,
+  timerRunning,
+  suiteTimerState,
+  formattedTimer,
+  applySuiteTimerState,
+  getPracticeTimerSnapshot,
+  resolvePracticeTiming,
+  installPracticeTimerBridge,
+  removePracticeTimerBridge,
+  startPracticeTimer,
+  stopPracticeTimer,
+  toggleTimer,
+  resetPracticeTimerClock,
+  setPracticeTimerElapsedSeconds
+} = useReadingTimer({
+  activeSuiteSessionId,
+  reviewMode,
+  suiteTimerSource: () => suiteSession.value?.timer
+})
+const {
+  coachQuery,
+  coachLoading,
+  coachError,
+  coachResponse,
+  selectedContext,
+  readingCoachOpen,
+  llmReviewStatus,
+  llmReviewMessage,
+  canAskCoach,
+  coachStatusText,
+  coachTranscript,
+  coachFollowUps,
+  resetReadingCoachState,
+  setReadingCoachOpen,
+  hydrateReadingCoachFromSubmission,
+  toggleReadingCoachPanel,
+  refreshSelectedContext,
+  clearSelectedContext,
+  askCoach,
+  askCoachFollowUp,
+  runCoachQuickAction,
+  runCoachSelectionAction,
+  runAutomaticReviewCoach,
+  queueAutomaticReviewRefresh
+} = useReadingCoach({
+  submissionSource: () => submission.value,
+  setSubmission: (nextSubmission) => {
+    submission.value = nextSubmission
+  },
+  assetIdSource: () => submission.value?.examId || asset.value?.id || props.assetId,
+  resolveCoachMode: () => {
+    if (activeSuiteSessionId.value) return 'suite'
+    if (isEndlessMode.value) return 'endless'
+    return props.sessionId || route.params.sessionId ? 'review' : 'single'
+  },
+  readCoachEnabled: () => readingCoachEnabled.value,
+  readSelectedContext,
+  getDisplayLabel,
+  formatReviewAnswer,
+  flushActiveQuestionVisit,
+  snapshotSubmission,
+  onSubmissionHydrated: (loadedSubmission) => {
+    restoreSubmittedMetadata(loadedSubmission)
+    if (loadedSubmission?.answers) {
+      Object.entries(loadedSubmission.answers).forEach(([questionId, value]) => {
+        assignAnswer(questionId, value)
+      })
+    }
+    syncDomAnswers()
+  }
+})
+const {
+  selectionToolbarVisible,
+  selectionToolbarStyle,
+  keepSelectionToolbar,
+  highlightSnapshot,
+  dictionaryBubble,
+  normalizeHighlightSnapshot: normalizeHighlightSnapshotState,
+  resetHighlightUiState: resetHighlightUiStateFromComposable
+} = useReadingHighlights()
+const canSubmit = computed(() => Boolean(asset.value && payload.value && !loading.value && !submitting.value && !readOnlyMode.value))
 const canRecycleSubmittedAttempt = computed(() => Boolean(
   reviewMode.value
   && !activeSuiteSessionId.value
@@ -986,15 +689,6 @@ const canRecycleSubmittedAttempt = computed(() => Boolean(
   && !String(props.sessionId || route.params.sessionId || '').trim()
   && !submitting.value
 ))
-const suiteTimerState = computed(() => normalizeSuiteTimerState(suiteSession.value?.timer))
-const timerDisplaySeconds = computed(() => {
-  const timer = suiteTimerState.value
-  if (timer?.mode === 'countdown' && Number.isFinite(Number(timer.limitSeconds))) {
-    return Math.max(0, Math.floor(Number(timer.limitSeconds)) - Math.max(0, Math.round(Number(elapsedSeconds.value) || 0)))
-  }
-  return Math.max(0, Math.round(Number(elapsedSeconds.value) || 0))
-})
-const formattedTimer = computed(() => formatClock(timerDisplaySeconds.value))
 const readingPageClassList = computed(() => ({
   [`font-${readingFontSize.value}`]: true,
   'dark-mode': readingThemeMode.value === 'dark',
@@ -1025,22 +719,6 @@ const resetButtonDisabled = computed(() => {
   if (isMemorizeMode.value) return false
   if (reviewMode.value) return !canRecycleSubmittedAttempt.value
   return submitting.value
-})
-const coachTranscript = computed(() => normalizeCoachTranscript(submission.value?.readingCoachTranscript))
-const coachFollowUps = computed(() => {
-  const transcript = coachTranscript.value
-  for (let index = transcript.length - 1; index >= 0; index -= 1) {
-    const entry = transcript[index]
-    if (entry.role !== 'assistant') continue
-    const followUps = Array.isArray(entry.followUps)
-      ? entry.followUps
-      : (Array.isArray(entry.snapshot?.followUps) ? entry.snapshot.followUps : [])
-    const normalized = followUps.map((item) => String(item || '').trim()).filter(Boolean)
-    if (normalized.length) {
-      return normalized.slice(0, 3)
-    }
-  }
-  return []
 })
 const endlessStatusText = computed(() => {
   if (endlessCountdown.value > 0 && endlessNextAssetId.value) {
@@ -1154,12 +832,13 @@ const analysisKindRows = computed(() => {
   return Object.values(fallback)
 })
 
-onMounted(() => {
+onMounted(async () => {
   initializeReadingPreferences()
   installPracticeTimerBridge()
   document.addEventListener('selectionchange', handleSelectionChange)
   document.addEventListener('click', handleDocumentClick, true)
-  loadAsset()
+  await loadReadingCoachPreference()
+  await loadAsset()
 })
 
 onBeforeUnmount(() => {
@@ -1170,6 +849,16 @@ onBeforeUnmount(() => {
   document.removeEventListener('selectionchange', handleSelectionChange)
   document.removeEventListener('click', handleDocumentClick, true)
   removeDividerDragListeners()
+})
+
+onUpdated(() => {
+  if (!asset.value?.id || !payload.value?.questionOrder?.length) {
+    return
+  }
+  syncDomAnswers()
+  if (reviewMode.value) {
+    setReadOnlyDomControls(true)
+  }
 })
 
 watch(() => props.assetId, () => {
@@ -1188,9 +877,25 @@ watch(() => [readRouteQueryValue('mode'), readRouteQueryValue('practiceMode')], 
   loadAsset()
 })
 
-watch(() => [elapsedSeconds.value, timerRunning.value, startedAt.value, activeSuiteSessionId.value, suiteTimerState.value?.mode, suiteTimerState.value?.limitSeconds], () => {
-  emitPracticeTimerStateChange()
-})
+watch(
+  () => ({
+    assetId: asset.value?.id || '',
+    questionCount: Array.isArray(payload.value?.questionOrder) ? payload.value.questionOrder.length : 0,
+    answers: JSON.stringify(snapshotAnswerMap()),
+    review: reviewMode.value
+  }),
+  async ({ assetId, questionCount }) => {
+    if (!assetId || !questionCount) {
+      return
+    }
+    await nextTick()
+    syncDomAnswers()
+    if (reviewMode.value) {
+      setReadOnlyDomControls(true)
+    }
+  },
+  { flush: 'post' }
+)
 
 async function loadAsset() {
   const normalizedAssetId = String(props.assetId || route.params.assetId || '').trim()
@@ -1203,37 +908,24 @@ async function loadAsset() {
     return
   }
 
-  loading.value = true
-  error.value = ''
+  clearReadingAssetError()
   submitError.value = ''
   snapshotMessage.value = ''
   submission.value = null
   suiteSession.value = null
   resetAttemptMetadata()
-  coachError.value = ''
-  coachResponse.value = null
-  coachStreamMessage.value = ''
-  coachLoading.value = false
-  readingCoachOpen.value = false
-  llmReviewStatus.value = 'idle'
-  llmReviewMessage.value = ''
+  resetReadingCoachState()
   closeFloatingPanels()
-  closeSelectionToolbar()
-  closeDictionaryBubble()
-  highlightSnapshot.value = []
+  resetHighlightUiStateFromComposable()
   suppressReadingNotesPersist = true
   notesText.value = ''
   suppressReadingNotesPersist = false
   clearEndlessTimer()
-  stopPracticeTimer()
-  elapsedSeconds.value = 0
-  timerRunning.value = false
+  resetPracticeTimerClock()
   endlessNextAssetId.value = ''
-  startedAt.value = new Date().toISOString()
   try {
-    const data = await practiceAssets.get('reading', normalizedAssetId)
-    asset.value = data
-    initializeAnswers(data?.payload)
+    const data = await loadReadingAsset(normalizedAssetId)
+    initializeReadingAnswers(data?.payload, { prefillAnswerKey: isMemorizeMode.value })
     loadReadingNotes()
     if (activeSuiteSessionId.value) {
       try {
@@ -1252,12 +944,6 @@ async function loadAsset() {
     }
   } catch (loadError) {
     console.error('加载阅读资源失败:', loadError)
-    asset.value = null
-    error.value = loadError?.message
-      ? `阅读资源加载失败：${loadError.message}`
-      : '阅读资源加载失败，请稍后重试'
-  } finally {
-    loading.value = false
   }
   if (asset.value && payload.value) {
     await nextTick()
@@ -1265,7 +951,7 @@ async function loadAsset() {
     restoreHighlightsFromRecords(highlightSnapshot.value)
     applyMemorizeStudyLayer()
     if (readOnlyMode.value) {
-      elapsedSeconds.value = Math.max(0, Number(submission.value?.duration || 0))
+      setPracticeTimerElapsedSeconds(Math.max(0, Number(submission.value?.duration || 0)))
       setReadOnlyDomControls(true)
     } else {
       startPracticeTimer()
@@ -1285,13 +971,13 @@ async function loadSubmittedSession(sessionId) {
     throw new Error('阅读回放记录与当前题目不匹配')
   }
   submission.value = loadedSubmission
-  readingCoachOpen.value = true
-  highlightSnapshot.value = normalizeHighlightSnapshot(loadedSubmission.highlights || loadedSubmission.analysisArtifacts?.highlights || [])
-  coachResponse.value = loadedSubmission.readingCoachSnapshot || null
-  if (loadedSubmission.singleAttemptAnalysisLlm || loadedSubmission.analysisArtifacts?.singleAttemptAnalysisLlm) {
-    llmReviewStatus.value = 'success'
-    llmReviewMessage.value = 'AI 复盘已载入'
-  }
+  highlightSnapshot.value = normalizeHighlightSnapshotState(loadedSubmission.highlights || loadedSubmission.analysisArtifacts?.highlights || [])
+  hydrateReadingCoachFromSubmission(loadedSubmission, {
+    open: true,
+    pendingIfMissing: true,
+    successMessage: 'AI 复盘已载入',
+    pendingMessage: 'AI 复盘待补全'
+  })
   restoreSubmittedMetadata(loadedSubmission)
   if (loadedSubmission.answers) {
     Object.entries(loadedSubmission.answers).forEach(([questionId, value]) => {
@@ -1299,12 +985,14 @@ async function loadSubmittedSession(sessionId) {
     })
   }
   await nextTick()
+  syncDomAnswers()
+  setReadOnlyDomControls(true)
   restoreHighlightsFromRecords(highlightSnapshot.value)
   restoreSubmittedViewport(loadedSubmission)
-  if (!loadedSubmission.singleAttemptAnalysisLlm && !loadedSubmission.analysisArtifacts?.singleAttemptAnalysisLlm) {
-    llmReviewStatus.value = 'idle'
-    llmReviewMessage.value = 'AI 复盘待补全'
-    queueAutomaticReviewRefresh(loadedSubmission.sessionId)
+  if (readingCoachEnabled.value) {
+    if (!loadedSubmission.singleAttemptAnalysisLlm && !loadedSubmission.analysisArtifacts?.singleAttemptAnalysisLlm) {
+      queueAutomaticReviewRefresh(loadedSubmission.sessionId)
+    }
   }
 }
 
@@ -1316,21 +1004,6 @@ function restoreSubmittedViewport(loadedSubmission) {
   window.requestAnimationFrame(() => {
     window.scrollTo(0, Math.max(0, Math.round(scrollY)))
   })
-}
-
-function initializeAnswers(readingPayload) {
-  Object.keys(answers).forEach((key) => {
-    delete answers[key]
-  })
-  const order = Array.isArray(readingPayload?.questionOrder) ? readingPayload.questionOrder : []
-  order.forEach((questionId) => {
-    answers[questionId] = ''
-  })
-  if (isMemorizeMode.value && readingPayload?.answerKey && typeof readingPayload.answerKey === 'object') {
-    order.forEach((questionId) => {
-      answers[questionId] = cloneAnswerValue(readingPayload.answerKey[questionId])
-    })
-  }
 }
 
 function resetAttemptMetadata() {
@@ -1345,189 +1018,10 @@ function resetAttemptMetadata() {
   interactionCount.value = 0
 }
 
-function normalizeSuiteTimerState(value) {
-  if (!value || typeof value !== 'object') {
-    return null
-  }
-  const anchorMs = Number(value.anchorMs ?? value.effectiveStartTimeMs)
-  if (!Number.isFinite(anchorMs) || anchorMs <= 0) {
-    return null
-  }
-  const mode = String(value.mode || '').trim().toLowerCase() === 'countdown' ? 'countdown' : 'elapsed'
-  const limitSeconds = value.limitSeconds == null ? null : Number(value.limitSeconds)
-  const pausedOffsetMs = value.pausedOffsetMs == null ? null : Number(value.pausedOffsetMs)
-  const pausedAtMs = value.pausedAtMs == null ? null : Number(value.pausedAtMs)
-  return {
-    source: 'suite',
-    anchorMs: Math.floor(anchorMs),
-    effectiveStartTimeMs: Math.floor(anchorMs),
-    mode,
-    limitSeconds: Number.isFinite(limitSeconds) && limitSeconds >= 0 ? Math.floor(limitSeconds) : null,
-    pausedOffsetMs: Number.isFinite(pausedOffsetMs) && pausedOffsetMs >= 0 ? Math.floor(pausedOffsetMs) : 0,
-    pausedAtMs: Number.isFinite(pausedAtMs) && pausedAtMs > 0 ? Math.floor(pausedAtMs) : null,
-    running: value.running !== false
-  }
-}
-
-function resolveSuiteElapsedSeconds(referenceMs = Date.now()) {
-  const timer = suiteTimerState.value
-  if (!activeSuiteSessionId.value || !timer) {
-    return null
-  }
-  let elapsedMs = Math.max(0, referenceMs - timer.anchorMs - timer.pausedOffsetMs)
-  if (!timer.running && timer.pausedAtMs && referenceMs > timer.pausedAtMs) {
-    elapsedMs = Math.max(0, elapsedMs - (referenceMs - timer.pausedAtMs))
-  }
-  return Math.max(0, Math.floor(elapsedMs / 1000))
-}
-
-function applySuiteTimerState() {
-  const timer = suiteTimerState.value
-  if (!activeSuiteSessionId.value || !timer) {
-    return
-  }
-  startedAt.value = new Date(timer.anchorMs).toISOString()
-  elapsedSeconds.value = resolveSuiteElapsedSeconds(Date.now()) ?? elapsedSeconds.value
-}
-
-function resolveTimerAnchorMs() {
-  const suiteTimer = suiteTimerState.value
-  if (activeSuiteSessionId.value && suiteTimer?.anchorMs) {
-    return suiteTimer.anchorMs
-  }
-  const parsed = Date.parse(startedAt.value)
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : Date.now()
-}
-
 function getCurrentScrollY() {
   if (typeof window === 'undefined') return 0
   const numeric = Number(window.scrollY)
   return Number.isFinite(numeric) && numeric > 0 ? Math.round(numeric) : 0
-}
-
-function getPracticeTimerSnapshot() {
-  const nowMs = Date.now()
-  const durationSeconds = Math.max(0, Math.round(Number(elapsedSeconds.value) || 0))
-  const effectiveStartTimeMs = Math.max(0, resolveTimerAnchorMs())
-  const elapsedMs = durationSeconds * 1000
-  const effectiveEndTimeMs = Math.max(effectiveStartTimeMs, effectiveStartTimeMs + elapsedMs)
-  const pausedOffsetMs = Math.max(0, nowMs - effectiveStartTimeMs - elapsedMs)
-  const running = Boolean(timerRunning.value && !reviewMode.value)
-  const suiteTimer = activeSuiteSessionId.value ? suiteTimerState.value : null
-  return {
-    running,
-    elapsedSeconds: durationSeconds,
-    durationSeconds,
-    displaySeconds: timerDisplaySeconds.value,
-    effectiveStartTimeMs,
-    effectiveEndTimeMs,
-    anchorMs: effectiveStartTimeMs,
-    mode: suiteTimer?.mode || 'elapsed',
-    limitSeconds: suiteTimer?.limitSeconds ?? null,
-    source: activeSuiteSessionId.value ? 'suite' : 'local',
-    actualEndTimeMs: nowMs,
-    pausedAtMs: running ? null : nowMs,
-    pausedOffsetMs
-  }
-}
-
-function resolvePracticeTiming(minDurationSeconds = 0, timerSnapshot = null) {
-  const snapshot = timerSnapshot && typeof timerSnapshot === 'object'
-    ? timerSnapshot
-    : getPracticeTimerSnapshot()
-  const startTimeMsRaw = Number(snapshot.effectiveStartTimeMs)
-  const durationRaw = Number(snapshot.durationSeconds ?? snapshot.elapsedSeconds ?? elapsedSeconds.value)
-  const actualEndTimeMsRaw = Number(snapshot.actualEndTimeMs)
-  const effectiveEndTimeMsRaw = Number(snapshot.effectiveEndTimeMs)
-  const startTimeMs = Number.isFinite(startTimeMsRaw) && startTimeMsRaw > 0
-    ? Math.floor(startTimeMsRaw)
-    : resolveTimerAnchorMs()
-  const duration = Math.max(minDurationSeconds, Math.round(Number.isFinite(durationRaw) ? durationRaw : 0))
-  const endTimeMs = Number.isFinite(actualEndTimeMsRaw) && actualEndTimeMsRaw > 0
-    ? Math.floor(actualEndTimeMsRaw)
-    : Date.now()
-  const effectiveEndTimeMs = Number.isFinite(effectiveEndTimeMsRaw) && effectiveEndTimeMsRaw > 0
-    ? Math.max(startTimeMs, startTimeMs + duration * 1000, Math.floor(effectiveEndTimeMsRaw))
-    : Math.max(startTimeMs, startTimeMs + duration * 1000)
-  return {
-    duration,
-    startTimeMs,
-    endTimeMs,
-    effectiveEndTimeMs
-  }
-}
-
-function emitPracticeTimerStateChange() {
-  if (typeof window === 'undefined' || !practiceTimerBridgeInstalled) return
-  try {
-    window.dispatchEvent(new CustomEvent(PRACTICE_TIMER_EVENT, {
-      detail: getPracticeTimerSnapshot()
-    }))
-  } catch (_) {
-    // Timer bridge is best-effort for legacy listeners.
-  }
-}
-
-function installPracticeTimerBridge() {
-  if (typeof window === 'undefined') return
-  window[PRACTICE_TIMER_BRIDGE_KEY] = {
-    eventName: PRACTICE_TIMER_EVENT,
-    getSnapshot: getPracticeTimerSnapshot,
-    pause: () => stopPracticeTimer(),
-    resume: () => {
-      if (!reviewMode.value) {
-        startPracticeTimer()
-      }
-    },
-    setRunning: (nextRunning) => {
-      if (nextRunning === false) {
-        stopPracticeTimer()
-      } else if (!reviewMode.value) {
-        startPracticeTimer()
-      }
-    },
-    __owner: practiceTimerBridgeOwner
-  }
-  practiceTimerBridgeInstalled = true
-  emitPracticeTimerStateChange()
-}
-
-function removePracticeTimerBridge() {
-  if (typeof window === 'undefined') return
-  const bridge = window[PRACTICE_TIMER_BRIDGE_KEY]
-  if (bridge && bridge.__owner === practiceTimerBridgeOwner) {
-    delete window[PRACTICE_TIMER_BRIDGE_KEY]
-  }
-  practiceTimerBridgeInstalled = false
-}
-
-function startPracticeTimer() {
-  stopPracticeTimer()
-  timerRunning.value = true
-  practiceTimer = window.setInterval(() => {
-    elapsedSeconds.value += 1
-  }, 1000)
-  emitPracticeTimerStateChange()
-}
-
-function stopPracticeTimer() {
-  if (practiceTimer) {
-    window.clearInterval(practiceTimer)
-    practiceTimer = null
-  }
-  timerRunning.value = false
-  emitPracticeTimerStateChange()
-}
-
-function toggleTimer() {
-  if (reviewMode.value) {
-    return
-  }
-  if (timerRunning.value) {
-    stopPracticeTimer()
-  } else {
-    startPracticeTimer()
-  }
 }
 
 function initializeReadingPreferences() {
@@ -1551,6 +1045,55 @@ function initializeReadingPreferences() {
   } catch (_) {}
 }
 
+async function loadReadingCoachPreference() {
+  readingCoachSettingError.value = ''
+  try {
+    readingCoachEnabled.value = await readingCoachSettingsApi.getEnabled()
+  } catch (error) {
+    readingCoachEnabled.value = true
+    console.warn('加载阅读 AI 教练设置失败，继续使用默认开启:', error)
+  }
+  if (!readingCoachEnabled.value) {
+    resetReadingCoachState()
+  }
+}
+
+function syncReadingCoachStateWithSetting(enabled) {
+  if (!enabled) {
+    resetReadingCoachState()
+    return
+  }
+  if (submission.value) {
+    hydrateReadingCoachFromSubmission(submission.value, {
+      pendingIfMissing: true,
+      successMessage: 'AI 复盘已载入',
+      pendingMessage: 'AI 复盘待补全'
+    })
+  }
+}
+
+async function updateReadingCoachEnabled(enabled) {
+  const normalized = Boolean(enabled)
+  if (readingCoachSettingSaving.value || readingCoachEnabled.value === normalized) {
+    return
+  }
+  const previous = readingCoachEnabled.value
+  readingCoachEnabled.value = normalized
+  readingCoachSettingError.value = ''
+  syncReadingCoachStateWithSetting(normalized)
+  readingCoachSettingSaving.value = true
+  try {
+    await readingCoachSettingsApi.updateEnabled(normalized)
+  } catch (error) {
+    readingCoachEnabled.value = previous
+    syncReadingCoachStateWithSetting(previous)
+    readingCoachSettingError.value = 'AI 教练设置保存失败，请稍后重试。'
+    console.error('保存阅读 AI 教练设置失败:', error)
+  } finally {
+    readingCoachSettingSaving.value = false
+  }
+}
+
 function toggleSettingsPanel() {
   const nextVisible = !settingsPanelOpen.value
   closeFloatingPanels()
@@ -1571,11 +1114,6 @@ function toggleNotesPanel() {
 function closeFloatingPanels() {
   settingsPanelOpen.value = false
   notesPanelOpen.value = false
-}
-
-function toggleReadingCoachPanel() {
-  if (!submission.value) return
-  readingCoachOpen.value = !readingCoachOpen.value
 }
 
 function selectReadingFont(value) {
@@ -1669,16 +1207,6 @@ function getDisplayLabel(questionId) {
   return payload.value?.questionDisplayMap?.[questionId] || String(questionId).replace(/^q/i, '')
 }
 
-function getAnswerValue(questionId) {
-  const value = answers[questionId]
-  return Array.isArray(value) ? value.join(', ') : String(value || '')
-}
-
-function hasAnswer(questionId) {
-  const value = answers[questionId]
-  return Array.isArray(value) ? value.length > 0 : String(value || '').trim().length > 0
-}
-
 function isChoiceControl(questionId) {
   const interaction = getInteraction(questionId)
   return ['radio', 'checkbox', 'select'].includes(interaction?.control)
@@ -1697,14 +1225,6 @@ function isMultiValueCheckbox(questionId) {
   const interaction = getInteraction(questionId)
   const correctAnswer = payload.value?.answerKey?.[questionId]
   return interaction?.control === 'checkbox' && Array.isArray(correctAnswer)
-}
-
-function isOptionSelected(questionId, optionValue) {
-  const value = answers[questionId]
-  const normalizedOption = String(optionValue || '').trim()
-  return Array.isArray(value)
-    ? value.includes(normalizedOption)
-    : String(value || '').trim() === normalizedOption
 }
 
 function getDragDropGroup(questionId) {
@@ -1742,7 +1262,7 @@ function findQuestionUsingDragOption(questionId, optionValue) {
     return ''
   }
   return getDragDropGroupQuestionIds(questionId).find((candidateId) => (
-    candidateId !== questionId && String(answers[candidateId] || '').trim() === normalizedOption
+    candidateId !== questionId && String(getRawAnswer(candidateId) || '').trim() === normalizedOption
   )) || ''
 }
 
@@ -1976,56 +1496,16 @@ function inferDragValueFromLabel(label) {
   return roman ? roman[1].toLowerCase() : text
 }
 
-function assignAnswer(questionId, value, options = {}) {
-  if (!payload.value?.questionOrder?.includes(questionId)) {
-    return
-  }
-  const previousFingerprint = getAnswerFingerprint(answers[questionId])
-  answers[questionId] = Array.isArray(value)
-    ? value.map((entry) => String(entry || '').trim()).filter(Boolean)
-    : String(value || '').trim()
-  if (options.track) {
-    recordAnswerTimeline(questionId, previousFingerprint, getAnswerFingerprint(answers[questionId]))
-  }
-  if (options.syncNative) {
-    syncNativeControl(questionId)
-  }
-  snapshotMessage.value = ''
-  submitError.value = ''
-}
-
-function setAnswer(questionId, value, options = {}) {
-  if (reviewMode.value) {
-    return
-  }
-  assignAnswer(questionId, value, { ...options, track: true })
-}
-
-function toggleAnswerOption(questionId, optionValue, checked, options = {}) {
-  if (reviewMode.value) {
-    return
-  }
-  const normalizedOption = String(optionValue || '').trim()
-  const current = Array.isArray(answers[questionId])
-    ? answers[questionId].slice()
-    : String(answers[questionId] || '').split(',').map((entry) => entry.trim()).filter(Boolean)
-  const next = checked
-    ? Array.from(new Set([...current, normalizedOption])).sort((left, right) => left.localeCompare(right, 'en'))
-    : current.filter((entry) => entry !== normalizedOption)
-  assignAnswer(questionId, next, { ...options, track: true })
-}
-
 function resetAnswers() {
   if (reviewMode.value) {
     return
   }
-  initializeAnswers(payload.value)
+  initializeReadingAnswers(payload.value, { prefillAnswerKey: isMemorizeMode.value })
   resetAttemptMetadata()
   if (activeSuiteSessionId.value && suiteTimerState.value) {
     applySuiteTimerState()
   } else {
-    elapsedSeconds.value = 0
-    startedAt.value = new Date().toISOString()
+    resetPracticeTimerClock()
   }
   startPracticeTimer()
   syncDomAnswers()
@@ -2038,26 +1518,17 @@ async function recycleSubmittedAttempt() {
   }
   submission.value = null
   clearSubmissionSnapshot()
-  coachResponse.value = null
-  coachError.value = ''
-  coachStreamMessage.value = ''
-  coachLoading.value = false
-  readingCoachOpen.value = false
-  llmReviewStatus.value = 'idle'
-  llmReviewMessage.value = ''
+  resetReadingCoachState()
   submitError.value = ''
   snapshotMessage.value = ''
   resetAttemptMetadata()
-  initializeAnswers(payload.value)
-  highlightSnapshot.value = []
-  closeSelectionToolbar()
-  closeDictionaryBubble()
+  initializeReadingAnswers(payload.value, { prefillAnswerKey: isMemorizeMode.value })
+  resetHighlightUiStateFromComposable()
   await nextTick()
   Object.values(getHighlightRoots()).forEach((root) => unwrapHighlights(root))
   syncDomAnswers()
   setReadOnlyDomControls(false)
-  elapsedSeconds.value = 0
-  startedAt.value = new Date().toISOString()
+  resetPracticeTimerClock()
   startPracticeTimer()
   snapshotMessage.value = '已重置本篇练习，可重新作答。'
 }
@@ -2068,7 +1539,7 @@ function snapshotAnswers() {
   const snapshot = {
     assetId: asset.value.id,
     savedAt: new Date().toISOString(),
-    answers: Object.fromEntries(Object.entries(answers)),
+    answers: snapshotAnswerMap(),
     markedQuestions: markedQuestions.value.slice(),
     questionTimelineLite: buildQuestionTimelineLite(),
     highlights: snapshotHighlights(),
@@ -2134,12 +1605,12 @@ function collectCheckboxGroup(name) {
 }
 
 function syncDomAnswers() {
-  Object.entries(answers).forEach(([questionId, value]) => {
+  getAnswerEntries().forEach(([questionId, value]) => {
     syncNativeControl(questionId, value)
   })
 }
 
-function syncNativeControl(questionId, explicitValue = answers[questionId]) {
+function syncNativeControl(questionId, explicitValue = getRawAnswer(questionId)) {
   if (typeof document === 'undefined') {
     return
   }
@@ -2157,7 +1628,7 @@ function syncNativeControl(questionId, explicitValue = answers[questionId]) {
     const groupIds = expandQuestionSequence(interaction.name)
     const selectedValues = new Set()
     groupIds.forEach((id) => {
-      const value = answers[id]
+      const value = getRawAnswer(id)
       if (Array.isArray(value)) {
         value.map((entry) => String(entry || '').trim()).filter(Boolean).forEach((entry) => selectedValues.add(entry))
         return
@@ -2187,43 +1658,45 @@ function syncNativeControl(questionId, explicitValue = answers[questionId]) {
   })
 }
 
-function syncDropzoneControl(questionId, explicitValue = answers[questionId]) {
-  const dropzone = findNativeDropzoneByQuestionId(questionId)
-  if (!dropzone) {
+function syncDropzoneControl(questionId, explicitValue = getRawAnswer(questionId)) {
+  const dropzones = findNativeDropzonesByQuestionId(questionId)
+  if (!dropzones.length) {
     return
   }
   const value = String(Array.isArray(explicitValue) ? explicitValue[0] || '' : explicitValue || '').trim()
   const option = getOptions(questionId).find((entry) => String(entry.value || '').trim() === value)
   const label = option?.label || value
-  dropzone.dataset.answerValue = value
-  dropzone.dataset.answerLabel = label
-  dropzone.dataset.sourceQuestionId = questionId
-  dropzone.setAttribute('data-vue-dropzone', 'true')
-  dropzone.classList.toggle('dropzone-filled', Boolean(value))
-  dropzone.classList.toggle('dropzone-empty', !value)
-  dropzone.setAttribute('aria-disabled', reviewMode.value ? 'true' : 'false')
-  applyDropzoneThemeStyle(dropzone)
+  dropzones.forEach((dropzone) => {
+    dropzone.dataset.answerValue = value
+    dropzone.dataset.answerLabel = label
+    dropzone.dataset.sourceQuestionId = questionId
+    dropzone.setAttribute('data-vue-dropzone', 'true')
+    dropzone.classList.toggle('dropzone-filled', Boolean(value))
+    dropzone.classList.toggle('dropzone-empty', !value)
+    dropzone.setAttribute('aria-disabled', reviewMode.value ? 'true' : 'false')
+    applyDropzoneThemeStyle(dropzone)
 
-  const holder = ensureDropzoneHolder(dropzone)
-  if (!holder) {
-    return
-  }
-  holder.innerHTML = ''
-  if (!value) {
-    return
-  }
+    const holder = ensureDropzoneHolder(dropzone)
+    if (!holder) {
+      return
+    }
+    holder.innerHTML = ''
+    if (!value) {
+      return
+    }
 
-  const chip = document.createElement('button')
-  chip.type = 'button'
-  chip.className = 'drag-item dragdrop-chip dragdrop-chip-assigned'
-  chip.textContent = label
-  chip.dataset.answerValue = value
-  chip.dataset.answerLabel = label
-  chip.dataset.sourceQuestionId = questionId
-  chip.dataset.dropzoneClear = 'true'
-  chip.draggable = !reviewMode.value
-  chip.disabled = reviewMode.value
-  holder.appendChild(chip)
+    const chip = document.createElement('button')
+    chip.type = 'button'
+    chip.className = 'drag-item dragdrop-chip dragdrop-chip-assigned'
+    chip.textContent = label
+    chip.dataset.answerValue = value
+    chip.dataset.answerLabel = label
+    chip.dataset.sourceQuestionId = questionId
+    chip.dataset.dropzoneClear = 'true'
+    chip.draggable = !reviewMode.value
+    chip.disabled = reviewMode.value
+    holder.appendChild(chip)
+  })
 }
 
 function applyDropzoneThemeStyle(dropzone) {
@@ -2279,7 +1752,9 @@ function ensureDropzoneHolder(dropzone) {
   return holder
 }
 
-function findNativeDropzoneByQuestionId(questionId) {
+function findNativeDropzonesByQuestionId(questionId) {
+  const matches = []
+  const seen = new Set()
   const aliases = resolveAnswerAliases(questionId)
   for (const alias of aliases) {
     const escaped = escapeCss(alias)
@@ -2298,18 +1773,21 @@ function findNativeDropzoneByQuestionId(questionId) {
       `#${escaped}-dropzone`,
       `#${escaped}-target`
     ].join(', ')
-    const direct = document.querySelector(selector)
-    if (direct) {
-      return direct
-    }
+    document.querySelectorAll(selector).forEach((direct) => {
+      if (!seen.has(direct)) {
+        seen.add(direct)
+        matches.push(direct)
+      }
+    })
     const anchor = document.getElementById(`${alias}-anchor`)
     const anchored = anchor?.querySelector?.('.paragraph-dropzone, .match-dropzone, .drop-target-summary')
       || anchor?.parentElement?.querySelector?.('.paragraph-dropzone, .match-dropzone, .drop-target-summary')
-    if (anchored) {
-      return anchored
+    if (anchored && !seen.has(anchored)) {
+      seen.add(anchored)
+      matches.push(anchored)
     }
   }
-  return null
+  return matches
 }
 
 function getNativeDropzoneElement(target) {
@@ -3024,7 +2502,7 @@ async function submitAnswers() {
     const effectiveEndTime = new Date(timing.effectiveEndTimeMs).toISOString()
     const durationSec = timing.duration
     const attempt = {
-      answers: Object.fromEntries(Object.entries(answers)),
+      answers: snapshotAnswerMap(),
       markedQuestions: markedQuestions.value.slice(),
       highlights: snapshotHighlights(),
       questionTimelineLite: buildQuestionTimelineLite(),
@@ -3043,9 +2521,9 @@ async function submitAnswers() {
         activity: 'reading',
         assetId: asset.value.id,
         attempt
-      })
+    })
     submission.value = result?.submission || null
-    readingCoachOpen.value = Boolean(submission.value)
+    setReadingCoachOpen(Boolean(submission.value && readingCoachEnabled.value))
     suiteSession.value = result?.suiteSession || suiteSession.value
     if (submission.value?.answers) {
       Object.entries(submission.value.answers).forEach(([questionId, value]) => {
@@ -3056,10 +2534,12 @@ async function submitAnswers() {
     syncDomAnswers()
     setReadOnlyDomControls(true)
     restoreHighlightsFromRecords(submission.value?.highlights || submission.value?.analysisArtifacts?.highlights || highlightSnapshot.value)
-    elapsedSeconds.value = Math.max(durationSec, Number(submission.value?.duration || 0))
+    setPracticeTimerElapsedSeconds(Math.max(durationSec, Number(submission.value?.duration || 0)))
     snapshotSubmission()
-    const reviewPromise = runAutomaticReviewCoach({ expectedSessionId: submission.value?.sessionId })
-    await reviewPromise
+    if (readingCoachEnabled.value) {
+      const reviewPromise = runAutomaticReviewCoach({ expectedSessionId: submission.value?.sessionId })
+      await reviewPromise
+    }
     maybeAdvanceSuitePassage()
     scheduleEndlessNext()
   } catch (submitFailure) {
@@ -3134,7 +2614,7 @@ async function getEndlessPool() {
     return storedPool
   }
 
-  const result = await practiceAssets.listAll({ activity: 'reading' })
+  const result = await loadReadingAssetPool()
   const pool = Array.isArray(result?.data)
     ? result.data.filter((entry) => entry?.id).map((entry) => ({
       id: entry.id,
@@ -3363,16 +2843,6 @@ function handlePrimaryButton() {
   submitAnswers()
 }
 
-function cloneAnswerValue(value) {
-  if (Array.isArray(value)) {
-    return value.map((entry) => String(entry || '').trim()).filter(Boolean)
-  }
-  if (value == null) {
-    return ''
-  }
-  return String(value).trim()
-}
-
 function applyMemorizeStudyLayer() {
   clearMemorizeLocatorHighlights()
   if (!isMemorizeMode.value || !payload.value?.answerKey) {
@@ -3458,40 +2928,6 @@ function wrapTextMatches(root, needle, options = {}) {
   return matches
 }
 
-function normalizeCoachTranscript(value) {
-  return (Array.isArray(value) ? value : [])
-    .map((entry, index) => {
-      if (!entry || typeof entry !== 'object') return null
-      const snapshot = entry.snapshot && typeof entry.snapshot === 'object' ? entry.snapshot : null
-      const content = String(entry.content || entry.text || snapshot?.answer || snapshot?.message || '').trim()
-      if (!content) return null
-      return {
-        id: String(entry.id || entry.createdAt || `coach_${index}`),
-        role: entry.role === 'assistant' ? 'assistant' : 'user',
-        content,
-        isError: Boolean(entry.isError),
-        followUps: Array.isArray(entry.followUps)
-          ? entry.followUps
-          : (Array.isArray(snapshot?.followUps) ? snapshot.followUps : []),
-        snapshot
-      }
-    })
-    .filter(Boolean)
-    .slice(-40)
-}
-
-function refreshSelectedContext() {
-  const nextContext = readSelectedContext()
-  if (nextContext) {
-    selectedContext.value = nextContext
-  }
-  return selectedContext.value
-}
-
-function clearSelectedContext() {
-  selectedContext.value = null
-}
-
 function readSelectedContext() {
   if (typeof window === 'undefined' || typeof window.getSelection !== 'function') {
     return null
@@ -3528,14 +2964,14 @@ function resolveSelectionElement(selection) {
   return null
 }
 
-function normalizeCoachQuestionNumber(value) {
+function normalizeSelectedQuestionNumber(value) {
   const raw = String(value || '').trim()
   if (!raw) return ''
   const exactNumber = raw.match(/^\d+$/)
   const qNumber = raw.match(/\bq(\d+)\b/i) || raw.match(/^q(\d+)/i)
   const numeric = exactNumber?.[0] || qNumber?.[1] || ''
   if (!numeric) return ''
-  const questionId = `q${Number(numeric)}`
+  const questionId = normalizeQuestionId(`q${Number(numeric)}`)
   return String(getDisplayLabel(questionId) || numeric).replace(/^q/i, '').trim()
 }
 
@@ -3568,7 +3004,7 @@ function collectSelectedQuestionNumbers(element) {
   if (group?.dataset?.questionIds) {
     candidates.push(...String(group.dataset.questionIds).split(','))
   }
-  return Array.from(new Set(candidates.map(normalizeCoachQuestionNumber).filter(Boolean)))
+  return Array.from(new Set(candidates.map(normalizeSelectedQuestionNumber).filter(Boolean)))
 }
 
 function collectSelectedParagraphLabels(element) {
@@ -3589,419 +3025,6 @@ function collectSelectedParagraphLabels(element) {
     labels.push(match[1])
   }
   return Array.from(new Set(labels.map((item) => String(item || '').replace(/^paragraph\s*/i, '').trim().toUpperCase()).filter(Boolean)))
-}
-
-function resolveCoachWrongQuestions() {
-  const fromCoachContext = Array.isArray(submission.value?.coachContext?.wrongQuestions)
-    ? submission.value.coachContext.wrongQuestions
-    : []
-  if (fromCoachContext.length) {
-    return fromCoachContext.map((item) => String(item || '').trim()).filter(Boolean)
-  }
-  return Object.values(submission.value?.answerComparison || {})
-    .filter((entry) => entry?.isCorrect === false)
-    .map((entry) => String(entry.displayLabel || getDisplayLabel(entry.questionId)).replace(/^q/i, '').trim())
-    .filter(Boolean)
-}
-
-function resolveCoachSelectedAnswers() {
-  const fromCoachContext = submission.value?.coachContext?.selectedAnswers
-  if (fromCoachContext && typeof fromCoachContext === 'object') {
-    return Object.fromEntries(
-      Object.entries(fromCoachContext)
-        .map(([questionNumber, answer]) => [String(questionNumber).replace(/^q/i, '').trim(), formatReviewAnswer(answer)])
-        .filter(([questionNumber, answer]) => questionNumber && answer)
-    )
-  }
-  return Object.values(submission.value?.answerComparison || {}).reduce((accumulator, entry) => {
-    const questionNumber = String(entry?.displayLabel || getDisplayLabel(entry?.questionId)).replace(/^q/i, '').trim()
-    const answer = formatReviewAnswer(entry?.userAnswer)
-    if (questionNumber && answer) {
-      accumulator[questionNumber] = answer
-    }
-    return accumulator
-  }, {})
-}
-
-function resolveCoachFocusQuestionNumbers(context = selectedContext.value) {
-  if (Array.isArray(context?.questionNumbers) && context.questionNumbers.length) {
-    return context.questionNumbers
-  }
-  const wrongQuestions = resolveCoachWrongQuestions()
-  if (wrongQuestions.length) {
-    return wrongQuestions.slice(0, 3)
-  }
-  if (typeof document !== 'undefined') {
-    const active = document.activeElement
-    const raw = active?.getAttribute?.('name') || active?.id || ''
-    const focused = normalizeCoachQuestionNumber(raw)
-    if (focused) return [focused]
-  }
-  return []
-}
-
-function resolveCoachMode() {
-  if (activeSuiteSessionId.value) return 'suite'
-  if (isEndlessMode.value) return 'endless'
-  return props.sessionId || route.params.sessionId ? 'review' : 'single'
-}
-
-function buildCoachPayload(query, options = {}) {
-  flushActiveQuestionVisit()
-  const action = String(options.action || 'chat').trim() || 'chat'
-  const surface = String(options.surface || (action === 'review_set' ? 'review_workspace' : 'chat_widget')).trim()
-  const promptKind = String(options.promptKind || 'freeform').trim() || 'freeform'
-  const context = refreshSelectedContext()
-  return {
-    examId: submission.value?.examId || asset.value?.id || props.assetId,
-    sessionId: submission.value?.sessionId || '',
-    mode: resolveCoachMode(),
-    query: String(query || '').trim(),
-    locale: 'zh',
-    surface,
-    action,
-    promptKind,
-    selectedText: context?.text || '',
-    selectedContext: context || null,
-    focusQuestionNumbers: resolveCoachFocusQuestionNumbers(context),
-    history: coachTranscript.value
-      .map((entry) => ({ role: entry.role, content: entry.content }))
-      .filter((entry) => entry.content.trim())
-      .slice(-8),
-    attemptContext: {
-      submitted: true,
-      score: submission.value?.coachContext?.score ?? submission.value?.scoreInfo?.percentage ?? null,
-      wrongQuestions: resolveCoachWrongQuestions(),
-      selectedAnswers: resolveCoachSelectedAnswers(),
-      analysisSignals: submission.value?.analysisSignals || submission.value?.analysisArtifacts?.analysisSignals || null,
-      markedQuestions: Array.isArray(submission.value?.markedQuestions) ? submission.value.markedQuestions : [],
-      questionTimelineLite: Array.isArray(submission.value?.questionTimelineLite) ? submission.value.questionTimelineLite : [],
-      questionTypePerformance: submission.value?.questionTypePerformance || {}
-    }
-  }
-}
-
-function resolveCoachPresetQuery(action) {
-  const focusNumbers = resolveCoachFocusQuestionNumbers()
-  const focusText = focusNumbers.length ? `（重点看 Q${focusNumbers.join(', Q')}）` : ''
-  if (action === 'hint') {
-    return `给我当前题目的提示，不要直接给答案${focusText}`.trim()
-  }
-  if (action === 'explain') {
-    return `解释当前题该如何定位证据并排除干扰项${focusText}`.trim()
-  }
-  if (action === 'review') {
-    return `${AUTOMATIC_REVIEW_QUERY}${focusText}`.trim()
-  }
-  if (action === 'similar') {
-    return `推荐与我薄弱题型类似的训练方向${focusText}`.trim()
-  }
-  return ''
-}
-
-function appendLocalCoachError(message) {
-  if (!submission.value) return
-  const transcript = Array.isArray(submission.value.readingCoachTranscript)
-    ? submission.value.readingCoachTranscript.slice()
-    : []
-  transcript.push({
-    role: 'assistant',
-    content: String(message || '阅读教练请求失败').trim(),
-    createdAt: new Date().toISOString(),
-    isError: true
-  })
-  submission.value = {
-    ...submission.value,
-    readingCoachTranscript: transcript
-  }
-}
-
-async function askCoach() {
-  if (!canAskCoach.value) {
-    return
-  }
-  const query = coachQuery.value.trim()
-  await sendCoachQuery(query, {
-    surface: 'chat_widget',
-    action: 'chat',
-    promptKind: 'freeform'
-  })
-}
-
-async function askCoachFollowUp(query) {
-  await sendCoachQuery(query, {
-    surface: 'chat_widget',
-    action: 'chat',
-    promptKind: 'followup'
-  })
-}
-
-async function runCoachQuickAction(actionId) {
-  const action = String(actionId || '').trim()
-  if (action === 'review') {
-    await runAutomaticReviewCoach()
-    return
-  }
-  const query = resolveCoachPresetQuery(action)
-  if (!query) return
-  await sendCoachQuery(query, {
-    surface: 'chat_widget',
-    action: action === 'similar' ? 'recommend_drills' : 'chat',
-    promptKind: 'preset'
-  })
-}
-
-async function runCoachSelectionAction(actionId) {
-  refreshSelectedContext()
-  if (!selectedContext.value?.text) {
-    coachError.value = '请先选中题干或原文片段。'
-    return
-  }
-  const action = String(actionId || 'explain_selection').trim()
-  const queryMap = {
-    explain_selection: '解释我选中的内容，并说明它和题目定位有什么关系',
-    locate_evidence: '根据我选中的内容定位相关证据',
-    find_paraphrases: '找出我选中内容里的同义替换和关键词'
-  }
-  await sendCoachQuery(queryMap[action] || queryMap.explain_selection, {
-    surface: 'selection_popover',
-    action,
-    promptKind: 'preset'
-  })
-}
-
-function formatCoachStreamMessage(streamEvent, mode = 'coach') {
-  const eventName = String(streamEvent?.event || streamEvent?.type || '').trim()
-  const payload = streamEvent?.data && typeof streamEvent.data === 'object' ? streamEvent.data : {}
-  const detail = payload.data && typeof payload.data === 'object' ? payload.data : payload
-  if (eventName === 'start') return mode === 'review' ? 'AI 复盘已启动...' : '教练已连接...'
-  if (eventName === 'cache_hit') return '命中已缓存复盘上下文...'
-  if (eventName === 'route') return '正在判断问题意图...'
-  if (eventName === 'retrieval') {
-    const chunkCount = Number(detail.chunkCount || 0)
-    return chunkCount > 0 ? `RAG 已检索 ${chunkCount} 条证据...` : 'RAG 正在检索证据...'
-  }
-  if (eventName === 'generation_start') return mode === 'review' ? '正在生成错因复盘...' : '正在生成教练回答...'
-  if (eventName === 'model_delta') return mode === 'review' ? '正在写入复盘结论...' : '正在组织回答...'
-  if (eventName === 'generation_complete') return mode === 'review' ? '复盘生成完成，正在落库...' : '回答生成完成，正在同步记录...'
-  if (eventName === 'complete') return mode === 'review' ? 'AI 复盘已更新' : '教练已返回结果'
-  if (eventName === 'generation_error' || eventName === 'error') return mode === 'review' ? 'AI 复盘失败' : '教练请求失败'
-  return ''
-}
-
-function handleCoachStreamEvent(streamEvent, { expectedSessionId, mode = 'coach' } = {}) {
-  if (!isCurrentSubmission(expectedSessionId)) return
-  const nextMessage = formatCoachStreamMessage(streamEvent, mode)
-  if (!nextMessage) return
-  if (mode === 'review') {
-    llmReviewMessage.value = nextMessage
-  } else {
-    coachStreamMessage.value = nextMessage
-  }
-}
-
-async function sendCoachQuery(query, options = {}) {
-  const normalizedQuery = String(query || '').trim()
-  if (!submission.value?.sessionId || !normalizedQuery || coachLoading.value) {
-    return null
-  }
-  const expectedSessionId = String(submission.value.sessionId || '').trim()
-  const requestId = ++coachRequestSequence
-  coachLoading.value = true
-  coachError.value = ''
-  coachResponse.value = null
-  coachStreamMessage.value = '教练已连接...'
-  try {
-    const requestPayload = buildCoachPayload(normalizedQuery, options)
-    const response = await practiceCoach.query('reading', requestPayload, expectedSessionId, {
-      onEvent: (event) => handleCoachStreamEvent(event, { expectedSessionId, mode: 'coach' })
-    })
-    if (!isCurrentSubmission(expectedSessionId)) {
-      return response
-    }
-    coachResponse.value = response
-    const refreshedSubmission = await refreshSubmissionFromHistory(expectedSessionId)
-    if (!refreshedSubmission) {
-      mergeCoachResultIntoSubmission(
-        response,
-        normalizedQuery,
-        response?.singleAttemptAnalysisLlm || null,
-        requestPayload,
-        expectedSessionId
-      )
-    }
-    snapshotSubmission()
-    return response
-  } catch (coachFailure) {
-    console.error('阅读教练请求失败:', coachFailure)
-    if (!isCurrentSubmission(expectedSessionId)) {
-      return null
-    }
-    coachError.value = coachFailure?.message
-      ? `阅读教练请求失败：${coachFailure.message}`
-      : '阅读教练请求失败，请稍后重试'
-    const refreshedSubmission = await refreshSubmissionFromHistory(expectedSessionId, { preserveCoachResponse: false })
-    if (!refreshedSubmission) {
-      appendLocalCoachError(coachError.value)
-    }
-    snapshotSubmission()
-    return null
-  } finally {
-    if (coachRequestSequence === requestId && isCurrentSubmission(expectedSessionId)) {
-      coachLoading.value = false
-      coachStreamMessage.value = ''
-    }
-  }
-}
-
-async function runAutomaticReviewCoach(options = {}) {
-  const expectedSessionId = String(options.expectedSessionId || submission.value?.sessionId || '').trim()
-  if (!expectedSessionId || llmReviewStatus.value === 'running') {
-    return
-  }
-  if (!isCurrentSubmission(expectedSessionId)) {
-    return
-  }
-  if (singleAttemptAnalysisLlm.value && !options.force) {
-    llmReviewStatus.value = 'success'
-    llmReviewMessage.value = 'AI 复盘已更新'
-    return
-  }
-
-  llmReviewStatus.value = 'running'
-  llmReviewMessage.value = 'AI 正在复盘错题...'
-  try {
-    const requestPayload = buildCoachPayload(AUTOMATIC_REVIEW_QUERY, {
-      surface: 'review_workspace',
-      action: 'review_set',
-      promptKind: 'preset'
-    })
-    const response = await practiceCoach.query('reading', requestPayload, expectedSessionId, {
-      onEvent: (event) => handleCoachStreamEvent(event, { expectedSessionId, mode: 'review' })
-    })
-    if (!isCurrentSubmission(expectedSessionId)) {
-      return
-    }
-    const llmPatch = response?.singleAttemptAnalysisLlm || null
-    coachResponse.value = response
-    const refreshedSubmission = await refreshSubmissionFromHistory(expectedSessionId)
-    if (!refreshedSubmission) {
-      mergeCoachResultIntoSubmission(response, AUTOMATIC_REVIEW_QUERY, llmPatch, requestPayload, expectedSessionId)
-    }
-    llmReviewStatus.value = 'success'
-    llmReviewMessage.value = 'AI 复盘已更新'
-    snapshotSubmission()
-  } catch (reviewFailure) {
-    console.error('自动阅读复盘失败:', reviewFailure)
-    if (!isCurrentSubmission(expectedSessionId)) {
-      return
-    }
-    llmReviewStatus.value = 'failed'
-    llmReviewMessage.value = formatLlmFailureStatusMessage(reviewFailure)
-    const refreshedSubmission = await refreshSubmissionFromHistory(expectedSessionId, { preserveCoachResponse: false })
-    if (!refreshedSubmission) {
-      appendLocalCoachError(llmReviewMessage.value)
-    }
-    snapshotSubmission()
-  }
-}
-
-function queueAutomaticReviewRefresh(sessionId) {
-  const expectedSessionId = String(sessionId || '').trim()
-  if (!expectedSessionId) return
-  Promise.resolve().then(() => {
-    if (!isCurrentSubmission(expectedSessionId) || singleAttemptAnalysisLlm.value || llmReviewStatus.value === 'running') {
-      return null
-    }
-    return runAutomaticReviewCoach({ expectedSessionId })
-  }).catch((refreshFailure) => {
-    console.warn('补全阅读回放 AI 复盘失败:', refreshFailure)
-  })
-}
-
-function isCurrentSubmission(expectedSessionId) {
-  const normalized = String(expectedSessionId || '').trim()
-  return Boolean(normalized && String(submission.value?.sessionId || '').trim() === normalized)
-}
-
-async function refreshSubmissionFromHistory(expectedSessionId, options = {}) {
-  if (!isCurrentSubmission(expectedSessionId)) {
-    return null
-  }
-  try {
-    const state = await practiceSessions.getState('reading', expectedSessionId)
-    const refreshedSubmission = state?.submission || null
-    if (!refreshedSubmission || !isCurrentSubmission(expectedSessionId)) {
-      return null
-    }
-    submission.value = refreshedSubmission
-    coachResponse.value = refreshedSubmission.readingCoachSnapshot || (options.preserveCoachResponse === false ? null : coachResponse.value)
-    restoreSubmittedMetadata(refreshedSubmission)
-    if (refreshedSubmission.answers) {
-      Object.entries(refreshedSubmission.answers).forEach(([questionId, value]) => {
-        assignAnswer(questionId, value)
-      })
-    }
-    return refreshedSubmission
-  } catch (refreshFailure) {
-    console.warn('刷新阅读教练持久化状态失败:', refreshFailure)
-    return null
-  }
-}
-
-function mergeCoachResultIntoSubmission(response, query, llmPatch = null, meta = {}, expectedSessionId = '') {
-  if (!submission.value || (expectedSessionId && !isCurrentSubmission(expectedSessionId))) {
-    return
-  }
-  const snapshot = response && typeof response === 'object' ? response : { value: response }
-  const now = new Date().toISOString()
-  const transcript = Array.isArray(submission.value.readingCoachTranscript)
-    ? submission.value.readingCoachTranscript.slice()
-    : []
-  const normalizedQuery = String(query || '').trim()
-  if (normalizedQuery) {
-    transcript.push({
-      role: 'user',
-      content: normalizedQuery,
-      createdAt: now,
-      surface: String(meta.surface || 'review_workspace'),
-      action: String(meta.action || 'review_set')
-    })
-  }
-  transcript.push({
-    role: 'assistant',
-    content: String(snapshot.answer || snapshot.message || '').trim(),
-    createdAt: now,
-    snapshot
-  })
-
-  const nextSubmission = {
-    ...submission.value,
-    readingCoachSnapshot: snapshot,
-    readingCoachTranscript: transcript
-  }
-  if (llmPatch && typeof llmPatch === 'object') {
-    nextSubmission.singleAttemptAnalysisLlm = llmPatch
-  }
-  submission.value = nextSubmission
-}
-
-function formatLlmFailureStatusMessage(error) {
-  const code = String(error?.code || '').trim().toLowerCase()
-  const rawMessage = String(error?.message || '').trim()
-  if (code === 'coach_locked_until_submit') {
-    return 'AI 复盘暂不可用：请先完成并提交本轮作答。'
-  }
-  if (code === 'local_api_unavailable') {
-    return 'AI 复盘暂不可用：未发现本地服务。'
-  }
-  if (code === 'invalid_response_format') {
-    return 'AI 复盘暂不可用：服务返回格式异常。'
-  }
-  if (rawMessage && rawMessage.length <= 140 && !/failed to fetch|http:|https:|file:/i.test(rawMessage)) {
-    return `AI 复盘暂不可用：${rawMessage}`
-  }
-  return 'AI 复盘暂不可用，请稍后重试。'
 }
 
 function getReviewEntry(questionId) {
@@ -4085,13 +3108,6 @@ function formatDuration(seconds) {
   return minutes > 0 ? `${minutes}分${rest}秒` : `${rest}秒`
 }
 
-function formatClock(seconds) {
-  const totalSeconds = Math.max(0, Math.floor(Number(seconds) || 0))
-  const minutes = Math.floor(totalSeconds / 60)
-  const rest = totalSeconds % 60
-  return `${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}`
-}
-
 function formatDensity(value) {
   const numeric = Number(value)
   return Number.isFinite(numeric) ? numeric.toFixed(1) : '0.0'
@@ -4106,13 +3122,6 @@ function getSeverityLabel(severity) {
   return labels[severity] || '提示'
 }
 
-function getAnswerFingerprint(value) {
-  if (Array.isArray(value)) {
-    return value.map((entry) => String(entry || '').trim()).filter(Boolean).sort().join('|')
-  }
-  return String(value || '').trim()
-}
-
 function getOrCreateQuestionTimelineEntry(questionId) {
   const normalized = normalizeQuestionId(questionId)
   if (!normalized) return null
@@ -4122,7 +3131,7 @@ function getOrCreateQuestionTimelineEntry(questionId) {
     changeCount: 0,
     visitCount: 0,
     elapsedMs: 0,
-    lastFingerprint: getAnswerFingerprint(answers[normalized])
+    lastFingerprint: getAnswerFingerprint(getRawAnswer(normalized))
   }
   current.changeCount = Math.max(0, Number(current.changeCount) || 0)
   current.visitCount = Math.max(0, Number(current.visitCount) || 0)
@@ -4352,7 +3361,7 @@ function getQuestionKindLabel(kind) {
 
 </script>
 
-<style scoped>
+<style>
 .reading-page {
   display: grid;
   gap: 20px;
@@ -4431,42 +3440,42 @@ function getQuestionKindLabel(kind) {
   color: var(--text-primary);
 }
 
-.reading-html :deep(h2),
-.reading-html :deep(h3),
-.reading-html :deep(h4),
-.reading-html :deep(h5) {
+.reading-html h2,
+.reading-html h3,
+.reading-html h4,
+.reading-html h5 {
   margin: 18px 0 10px;
   font-family: var(--font-family-display);
 }
 
-.reading-html :deep(p) {
+.reading-html p {
   margin: 10px 0;
 }
 
-.reading-html :deep(table) {
+.reading-html table {
   width: 100%;
   border-collapse: collapse;
   margin: 14px 0;
   background: rgba(255, 255, 255, 0.46);
 }
 
-.reading-html :deep(th),
-.reading-html :deep(td) {
+.reading-html th,
+.reading-html td {
   padding: 9px 10px;
   border: 1px solid rgba(41, 39, 56, 0.12);
   vertical-align: top;
 }
 
-.reading-html :deep(input[type="radio"]),
-.reading-html :deep(input[type="checkbox"]) {
+.reading-html input[type="radio"],
+.reading-html input[type="checkbox"] {
   width: 18px;
   height: 18px;
   accent-color: var(--primary-color);
 }
 
-.reading-html :deep(.paragraph-dropzone),
-.reading-html :deep(.match-dropzone),
-.reading-html :deep(.drop-target-summary) {
+.reading-html .paragraph-dropzone,
+.reading-html .match-dropzone,
+.reading-html .drop-target-summary {
   min-height: 36px;
   margin: 8px 0;
   padding: 8px 10px;
@@ -4476,27 +3485,27 @@ function getQuestionKindLabel(kind) {
   transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
 }
 
-.reading-html :deep(.dropzone-filled) {
+.reading-html .dropzone-filled {
   border-style: solid;
   border-color: rgba(35, 143, 91, 0.46);
   background: rgba(35, 143, 91, 0.12);
 }
 
-.reading-html :deep(.drag-over),
+.reading-html .drag-over,
 .dragdrop-slot.drag-over {
   border-color: var(--primary-color);
   box-shadow: 0 0 0 3px rgba(201, 100, 66, 0.13);
 }
 
-.reading-html :deep(.pool-items),
-.reading-html :deep(.options-pool),
-.reading-html :deep(.headings-pool) {
+.reading-html .pool-items,
+.reading-html .options-pool,
+.reading-html .headings-pool {
   transition: background 0.16s ease, box-shadow 0.16s ease;
 }
 
-.reading-html :deep(.pool-items.drag-over),
-.reading-html :deep(.options-pool.drag-over),
-.reading-html :deep(.headings-pool.drag-over) {
+.reading-html .pool-items.drag-over,
+.reading-html .options-pool.drag-over,
+.reading-html .headings-pool.drag-over {
   background: rgba(201, 100, 66, 0.08);
   box-shadow: inset 0 0 0 1px rgba(201, 100, 66, 0.26);
 }
@@ -4672,7 +3681,7 @@ function getQuestionKindLabel(kind) {
 }
 
 .dragdrop-chip,
-.reading-html :deep(.dragdrop-chip) {
+.reading-html .dragdrop-chip {
   min-height: 30px;
   max-width: 100%;
   padding: 5px 9px;
@@ -4689,13 +3698,13 @@ function getQuestionKindLabel(kind) {
 }
 
 .dragdrop-chip:disabled,
-.reading-html :deep(.dragdrop-chip:disabled) {
+.reading-html .dragdrop-chip:disabled {
   cursor: default;
   opacity: 0.76;
 }
 
 .dragdrop-chip-assigned,
-.reading-html :deep(.dragdrop-chip-assigned) {
+.reading-html .dragdrop-chip-assigned {
   border-color: rgba(35, 143, 91, 0.36);
   background: rgba(35, 143, 91, 0.14);
   color: var(--text-primary);
@@ -4712,7 +3721,7 @@ function getQuestionKindLabel(kind) {
 }
 
 .dragdrop-chip.dragging,
-.reading-html :deep(.dragging) {
+.reading-html .dragging {
   opacity: 0.58;
 }
 
@@ -5317,19 +4326,19 @@ function getQuestionKindLabel(kind) {
   background: #334155;
 }
 
-.reading-html :deep(.hl),
+.reading-html .hl,
 .review-dictionary-highlight {
   background-color: #72361c;
   color: #fff;
   cursor: pointer;
 }
 
-.reading-html :deep(.hl[data-hl-type="note"]) {
+.reading-html .hl[data-hl-type="note"] {
   background-color: #0369d9;
   color: #fff;
 }
 
-.reading-html :deep(.memorize-locator-highlight) {
+.reading-html .memorize-locator-highlight {
   border-radius: 3px;
   background: rgba(187, 247, 208, 0.85);
   box-shadow: inset 0 -2px 0 rgba(22, 163, 74, 0.36);
@@ -5517,38 +4526,38 @@ function getQuestionKindLabel(kind) {
   color: var(--reading-text);
 }
 
-.reading-html :deep(h2),
-.reading-html :deep(h3),
-.reading-html :deep(h4),
-.reading-html :deep(h5) {
+.reading-html h2,
+.reading-html h3,
+.reading-html h4,
+.reading-html h5 {
   margin: 18px 0 10px;
   color: var(--reading-text);
   font-family: inherit;
 }
 
-.reading-html :deep(p),
-#left :deep(p),
-#right :deep(p) {
+.reading-html p,
+#left p,
+#right p {
   margin: 0 0 14px;
   line-height: 1.7;
 }
 
-.reading-html :deep(label) {
+.reading-html label {
   display: block;
   margin: 8px 0;
   line-height: 1.55;
 }
 
-.reading-html :deep(.choice-item label),
-.reading-html :deep(.checkbox-options label),
-.reading-html :deep(.options-list label),
-.reading-html :deep(.multiple-choice-options label),
-.reading-html :deep(.matching-options label),
-.reading-html :deep(.mcq-group label),
-.reading-html :deep(.radio-options label),
-.reading-html :deep(.radio-group label),
-.reading-html :deep(.multiple-choice label),
-.reading-html :deep(.true-false-ng label) {
+.reading-html .choice-item label,
+.reading-html .checkbox-options label,
+.reading-html .options-list label,
+.reading-html .multiple-choice-options label,
+.reading-html .matching-options label,
+.reading-html .mcq-group label,
+.reading-html .radio-options label,
+.reading-html .radio-group label,
+.reading-html .multiple-choice label,
+.reading-html .true-false-ng label {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -5557,25 +4566,25 @@ function getQuestionKindLabel(kind) {
   line-height: 1.5;
 }
 
-.reading-html :deep(.choice-item label input[type="checkbox"]),
-.reading-html :deep(.checkbox-options label input[type="checkbox"]),
-.reading-html :deep(.options-list label input[type="checkbox"]),
-.reading-html :deep(.choice-item label input[type="radio"]),
-.reading-html :deep(.multiple-choice-options label input[type="radio"]),
-.reading-html :deep(.matching-options label input[type="radio"]),
-.reading-html :deep(.mcq-group label input[type="radio"]),
-.reading-html :deep(.radio-options label input[type="radio"]),
-.reading-html :deep(.radio-group label input[type="radio"]),
-.reading-html :deep(.multiple-choice label input[type="radio"]),
-.reading-html :deep(.true-false-ng label input[type="radio"]) {
+.reading-html .choice-item label input[type="checkbox"],
+.reading-html .checkbox-options label input[type="checkbox"],
+.reading-html .options-list label input[type="checkbox"],
+.reading-html .choice-item label input[type="radio"],
+.reading-html .multiple-choice-options label input[type="radio"],
+.reading-html .matching-options label input[type="radio"],
+.reading-html .mcq-group label input[type="radio"],
+.reading-html .radio-options label input[type="radio"],
+.reading-html .radio-group label input[type="radio"],
+.reading-html .multiple-choice label input[type="radio"],
+.reading-html .true-false-ng label input[type="radio"] {
   flex-shrink: 0;
   margin-top: 4px;
   cursor: pointer;
 }
 
-.reading-html :deep(input[type="text"]),
-.reading-html :deep(textarea),
-.reading-html :deep(select),
+.reading-html input[type="text"],
+.reading-html textarea,
+.reading-html select,
 .practice-nav select,
 .practice-nav input[type="text"] {
   border: 1px solid var(--reading-line);
@@ -5587,8 +4596,8 @@ function getQuestionKindLabel(kind) {
   padding: 6px 8px;
 }
 
-.reading-html :deep(input[type="radio"]),
-.reading-html :deep(input[type="checkbox"]),
+.reading-html input[type="radio"],
+.reading-html input[type="checkbox"],
 .practice-nav input[type="checkbox"] {
   width: 18px;
   height: 18px;
@@ -5596,16 +4605,16 @@ function getQuestionKindLabel(kind) {
   vertical-align: middle;
 }
 
-.reading-html :deep(table) {
+.reading-html table {
   width: 100%;
   margin: 14px 0;
   border-collapse: collapse;
   background: #ffffff;
 }
 
-.reading-page.dark-mode .reading-html :deep(input[type="text"]),
-.reading-page.dark-mode .reading-html :deep(textarea),
-.reading-page.dark-mode .reading-html :deep(select),
+.reading-page.dark-mode .reading-html input[type="text"],
+.reading-page.dark-mode .reading-html textarea,
+.reading-page.dark-mode .reading-html select,
 .reading-page.dark-mode .practice-nav select,
 .reading-page.dark-mode .practice-nav input[type="text"] {
   border-color: var(--reading-line);
@@ -5613,18 +4622,18 @@ function getQuestionKindLabel(kind) {
   color: var(--reading-text);
 }
 
-.reading-page.dark-mode .reading-html :deep(table) {
+.reading-page.dark-mode .reading-html table {
   background: var(--reading-panel);
 }
 
-.reading-html :deep(th),
-.reading-html :deep(td) {
+.reading-html th,
+.reading-html td {
   padding: 8px 10px;
   border: 1px solid var(--reading-line);
   vertical-align: top;
 }
 
-.reading-html :deep(.table-section) {
+.reading-html .table-section {
   margin-top: 12px;
   overflow-x: auto;
   padding: 10px 12px;
@@ -5633,14 +4642,14 @@ function getQuestionKindLabel(kind) {
   background: var(--reading-panel);
 }
 
-.reading-html :deep(.table-section table) {
+.reading-html .table-section table {
   width: 100%;
   margin: 0;
   table-layout: fixed;
   border-collapse: collapse;
 }
 
-.reading-html :deep(.table-section thead th) {
+.reading-html .table-section thead th {
   padding: 10px 8px;
   border: 1px solid var(--reading-line);
   background: var(--reading-panel-alt);
@@ -5648,38 +4657,38 @@ function getQuestionKindLabel(kind) {
   font-weight: 700;
 }
 
-.reading-html :deep(.table-section tbody td) {
+.reading-html .table-section tbody td {
   padding: 10px 10px;
   border: 1px solid var(--reading-line);
   vertical-align: top;
   line-height: 1.45;
 }
 
-.reading-html :deep(.table-section thead th:first-child),
-.reading-html :deep(.table-section tbody td:first-child) {
+.reading-html .table-section thead th:first-child,
+.reading-html .table-section tbody td:first-child {
   width: 16%;
 }
 
-.reading-html :deep(.table-section thead th:nth-child(2)),
-.reading-html :deep(.table-section tbody td:nth-child(2)) {
+.reading-html .table-section thead th:nth-child(2),
+.reading-html .table-section tbody td:nth-child(2) {
   width: 20%;
 }
 
-.reading-html :deep(.table-section thead th:nth-child(3)),
-.reading-html :deep(.table-section tbody td:nth-child(3)) {
+.reading-html .table-section thead th:nth-child(3),
+.reading-html .table-section tbody td:nth-child(3) {
   width: 64%;
 }
 
-.reading-html :deep(.table-section ul) {
+.reading-html .table-section ul {
   margin: 0;
   padding-left: 20px;
 }
 
-.reading-html :deep(.table-section li + li) {
+.reading-html .table-section li + li {
   margin-top: 6px;
 }
 
-.reading-html :deep(.table-section input.blank) {
+.reading-html .table-section input.blank {
   display: inline-block;
   min-width: 120px;
   max-width: 180px;
@@ -5703,7 +4712,7 @@ function getQuestionKindLabel(kind) {
   margin-bottom: 12px;
 }
 
-.reading-html :deep(.group) {
+.reading-html .group {
   margin-bottom: 0;
   padding: 18px 22px;
   border: 1px solid var(--reading-line);
@@ -5721,7 +4730,7 @@ function getQuestionKindLabel(kind) {
   box-shadow: var(--reading-shadow);
 }
 
-.reading-page.dark-mode .reading-html :deep(.group),
+.reading-page.dark-mode .reading-html .group,
 .reading-page.dark-mode #results.review-panel {
   border-color: var(--reading-line);
   background: var(--reading-panel);
@@ -5781,14 +4790,14 @@ function getQuestionKindLabel(kind) {
   margin: 8px 0;
 }
 
-.reading-html :deep(.question-item),
-.reading-html :deep(.match-question-item),
-.reading-html :deep(.choice-item) {
+.reading-html .question-item,
+.reading-html .match-question-item,
+.reading-html .choice-item {
   margin-bottom: 12px;
 }
 
-.reading-html :deep(.paragraph-dropzone),
-.reading-html :deep(.match-dropzone),
+.reading-html .paragraph-dropzone,
+.reading-html .match-dropzone,
 .dragdrop-slot {
   display: flex;
   min-height: 40px;
@@ -5804,40 +4813,40 @@ function getQuestionKindLabel(kind) {
   transition: border-color 0.16s ease, background 0.16s ease;
 }
 
-.reading-page.dark-mode .reading-html :deep(.paragraph-dropzone),
-.reading-page.dark-mode .reading-html :deep(.match-dropzone),
-.reading-page.dark-mode .reading-html :deep([data-vue-dropzone="true"]),
+.reading-page.dark-mode .reading-html .paragraph-dropzone,
+.reading-page.dark-mode .reading-html .match-dropzone,
+.reading-page.dark-mode .reading-html [data-vue-dropzone="true"],
 .reading-page.dark-mode .dragdrop-slot {
   border-color: #475569 !important;
   background: #1e293b !important;
   color: var(--reading-muted);
 }
 
-.reading-html :deep(.paragraph-dropzone.drag-over),
-.reading-html :deep(.match-dropzone.drag-over),
-.reading-html :deep(.drag-over),
+.reading-html .paragraph-dropzone.drag-over,
+.reading-html .match-dropzone.drag-over,
+.reading-html .drag-over,
 .dragdrop-slot.drag-over {
   border-color: var(--reading-dropzone-drag-border);
   background: var(--reading-dropzone-drag-bg);
   box-shadow: none;
 }
 
-.reading-page.dark-mode .reading-html :deep(.paragraph-dropzone.drag-over),
-.reading-page.dark-mode .reading-html :deep(.match-dropzone.drag-over),
-.reading-page.dark-mode .reading-html :deep([data-vue-dropzone="true"].drag-over),
-.reading-page.dark-mode .reading-html :deep(.drag-over),
+.reading-page.dark-mode .reading-html .paragraph-dropzone.drag-over,
+.reading-page.dark-mode .reading-html .match-dropzone.drag-over,
+.reading-page.dark-mode .reading-html [data-vue-dropzone="true"].drag-over,
+.reading-page.dark-mode .reading-html .drag-over,
 .reading-page.dark-mode .dragdrop-slot.drag-over {
   border-color: #3b82f6 !important;
   background: #1e3a8a !important;
 }
 
-.reading-html :deep(.paragraph-dropzone.dropzone-filled),
-.reading-html :deep(.match-dropzone.dropzone-filled),
+.reading-html .paragraph-dropzone.dropzone-filled,
+.reading-html .match-dropzone.dropzone-filled,
 .dragdrop-slot.filled {
   border-style: solid;
 }
 
-.reading-html :deep(.drop-target-summary) {
+.reading-html .drop-target-summary {
   position: relative;
   display: inline-flex;
   min-width: 80px;
@@ -5855,20 +4864,20 @@ function getQuestionKindLabel(kind) {
   transition: all 0.2s ease;
 }
 
-.reading-html :deep(.drop-target-summary.drag-over) {
+.reading-html .drop-target-summary.drag-over {
   border-bottom-color: var(--reading-accent);
   background: #dbeafe;
 }
 
-.reading-html :deep(.drop-target-summary.dropzone-filled) {
+.reading-html .drop-target-summary.dropzone-filled {
   border-bottom-color: var(--reading-success);
   background: #dcfce7;
   color: var(--reading-success);
   font-weight: 600;
 }
 
-.reading-html :deep(.drop-target-summary .drag-item),
-.reading-html :deep(.drop-target-summary .dragdrop-chip) {
+.reading-html .drop-target-summary .drag-item,
+.reading-html .drop-target-summary .dragdrop-chip {
   margin: 0;
   padding: 0;
   border: 0;
@@ -5878,30 +4887,30 @@ function getQuestionKindLabel(kind) {
   font-weight: inherit;
 }
 
-.reading-page.dark-mode .reading-html :deep(.drop-target-summary) {
+.reading-page.dark-mode .reading-html .drop-target-summary {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.reading-page.dark-mode .reading-html :deep(.drop-target-summary.drag-over) {
+.reading-page.dark-mode .reading-html .drop-target-summary.drag-over {
   background: #1e3a8a;
 }
 
-.reading-page.dark-mode .reading-html :deep(.drop-target-summary.dropzone-filled) {
+.reading-page.dark-mode .reading-html .drop-target-summary.dropzone-filled {
   background: #064e3b;
   color: #dcfce7;
 }
 
-.reading-html :deep(.paragraph-label) {
+.reading-html .paragraph-label {
   color: var(--reading-muted);
   font-size: 0.9rem;
   font-weight: 700;
   white-space: nowrap;
 }
 
-.reading-html :deep(.pool-items),
-.reading-html :deep(.options-pool),
-.reading-html :deep(.headings-pool),
-.reading-html :deep(.dropped-items),
+.reading-html .pool-items,
+.reading-html .options-pool,
+.reading-html .headings-pool,
+.reading-html .dropped-items,
 .dragdrop-options {
   display: flex;
   min-height: 40px;
@@ -5910,34 +4919,34 @@ function getQuestionKindLabel(kind) {
   gap: 8px;
 }
 
-.reading-html :deep(.pool-items.drag-over),
-.reading-html :deep(.options-pool.drag-over),
-.reading-html :deep(.headings-pool.drag-over) {
+.reading-html .pool-items.drag-over,
+.reading-html .options-pool.drag-over,
+.reading-html .headings-pool.drag-over {
   border-color: var(--reading-accent);
   background: var(--reading-pool-drag-bg);
   box-shadow: none;
 }
 
-.reading-page.dark-mode .reading-html :deep(.pool-items.drag-over),
-.reading-page.dark-mode .reading-html :deep(.options-pool.drag-over),
-.reading-page.dark-mode .reading-html :deep(.headings-pool.drag-over) {
+.reading-page.dark-mode .reading-html .pool-items.drag-over,
+.reading-page.dark-mode .reading-html .options-pool.drag-over,
+.reading-page.dark-mode .reading-html .headings-pool.drag-over {
   border-color: var(--reading-dropzone-drag-border);
   background: var(--reading-pool-drag-bg);
 }
 
-.reading-html :deep(.dropped-items:empty::after) {
+.reading-html .dropped-items:empty::after {
   content: "拖到这里";
   color: #7b8a98;
   font-size: 0.82rem;
 }
 
-.reading-page.dark-mode .reading-html :deep(.dropped-items:empty::after) {
+.reading-page.dark-mode .reading-html .dropped-items:empty::after {
   color: #94a3b8;
 }
 
-.reading-html :deep(.drag-item),
+.reading-html .drag-item,
 .dragdrop-chip,
-.reading-html :deep(.dragdrop-chip) {
+.reading-html .dragdrop-chip {
   min-height: 32px;
   max-width: 100%;
   padding: 6px 10px;
@@ -5954,31 +4963,31 @@ function getQuestionKindLabel(kind) {
   user-select: none;
 }
 
-.reading-page.dark-mode .reading-html :deep(.drag-item),
+.reading-page.dark-mode .reading-html .drag-item,
 .reading-page.dark-mode .dragdrop-chip,
-.reading-page.dark-mode .reading-html :deep(.dragdrop-chip) {
+.reading-page.dark-mode .reading-html .dragdrop-chip {
   border-color: #64748b !important;
   background: #334155 !important;
   color: #f8fafc;
 }
 
-.reading-html :deep(.drag-item.dragging),
+.reading-html .drag-item.dragging,
 .dragdrop-chip.dragging,
-.reading-html :deep(.dragging) {
+.reading-html .dragging {
   opacity: 0.55;
 }
 
-.reading-html :deep(.drag-item--assigned),
+.reading-html .drag-item--assigned,
 .dragdrop-chip-assigned,
-.reading-html :deep(.dragdrop-chip-assigned) {
+.reading-html .dragdrop-chip-assigned {
   border-style: solid;
   border-color: var(--reading-drag-item-border);
   background: var(--reading-drag-item-bg);
 }
 
-.reading-page.dark-mode .reading-html :deep(.drag-item--assigned),
+.reading-page.dark-mode .reading-html .drag-item--assigned,
 .reading-page.dark-mode .dragdrop-chip-assigned,
-.reading-page.dark-mode .reading-html :deep(.dragdrop-chip-assigned) {
+.reading-page.dark-mode .reading-html .dragdrop-chip-assigned {
   border-color: #64748b !important;
   background: #334155 !important;
 }
@@ -6658,7 +5667,7 @@ function getQuestionKindLabel(kind) {
     justify-content: flex-end;
   }
 
-  .reading-html :deep(.table-section input.blank) {
+  .reading-html .table-section input.blank {
     width: 100%;
     max-width: none;
     margin-top: 4px;

@@ -592,6 +592,11 @@
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { settings, essays, configs, prompts, topics } from '@/api/client.js'
+import {
+  openLegacyUpdateManager,
+  startLegacyOnboardingTour,
+  switchLegacyBackgroundTheme
+} from '@/modules/legacy/legacyBridge'
 import { createRequestGate } from '@/utils/request-gate.js'
 import {
   isProviderDefaultUrl,
@@ -790,10 +795,6 @@ const confirmDialog = reactive({
 const apiRequestGate = createRequestGate()
 const promptRequestGate = createRequestGate()
 const settingsRequestGate = createRequestGate()
-const legacyStylePromises = new Map()
-const legacyScriptPromises = new Map()
-let legacyOnboardingPromise = null
-let legacyUpdateManagerPromise = null
 
 // 关于页面数据
 const electronVersion = ref('N/A')
@@ -1404,9 +1405,7 @@ function applyBackgroundTheme(themeName) {
   const nextTheme = backgroundThemes.some((theme) => theme.value === themeName)
     ? themeName
     : 'misty-mountain'
-  if (typeof window.switchBgTheme === 'function') {
-    window.switchBgTheme(nextTheme)
-  } else {
+  if (!switchLegacyBackgroundTheme(nextTheme)) {
     try {
       localStorage.setItem('three_bg_theme', nextTheme)
     } catch (_) {}
@@ -1417,138 +1416,22 @@ function applyBackgroundTheme(themeName) {
   setGlobalMessage('success', `主题已切换：${label}`)
 }
 
-function resolveLegacyAssetUrl(relativePath) {
-  const normalized = String(relativePath || '').replace(/^\/+/, '')
-  try {
-    const currentUrl = new URL(window.location.href)
-    if (currentUrl.pathname.includes('/dist/writing/')) {
-      return new URL(`../../${normalized}`, currentUrl.href).href
-    }
-  } catch (_) {}
-  return `/${normalized}`
-}
-
-function loadLegacyStyle(relativePath) {
-  if (legacyStylePromises.has(relativePath)) return legacyStylePromises.get(relativePath)
-  const href = resolveLegacyAssetUrl(relativePath)
-  const existing = document.querySelector(`link[data-legacy-style="${relativePath}"]`)
-  if (existing) {
-    const promise = Promise.resolve()
-    legacyStylePromises.set(relativePath, promise)
-    return promise
-  }
-  const promise = new Promise((resolve, reject) => {
-    const link = document.createElement('link')
-    link.rel = 'stylesheet'
-    link.href = href
-    link.dataset.legacyStyle = relativePath
-    link.onload = () => resolve()
-    link.onerror = () => {
-      legacyStylePromises.delete(relativePath)
-      reject(new Error(`加载 legacy 样式失败：${relativePath}`))
-    }
-    document.head.appendChild(link)
-  })
-  legacyStylePromises.set(relativePath, promise)
-  return promise
-}
-
-function loadLegacyScript(relativePath) {
-  if (legacyScriptPromises.has(relativePath)) return legacyScriptPromises.get(relativePath)
-  const existing = document.querySelector(`script[data-legacy-script="${relativePath}"]`)
-  if (existing) {
-    const promise = Promise.resolve()
-    legacyScriptPromises.set(relativePath, promise)
-    return promise
-  }
-  const promise = new Promise((resolve, reject) => {
-    const script = document.createElement('script')
-    script.src = resolveLegacyAssetUrl(relativePath)
-    script.async = false
-    script.dataset.legacyScript = relativePath
-    script.onload = () => resolve()
-    script.onerror = () => {
-      legacyScriptPromises.delete(relativePath)
-      reject(new Error(`加载 legacy 脚本失败：${relativePath}`))
-    }
-    document.head.appendChild(script)
-  })
-  legacyScriptPromises.set(relativePath, promise)
-  return promise
-}
-
-function ensureLegacyOnboarding() {
-  if (window.OnboardingTour && typeof window.OnboardingTour.start === 'function') {
-    return Promise.resolve()
-  }
-  if (!legacyOnboardingPromise) {
-    legacyOnboardingPromise = loadLegacyStyle('css/onboarding.css')
-      .then(() => loadLegacyScript('js/components/onboardingTour.js'))
-      .then(() => {
-        window.OnboardingTour?.init?.()
-      })
-      .catch((error) => {
-        legacyOnboardingPromise = null
-        throw error
-      })
-  }
-  return legacyOnboardingPromise
-}
-
 async function startOnboardingTour(event) {
   event?.preventDefault?.()
   event?.stopImmediatePropagation?.()
   try {
-    await ensureLegacyOnboarding()
-    if (!window.OnboardingTour || typeof window.OnboardingTour.start !== 'function') {
-      throw new Error('OnboardingTour 未加载')
-    }
-    window.OnboardingTour.start(true)
+    await startLegacyOnboardingTour()
   } catch (error) {
     console.error('打开引导流程失败:', error)
     setGlobalMessage('error', error?.message ? `引导打开失败：${error.message}` : '引导打开失败，请稍后重试。')
   }
 }
 
-function ensureUpdateManagerInstance() {
-  if (window.appUpdateManager && typeof window.appUpdateManager.handleAction === 'function') {
-    return Promise.resolve(window.appUpdateManager)
-  }
-  if (typeof window.AppUpdateManager !== 'function') {
-    return Promise.reject(new Error('AppUpdateManager 未加载'))
-  }
-  const manager = new window.AppUpdateManager()
-  window.appUpdateManager = manager
-  return manager.init().then(() => manager)
-}
-
-function ensureLegacyUpdateManager() {
-  if (window.appUpdateManager && typeof window.appUpdateManager.handleAction === 'function') {
-    return Promise.resolve(window.appUpdateManager)
-  }
-  if (!legacyUpdateManagerPromise) {
-    legacyUpdateManagerPromise = loadLegacyStyle('css/main.css')
-      .then(() => loadLegacyScript('js/integration/updateManager.js'))
-      .then(() => ensureUpdateManagerInstance())
-      .catch((error) => {
-        legacyUpdateManagerPromise = null
-        throw error
-      })
-  }
-  return legacyUpdateManagerPromise
-}
-
 async function openUpdateManager(event) {
   event?.preventDefault?.()
   event?.stopImmediatePropagation?.()
   try {
-    const manager = await ensureLegacyUpdateManager()
-    if (typeof manager.handleAction === 'function') {
-      await manager.handleAction('open-modal')
-      return
-    }
-    manager.showModal?.()
-    await manager.ensureAutoCheck?.()
+    await openLegacyUpdateManager()
   } catch (error) {
     console.error('打开更新管理失败:', error)
     setGlobalMessage('error', error?.message ? `更新检查打开失败：${error.message}` : '更新检查打开失败，请稍后重试。')

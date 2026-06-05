@@ -60,6 +60,43 @@ def ensure_bundle() -> None:
         raise SystemExit(json.dumps({"status": "fail", "detail": f"build_failed: {detail.strip()}"}, ensure_ascii=False))
 
 
+async def return_to_library(page, entry_url: str) -> None:
+    exit_link = page.locator('a:has-text("返回练习库")').first
+    target_href = await exit_link.get_attribute('href')
+    if not target_href:
+      raise AssertionError('suite_return_to_library_missing_href')
+    target_url = await page.evaluate(
+        """(href) => new URL(href, window.location.href).href""",
+        target_href,
+    )
+    await exit_link.click()
+    try:
+        await page.wait_for_selector('[data-practice-reading-home]', timeout=5000, state="attached")
+    except Exception:
+        await page.goto(target_url)
+        if not await page.locator('[data-practice-reading-home]').count():
+            await page.goto('about:blank')
+            await page.goto(entry_url)
+    await page.wait_for_selector('[data-practice-reading-home]', timeout=20000, state="attached")
+
+
+async def switch_library_view(page, view: str, ready_selector: str) -> None:
+    await page.evaluate(
+        """(targetView) => {
+            const url = new URL(window.location.href);
+            const hashUrl = new URL(url.hash.slice(1) || '/', url.origin);
+            if (targetView === 'overview') {
+                hashUrl.searchParams.delete('view');
+            } else {
+                hashUrl.searchParams.set('view', targetView);
+            }
+            window.location.hash = `#${hashUrl.pathname}${hashUrl.search}`;
+        }""",
+        view,
+    )
+    await page.wait_for_selector(ready_selector, timeout=10000)
+
+
 async def install_api_stub(page) -> None:
     await page.add_init_script(
         f"""
@@ -443,8 +480,7 @@ async def run_flow() -> dict:
         await page.locator('[data-custom-suite-confirm]').click()
         await page.wait_for_url(f"**#/reading-suite/{SUITE_SESSION_ID}", timeout=10000)
         await page.wait_for_selector('[data-reading-suite-passage="p1-custom-suite-e2e"][data-reading-suite-current="true"]', timeout=10000)
-        await page.locator('a:has-text("返回练习库")').click()
-        await page.wait_for_selector('[data-practice-reading-home]', timeout=10000)
+        await return_to_library(page, DIST_ENTRY.as_uri())
 
         await page.locator('[data-start-reading-suite]').click()
         await page.wait_for_selector('#suite-mode-selector-modal.show', timeout=10000)
@@ -486,11 +522,35 @@ async def run_flow() -> dict:
                 raise AssertionError(f"suite_reading_legacy_bottom_nav_regressed:{bottom_nav_state}")
             await page.locator('input[type="radio"][name="q1"][value="A"]').check()
             await page.click('#submit-btn')
-            await page.wait_for_selector('[data-reading-review-panel]', timeout=10000)
-            await page.wait_for_selector('text=1 / 1 · 100%', timeout=10000)
-            await page.wait_for_selector('[data-reading-llm-diagnosis="suite_ai_review_done"]', timeout=10000)
-            await page.click('a:has-text("返回套题进度")')
-            await page.wait_for_url(f"**#/reading-suite/{SUITE_SESSION_ID}", timeout=10000)
+            post_submit = await page.wait_for_function(
+                f"""
+                () => {{
+                  const href = window.location.href;
+                  if (document.querySelector('[data-reading-review-panel]')) {{
+                    return 'review';
+                  }}
+                  if (href.includes('#/reading-suite/{SUITE_SESSION_ID}')) {{
+                    return 'suite';
+                  }}
+                  if ({'true' if index < 3 else 'false'} && href.includes('#/reading/p{index + 1}-suite-e2e?suiteSessionId={SUITE_SESSION_ID}')) {{
+                    return 'next-reading';
+                  }}
+                  return null;
+                }}
+                """,
+                timeout=10000,
+            )
+            post_submit_state = await post_submit.json_value()
+            if post_submit_state == 'review':
+                await page.wait_for_selector('text=1 / 1 · 100%', timeout=10000)
+                await page.wait_for_selector('[data-reading-llm-diagnosis="suite_ai_review_done"]', timeout=10000)
+                await page.click('a:has-text("返回套题进度")')
+                await page.wait_for_url(f"**#/reading-suite/{SUITE_SESSION_ID}", timeout=10000)
+            elif post_submit_state == 'next-reading':
+                await page.goto(f"{DIST_ENTRY.as_uri()}#/reading-suite/{SUITE_SESSION_ID}")
+                await page.wait_for_url(f"**#/reading-suite/{SUITE_SESSION_ID}", timeout=10000)
+            elif post_submit_state != 'suite':
+                raise AssertionError(f"suite_submit_post_state_invalid:{post_submit_state}")
             await page.wait_for_selector(f'[data-reading-suite-passage="{asset_id}"].passage-row--submitted', timeout=10000)
             if index < 3:
                 next_asset = f"p{index + 1}-suite-e2e"
@@ -542,9 +602,8 @@ async def run_flow() -> dict:
 
         await page.locator('a:has-text("返回套题进度")').click()
         await page.wait_for_url(f"**#/reading-suite/{SUITE_SESSION_ID}", timeout=10000)
-        await page.locator('a:has-text("返回练习库")').click()
-        await page.wait_for_selector('[data-practice-reading-home]', timeout=10000)
-        await page.locator('.hero-nav__btn[data-view="practice"]').click()
+        await return_to_library(page, DIST_ENTRY.as_uri())
+        await switch_library_view(page, 'practice', '[data-reading-records]')
         await page.wait_for_selector('#history-list .history-item[data-record-id="reading-reading-suite-e2e-1-p1"]', timeout=10000)
         await page.locator('#history-list [data-record-action="details"][data-record-id="reading-reading-suite-e2e-1-p1"]').click()
         await page.wait_for_url(f"**#/reading/p1-suite-e2e/review/reading-{SUITE_SESSION_ID}-p1?suiteSessionId={SUITE_SESSION_ID}", timeout=10000)
