@@ -81,6 +81,16 @@
         simulationMode: false,
         simulationCtx: null,
         simulationContextReady: false,
+        suite: {
+            inline: false,
+            flowMode: '',
+            sequence: [],
+            activeExamId: null,
+            currentIndex: 0,
+            activeStartedAtMs: null,
+            slotsByExamId: new Map(),
+            activating: false
+        },
         simulationDraftSyncTimer: null,
         simulationDraftFingerprint: '',
         lastInitSignature: '',
@@ -230,12 +240,17 @@
                 state.endlessCountdownEndTime = null;
                 timer.classList.remove('endless-countdown');
             }
+            var remainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
+            timer.textContent = remainingMinutes + ' minutes remaining';
+        } else if (!state.suiteSessionId) {
+            var elapsed = getPageElapsedSeconds();
+            timer.textContent = formatTimerSeconds(elapsed);
         } else {
             var elapsed = getPageElapsedSeconds();
             displaySeconds = Math.max(0, limitSeconds - elapsed);
+            var remainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
+            timer.textContent = remainingMinutes + ' minutes remaining';
         }
-        var remainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
-        timer.textContent = remainingMinutes + ' minutes remaining';
         var hasEndlessCountdown = state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime);
         timer.classList.toggle('paused', !interaction.timerRunning && !hasEndlessCountdown);
         timer.style.opacity = (interaction.timerRunning || hasEndlessCountdown) ? '1' : '0.5';
@@ -685,6 +700,330 @@
         return dataset;
     }
 
+    function normalizeSuiteSequence(rawSequence = []) {
+        const seen = new Set();
+        return (Array.isArray(rawSequence) ? rawSequence : [])
+            .map((entry, index) => {
+                if (!entry || typeof entry !== 'object') {
+                    return null;
+                }
+                const examId = entry.examId != null ? String(entry.examId).trim() : '';
+                if (!examId || seen.has(examId)) {
+                    return null;
+                }
+                seen.add(examId);
+                const dataKey = entry.dataKey != null && String(entry.dataKey).trim()
+                    ? String(entry.dataKey).trim()
+                    : examId;
+                return {
+                    examId,
+                    dataKey,
+                    title: entry.title != null ? String(entry.title) : '',
+                    category: entry.category != null ? String(entry.category) : '',
+                    index
+                };
+            })
+            .filter(Boolean);
+    }
+
+    async function loadDatasetByEntry(sequenceEntry) {
+        const manifest = await ensureManifest();
+        const lookupKey = sequenceEntry?.dataKey || sequenceEntry?.examId;
+        const entry = manifest[lookupKey] || manifest[sequenceEntry?.examId];
+        const registry = global.__READING_EXAM_DATA__;
+        if (!entry) {
+            throw new Error(`reading_exam_manifest_entry_missing:${sequenceEntry?.examId || lookupKey}`);
+        }
+        if (!registry || typeof registry.get !== 'function') {
+            throw new Error('reading_exam_registry_missing');
+        }
+        if (!registry.has(entry.dataKey)) {
+            await loadScript(entry.script);
+        }
+        const dataset = registry.get(entry.dataKey);
+        if (!dataset) {
+            throw new Error(`reading_exam_dataset_missing:${entry.dataKey}`);
+        }
+        return {
+            dataset,
+            dataKey: entry.dataKey,
+            manifestEntry: entry
+        };
+    }
+
+    function getSuiteSlot(examId = state.examId) {
+        const key = examId != null ? String(examId).trim() : '';
+        if (!key || !state.suite || !(state.suite.slotsByExamId instanceof Map)) {
+            return null;
+        }
+        return state.suite.slotsByExamId.get(key) || null;
+    }
+
+    function getActiveSuiteSlot() {
+        return getSuiteSlot(state.suite?.activeExamId || state.examId);
+    }
+
+    function getNotesText() {
+        const noteArea = document.querySelector('#notes-panel textarea');
+        return noteArea ? String(noteArea.value || '') : '';
+    }
+
+    function setNotesText(value) {
+        const noteArea = document.querySelector('#notes-panel textarea');
+        if (noteArea) {
+            noteArea.value = String(value || '');
+        }
+    }
+
+    function buildEmptyDraft() {
+        return {
+            answers: {},
+            highlights: [],
+            noteText: '',
+            scrollY: 0,
+            updatedAt: Date.now()
+        };
+    }
+
+    function mergeDraft(baseDraft, nextDraft) {
+        const base = baseDraft && typeof baseDraft === 'object' ? baseDraft : {};
+        const next = nextDraft && typeof nextDraft === 'object' ? nextDraft : {};
+        return Object.assign(buildEmptyDraft(), base, next, {
+            answers: next.answers && typeof next.answers === 'object'
+                ? { ...next.answers }
+                : (base.answers && typeof base.answers === 'object' ? { ...base.answers } : {}),
+            highlights: Array.isArray(next.highlights)
+                ? next.highlights.slice()
+                : (Array.isArray(base.highlights) ? base.highlights.slice() : []),
+            noteText: typeof next.noteText === 'string'
+                ? next.noteText
+                : (typeof base.noteText === 'string' ? base.noteText : ''),
+            scrollY: Number.isFinite(Number(next.scrollY))
+                ? Number(next.scrollY)
+                : (Number.isFinite(Number(base.scrollY)) ? Number(base.scrollY) : 0),
+            updatedAt: Number.isFinite(Number(next.updatedAt))
+                ? Number(next.updatedAt)
+                : (Number.isFinite(Number(base.updatedAt)) ? Number(base.updatedAt) : Date.now())
+        });
+    }
+
+    function mergeSuiteDraftPayload(data = {}) {
+        if (!state.suite?.inline) {
+            return;
+        }
+        const draftsByExam = data && data.draftsByExam && typeof data.draftsByExam === 'object'
+            ? data.draftsByExam
+            : null;
+        if (draftsByExam) {
+            Object.entries(draftsByExam).forEach(([examId, draft]) => {
+                const slot = getSuiteSlot(examId);
+                if (slot && draft && typeof draft === 'object') {
+                    slot.draft = mergeDraft(slot.draft, draft);
+                }
+            });
+        }
+
+        const contextExamId = data && data.examId != null ? String(data.examId).trim() : '';
+        const draft = data && data.draft && typeof data.draft === 'object'
+            ? data.draft
+            : null;
+        if (contextExamId && draft) {
+            const slot = getSuiteSlot(contextExamId);
+            if (slot) {
+                slot.draft = mergeDraft(slot.draft, draft);
+            }
+        }
+    }
+
+    function resolveSuiteTargetExamId(data = {}, options = {}) {
+        if (options.preferExistingActive) {
+            const activeExamId = state.suite?.activeExamId ? String(state.suite.activeExamId).trim() : '';
+            if (activeExamId && getSuiteSlot(activeExamId)) {
+                return activeExamId;
+            }
+        }
+        const contextExamId = data && data.examId != null ? String(data.examId).trim() : '';
+        if (contextExamId && getSuiteSlot(contextExamId)) {
+            return contextExamId;
+        }
+        const rawIndex = Number((data && data.currentIndex) ?? (data && data.suiteSequenceIndex));
+        const index = Number.isFinite(rawIndex) ? Math.max(0, Math.floor(rawIndex)) : 0;
+        const indexedEntry = state.suite.sequence[index];
+        if (indexedEntry && indexedEntry.examId && getSuiteSlot(indexedEntry.examId)) {
+            return indexedEntry.examId;
+        }
+        return state.suite.sequence[0]?.examId || state.examId || '';
+    }
+
+    function updateActiveSlotFromCurrentDom(reason = 'snapshot') {
+        if (!state.suite?.inline || state.suite.activating) {
+            return null;
+        }
+        const slot = getActiveSuiteSlot();
+        if (!slot || !state.dataset) {
+            return null;
+        }
+        const draft = mergeDraft(slot.draft, {
+            answers: collectAnswers(),
+            highlights: collectHighlights(),
+            noteText: getNotesText(),
+            scrollY: global.scrollY || 0,
+            updatedAt: Date.now()
+        });
+        slot.draft = draft;
+        slot.navStatus = new Map(navStatus);
+        slot.lastResults = state.lastResults || slot.lastResults || null;
+        if (Number.isFinite(Number(state.suite.activeStartedAtMs)) && state.suite.activeStartedAtMs > 0) {
+            const elapsedSeconds = Math.max(0, Math.round((Date.now() - state.suite.activeStartedAtMs) / 1000));
+            if (elapsedSeconds > 0) {
+                slot.durationSeconds = Math.max(0, Number(slot.durationSeconds) || 0) + elapsedSeconds;
+                state.suite.activeStartedAtMs = Date.now();
+            }
+        }
+        state.simulationDraftFingerprint = reason === 'activate'
+            ? state.simulationDraftFingerprint
+            : buildDraftFingerprint(draft);
+        return draft;
+    }
+
+    function getSuiteSequenceIndex(examId) {
+        const key = examId != null ? String(examId).trim() : '';
+        return state.suite.sequence.findIndex((entry) => entry && entry.examId === key);
+    }
+
+    function syncSimulationCtxForActiveSlot() {
+        if (!state.suite?.inline) {
+            return;
+        }
+        const index = getSuiteSequenceIndex(state.suite.activeExamId);
+        const total = state.suite.sequence.length || 1;
+        const currentIndex = index >= 0 ? index : 0;
+        state.suite.currentIndex = currentIndex;
+        state.simulationCtx = Object.assign({}, state.simulationCtx || {}, {
+            suiteSessionId: state.suiteSessionId || state.simulationCtx?.suiteSessionId || null,
+            flowMode: 'simulation',
+            examId: state.suite.activeExamId,
+            suiteSequence: state.suite.sequence.map((entry) => ({ ...entry })),
+            currentIndex,
+            total,
+            isLast: currentIndex >= total - 1,
+            canPrev: currentIndex > 0,
+            canNext: currentIndex < total - 1
+        });
+    }
+
+    async function ensureSuiteDatasets(rawSequence = []) {
+        const sequence = normalizeSuiteSequence(rawSequence);
+        if (!sequence.length) {
+            return false;
+        }
+        state.suite.inline = true;
+        state.suite.flowMode = 'simulation';
+        state.suite.sequence = sequence;
+        await Promise.all(sequence.map(async (entry) => {
+            const loaded = await loadDatasetByEntry(entry);
+            const existing = getSuiteSlot(entry.examId);
+            const inheritedDraft = state.simulationCtx?.draft
+                && state.simulationCtx.examId === entry.examId
+                ? state.simulationCtx.draft
+                : null;
+            state.suite.slotsByExamId.set(entry.examId, Object.assign({}, existing || {}, {
+                examId: entry.examId,
+                dataKey: loaded.dataKey,
+                title: entry.title || loaded.dataset?.meta?.title || loaded.manifestEntry?.title || entry.examId,
+                category: entry.category || loaded.dataset?.meta?.category || loaded.manifestEntry?.category || '',
+                dataset: loaded.dataset,
+                draft: mergeDraft(existing?.draft, inheritedDraft),
+                navStatus: existing?.navStatus instanceof Map ? existing.navStatus : new Map(),
+                lastResults: existing?.lastResults || null,
+                durationSeconds: Number.isFinite(Number(existing?.durationSeconds)) ? Number(existing.durationSeconds) : 0
+            }));
+        }));
+        return true;
+    }
+
+    function initDragPools() {
+        document.querySelectorAll('.pool-items').forEach((pool, index) => {
+            if (!pool.id) {
+                pool.id = `practice-pool-${index}`;
+            }
+        });
+        document.querySelectorAll('.pool-items .drag-item').forEach((item) => {
+            if (!item.dataset.originPool) {
+                const pool = item.closest('.pool-items');
+                if (pool?.id) {
+                    item.dataset.originPool = pool.id;
+                }
+            }
+        });
+    }
+
+    function refreshDynamicQuestionEnhancements() {
+        getDropzones().forEach((dropzone, index) => {
+            if (!dropzone.dataset.dropzoneId) {
+                dropzone.dataset.dropzoneId = `dropzone-${index + 1}`;
+            }
+            ensureDropzoneHolder(dropzone);
+            updateDropzoneState(dropzone);
+        });
+        document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
+            if (item instanceof HTMLElement) {
+                attachDraggableBehavior(item);
+            }
+        });
+        initDragPools();
+    }
+
+    async function activateSuiteSlot(examId, options = {}) {
+        if (!state.suite?.inline) {
+            return false;
+        }
+        const targetExamId = examId != null ? String(examId).trim() : '';
+        const slot = getSuiteSlot(targetExamId);
+        if (!slot || !slot.dataset) {
+            return false;
+        }
+        if (!options.skipSave) {
+            updateActiveSlotFromCurrentDom('deactivate');
+        }
+        state.suite.activating = true;
+        state.suite.activeExamId = targetExamId;
+        state.suite.activeStartedAtMs = Date.now();
+        state.examId = targetExamId;
+        state.dataKey = slot.dataKey || targetExamId;
+        state.dataset = slot.dataset;
+        state.lastResults = slot.lastResults || null;
+        navStatus.clear();
+        if (slot.navStatus instanceof Map) {
+            slot.navStatus.forEach((value, key) => navStatus.set(key, value));
+        }
+        renderDataset(slot.dataset);
+        refreshDynamicQuestionEnhancements();
+        clearCurrentAnswers();
+        applyDraftToDom(slot.draft || buildEmptyDraft());
+        setNotesText(slot.draft?.noteText || '');
+        syncSimulationCtxForActiveSlot();
+        state.simulationMode = true;
+        state.simulationContextReady = true;
+        updateNavStatuses(slot.lastResults || null);
+        syncPrimaryActionButtons();
+        state.suite.activating = false;
+        if (Number.isFinite(Number(slot.draft?.scrollY))) {
+            global.scrollTo(0, Number(slot.draft.scrollY) || 0);
+        }
+        if (!options.skipDraftSync) {
+            syncSimulationDraftSnapshot('activate');
+        }
+        if (!options.silent) {
+            postMessage('SIMULATION_ACTIVE_EXAM_CHANGE', {
+                examId: targetExamId,
+                currentIndex: state.suite.currentIndex,
+                suiteSequence: state.suite.sequence.map((entry) => ({ ...entry }))
+            });
+        }
+        return true;
+    }
+
     async function ensureExplanationManifest() {
         if (global.__READING_EXPLANATION_MANIFEST__) {
             return global.__READING_EXPLANATION_MANIFEST__;
@@ -1017,6 +1356,47 @@
     }
 
     function getPassageQuestionStates() {
+        if (state.suite?.inline && state.suite.sequence.length) {
+            const info = {
+                p1: { questions: [], answeredCount: 0, total: 13 },
+                p2: { questions: [], answeredCount: 0, total: 13 },
+                p3: { questions: [], answeredCount: 0, total: 14 }
+            };
+            const activeExamId = state.suite.activeExamId || state.examId;
+            let currentPart = 'p1';
+            state.suite.sequence.forEach((entry, index) => {
+                const slot = getSuiteSlot(entry.examId);
+                const dataset = slot?.dataset;
+                const category = String(entry.category || dataset?.meta?.category || '').toUpperCase();
+                const partKey = category === 'P2' ? 'p2' : (category === 'P3' ? 'p3' : `p${Math.min(3, index + 1)}`);
+                if (entry.examId === activeExamId) {
+                    currentPart = partKey;
+                }
+                const order = Array.isArray(dataset?.questionOrder) ? dataset.questionOrder : [];
+                const answers = slot?.draft?.answers && typeof slot.draft.answers === 'object' ? slot.draft.answers : {};
+                const statusMap = slot?.navStatus instanceof Map ? slot.navStatus : new Map();
+                info[partKey].total = order.length || info[partKey].total;
+                info[partKey].questions = order.map((qId) => {
+                    const labelMap = dataset?.questionDisplayMap || {};
+                    const label = labelMap[qId] || String(qId).replace(/^q/i, '');
+                    let status = statusMap.get(qId) || '';
+                    const answered = Object.prototype.hasOwnProperty.call(answers, qId)
+                        && splitAnswerTokens(answers[qId]).length > 0;
+                    if (answered && !status) {
+                        status = 'answered';
+                    }
+                    if (answered) {
+                        info[partKey].answeredCount += 1;
+                    }
+                    const comparison = slot?.lastResults?.answerComparison?.[qId];
+                    if (comparison) {
+                        status = comparison.isCorrect ? 'correct' : 'incorrect';
+                    }
+                    return { qId, label, status, examId: entry.examId };
+                });
+            });
+            return { info, currentPart };
+        }
         const info = {
             p1: { questions: [], answeredCount: 0, total: 13 },
             p2: { questions: [], answeredCount: 0, total: 13 },
@@ -1168,11 +1548,12 @@
             return questions.map(q => {
                 const segmentClass = q.status ? q.status : '';
                 const activeClass = (isCurrent && q.qId === state.currentActiveQuestionId) ? 'active' : '';
-                const disabledClass = isCurrent ? '' : 'disabled';
+                const disabledClass = isCurrent || state.suite?.inline ? '' : 'disabled';
                 const qidAttr = isCurrent ? `data-question-id="${q.qId}"` : '';
+                const examAttr = q.examId ? ` data-exam-id="${escapeHtml(q.examId)}"` : '';
                 
                 return `
-                    <div class="q-column" data-question-id="${q.qId}" data-part="${partKey}">
+                    <div class="q-column" data-question-id="${q.qId}" data-part="${partKey}"${examAttr}>
                         <div class="q-bar-segment ${segmentClass}"></div>
                         <button class="q-item ${activeClass} ${q.status} ${disabledClass}" ${qidAttr} type="button">${q.label}</button>
                     </div>
@@ -1601,6 +1982,25 @@
                 }
                 updateActiveQuestionHighlight(questionId);
             } else {
+                if (state.suite?.inline) {
+                    const targetExamId = column.dataset.examId || '';
+                    if (targetExamId) {
+                        activateSuiteSlot(targetExamId).then((activated) => {
+                            if (activated && questionId) {
+                                const target = findQuestionAnchor(questionId);
+                                if (target && typeof global.scrollToElement === 'function') {
+                                    global.scrollToElement(target);
+                                } else {
+                                    target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+                                }
+                                updateActiveQuestionHighlight(questionId);
+                            }
+                        }).catch((error) => {
+                            console.warn('[UnifiedReadingPage] inline suite navigate failed:', error);
+                        });
+                    }
+                    return;
+                }
                 if (state.simulationMode) {
                     if (partKey === 'p1' && currentPartKey === 'p2') dispatchSimulationNavigate('prev');
                     else if (partKey === 'p2' && currentPartKey === 'p3') dispatchSimulationNavigate('prev');
@@ -1643,14 +2043,23 @@
         const nextBtn = document.getElementById('float-next-btn');
         
         prevBtn?.addEventListener('click', () => {
-            if (state.simulationMode) {
-                handleReset();
+            if (state.simulationMode && state.simulationCtx) {
+                if (state.simulationCtx.canPrev) {
+                    if (state.suite?.inline) {
+                        dispatchSimulationNavigate('prev', buildSubmissionSnapshot());
+                        return;
+                    }
+                    dispatchSimulationNavigate('prev', buildSubmissionSnapshot());
+                }
             }
         });
         
         nextBtn?.addEventListener('click', () => {
-            if (state.simulationMode) {
-                handleSubmit();
+            if (state.simulationMode && state.simulationCtx) {
+                if (!state.simulationCtx.isLast) {
+                    syncSimulationDraftSnapshot('submit');
+                    dispatchSimulationNavigate('next', buildSubmissionSnapshot());
+                }
             }
         });
     }
@@ -2672,11 +3081,10 @@
         return splitAnswerTokens(value).length > 0;
     }
 
-    function buildResults() {
-        const answers = collectAnswers();
-        const answerKey = state.dataset?.answerKey || {};
-        const questionOrder = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : Object.keys(answerKey);
-        const questionTypeMap = buildQuestionTypeMap();
+    function buildResultsFromAnswers(dataset, answers = {}) {
+        const answerKey = dataset?.answerKey || {};
+        const questionOrder = Array.isArray(dataset?.questionOrder) ? dataset.questionOrder : Object.keys(answerKey);
+        const questionTypeMap = buildQuestionTypeMap(dataset);
         const questionTypePerformance = {};
         const answerComparison = {};
         const details = {};
@@ -2741,6 +3149,10 @@
                 source: 'unified_reading_page'
             }
         };
+    }
+
+    function buildResults() {
+        return buildResultsFromAnswers(state.dataset, collectAnswers());
     }
 
     function renderResults(results) {
@@ -3063,15 +3475,12 @@
             return;
         }
         if (dom.resetBtn) {
-            dom.resetBtn.style.display = '';
-            dom.resetBtn.setAttribute('type', 'button');
-            dom.resetBtn.textContent = '上一题';
-            dom.resetBtn.disabled = state.readOnly || !ctx.canPrev;
+            dom.resetBtn.style.display = 'none';
         }
         if (dom.submitBtn) {
-            dom.submitBtn.style.display = '';
+            dom.submitBtn.style.display = ctx.isLast ? '' : 'none';
             dom.submitBtn.setAttribute('type', 'button');
-            setSubmitLabel(ctx.isLast ? 'Submit' : '下一题');
+            setSubmitLabel('Submit');
             dom.submitBtn.disabled = state.readOnly;
         }
     }
@@ -3435,6 +3844,7 @@
             return {
                 answers: draft.answers && typeof draft.answers === 'object' ? { ...draft.answers } : {},
                 highlights: Array.isArray(draft.highlights) ? draft.highlights.slice() : [],
+                noteText: typeof draft.noteText === 'string' ? draft.noteText : '',
                 scrollY: Number.isFinite(Number(draft.scrollY)) ? Number(draft.scrollY) : 0
             };
         }
@@ -3511,6 +3921,7 @@
         return {
             answers,
             highlights: collectHighlights(),
+            noteText: getNotesText(),
             scrollY: global.scrollY || 0,
             updatedAt
         };
@@ -3520,7 +3931,9 @@
         if (!state.simulationMode || state.readOnly || !state.suiteSessionId) {
             return;
         }
-        const draft = collectCurrentDraft();
+        const draft = state.suite?.inline
+            ? (updateActiveSlotFromCurrentDom(reason) || collectCurrentDraft())
+            : collectCurrentDraft();
         const fingerprint = buildDraftFingerprint(draft);
         if (reason === 'periodic' && fingerprint && fingerprint === state.simulationDraftFingerprint) {
             return;
@@ -3530,8 +3943,11 @@
         if (!mirroredDraft) {
             return;
         }
-        persistSimulationDraftMirror(mirroredDraft);
+        if (!state.suite?.inline) {
+            persistSimulationDraftMirror(mirroredDraft);
+        }
         postMessage('SIMULATION_DRAFT_SYNC', {
+            examId: state.examId,
             draft: mirroredDraft,
             draftUpdatedAt: Number.isFinite(Number(mirroredDraft.updatedAt)) ? Number(mirroredDraft.updatedAt) : Date.now(),
             elapsed: getPageElapsedSeconds()
@@ -3544,7 +3960,7 @@
             && state.simulationContextReady
             && !state.readOnly
             && state.suiteSessionId
-            && state.examId
+            && (state.examId || state.suite?.activeExamId)
         );
         if (!shouldSync) {
             stopSimulationDraftSync();
@@ -3670,6 +4086,9 @@
         if (Array.isArray(draft.highlights)) {
             applyHighlights(draft.highlights);
         }
+        if (typeof draft.noteText === 'string') {
+            setNotesText(draft.noteText);
+        }
         if (typeof draft.scrollY === 'number') {
             global.scrollTo(0, draft.scrollY);
         }
@@ -3722,10 +4141,121 @@
             results,
             answers: results.answers || {},
             highlights: collectHighlights(),
+            noteText: getNotesText(),
             scrollY: global.scrollY || 0,
             elapsed: Math.max(0, Number(timerSnapshot.durationSeconds) || 0),
             timerSnapshot,
             updatedAt: Date.now()
+        };
+    }
+
+    function prefixSuiteMap(examId, source = {}) {
+        const prefixed = {};
+        const prefix = examId ? `${examId}::` : '';
+        Object.entries(source || {}).forEach(([questionId, value]) => {
+            prefixed[`${prefix}${questionId}`] = value;
+        });
+        return prefixed;
+    }
+
+    function mergeQuestionTypePerformance(target, source = {}) {
+        Object.entries(source || {}).forEach(([type, performance]) => {
+            if (!target[type]) {
+                target[type] = { total: 0, correct: 0, accuracy: 0 };
+            }
+            target[type].total += Number(performance && performance.total) || 0;
+            target[type].correct += Number(performance && performance.correct) || 0;
+            target[type].accuracy = target[type].total > 0
+                ? target[type].correct / target[type].total
+                : 0;
+        });
+    }
+
+    function buildInlineSuiteSubmissionSnapshot() {
+        updateActiveSlotFromCurrentDom('submit');
+        const timerSnapshot = getPracticeTimerSnapshot();
+        const suiteEntries = [];
+        const aggregatedAnswers = {};
+        const aggregatedComparison = {};
+        const aggregatedCorrectAnswers = {};
+        const aggregatedQuestionTypeMap = {};
+        const aggregatedQuestionTypePerformance = {};
+        let totalCorrect = 0;
+        let totalQuestions = 0;
+        let latestUpdatedAt = Date.now();
+
+        state.suite.sequence.forEach((entry) => {
+            const slot = getSuiteSlot(entry.examId);
+            if (!slot || !slot.dataset) {
+                return;
+            }
+            const draft = mergeDraft(slot.draft, {});
+            const results = buildResultsFromAnswers(slot.dataset, draft.answers || {});
+            slot.lastResults = results;
+            slot.navStatus = new Map();
+            Object.entries(results.answerComparison || {}).forEach(([questionId, comparison]) => {
+                slot.navStatus.set(questionId, comparison && comparison.isCorrect ? 'correct' : 'incorrect');
+            });
+            const scoreInfo = results.scoreInfo || {};
+            totalCorrect += Number(scoreInfo.correct) || 0;
+            totalQuestions += Number(scoreInfo.total ?? scoreInfo.totalQuestions) || 0;
+            latestUpdatedAt = Math.max(latestUpdatedAt, Number(draft.updatedAt) || latestUpdatedAt);
+            Object.assign(aggregatedAnswers, prefixSuiteMap(entry.examId, results.answers || {}));
+            Object.assign(aggregatedComparison, prefixSuiteMap(entry.examId, results.answerComparison || {}));
+            Object.assign(aggregatedCorrectAnswers, prefixSuiteMap(entry.examId, results.correctAnswers || {}));
+            Object.assign(aggregatedQuestionTypeMap, prefixSuiteMap(entry.examId, results.questionTypeMap || {}));
+            mergeQuestionTypePerformance(aggregatedQuestionTypePerformance, results.questionTypePerformance || {});
+            suiteEntries.push({
+                examId: entry.examId,
+                title: slot.title || entry.title || slot.dataset?.meta?.title || entry.examId,
+                category: slot.category || entry.category || slot.dataset?.meta?.category || '',
+                dataKey: slot.dataKey || entry.dataKey || entry.examId,
+                duration: Math.max(0, Math.round(Number(slot.durationSeconds) || 0)),
+                answers: results.answers || {},
+                answerComparison: results.answerComparison || {},
+                correctAnswers: results.correctAnswers || {},
+                scoreInfo: results.scoreInfo || {},
+                questionTypeMap: results.questionTypeMap || {},
+                questionTypePerformance: results.questionTypePerformance || {},
+                highlights: Array.isArray(draft.highlights) ? draft.highlights.slice() : [],
+                noteText: typeof draft.noteText === 'string' ? draft.noteText : '',
+                scrollY: Number.isFinite(Number(draft.scrollY)) ? Number(draft.scrollY) : 0,
+                updatedAt: Number.isFinite(Number(draft.updatedAt)) ? Number(draft.updatedAt) : Date.now()
+            });
+        });
+
+        const accuracy = totalQuestions > 0 ? totalCorrect / totalQuestions : 0;
+        const scoreInfo = {
+            correct: totalCorrect,
+            total: totalQuestions,
+            totalQuestions,
+            accuracy,
+            percentage: Math.round(accuracy * 100),
+            source: 'unified_reading_inline_suite'
+        };
+        return {
+            suiteSubmission: true,
+            suiteEntries,
+            results: {
+                answers: aggregatedAnswers,
+                answerComparison: aggregatedComparison,
+                correctAnswers: aggregatedCorrectAnswers,
+                questionTypeMap: aggregatedQuestionTypeMap,
+                questionTypePerformance: aggregatedQuestionTypePerformance,
+                scoreInfo
+            },
+            answers: aggregatedAnswers,
+            answerComparison: aggregatedComparison,
+            correctAnswers: aggregatedCorrectAnswers,
+            questionTypeMap: aggregatedQuestionTypeMap,
+            questionTypePerformance: aggregatedQuestionTypePerformance,
+            scoreInfo,
+            highlights: [],
+            noteText: '',
+            scrollY: global.scrollY || 0,
+            elapsed: Math.max(0, Number(timerSnapshot.durationSeconds) || 0),
+            timerSnapshot,
+            updatedAt: latestUpdatedAt
         };
     }
 
@@ -3749,11 +4279,24 @@
             return;
         }
         const snapshot = submissionSnapshot || buildSubmissionSnapshot();
+        if (state.suite?.inline) {
+            updateActiveSlotFromCurrentDom('navigate');
+            const currentIndex = state.suite.currentIndex;
+            const targetIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
+            const targetEntry = state.suite.sequence[targetIndex];
+            if (targetEntry && targetEntry.examId) {
+                activateSuiteSlot(targetEntry.examId).catch((error) => {
+                    console.warn('[UnifiedReadingPage] inline simulation navigation failed:', error);
+                });
+            }
+            return;
+        }
         postMessage('SIMULATION_NAVIGATE', {
             direction: direction === 'prev' ? 'prev' : 'next',
             draft: {
                 answers: snapshot.answers || {},
                 highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
+                noteText: typeof snapshot.noteText === 'string' ? snapshot.noteText : '',
                 scrollY: Number.isFinite(Number(snapshot.scrollY)) ? Number(snapshot.scrollY) : 0,
                 updatedAt: Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now()
             },
@@ -3761,6 +4304,7 @@
             resultSnapshot: snapshot.results,
             answers: snapshot.answers || {},
             highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
+            noteText: typeof snapshot.noteText === 'string' ? snapshot.noteText : '',
             scrollY: Number.isFinite(Number(snapshot.scrollY)) ? Number(snapshot.scrollY) : 0,
             elapsed: Number.isFinite(Number(snapshot.elapsed)) ? Number(snapshot.elapsed) : getPageElapsedSeconds(),
             timerSnapshot: snapshot.timerSnapshot || getPracticeTimerSnapshot()
@@ -3774,19 +4318,22 @@
         if (state.readOnly) {
             return;
         }
-        const submissionSnapshot = buildSubmissionSnapshot();
+        const submissionSnapshot = state.suite?.inline
+            ? buildInlineSuiteSubmissionSnapshot()
+            : buildSubmissionSnapshot();
         if (state.simulationMode) {
             syncSimulationDraftSnapshot('submit');
         }
-        if (state.simulationMode && state.simulationCtx && !state.simulationCtx.isLast) {
-            dispatchSimulationNavigate('next', submissionSnapshot);
-            return;
-        }
-        const results = submissionSnapshot.results;
-        const highlightSnapshot = Array.isArray(submissionSnapshot.highlights)
-            ? submissionSnapshot.highlights
-            : [];
+        const activeSlot = state.suite?.inline ? getActiveSuiteSlot() : null;
+        const results = activeSlot?.lastResults || submissionSnapshot.results;
+        const highlightSnapshot = state.suite?.inline
+            ? (Array.isArray(activeSlot?.draft?.highlights) ? activeSlot.draft.highlights : [])
+            : (Array.isArray(submissionSnapshot.highlights) ? submissionSnapshot.highlights : []);
+        const postedResults = submissionSnapshot.results || results;
         state.lastResults = results;
+        if (activeSlot) {
+            activeSlot.lastResults = results;
+        }
         renderResults(results);
         enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
         await renderExplanations();
@@ -3819,8 +4366,12 @@
             },
             answers: submissionSnapshot.answers || {},
             highlights: Array.isArray(submissionSnapshot.highlights) ? submissionSnapshot.highlights : [],
+            noteText: typeof submissionSnapshot.noteText === 'string' ? submissionSnapshot.noteText : '',
             scrollY: Number.isFinite(Number(submissionSnapshot.scrollY)) ? Number(submissionSnapshot.scrollY) : 0
-        }, results));
+        }, state.suite?.inline ? {
+            suiteSubmission: true,
+            suiteEntries: Array.isArray(submissionSnapshot.suiteEntries) ? submissionSnapshot.suiteEntries : []
+        } : {}, postedResults));
         if (state.simulationMode && state.simulationCtx && state.simulationCtx.isLast) {
             stopSimulationDraftSync();
             clearSimulationDraftMirror();
@@ -3843,12 +4394,6 @@
             return;
         }
         closeReviewHighlightDictionary();
-        if (state.simulationMode && state.simulationCtx) {
-            if (state.simulationCtx.canPrev) {
-                dispatchSimulationNavigate('prev', buildSubmissionSnapshot());
-            }
-            return;
-        }
         clearCurrentAnswers();
         if (dom.results) {
             dom.results.style.display = 'none';
@@ -3906,6 +4451,22 @@
         if (document.body && document.body.dataset) {
             document.body.dataset.suiteMode = isSuiteMode ? 'true' : 'false';
         }
+        const candidateId = document.getElementById('candidate-id');
+        if (candidateId) {
+            const sourceId = state.suiteSessionId || state.sessionId || '';
+            if (sourceId) {
+                let hash = 0;
+                String(sourceId).split('').forEach((char) => {
+                    hash = ((hash << 5) - hash) + char.charCodeAt(0);
+                    hash |= 0;
+                });
+                candidateId.textContent = String(Math.abs(hash) % 900000 + 100000);
+                candidateId.hidden = false;
+            } else {
+                candidateId.textContent = '';
+                candidateId.hidden = true;
+            }
+        }
         if (typeof global.updatePracticeSuiteModeUI === 'function') {
             try {
                 global.updatePracticeSuiteModeUI(isSuiteMode);
@@ -3915,7 +4476,39 @@
         }
     }
 
-    function handleIncoming(event) {
+    async function initializeInlineSimulationSuite(data = {}, options = {}) {
+        const sequence = Array.isArray(data && data.suiteSequence) ? data.suiteSequence : [];
+        if (!sequence.length) {
+            return false;
+        }
+        const flowMode = data && typeof data.flowMode === 'string'
+            ? data.flowMode.trim().toLowerCase()
+            : (data && typeof data.suiteFlowMode === 'string' ? data.suiteFlowMode.trim().toLowerCase() : '');
+        if (flowMode && flowMode !== 'simulation') {
+            return false;
+        }
+        await ensureSuiteDatasets(sequence);
+        mergeSuiteDraftPayload(data || {});
+        const targetExamId = resolveSuiteTargetExamId(data || {}, options);
+        if (!targetExamId) {
+            return false;
+        }
+        const activated = await activateSuiteSlot(targetExamId, {
+            skipSave: true,
+            skipDraftSync: Boolean(options.skipDraftSync),
+            silent: Boolean(options.silent)
+        });
+        if (activated) {
+            const slot = getSuiteSlot(targetExamId);
+            if (slot?.draft) {
+                state.simulationDraftFingerprint = buildDraftFingerprint(slot.draft);
+            }
+            refreshSimulationDraftSyncLifecycle();
+        }
+        return activated;
+    }
+
+    async function handleIncoming(event) {
         const payload = event?.data;
         if (!payload || typeof payload !== 'object') {
             return;
@@ -3927,7 +4520,16 @@
             const isDuplicateInit = initSignature && initSignature === state.lastInitSignature;
             const incomingExamId = data && data.examId != null ? String(data.examId).trim() : '';
             const currentExamId = state.examId != null ? String(state.examId).trim() : '';
-            if (incomingExamId && currentExamId && incomingExamId !== currentExamId) {
+            const incomingSuiteSequence = normalizeSuiteSequence(data && data.suiteSequence);
+            const incomingExamInSuiteSequence = Boolean(
+                incomingExamId
+                && incomingSuiteSequence.length
+                && incomingSuiteSequence.some((entry) => entry.examId === incomingExamId)
+            );
+            if (incomingExamId && currentExamId && incomingExamId !== currentExamId && !incomingExamInSuiteSequence) {
+                return;
+            }
+            if (isDuplicateInit && state.sessionReadySent) {
                 return;
             }
             if (incomingExamId && !currentExamId) {
@@ -3987,8 +4589,21 @@
                     isLast,
                     canPrev: currentIndex > 0,
                     canNext: !isLast,
-                    flowMode: 'simulation'
+                    flowMode: 'simulation',
+                    examId: incomingExamId || currentExamId || null,
+                    suiteSessionId: data.suiteSessionId || state.suiteSessionId || null,
+                    suiteSequence: incomingSuiteSequence.map((entry) => ({ ...entry }))
                 };
+                if (incomingSuiteSequence.length) {
+                    await initializeInlineSimulationSuite(Object.assign({}, data, {
+                        flowMode: 'simulation',
+                        suiteSequence: incomingSuiteSequence
+                    }), {
+                        skipDraftSync: true,
+                        silent: true,
+                        preferExistingActive: true
+                    });
+                }
             } else if (initFlowMode) {
                 state.simulationMode = false;
                 state.simulationContextReady = false;
@@ -4006,9 +4621,6 @@
             refreshSimulationDraftSyncLifecycle();
             syncSuiteModeState();
             stopInitLoop();
-            if (isDuplicateInit && state.sessionReadySent) {
-                return;
-            }
             state.lastInitSignature = initSignature;
             if (state.memorizeMode && !state.reviewMode && !state.simulationMode) {
                 renderMemorizeStudyLayer().catch(() => {});
@@ -4041,7 +4653,13 @@
         if (type === 'SIMULATION_CONTEXT') {
             const contextExamId = data && data.examId != null ? String(data.examId).trim() : '';
             const currentExamId = state.examId != null ? String(state.examId).trim() : '';
-            if (contextExamId && currentExamId && contextExamId !== currentExamId) {
+            const contextSuiteSequence = normalizeSuiteSequence(data && data.suiteSequence);
+            const contextExamInSuiteSequence = Boolean(
+                contextExamId
+                && contextSuiteSequence.length
+                && contextSuiteSequence.some((entry) => entry.examId === contextExamId)
+            );
+            if (contextExamId && currentExamId && contextExamId !== currentExamId && !contextExamInSuiteSequence && !state.suite?.inline) {
                 return;
             }
             const flowMode = data && typeof data.flowMode === 'string'
@@ -4060,6 +4678,12 @@
             state.simulationMode = true;
             state.simulationContextReady = true;
             state.simulationCtx = data;
+            if (contextExamId) {
+                state.simulationCtx.examId = contextExamId;
+            }
+            if (contextSuiteSequence.length) {
+                state.simulationCtx.suiteSequence = contextSuiteSequence.map((entry) => ({ ...entry }));
+            }
             const simulationTimerAnchorMs = Number(data.globalTimerAnchorMs ?? data.suiteTimerAnchorMs);
             if (Number.isFinite(simulationTimerAnchorMs)) {
                 state.simulationGlobalAnchorMs = simulationTimerAnchorMs;
@@ -4102,8 +4726,17 @@
             const draftFromParent = data && data.draft && typeof data.draft === 'object'
                 ? data.draft
                 : null;
-            const draft = draftFromParent || restoreSimulationDraftMirror();
-            if (draft) {
+            const initializedInlineSuite = contextSuiteSequence.length
+                ? await initializeInlineSimulationSuite(Object.assign({}, data, {
+                    suiteSequence: contextSuiteSequence,
+                    flowMode: 'simulation'
+                }), {
+                    skipDraftSync: true,
+                    silent: true
+                })
+                : false;
+            const draft = draftFromParent || (initializedInlineSuite ? null : restoreSimulationDraftMirror());
+            if (draft && !initializedInlineSuite) {
                 applyDraftToDom(draft);
                 state.simulationDraftFingerprint = buildDraftFingerprint(draft);
                 persistSimulationDraftMirror(cloneDraftSafely(draft));

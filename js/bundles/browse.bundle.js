@@ -6771,6 +6771,12 @@
                     if (options.suiteFlowMode) {
                         sessionInfo.suiteFlowMode = options.suiteFlowMode;
                     }
+                    if (typeof this._buildSuiteSequencePayload === 'function' && this.currentSuiteSession) {
+                        const suiteSequence = this._buildSuiteSequencePayload(this.currentSuiteSession);
+                        if (suiteSequence.length) {
+                            sessionInfo.suiteSequence = suiteSequence;
+                        }
+                    }
                     const timerContext = this._resolveSuiteTimerContext(options, sessionInfo);
                     if (timerContext.suiteTimerAnchorMs != null) {
                         sessionInfo.suiteTimerAnchorMs = timerContext.suiteTimerAnchorMs;
@@ -8033,6 +8039,7 @@
                     'VOCAB_HIGHLIGHT_SAVE',
                     'SIMULATION_DRAFT_SYNC',
                     'SIMULATION_NAVIGATE',
+                    'SIMULATION_ACTIVE_EXAM_CHANGE',
                     'SIMULATION_SUBMIT'
                 ]);
 
@@ -8199,10 +8206,31 @@
                 const activeSuiteSessionId = this.currentSuiteSession && this.currentSuiteSession.id
                     ? String(this.currentSuiteSession.id)
                     : '';
+                const activeSuiteSequence = this.currentSuiteSession && Array.isArray(this.currentSuiteSession.sequence)
+                    ? this.currentSuiteSession.sequence
+                    : [];
                 const isExamInActiveSuite = Boolean(
                     this.currentSuiteSession
-                    && Array.isArray(this.currentSuiteSession.sequence)
-                    && this.currentSuiteSession.sequence.some(item => item && String(item.examId) === expectedExamId)
+                    && activeSuiteSequence.some(item => item && String(item.examId) === expectedExamId)
+                );
+                const isPayloadExamInActiveSuite = Boolean(
+                    this.currentSuiteSession
+                    && payloadExamId
+                    && activeSuiteSequence.some(item => item && String(item.examId) === payloadExamId)
+                );
+                const simulationSuiteMessageTypes = new Set([
+                    'SIMULATION_DRAFT_SYNC',
+                    'SIMULATION_NAVIGATE',
+                    'SIMULATION_ACTIVE_EXAM_CHANGE',
+                    'SIMULATION_SUBMIT'
+                ]);
+                const isSimulationSuiteMessage = simulationSuiteMessageTypes.has(type);
+                const canRoutePayloadExamInActiveSuite = Boolean(
+                    isSimulationSuiteMessage
+                    && isPayloadExamInActiveSuite
+                    && activeSuiteSessionId
+                    && payloadSuiteSessionId
+                    && payloadSuiteSessionId === activeSuiteSessionId
                 );
                 const sourceMatched = isLikelySameWindowContext(sourceWindow, expectedWindow);
                 const isListeningBridgeSource = src === 'listening_record_bridge';
@@ -8219,7 +8247,7 @@
                 const allowSuiteSourceFallback = Boolean(
                     !sourceMatched
                     && payloadExamId
-                    && payloadExamId === expectedExamId
+                    && (payloadExamId === expectedExamId || isPayloadExamInActiveSuite)
                     && (
                         (payloadSuiteSessionId && activeSuiteSessionId && payloadSuiteSessionId === activeSuiteSessionId)
                         || isExamInActiveSuite
@@ -8243,14 +8271,16 @@
                     (type === 'PRACTICE_COMPLETE'
                         || type === 'PRACTICE_RESULT'
                         || type === 'REVIEW_NAVIGATE'
+                        || type === 'SIMULATION_DRAFT_SYNC'
                         || type === 'SIMULATION_NAVIGATE'
+                        || type === 'SIMULATION_ACTIVE_EXAM_CHANGE'
                         || type === 'SIMULATION_SUBMIT'
                         || type === 'SESSION_READY')
                     && payloadSuiteSessionId
                     && activeSuiteSessionId
                     && payloadSuiteSessionId === activeSuiteSessionId
                     && payloadExamId
-                    && payloadExamId === expectedExamId
+                    && (payloadExamId === expectedExamId || isPayloadExamInActiveSuite)
                 );
 
                 if (payloadSessionId) {
@@ -8298,12 +8328,14 @@
                         isListeningBridgeProtocolMessage
                         && (sourceMatched || allowListeningSourceFallback)
                     );
-                    if (!allowedLegacy && !allowListeningExamMismatch) {
+                    const allowSuiteExamMismatch = Boolean(isSuiteFlowPayload && isPayloadExamInActiveSuite);
+                    if (!allowedLegacy && !allowListeningExamMismatch && !allowSuiteExamMismatch) {
                         return;
                     }
                 }
 
-                data.examId = examId;
+                const routedExamId = canRoutePayloadExamInActiveSuite ? payloadExamId : examId;
+                data.examId = routedExamId;
                 if (!data.sessionId && expectedSessionId) {
                     data.sessionId = expectedSessionId;
                 }
@@ -8421,7 +8453,7 @@
                     case 'SIMULATION_DRAFT_SYNC':
                         if (this.currentSuiteSession && data && data.draft) {
                             const incomingUpdatedAt = Number(data.draftUpdatedAt ?? data.draft.updatedAt);
-                            const previousDraft = this.currentSuiteSession.draftsByExam[examId] || null;
+                            const previousDraft = this.currentSuiteSession.draftsByExam[routedExamId] || null;
                             const previousUpdatedAt = Number(previousDraft && previousDraft.updatedAt);
                             const shouldAcceptDraft = !(
                                 previousDraft
@@ -8430,7 +8462,7 @@
                                 && incomingUpdatedAt < previousUpdatedAt
                             );
                             if (shouldAcceptDraft) {
-                                this.currentSuiteSession.draftsByExam[examId] = {
+                                this.currentSuiteSession.draftsByExam[routedExamId] = {
                                     ...data.draft,
                                     updatedAt: Number.isFinite(incomingUpdatedAt) ? incomingUpdatedAt : Date.now()
                                 };
@@ -8442,14 +8474,38 @@
                         break;
                     case 'SIMULATION_NAVIGATE':
                         if (typeof this._handleSimulationNavigate === 'function') {
-                            await this._handleSimulationNavigate(examId, data, sourceWindow || expectedWindow);
+                            await this._handleSimulationNavigate(routedExamId, data, sourceWindow || expectedWindow);
+                        }
+                        break;
+                    case 'SIMULATION_ACTIVE_EXAM_CHANGE':
+                        if (
+                            this.currentSuiteSession
+                            && isPayloadExamInActiveSuite
+                            && (
+                                !payloadSuiteSessionId
+                                || !activeSuiteSessionId
+                                || payloadSuiteSessionId === activeSuiteSessionId
+                            )
+                        ) {
+                            const activeIndex = activeSuiteSequence.findIndex(item => item && String(item.examId) === routedExamId);
+                            this.currentSuiteSession.activeExamId = routedExamId;
+                            if (activeIndex >= 0) {
+                                this.currentSuiteSession.currentIndex = activeIndex;
+                            }
+                            this.currentSuiteSession.lastUpdate = Date.now();
+                            if (sourceWindow && !sourceWindow.closed) {
+                                this.currentSuiteSession.windowRef = sourceWindow;
+                            }
+                            if (typeof this._mirrorSessionToStorage === 'function') {
+                                this._mirrorSessionToStorage(this.currentSuiteSession);
+                            }
                         }
                         break;
                     case 'SIMULATION_SUBMIT':
                         if (windowInfo && windowInfo.reviewMode) {
                             break;
                         }
-                        await this.handlePracticeComplete(examId, data, sourceWindow || expectedWindow);
+                        await this.handlePracticeComplete(routedExamId, data, sourceWindow || expectedWindow);
                         break;
                     default:
                 }
@@ -9379,6 +9435,11 @@
                 suiteTimerLimitSeconds: timerContext.suiteTimerLimitSeconds != null ? timerContext.suiteTimerLimitSeconds : null,
                 suiteSequenceIndex: Number.isInteger(info.suiteSequenceIndex) ? info.suiteSequenceIndex : null,
                 suiteSequenceTotal: Number.isInteger(info.suiteSequenceTotal) ? info.suiteSequenceTotal : null,
+                suiteSequence: Array.isArray(info.suiteSequence)
+                    ? info.suiteSequence
+                    : (typeof this._buildSuiteSequencePayload === 'function' && this.currentSuiteSession
+                        ? this._buildSuiteSequencePayload(this.currentSuiteSession)
+                        : []),
                 practiceMode: typeof info.practiceMode === 'string' && info.practiceMode.trim()
                     ? info.practiceMode.trim().toLowerCase()
                     : null,
@@ -9767,6 +9828,9 @@
                 }
                 if (Number.isInteger(payload.suiteSequenceTotal)) {
                     windowInfo.suiteSequenceTotal = payload.suiteSequenceTotal;
+                }
+                if (Array.isArray(payload.suiteSequence) && payload.suiteSequence.length) {
+                    windowInfo.suiteSequence = payload.suiteSequence;
                 }
                 if (payload.url) {
                     windowInfo.latestUrl = payload.url;
