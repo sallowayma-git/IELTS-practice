@@ -179,6 +179,9 @@
             if (data && data.suiteId) {
                 return await this.handleMultiSuitePracticeComplete(examId, data);
             }
+            if (data && data.suiteSubmission === true && typeof this._handleInlineSimulationSuiteSubmit === 'function') {
+                return await this._handleInlineSimulationSuiteSubmit(examId, data, sourceWindow);
+            }
 
             const session = this.currentSuiteSession;
             if (!session || session.status !== 'active') {
@@ -233,6 +236,7 @@
             session.draftsByExam[examId] = {
                 answers: data.answers || {},
                 highlights: data.highlights || [],
+                noteText: typeof data.noteText === 'string' ? data.noteText : '',
                 scrollY: data.scrollY || 0,
                 updatedAt: Number.isFinite(Number(data && data.draftUpdatedAt))
                     ? Number(data.draftUpdatedAt)
@@ -300,6 +304,91 @@
             return this._advanceSuiteToNext(session, 'previous section', null);
         },
 
+        async _handleInlineSimulationSuiteSubmit(examId, data, sourceWindow = null) {
+            const session = this.currentSuiteSession;
+            if (!session || session.status !== 'active' || session.flowMode !== 'simulation') {
+                return false;
+            }
+            const payloadSuiteSessionId = data && typeof data.suiteSessionId === 'string'
+                ? data.suiteSessionId.trim()
+                : '';
+            if (payloadSuiteSessionId && payloadSuiteSessionId !== session.id) {
+                return false;
+            }
+            const suiteEntries = Array.isArray(data && data.suiteEntries) ? data.suiteEntries : [];
+            if (!suiteEntries.length) {
+                return false;
+            }
+            const entriesByExam = new Map();
+            suiteEntries.forEach((entry) => {
+                const entryExamId = entry && entry.examId != null ? String(entry.examId).trim() : '';
+                if (entryExamId) {
+                    entriesByExam.set(entryExamId, entry);
+                }
+            });
+            if (!entriesByExam.size) {
+                return false;
+            }
+            const hasEverySequenceEntry = Array.isArray(session.sequence)
+                && session.sequence.length > 0
+                && session.sequence.every((sequenceEntry) => {
+                    const entryExamId = sequenceEntry && sequenceEntry.examId != null ? String(sequenceEntry.examId) : '';
+                    return entryExamId && entriesByExam.has(entryExamId);
+                });
+            if (!hasEverySequenceEntry) {
+                console.warn('[SuitePractice] inline simulation suite submit missing sequence entries:', {
+                    sessionId: session.id,
+                    expected: session.sequence.map(item => item && item.examId).filter(Boolean),
+                    received: Array.from(entriesByExam.keys())
+                });
+                return false;
+            }
+
+            session.results = [];
+            session.sequence.forEach((sequenceEntry) => {
+                if (!sequenceEntry || !sequenceEntry.examId) {
+                    return;
+                }
+                const entryExamId = String(sequenceEntry.examId);
+                const entryPayload = entriesByExam.get(entryExamId);
+                if (!entryPayload) {
+                    return;
+                }
+                const normalized = this._normalizeSuiteResult(sequenceEntry.exam, Object.assign({}, entryPayload, {
+                    duration: Number.isFinite(Number(entryPayload.duration))
+                        ? Number(entryPayload.duration)
+                        : Number(data.duration || 0)
+                }));
+                this._upsertSuiteResult(session, entryExamId, normalized);
+                session.draftsByExam[entryExamId] = {
+                    answers: entryPayload.answers || {},
+                    highlights: Array.isArray(entryPayload.highlights) ? entryPayload.highlights.slice() : [],
+                    noteText: typeof entryPayload.noteText === 'string' ? entryPayload.noteText : '',
+                    scrollY: Number.isFinite(Number(entryPayload.scrollY)) ? Number(entryPayload.scrollY) : 0,
+                    updatedAt: Number.isFinite(Number(entryPayload.updatedAt))
+                        ? Number(entryPayload.updatedAt)
+                        : Date.now()
+                };
+                const entryDuration = Number(entryPayload.duration);
+                if (Number.isFinite(entryDuration)) {
+                    session.elapsedByExam[entryExamId] = Math.max(0, entryDuration);
+                }
+                this.updateExamStatus && this.updateExamStatus(entryExamId, 'completed');
+            });
+
+            this._syncSuiteTimerFromPayload(session, data);
+            session.currentIndex = session.sequence.length;
+            session.pendingAdvance = null;
+            session.activeExamId = examId || session.sequence[session.sequence.length - 1]?.examId || session.activeExamId;
+            session.lastUpdate = Date.now();
+            if (sourceWindow && !sourceWindow.closed) {
+                session.windowRef = sourceWindow;
+            }
+            this._mirrorSessionToStorage(session);
+            await this.finalizeSuiteRecord(session);
+            return true;
+        },
+
         _resolveSuitePreference(options = {}) {
             return resolveSuitePreferenceForMixin(options);
         },
@@ -346,6 +435,29 @@
             return draft && typeof draft === 'object' ? draft : null;
         },
 
+        _buildSuiteSequencePayload(session) {
+            const sequence = session && Array.isArray(session.sequence) ? session.sequence : [];
+            return sequence
+                .map((entry) => {
+                    if (!entry || !entry.examId) {
+                        return null;
+                    }
+                    const exam = entry.exam && typeof entry.exam === 'object' ? entry.exam : {};
+                    let dataKey = entry.dataKey || exam.dataKey || '';
+                    if (!dataKey && typeof this._getUnifiedReadingManifestEntry === 'function') {
+                        const manifestEntry = this._getUnifiedReadingManifestEntry(exam);
+                        dataKey = manifestEntry && (manifestEntry.dataKey || manifestEntry.examId) || '';
+                    }
+                    return {
+                        examId: String(entry.examId),
+                        dataKey: dataKey ? String(dataKey) : String(entry.examId),
+                        title: entry.title || exam.title || String(entry.examId),
+                        category: entry.category || exam.category || ''
+                    };
+                })
+                .filter(Boolean);
+        },
+
         _cloneSuitePlainObject(value) {
             if (!value || typeof value !== 'object') {
                 return value;
@@ -364,6 +476,7 @@
             }
             delete cloned.highlights;
             delete cloned.scrollY;
+            delete cloned.noteText;
             return cloned;
         },
 
@@ -377,6 +490,10 @@
             const scrollY = this._resolveSuiteEntryScrollY(entry, draft);
             if (Number.isFinite(Number(scrollY))) {
                 rawData.scrollY = Number(scrollY);
+            }
+            const noteText = this._resolveSuiteEntryNoteText(entry, draft);
+            if (noteText) {
+                rawData.noteText = noteText;
             }
             return rawData;
         },
@@ -420,6 +537,20 @@
                 }
             }
             return 0;
+        },
+
+        _resolveSuiteEntryNoteText(entry, draft = null) {
+            const sources = [
+                draft && draft.noteText,
+                entry && entry.noteText,
+                entry && entry.rawData && entry.rawData.noteText
+            ];
+            for (const source of sources) {
+                if (typeof source === 'string' && source.trim()) {
+                    return source;
+                }
+            }
+            return '';
         },
 
         _buildSuiteReplayEntry(session, examId) {
@@ -476,6 +607,7 @@
                 scoreInfo: result.scoreInfo || {},
                 markedQuestions: Array.isArray(result.markedQuestions) ? result.markedQuestions.slice() : [],
                 highlights: this._resolveSuiteEntryHighlights(result, draft),
+                noteText: this._resolveSuiteEntryNoteText(result, draft),
                 scrollY: this._resolveSuiteEntryScrollY(result, draft)
             };
         },
@@ -769,6 +901,7 @@
                 const snapshot = {
                     id: session.id,
                     sequence: session.sequence,
+                    suiteSequence: this._buildSuiteSequencePayload(session),
                     currentIndex: session.currentIndex,
                     draftsByExam: session.draftsByExam || {},
                     elapsedByExam: session.elapsedByExam || {},
@@ -886,6 +1019,7 @@
                     suiteSessionId: session.id,
                     flowMode: session.flowMode || 'simulation',
                     examId,
+                    suiteSequence: this._buildSuiteSequencePayload(session),
                     currentIndex: idx,
                     total: session.sequence.length,
                     isLast: idx === session.sequence.length - 1,
@@ -1540,6 +1674,7 @@
                         answerComparison: entry.answerComparison,
                         markedQuestions: Array.isArray(entry.markedQuestions) ? entry.markedQuestions.slice() : [],
                         highlights: this._resolveSuiteEntryHighlights(entry, draft),
+                        noteText: this._resolveSuiteEntryNoteText(entry, draft),
                         scrollY: this._resolveSuiteEntryScrollY(entry, draft),
                         rawData: this._sanitizeSuiteRawData(entry.rawData)
                     };
