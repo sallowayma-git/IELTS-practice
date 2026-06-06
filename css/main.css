@@ -2386,6 +2386,35 @@ body.no-scroll {
     gap: var(--space-sm);
 }
 
+.reading-memorize-exit-btn {
+    border: 1px solid rgba(239, 68, 68, 0.36);
+    background: rgba(254, 242, 242, 0.92);
+    color: #b91c1c;
+    border-radius: var(--border-radius-full);
+    min-height: 36px;
+    padding: 0 var(--space-md);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    box-shadow: 0 8px 22px rgba(239, 68, 68, 0.16);
+    transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.reading-memorize-exit-btn:hover,
+.reading-memorize-exit-btn:focus-visible {
+    background: #fee2e2;
+    border-color: rgba(220, 38, 38, 0.56);
+    box-shadow: 0 10px 26px rgba(220, 38, 38, 0.22);
+    transform: translateY(-1px);
+    outline: none;
+}
+
+.reading-memorize-exit-btn[hidden] {
+    display: none;
+}
+
 .browse-preference-panel {
     position: absolute;
     top: calc(100% + 8px);

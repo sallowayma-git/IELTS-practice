@@ -2447,8 +2447,15 @@ function filterReadingMemorizeExamsFallback(exams) {
 }
 
 function clearReadingMemorizeBrowseMode() {
-    window.__readingMemorizeBrowseMode = false;
+    if (typeof window.setReadingMemorizeBrowseMode === 'function') {
+        window.setReadingMemorizeBrowseMode(false);
+    } else {
+        window.__readingMemorizeBrowseMode = false;
+    }
     window.__browseMemorizeFilterMode = null;
+    if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+        window.syncReadingMemorizeBrowseModeUI();
+    }
 }
 
 function selectReadingMemorizeExam(examId) {
@@ -2467,9 +2474,8 @@ function selectReadingMemorizeExam(examId) {
         }
         return null;
     }
-    clearReadingMemorizeBrowseMode();
-    if (typeof setBrowseTitle === 'function') {
-        setBrowseTitle('阅读理解');
+    if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+        window.syncReadingMemorizeBrowseModeUI();
     }
     return openExam(examId, {
         practiceMode: 'memorize',
@@ -2579,6 +2585,9 @@ function loadExamListFallback() {
         let currentCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
         let currentType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+            window.syncReadingMemorizeBrowseModeUI();
+        }
         if (memorizeSelectionActive) {
             currentCategory = 'all';
             currentType = 'reading';
@@ -2702,8 +2711,11 @@ function displayExams(exams) {
         if (loadingEl) {
             loadingEl.style.display = 'none';
         }
-        
+
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+            window.syncReadingMemorizeBrowseModeUI();
+        }
         const normalizedExams = memorizeSelectionActive
             ? filterReadingMemorizeExamsFallback(exams)
             : (Array.isArray(exams) ? exams : []);

@@ -3955,8 +3955,15 @@
     }
 
     function clearReadingMemorizeBrowseMode() {
-        global.__readingMemorizeBrowseMode = false;
+        if (typeof global.setReadingMemorizeBrowseMode === 'function') {
+            global.setReadingMemorizeBrowseMode(false);
+        } else {
+            global.__readingMemorizeBrowseMode = false;
+        }
         global.__browseMemorizeFilterMode = null;
+        if (typeof global.syncReadingMemorizeBrowseModeUI === 'function') {
+            global.syncReadingMemorizeBrowseModeUI();
+        }
     }
 
     function isReadingMemorizeExam(exam) {
@@ -4000,9 +4007,8 @@
             target: 'tab',
             windowName: 'ielts-reading-memorize'
         };
-        clearReadingMemorizeBrowseMode();
-        if (typeof global.setBrowseTitle === 'function') {
-            global.setBrowseTitle('阅读理解');
+        if (typeof global.syncReadingMemorizeBrowseModeUI === 'function') {
+            global.syncReadingMemorizeBrowseModeUI();
         }
         if (global.app && typeof global.app.openExam === 'function') {
             global.app.openExam(examId, launchOptions);
@@ -4399,7 +4405,10 @@
         }
 
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
-        
+        if (typeof global.syncReadingMemorizeBrowseModeUI === 'function') {
+            global.syncReadingMemorizeBrowseModeUI();
+        }
+
         // 1. 频率模式委托给 BrowseController
         if (!memorizeSelectionActive && global.__browseFilterMode && global.__browseFilterMode !== 'default' && global.browseController) {
             try {
@@ -11515,6 +11524,9 @@
         updateBrowseTitle() {
             const titleElement = document.getElementById('browse-title');
             if (!titleElement) return;
+            if (typeof global.syncReadingMemorizeBrowseModeUI === 'function') {
+                global.syncReadingMemorizeBrowseModeUI();
+            }
 
             if (isReadingMemorizeBrowseMode()) {
                 titleElement.textContent = '阅读背题选题';
@@ -17084,8 +17096,15 @@ function filterReadingMemorizeExamsFallback(exams) {
 }
 
 function clearReadingMemorizeBrowseMode() {
-    window.__readingMemorizeBrowseMode = false;
+    if (typeof window.setReadingMemorizeBrowseMode === 'function') {
+        window.setReadingMemorizeBrowseMode(false);
+    } else {
+        window.__readingMemorizeBrowseMode = false;
+    }
     window.__browseMemorizeFilterMode = null;
+    if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+        window.syncReadingMemorizeBrowseModeUI();
+    }
 }
 
 function selectReadingMemorizeExam(examId) {
@@ -17104,9 +17123,8 @@ function selectReadingMemorizeExam(examId) {
         }
         return null;
     }
-    clearReadingMemorizeBrowseMode();
-    if (typeof setBrowseTitle === 'function') {
-        setBrowseTitle('阅读理解');
+    if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+        window.syncReadingMemorizeBrowseModeUI();
     }
     return openExam(examId, {
         practiceMode: 'memorize',
@@ -17216,6 +17234,9 @@ function loadExamListFallback() {
         let currentCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
         let currentType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+            window.syncReadingMemorizeBrowseModeUI();
+        }
         if (memorizeSelectionActive) {
             currentCategory = 'all';
             currentType = 'reading';
@@ -17339,8 +17360,11 @@ function displayExams(exams) {
         if (loadingEl) {
             loadingEl.style.display = 'none';
         }
-        
+
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+            window.syncReadingMemorizeBrowseModeUI();
+        }
         const normalizedExams = memorizeSelectionActive
             ? filterReadingMemorizeExamsFallback(exams)
             : (Array.isArray(exams) ? exams : []);
