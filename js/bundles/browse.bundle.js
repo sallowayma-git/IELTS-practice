@@ -3987,7 +3987,8 @@
             return false;
         }
         const manifest = global.__READING_EXAM_MANIFEST__;
-        return !!(manifest && manifest[exam.id]);
+        const entry = manifest && manifest[exam.id];
+        return !!(entry && entry.script);
     }
 
     function filterReadingMemorizeExams(exams) {
@@ -6425,8 +6426,10 @@
         if (!Array.isArray(dataset) || dataset.length === 0) {
             if (Array.isArray(global.examIndex) && global.examIndex.length) {
                 dataset = global.examIndex.slice();
-            } else if (Array.isArray(global.completeExamIndex) && global.completeExamIndex.length) {
-                dataset = global.completeExamIndex.slice();
+            } else if (typeof global.getReadingExamIndex === 'function') {
+                dataset = global.getReadingExamIndex();
+            } else if (Array.isArray(global.__READING_EXAM_INDEX__) && global.__READING_EXAM_INDEX__.length) {
+                dataset = global.__READING_EXAM_INDEX__.slice();
             }
         }
         return Array.isArray(dataset) ? dataset : [];
@@ -6444,7 +6447,8 @@
 
         const fallbacks = [
             Array.isArray(global.examIndex) ? global.examIndex : null,
-            Array.isArray(global.completeExamIndex) ? global.completeExamIndex : null,
+            typeof global.getReadingExamIndex === 'function' ? global.getReadingExamIndex() : null,
+            Array.isArray(global.__READING_EXAM_INDEX__) ? global.__READING_EXAM_INDEX__ : null,
             Array.isArray(global.listeningExamIndex) ? global.listeningExamIndex : null
         ];
         for (const fallback of fallbacks) {
@@ -6624,7 +6628,7 @@
                 ? window.__READING_EXAM_MANIFEST__
                 : null;
             const manifestEntry = manifest && exam.id ? manifest[exam.id] : null;
-            if (!manifestEntry || !(manifestEntry.dataKey || manifestEntry.examId)) {
+            if (!manifestEntry || !manifestEntry.script || !(manifestEntry.dataKey || manifestEntry.examId)) {
                 return null;
             }
             return manifestEntry;
@@ -13584,8 +13588,17 @@ window.BrowseStateManager = BrowseStateManager;
     }
 
     function getAllExamIndexes(globalObj) {
+        let readingIndex = null;
+        if (globalObj && typeof globalObj.getReadingExamIndex === 'function') {
+            try {
+                readingIndex = globalObj.getReadingExamIndex();
+            } catch (_) {
+                readingIndex = null;
+            }
+        }
         const sources = [
-            globalObj.completeExamIndex,
+            readingIndex,
+            globalObj.__READING_EXAM_INDEX__,
             globalObj.examIndex,
             globalObj.readingExamIndex,
             globalObj.listeningExamIndex,
@@ -17088,7 +17101,8 @@ function isReadingMemorizeCandidateFallback(exam) {
     if (exam.hasHtml === false) {
         return false;
     }
-    return !!(window.__READING_EXAM_MANIFEST__ && window.__READING_EXAM_MANIFEST__[exam.id]);
+    const manifestEntry = window.__READING_EXAM_MANIFEST__ && window.__READING_EXAM_MANIFEST__[exam.id];
+    return !!(manifestEntry && manifestEntry.script);
 }
 
 function filterReadingMemorizeExamsFallback(exams) {
@@ -18190,9 +18204,11 @@ async function debugCompareActiveIndexWithDefault() {
     try {
         const activeKey = await getActiveLibraryConfigurationKey();
         const activeIndex = Array.isArray(getExamIndexState()) ? getExamIndexState() : [];
-        const defaultIndex = Array.isArray(window.completeExamIndex)
-            ? window.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
-            : [];
+        const defaultIndex = typeof window.getReadingExamIndex === 'function'
+            ? window.getReadingExamIndex().map((exam) => Object.assign({}, exam, { type: 'reading' }))
+            : (Array.isArray(window.__READING_EXAM_INDEX__)
+                ? window.__READING_EXAM_INDEX__.map((exam) => Object.assign({}, exam, { type: 'reading' }))
+                : []);
         const defaultListening = Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : [];
         const storedDefault = await storage.get('exam_index', []);
         const combinedDefault = storedDefault.length ? storedDefault : [...defaultIndex, ...defaultListening];

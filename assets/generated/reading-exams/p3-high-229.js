@@ -7,10 +7,12 @@
   "schemaVersion": "ReadingExamSourceV1",
   "examId": "p3-high-229",
   "meta": {
-    "title": "All in the family",
+    "title": "All in the family 兄弟姐妹的影响",
     "category": "P3",
     "frequency": "high",
-    "sourceDoc": "P3 - All in the family(1).docx",
+    "pdfFilename": "237. P3 - All in the family 兄弟姐妹的影响.pdf",
+    "legacyPath": "ReadingPractice/PDF/",
+    "legacyFilename": "237. P3 - All in the family 兄弟姐妹的影响.pdf",
     "questionIntroHtml": "<h3>Questions</h3>"
   },
   "passage": {
@@ -78,14 +80,14 @@
   },
   "sourceRefs": {
     "shuiHtml": null,
-    "shuiPdf": null,
+    "shuiPdf": "ReadingPractice/PDF/237. P3 - All in the family 兄弟姐妹的影响.pdf",
     "ieltsHtml": null
   },
   "audit": {
-    "matchStatus": "imported_docx_visual_answer_verified",
+    "matchStatus": "pdf_visual_answer_verified",
     "matchConfidence": 0.98,
-    "verifiedAt": "2026-05-24T00:00:00.000+08:00",
-    "notes": "Built from imported Word DOCX source; passage and question text extracted from Word XML; answer key and explanations extracted from embedded answer images by visual inspection."
+    "verifiedAt": "2026-06-06T00:00:00.000+08:00",
+    "notes": "Re-audited against the June PDF text layer; answer key and explanations match the embedded PDF answer images."
   },
   "questionOrder": [
     "q1",

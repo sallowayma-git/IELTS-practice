@@ -1662,10 +1662,10 @@ def run_checks() -> Tuple[List[dict], bool]:
         results.append(_format_result("ResourceCore resolveExamBasePath 路径组合逻辑", resolve_passed, resolve_detail))
         all_passed &= resolve_passed
 
-    complete_exam_data = REPO_ROOT / "assets" / "scripts" / "complete-exam-data.js"
-    complete_meta_passed, complete_meta_detail = _ensure_exists(complete_exam_data)
-    results.append(_format_result("complete-exam-data.js 存在性", complete_meta_passed, complete_meta_detail))
-    all_passed &= complete_meta_passed
+    reading_manifest = REPO_ROOT / "assets" / "generated" / "reading-exams" / "manifest.js"
+    reading_manifest_passed, reading_manifest_detail = _ensure_exists(reading_manifest)
+    results.append(_format_result("reading-exams manifest.js 存在性", reading_manifest_passed, reading_manifest_detail))
+    all_passed &= reading_manifest_passed
 
     path_map_path = REPO_ROOT / "assets" / "data" / "path-map.json"
     path_map_passed, path_map_detail = _check_json_path_map(path_map_path)

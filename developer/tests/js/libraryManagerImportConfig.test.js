@@ -25,6 +25,7 @@ function createHarness(seed = {}) {
     const storageState = new Map();
     const localStorageState = new Map();
     const appState = { examIndex: [] };
+    const defaultReadingIndex = clone(seed.readingExamIndex || []);
     Object.entries(seed.storage || {}).forEach(([key, value]) => {
         storageState.set(key, clone(value));
     });
@@ -57,7 +58,10 @@ function createHarness(seed = {}) {
                 return true;
             }
         },
-        completeExamIndex: clone(seed.completeExamIndex || []),
+        __READING_EXAM_INDEX__: clone(defaultReadingIndex),
+        getReadingExamIndex() {
+            return clone(defaultReadingIndex);
+        },
         listeningExamIndex: clone(seed.listeningExamIndex || []),
         __LISTENING_EXAM_MANIFEST__: clone(seed.listeningManifest),
         __defaultListeningLibraryAvailable: typeof seed.defaultListeningAvailable === 'boolean'
@@ -167,7 +171,7 @@ function baseSeed() {
             ],
             practice_records: records
         },
-        completeExamIndex: [readingA],
+        readingExamIndex: [readingA],
         listeningExamIndex: [listeningOld]
     };
 }
@@ -389,7 +393,7 @@ async function testDefaultLibrarySkipsListeningWithoutManifest() {
     };
     const { window } = createHarness({
         storage: { active_exam_index_key: 'exam_index' },
-        completeExamIndex: [readingDefault],
+        readingExamIndex: [readingDefault],
         listeningExamIndex: [listeningDefault],
         defaultListeningAvailable: false
     });
@@ -424,7 +428,7 @@ async function testDefaultLibraryKeepsListeningWithManifest() {
     };
     const { window } = createHarness({
         storage: { active_exam_index_key: 'exam_index' },
-        completeExamIndex: [readingDefault],
+        readingExamIndex: [readingDefault],
         listeningExamIndex: [listeningDefault],
         listeningManifest: { 'default-listening': { examId: 'default-listening' } },
         defaultListeningAvailable: true
@@ -461,7 +465,7 @@ async function testFullReadingDoesNotReAddDefaultListeningWhenManifestMissing() 
     };
     const { window } = createHarness({
         storage: { active_exam_index_key: 'exam_index', exam_index: [] },
-        completeExamIndex: [],
+        readingExamIndex: [],
         listeningExamIndex: [defaultListening],
         defaultListeningAvailable: false
     });

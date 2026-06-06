@@ -6089,8 +6089,11 @@ class PracticeRecorder {
 
         const sources = [
             () => Array.isArray(window.examIndex) ? window.examIndex : null,
-            () => Array.isArray(window.completeExamIndex)
-                ? window.completeExamIndex.map(exam => ({ ...exam, type: exam.type || 'reading' }))
+            () => typeof window.getReadingExamIndex === 'function'
+                ? window.getReadingExamIndex().map(exam => ({ ...exam, type: exam.type || 'reading' }))
+                : null,
+            () => Array.isArray(window.__READING_EXAM_INDEX__)
+                ? window.__READING_EXAM_INDEX__.map(exam => ({ ...exam, type: exam.type || 'reading' }))
                 : null,
             () => Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : null
         ];

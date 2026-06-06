@@ -18,12 +18,19 @@ const AnswerComparisonUtils = require(path.join(__dirname, '..', '..', '..', 'js
 const results = [];
 
 function resetGlobalIndexes() {
-    delete global.completeExamIndex;
+    delete global.getReadingExamIndex;
+    delete global.__READING_EXAM_INDEX__;
     delete global.examIndex;
     delete global.readingExamIndex;
     delete global.listeningExamIndex;
     delete global.fullExamIndex;
     delete global.practiceExamIndex;
+}
+
+function setReadingManifestIndex(items) {
+    const index = Array.isArray(items) ? items : [];
+    global.__READING_EXAM_INDEX__ = index;
+    global.getReadingExamIndex = () => index.map((entry) => Object.assign({}, entry));
 }
 
 function recordResult(name, passed, detail) {
@@ -46,7 +53,7 @@ async function testUrlPathMatching() {
     const testName = 'URL 路径匹配填充 metadata';
     resetGlobalIndexes();
 
-    global.completeExamIndex = [
+    setReadingManifestIndex([
         {
             id: 'custom_listening_1699999999_0',
             title: 'City Development',
@@ -55,7 +62,7 @@ async function testUrlPathMatching() {
             path: 'ListeningPractice/P4/2. PART4 City Development/',
             frequency: 'high'
         }
-    ];
+    ]);
 
     const record = {
         examId: 'p4-city-development',
@@ -78,7 +85,7 @@ async function testFuzzyTitleMatching() {
     const testName = '模糊标题匹配带标签前缀';
     resetGlobalIndexes();
 
-    global.completeExamIndex = [
+    setReadingManifestIndex([
         {
             id: 'custom_listening_1699999999_1',
             title: '[听力全量-2024-11-13] City Development',
@@ -86,7 +93,7 @@ async function testFuzzyTitleMatching() {
             type: 'listening',
             path: 'ListeningPractice/P4/2. PART4 City Development/'
         }
-    ];
+    ]);
 
     const record = {
         examId: 'unknown_id',

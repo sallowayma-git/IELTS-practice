@@ -765,9 +765,9 @@
     "examId": "p2-high-235",
     "dataKey": "p2-high-235",
     "script": "../reading-explanations/p2-high-235.js",
-    "title": "The return of the black-footed ferret",
-    "sourceDoc": "P2 - The return of the black-footed ferret(1).docx",
-    "matchedTitle": "The return of the black-footed ferret"
+    "title": "The return of the black-footed ferret 黑足鼬",
+    "sourceDoc": "235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
+    "matchedTitle": "The return of the black-footed ferret 黑足鼬"
   },
   "p2-high-236": {
     "examId": "p2-high-236",
@@ -1341,9 +1341,9 @@
     "examId": "p3-high-229",
     "dataKey": "p3-high-229",
     "script": "../reading-explanations/p3-high-229.js",
-    "title": "All in the family",
-    "sourceDoc": "P3 - All in the family(1).docx",
-    "matchedTitle": "All in the family"
+    "title": "All in the family 兄弟姐妹的影响",
+    "sourceDoc": "237. P3 - All in the family 兄弟姐妹的影响.pdf",
+    "matchedTitle": "All in the family 兄弟姐妹的影响"
   },
   "p3-high-32": {
     "examId": "p3-high-32",
@@ -1800,6 +1800,22 @@
     "title": "Mercator - The Map Maker 地理制图师",
     "sourceDoc": "P3 解析+1202高频_副本.md",
     "matchedTitle": "Mercator - The Map Maker 地理制图师"
+  },
+  "p3-high-221": {
+    "examId": "p3-high-221",
+    "dataKey": "p3-high-221",
+    "script": "../reading-explanations/p3-high-221.js",
+    "title": "The Animal Connection 动物联结",
+    "sourceDoc": "221. P3 - The Animal Connection 动物联结.pdf",
+    "matchedTitle": "The Animal Connection 动物联结"
+  },
+  "p2-high-239": {
+    "examId": "p2-high-239",
+    "dataKey": "p2-high-239",
+    "script": "../reading-explanations/p2-high-239.js",
+    "title": "Nanotechnology: the science of the very small 纳米科技",
+    "sourceDoc": "239. P2 - Nanotechnology the science of the very small 纳米科技.pdf",
+    "matchedTitle": "Nanotechnology: the science of the very small 纳米科技"
   }
 };
 })(typeof window !== "undefined" ? window : globalThis);

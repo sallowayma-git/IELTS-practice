@@ -52,8 +52,10 @@
         if (!Array.isArray(dataset) || dataset.length === 0) {
             if (Array.isArray(global.examIndex) && global.examIndex.length) {
                 dataset = global.examIndex.slice();
-            } else if (Array.isArray(global.completeExamIndex) && global.completeExamIndex.length) {
-                dataset = global.completeExamIndex.slice();
+            } else if (typeof global.getReadingExamIndex === 'function') {
+                dataset = global.getReadingExamIndex();
+            } else if (Array.isArray(global.__READING_EXAM_INDEX__) && global.__READING_EXAM_INDEX__.length) {
+                dataset = global.__READING_EXAM_INDEX__.slice();
             }
         }
         return Array.isArray(dataset) ? dataset : [];
@@ -71,7 +73,8 @@
 
         const fallbacks = [
             Array.isArray(global.examIndex) ? global.examIndex : null,
-            Array.isArray(global.completeExamIndex) ? global.completeExamIndex : null,
+            typeof global.getReadingExamIndex === 'function' ? global.getReadingExamIndex() : null,
+            Array.isArray(global.__READING_EXAM_INDEX__) ? global.__READING_EXAM_INDEX__ : null,
             Array.isArray(global.listeningExamIndex) ? global.listeningExamIndex : null
         ];
         for (const fallback of fallbacks) {
@@ -251,7 +254,7 @@
                 ? window.__READING_EXAM_MANIFEST__
                 : null;
             const manifestEntry = manifest && exam.id ? manifest[exam.id] : null;
-            if (!manifestEntry || !(manifestEntry.dataKey || manifestEntry.examId)) {
+            if (!manifestEntry || !manifestEntry.script || !(manifestEntry.dataKey || manifestEntry.examId)) {
                 return null;
             }
             return manifestEntry;

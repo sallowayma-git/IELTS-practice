@@ -1529,8 +1529,11 @@
         return _cachedDefaultListening;
       }
       var data = [];
-      if (type === 'reading' && Array.isArray(window.completeExamIndex)) {
-        data = window.completeExamIndex.map(function (e) { return Object.assign({}, e, { type: 'reading' }); });
+      if (type === 'reading' && typeof window.getReadingExamIndex === 'function') {
+        data = window.getReadingExamIndex().map(function (e) { return Object.assign({}, e, { type: 'reading' }); });
+        _cachedDefaultReading = data.slice();
+      } else if (type === 'reading' && Array.isArray(window.__READING_EXAM_INDEX__)) {
+        data = window.__READING_EXAM_INDEX__.map(function (e) { return Object.assign({}, e, { type: 'reading' }); });
         _cachedDefaultReading = data.slice();
       }
       if (type === 'listening' && Array.isArray(window.listeningExamIndex)) {

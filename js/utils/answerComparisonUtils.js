@@ -566,8 +566,17 @@
     }
 
     function getAllExamIndexes(globalObj) {
+        let readingIndex = null;
+        if (globalObj && typeof globalObj.getReadingExamIndex === 'function') {
+            try {
+                readingIndex = globalObj.getReadingExamIndex();
+            } catch (_) {
+                readingIndex = null;
+            }
+        }
         const sources = [
-            globalObj.completeExamIndex,
+            readingIndex,
+            globalObj.__READING_EXAM_INDEX__,
             globalObj.examIndex,
             globalObj.readingExamIndex,
             globalObj.listeningExamIndex,

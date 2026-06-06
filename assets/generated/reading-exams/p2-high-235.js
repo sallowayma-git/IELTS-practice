@@ -7,10 +7,12 @@
   "schemaVersion": "ReadingExamSourceV1",
   "examId": "p2-high-235",
   "meta": {
-    "title": "The return of the black-footed ferret",
+    "title": "The return of the black-footed ferret 黑足鼬",
     "category": "P2",
     "frequency": "high",
-    "sourceDoc": "P2 - The return of the black-footed ferret(1).docx",
+    "pdfFilename": "235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
+    "legacyPath": "ReadingPractice/PDF/",
+    "legacyFilename": "235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
     "questionIntroHtml": "<h3>Questions</h3>"
   },
   "passage": {
@@ -77,14 +79,14 @@
   },
   "sourceRefs": {
     "shuiHtml": null,
-    "shuiPdf": null,
+    "shuiPdf": "ReadingPractice/PDF/235. P2 - The return of the black-footed ferret 黑足鼬.pdf",
     "ieltsHtml": null
   },
   "audit": {
-    "matchStatus": "imported_docx_visual_answer_verified",
+    "matchStatus": "pdf_visual_answer_verified",
     "matchConfidence": 0.98,
-    "verifiedAt": "2026-05-24T00:00:00.000+08:00",
-    "notes": "Built from imported Word DOCX source; passage and question text extracted from Word XML; answer key and explanations extracted from embedded answer images by visual inspection."
+    "verifiedAt": "2026-06-06T00:00:00.000+08:00",
+    "notes": "Re-audited against the June PDF text layer; answer key and explanations match the embedded PDF answer images."
   },
   "questionOrder": [
     "q1",
