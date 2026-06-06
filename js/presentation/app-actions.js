@@ -391,8 +391,16 @@
         if (Array.isArray(global.examIndex) && global.examIndex.length) {
             return global.examIndex.slice();
         }
-        if (Array.isArray(global.completeExamIndex) && global.completeExamIndex.length) {
-            return global.completeExamIndex.map(function (exam) {
+        if (typeof global.getReadingExamIndex === 'function') {
+            var readingIndex = global.getReadingExamIndex();
+            if (Array.isArray(readingIndex) && readingIndex.length) {
+                return readingIndex.map(function (exam) {
+                    return Object.assign({}, exam, { type: exam.type || 'reading' });
+                });
+            }
+        }
+        if (Array.isArray(global.__READING_EXAM_INDEX__) && global.__READING_EXAM_INDEX__.length) {
+            return global.__READING_EXAM_INDEX__.map(function (exam) {
                 return Object.assign({}, exam, { type: exam.type || 'reading' });
             });
         }
@@ -413,7 +421,8 @@
             return false;
         }
         var manifest = global.__READING_EXAM_MANIFEST__;
-        return !!(manifest && manifest[exam.id]);
+        var entry = manifest && manifest[exam.id];
+        return !!(entry && entry.script);
     }
 
     function ensureReadingMemorizeDataReady() {

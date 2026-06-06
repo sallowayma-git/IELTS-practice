@@ -569,13 +569,13 @@
     var groupStatus = Object.create(null);
     var dependencies = Object.create(null);
     var providedScripts = new Set();
-    var READING_EXAM_DATA_SCRIPT = 'assets/scripts/complete-exam-data.js';
+    var READING_EXAM_MANIFEST_SCRIPT = 'assets/generated/reading-exams/manifest.js';
     var LISTENING_EXAM_MANIFEST_SCRIPT = 'assets/generated/listening-exams/manifest.js';
     var LISTENING_EXAM_INDEX_SCRIPT = 'assets/generated/listening-exams/listening-index.compat.js';
 
     function registerDefaultManifest() {
         manifest['exam-data'] = [
-            READING_EXAM_DATA_SCRIPT
+            READING_EXAM_MANIFEST_SCRIPT
         ];
 
         manifest['state-core'] = [
@@ -1539,8 +1539,16 @@
         if (Array.isArray(global.examIndex) && global.examIndex.length) {
             return global.examIndex.slice();
         }
-        if (Array.isArray(global.completeExamIndex) && global.completeExamIndex.length) {
-            return global.completeExamIndex.map(function (exam) {
+        if (typeof global.getReadingExamIndex === 'function') {
+            var readingIndex = global.getReadingExamIndex();
+            if (Array.isArray(readingIndex) && readingIndex.length) {
+                return readingIndex.map(function (exam) {
+                    return Object.assign({}, exam, { type: exam.type || 'reading' });
+                });
+            }
+        }
+        if (Array.isArray(global.__READING_EXAM_INDEX__) && global.__READING_EXAM_INDEX__.length) {
+            return global.__READING_EXAM_INDEX__.map(function (exam) {
                 return Object.assign({}, exam, { type: exam.type || 'reading' });
             });
         }
@@ -1561,7 +1569,8 @@
             return false;
         }
         var manifest = global.__READING_EXAM_MANIFEST__;
-        return !!(manifest && manifest[exam.id]);
+        var entry = manifest && manifest[exam.id];
+        return !!(entry && entry.script);
     }
 
     function ensureReadingMemorizeDataReady() {

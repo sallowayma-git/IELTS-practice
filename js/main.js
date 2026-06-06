@@ -2439,7 +2439,8 @@ function isReadingMemorizeCandidateFallback(exam) {
     if (exam.hasHtml === false) {
         return false;
     }
-    return !!(window.__READING_EXAM_MANIFEST__ && window.__READING_EXAM_MANIFEST__[exam.id]);
+    const manifestEntry = window.__READING_EXAM_MANIFEST__ && window.__READING_EXAM_MANIFEST__[exam.id];
+    return !!(manifestEntry && manifestEntry.script);
 }
 
 function filterReadingMemorizeExamsFallback(exams) {
@@ -3541,9 +3542,11 @@ async function debugCompareActiveIndexWithDefault() {
     try {
         const activeKey = await getActiveLibraryConfigurationKey();
         const activeIndex = Array.isArray(getExamIndexState()) ? getExamIndexState() : [];
-        const defaultIndex = Array.isArray(window.completeExamIndex)
-            ? window.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
-            : [];
+        const defaultIndex = typeof window.getReadingExamIndex === 'function'
+            ? window.getReadingExamIndex().map((exam) => Object.assign({}, exam, { type: 'reading' }))
+            : (Array.isArray(window.__READING_EXAM_INDEX__)
+                ? window.__READING_EXAM_INDEX__.map((exam) => Object.assign({}, exam, { type: 'reading' }))
+                : []);
         const defaultListening = Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : [];
         const storedDefault = await storage.get('exam_index', []);
         const combinedDefault = storedDefault.length ? storedDefault : [...defaultIndex, ...defaultListening];

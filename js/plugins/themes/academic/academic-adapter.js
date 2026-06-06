@@ -187,7 +187,11 @@
       if (Array.isArray(window.examIndex) && window.examIndex.length > 0) {
         return window.examIndex.slice();
       }
-      const reading = Array.isArray(window.completeExamIndex) ? window.completeExamIndex : [];
+      const reading = typeof window.getReadingExamIndex === 'function'
+        ? window.getReadingExamIndex()
+        : (Array.isArray(window.__READING_EXAM_INDEX__)
+          ? window.__READING_EXAM_INDEX__
+          : []);
       const listening = Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : [];
       return [...reading, ...listening];
     }

@@ -401,7 +401,8 @@
             return false;
         }
         const manifest = global.__READING_EXAM_MANIFEST__;
-        return !!(manifest && manifest[exam.id]);
+        const entry = manifest && manifest[exam.id];
+        return !!(entry && entry.script);
     }
 
     function filterReadingMemorizeExams(exams) {
