@@ -174,6 +174,16 @@ window.__APP_INDEX_HTML_SNAPSHOT__ = `<!doctype html>
                         ></span>
                     </button>
                     <h2 id="browse-title" class="hero-panel__title" style="margin: 0;">题库浏览</h2>
+                    <button
+                        id="reading-memorize-exit-btn"
+                        class="reading-memorize-exit-btn"
+                        type="button"
+                        hidden
+                        aria-label="退出阅读背题模式"
+                        title="退出阅读背题模式"
+                    >
+                        退出背题
+                    </button>
                     <div
                         class="browse-preference-panel"
                         id="browse-preference-panel"
