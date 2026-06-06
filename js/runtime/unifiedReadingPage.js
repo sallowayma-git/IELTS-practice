@@ -364,15 +364,46 @@
         const leftPane = dom.left;
         const rightPane = document.getElementById('right');
         const isInAllowedPane = (leftPane && leftPane.contains(container)) || (rightPane && rightPane.contains(container));
-        const highlightNode = container instanceof HTMLElement
+        
+        let highlightNode = container instanceof HTMLElement
             ? (container.matches('.hl') ? container : container.closest('.hl'))
             : null;
-        if (!isInAllowedPane && !highlightNode) {
+
+        let hasHighlight = !!highlightNode;
+        let finalHighlightNode = highlightNode;
+        if (!hasHighlight && range) {
+            const containerElement = container instanceof HTMLElement ? container : container.parentElement;
+            if (containerElement) {
+                const hls = containerElement.querySelectorAll('.hl');
+                for (let i = 0; i < hls.length; i++) {
+                    const hl = hls[i];
+                    let intersects = false;
+                    if (typeof range.intersectsNode === 'function') {
+                        intersects = range.intersectsNode(hl);
+                    } else if (selection && typeof selection.containsNode === 'function') {
+                        intersects = selection.containsNode(hl, true);
+                    }
+                    if (intersects) {
+                        hasHighlight = true;
+                        finalHighlightNode = hl;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!isInAllowedPane && !hasHighlight) {
             toolbar.style.display = 'none';
             return;
         }
         interaction.lastRange = range.cloneRange();
-        interaction.currentHighlightNode = highlightNode || null;
+        interaction.currentHighlightNode = finalHighlightNode || null;
+
+        const btnUH = document.getElementById('btnUH');
+        if (btnUH) {
+            btnUH.style.display = hasHighlight ? '' : 'none';
+        }
+
         positionSelectionToolbar(range.getBoundingClientRect());
     }
 
