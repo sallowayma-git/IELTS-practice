@@ -1614,13 +1614,25 @@
         }
 
         const isSingleMode = !state.suiteSessionId;
+        const p1Section = document.getElementById('part-section-1');
+        if (p1Section) {
+            p1Section.classList.toggle('active', currentPart === 'p1');
+        }
         const p1Name = document.querySelector('#part-section-1 .part-nav-name');
         if (p1Name) {
             p1Name.classList.toggle('inactive', isSingleMode && currentPart !== 'p1');
         }
+        const p2Section = document.getElementById('part-section-2');
+        if (p2Section) {
+            p2Section.classList.toggle('active', currentPart === 'p2');
+        }
         const p2Name = document.querySelector('#part-section-2 .part-nav-name');
         if (p2Name) {
             p2Name.classList.toggle('inactive', isSingleMode && currentPart !== 'p2');
+        }
+        const p3Section = document.getElementById('part-section-3');
+        if (p3Section) {
+            p3Section.classList.toggle('active', currentPart === 'p3');
         }
         const p3Name = document.querySelector('#part-section-3 .part-nav-name');
         if (p3Name) {
