@@ -428,6 +428,25 @@
         }
         
         try {
+            document.body.setAttribute('data-bg-theme', themeName);
+        } catch (e) {}
+
+        if (themeName === 'newjeans') {
+            try {
+                if (global.SHUIThreeBackground) {
+                    global.SHUIThreeBackground.destroy();
+                    global.SHUIThreeBackground = null;
+                }
+                const existing = document.getElementById('shui-three-bg');
+                if (existing) existing.remove();
+                document.body.classList.remove('three-bg-active');
+            } catch (error) {
+                console.warn('[SHUI Three Background] failed to stop WebGL for newjeans theme:', error);
+            }
+            return;
+        }
+
+        try {
             if (global.SHUIThreeBackground) {
                 global.SHUIThreeBackground.destroy();
             }

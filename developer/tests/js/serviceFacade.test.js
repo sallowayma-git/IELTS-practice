@@ -168,7 +168,7 @@ function testCompatPatchRegistry() {
 function testReadingLaunchHost() {
     const windowStub = {
         __READING_EXAM_MANIFEST__: {
-            'p1-reading': { dataKey: 'p1-reading-data' }
+            'p1-reading': { dataKey: 'p1-reading-data', script: 'dummy.js' }
         },
         buildResourcePath(exam, kind) {
             return `${kind}/${exam.pdfFilename || ''}`;
