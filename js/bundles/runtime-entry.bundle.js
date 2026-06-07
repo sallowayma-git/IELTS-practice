@@ -418,12 +418,128 @@
         };
     }
 
+    const ASCII_FLOWER_LINES = [
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [23, "':l:;."],
+      [21, "..,;;;;:."],
+      [18, "..;c::::;:::                                      .;,:c,;;:clcl,."],
+      [15, "..,''',;;,;,,;::,.                              ..;;;;:;;;;;;:;;::;;.  .."],
+      [14, ".'';;;;:;:;::cclcc'..                         .,;ccc:::c::::c:lcc:c:cc;;cc;;,"],
+      [13, "'..','',,',':;ccc::,...                       ';:;;;;,;;:,,;,::c::;:;c:c,,,'''."],
+      [12, "....,,,'',,:;:;:cc:::....'''.                 .;,;;;;;';;c::c,;::,;;,;c;:'..',;;"],
+      [10, "'..'..',;;;c;::c:cclloll;;lc:cc',..           .l:c:c::cc:::l::;,;;;',;;:;;ccoooodl'."],
+      [10, "..'''',,,;;:;'':;::::cccccc:,;;,;';;;,.      ';:;;,;;:::,,','',','',;',;:;:;::;;;;,;."],
+      [9, ".,,,;,,,;:::::,',,:;:;cll:;;:'...,;c;;,'..   .'',''.,,,,;',','''',,;''';;;,::cc::;;,,'........"],
+      [9, "..'','',;',;:;'',''',,::,,,,;,,;,,,:;;.....  ......',''',.'.'..'';':;;,:.'''.,;,;;;;::,',,,',''."],
+      [9, ".,,,;,';::,,:,;,:,;,,,:c;;::::cc,:,;,;;;;:;,'cc,,.,;:;;;;,;,:,;;,:locc;c;;:lcllllollollcccc::;;''"],
+      [11, "... ..'.'',''',''''.;;;;::;:::',''.,''',,'':;,,.'',''',.'',,,',:::;;;,,';c:::::::;:::;;;;,;''.."],
+      [12, "....',''',,,',',,,';clccc:ccl;,';;ccc::;;:llcc:c',''',',';':c:ccl:ccc,cllccccclcclc:;,,,';'',."],
+      [14, "..';,,,;;;,:,;;:colllccclll::;llllllllllollollll:;;:,cclccc:c;lclcl;lllcccccllclllcl,,',''..."],
+      [16, "..''',''.,.,:llllcccccccc::;ccc:ccccccclcllocc::;;;::c::ccc,:cc;;;ccc,:::lllccc::,........."],
+      [18, ".'',,'',',:::;;;:::cc:c:c::c:::ccccccccclccc:c::;ccc:c:;:,:c:;;;:;,;::::::;:::.........."],
+      [19, "..'''',.,c;;:::clcclcl:lccclcccclccllloolclllllcccc:cc:c;lc,;;;;',:c:,;cc:c:,....."],
+      [19, ".::,,,;,;;;;cclllllccllolllllclllllollllolllcclclclc:cccco:::l;;,:;:c:ccc:c;'..."],
+      [10, ".         .,''.'.'''';;::::;c:::::::cc:::cc::::cclcc,',;;;;:;,,',;:';,:.'''.;';;;;,;'..."],
+      [8, ".;lll:       ';:,;,;;;,lllclcclllclllclllllllclllollc:,;,;:c;:,lc,;cc:;c:',,;,,;::cc:;..."],
+      [7, ".,,;,:;        .'';',,,'::cc:ccccc:lccccccccc::lclc::',,,',.,',',,';;,,;:,''''.;;;:::'...."],
+      [6, ".,;,;,;:,.....    .,,:,,;ccccccclcl:lllclllllc;cllll,,,,;,',.'.,'','c;:'l:,.,';;cc::'....."],
+      [6, ",,,.;.',;:::,,..     ..,'::;:c::c:c;ccccc:ccc,ccclc:',,;''.....,',',,,;::''.',:;:;......."],
+      [5, ".:,...'',:c:ccc::;;,,'';;,;:::cccccc:cccccccc:ccclcc:,;,;''',''.,'';;,;cc;',',:c;,'....."],
+      [6, ";,'.;::lccclllollllcclcc:c::::::ccc:c:cccc::cccclccl;,,;''';',';',:',;l;'',;::,......"],
+      [6, ",,;':;lollllllllllllclllcc::;;';::c;::c:cc::c::ccccl:,''.'''.'.'.;,.,:c''',,'......"],
+      [7, ";:;c:lol:llooolclcllllllllcc::;;,;;;;c:ccc:cccclcc:,,';',,;,,,:;,;,c:,',,........"],
+      [8, ";:::::...;;;:ccc:cclllcc::::;''''.,';;:;:,:::;:;',',','.',.'';.';,;''........"],
+      [8, "';:,. .....''..,''.';c;cc;;;;,,,;,;,,,ccc,;cc:;,;;,;,,',';':,;;:c;;'......        ''.."],
+      [15, "'....    ......''''','''''.'.'.',;,,''.''.'''.''..;';':;,,''.....         ......"],
+      [15, "...             ....',''''.,''.'',,;,,,,'',',;c;::::c:c,;;''';,;,,''''',;;;::,;;;."],
+      [31, "...........'...'...'',.''.,,,,,.'';;;;:cccc:::;;,;;:::,;,';::;:::."],
+      [33, "..''',,,',',',''','',,'';',',,:ccloddool;'''';;:;clocllllolllll.....'.,."],
+      [35, "...'''.'.'.'.''''..'..'.,,;;:::::c:,',,;,,.'.,'::c:ccccccccc;,;'..',;;."],
+      [37, "..',',.'.'';;'',,,'',''',''',,,,;;;;;;,'.'',',;cloollllllllllclllc:cc."],
+      [40, "..'...;;;;:';::'''.'.'''''''','''''.'...'.'',':c:ccc:c::;:;,,:;cc;.."],
+      [42, ". ..,,:::;;;c,.''..'.......'................''.,;,''',',''.,,'...."],
+      [44, ".'::::c:::cc',''.'.'''.'.'..'.'.....'.'.'.'..'''',,;;c:'......."],
+      [39, ".. . .;cc::c:c:c:;,',.'..',''.'..'.'.....'.'.'.''''''',,:c;'..."],
+      [38, "..    .;cc::cc:;;;;;,,,'''',',','''.'''''''.'''''''',,,:,,...."],
+      [44, ".',,'.,,''''',.''........'...................';;'....."],
+      [37, ".      .;c;:';;;,;,,;',,,',',';,;,,,',,,'',,',,,',,',l:...."],
+      [37, ".       .;...'''.'..'.'.'......';;:;,,''.....'''.,,';;...."],
+      [36, "..        ''...'''''.'''.'.'''....';:;:;;..''.'.''''.;...."],
+      [47, "....,..'..'.'.'.'''...'..,'::c;:::;::c:c:....."],
+      [35, "..           ..'';,,,',''',.'';',',.''.',::cclcllo:;'..."],
+      [34, ".                ...,,',''.'.'',,,,:;:;,;,:;;,,''......"],
+      [33, ".                    .';:'',,.;;;,;;:;::;c:'......"],
+      [56, ".',;;:clclcl:c::::,....."],
+      [33, ".                           .....''........."],
+      [32, "."],
+      [0, ""],
+      [31, ".."],
+      [31, "."],
+      [31, "."],
+      [0, ""],
+      [31, ".."],
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [29, "."],
+      [29, "."],
+      [0, ""],
+      [29, "."],
+      [29, "."],
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [0, ""]
+    ];
+
+    function renderAsciiFlower() {
+        const container = document.querySelector('.ascii-bg-container');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'ascii-flower-wrapper';
+        
+        wrapper.style.position = 'absolute';
+        wrapper.style.fontFamily = '"Courier New", Courier, monospace';
+        wrapper.style.fontSize = '11px';
+        wrapper.style.lineHeight = '11.5px';
+        wrapper.style.fontWeight = '600';
+        wrapper.style.color = '#f4f4f5';
+        wrapper.style.opacity = '0.75';
+        wrapper.style.pointerEvents = 'none';
+        wrapper.style.userSelect = 'none';
+        
+        const charWidth = 6.0;
+        const rowHeight = 11.5;
+        
+        ASCII_FLOWER_LINES.forEach((line, index) => {
+            if (!line[1]) return;
+            const lineDiv = document.createElement('div');
+            lineDiv.className = 'ascii-line';
+            lineDiv.style.position = 'absolute';
+            lineDiv.style.whiteSpace = 'pre';
+            lineDiv.style.top = (index * rowHeight) + 'px';
+            lineDiv.style.left = (line[0] * charWidth) + 'px';
+            lineDiv.textContent = line[1];
+            wrapper.appendChild(lineDiv);
+        });
+        
+        container.appendChild(wrapper);
+    }
+
     function start(themeName = null) {
         if (!themeName) {
             try {
-                themeName = localStorage.getItem('three_bg_theme') || 'misty-mountain';
+                themeName = localStorage.getItem('three_bg_theme') || 'floral-bloom';
             } catch(e) {
-                themeName = 'misty-mountain';
+                themeName = 'floral-bloom';
             }
         }
         
@@ -431,7 +547,12 @@
             document.body.setAttribute('data-bg-theme', themeName);
         } catch (e) {}
 
-        if (themeName === 'newjeans') {
+        const asciiContainer = document.querySelector('.ascii-bg-container');
+        if (asciiContainer) {
+            asciiContainer.innerHTML = '';
+        }
+
+        if (themeName === 'newjeans' || themeName === 'ascii-flower') {
             try {
                 if (global.SHUIThreeBackground) {
                     global.SHUIThreeBackground.destroy();
@@ -441,7 +562,11 @@
                 if (existing) existing.remove();
                 document.body.classList.remove('three-bg-active');
             } catch (error) {
-                console.warn('[SHUI Three Background] failed to stop WebGL for newjeans theme:', error);
+                console.warn('[SHUI Three Background] failed to stop WebGL for ' + themeName + ' theme:', error);
+            }
+            
+            if (themeName === 'ascii-flower') {
+                renderAsciiFlower();
             }
             return;
         }
@@ -464,10 +589,14 @@
         start(themeName);
     };
 
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    function init() {
         start();
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        init();
     } else {
-        document.addEventListener('DOMContentLoaded', () => start(), { once: true });
+        document.addEventListener('DOMContentLoaded', () => init(), { once: true });
     }
 })(typeof window !== 'undefined' ? window : this);
 
