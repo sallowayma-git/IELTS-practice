@@ -851,8 +851,8 @@ body.no-scroll {
     --vocab-shadow-soft: 0 12px 24px rgba(78, 60, 38, 0.14);
     --vocab-shadow-fine: 0 4px 10px rgba(78, 60, 38, 0.12);
     --vocab-shadow-strong: 0 30px 60px rgba(78, 60, 38, 0.24);
-    --vocab-font-body: 'Kaiti SC', 'STKaiti', 'KaiTi', '楷体', 'Songti SC', 'STSong', 'SimSun', serif;
-    --vocab-font-title: 'Kaiti SC', 'STKaiti', 'KaiTi', '楷体', 'Songti SC', 'STSong', 'SimSun', serif;
+    --vocab-font-body: 'Georgia', -apple-system, 'Playfair Display', 'STKaiti', 'Kaiti SC', 'KaiTi', '楷体', serif;
+    --vocab-font-title: 'Georgia', -apple-system, 'Playfair Display', 'STKaiti', 'Kaiti SC', 'KaiTi', '楷体', serif;
     position: relative;
     isolation: isolate;
     display: flex;
@@ -1500,8 +1500,9 @@ body.no-scroll {
     border-left: 4px solid rgba(196, 104, 75, 0.45);
     background: rgba(196, 104, 75, 0.1);
     color: var(--vocab-ink);
-    font-size: 16px;
-    line-height: 1.7;
+    font-size: 18px;
+    line-height: 1.8;
+    font-weight: 600;
 }
 
 .vocab-card__reveal {
@@ -1678,7 +1679,8 @@ body.no-scroll {
 
 .vocab-feedback__details dd {
     margin: 2px 0 0;
-    font-size: var(--fz-sm, 14px);
+    font-size: 16px;
+    line-height: 1.7;
     color: var(--vocab-ink);
 }
 
@@ -1729,9 +1731,9 @@ body.no-scroll {
 
 .vocab-side-panel__section p,
 .vocab-side-panel__section textarea {
-    font-size: var(--fz-sm, 14px);
+    font-size: 16px;
     color: var(--vocab-ink);
-    line-height: 1.6;
+    line-height: 1.75;
 }
 
 .vocab-side-panel__section textarea {
