@@ -81,6 +81,7 @@
         simulationMode: false,
         simulationCtx: null,
         simulationContextReady: false,
+        countdownExpiredAutoSubmit: false,
         suite: {
             inline: false,
             flowMode: '',
@@ -220,6 +221,9 @@
         };
     }
 
+    var COUNTDOWN_WARN_10_MIN = 600;
+    var COUNTDOWN_WARN_5_MIN = 300;
+
     function formatTimerSeconds(totalSeconds) {
         const safeSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
         const minutes = String(Math.floor(safeSeconds / 60)).padStart(2, '0');
@@ -254,6 +258,25 @@
         var hasEndlessCountdown = state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime);
         timer.classList.toggle('paused', !interaction.timerRunning && !hasEndlessCountdown);
         timer.style.opacity = (interaction.timerRunning || hasEndlessCountdown) ? '1' : '0.5';
+        var _warnRemaining = state.suiteTimerMode === 'countdown' && state.suiteTimerLimitSeconds !== null && state.suiteTimerLimitSeconds > 0
+            ? Math.max(0, state.suiteTimerLimitSeconds - getPageElapsedSeconds())
+            : null;
+        if (_warnRemaining !== null) {
+            timer.classList.remove('countdown-warn-10', 'countdown-warn-5', 'countdown-expired');
+            if (_warnRemaining <= 0) {
+                timer.classList.add('countdown-expired');
+                if (!state.countdownExpiredAutoSubmit && !state.submitted) {
+                    state.countdownExpiredAutoSubmit = true;
+                    handleCountdownExpired();
+                }
+            } else if (_warnRemaining <= COUNTDOWN_WARN_5_MIN) {
+                timer.classList.add('countdown-warn-5');
+            } else if (_warnRemaining <= COUNTDOWN_WARN_10_MIN) {
+                timer.classList.add('countdown-warn-10');
+            }
+        } else {
+            timer.classList.remove('countdown-warn-10', 'countdown-warn-5', 'countdown-expired');
+        }
     }
 
     function setTimerRunning(nextRunning) {
@@ -266,6 +289,13 @@
             }));
         } catch (_) {
             // ignore timer bridge event failures
+        }
+    }
+
+    function handleCountdownExpired() {
+        setTimerRunning(false);
+        if (typeof handleSubmit === 'function' && !state.submitted) {
+            handleSubmit().catch(function () {});
         }
     }
 
@@ -644,9 +674,12 @@
         if (suiteTimerMode === 'countdown' || suiteTimerMode === 'elapsed') {
             state.suiteTimerMode = suiteTimerMode;
         }
-        const suiteTimerLimitSeconds = Number(params.get('suiteTimerLimitSeconds'));
-        if (Number.isFinite(suiteTimerLimitSeconds) && suiteTimerLimitSeconds >= 0) {
-            state.suiteTimerLimitSeconds = Math.floor(suiteTimerLimitSeconds);
+        const rawSuiteTimerLimit = params.get('suiteTimerLimitSeconds');
+        if (rawSuiteTimerLimit !== null && rawSuiteTimerLimit !== '') {
+            const suiteTimerLimitSeconds = Number(rawSuiteTimerLimit);
+            if (Number.isFinite(suiteTimerLimitSeconds) && suiteTimerLimitSeconds >= 0) {
+                state.suiteTimerLimitSeconds = Math.floor(suiteTimerLimitSeconds);
+            }
         }
         const queryFlowMode = decodeParam(params.get('suiteFlowMode')).trim().toLowerCase();
         if (queryFlowMode === 'simulation') {
