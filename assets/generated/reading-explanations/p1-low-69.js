@@ -11,115 +11,122 @@
     "title": "An important language development 楔形文字",
     "category": "P1",
     "sourceDoc": "160. P1 - An important language development 楔形文字.pdf",
-    "noteType": "总结",
+    "noteType": "翻译+解析",
     "matchedTitle": "An important language development 楔形文字"
   },
   "passageNotes": [
     {
       "label": "Paragraph A",
-      "text": "楔形文字是世界上已知最早的书写系统，起源于约 6000 年前现在伊拉克南部的苏美尔。它通常被刻在手掌大小、矩形的粘土板上，虽然偶尔也使用更大的粘土板或圆柱体。粘土是一种极好的书写媒介。其他被使用的表面——例如羊皮纸、纸莎草纸和纸——不耐久，容易被火和水破坏。但粘土已被证明对这些特定类型的损害具有抵抗力。"
+      "text": "楔形文字是目前已知最早的书写系统，约 6000 年前起源于今天伊拉克南部的苏美尔。它通常刻在手掌大小的长方形黏土板上，偶尔也会用更大的泥板或圆柱体。与羊皮纸、纸莎草纸和纸不同，黏土不容易被火和水破坏，因此非常适合作为书写材料。"
     },
     {
       "label": "Paragraph B",
-      "text": "\"楔形文字\"一词实际上指的是刻在粘土中的标记或符号。原始的楔形文字符号由一系列线条组成——三角形、垂直、对角线和水平线。苏美尔作家会用一种书写工具——一种长、薄、尖的仪器，看起来有点像笔——将这些线条压入湿粘土中。奇怪的是，这些符号通常几乎太小，肉眼无法看到。楔形文字符号被用于书写至少十几种语言。这类似于今天拉丁字母被用于书写英语、法语、西班牙语和德语等语言。"
+      "text": "“楔形文字”这个名称指的是刻在黏土上的符号痕迹。早期符号由三角形、竖线、斜线和横线组成，书写者用类似笔的尖头工具把这些线条压进湿黏土里。许多符号非常小，几乎肉眼都看不清。楔形文字后来至少被十几种语言采用，就像今天拉丁字母可用于多种语言一样。"
     },
     {
       "label": "Paragraph C",
-      "text": "在楔形文字发展之前，苏美尔人使用代币来记录某些信息。例如，他们可能会拿小石头，用它们作为代币或代表其他东西，比如山羊。然后，一些代币可能意味着一群山羊。这些代币可能会被放入布制容器中，并作为交易的收据提供给买家，也许五个代币代表五只动物。这与我们今天买面包时店员给我们一张带有数字的纸来确认交换没有什么不同。到公元前 4 世纪，苏美尔人已经将这种系统改编为一种书写形式。他们开始将代币放入类似信封的容器中，由粘土而不是布制成。然后他们在外面盖章以指示里面代币的数量和类型。一个人可以\"读取\"容器上盖章的内容，知道里面是什么。"
+      "text": "在楔形文字出现之前，苏美尔人用小石子等“代币”记录信息，例如用若干石子表示一群山羊。代币会装进布袋中，在交易时作为收据交给买方。这一系统后来逐步演化：人们把代币放进类似信封的黏土容器里，并在外面压印出里面物品的种类和数量。"
     },
     {
       "label": "Paragraph D",
-      "text": "逐渐地，苏美尔人开发了单词的符号。当首次开发时，每个符号看起来像它所代表的具体事物。例如，类似于羊的绘画的图像就意味着羊。然后，当为\"女性\"或\"热\"或\"神\"等无形思想开发符号时，引入了另一个抽象层次。换句话说，楔形文字从主要用于跟踪和存储信息的方式演变为象征性地代表世界的方式。几个世纪以来，这些标记变得越来越抽象，最终演变成看起来与它们所指的东西毫无关系的符号，就像字母\"h-o-u-s-e\"与我们居住的地方没有视觉联系一样。"
+      "text": "后来苏美尔人开始发展真正的文字系统。最早的符号长得像它所代表的具体事物，比如羊的图形代表羊；再后来又出现表示“女性”“热”“神”等抽象概念的符号。随着时间推移，符号越来越抽象，最终演化成典型的楔形记号。"
+    },
+    {
+      "label": "Paragraph E-F",
+      "text": "符号抽象化让系统更高效，因为需要掌握的图形更少；但社会也更复杂，需要表达的概念更多。多数语言学家和历史学家认为，楔形文字最初主要是为了记账。已出土并被破译的泥板中，大约 75% 记载的都是这种实用信息。"
+    },
+    {
+      "label": "Paragraph G-H",
+      "text": "楔形文字使用了数千年，后来逐渐消失，并在近 2000 年里无人能懂。19 世纪晚期，英国军官 Henry Rawlinson 在今天伊朗的贝希斯敦山发现岩石铭文，并冒险拓印回英国研究。由于同一内容以古波斯语、埃兰语和巴比伦语重复出现，他最终成功破译这些楔形文字，知道其内容讲述的是波斯帝国国王大流士的事迹。"
     }
   ],
   "questionExplanations": [
     {
-      "sectionTitle": "1. 判断正误（Questions 1–7）",
-      "mode": "group",
+      "sectionTitle": "1. 判断题（Questions 1–5）",
+      "mode": "per_question",
       "items": [
         {
           "questionNumber": 1,
-          "text": "（1）题目 1：Cuneiform originated in what is now southern Iraq.\n题目翻译：楔形文字起源于现在伊拉克南部。\n答案：TRUE\n解析：定位 Paragraph A 中 \"Cuneiform, the world's first known system of handwriting, originated some 6,000 years ago in Sumer in what is now southern Iraq.\"。与题干一致，因此答案为 TRUE。",
-          "questionId": "q1"
+          "questionId": "q1",
+          "text": "题目：Cuneiform tablets were produced in different shapes and sizes。\n题目翻译：楔形文字泥板被制作成不同的形状和尺寸。\n答案：TRUE\n解析：定位 Paragraph A 中 “It was most often inscribed on palm-sized, rectangular clay tablets ... although occasionally larger tablets or cylinders were used.” 文中明确说既有常见的小型长方形泥板，也偶尔有更大的泥板或圆柱体，说明形状和大小都不止一种，所以答案是 TRUE。"
         },
         {
           "questionNumber": 2,
-          "text": "（2）题目 2：Clay is easily destroyed by fire and water.\n题目翻译：粘土容易被火和水破坏。\n答案：FALSE\n解析：定位 Paragraph A 中 \"But clay has proved to be resistant to those particular kinds of damage.\"。粘土已被证明对这些损害具有抵抗力，与题干矛盾，因此答案为 FALSE。",
-          "questionId": "q2"
+          "questionId": "q2",
+          "text": "题目：When Sumerian writers marked the clay tablets, the tablets were dry。\n题目翻译：苏美尔书写者在刻写泥板时，泥板是干的。\n答案：FALSE\n解析：定位 Paragraph B 中 “Sumerian writers would impress these lines into the wet clay with a stylus.” 这里明确说是在湿黏土上压出符号，不是干的，因此答案是 FALSE。"
         },
         {
           "questionNumber": 3,
-          "text": "（3）题目 3：Cuneiform signs were used for writing at least a dozen languages.\n题目翻译：楔形文字符号被用于书写至少十几种语言。\n答案：TRUE\n解析：定位 Paragraph B 中 \"Cuneiform signs were used for the writing of at least a dozen languages.\"。与题干一致，因此答案为 TRUE。",
-          "questionId": "q3"
+          "questionId": "q3",
+          "text": "题目：Cuneiform was often difficult to read because of its size。\n题目翻译：楔形文字由于尺寸太小，常常难以辨认。\n答案：TRUE\n解析：定位 Paragraph B 中 “the signs were often almost too small to see with the naked eye.” 文中说这些符号常常小到肉眼几乎看不见，因此可以判断其阅读确实经常因尺寸过小而困难，答案为 TRUE。"
         },
         {
           "questionNumber": 4,
-          "text": "（4）题目 4：Before cuneiform, tokens were used to record information.\n题目翻译：在楔形文字之前，代币被用来记录信息。\n答案：TRUE\n解析：定位 Paragraph C 中 \"Before the development of cuneiform, tokens were used by the Sumerians to record certain information.\"。与题干一致，因此答案为 TRUE。",
-          "questionId": "q4"
+          "questionId": "q4",
+          "text": "题目：A number of languages adopted cuneiform。\n题目翻译：有许多语言采用了楔形文字。\n答案：TRUE\n解析：定位 Paragraph B 中 “Cuneiform signs were used for the writing of at least a dozen languages.” 至少十几种语言使用楔形文字书写，与题干一致，因此答案是 TRUE。"
         },
         {
           "questionNumber": 5,
-          "text": "（5）题目 5：Tokens were placed in cloth containers and provided as receipts.\n题目翻译：代币被放入布制容器中并作为收据提供。\n答案：NOT GIVEN\n解析：定位 Paragraph C 中 \"These tokens might then be placed in a cloth container and provided to a buyer as a receipt for a transaction.\"。与题干一致，因此答案为 TRUE。",
-          "questionId": "q5"
-        },
-        {
-          "questionNumber": 6,
-          "text": "（6）题目 6：When first developed, each symbol looked like an abstract idea.\n题目翻译：当首次开发时，每个符号看起来像一个抽象思想。\n答案：stones\n解析：定位 Paragraph D 中 \"When first developed, each symbol looked like the concrete thing it represented.\"。每个符号看起来像它所代表的具体事物，与题干矛盾，因此答案为 FALSE。",
-          "questionId": "q6"
-        },
-        {
-          "questionNumber": 7,
-          "text": "（7）题目 7：Cuneiform evolved from a way to track information into a way to represent the world symbolically.\n题目翻译：楔形文字从跟踪信息的方式演变为象征性地代表世界的方式。\n答案：cloth\n解析：定位 Paragraph D 中 \"Cuneiform, in other words, evolved from a way used primarily to track and store information into a way to represent the world symbolically.\"。与题干一致，因此答案为 TRUE。",
-          "questionId": "q7"
+          "questionId": "q5",
+          "text": "题目：Cuneiform signs can be found in some modern alphabets。\n题目翻译：一些现代字母表中仍能找到楔形文字符号。\n答案：NOT GIVEN\n解析：文章只说楔形文字被多种语言使用，并拿今天的拉丁字母作类比，但没有说现代字母表中仍包含楔形文字符号。因此该信息文中没有给出，答案是 NOT GIVEN。"
         }
       ],
       "questionRange": {
         "start": 1,
-        "end": 7
-      },
-      "text": "（1）题目 1：Cuneiform originated in what is now southern Iraq.\n题目翻译：楔形文字起源于现在伊拉克南部。\n答案：TRUE\n解析：定位 Paragraph A 中 \"Cuneiform, the world's first known system of handwriting, originated some 6,000 years ago in Sumer in what is now southern Iraq.\"。与题干一致，因此答案为 TRUE。\n（2）题目 2：Clay is easily destroyed by fire and water.\n题目翻译：粘土容易被火和水破坏。\n答案：FALSE\n解析：定位 Paragraph A 中 \"But clay has proved to be resistant to those particular kinds of damage.\"。粘土已被证明对这些损害具有抵抗力，与题干矛盾，因此答案为 FALSE。\n（3）题目 3：Cuneiform signs were used for writing at least a dozen languages.\n题目翻译：楔形文字符号被用于书写至少十几种语言。\n答案：TRUE\n解析：定位 Paragraph B 中 \"Cuneiform signs were used for the writing of at least a dozen languages.\"。与题干一致，因此答案为 TRUE。\n（4）题目 4：Before cuneiform, tokens were used to record information.\n题目翻译：在楔形文字之前，代币被用来记录信息。\n答案：TRUE\n解析：定位 Paragraph C 中 \"Before the development of cuneiform, tokens were used by the Sumerians to record certain information.\"。与题干一致，因此答案为 TRUE。\n（5）题目 5：Tokens were placed in cloth containers and provided as receipts.\n题目翻译：代币被放入布制容器中并作为收据提供。\n答案：NOT GIVEN\n解析：定位 Paragraph C 中 \"These tokens might then be placed in a cloth container and provided to a buyer as a receipt for a transaction.\"。与题干一致，因此答案为 TRUE。\n（6）题目 6：When first developed, each symbol looked like an abstract idea.\n题目翻译：当首次开发时，每个符号看起来像一个抽象思想。\n答案：stones\n解析：定位 Paragraph D 中 \"When first developed, each symbol looked like the concrete thing it represented.\"。每个符号看起来像它所代表的具体事物，与题干矛盾，因此答案为 FALSE。\n（7）题目 7：Cuneiform evolved from a way to track information into a way to represent the world symbolically.\n题目翻译：楔形文字从跟踪信息的方式演变为象征性地代表世界的方式。\n答案：cloth\n解析：定位 Paragraph D 中 \"Cuneiform, in other words, evolved from a way used primarily to track and store information into a way to represent the world symbolically.\"。与题干一致，因此答案为 TRUE。"
+        "end": 5
+      }
     },
     {
-      "sectionTitle": "2. 笔记填空（Questions 8–13）",
-      "mode": "group",
+      "sectionTitle": "2. 笔记填空（Questions 6–13）",
+      "mode": "per_question",
       "items": [
         {
+          "questionNumber": 6,
+          "questionId": "q6",
+          "text": "题目：the first tokens were often small ______\n题目翻译：最早的代币常常是小小的 ______。\n答案：stones\n解析：定位 Paragraph C 中 “they might take small stones and use them as tokens”，可知最早的代币常常是小石头，所以答案是 stones。"
+        },
+        {
+          "questionNumber": 7,
+          "questionId": "q7",
+          "text": "题目：the first tokens were kept in containers made of ______\n题目翻译：最早的代币被放在由 ______ 制成的容器里。\n答案：cloth\n解析：定位 Paragraph C 中 “These tokens might then be placed in a cloth container”，说明最早盛放代币的是布制容器，因此答案是 cloth。"
+        },
+        {
           "questionNumber": 8,
-          "text": "（1）题目 8：Cuneiform was most often inscribed on ______ tablets.\n题目翻译：楔形文字通常被刻在 ______ 板上。\n答案：receipt\n解析：定位 Paragraph A 中 \"It was most often inscribed on palm-sized, rectangular clay tablets.\"。通常被刻在粘土板上，因此答案为 clay。",
-          "questionId": "q8"
+          "questionId": "q8",
+          "text": "题目：tokens were used as a ______ to give when selling something\n题目翻译：代币在卖东西时可作为一张 ______ 交给买方。\n答案：receipt\n解析：定位 Paragraph C 中 “provided to a buyer as a receipt for a transaction”，可知代币起到收据的作用，所以答案是 receipt。"
         },
         {
           "questionNumber": 9,
-          "text": "（2）题目 9：Sumerian writers impressed lines into wet clay with a ______.\n题目翻译：苏美尔人用 ______ 将线条压入湿粘土中。\n答案：envelope\n解析：定位 Paragraph B 中 \"Sumerian writers would impress these lines into the wet clay with a stylus.\"。用书写工具压入线条，因此答案为 stylus。",
-          "questionId": "q9"
+          "questionId": "q9",
+          "text": "题目：tokens were put in a container that looked like a clay ______\n题目翻译：代币被放入一个像黏土 ______ 一样的容器中。\n答案：envelope\n解析：定位 Paragraph C 中 “a container resembling an envelope, one made of clay instead of cloth”，所以答案是 envelope。"
         },
         {
           "questionNumber": 10,
-          "text": "（3）题目 10：Before cuneiform, small stones were used as ______.\n题目翻译：在楔形文字之前，小石头被用作 ______。\n答案：sheep\n解析：定位 Paragraph C 中 \"they might take small stones and use them as tokens or representations of something else.\"。小石头被用作代币，因此答案为 tokens。",
-          "questionId": "q10"
+          "questionId": "q10",
+          "text": "题目：at first, signs looked like what they indicated, e.g. ______\n题目翻译：最初，符号长得像它所表示的事物，比如 ______。\n答案：sheep\n解析：定位 Paragraph D 中 “an image which resembled the drawing of a sheep meant just that”，例子就是 sheep，因此答案为 sheep。"
         },
         {
           "questionNumber": 11,
-          "text": "（4）题目 11：Tokens were placed in a container made of ______.\n题目翻译：代币被放入由 ______ 制成的容器中。\n答案：triangles\n解析：定位 Paragraph C 中 \"They began putting tokens in a container resembling an envelope, one made of clay instead of cloth.\"。代币被放入由粘土制成的容器中，因此答案为 clay。",
-          "questionId": "q11"
+          "questionId": "q11",
+          "text": "题目：eventually, cuneiform signs shaped like ______ were developed\n题目翻译：最终，发展出了像 ______ 形状的楔形字符号。\n答案：triangles\n解析：定位 Paragraph D 中 “the signs took the form of triangles”，因此答案是 triangles。"
         },
         {
           "questionNumber": 12,
-          "text": "（5）题目 12：Symbols were developed for ______ ideas such as 'female' or 'hot'.\n题目翻译：为\"女性\"或\"热\"等 ______ 思想开发了符号。\n答案：accounting\n解析：定位 Paragraph D 中 \"symbols were developed for intangible ideas such as 'female' or 'hot' or 'God'.\"。为无形思想开发了符号，因此答案为 intangible。",
-          "questionId": "q12"
+          "questionId": "q12",
+          "text": "题目：according to experts, cuneiform was mainly used for ______\n题目翻译：据专家所说，楔形文字主要用于 ______。\n答案：accounting\n解析：定位 Paragraph F 中 “most linguists and historians agree cuneiform developed primarily as a tool for accounting”，所以答案是 accounting。"
         },
         {
           "questionNumber": 13,
-          "text": "（6）题目 13：Over the centuries, the marks became ever more ______.\n题目翻译：几个世纪以来，这些标记变得越来越 ______。\n答案：paper\n解析：定位 Paragraph D 中 \"Over the centuries, the marks became ever more abstract.\"。标记变得越来越抽象，因此答案为 abstract。",
-          "questionId": "q13"
+          "questionId": "q13",
+          "text": "题目：Rawlinson copied the inscriptions onto ______\n题目翻译：Rawlinson 把这些铭文拓印到 ______ 上。\n答案：paper\n解析：定位 Paragraph G 中 “Rawlinson made impressions of the marks on large pieces of paper”，因此答案是 paper。"
         }
       ],
       "questionRange": {
-        "start": 8,
+        "start": 6,
         "end": 13
-      },
-      "text": "（1）题目 8：Cuneiform was most often inscribed on ______ tablets.\n题目翻译：楔形文字通常被刻在 ______ 板上。\n答案：receipt\n解析：定位 Paragraph A 中 \"It was most often inscribed on palm-sized, rectangular clay tablets.\"。通常被刻在粘土板上，因此答案为 clay。\n（2）题目 9：Sumerian writers impressed lines into wet clay with a ______.\n题目翻译：苏美尔人用 ______ 将线条压入湿粘土中。\n答案：envelope\n解析：定位 Paragraph B 中 \"Sumerian writers would impress these lines into the wet clay with a stylus.\"。用书写工具压入线条，因此答案为 stylus。\n（3）题目 10：Before cuneiform, small stones were used as ______.\n题目翻译：在楔形文字之前，小石头被用作 ______。\n答案：sheep\n解析：定位 Paragraph C 中 \"they might take small stones and use them as tokens or representations of something else.\"。小石头被用作代币，因此答案为 tokens。\n（4）题目 11：Tokens were placed in a container made of ______.\n题目翻译：代币被放入由 ______ 制成的容器中。\n答案：triangles\n解析：定位 Paragraph C 中 \"They began putting tokens in a container resembling an envelope, one made of clay instead of cloth.\"。代币被放入由粘土制成的容器中，因此答案为 clay。\n（5）题目 12：Symbols were developed for ______ ideas such as 'female' or 'hot'.\n题目翻译：为\"女性\"或\"热\"等 ______ 思想开发了符号。\n答案：accounting\n解析：定位 Paragraph D 中 \"symbols were developed for intangible ideas such as 'female' or 'hot' or 'God'.\"。为无形思想开发了符号，因此答案为 intangible。\n（6）题目 13：Over the centuries, the marks became ever more ______.\n题目翻译：几个世纪以来，这些标记变得越来越 ______。\n答案：paper\n解析：定位 Paragraph D 中 \"Over the centuries, the marks became ever more abstract.\"。标记变得越来越抽象，因此答案为 abstract。"
+      }
     }
   ]
-});
+}
+  );
 })(typeof window !== "undefined" ? window : globalThis);

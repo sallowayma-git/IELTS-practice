@@ -17,35 +17,35 @@
   "passageNotes": [
     {
       "label": "Paragraph 1",
-      "text": "We can choose our friends, the saying goes, but we cannot choose our family of origin. Our parents provide the genetic material and make powerful early role models, but even more influential in determining what kind of adult we will become are our brothers and sisters — our siblings. They occupy a position of unique intimacy in our lives and cast a longer shadow than many recognise or are prepared to acknowledge. By turns, enraging and lovable, familiar and mysterious, our brothers and sisters are the human beings who people our first social relationships. And a sibling relationship is the most enduring relationship many of us will ever have — no less emotionally intense than the bonds we form with our spouses and our own children — if only because they started when we were so young."
+      "text": "作者开篇指出：朋友可以选择，但原生家庭无法选择。父母会提供基因并树立最早的榜样，但在决定我们成年后会成为什么样的人时，兄弟姐妹往往影响更深。兄弟姐妹既亲密又复杂，他们构成了我们最早的社会关系，而这种关系也常常是人生中持续时间最长、情感张力极强的一种关系。"
     },
     {
       "label": "Paragraph 2",
-      "text": "Surprising new research by Dr Gene Brody found that having older children who do well in school and are well liked by other children leads to parental ‘basking’ — increasing mothers’ self-esteem. It is clear that in turn this is associated with more positive parenting of younger children, who display fewer behavioural problems as a result. Conversely, parents who get a difficult first child may in turn experience a negative spiral of household tension."
+      "text": "Gene Brody 的研究发现，如果家里的大孩子学习好、也受同伴欢迎，父母会产生一种“沾光式的自豪感”，尤其能提升母亲的自尊。这种积极感受又会带来对年幼孩子更正向的养育方式，因此后出生的孩子往往表现出更少的行为问题；相反，若第一个孩子很难带，家庭气氛也可能陷入负向循环。"
     },
     {
       "label": "Paragraph 3",
-      "text": "International sports star Piri Weepu is a rugby hard man, but at least some of his tough temperament was forged long ago in the family home. His older brother Billy started rugby — tackling little Piri when he was just four — to ‘harden him up’. It seemed to work. Piri followed his brother in playing for the under-sevens league before he even started school. There are as many such stories as there are families: in the formative hothouse of the family, siblings interact in complex ways with the powerful forcefields of parents, genetics and personality already at work. It starts with birth order, which determines play roles: the firstborn leader, the middle-child mediator and the rebellious youngest. These are roles that can stick for life."
+      "text": "作者用橄榄球明星 Piri Weepu 的例子说明，兄弟姐妹之间的互动会很早就塑造性格。文章进一步指出，出生顺序会影响孩子在家庭里的角色分工，例如老大像领导者、中间孩子像协调者、老幺更叛逆，而这些角色甚至可能延续到成年。"
     },
     {
       "label": "Paragraph 4",
-      "text": "Clinical psychologist Claire Cartwright says she has clients who believe, and it might not have been true, that they were treated differently from their siblings, that one child in the family was preferred over others. They are quite convinced that the parental judgements on them all those years ago were harsher, and that they were the ones who always got into trouble. Later, in the workplace, such a person might be particularly defensive, and so behave in a way more prone to attracting harsh judgements."
+      "text": "心理学家 Claire Cartwright 说，有些来访者坚信自己小时候比兄弟姐妹更不受宠、更容易被严厉评价，但这种记忆和理解未必真实。可是这种感受本身会持续影响他们，甚至到成年后的职场中，他们也可能因此更防御、更容易吸引负面评价。"
     },
     {
       "label": "Paragraph 5",
-      "text": "However, the research shows that being Mummy or Daddy’s favourite has its own traps. If you were the easy-going, co-operative child at home, you probably excelled at pleasing parents and, later, bosses. But you might, as an adult, find it hard to be assertive with authority figures and lack direction. On the other hand, the sibling who is disruptive and annoying as a child may be able to reinterpret that role later, turning those attention-seeking characteristics into strengths like determination and leadership."
+      "text": "文章提醒：即使是父母偏爱的“乖孩子”，成年后也未必占尽优势。讨好型孩子也许更容易取悦父母和上司，但可能缺乏主见；而小时候爱捣乱、惹人烦的孩子，成年后反而可能把这种争取注意力的特质转化为决心和领导力。"
     },
     {
       "label": "Paragraph 6",
-      "text": "How is it that full siblings, despite sharing DNA, can turn out so differently? One answer is that, in fact, each sibling grows up in a different family, a unique micro-culture. For example, the firstborn is, for a while, an only child, and therefore has a completely different experience of the parents than those born later. The parents themselves are growing up too, weathering hardship or good fortune, so one sibling might experience stability and closeness while another might be raised in the midst of crisis."
+      "text": "为什么同父同母、共享 DNA 的兄弟姐妹会长得如此不同？作者给出的解释是：每个孩子其实都成长在一个不同版本的家庭里。父母所处的人生阶段、家庭是否稳定、是否经历危机，都会随着时间变化，因此每个孩子面对的“家庭微文化”并不相同。"
     },
     {
       "label": "Paragraph 7",
-      "text": "Of course, there are many positive aspects of sibling relationships. Annette Henderson, a lecturer in psychology, says firstborn children learn vocabulary more quickly than their siblings because they are not competing to spend one-on-one time with parents. But younger children in turn benefit from unintentional instruction from their bigger brothers and sisters, acquiring entire phrases and an understanding of social concepts such as politeness. Similarly, a Cambridge University study of 140 children found that even when there is a great deal of conflict, siblings will still create a rich world of play and make-believe that extends them developmentally. Love-hate relationships were common among the children, but even those who fought the most had as many positive interactions as the other sibling pairs. It is also true that children compete for parental attention by making themselves different from their brothers and sisters, particularly if they are close in age. A 2003 research paper studied adolescents from 185 families over two years, finding that those who changed to differentiate themselves from their siblings increased the amount of warmth they gained from parents, and also developed stronger personalities and a better sense of their own identity."
+      "text": "兄弟姐妹关系也有很多积极面。Annette Henderson 认为，大孩子和小孩子之间会自然形成语言和社交上的“无意识教学”；剑桥大学研究发现，即使常常冲突，兄弟姐妹之间依然会创造丰富的想象游戏世界。还有研究指出，孩子为了与兄弟姐妹区分开来，会逐渐形成更强烈的个性与自我认同。"
     },
     {
       "label": "Paragraph 8",
-      "text": "Another consideration is that many families today are smaller and more intimate than their historical counterparts. This may be advantageous because siblings tend to know each other better and remain lifelong friends compared to children from bigger or more widely spaced families, who perhaps lose touch with one another after leaving home. Then there was a 2010 American study which found that having a sister, whether younger or older, meant that 10- to 14-year-olds were less likely to feel lonely, unloved, self-conscious or fearful. The same study found that having a loving sibling of either gender promoted good deeds, such as helping a neighbour around the house or helping other children at school."
+      "text": "现代家庭普遍更小、更亲密，这可能带来一个好处：兄弟姐妹更了解彼此，也更可能在成年后仍保持朋友般的亲密关系。2010 年一项美国研究还发现，有姐妹的 10 至 14 岁儿童更不容易感到孤独、缺爱、自卑或害怕；而拥有充满关爱的兄弟姐妹，也会促进孩子表现出更多助人善举。"
     }
   ],
   "questionExplanations": [

@@ -11,119 +11,188 @@
     "title": "A Brief History of Humans and Food 人类食物的历史",
     "category": "P1",
     "sourceDoc": "155. P1 - A Brief History of Humans and Food 人类食物的历史.pdf",
-    "noteType": "总结",
+    "noteType": "PDF解析",
     "matchedTitle": "A Brief History of Humans and Food 人类食物的历史"
   },
-  "passageNotes": [
-    {
-      "label": "Paragraph A",
-      "text": "人类与食物的关系经历了漫长的演变。早期的狩猎采集者依靠野生植物和动物获取营养，他们的饮食多样化且季节性变化。考古证据表明，早期人类的饮食包括各种坚果、浆果、根茎和肉类。"
-    },
-    {
-      "label": "Paragraph B",
-      "text": "大约 1 万年前，农业革命改变了人类的食物获取方式。人类开始驯化植物和动物，从狩猎采集转向定居农业。小麦、水稻和玉米成为主要的粮食作物，为人口增长提供了基础。"
-    },
-    {
-      "label": "Paragraph C",
-      "text": "农业的发展也带来了饮食结构的变化。与狩猎采集者相比，农业社会的饮食更加依赖少数几种主食，导致营养多样性下降。然而，农业使得食物供应更加稳定，支持了更大规模的人口和复杂的社会结构。"
-    },
-    {
-      "label": "Paragraph D",
-      "text": "工业革命进一步改变了人类的饮食。食品加工技术的发展使得食物可以长期保存和远距离运输。罐装食品、冷冻食品和精加工食品的出现改变了人们的饮食习惯。然而，这也导致了营养质量下降和肥胖等健康问题的增加。"
-    },
-    {
-      "label": "Paragraph E",
-      "text": "21 世纪，人类面临着新的食物挑战。全球人口增长、气候变化和环境退化威胁着粮食安全。可持续农业、垂直农场和人造肉等创新技术正在被开发，以应对这些挑战。同时，人们也越来越关注健康饮食和食物的环境影响。"
-    }
-  ],
+  "passageNotes": [],
   "questionExplanations": [
     {
-      "sectionTitle": "1. 判断正误（Questions 1–7）",
-      "mode": "group",
+      "sectionTitle": "Questions 1–5 判断题",
+      "mode": "per_question",
       "items": [
         {
           "questionNumber": 1,
-          "text": "（1）题目 1：Early hunter-gatherers had a diverse and seasonal diet.\n题目翻译：早期狩猎采集者有多样化和季节性的饮食。\n答案：FALSE\n解析：定位 Paragraph A 中 \"Early hunter-gatherers relied on wild plants and animals for nutrition, and their diet was diverse and seasonal.\"。与题干一致，因此答案为 TRUE。",
-          "questionId": "q1"
+          "questionId": "q1",
+          "text": "题目：According to Darwin, cooking was the most significant development in human history.\n答案：FALSE\n定位：第2段\"Charles Darwin thought that cooking, after language, was the greatest discovery made by man.\"\n解析：题干说cooking是最重要的发现，但原文说after language（仅次于语言），所以语言更重要，cooking排第二。",
+          "visualExtraction": {
+            "question": "1",
+            "answer": "FALSE",
+            "translation": "根据达尔文的观点，烹饪是人类历史上最重要的发展。",
+            "locating": "第2段：Charles Darwin thought that cooking, after language, was the greatest discovery made by man.（达尔文认为烹饪是人类继语言之后最伟大的发现）",
+            "detail": "题干说cooking是最重要的发现，但原文明确说after language（仅次于语言），所以语言才是最重要的，cooking排第二。答案FALSE。"
+          }
         },
         {
           "questionNumber": 2,
-          "text": "（2）题目 2：The agricultural revolution occurred about 10,000 years ago.\n题目翻译：农业革命发生在大约 1 万年前。\n答案：TRUE\n解析：定位 Paragraph B 中 \"About 10,000 years ago, the agricultural revolution changed the way humans obtained food.\"。与题干一致，因此答案为 TRUE。",
-          "questionId": "q2"
+          "questionId": "q2",
+          "text": "题目：The process of cooking gets rid of some plant poisons.\n答案：TRUE\n定位：第2段\"Cooking can turn plants that are inedible into edible food by destroying toxic chemicals\"\n解析：cooking可以破坏有毒化学物质，与题干一致。",
+          "visualExtraction": {
+            "question": "2",
+            "answer": "TRUE",
+            "translation": "烹饪过程可以去除一些植物毒素。",
+            "locating": "第2段：Cooking can turn plants that are inedible into edible food by destroying toxic chemicals（烹饪可以通过破坏有毒化学物质，将不可食用的植物变成可食用的食物）",
+            "detail": "原文说烹饪可以destroying toxic chemicals（破坏有毒化学物质），与题干gets rid of some plant poisons（去除植物毒素）意思一致。答案TRUE。"
+          }
         },
         {
           "questionNumber": 3,
-          "text": "（3）题目 3：Agricultural societies had more diverse diets than hunter-gatherers.\n题目翻译：农业社会的饮食比狩猎采集者更多样化。\n答案：TRUE\n解析：定位 Paragraph C 中 \"Compared to hunter-gatherers, agricultural societies' diets relied more heavily on a few staple foods, leading to a decline in nutritional diversity.\"。农业社会的饮食多样性下降，与题干矛盾，因此答案为 FALSE。",
-          "questionId": "q3"
+          "questionId": "q3",
+          "text": "题目：Eating cooked food is more energy efficient than eating raw food.\n答案：TRUE\n定位：第3段\"the ratio of energy gained to energy expended by the body is greater when food is cooked\"\n解析：熟食的能量获得/消耗比更高，即更高效。",
+          "visualExtraction": {
+            "question": "3",
+            "answer": "TRUE",
+            "translation": "吃熟食比吃生食更节能。",
+            "locating": "第3段：the ratio of energy gained to energy expended by the body is greater when food is cooked（食物煮熟后，身体获得的能量与消耗的能量之比更高）",
+            "detail": "原文说熟食的能量获得与消耗比率更高（ratio is greater），这意味着更高效（more energy efficient）。答案TRUE。"
+          }
         },
         {
           "questionNumber": 4,
-          "text": "（4）题目 4：The Industrial Revolution led to the development of food preservation technologies.\n题目翻译：工业革命导致了食品保存技术的发展。\n答案：NOT GIVEN\n解析：定位 Paragraph D 中 \"The development of food processing technologies allowed food to be preserved for long periods and transported over long distances.\"。食品加工技术的发展使得食物可以长期保存，与题干一致，因此答案为 TRUE。",
-          "questionId": "q4"
+          "questionId": "q4",
+          "text": "题目：Clarence Birdseye had previously worked in the Australian food industry.\n答案：NOT GIVEN\n定位：第7段提到Birdseye在加拿大北极与因纽特人一起，但未提及澳大利亚\n解析：文中只说他在加拿大的钓鱼之旅，没有提到澳大利亚食品业。",
+          "visualExtraction": {
+            "question": "4",
+            "answer": "NOT GIVEN",
+            "translation": "Clarence Birdseye之前在澳大利亚食品行业工作过。",
+            "locating": "第7段：While on a fishing trip with the Inuit in the Canadian Arctic, Birdseye observed...（在加拿大北极与因纽特人的钓鱼之旅中，Birdseye观察到...）",
+            "detail": "文章只提到Birdseye在加拿大北极的经历，完全没有提及他是否在澳大利亚工作过。答案NOT GIVEN。"
+          }
         },
         {
           "questionNumber": 5,
-          "text": "（5）题目 5：Processed foods have improved nutritional quality.\n题目翻译：加工食品提高了营养质量。\n答案：FALSE\n解析：定位 Paragraph D 中 \"this also led to a decline in nutritional quality and an increase in health problems such as obesity.\"。加工食品导致营养质量下降，与题干矛盾，因此答案为 FALSE。",
-          "questionId": "q5"
-        },
-        {
-          "questionNumber": 6,
-          "text": "（6）题目 6：Climate change poses a threat to food security.\n题目翻译：气候变化对粮食安全构成威胁。\n答案：populations\n解析：定位 Paragraph E 中 \"global population growth, climate change and environmental degradation threaten food security.\"。气候变化威胁粮食安全，与题干一致，因此答案为 TRUE。",
-          "questionId": "q6"
-        },
-        {
-          "questionNumber": 7,
-          "text": "（7）题目 7：Vertical farming and lab-grown meat are being developed to address food challenges.\n题目翻译：垂直农场和人造肉正在被开发以应对食物挑战。\n答案：records\n解析：定位 Paragraph E 中 \"Sustainable agriculture, vertical farms and lab-grown meat are being developed to address these challenges.\"。与题干一致，因此答案为 TRUE。",
-          "questionId": "q7"
+          "questionId": "q5",
+          "text": "题目：Birdseye's trip with the Inuit confirmed what he already believed about rapid freezing.\n答案：FALSE\n定位：第7段\"a discovery he had not expected\"\n解析：这是意外发现（not expected），不是确认已有想法。",
+          "visualExtraction": {
+            "question": "5",
+            "answer": "FALSE",
+            "translation": "Birdseye与因纽特人的旅行证实了他已有的关于快速冷冻的想法。",
+            "locating": "第7段：Birdseye observed that rapid freezing creates smaller ice crystals—a discovery he had not expected.（Birdseye观察到快速冷冻会产生更小的冰晶——这是一个他没有预料到的发现）",
+            "detail": "题干说confirmed what he already believed（证实了他已有的想法），但原文明确说a discovery he had not expected（一个意外的发现）。答案FALSE。"
+          }
         }
       ],
       "questionRange": {
         "start": 1,
-        "end": 7
-      },
-      "text": "（1）题目 1：Early hunter-gatherers had a diverse and seasonal diet.\n题目翻译：早期狩猎采集者有多样化和季节性的饮食。\n答案：FALSE\n解析：定位 Paragraph A 中 \"Early hunter-gatherers relied on wild plants and animals for nutrition, and their diet was diverse and seasonal.\"。与题干一致，因此答案为 TRUE。\n（2）题目 2：The agricultural revolution occurred about 10,000 years ago.\n题目翻译：农业革命发生在大约 1 万年前。\n答案：TRUE\n解析：定位 Paragraph B 中 \"About 10,000 years ago, the agricultural revolution changed the way humans obtained food.\"。与题干一致，因此答案为 TRUE。\n（3）题目 3：Agricultural societies had more diverse diets than hunter-gatherers.\n题目翻译：农业社会的饮食比狩猎采集者更多样化。\n答案：TRUE\n解析：定位 Paragraph C 中 \"Compared to hunter-gatherers, agricultural societies' diets relied more heavily on a few staple foods, leading to a decline in nutritional diversity.\"。农业社会的饮食多样性下降，与题干矛盾，因此答案为 FALSE。\n（4）题目 4：The Industrial Revolution led to the development of food preservation technologies.\n题目翻译：工业革命导致了食品保存技术的发展。\n答案：NOT GIVEN\n解析：定位 Paragraph D 中 \"The development of food processing technologies allowed food to be preserved for long periods and transported over long distances.\"。食品加工技术的发展使得食物可以长期保存，与题干一致，因此答案为 TRUE。\n（5）题目 5：Processed foods have improved nutritional quality.\n题目翻译：加工食品提高了营养质量。\n答案：FALSE\n解析：定位 Paragraph D 中 \"this also led to a decline in nutritional quality and an increase in health problems such as obesity.\"。加工食品导致营养质量下降，与题干矛盾，因此答案为 FALSE。\n（6）题目 6：Climate change poses a threat to food security.\n题目翻译：气候变化对粮食安全构成威胁。\n答案：populations\n解析：定位 Paragraph E 中 \"global population growth, climate change and environmental degradation threaten food security.\"。气候变化威胁粮食安全，与题干一致，因此答案为 TRUE。\n（7）题目 7：Vertical farming and lab-grown meat are being developed to address food challenges.\n题目翻译：垂直农场和人造肉正在被开发以应对食物挑战。\n答案：records\n解析：定位 Paragraph E 中 \"Sustainable agriculture, vertical farms and lab-grown meat are being developed to address these challenges.\"。与题干一致，因此答案为 TRUE。"
+        "end": 5
+      }
     },
     {
-      "sectionTitle": "2. 笔记填空（Questions 8–13）",
-      "mode": "group",
+      "sectionTitle": "Questions 6–13 填空题",
+      "mode": "per_question",
       "items": [
         {
+          "questionNumber": 6,
+          "questionId": "q6",
+          "text": "题目：the development of equipment and larger 6 _______\n答案：populations\n定位：第4段\"populations increased in size\"\n解析：农业带来人口增长。",
+          "visualExtraction": {
+            "question": "6",
+            "answer": "populations",
+            "translation": "设备的发展和更大的____",
+            "locating": "第4段：populations increased in size（人口规模增加）",
+            "detail": "原文说农业导致人口规模增加，填populations。"
+          }
+        },
+        {
+          "questionNumber": 7,
+          "questionId": "q7",
+          "text": "题目：the ability to keep 7 _______ as writing developed\n答案：records\n定位：第4段\"writing became more sophisticated and allowed people to maintain records\"\n解析：文字发展使人们能保存记录。",
+          "visualExtraction": {
+            "question": "7",
+            "answer": "records",
+            "translation": "随着文字的发展，保存____的能力",
+            "locating": "第4段：writing became more sophisticated and allowed people to maintain records（文字变得更复杂，使人们能够保存记录）",
+            "detail": "原文说文字发展让人们maintain records（保存记录），填records。"
+          }
+        },
+        {
           "questionNumber": 8,
-          "text": "（1）题目 8：Early hunter-gatherers relied on ______ plants and animals for nutrition.\n题目翻译：早期狩猎采集者依靠 ______ 植物和动物获取营养。\n答案：salt\n解析：定位 Paragraph A 中 \"Early hunter-gatherers relied on wild plants and animals for nutrition.\"。依靠野生（wild）植物和动物，因此答案为 wild。",
-          "questionId": "q8"
+          "questionId": "q8",
+          "text": "题目：smoking, drying and combining food with acid or 8 _______\n答案：salt\n定位：第5段\"smoking, drying, adding acid by fermentation, or adding salt\"\n解析：四种保存方法之一是加盐。",
+          "visualExtraction": {
+            "question": "8",
+            "answer": "salt",
+            "translation": "吸烟、干燥以及将食物与酸或____混合",
+            "locating": "第5段：smoking, drying, adding acid by fermentation, or adding salt（熏制、干燥、通过发酵添加酸或添加盐）",
+            "detail": "原文列举四种保存方法，最后一个是adding salt，填salt。"
+          }
         },
         {
           "questionNumber": 9,
-          "text": "（2）题目 9：Wheat, rice and ______ became major food crops.\n题目翻译：小麦、水稻和 ______ 成为主要粮食作物。\n答案：glass\n解析：定位 Paragraph B 中 \"Wheat, rice and maize became the major food crops.\"。小麦、水稻和玉米（maize）成为主要粮食作物，因此答案为 maize。",
-          "questionId": "q9"
+          "questionId": "q9",
+          "text": "题目：Nicolas Appert put food into containers made of 9 _______\n答案：glass\n定位：第6段\"He sealed food in bottles fabricated from glass\"\n解析：Appert用玻璃瓶装食物。",
+          "visualExtraction": {
+            "question": "9",
+            "answer": "glass",
+            "translation": "Nicolas Appert把食物放入由____制成的容器中",
+            "locating": "第6段：He sealed food in bottles fabricated from glass（他把食物密封在玻璃制成的瓶子里）",
+            "detail": "原文说bottles fabricated from glass（玻璃制成的瓶子），填glass。"
+          }
         },
         {
           "questionNumber": 10,
-          "text": "（3）题目 10：Agricultural societies relied more heavily on a few ______ foods.\n题目翻译：农业社会更加依赖少数几种 ______ 食物。\n答案：texture\n解析：定位 Paragraph C 中 \"agricultural societies' diets relied more heavily on a few staple foods.\"。更加依赖少数几种主食（staple），因此答案为 staple。",
-          "questionId": "q10"
+          "questionId": "q10",
+          "text": "题目：preserved food that had the same taste and 10 _______ as fresh food\n答案：texture\n定位：第6段\"the flavor and texture were similar to freshly cooked products\"\n解析：罐装食品的味道和质地与新鲜食品相似。",
+          "visualExtraction": {
+            "question": "10",
+            "answer": "texture",
+            "translation": "保存的食物具有与新鲜食物相同的味道和____",
+            "locating": "第6段：the flavor and texture were similar to freshly cooked products（风味和质地与新鲜烹制的产品相似）",
+            "detail": "原文说flavor and texture（风味和质地），题目已给taste（味道），填texture。"
+          }
         },
         {
           "questionNumber": 11,
-          "text": "（4）题目 11：The Industrial Revolution led to the development of food ______ technologies.\n题目翻译：工业革命导致了食品 ______ 技术的发展。\n答案：lightweight\n解析：定位 Paragraph D 中 \"The development of food processing technologies allowed food to be preserved.\"。食品加工（processing）技术的发展，因此答案为 processing。",
-          "questionId": "q11"
+          "questionId": "q11",
+          "text": "题目：cans which had the advantage of being 11 _______ and hard to break\n答案：lightweight\n定位：第6段\"Durand produced the first ones which were lightweight and resistant to damage\"\n解析：Durand的罐头轻便且不易损坏。",
+          "visualExtraction": {
+            "question": "11",
+            "answer": "lightweight",
+            "translation": "罐头具有____和不易破碎的优点",
+            "locating": "第6段：Durand produced the first ones which were lightweight and resistant to damage（Durand制造了第一批轻便且抗损坏的罐头）",
+            "detail": "原文说lightweight and resistant to damage（轻便且抗损坏），题目中hard to break对应resistant to damage，填lightweight。"
+          }
         },
         {
           "questionNumber": 12,
-          "text": "（5）题目 12：Processed foods led to an increase in health problems such as ______.\n题目翻译：加工食品导致健康问题如 ______ 的增加。\n答案：chisel\n解析：定位 Paragraph D 中 \"an increase in health problems such as obesity.\"。健康问题如肥胖（obesity）的增加，因此答案为 obesity。",
-          "questionId": "q12"
+          "questionId": "q12",
+          "text": "题目：the metal can opener replaced the 12 _______ which had been used with a hammer\n答案：chisel\n定位：第6段\"Until then, cans were opened with a chisel and hammer\"\n解析：开罐器发明前用凿子和锤子开罐。",
+          "visualExtraction": {
+            "question": "12",
+            "answer": "chisel",
+            "translation": "金属开罐器取代了与锤子一起使用的____",
+            "locating": "第6段：Until then, cans were opened with a chisel and hammer（在那之前，罐头是用凿子和锤子打开的）",
+            "detail": "原文说用chisel and hammer（凿子和锤子）开罐，填chisel。"
+          }
         },
         {
           "questionNumber": 13,
-          "text": "（6）题目 13：Sustainable agriculture and ______ farms are being developed to address challenges.\n题目翻译：可持续农业和 ______ 农场正在被开发以应对挑战。\n答案：meat\n解析：定位 Paragraph E 中 \"Sustainable agriculture, vertical farms and lab-grown meat are being developed.\"。垂直（vertical）农场，因此答案为 vertical。",
-          "questionId": "q13"
+          "questionId": "q13",
+          "text": "题目：an old can of 13 _______\n答案：meat\n定位：第6段\"one can containing meat, dating back to 1824, was opened in 1939\"\n解析：1824年的肉罐头在1939年打开仍然良好。",
+          "visualExtraction": {
+            "question": "13",
+            "answer": "meat",
+            "translation": "一罐旧的____",
+            "locating": "第6段：one can containing meat, dating back to 1824, was opened in 1939, and the contents were still in good condition（一罐装有肉的罐头可以追溯到1824年，1939年打开时内容物仍然完好）",
+            "detail": "原文说one can containing meat（装肉的罐头），填meat。"
+          }
         }
       ],
       "questionRange": {
-        "start": 8,
+        "start": 6,
         "end": 13
-      },
-      "text": "（1）题目 8：Early hunter-gatherers relied on ______ plants and animals for nutrition.\n题目翻译：早期狩猎采集者依靠 ______ 植物和动物获取营养。\n答案：salt\n解析：定位 Paragraph A 中 \"Early hunter-gatherers relied on wild plants and animals for nutrition.\"。依靠野生（wild）植物和动物，因此答案为 wild。\n（2）题目 9：Wheat, rice and ______ became major food crops.\n题目翻译：小麦、水稻和 ______ 成为主要粮食作物。\n答案：glass\n解析：定位 Paragraph B 中 \"Wheat, rice and maize became the major food crops.\"。小麦、水稻和玉米（maize）成为主要粮食作物，因此答案为 maize。\n（3）题目 10：Agricultural societies relied more heavily on a few ______ foods.\n题目翻译：农业社会更加依赖少数几种 ______ 食物。\n答案：texture\n解析：定位 Paragraph C 中 \"agricultural societies' diets relied more heavily on a few staple foods.\"。更加依赖少数几种主食（staple），因此答案为 staple。\n（4）题目 11：The Industrial Revolution led to the development of food ______ technologies.\n题目翻译：工业革命导致了食品 ______ 技术的发展。\n答案：lightweight\n解析：定位 Paragraph D 中 \"The development of food processing technologies allowed food to be preserved.\"。食品加工（processing）技术的发展，因此答案为 processing。\n（5）题目 12：Processed foods led to an increase in health problems such as ______.\n题目翻译：加工食品导致健康问题如 ______ 的增加。\n答案：chisel\n解析：定位 Paragraph D 中 \"an increase in health problems such as obesity.\"。健康问题如肥胖（obesity）的增加，因此答案为 obesity。\n（6）题目 13：Sustainable agriculture and ______ farms are being developed to address challenges.\n题目翻译：可持续农业和 ______ 农场正在被开发以应对挑战。\n答案：meat\n解析：定位 Paragraph E 中 \"Sustainable agriculture, vertical farms and lab-grown meat are being developed.\"。垂直（vertical）农场，因此答案为 vertical。"
+      }
     }
   ]
-});
+}
+  );
 })(typeof window !== "undefined" ? window : globalThis);
