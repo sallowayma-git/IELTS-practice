@@ -798,6 +798,8 @@
                     windowName: session.windowName || 'ielts-suite-mode-tab',
                     suiteSessionId: session.id,
                     suiteFlowMode: session.flowMode || 'simulation',
+                    suiteTimerMode: session.suiteTimerMode || 'countdown',
+                    suiteTimerLimitSeconds: Number.isFinite(Number(session.suiteTimerLimitSeconds)) ? Number(session.suiteTimerLimitSeconds) : 3600,
                     sequenceIndex: targetIndex,
                     sequenceTotal: session.sequence.length,
                     reuseWindow: targetWindow || undefined
@@ -839,6 +841,8 @@
                     windowName,
                     suiteSessionId: session.id,
                     suiteFlowMode: session.flowMode || 'simulation',
+                    suiteTimerMode: session.suiteTimerMode || 'countdown',
+                    suiteTimerLimitSeconds: Number.isFinite(Number(session.suiteTimerLimitSeconds)) ? Number(session.suiteTimerLimitSeconds) : 3600,
                     sequenceIndex: session.currentIndex,
                     sequenceTotal: session.sequence.length
                 };
@@ -1026,6 +1030,8 @@
                     elapsed,
                     globalTimerAnchorMs: timerAnchorMs,
                     suiteTimerAnchorMs: timerAnchorMs,
+                    suiteTimerMode: session.suiteTimerMode || 'countdown',
+                    suiteTimerLimitSeconds: Number.isFinite(Number(session.suiteTimerLimitSeconds)) ? Number(session.suiteTimerLimitSeconds) : 3600,
                     suiteTimerPausedOffsetMs: pausedOffsetMs,
                     suiteTimerPausedAtMs: pausedAtMs,
                     suiteTimerRunning,
@@ -1128,6 +1134,8 @@
                     windowName: session.windowName || 'ielts-suite-mode-tab',
                     suiteSessionId: session.id,
                     suiteFlowMode: session.flowMode || 'simulation',
+                    suiteTimerMode: session.suiteTimerMode || 'countdown',
+                    suiteTimerLimitSeconds: Number.isFinite(Number(session.suiteTimerLimitSeconds)) ? Number(session.suiteTimerLimitSeconds) : 3600,
                     sequenceIndex: targetIdx,
                     sequenceTotal: session.sequence.length,
                     reuseWindow: sourceWindow && !sourceWindow.closed ? sourceWindow : undefined
@@ -2185,6 +2193,8 @@
                     ? false
                     : true;
                 const timerAnchorMs = Date.now();
+                const suiteTimerMode = 'countdown';
+                const suiteTimerLimitSeconds = 3600;
                 const session = {
                     id: suiteSessionId,
                     status: 'initializing',
@@ -2195,6 +2205,9 @@
                     draftsByExam: {},
                     elapsedByExam: {},
                     globalTimerAnchorMs: timerAnchorMs,
+                    suiteTimerAnchorMs: timerAnchorMs,
+                    suiteTimerMode,
+                    suiteTimerLimitSeconds,
                     suiteTimerPausedOffsetMs: 0,
                     suiteTimerPausedAtMs: null,
                     suiteTimerRunning: true,
@@ -2218,6 +2231,8 @@
                         windowName: suiteWindowName,
                         suiteSessionId,
                         suiteFlowMode: flowMode,
+                        suiteTimerMode,
+                        suiteTimerLimitSeconds,
                         sequenceIndex: 0,
                         sequenceTotal: normalizedSequence.length
                     });

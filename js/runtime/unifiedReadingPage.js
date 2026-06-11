@@ -1263,15 +1263,31 @@
         return card;
     }
 
+    function resolveGroupMarkup(group) {
+        const primary = String(group?.bodyHtml || '').trim();
+        const fallback = String(group?.leadHtml || group?.html || '').trim();
+        const markup = primary || fallback;
+        if (!markup) {
+            return '';
+        }
+        // 检查是否有独立的 "group" class（不是 question-group 等）
+        const hasGroupClass = /class\s*=\s*["'](?:[^"']*\s)?group(?:\s[^"']*)?["']/i.test(markup);
+        if (hasGroupClass) {
+            return markup;
+        }
+        return `<div class="group">${markup}</div>`;
+    }
+
     function createGroupMarkup(group) {
         const questionIds = Array.isArray(group.questionIds) ? group.questionIds.join(',') : '';
         const allowOptionReuseFlag = resolveAllowOptionReuse(group);
         const allowOptionReuse = typeof allowOptionReuseFlag === 'boolean'
             ? ` data-allow-option-reuse="${allowOptionReuseFlag ? 'true' : 'false'}"`
             : '';
+        const groupMarkup = resolveGroupMarkup(group);
         return `
             <section class="unified-group" data-group-id="${group.groupId}" data-question-ids="${questionIds}"${allowOptionReuse}>
-                ${group.bodyHtml || ''}
+                ${groupMarkup}
             </section>
         `;
     }
@@ -2160,7 +2176,7 @@
     }
 
     function locateQuestionContainer(groupEl, questionId) {
-        const itemContainerSelector = '.question-item, .tfng-item, .match-question-item, .question-row, .summary-completion, tr, li';
+        const itemContainerSelector = '.question-item, .tfng-item, .match-question-item, .mc-question-item, .question-row, .summary-completion, .question-group, tr, li';
         const escaped = escapeSelector(questionId);
         const directByAnchor = groupEl.querySelector(`#${escaped}-anchor`);
         if (directByAnchor) {
@@ -2173,8 +2189,13 @@
         }
         const byData = groupEl.querySelector(`[data-question="${escaped}"]`);
         if (byData) {
-            return byData.closest('.question-item, .match-question-item, .question-row, .summary-completion, .paragraph-wrapper, tr, li')
+            return byData.closest('.question-item, .match-question-item, .mc-question-item, .question-row, .summary-completion, .paragraph-wrapper, .question-group, tr, li')
                 || byData.parentElement;
+        }
+        const directByTarget = groupEl.querySelector(`#${escaped}-target`);
+        if (directByTarget) {
+            return directByTarget.closest('.question-item, .match-question-item, .mc-question-item, .question-row, .summary-completion, .question-group, p, li')
+                || directByTarget.parentElement;
         }
         const displayNumber = Number(questionNumberFromId(questionId));
         if (Number.isFinite(displayNumber)) {
