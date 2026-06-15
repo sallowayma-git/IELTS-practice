@@ -200,13 +200,43 @@
             }
         }
 
+        getDefaultReadingIndex() {
+            if (typeof global.getReadingExamIndex === 'function') {
+                try {
+                    const index = global.getReadingExamIndex();
+                    if (Array.isArray(index)) {
+                        return index.map((exam) => Object.assign({}, exam, { type: 'reading' }));
+                    }
+                } catch (error) {
+                    console.warn('[LibraryManager] 读取阅读题库 manifest 失败:', error);
+                }
+            }
+            if (Array.isArray(global.__READING_EXAM_INDEX__)) {
+                return global.__READING_EXAM_INDEX__.map((exam) => Object.assign({}, exam, { type: 'reading' }));
+            }
+            return [];
+        }
+
+        getReadingPathRoot() {
+            if (global.__READING_EXAM_PATH_ROOT__ && typeof global.__READING_EXAM_PATH_ROOT__ === 'object') {
+                return global.__READING_EXAM_PATH_ROOT__;
+            }
+            if (typeof global.getReadingExamIndex === 'function' && global.getReadingExamIndex.pathRoot) {
+                return global.getReadingExamIndex.pathRoot;
+            }
+            if (Array.isArray(global.__READING_EXAM_INDEX__) && global.__READING_EXAM_INDEX__.pathRoot) {
+                return global.__READING_EXAM_INDEX__.pathRoot;
+            }
+            return null;
+        }
+
         resolveScriptPathRoot(type) {
             const defaultRoot = type === 'reading'
                 ? '睡着过项目组/2. 所有文章(11.20)[192篇]/'
                 : 'ListeningPractice/';
             try {
                 if (type === 'reading') {
-                    const rootMeta = global.completeExamIndex && global.completeExamIndex.pathRoot;
+                    const rootMeta = this.getReadingPathRoot();
                     if (typeof rootMeta === 'string' && rootMeta.trim()) {
                         return rootMeta.trim();
                     }
@@ -219,7 +249,7 @@
                     if (typeof rootMeta === 'string' && rootMeta.trim()) {
                         return rootMeta.trim();
                     }
-                    const completeRoot = global.completeExamIndex && global.completeExamIndex.pathRoot;
+                    const completeRoot = this.getReadingPathRoot();
                     if (completeRoot && typeof completeRoot === 'object' && typeof completeRoot.listening === 'string') {
                         return completeRoot.listening.trim();
                     }
@@ -326,9 +356,7 @@
                     global.reportBootStage('解析题库数据', 55);
                 }
 
-                const readingExams = Array.isArray(global.completeExamIndex)
-                    ? global.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
-                    : [];
+                const readingExams = this.getDefaultReadingIndex();
                 const listeningExams = this.resolveDefaultTypeIndex('listening');
 
                 if (!readingExams.length && !listeningExams.length) {
@@ -441,10 +469,8 @@
         }
 
         resolveDefaultTypeIndex(type) {
-            if (type === 'reading' && Array.isArray(global.completeExamIndex)) {
-                return this.normalizeIndexForCustomConfig(
-                    global.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
-                );
+            if (type === 'reading') {
+                return this.normalizeIndexForCustomConfig(this.getDefaultReadingIndex());
             }
             if (
                 type === 'listening'

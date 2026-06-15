@@ -418,15 +418,159 @@
         };
     }
 
+    const ASCII_FLOWER_LINES = [
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [23, "':l:;."],
+      [21, "..,;;;;:."],
+      [18, "..;c::::;:::                                      .;,:c,;;:clcl,."],
+      [15, "..,''',;;,;,,;::,.                              ..;;;;:;;;;;;:;;::;;.  .."],
+      [14, ".'';;;;:;:;::cclcc'..                         .,;ccc:::c::::c:lcc:c:cc;;cc;;,"],
+      [13, "'..','',,',':;ccc::,...                       ';:;;;;,;;:,,;,::c::;:;c:c,,,'''."],
+      [12, "....,,,'',,:;:;:cc:::....'''.                 .;,;;;;;';;c::c,;::,;;,;c;:'..',;;"],
+      [10, "'..'..',;;;c;::c:cclloll;;lc:cc',..           .l:c:c::cc:::l::;,;;;',;;:;;ccoooodl'."],
+      [10, "..'''',,,;;:;'':;::::cccccc:,;;,;';;;,.      ';:;;,;;:::,,','',','',;',;:;:;::;;;;,;."],
+      [9, ".,,,;,,,;:::::,',,:;:;cll:;;:'...,;c;;,'..   .'',''.,,,,;',','''',,;''';;;,::cc::;;,,'........"],
+      [9, "..'','',;',;:;'',''',,::,,,,;,,;,,,:;;.....  ......',''',.'.'..'';':;;,:.'''.,;,;;;;::,',,,',''."],
+      [9, ".,,,;,';::,,:,;,:,;,,,:c;;::::cc,:,;,;;;;:;,'cc,,.,;:;;;;,;,:,;;,:locc;c;;:lcllllollollcccc::;;''"],
+      [11, "... ..'.'',''',''''.;;;;::;:::',''.,''',,'':;,,.'',''',.'',,,',:::;;;,,';c:::::::;:::;;;;,;''.."],
+      [12, "....',''',,,',',,,';clccc:ccl;,';;ccc::;;:llcc:c',''',',';':c:ccl:ccc,cllccccclcclc:;,,,';'',."],
+      [14, "..';,,,;;;,:,;;:colllccclll::;llllllllllollollll:;;:,cclccc:c;lclcl;lllcccccllclllcl,,',''..."],
+      [16, "..''',''.,.,:llllcccccccc::;ccc:ccccccclcllocc::;;;::c::ccc,:cc;;;ccc,:::lllccc::,........."],
+      [18, ".'',,'',',:::;;;:::cc:c:c::c:::ccccccccclccc:c::;ccc:c:;:,:c:;;;:;,;::::::;:::.........."],
+      [19, "..'''',.,c;;:::clcclcl:lccclcccclccllloolclllllcccc:cc:c;lc,;;;;',:c:,;cc:c:,....."],
+      [19, ".::,,,;,;;;;cclllllccllolllllclllllollllolllcclclclc:cccco:::l;;,:;:c:ccc:c;'..."],
+      [10, ".         .,''.'.'''';;::::;c:::::::cc:::cc::::cclcc,',;;;;:;,,',;:';,:.'''.;';;;;,;'..."],
+      [8, ".;lll:       ';:,;,;;;,lllclcclllclllclllllllclllollc:,;,;:c;:,lc,;cc:;c:',,;,,;::cc:;..."],
+      [7, ".,,;,:;        .'';',,,'::cc:ccccc:lccccccccc::lclc::',,,',.,',',,';;,,;:,''''.;;;:::'...."],
+      [6, ".,;,;,;:,.....    .,,:,,;ccccccclcl:lllclllllc;cllll,,,,;,',.'.,'','c;:'l:,.,';;cc::'....."],
+      [6, ",,,.;.',;:::,,..     ..,'::;:c::c:c;ccccc:ccc,ccclc:',,;''.....,',',,,;::''.',:;:;......."],
+      [5, ".:,...'',:c:ccc::;;,,'';;,;:::cccccc:cccccccc:ccclcc:,;,;''',''.,'';;,;cc;',',:c;,'....."],
+      [6, ";,'.;::lccclllollllcclcc:c::::::ccc:c:cccc::cccclccl;,,;''';',';',:',;l;'',;::,......"],
+      [6, ",,;':;lollllllllllllclllcc::;;';::c;::c:cc::c::ccccl:,''.'''.'.'.;,.,:c''',,'......"],
+      [7, ";:;c:lol:llooolclcllllllllcc::;;,;;;;c:ccc:cccclcc:,,';',,;,,,:;,;,c:,',,........"],
+      [8, ";:::::...;;;:ccc:cclllcc::::;''''.,';;:;:,:::;:;',',','.',.'';.';,;''........"],
+      [8, "';:,. .....''..,''.';c;cc;;;;,,,;,;,,,ccc,;cc:;,;;,;,,',';':,;;:c;;'......        ''.."],
+      [15, "'....    ......''''','''''.'.'.',;,,''.''.'''.''..;';':;,,''.....         ......"],
+      [15, "...             ....',''''.,''.'',,;,,,,'',',;c;::::c:c,;;''';,;,,''''',;;;::,;;;."],
+      [31, "...........'...'...'',.''.,,,,,.'';;;;:cccc:::;;,;;:::,;,';::;:::."],
+      [33, "..''',,,',',',''','',,'';',',,:ccloddool;'''';;:;clocllllolllll.....'.,."],
+      [35, "...'''.'.'.'.''''..'..'.,,;;:::::c:,',,;,,.'.,'::c:ccccccccc;,;'..',;;."],
+      [37, "..',',.'.'';;'',,,'',''',''',,,,;;;;;;,'.'',',;cloollllllllllclllc:cc."],
+      [40, "..'...;;;;:';::'''.'.'''''''','''''.'...'.'',':c:ccc:c::;:;,,:;cc;.."],
+      [42, ". ..,,:::;;;c,.''..'.......'................''.,;,''',',''.,,'...."],
+      [44, ".'::::c:::cc',''.'.'''.'.'..'.'.....'.'.'.'..'''',,;;c:'......."],
+      [39, ".. . .;cc::c:c:c:;,',.'..',''.'..'.'.....'.'.'.''''''',,:c;'..."],
+      [38, "..    .;cc::cc:;;;;;,,,'''',',','''.'''''''.'''''''',,,:,,...."],
+      [44, ".',,'.,,''''',.''........'...................';;'....."],
+      [37, ".      .;c;:';;;,;,,;',,,',',';,;,,,',,,'',,',,,',,',l:...."],
+      [37, ".       .;...'''.'..'.'.'......';;:;,,''.....'''.,,';;...."],
+      [36, "..        ''...'''''.'''.'.'''....';:;:;;..''.'.''''.;...."],
+      [47, "....,..'..'.'.'.'''...'..,'::c;:::;::c:c:....."],
+      [35, "..           ..'';,,,',''',.'';',',.''.',::cclcllo:;'..."],
+      [34, ".                ...,,',''.'.'',,,,:;:;,;,:;;,,''......"],
+      [33, ".                    .';:'',,.;;;,;;:;::;c:'......"],
+      [56, ".',;;:clclcl:c::::,....."],
+      [33, ".                           .....''........."],
+      [32, "."],
+      [0, ""],
+      [31, ".."],
+      [31, "."],
+      [31, "."],
+      [0, ""],
+      [31, ".."],
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [29, "."],
+      [29, "."],
+      [0, ""],
+      [29, "."],
+      [29, "."],
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [0, ""],
+      [0, ""]
+    ];
+
+    function renderAsciiFlower() {
+        const container = document.querySelector('.ascii-bg-container');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'ascii-flower-wrapper';
+        
+        wrapper.style.position = 'absolute';
+        wrapper.style.fontFamily = '"Courier New", Courier, monospace';
+        wrapper.style.fontSize = '11px';
+        wrapper.style.lineHeight = '11.5px';
+        wrapper.style.fontWeight = '600';
+        wrapper.style.color = '#f4f4f5';
+        wrapper.style.opacity = '0.75';
+        wrapper.style.pointerEvents = 'none';
+        wrapper.style.userSelect = 'none';
+        
+        const charWidth = 6.0;
+        const rowHeight = 11.5;
+        
+        ASCII_FLOWER_LINES.forEach((line, index) => {
+            if (!line[1]) return;
+            const lineDiv = document.createElement('div');
+            lineDiv.className = 'ascii-line';
+            lineDiv.style.position = 'absolute';
+            lineDiv.style.whiteSpace = 'pre';
+            lineDiv.style.top = (index * rowHeight) + 'px';
+            lineDiv.style.left = (line[0] * charWidth) + 'px';
+            lineDiv.textContent = line[1];
+            wrapper.appendChild(lineDiv);
+        });
+        
+        container.appendChild(wrapper);
+    }
+
     function start(themeName = null) {
         if (!themeName) {
             try {
-                themeName = localStorage.getItem('three_bg_theme') || 'misty-mountain';
+                themeName = localStorage.getItem('three_bg_theme') || 'floral-bloom';
             } catch(e) {
-                themeName = 'misty-mountain';
+                themeName = 'floral-bloom';
             }
         }
         
+        try {
+            document.body.setAttribute('data-bg-theme', themeName);
+        } catch (e) {}
+
+        const asciiContainer = document.querySelector('.ascii-bg-container');
+        if (asciiContainer) {
+            asciiContainer.innerHTML = '';
+        }
+
+        if (themeName === 'newjeans' || themeName === 'ascii-flower') {
+            try {
+                if (global.SHUIThreeBackground) {
+                    global.SHUIThreeBackground.destroy();
+                    global.SHUIThreeBackground = null;
+                }
+                const existing = document.getElementById('shui-three-bg');
+                if (existing) existing.remove();
+                document.body.classList.remove('three-bg-active');
+            } catch (error) {
+                console.warn('[SHUI Three Background] failed to stop WebGL for ' + themeName + ' theme:', error);
+            }
+            
+            if (themeName === 'ascii-flower') {
+                renderAsciiFlower();
+            }
+            return;
+        }
+
         try {
             if (global.SHUIThreeBackground) {
                 global.SHUIThreeBackground.destroy();
@@ -445,10 +589,14 @@
         start(themeName);
     };
 
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    function init() {
         start();
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        init();
     } else {
-        document.addEventListener('DOMContentLoaded', () => start(), { once: true });
+        document.addEventListener('DOMContentLoaded', () => init(), { once: true });
     }
 })(typeof window !== 'undefined' ? window : this);
 
@@ -569,13 +717,13 @@
     var groupStatus = Object.create(null);
     var dependencies = Object.create(null);
     var providedScripts = new Set();
-    var READING_EXAM_DATA_SCRIPT = 'assets/scripts/complete-exam-data.js';
+    var READING_EXAM_MANIFEST_SCRIPT = 'assets/generated/reading-exams/manifest.js';
     var LISTENING_EXAM_MANIFEST_SCRIPT = 'assets/generated/listening-exams/manifest.js';
     var LISTENING_EXAM_INDEX_SCRIPT = 'assets/generated/listening-exams/listening-index.compat.js';
 
     function registerDefaultManifest() {
         manifest['exam-data'] = [
-            READING_EXAM_DATA_SCRIPT
+            READING_EXAM_MANIFEST_SCRIPT
         ];
 
         manifest['state-core'] = [
@@ -1254,8 +1402,10 @@
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
         attachPrefetchTriggers();
+        setupReadingMemorizeExitButton();
     } else {
         document.addEventListener('DOMContentLoaded', attachPrefetchTriggers);
+        document.addEventListener('DOMContentLoaded', setupReadingMemorizeExitButton);
     }
 
     // ============================================================================
@@ -1537,8 +1687,16 @@
         if (Array.isArray(global.examIndex) && global.examIndex.length) {
             return global.examIndex.slice();
         }
-        if (Array.isArray(global.completeExamIndex) && global.completeExamIndex.length) {
-            return global.completeExamIndex.map(function (exam) {
+        if (typeof global.getReadingExamIndex === 'function') {
+            var readingIndex = global.getReadingExamIndex();
+            if (Array.isArray(readingIndex) && readingIndex.length) {
+                return readingIndex.map(function (exam) {
+                    return Object.assign({}, exam, { type: exam.type || 'reading' });
+                });
+            }
+        }
+        if (Array.isArray(global.__READING_EXAM_INDEX__) && global.__READING_EXAM_INDEX__.length) {
+            return global.__READING_EXAM_INDEX__.map(function (exam) {
                 return Object.assign({}, exam, { type: exam.type || 'reading' });
             });
         }
@@ -1559,7 +1717,8 @@
             return false;
         }
         var manifest = global.__READING_EXAM_MANIFEST__;
-        return !!(manifest && manifest[exam.id]);
+        var entry = manifest && manifest[exam.id];
+        return !!(entry && entry.script);
     }
 
     function ensureReadingMemorizeDataReady() {
@@ -1576,14 +1735,88 @@
         });
     }
 
+    function isReadingMemorizeBrowseMode() {
+        return global.__readingMemorizeBrowseMode === true
+            || String(global.__browseMemorizeFilterMode || '') === 'reading-memorize';
+    }
+
+    function syncReadingMemorizeBrowseModeUI() {
+        if (!global.document) {
+            return;
+        }
+        var isActive = isReadingMemorizeBrowseMode();
+        var button = global.document.getElementById('reading-memorize-exit-btn');
+        if (button) {
+            button.hidden = !isActive;
+            button.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+            button.classList.toggle('is-active', isActive);
+        }
+        if (global.document.body) {
+            global.document.body.classList.toggle('reading-memorize-browse-active', isActive);
+        }
+    }
+
+    function setupReadingMemorizeExitButton() {
+        if (!global.document) {
+            return;
+        }
+        var button = global.document.getElementById('reading-memorize-exit-btn');
+        if (!button) {
+            return;
+        }
+        if (button.dataset.bound === 'true') {
+            syncReadingMemorizeBrowseModeUI();
+            return;
+        }
+        button.addEventListener('click', function handleExitClick(event) {
+            if (event && typeof event.preventDefault === 'function') {
+                event.preventDefault();
+            }
+            exitReadingMemorizeBrowseMode();
+        });
+        button.dataset.bound = 'true';
+        syncReadingMemorizeBrowseModeUI();
+    }
+
     function setReadingMemorizeBrowseMode(enabled) {
         global.__readingMemorizeBrowseMode = enabled === true;
         if (!global.__readingMemorizeBrowseMode && typeof global.__browseMemorizeFilterMode !== 'undefined') {
             global.__browseMemorizeFilterMode = null;
         }
+        syncReadingMemorizeBrowseModeUI();
+    }
+
+    function exitReadingMemorizeBrowseMode() {
+        setReadingMemorizeBrowseMode(false);
+        global.__browseMemorizeFilterMode = null;
+        global.__browseFilterMode = 'default';
+        global.__browsePath = null;
+
+        if (typeof global.resetBrowseViewToAll === 'function') {
+            try {
+                global.resetBrowseViewToAll();
+            } catch (error) {
+                console.warn('[AppActions] 退出阅读背题模式时重置浏览页失败:', error);
+            }
+        } else {
+            if (typeof global.setBrowseFilterState === 'function') {
+                try { global.setBrowseFilterState('all', 'all'); } catch (_) { }
+            }
+            if (typeof global.setBrowseTitle === 'function') {
+                try { global.setBrowseTitle('题库列表'); } catch (_) { }
+            }
+            if (typeof global.loadExamList === 'function') {
+                try { global.loadExamList(); } catch (_) { }
+            }
+        }
+
+        if (typeof global.showMessage === 'function') {
+            global.showMessage('已退出阅读背题模式。', 'info');
+        }
     }
 
     function navigateToReadingMemorizeBrowse() {
+        setupReadingMemorizeExitButton();
         setReadingMemorizeBrowseMode(true);
         global.__browseMemorizeFilterMode = 'reading-memorize';
         global.__browseFilterMode = 'default';
@@ -1983,6 +2216,8 @@
         continueSuitePractice: continueSuitePractice,
         openExamWithFallback: openExamWithFallback,
         startReadingMemorize: startReadingMemorize,
+        exitReadingMemorizeBrowseMode: exitReadingMemorizeBrowseMode,
+        syncReadingMemorizeBrowseModeUI: syncReadingMemorizeBrowseModeUI,
         startRandomPractice: startRandomPractice,
         // Phase 4
         startEndlessPractice: startEndlessPractice,
@@ -1994,6 +2229,10 @@
     global.continueSuitePractice = continueSuitePractice;
     global.openExamWithFallback = openExamWithFallback;
     global.isReadingMemorizeCandidate = isReadingMemorizeCandidate;
+    global.isReadingMemorizeBrowseMode = isReadingMemorizeBrowseMode;
+    global.setReadingMemorizeBrowseMode = setReadingMemorizeBrowseMode;
+    global.exitReadingMemorizeBrowseMode = exitReadingMemorizeBrowseMode;
+    global.syncReadingMemorizeBrowseModeUI = syncReadingMemorizeBrowseModeUI;
     global.startReadingMemorize = startReadingMemorize;
     global.startRandomPractice = startRandomPractice;
     global.startEndlessPractice = startEndlessPractice;

@@ -81,6 +81,17 @@
         simulationMode: false,
         simulationCtx: null,
         simulationContextReady: false,
+        countdownExpiredAutoSubmit: false,
+        suite: {
+            inline: false,
+            flowMode: '',
+            sequence: [],
+            activeExamId: null,
+            currentIndex: 0,
+            activeStartedAtMs: null,
+            slotsByExamId: new Map(),
+            activating: false
+        },
         simulationDraftSyncTimer: null,
         simulationDraftFingerprint: '',
         lastInitSignature: '',
@@ -210,6 +221,9 @@
         };
     }
 
+    var COUNTDOWN_WARN_10_MIN = 600;
+    var COUNTDOWN_WARN_5_MIN = 300;
+
     function formatTimerSeconds(totalSeconds) {
         const safeSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
         const minutes = String(Math.floor(safeSeconds / 60)).padStart(2, '0');
@@ -221,6 +235,7 @@
         const timer = document.getElementById('timer');
         if (!timer) return;
         var displaySeconds;
+        var limitSeconds = Number.isFinite(Number(state.suiteTimerLimitSeconds)) ? Number(state.suiteTimerLimitSeconds) : 3600;
         if (state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime)) {
             var remainingMs = state.endlessCountdownEndTime - Date.now();
             displaySeconds = Math.max(0, Math.ceil(remainingMs / 1000));
@@ -229,16 +244,39 @@
                 state.endlessCountdownEndTime = null;
                 timer.classList.remove('endless-countdown');
             }
+            var remainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
+            timer.textContent = remainingMinutes + ' minutes remaining';
+        } else if (!state.suiteSessionId) {
+            var elapsed = getPageElapsedSeconds();
+            timer.textContent = formatTimerSeconds(elapsed);
         } else {
-            displaySeconds = getPageElapsedSeconds();
-            if (state.suiteTimerMode === 'countdown' && Number.isFinite(Number(state.suiteTimerLimitSeconds))) {
-                displaySeconds = Math.max(0, Number(state.suiteTimerLimitSeconds) - displaySeconds);
-            }
+            var elapsed = getPageElapsedSeconds();
+            displaySeconds = Math.max(0, limitSeconds - elapsed);
+            var remainingMinutes = Math.max(0, Math.ceil(displaySeconds / 60));
+            timer.textContent = remainingMinutes + ' minutes remaining';
         }
-        timer.textContent = formatTimerSeconds(displaySeconds);
         var hasEndlessCountdown = state.endlessCountdownEndTime && Number.isFinite(state.endlessCountdownEndTime);
         timer.classList.toggle('paused', !interaction.timerRunning && !hasEndlessCountdown);
         timer.style.opacity = (interaction.timerRunning || hasEndlessCountdown) ? '1' : '0.5';
+        var _warnRemaining = state.suiteTimerMode === 'countdown' && state.suiteTimerLimitSeconds !== null && state.suiteTimerLimitSeconds > 0
+            ? Math.max(0, state.suiteTimerLimitSeconds - getPageElapsedSeconds())
+            : null;
+        if (_warnRemaining !== null) {
+            timer.classList.remove('countdown-warn-10', 'countdown-warn-5', 'countdown-expired');
+            if (_warnRemaining <= 0) {
+                timer.classList.add('countdown-expired');
+                if (!state.countdownExpiredAutoSubmit && !state.submitted) {
+                    state.countdownExpiredAutoSubmit = true;
+                    handleCountdownExpired();
+                }
+            } else if (_warnRemaining <= COUNTDOWN_WARN_5_MIN) {
+                timer.classList.add('countdown-warn-5');
+            } else if (_warnRemaining <= COUNTDOWN_WARN_10_MIN) {
+                timer.classList.add('countdown-warn-10');
+            }
+        } else {
+            timer.classList.remove('countdown-warn-10', 'countdown-warn-5', 'countdown-expired');
+        }
     }
 
     function setTimerRunning(nextRunning) {
@@ -251,6 +289,13 @@
             }));
         } catch (_) {
             // ignore timer bridge event failures
+        }
+    }
+
+    function handleCountdownExpired() {
+        setTimerRunning(false);
+        if (typeof handleSubmit === 'function' && !state.submitted) {
+            handleSubmit().catch(function () {});
         }
     }
 
@@ -349,15 +394,46 @@
         const leftPane = dom.left;
         const rightPane = document.getElementById('right');
         const isInAllowedPane = (leftPane && leftPane.contains(container)) || (rightPane && rightPane.contains(container));
-        const highlightNode = container instanceof HTMLElement
+        
+        let highlightNode = container instanceof HTMLElement
             ? (container.matches('.hl') ? container : container.closest('.hl'))
             : null;
-        if (!isInAllowedPane && !highlightNode) {
+
+        let hasHighlight = !!highlightNode;
+        let finalHighlightNode = highlightNode;
+        if (!hasHighlight && range) {
+            const containerElement = container instanceof HTMLElement ? container : container.parentElement;
+            if (containerElement) {
+                const hls = containerElement.querySelectorAll('.hl');
+                for (let i = 0; i < hls.length; i++) {
+                    const hl = hls[i];
+                    let intersects = false;
+                    if (typeof range.intersectsNode === 'function') {
+                        intersects = range.intersectsNode(hl);
+                    } else if (selection && typeof selection.containsNode === 'function') {
+                        intersects = selection.containsNode(hl, true);
+                    }
+                    if (intersects) {
+                        hasHighlight = true;
+                        finalHighlightNode = hl;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!isInAllowedPane && !hasHighlight) {
             toolbar.style.display = 'none';
             return;
         }
         interaction.lastRange = range.cloneRange();
-        interaction.currentHighlightNode = highlightNode || null;
+        interaction.currentHighlightNode = finalHighlightNode || null;
+
+        const btnUH = document.getElementById('btnUH');
+        if (btnUH) {
+            btnUH.style.display = hasHighlight ? '' : 'none';
+        }
+
         positionSelectionToolbar(range.getBoundingClientRect());
     }
 
@@ -598,9 +674,12 @@
         if (suiteTimerMode === 'countdown' || suiteTimerMode === 'elapsed') {
             state.suiteTimerMode = suiteTimerMode;
         }
-        const suiteTimerLimitSeconds = Number(params.get('suiteTimerLimitSeconds'));
-        if (Number.isFinite(suiteTimerLimitSeconds) && suiteTimerLimitSeconds >= 0) {
-            state.suiteTimerLimitSeconds = Math.floor(suiteTimerLimitSeconds);
+        const rawSuiteTimerLimit = params.get('suiteTimerLimitSeconds');
+        if (rawSuiteTimerLimit !== null && rawSuiteTimerLimit !== '') {
+            const suiteTimerLimitSeconds = Number(rawSuiteTimerLimit);
+            if (Number.isFinite(suiteTimerLimitSeconds) && suiteTimerLimitSeconds >= 0) {
+                state.suiteTimerLimitSeconds = Math.floor(suiteTimerLimitSeconds);
+            }
         }
         const queryFlowMode = decodeParam(params.get('suiteFlowMode')).trim().toLowerCase();
         if (queryFlowMode === 'simulation') {
@@ -683,6 +762,330 @@
         state.dataset = dataset;
         state.dataKey = entry.dataKey;
         return dataset;
+    }
+
+    function normalizeSuiteSequence(rawSequence = []) {
+        const seen = new Set();
+        return (Array.isArray(rawSequence) ? rawSequence : [])
+            .map((entry, index) => {
+                if (!entry || typeof entry !== 'object') {
+                    return null;
+                }
+                const examId = entry.examId != null ? String(entry.examId).trim() : '';
+                if (!examId || seen.has(examId)) {
+                    return null;
+                }
+                seen.add(examId);
+                const dataKey = entry.dataKey != null && String(entry.dataKey).trim()
+                    ? String(entry.dataKey).trim()
+                    : examId;
+                return {
+                    examId,
+                    dataKey,
+                    title: entry.title != null ? String(entry.title) : '',
+                    category: entry.category != null ? String(entry.category) : '',
+                    index
+                };
+            })
+            .filter(Boolean);
+    }
+
+    async function loadDatasetByEntry(sequenceEntry) {
+        const manifest = await ensureManifest();
+        const lookupKey = sequenceEntry?.dataKey || sequenceEntry?.examId;
+        const entry = manifest[lookupKey] || manifest[sequenceEntry?.examId];
+        const registry = global.__READING_EXAM_DATA__;
+        if (!entry) {
+            throw new Error(`reading_exam_manifest_entry_missing:${sequenceEntry?.examId || lookupKey}`);
+        }
+        if (!registry || typeof registry.get !== 'function') {
+            throw new Error('reading_exam_registry_missing');
+        }
+        if (!registry.has(entry.dataKey)) {
+            await loadScript(entry.script);
+        }
+        const dataset = registry.get(entry.dataKey);
+        if (!dataset) {
+            throw new Error(`reading_exam_dataset_missing:${entry.dataKey}`);
+        }
+        return {
+            dataset,
+            dataKey: entry.dataKey,
+            manifestEntry: entry
+        };
+    }
+
+    function getSuiteSlot(examId = state.examId) {
+        const key = examId != null ? String(examId).trim() : '';
+        if (!key || !state.suite || !(state.suite.slotsByExamId instanceof Map)) {
+            return null;
+        }
+        return state.suite.slotsByExamId.get(key) || null;
+    }
+
+    function getActiveSuiteSlot() {
+        return getSuiteSlot(state.suite?.activeExamId || state.examId);
+    }
+
+    function getNotesText() {
+        const noteArea = document.querySelector('#notes-panel textarea');
+        return noteArea ? String(noteArea.value || '') : '';
+    }
+
+    function setNotesText(value) {
+        const noteArea = document.querySelector('#notes-panel textarea');
+        if (noteArea) {
+            noteArea.value = String(value || '');
+        }
+    }
+
+    function buildEmptyDraft() {
+        return {
+            answers: {},
+            highlights: [],
+            noteText: '',
+            scrollY: 0,
+            updatedAt: Date.now()
+        };
+    }
+
+    function mergeDraft(baseDraft, nextDraft) {
+        const base = baseDraft && typeof baseDraft === 'object' ? baseDraft : {};
+        const next = nextDraft && typeof nextDraft === 'object' ? nextDraft : {};
+        return Object.assign(buildEmptyDraft(), base, next, {
+            answers: next.answers && typeof next.answers === 'object'
+                ? { ...next.answers }
+                : (base.answers && typeof base.answers === 'object' ? { ...base.answers } : {}),
+            highlights: Array.isArray(next.highlights)
+                ? next.highlights.slice()
+                : (Array.isArray(base.highlights) ? base.highlights.slice() : []),
+            noteText: typeof next.noteText === 'string'
+                ? next.noteText
+                : (typeof base.noteText === 'string' ? base.noteText : ''),
+            scrollY: Number.isFinite(Number(next.scrollY))
+                ? Number(next.scrollY)
+                : (Number.isFinite(Number(base.scrollY)) ? Number(base.scrollY) : 0),
+            updatedAt: Number.isFinite(Number(next.updatedAt))
+                ? Number(next.updatedAt)
+                : (Number.isFinite(Number(base.updatedAt)) ? Number(base.updatedAt) : Date.now())
+        });
+    }
+
+    function mergeSuiteDraftPayload(data = {}) {
+        if (!state.suite?.inline) {
+            return;
+        }
+        const draftsByExam = data && data.draftsByExam && typeof data.draftsByExam === 'object'
+            ? data.draftsByExam
+            : null;
+        if (draftsByExam) {
+            Object.entries(draftsByExam).forEach(([examId, draft]) => {
+                const slot = getSuiteSlot(examId);
+                if (slot && draft && typeof draft === 'object') {
+                    slot.draft = mergeDraft(slot.draft, draft);
+                }
+            });
+        }
+
+        const contextExamId = data && data.examId != null ? String(data.examId).trim() : '';
+        const draft = data && data.draft && typeof data.draft === 'object'
+            ? data.draft
+            : null;
+        if (contextExamId && draft) {
+            const slot = getSuiteSlot(contextExamId);
+            if (slot) {
+                slot.draft = mergeDraft(slot.draft, draft);
+            }
+        }
+    }
+
+    function resolveSuiteTargetExamId(data = {}, options = {}) {
+        if (options.preferExistingActive) {
+            const activeExamId = state.suite?.activeExamId ? String(state.suite.activeExamId).trim() : '';
+            if (activeExamId && getSuiteSlot(activeExamId)) {
+                return activeExamId;
+            }
+        }
+        const contextExamId = data && data.examId != null ? String(data.examId).trim() : '';
+        if (contextExamId && getSuiteSlot(contextExamId)) {
+            return contextExamId;
+        }
+        const rawIndex = Number((data && data.currentIndex) ?? (data && data.suiteSequenceIndex));
+        const index = Number.isFinite(rawIndex) ? Math.max(0, Math.floor(rawIndex)) : 0;
+        const indexedEntry = state.suite.sequence[index];
+        if (indexedEntry && indexedEntry.examId && getSuiteSlot(indexedEntry.examId)) {
+            return indexedEntry.examId;
+        }
+        return state.suite.sequence[0]?.examId || state.examId || '';
+    }
+
+    function updateActiveSlotFromCurrentDom(reason = 'snapshot') {
+        if (!state.suite?.inline || state.suite.activating) {
+            return null;
+        }
+        const slot = getActiveSuiteSlot();
+        if (!slot || !state.dataset) {
+            return null;
+        }
+        const draft = mergeDraft(slot.draft, {
+            answers: collectAnswers(),
+            highlights: collectHighlights(),
+            noteText: getNotesText(),
+            scrollY: global.scrollY || 0,
+            updatedAt: Date.now()
+        });
+        slot.draft = draft;
+        slot.navStatus = new Map(navStatus);
+        slot.lastResults = state.lastResults || slot.lastResults || null;
+        if (Number.isFinite(Number(state.suite.activeStartedAtMs)) && state.suite.activeStartedAtMs > 0) {
+            const elapsedSeconds = Math.max(0, Math.round((Date.now() - state.suite.activeStartedAtMs) / 1000));
+            if (elapsedSeconds > 0) {
+                slot.durationSeconds = Math.max(0, Number(slot.durationSeconds) || 0) + elapsedSeconds;
+                state.suite.activeStartedAtMs = Date.now();
+            }
+        }
+        state.simulationDraftFingerprint = reason === 'activate'
+            ? state.simulationDraftFingerprint
+            : buildDraftFingerprint(draft);
+        return draft;
+    }
+
+    function getSuiteSequenceIndex(examId) {
+        const key = examId != null ? String(examId).trim() : '';
+        return state.suite.sequence.findIndex((entry) => entry && entry.examId === key);
+    }
+
+    function syncSimulationCtxForActiveSlot() {
+        if (!state.suite?.inline) {
+            return;
+        }
+        const index = getSuiteSequenceIndex(state.suite.activeExamId);
+        const total = state.suite.sequence.length || 1;
+        const currentIndex = index >= 0 ? index : 0;
+        state.suite.currentIndex = currentIndex;
+        state.simulationCtx = Object.assign({}, state.simulationCtx || {}, {
+            suiteSessionId: state.suiteSessionId || state.simulationCtx?.suiteSessionId || null,
+            flowMode: 'simulation',
+            examId: state.suite.activeExamId,
+            suiteSequence: state.suite.sequence.map((entry) => ({ ...entry })),
+            currentIndex,
+            total,
+            isLast: currentIndex >= total - 1,
+            canPrev: currentIndex > 0,
+            canNext: currentIndex < total - 1
+        });
+    }
+
+    async function ensureSuiteDatasets(rawSequence = []) {
+        const sequence = normalizeSuiteSequence(rawSequence);
+        if (!sequence.length) {
+            return false;
+        }
+        state.suite.inline = true;
+        state.suite.flowMode = 'simulation';
+        state.suite.sequence = sequence;
+        await Promise.all(sequence.map(async (entry) => {
+            const loaded = await loadDatasetByEntry(entry);
+            const existing = getSuiteSlot(entry.examId);
+            const inheritedDraft = state.simulationCtx?.draft
+                && state.simulationCtx.examId === entry.examId
+                ? state.simulationCtx.draft
+                : null;
+            state.suite.slotsByExamId.set(entry.examId, Object.assign({}, existing || {}, {
+                examId: entry.examId,
+                dataKey: loaded.dataKey,
+                title: entry.title || loaded.dataset?.meta?.title || loaded.manifestEntry?.title || entry.examId,
+                category: entry.category || loaded.dataset?.meta?.category || loaded.manifestEntry?.category || '',
+                dataset: loaded.dataset,
+                draft: mergeDraft(existing?.draft, inheritedDraft),
+                navStatus: existing?.navStatus instanceof Map ? existing.navStatus : new Map(),
+                lastResults: existing?.lastResults || null,
+                durationSeconds: Number.isFinite(Number(existing?.durationSeconds)) ? Number(existing.durationSeconds) : 0
+            }));
+        }));
+        return true;
+    }
+
+    function initDragPools() {
+        document.querySelectorAll('.pool-items').forEach((pool, index) => {
+            if (!pool.id) {
+                pool.id = `practice-pool-${index}`;
+            }
+        });
+        document.querySelectorAll('.pool-items .drag-item').forEach((item) => {
+            if (!item.dataset.originPool) {
+                const pool = item.closest('.pool-items');
+                if (pool?.id) {
+                    item.dataset.originPool = pool.id;
+                }
+            }
+        });
+    }
+
+    function refreshDynamicQuestionEnhancements() {
+        getDropzones().forEach((dropzone, index) => {
+            if (!dropzone.dataset.dropzoneId) {
+                dropzone.dataset.dropzoneId = `dropzone-${index + 1}`;
+            }
+            ensureDropzoneHolder(dropzone);
+            updateDropzoneState(dropzone);
+        });
+        document.querySelectorAll('.drag-item, .draggable-word, .card').forEach((item) => {
+            if (item instanceof HTMLElement) {
+                attachDraggableBehavior(item);
+            }
+        });
+        initDragPools();
+    }
+
+    async function activateSuiteSlot(examId, options = {}) {
+        if (!state.suite?.inline) {
+            return false;
+        }
+        const targetExamId = examId != null ? String(examId).trim() : '';
+        const slot = getSuiteSlot(targetExamId);
+        if (!slot || !slot.dataset) {
+            return false;
+        }
+        if (!options.skipSave) {
+            updateActiveSlotFromCurrentDom('deactivate');
+        }
+        state.suite.activating = true;
+        state.suite.activeExamId = targetExamId;
+        state.suite.activeStartedAtMs = Date.now();
+        state.examId = targetExamId;
+        state.dataKey = slot.dataKey || targetExamId;
+        state.dataset = slot.dataset;
+        state.lastResults = slot.lastResults || null;
+        navStatus.clear();
+        if (slot.navStatus instanceof Map) {
+            slot.navStatus.forEach((value, key) => navStatus.set(key, value));
+        }
+        renderDataset(slot.dataset);
+        refreshDynamicQuestionEnhancements();
+        clearCurrentAnswers();
+        applyDraftToDom(slot.draft || buildEmptyDraft());
+        setNotesText(slot.draft?.noteText || '');
+        syncSimulationCtxForActiveSlot();
+        state.simulationMode = true;
+        state.simulationContextReady = true;
+        updateNavStatuses(slot.lastResults || null);
+        syncPrimaryActionButtons();
+        state.suite.activating = false;
+        if (Number.isFinite(Number(slot.draft?.scrollY))) {
+            global.scrollTo(0, Number(slot.draft.scrollY) || 0);
+        }
+        if (!options.skipDraftSync) {
+            syncSimulationDraftSnapshot('activate');
+        }
+        if (!options.silent) {
+            postMessage('SIMULATION_ACTIVE_EXAM_CHANGE', {
+                examId: targetExamId,
+                currentIndex: state.suite.currentIndex,
+                suiteSequence: state.suite.sequence.map((entry) => ({ ...entry }))
+            });
+        }
+        return true;
     }
 
     async function ensureExplanationManifest() {
@@ -893,15 +1296,31 @@
         return card;
     }
 
+    function resolveGroupMarkup(group) {
+        const primary = String(group?.bodyHtml || '').trim();
+        const fallback = String(group?.leadHtml || group?.html || '').trim();
+        const markup = primary || fallback;
+        if (!markup) {
+            return '';
+        }
+        // 检查是否有独立的 "group" class（不是 question-group 等）
+        const hasGroupClass = /class\s*=\s*["'](?:[^"']*\s)?group(?:\s[^"']*)?["']/i.test(markup);
+        if (hasGroupClass) {
+            return markup;
+        }
+        return `<div class="group">${markup}</div>`;
+    }
+
     function createGroupMarkup(group) {
         const questionIds = Array.isArray(group.questionIds) ? group.questionIds.join(',') : '';
         const allowOptionReuseFlag = resolveAllowOptionReuse(group);
         const allowOptionReuse = typeof allowOptionReuseFlag === 'boolean'
             ? ` data-allow-option-reuse="${allowOptionReuseFlag ? 'true' : 'false'}"`
             : '';
+        const groupMarkup = resolveGroupMarkup(group);
         return `
             <section class="unified-group" data-group-id="${group.groupId}" data-question-ids="${questionIds}"${allowOptionReuse}>
-                ${group.bodyHtml || ''}
+                ${groupMarkup}
             </section>
         `;
     }
@@ -934,6 +1353,7 @@
             dom.results.style.display = 'none';
             dom.results.innerHTML = '';
         }
+        updateRedesignedSubHeader();
     }
 
     function resolveAllowOptionReuse(group) {
@@ -990,14 +1410,292 @@
         return String(questionId).replace(/^q/i, '');
     }
 
-    function buildQuestionNav() {
-        if (!dom.nav) return;
+    function getQuestionRangeText() {
         const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
-        dom.nav.innerHTML = order.map((questionId) => {
-            const status = navStatus.get(questionId) || '';
-            const label = displayLabel(questionId);
-            return `<button class="q-item ${status}" data-question-id="${questionId}" type="button">${label}</button>`;
-        }).join('');
+        if (!order.length) return '';
+        const labels = order.map(qId => parseInt(displayLabel(qId))).filter(num => !isNaN(num));
+        if (!labels.length) return '';
+        const min = Math.min(...labels);
+        const max = Math.max(...labels);
+        return `${min}-${max}`;
+    }
+
+    function updateRedesignedSubHeader() {
+        const partEl = document.getElementById('sub-header-part');
+        const instEl = document.getElementById('sub-header-instruction');
+        if (partEl && instEl) {
+            const category = (state.dataset?.meta?.category || '').toUpperCase();
+            let partName = 'Part 1';
+            if (category === 'P2') partName = 'Part 2';
+            else if (category === 'P3') partName = 'Part 3';
+            partEl.textContent = partName;
+            
+            const range = getQuestionRangeText();
+            instEl.textContent = range ? `Read the text and answer questions ${range}.` : '';
+        }
+    }
+
+    function getPassageQuestionStates() {
+        if (state.suite?.inline && state.suite.sequence.length) {
+            const info = {
+                p1: { questions: [], answeredCount: 0, total: 13 },
+                p2: { questions: [], answeredCount: 0, total: 13 },
+                p3: { questions: [], answeredCount: 0, total: 14 }
+            };
+            const activeExamId = state.suite.activeExamId || state.examId;
+            let currentPart = 'p1';
+            state.suite.sequence.forEach((entry, index) => {
+                const slot = getSuiteSlot(entry.examId);
+                const dataset = slot?.dataset;
+                const category = String(entry.category || dataset?.meta?.category || '').toUpperCase();
+                const partKey = category === 'P2' ? 'p2' : (category === 'P3' ? 'p3' : `p${Math.min(3, index + 1)}`);
+                if (entry.examId === activeExamId) {
+                    currentPart = partKey;
+                }
+                const order = Array.isArray(dataset?.questionOrder) ? dataset.questionOrder : [];
+                const answers = slot?.draft?.answers && typeof slot.draft.answers === 'object' ? slot.draft.answers : {};
+                const statusMap = slot?.navStatus instanceof Map ? slot.navStatus : new Map();
+                info[partKey].total = order.length || info[partKey].total;
+                info[partKey].questions = order.map((qId) => {
+                    const labelMap = dataset?.questionDisplayMap || {};
+                    const label = labelMap[qId] || String(qId).replace(/^q/i, '');
+                    let status = statusMap.get(qId) || '';
+                    const answered = Object.prototype.hasOwnProperty.call(answers, qId)
+                        && splitAnswerTokens(answers[qId]).length > 0;
+                    if (answered && !status) {
+                        status = 'answered';
+                    }
+                    if (answered) {
+                        info[partKey].answeredCount += 1;
+                    }
+                    const comparison = slot?.lastResults?.answerComparison?.[qId];
+                    if (comparison) {
+                        status = comparison.isCorrect ? 'correct' : 'incorrect';
+                    }
+                    return { qId, label, status, examId: entry.examId };
+                });
+            });
+            return { info, currentPart };
+        }
+        const info = {
+            p1: { questions: [], answeredCount: 0, total: 13 },
+            p2: { questions: [], answeredCount: 0, total: 13 },
+            p3: { questions: [], answeredCount: 0, total: 14 }
+        };
+
+        const p1PlaceholderOrder = Array.from({ length: 13 }, (_, i) => `q${i + 1}`);
+        const p2PlaceholderOrder = Array.from({ length: 13 }, (_, i) => `q${i + 14}`);
+        const p3PlaceholderOrder = Array.from({ length: 14 }, (_, i) => `q${i + 27}`);
+
+        let sequenceExams = [];
+        let draftsByExam = {};
+        let resultsByExam = {};
+        try {
+            const raw = global.sessionStorage?.getItem('ielts_sim_session');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed) {
+                    if (Array.isArray(parsed.sequence)) sequenceExams = parsed.sequence;
+                    if (parsed.draftsByExam) draftsByExam = parsed.draftsByExam;
+                    if (Array.isArray(parsed.results)) {
+                        parsed.results.forEach(res => {
+                            if (res && res.examId) resultsByExam[res.examId] = res;
+                        });
+                    }
+                }
+            }
+        } catch (_) {}
+
+        const category = (state.dataset?.meta?.category || '').toUpperCase();
+        let currentPart = 'p1';
+        if (category === 'P2') currentPart = 'p2';
+        else if (category === 'P3') currentPart = 'p3';
+
+        // Part 1
+        if (currentPart === 'p1') {
+            const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+            info.p1.total = order.length;
+            info.p1.questions = order.map(qId => {
+                const label = displayLabel(qId);
+                const status = navStatus.get(qId) || '';
+                if (hasAnswer(qId)) info.p1.answeredCount++;
+                return { qId, label, status };
+            });
+        } else {
+            const examId = sequenceExams[0]?.examId;
+            const draft = examId ? draftsByExam[examId] : null;
+            const draftAnswers = draft ? (draft.answers || {}) : {};
+            const result = examId ? resultsByExam[examId] : null;
+            const comparison = result ? (result.answerComparison || {}) : {};
+            
+            info.p1.questions = p1PlaceholderOrder.map(qId => {
+                const label = qId.replace(/^q/i, '');
+                let status = '';
+                const answered = draftAnswers[qId] != null && String(draftAnswers[qId]).trim() !== '';
+                if (answered) {
+                    info.p1.answeredCount++;
+                    status = 'answered';
+                }
+                if (comparison[qId]) {
+                    status = comparison[qId].isCorrect ? 'correct' : 'incorrect';
+                }
+                return { qId, label, status };
+            });
+        }
+
+        // Part 2
+        if (currentPart === 'p2') {
+            const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+            info.p2.total = order.length;
+            info.p2.questions = order.map(qId => {
+                const label = displayLabel(qId);
+                const status = navStatus.get(qId) || '';
+                if (hasAnswer(qId)) info.p2.answeredCount++;
+                return { qId, label, status };
+            });
+        } else {
+            const examId = sequenceExams[1]?.examId;
+            const draft = examId ? draftsByExam[examId] : null;
+            const draftAnswers = draft ? (draft.answers || {}) : {};
+            const result = examId ? resultsByExam[examId] : null;
+            const comparison = result ? (result.answerComparison || {}) : {};
+            
+            info.p2.questions = p2PlaceholderOrder.map(qId => {
+                const label = qId.replace(/^q/i, '');
+                let status = '';
+                const answered = draftAnswers[qId] != null && String(draftAnswers[qId]).trim() !== '';
+                if (answered) {
+                    info.p2.answeredCount++;
+                    status = 'answered';
+                }
+                if (comparison[qId]) {
+                    status = comparison[qId].isCorrect ? 'correct' : 'incorrect';
+                }
+                return { qId, label, status };
+            });
+        }
+
+        // Part 3
+        if (currentPart === 'p3') {
+            const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+            info.p3.total = order.length;
+            info.p3.questions = order.map(qId => {
+                const label = displayLabel(qId);
+                const status = navStatus.get(qId) || '';
+                if (hasAnswer(qId)) info.p3.answeredCount++;
+                return { qId, label, status };
+            });
+        } else {
+            const examId = sequenceExams[2]?.examId;
+            const draft = examId ? draftsByExam[examId] : null;
+            const draftAnswers = draft ? (draft.answers || {}) : {};
+            const result = examId ? resultsByExam[examId] : null;
+            const comparison = result ? (result.answerComparison || {}) : {};
+            
+            info.p3.questions = p3PlaceholderOrder.map(qId => {
+                const label = qId.replace(/^q/i, '');
+                let status = '';
+                const answered = draftAnswers[qId] != null && String(draftAnswers[qId]).trim() !== '';
+                if (answered) {
+                    info.p3.answeredCount++;
+                    status = 'answered';
+                }
+                if (comparison[qId]) {
+                    status = comparison[qId].isCorrect ? 'correct' : 'incorrect';
+                }
+                return { qId, label, status };
+            });
+        }
+
+        return { info, currentPart };
+    }
+
+    function updateActiveQuestionHighlight(qId) {
+        state.currentActiveQuestionId = qId;
+        document.querySelectorAll('.q-item').forEach((item) => {
+            if (item.dataset.questionId === qId) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+    }
+
+    function buildQuestionNav() {
+        const { info, currentPart } = getPassageQuestionStates();
+        
+        const renderQuestionsHtml = (partKey, questions, isCurrent) => {
+            return questions.map(q => {
+                const segmentClass = q.status ? q.status : '';
+                const activeClass = (isCurrent && q.qId === state.currentActiveQuestionId) ? 'active' : '';
+                const disabledClass = isCurrent || state.suite?.inline ? '' : 'disabled';
+                const qidAttr = isCurrent ? `data-question-id="${q.qId}"` : '';
+                const examAttr = q.examId ? ` data-exam-id="${escapeHtml(q.examId)}"` : '';
+                
+                return `
+                    <div class="q-column" data-question-id="${q.qId}" data-part="${partKey}"${examAttr}>
+                        <div class="q-bar-segment ${segmentClass}"></div>
+                        <button class="q-item ${activeClass} ${q.status} ${disabledClass}" ${qidAttr} type="button">${q.label}</button>
+                    </div>
+                `;
+            }).join('');
+        };
+        
+        const p1Status = document.getElementById('part1-status-text');
+        const p1QuestionsContainer = document.getElementById('part1-questions');
+        if (p1Status) p1Status.textContent = `${info.p1.answeredCount} of ${info.p1.total}`;
+        if (p1QuestionsContainer) {
+            p1QuestionsContainer.innerHTML = renderQuestionsHtml('p1', info.p1.questions, currentPart === 'p1');
+        }
+        
+        const p2Status = document.getElementById('part2-status-text');
+        const p2QuestionsContainer = document.getElementById('part2-questions');
+        if (p2Status) p2Status.textContent = `${info.p2.answeredCount} of ${info.p2.total}`;
+        if (p2QuestionsContainer) {
+            p2QuestionsContainer.innerHTML = renderQuestionsHtml('p2', info.p2.questions, currentPart === 'p2');
+        }
+        
+        const p3Status = document.getElementById('part3-status-text');
+        const p3QuestionsContainer = document.getElementById('part3-questions');
+        if (p3Status) p3Status.textContent = `${info.p3.answeredCount} of ${info.p3.total}`;
+        if (p3QuestionsContainer) {
+            p3QuestionsContainer.innerHTML = renderQuestionsHtml('p3', info.p3.questions, currentPart === 'p3');
+        }
+
+        const isSingleMode = !state.suiteSessionId;
+        const p1Section = document.getElementById('part-section-1');
+        if (p1Section) {
+            p1Section.classList.toggle('active', currentPart === 'p1');
+        }
+        const p1Name = document.querySelector('#part-section-1 .part-nav-name');
+        if (p1Name) {
+            p1Name.classList.toggle('inactive', isSingleMode && currentPart !== 'p1');
+        }
+        const p2Section = document.getElementById('part-section-2');
+        if (p2Section) {
+            p2Section.classList.toggle('active', currentPart === 'p2');
+        }
+        const p2Name = document.querySelector('#part-section-2 .part-nav-name');
+        if (p2Name) {
+            p2Name.classList.toggle('inactive', isSingleMode && currentPart !== 'p2');
+        }
+        const p3Section = document.getElementById('part-section-3');
+        if (p3Section) {
+            p3Section.classList.toggle('active', currentPart === 'p3');
+        }
+        const p3Name = document.querySelector('#part-section-3 .part-nav-name');
+        if (p3Name) {
+            p3Name.classList.toggle('inactive', isSingleMode && currentPart !== 'p3');
+        }
+
+        const prevBtn = document.getElementById('float-prev-btn');
+        const nextBtn = document.getElementById('float-next-btn');
+        if (prevBtn && nextBtn) {
+            const hasPrev = state.simulationMode && state.simulationCtx && state.simulationCtx.canPrev;
+            const hasNext = state.simulationMode && state.simulationCtx && state.simulationCtx.canNext;
+            prevBtn.disabled = !hasPrev;
+            nextBtn.disabled = !hasNext;
+        }
     }
 
     function attachPaneResizer() {
@@ -1355,20 +2053,107 @@
         syncPrimaryActionButtons();
     }
 
-    function navClickHandler(event) {
-        const button = event.target.closest('.q-item[data-question-id]');
-        if (!button) return;
-        const questionId = button.dataset.questionId;
-        const target = findQuestionAnchor(questionId);
-        if (target && typeof global.scrollToElement === 'function') {
-            global.scrollToElement(target);
-            return;
-        }
-        target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    function attachNavListeners() {
+        const handler = (event) => {
+            const column = event.target.closest('.q-column');
+            if (!column) return;
+            const questionId = column.dataset.questionId;
+            const partKey = column.dataset.part;
+            
+            const category = (state.dataset?.meta?.category || '').toUpperCase();
+            let currentPartKey = 'p1';
+            if (category === 'P2') currentPartKey = 'p2';
+            else if (category === 'P3') currentPartKey = 'p3';
+            
+            if (partKey === currentPartKey) {
+                const target = findQuestionAnchor(questionId);
+                if (target && typeof global.scrollToElement === 'function') {
+                    global.scrollToElement(target);
+                } else {
+                    target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+                }
+                updateActiveQuestionHighlight(questionId);
+            } else {
+                if (state.suite?.inline) {
+                    const targetExamId = column.dataset.examId || '';
+                    if (targetExamId) {
+                        activateSuiteSlot(targetExamId).then((activated) => {
+                            if (activated && questionId) {
+                                const target = findQuestionAnchor(questionId);
+                                if (target && typeof global.scrollToElement === 'function') {
+                                    global.scrollToElement(target);
+                                } else {
+                                    target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+                                }
+                                updateActiveQuestionHighlight(questionId);
+                            }
+                        }).catch((error) => {
+                            console.warn('[UnifiedReadingPage] inline suite navigate failed:', error);
+                        });
+                    }
+                    return;
+                }
+                if (state.simulationMode) {
+                    if (partKey === 'p1' && currentPartKey === 'p2') dispatchSimulationNavigate('prev');
+                    else if (partKey === 'p2' && currentPartKey === 'p3') dispatchSimulationNavigate('prev');
+                    else if (partKey === 'p2' && currentPartKey === 'p1') dispatchSimulationNavigate('next');
+                    else if (partKey === 'p3' && currentPartKey === 'p2') dispatchSimulationNavigate('next');
+                    else if (partKey === 'p3' && currentPartKey === 'p1') {
+                        dispatchSimulationNavigate('next');
+                    }
+                    else if (partKey === 'p1' && currentPartKey === 'p3') {
+                        dispatchSimulationNavigate('prev');
+                    }
+                }
+            }
+        };
+        
+        document.getElementById('part1-questions')?.addEventListener('click', handler);
+        document.getElementById('part2-questions')?.addEventListener('click', handler);
+        document.getElementById('part3-questions')?.addEventListener('click', handler);
+
+        dom.right?.addEventListener('focusin', (event) => {
+            const input = event.target.closest('input, select, textarea');
+            if (!input) return;
+            const name = input.getAttribute('name');
+            if (name) {
+                const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
+                const cleanName = name.replace(/^q/i, '');
+                const matched = order.find(qId => {
+                    const cleanQId = qId.replace(/^q/i, '');
+                    return cleanQId === cleanName;
+                });
+                if (matched) {
+                    updateActiveQuestionHighlight(matched);
+                }
+            }
+        });
     }
 
-    function attachNavListeners() {
-        dom.nav?.addEventListener('click', navClickHandler);
+    function attachFloatingNavListeners() {
+        const prevBtn = document.getElementById('float-prev-btn');
+        const nextBtn = document.getElementById('float-next-btn');
+        
+        prevBtn?.addEventListener('click', () => {
+            if (state.simulationMode && state.simulationCtx) {
+                if (state.simulationCtx.canPrev) {
+                    if (state.suite?.inline) {
+                        dispatchSimulationNavigate('prev', buildSubmissionSnapshot());
+                        return;
+                    }
+                    dispatchSimulationNavigate('prev', buildSubmissionSnapshot());
+                }
+            }
+        });
+        
+        nextBtn?.addEventListener('click', () => {
+            if (state.simulationMode && state.simulationCtx) {
+                if (!state.simulationCtx.isLast) {
+                    syncSimulationDraftSnapshot('submit');
+                    dispatchSimulationNavigate('next', buildSubmissionSnapshot());
+                }
+            }
+        });
     }
 
     function attachMemorizeLocatorListeners() {
@@ -1424,7 +2209,7 @@
     }
 
     function locateQuestionContainer(groupEl, questionId) {
-        const itemContainerSelector = '.question-item, .tfng-item, .match-question-item, .question-row, .summary-completion, tr, li';
+        const itemContainerSelector = '.question-item, .tfng-item, .match-question-item, .mc-question-item, .question-row, .summary-completion, .question-group, tr, li';
         const escaped = escapeSelector(questionId);
         const directByAnchor = groupEl.querySelector(`#${escaped}-anchor`);
         if (directByAnchor) {
@@ -1437,8 +2222,13 @@
         }
         const byData = groupEl.querySelector(`[data-question="${escaped}"]`);
         if (byData) {
-            return byData.closest('.question-item, .match-question-item, .question-row, .summary-completion, .paragraph-wrapper, tr, li')
+            return byData.closest('.question-item, .match-question-item, .mc-question-item, .question-row, .summary-completion, .paragraph-wrapper, .question-group, tr, li')
                 || byData.parentElement;
+        }
+        const directByTarget = groupEl.querySelector(`#${escaped}-target`);
+        if (directByTarget) {
+            return directByTarget.closest('.question-item, .match-question-item, .mc-question-item, .question-row, .summary-completion, .question-group, p, li')
+                || directByTarget.parentElement;
         }
         const displayNumber = Number(questionNumberFromId(questionId));
         if (Number.isFinite(displayNumber)) {
@@ -2388,11 +3178,10 @@
         return splitAnswerTokens(value).length > 0;
     }
 
-    function buildResults() {
-        const answers = collectAnswers();
-        const answerKey = state.dataset?.answerKey || {};
-        const questionOrder = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : Object.keys(answerKey);
-        const questionTypeMap = buildQuestionTypeMap();
+    function buildResultsFromAnswers(dataset, answers = {}) {
+        const answerKey = dataset?.answerKey || {};
+        const questionOrder = Array.isArray(dataset?.questionOrder) ? dataset.questionOrder : Object.keys(answerKey);
+        const questionTypeMap = buildQuestionTypeMap(dataset);
         const questionTypePerformance = {};
         const answerComparison = {};
         const details = {};
@@ -2457,6 +3246,10 @@
                 source: 'unified_reading_page'
             }
         };
+    }
+
+    function buildResults() {
+        return buildResultsFromAnswers(state.dataset, collectAnswers());
     }
 
     function renderResults(results) {
@@ -2646,13 +3439,14 @@
         document.body.classList.toggle('review-readonly-mode', state.readOnly);
         if (dom.submitBtn) {
             if (!dom.submitBtn.dataset.defaultLabel) {
-                dom.submitBtn.dataset.defaultLabel = dom.submitBtn.textContent || 'Submit';
+                dom.submitBtn.dataset.defaultLabel = dom.submitBtn.title || 'Submit';
             }
             dom.submitBtn.disabled = state.readOnly;
-            if (state.readOnly) {
-                dom.submitBtn.textContent = '回顾模式';
+            const label = state.readOnly ? '回顾模式' : dom.submitBtn.dataset.defaultLabel;
+            if (dom.submitBtn.classList.contains('nav-submit-circle-btn')) {
+                dom.submitBtn.title = label;
             } else {
-                dom.submitBtn.textContent = dom.submitBtn.dataset.defaultLabel;
+                dom.submitBtn.textContent = label;
             }
         }
         if (dom.resetBtn) {
@@ -2706,7 +3500,9 @@
 
     function syncPrimaryActionButtons() {
         if (dom.submitBtn && !dom.submitBtn.dataset.defaultLabel) {
-            dom.submitBtn.dataset.defaultLabel = dom.submitBtn.textContent || 'Submit';
+            dom.submitBtn.dataset.defaultLabel = dom.submitBtn.classList.contains('nav-submit-circle-btn') 
+                ? 'Submit' 
+                : (dom.submitBtn.textContent || 'Submit');
         }
         if (dom.submitBtn && !dom.submitBtn.dataset.defaultType) {
             dom.submitBtn.dataset.defaultType = dom.submitBtn.getAttribute('type') || '';
@@ -2720,11 +3516,21 @@
         const ctx = state.simulationCtx && typeof state.simulationCtx === 'object' ? state.simulationCtx : null;
         const simulationEnabled = Boolean(state.simulationMode && ctx);
         syncSimulationRuntimeFlags();
+        
+        const setSubmitLabel = (label) => {
+            if (!dom.submitBtn) return;
+            if (dom.submitBtn.classList.contains('nav-submit-circle-btn')) {
+                dom.submitBtn.title = label;
+            } else {
+                dom.submitBtn.textContent = label;
+            }
+        };
+
         if (state.memorizeMode && !state.reviewMode && !simulationEnabled) {
             if (dom.submitBtn) {
                 dom.submitBtn.style.display = '';
                 dom.submitBtn.setAttribute('type', 'button');
-                dom.submitBtn.textContent = 'Exit';
+                setSubmitLabel('Exit');
                 dom.submitBtn.disabled = false;
             }
             if (dom.resetBtn) {
@@ -2749,7 +3555,7 @@
                     dom.submitBtn.setAttribute('type', dom.submitBtn.dataset.defaultType);
                 }
                 if (!state.readOnly || canResetSubmittedSingle) {
-                    dom.submitBtn.textContent = dom.submitBtn.dataset.defaultLabel || 'Submit';
+                    setSubmitLabel(dom.submitBtn.dataset.defaultLabel || 'Submit');
                 }
                 dom.submitBtn.disabled = state.readOnly;
             }
@@ -2766,15 +3572,12 @@
             return;
         }
         if (dom.resetBtn) {
-            dom.resetBtn.style.display = '';
-            dom.resetBtn.setAttribute('type', 'button');
-            dom.resetBtn.textContent = '上一题';
-            dom.resetBtn.disabled = state.readOnly || !ctx.canPrev;
+            dom.resetBtn.style.display = 'none';
         }
         if (dom.submitBtn) {
-            dom.submitBtn.style.display = '';
+            dom.submitBtn.style.display = ctx.isLast ? '' : 'none';
             dom.submitBtn.setAttribute('type', 'button');
-            dom.submitBtn.textContent = ctx.isLast ? 'Submit' : '下一题';
+            setSubmitLabel('Submit');
             dom.submitBtn.disabled = state.readOnly;
         }
     }
@@ -3138,6 +3941,7 @@
             return {
                 answers: draft.answers && typeof draft.answers === 'object' ? { ...draft.answers } : {},
                 highlights: Array.isArray(draft.highlights) ? draft.highlights.slice() : [],
+                noteText: typeof draft.noteText === 'string' ? draft.noteText : '',
                 scrollY: Number.isFinite(Number(draft.scrollY)) ? Number(draft.scrollY) : 0
             };
         }
@@ -3214,6 +4018,7 @@
         return {
             answers,
             highlights: collectHighlights(),
+            noteText: getNotesText(),
             scrollY: global.scrollY || 0,
             updatedAt
         };
@@ -3223,7 +4028,9 @@
         if (!state.simulationMode || state.readOnly || !state.suiteSessionId) {
             return;
         }
-        const draft = collectCurrentDraft();
+        const draft = state.suite?.inline
+            ? (updateActiveSlotFromCurrentDom(reason) || collectCurrentDraft())
+            : collectCurrentDraft();
         const fingerprint = buildDraftFingerprint(draft);
         if (reason === 'periodic' && fingerprint && fingerprint === state.simulationDraftFingerprint) {
             return;
@@ -3233,8 +4040,11 @@
         if (!mirroredDraft) {
             return;
         }
-        persistSimulationDraftMirror(mirroredDraft);
+        if (!state.suite?.inline) {
+            persistSimulationDraftMirror(mirroredDraft);
+        }
         postMessage('SIMULATION_DRAFT_SYNC', {
+            examId: state.examId,
             draft: mirroredDraft,
             draftUpdatedAt: Number.isFinite(Number(mirroredDraft.updatedAt)) ? Number(mirroredDraft.updatedAt) : Date.now(),
             elapsed: getPageElapsedSeconds()
@@ -3247,7 +4057,7 @@
             && state.simulationContextReady
             && !state.readOnly
             && state.suiteSessionId
-            && state.examId
+            && (state.examId || state.suite?.activeExamId)
         );
         if (!shouldSync) {
             stopSimulationDraftSync();
@@ -3373,6 +4183,9 @@
         if (Array.isArray(draft.highlights)) {
             applyHighlights(draft.highlights);
         }
+        if (typeof draft.noteText === 'string') {
+            setNotesText(draft.noteText);
+        }
         if (typeof draft.scrollY === 'number') {
             global.scrollTo(0, draft.scrollY);
         }
@@ -3425,10 +4238,121 @@
             results,
             answers: results.answers || {},
             highlights: collectHighlights(),
+            noteText: getNotesText(),
             scrollY: global.scrollY || 0,
             elapsed: Math.max(0, Number(timerSnapshot.durationSeconds) || 0),
             timerSnapshot,
             updatedAt: Date.now()
+        };
+    }
+
+    function prefixSuiteMap(examId, source = {}) {
+        const prefixed = {};
+        const prefix = examId ? `${examId}::` : '';
+        Object.entries(source || {}).forEach(([questionId, value]) => {
+            prefixed[`${prefix}${questionId}`] = value;
+        });
+        return prefixed;
+    }
+
+    function mergeQuestionTypePerformance(target, source = {}) {
+        Object.entries(source || {}).forEach(([type, performance]) => {
+            if (!target[type]) {
+                target[type] = { total: 0, correct: 0, accuracy: 0 };
+            }
+            target[type].total += Number(performance && performance.total) || 0;
+            target[type].correct += Number(performance && performance.correct) || 0;
+            target[type].accuracy = target[type].total > 0
+                ? target[type].correct / target[type].total
+                : 0;
+        });
+    }
+
+    function buildInlineSuiteSubmissionSnapshot() {
+        updateActiveSlotFromCurrentDom('submit');
+        const timerSnapshot = getPracticeTimerSnapshot();
+        const suiteEntries = [];
+        const aggregatedAnswers = {};
+        const aggregatedComparison = {};
+        const aggregatedCorrectAnswers = {};
+        const aggregatedQuestionTypeMap = {};
+        const aggregatedQuestionTypePerformance = {};
+        let totalCorrect = 0;
+        let totalQuestions = 0;
+        let latestUpdatedAt = Date.now();
+
+        state.suite.sequence.forEach((entry) => {
+            const slot = getSuiteSlot(entry.examId);
+            if (!slot || !slot.dataset) {
+                return;
+            }
+            const draft = mergeDraft(slot.draft, {});
+            const results = buildResultsFromAnswers(slot.dataset, draft.answers || {});
+            slot.lastResults = results;
+            slot.navStatus = new Map();
+            Object.entries(results.answerComparison || {}).forEach(([questionId, comparison]) => {
+                slot.navStatus.set(questionId, comparison && comparison.isCorrect ? 'correct' : 'incorrect');
+            });
+            const scoreInfo = results.scoreInfo || {};
+            totalCorrect += Number(scoreInfo.correct) || 0;
+            totalQuestions += Number(scoreInfo.total ?? scoreInfo.totalQuestions) || 0;
+            latestUpdatedAt = Math.max(latestUpdatedAt, Number(draft.updatedAt) || latestUpdatedAt);
+            Object.assign(aggregatedAnswers, prefixSuiteMap(entry.examId, results.answers || {}));
+            Object.assign(aggregatedComparison, prefixSuiteMap(entry.examId, results.answerComparison || {}));
+            Object.assign(aggregatedCorrectAnswers, prefixSuiteMap(entry.examId, results.correctAnswers || {}));
+            Object.assign(aggregatedQuestionTypeMap, prefixSuiteMap(entry.examId, results.questionTypeMap || {}));
+            mergeQuestionTypePerformance(aggregatedQuestionTypePerformance, results.questionTypePerformance || {});
+            suiteEntries.push({
+                examId: entry.examId,
+                title: slot.title || entry.title || slot.dataset?.meta?.title || entry.examId,
+                category: slot.category || entry.category || slot.dataset?.meta?.category || '',
+                dataKey: slot.dataKey || entry.dataKey || entry.examId,
+                duration: Math.max(0, Math.round(Number(slot.durationSeconds) || 0)),
+                answers: results.answers || {},
+                answerComparison: results.answerComparison || {},
+                correctAnswers: results.correctAnswers || {},
+                scoreInfo: results.scoreInfo || {},
+                questionTypeMap: results.questionTypeMap || {},
+                questionTypePerformance: results.questionTypePerformance || {},
+                highlights: Array.isArray(draft.highlights) ? draft.highlights.slice() : [],
+                noteText: typeof draft.noteText === 'string' ? draft.noteText : '',
+                scrollY: Number.isFinite(Number(draft.scrollY)) ? Number(draft.scrollY) : 0,
+                updatedAt: Number.isFinite(Number(draft.updatedAt)) ? Number(draft.updatedAt) : Date.now()
+            });
+        });
+
+        const accuracy = totalQuestions > 0 ? totalCorrect / totalQuestions : 0;
+        const scoreInfo = {
+            correct: totalCorrect,
+            total: totalQuestions,
+            totalQuestions,
+            accuracy,
+            percentage: Math.round(accuracy * 100),
+            source: 'unified_reading_inline_suite'
+        };
+        return {
+            suiteSubmission: true,
+            suiteEntries,
+            results: {
+                answers: aggregatedAnswers,
+                answerComparison: aggregatedComparison,
+                correctAnswers: aggregatedCorrectAnswers,
+                questionTypeMap: aggregatedQuestionTypeMap,
+                questionTypePerformance: aggregatedQuestionTypePerformance,
+                scoreInfo
+            },
+            answers: aggregatedAnswers,
+            answerComparison: aggregatedComparison,
+            correctAnswers: aggregatedCorrectAnswers,
+            questionTypeMap: aggregatedQuestionTypeMap,
+            questionTypePerformance: aggregatedQuestionTypePerformance,
+            scoreInfo,
+            highlights: [],
+            noteText: '',
+            scrollY: global.scrollY || 0,
+            elapsed: Math.max(0, Number(timerSnapshot.durationSeconds) || 0),
+            timerSnapshot,
+            updatedAt: latestUpdatedAt
         };
     }
 
@@ -3452,11 +4376,24 @@
             return;
         }
         const snapshot = submissionSnapshot || buildSubmissionSnapshot();
+        if (state.suite?.inline) {
+            updateActiveSlotFromCurrentDom('navigate');
+            const currentIndex = state.suite.currentIndex;
+            const targetIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
+            const targetEntry = state.suite.sequence[targetIndex];
+            if (targetEntry && targetEntry.examId) {
+                activateSuiteSlot(targetEntry.examId).catch((error) => {
+                    console.warn('[UnifiedReadingPage] inline simulation navigation failed:', error);
+                });
+            }
+            return;
+        }
         postMessage('SIMULATION_NAVIGATE', {
             direction: direction === 'prev' ? 'prev' : 'next',
             draft: {
                 answers: snapshot.answers || {},
                 highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
+                noteText: typeof snapshot.noteText === 'string' ? snapshot.noteText : '',
                 scrollY: Number.isFinite(Number(snapshot.scrollY)) ? Number(snapshot.scrollY) : 0,
                 updatedAt: Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now()
             },
@@ -3464,6 +4401,7 @@
             resultSnapshot: snapshot.results,
             answers: snapshot.answers || {},
             highlights: Array.isArray(snapshot.highlights) ? snapshot.highlights : [],
+            noteText: typeof snapshot.noteText === 'string' ? snapshot.noteText : '',
             scrollY: Number.isFinite(Number(snapshot.scrollY)) ? Number(snapshot.scrollY) : 0,
             elapsed: Number.isFinite(Number(snapshot.elapsed)) ? Number(snapshot.elapsed) : getPageElapsedSeconds(),
             timerSnapshot: snapshot.timerSnapshot || getPracticeTimerSnapshot()
@@ -3477,19 +4415,22 @@
         if (state.readOnly) {
             return;
         }
-        const submissionSnapshot = buildSubmissionSnapshot();
+        const submissionSnapshot = state.suite?.inline
+            ? buildInlineSuiteSubmissionSnapshot()
+            : buildSubmissionSnapshot();
         if (state.simulationMode) {
             syncSimulationDraftSnapshot('submit');
         }
-        if (state.simulationMode && state.simulationCtx && !state.simulationCtx.isLast) {
-            dispatchSimulationNavigate('next', submissionSnapshot);
-            return;
-        }
-        const results = submissionSnapshot.results;
-        const highlightSnapshot = Array.isArray(submissionSnapshot.highlights)
-            ? submissionSnapshot.highlights
-            : [];
+        const activeSlot = state.suite?.inline ? getActiveSuiteSlot() : null;
+        const results = activeSlot?.lastResults || submissionSnapshot.results;
+        const highlightSnapshot = state.suite?.inline
+            ? (Array.isArray(activeSlot?.draft?.highlights) ? activeSlot.draft.highlights : [])
+            : (Array.isArray(submissionSnapshot.highlights) ? submissionSnapshot.highlights : []);
+        const postedResults = submissionSnapshot.results || results;
         state.lastResults = results;
+        if (activeSlot) {
+            activeSlot.lastResults = results;
+        }
         renderResults(results);
         enterSubmittedReadOnlyState(state.simulationMode ? 'simulation-final-submit' : 'final-submit');
         await renderExplanations();
@@ -3522,8 +4463,12 @@
             },
             answers: submissionSnapshot.answers || {},
             highlights: Array.isArray(submissionSnapshot.highlights) ? submissionSnapshot.highlights : [],
+            noteText: typeof submissionSnapshot.noteText === 'string' ? submissionSnapshot.noteText : '',
             scrollY: Number.isFinite(Number(submissionSnapshot.scrollY)) ? Number(submissionSnapshot.scrollY) : 0
-        }, results));
+        }, state.suite?.inline ? {
+            suiteSubmission: true,
+            suiteEntries: Array.isArray(submissionSnapshot.suiteEntries) ? submissionSnapshot.suiteEntries : []
+        } : {}, postedResults));
         if (state.simulationMode && state.simulationCtx && state.simulationCtx.isLast) {
             stopSimulationDraftSync();
             clearSimulationDraftMirror();
@@ -3546,12 +4491,6 @@
             return;
         }
         closeReviewHighlightDictionary();
-        if (state.simulationMode && state.simulationCtx) {
-            if (state.simulationCtx.canPrev) {
-                dispatchSimulationNavigate('prev', buildSubmissionSnapshot());
-            }
-            return;
-        }
         clearCurrentAnswers();
         if (dom.results) {
             dom.results.style.display = 'none';
@@ -3609,6 +4548,22 @@
         if (document.body && document.body.dataset) {
             document.body.dataset.suiteMode = isSuiteMode ? 'true' : 'false';
         }
+        const candidateId = document.getElementById('candidate-id');
+        if (candidateId) {
+            const sourceId = state.suiteSessionId || state.sessionId || '';
+            if (sourceId) {
+                let hash = 0;
+                String(sourceId).split('').forEach((char) => {
+                    hash = ((hash << 5) - hash) + char.charCodeAt(0);
+                    hash |= 0;
+                });
+                candidateId.textContent = String(Math.abs(hash) % 900000 + 100000);
+                candidateId.hidden = false;
+            } else {
+                candidateId.textContent = '';
+                candidateId.hidden = true;
+            }
+        }
         if (typeof global.updatePracticeSuiteModeUI === 'function') {
             try {
                 global.updatePracticeSuiteModeUI(isSuiteMode);
@@ -3618,7 +4573,39 @@
         }
     }
 
-    function handleIncoming(event) {
+    async function initializeInlineSimulationSuite(data = {}, options = {}) {
+        const sequence = Array.isArray(data && data.suiteSequence) ? data.suiteSequence : [];
+        if (!sequence.length) {
+            return false;
+        }
+        const flowMode = data && typeof data.flowMode === 'string'
+            ? data.flowMode.trim().toLowerCase()
+            : (data && typeof data.suiteFlowMode === 'string' ? data.suiteFlowMode.trim().toLowerCase() : '');
+        if (flowMode && flowMode !== 'simulation') {
+            return false;
+        }
+        await ensureSuiteDatasets(sequence);
+        mergeSuiteDraftPayload(data || {});
+        const targetExamId = resolveSuiteTargetExamId(data || {}, options);
+        if (!targetExamId) {
+            return false;
+        }
+        const activated = await activateSuiteSlot(targetExamId, {
+            skipSave: true,
+            skipDraftSync: Boolean(options.skipDraftSync),
+            silent: Boolean(options.silent)
+        });
+        if (activated) {
+            const slot = getSuiteSlot(targetExamId);
+            if (slot?.draft) {
+                state.simulationDraftFingerprint = buildDraftFingerprint(slot.draft);
+            }
+            refreshSimulationDraftSyncLifecycle();
+        }
+        return activated;
+    }
+
+    async function handleIncoming(event) {
         const payload = event?.data;
         if (!payload || typeof payload !== 'object') {
             return;
@@ -3630,7 +4617,16 @@
             const isDuplicateInit = initSignature && initSignature === state.lastInitSignature;
             const incomingExamId = data && data.examId != null ? String(data.examId).trim() : '';
             const currentExamId = state.examId != null ? String(state.examId).trim() : '';
-            if (incomingExamId && currentExamId && incomingExamId !== currentExamId) {
+            const incomingSuiteSequence = normalizeSuiteSequence(data && data.suiteSequence);
+            const incomingExamInSuiteSequence = Boolean(
+                incomingExamId
+                && incomingSuiteSequence.length
+                && incomingSuiteSequence.some((entry) => entry.examId === incomingExamId)
+            );
+            if (incomingExamId && currentExamId && incomingExamId !== currentExamId && !incomingExamInSuiteSequence) {
+                return;
+            }
+            if (isDuplicateInit && state.sessionReadySent) {
                 return;
             }
             if (incomingExamId && !currentExamId) {
@@ -3690,8 +4686,21 @@
                     isLast,
                     canPrev: currentIndex > 0,
                     canNext: !isLast,
-                    flowMode: 'simulation'
+                    flowMode: 'simulation',
+                    examId: incomingExamId || currentExamId || null,
+                    suiteSessionId: data.suiteSessionId || state.suiteSessionId || null,
+                    suiteSequence: incomingSuiteSequence.map((entry) => ({ ...entry }))
                 };
+                if (incomingSuiteSequence.length) {
+                    await initializeInlineSimulationSuite(Object.assign({}, data, {
+                        flowMode: 'simulation',
+                        suiteSequence: incomingSuiteSequence
+                    }), {
+                        skipDraftSync: true,
+                        silent: true,
+                        preferExistingActive: true
+                    });
+                }
             } else if (initFlowMode) {
                 state.simulationMode = false;
                 state.simulationContextReady = false;
@@ -3709,9 +4718,6 @@
             refreshSimulationDraftSyncLifecycle();
             syncSuiteModeState();
             stopInitLoop();
-            if (isDuplicateInit && state.sessionReadySent) {
-                return;
-            }
             state.lastInitSignature = initSignature;
             if (state.memorizeMode && !state.reviewMode && !state.simulationMode) {
                 renderMemorizeStudyLayer().catch(() => {});
@@ -3744,7 +4750,13 @@
         if (type === 'SIMULATION_CONTEXT') {
             const contextExamId = data && data.examId != null ? String(data.examId).trim() : '';
             const currentExamId = state.examId != null ? String(state.examId).trim() : '';
-            if (contextExamId && currentExamId && contextExamId !== currentExamId) {
+            const contextSuiteSequence = normalizeSuiteSequence(data && data.suiteSequence);
+            const contextExamInSuiteSequence = Boolean(
+                contextExamId
+                && contextSuiteSequence.length
+                && contextSuiteSequence.some((entry) => entry.examId === contextExamId)
+            );
+            if (contextExamId && currentExamId && contextExamId !== currentExamId && !contextExamInSuiteSequence && !state.suite?.inline) {
                 return;
             }
             const flowMode = data && typeof data.flowMode === 'string'
@@ -3763,6 +4775,12 @@
             state.simulationMode = true;
             state.simulationContextReady = true;
             state.simulationCtx = data;
+            if (contextExamId) {
+                state.simulationCtx.examId = contextExamId;
+            }
+            if (contextSuiteSequence.length) {
+                state.simulationCtx.suiteSequence = contextSuiteSequence.map((entry) => ({ ...entry }));
+            }
             const simulationTimerAnchorMs = Number(data.globalTimerAnchorMs ?? data.suiteTimerAnchorMs);
             if (Number.isFinite(simulationTimerAnchorMs)) {
                 state.simulationGlobalAnchorMs = simulationTimerAnchorMs;
@@ -3805,8 +4823,17 @@
             const draftFromParent = data && data.draft && typeof data.draft === 'object'
                 ? data.draft
                 : null;
-            const draft = draftFromParent || restoreSimulationDraftMirror();
-            if (draft) {
+            const initializedInlineSuite = contextSuiteSequence.length
+                ? await initializeInlineSimulationSuite(Object.assign({}, data, {
+                    suiteSequence: contextSuiteSequence,
+                    flowMode: 'simulation'
+                }), {
+                    skipDraftSync: true,
+                    silent: true
+                })
+                : false;
+            const draft = draftFromParent || (initializedInlineSuite ? null : restoreSimulationDraftMirror());
+            if (draft && !initializedInlineSuite) {
                 applyDraftToDom(draft);
                 state.simulationDraftFingerprint = buildDraftFingerprint(draft);
                 persistSimulationDraftMirror(cloneDraftSafely(draft));
@@ -3876,8 +4903,10 @@
         captureDom();
         const dataset = await ensureDataset();
         renderDataset(dataset);
+        updateRedesignedSubHeader();
         buildQuestionNav();
         attachNavListeners();
+        attachFloatingNavListeners();
         attachMemorizeLocatorListeners();
         attachDragDrop();
         attachPaneResizer();

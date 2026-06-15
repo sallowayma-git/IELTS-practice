@@ -1114,7 +1114,11 @@
         // 回退到全局变量
         if (!data || !Array.isArray(data) || data.length === 0) {
           console.log('[ThemeAdapterBase] 存储中无题库索引，尝试全局变量');
-          const reading = Array.isArray(window.completeExamIndex) ? window.completeExamIndex : [];
+          const reading = typeof window.getReadingExamIndex === 'function'
+            ? window.getReadingExamIndex()
+            : (Array.isArray(window.__READING_EXAM_INDEX__)
+              ? window.__READING_EXAM_INDEX__
+              : []);
           const listening = Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : [];
           data = [...markType(reading, 'reading'), ...markType(listening, 'listening')];
         }

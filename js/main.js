@@ -2439,7 +2439,8 @@ function isReadingMemorizeCandidateFallback(exam) {
     if (exam.hasHtml === false) {
         return false;
     }
-    return !!(window.__READING_EXAM_MANIFEST__ && window.__READING_EXAM_MANIFEST__[exam.id]);
+    const manifestEntry = window.__READING_EXAM_MANIFEST__ && window.__READING_EXAM_MANIFEST__[exam.id];
+    return !!(manifestEntry && manifestEntry.script);
 }
 
 function filterReadingMemorizeExamsFallback(exams) {
@@ -2447,8 +2448,15 @@ function filterReadingMemorizeExamsFallback(exams) {
 }
 
 function clearReadingMemorizeBrowseMode() {
-    window.__readingMemorizeBrowseMode = false;
+    if (typeof window.setReadingMemorizeBrowseMode === 'function') {
+        window.setReadingMemorizeBrowseMode(false);
+    } else {
+        window.__readingMemorizeBrowseMode = false;
+    }
     window.__browseMemorizeFilterMode = null;
+    if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+        window.syncReadingMemorizeBrowseModeUI();
+    }
 }
 
 function selectReadingMemorizeExam(examId) {
@@ -2467,9 +2475,8 @@ function selectReadingMemorizeExam(examId) {
         }
         return null;
     }
-    clearReadingMemorizeBrowseMode();
-    if (typeof setBrowseTitle === 'function') {
-        setBrowseTitle('阅读理解');
+    if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+        window.syncReadingMemorizeBrowseModeUI();
     }
     return openExam(examId, {
         practiceMode: 'memorize',
@@ -2579,6 +2586,9 @@ function loadExamListFallback() {
         let currentCategory = typeof getCurrentCategory === 'function' ? getCurrentCategory() : 'all';
         let currentType = typeof getCurrentExamType === 'function' ? getCurrentExamType() : 'all';
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+            window.syncReadingMemorizeBrowseModeUI();
+        }
         if (memorizeSelectionActive) {
             currentCategory = 'all';
             currentType = 'reading';
@@ -2702,8 +2712,11 @@ function displayExams(exams) {
         if (loadingEl) {
             loadingEl.style.display = 'none';
         }
-        
+
         const memorizeSelectionActive = isReadingMemorizeBrowseMode();
+        if (typeof window.syncReadingMemorizeBrowseModeUI === 'function') {
+            window.syncReadingMemorizeBrowseModeUI();
+        }
         const normalizedExams = memorizeSelectionActive
             ? filterReadingMemorizeExamsFallback(exams)
             : (Array.isArray(exams) ? exams : []);
@@ -3529,9 +3542,11 @@ async function debugCompareActiveIndexWithDefault() {
     try {
         const activeKey = await getActiveLibraryConfigurationKey();
         const activeIndex = Array.isArray(getExamIndexState()) ? getExamIndexState() : [];
-        const defaultIndex = Array.isArray(window.completeExamIndex)
-            ? window.completeExamIndex.map((exam) => Object.assign({}, exam, { type: 'reading' }))
-            : [];
+        const defaultIndex = typeof window.getReadingExamIndex === 'function'
+            ? window.getReadingExamIndex().map((exam) => Object.assign({}, exam, { type: 'reading' }))
+            : (Array.isArray(window.__READING_EXAM_INDEX__)
+                ? window.__READING_EXAM_INDEX__.map((exam) => Object.assign({}, exam, { type: 'reading' }))
+                : []);
         const defaultListening = Array.isArray(window.listeningExamIndex) ? window.listeningExamIndex : [];
         const storedDefault = await storage.get('exam_index', []);
         const combinedDefault = storedDefault.length ? storedDefault : [...defaultIndex, ...defaultListening];

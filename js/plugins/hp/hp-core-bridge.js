@@ -736,7 +736,10 @@
           return;
         }
 
-        const reading = markTypes(window.completeExamIndex || [], 'reading');
+        const defaultReading = typeof window.getReadingExamIndex === 'function'
+          ? window.getReadingExamIndex()
+          : (window.__READING_EXAM_INDEX__ || []);
+        const reading = markTypes(defaultReading, 'reading');
         const listening = markTypes(window.listeningExamIndex || [], 'listening');
         const merged = reading.concat(listening);
         this._setExamIndex(merged);
