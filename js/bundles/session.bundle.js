@@ -2,6 +2,7 @@
 
 /* ===== js/app/suitePracticeMixin.js ===== */
 (function(global) {
+    const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
 
     function getSuitePreferenceUtils() {
@@ -178,6 +179,9 @@
             if (data && data.suiteId) {
                 return await this.handleMultiSuitePracticeComplete(examId, data);
             }
+            if (data && data.suiteSubmission === true && typeof this._handleInlineSimulationSuiteSubmit === 'function') {
+                return await this._handleInlineSimulationSuiteSubmit(examId, data, sourceWindow);
+            }
 
             const session = this.currentSuiteSession;
             if (!session || session.status !== 'active') {
@@ -232,6 +236,7 @@
             session.draftsByExam[examId] = {
                 answers: data.answers || {},
                 highlights: data.highlights || [],
+                noteText: typeof data.noteText === 'string' ? data.noteText : '',
                 scrollY: data.scrollY || 0,
                 updatedAt: Number.isFinite(Number(data && data.draftUpdatedAt))
                     ? Number(data.draftUpdatedAt)
@@ -299,6 +304,91 @@
             return this._advanceSuiteToNext(session, 'previous section', null);
         },
 
+        async _handleInlineSimulationSuiteSubmit(examId, data, sourceWindow = null) {
+            const session = this.currentSuiteSession;
+            if (!session || session.status !== 'active' || session.flowMode !== 'simulation') {
+                return false;
+            }
+            const payloadSuiteSessionId = data && typeof data.suiteSessionId === 'string'
+                ? data.suiteSessionId.trim()
+                : '';
+            if (payloadSuiteSessionId && payloadSuiteSessionId !== session.id) {
+                return false;
+            }
+            const suiteEntries = Array.isArray(data && data.suiteEntries) ? data.suiteEntries : [];
+            if (!suiteEntries.length) {
+                return false;
+            }
+            const entriesByExam = new Map();
+            suiteEntries.forEach((entry) => {
+                const entryExamId = entry && entry.examId != null ? String(entry.examId).trim() : '';
+                if (entryExamId) {
+                    entriesByExam.set(entryExamId, entry);
+                }
+            });
+            if (!entriesByExam.size) {
+                return false;
+            }
+            const hasEverySequenceEntry = Array.isArray(session.sequence)
+                && session.sequence.length > 0
+                && session.sequence.every((sequenceEntry) => {
+                    const entryExamId = sequenceEntry && sequenceEntry.examId != null ? String(sequenceEntry.examId) : '';
+                    return entryExamId && entriesByExam.has(entryExamId);
+                });
+            if (!hasEverySequenceEntry) {
+                console.warn('[SuitePractice] inline simulation suite submit missing sequence entries:', {
+                    sessionId: session.id,
+                    expected: session.sequence.map(item => item && item.examId).filter(Boolean),
+                    received: Array.from(entriesByExam.keys())
+                });
+                return false;
+            }
+
+            session.results = [];
+            session.sequence.forEach((sequenceEntry) => {
+                if (!sequenceEntry || !sequenceEntry.examId) {
+                    return;
+                }
+                const entryExamId = String(sequenceEntry.examId);
+                const entryPayload = entriesByExam.get(entryExamId);
+                if (!entryPayload) {
+                    return;
+                }
+                const normalized = this._normalizeSuiteResult(sequenceEntry.exam, Object.assign({}, entryPayload, {
+                    duration: Number.isFinite(Number(entryPayload.duration))
+                        ? Number(entryPayload.duration)
+                        : Number(data.duration || 0)
+                }));
+                this._upsertSuiteResult(session, entryExamId, normalized);
+                session.draftsByExam[entryExamId] = {
+                    answers: entryPayload.answers || {},
+                    highlights: Array.isArray(entryPayload.highlights) ? entryPayload.highlights.slice() : [],
+                    noteText: typeof entryPayload.noteText === 'string' ? entryPayload.noteText : '',
+                    scrollY: Number.isFinite(Number(entryPayload.scrollY)) ? Number(entryPayload.scrollY) : 0,
+                    updatedAt: Number.isFinite(Number(entryPayload.updatedAt))
+                        ? Number(entryPayload.updatedAt)
+                        : Date.now()
+                };
+                const entryDuration = Number(entryPayload.duration);
+                if (Number.isFinite(entryDuration)) {
+                    session.elapsedByExam[entryExamId] = Math.max(0, entryDuration);
+                }
+                this.updateExamStatus && this.updateExamStatus(entryExamId, 'completed');
+            });
+
+            this._syncSuiteTimerFromPayload(session, data);
+            session.currentIndex = session.sequence.length;
+            session.pendingAdvance = null;
+            session.activeExamId = examId || session.sequence[session.sequence.length - 1]?.examId || session.activeExamId;
+            session.lastUpdate = Date.now();
+            if (sourceWindow && !sourceWindow.closed) {
+                session.windowRef = sourceWindow;
+            }
+            this._mirrorSessionToStorage(session);
+            await this.finalizeSuiteRecord(session);
+            return true;
+        },
+
         _resolveSuitePreference(options = {}) {
             return resolveSuitePreferenceForMixin(options);
         },
@@ -345,6 +435,29 @@
             return draft && typeof draft === 'object' ? draft : null;
         },
 
+        _buildSuiteSequencePayload(session) {
+            const sequence = session && Array.isArray(session.sequence) ? session.sequence : [];
+            return sequence
+                .map((entry) => {
+                    if (!entry || !entry.examId) {
+                        return null;
+                    }
+                    const exam = entry.exam && typeof entry.exam === 'object' ? entry.exam : {};
+                    let dataKey = entry.dataKey || exam.dataKey || '';
+                    if (!dataKey && typeof this._getUnifiedReadingManifestEntry === 'function') {
+                        const manifestEntry = this._getUnifiedReadingManifestEntry(exam);
+                        dataKey = manifestEntry && (manifestEntry.dataKey || manifestEntry.examId) || '';
+                    }
+                    return {
+                        examId: String(entry.examId),
+                        dataKey: dataKey ? String(dataKey) : String(entry.examId),
+                        title: entry.title || exam.title || String(entry.examId),
+                        category: entry.category || exam.category || ''
+                    };
+                })
+                .filter(Boolean);
+        },
+
         _cloneSuitePlainObject(value) {
             if (!value || typeof value !== 'object') {
                 return value;
@@ -363,6 +476,7 @@
             }
             delete cloned.highlights;
             delete cloned.scrollY;
+            delete cloned.noteText;
             return cloned;
         },
 
@@ -376,6 +490,10 @@
             const scrollY = this._resolveSuiteEntryScrollY(entry, draft);
             if (Number.isFinite(Number(scrollY))) {
                 rawData.scrollY = Number(scrollY);
+            }
+            const noteText = this._resolveSuiteEntryNoteText(entry, draft);
+            if (noteText) {
+                rawData.noteText = noteText;
             }
             return rawData;
         },
@@ -421,6 +539,20 @@
             return 0;
         },
 
+        _resolveSuiteEntryNoteText(entry, draft = null) {
+            const sources = [
+                draft && draft.noteText,
+                entry && entry.noteText,
+                entry && entry.rawData && entry.rawData.noteText
+            ];
+            for (const source of sources) {
+                if (typeof source === 'string' && source.trim()) {
+                    return source;
+                }
+            }
+            return '';
+        },
+
         _buildSuiteReplayEntry(session, examId) {
             if (!session || !Array.isArray(session.results)) {
                 return null;
@@ -430,19 +562,12 @@
                 return null;
             }
 
-            const targetExamId = result.examId || examId;
-            const rawComparison = result.answerComparison && typeof result.answerComparison === 'object'
+            const answerComparison = result.answerComparison && typeof result.answerComparison === 'object'
                 ? result.answerComparison
                 : {};
-            const rawAnswers = result.answers && typeof result.answers === 'object'
+            const answers = result.answers && typeof result.answers === 'object'
                 ? result.answers
                 : {};
-            const answerComparison = typeof this._normalizeReplayComparison === 'function'
-                ? this._normalizeReplayComparison(rawComparison, targetExamId, true)
-                : rawComparison;
-            const answers = typeof this._normalizeReplayAnswerMap === 'function'
-                ? this._normalizeReplayAnswerMap(rawAnswers, targetExamId, true)
-                : rawAnswers;
 
             const filteredComparison = {};
             const filteredAnswers = {};
@@ -458,7 +583,7 @@
                 if (!this._hasMeaningfulSuiteAnswer(userAnswer)) {
                     return;
                 }
-                filteredComparison[questionId] = this._cloneSuitePlainObject(comparisonEntry);
+                filteredComparison[questionId] = comparisonEntry;
                 filteredAnswers[questionId] = userAnswer;
             });
 
@@ -473,29 +598,16 @@
                 filteredAnswers[questionId] = value;
             });
 
-            const draft = this._resolveSuiteEntryDraft(session, targetExamId);
-            const correctAnswerMap = typeof this._resolveReplayCorrectAnswerMap === 'function'
-                ? this._resolveReplayCorrectAnswerMap(result, { examId: targetExamId, comparison: rawComparison })
-                : {};
-            const finalizedComparison = typeof this._finalizeReplayComparison === 'function'
-                ? this._finalizeReplayComparison(filteredAnswers, correctAnswerMap, filteredComparison)
-                : filteredComparison;
-            const hasCompleteCorrectMap = typeof this._hasCompleteReplayCorrectAnswerMap === 'function'
-                ? this._hasCompleteReplayCorrectAnswerMap(correctAnswerMap, finalizedComparison, result.scoreInfo || {})
-                : false;
-            const finalizedScoreInfo = typeof this._deriveReplayScoreInfo === 'function'
-                ? this._deriveReplayScoreInfo(result.scoreInfo || {}, finalizedComparison, hasCompleteCorrectMap)
-                : (result.scoreInfo || {});
+            const draft = this._resolveSuiteEntryDraft(session, result.examId || examId);
             return {
-                examId: targetExamId,
+                examId: result.examId,
                 title: result.title,
                 answers: filteredAnswers,
-                correctAnswerMap,
-                correctAnswers: correctAnswerMap,
-                answerComparison: finalizedComparison,
-                scoreInfo: finalizedScoreInfo,
+                answerComparison: filteredComparison,
+                scoreInfo: result.scoreInfo || {},
                 markedQuestions: Array.isArray(result.markedQuestions) ? result.markedQuestions.slice() : [],
                 highlights: this._resolveSuiteEntryHighlights(result, draft),
+                noteText: this._resolveSuiteEntryNoteText(result, draft),
                 scrollY: this._resolveSuiteEntryScrollY(result, draft)
             };
         },
@@ -597,8 +709,8 @@
             if ((mappedSessionId && mappedSessionId !== session.id) || (targetSessionId && targetSessionId !== session.id)) {
                 return false;
             }
-            const sequenceIndex = session.sequence.findIndex(item => item && item.examId === examId);
-            if (sequenceIndex < 0) {
+            const inActiveSequence = session.sequence.some(item => item && item.examId === examId);
+            if (!inActiveSequence) {
                 return false;
             }
 
@@ -609,7 +721,6 @@
                 return false;
             }
 
-            session.currentIndex = sequenceIndex;
             session.activeExamId = examId;
             return this._sendSuiteReviewState(session, examId, resolvedWindow);
         },
@@ -630,14 +741,7 @@
                 return false;
             }
 
-            const payloadExamId = data && data.examId != null ? String(data.examId).trim() : '';
-            const payloadIndex = payloadExamId
-                ? session.sequence.findIndex(item => item && item.examId === payloadExamId)
-                : -1;
-            const normalizedExamId = payloadIndex >= 0 ? payloadExamId : String(examId);
-            const currentIndex = payloadIndex >= 0
-                ? payloadIndex
-                : session.sequence.findIndex(item => item && item.examId === normalizedExamId);
+            const currentIndex = session.sequence.findIndex(item => item && item.examId === examId);
             if (currentIndex < 0) {
                 return false;
             }
@@ -653,7 +757,7 @@
             }
 
             const hasCurrentResult = Array.isArray(session.results)
-                ? session.results.some(item => item && item.examId === normalizedExamId)
+                ? session.results.some(item => item && item.examId === examId)
                 : false;
             const requestedFinalizeOnNext = Boolean(
                 direction === 'next'
@@ -673,7 +777,7 @@
                     direction === 'next'
                     && currentIndex === session.sequence.length - 1
                     && session.pendingAdvance
-                    && session.pendingAdvance.completedExamId === normalizedExamId
+                    && session.pendingAdvance.completedExamId === examId
                     && session.pendingAdvance.finalReview === true
                 );
                 if (canFinalize) {
@@ -691,19 +795,14 @@
 
             let targetWindow = sourceWindow && !sourceWindow.closed ? sourceWindow : (session.windowRef && !session.windowRef.closed ? session.windowRef : null);
 
-            if (targetEntry.examId !== normalizedExamId || !targetWindow) {
-                if (targetEntry.examId !== normalizedExamId && typeof this.cleanupExamSession === 'function') {
-                    try {
-                        await this.cleanupExamSession(normalizedExamId);
-                    } catch (cleanupError) {
-                        console.warn('[SuitePractice] 清理回看切题旧会话失败:', cleanupError);
-                    }
-                }
+            if (targetEntry.examId !== examId || !targetWindow) {
                 targetWindow = await this.openExam(targetEntry.examId, {
                     target: 'tab',
                     windowName: session.windowName || 'ielts-suite-mode-tab',
                     suiteSessionId: session.id,
                     suiteFlowMode: session.flowMode || 'simulation',
+                    suiteTimerMode: session.suiteTimerMode || 'countdown',
+                    suiteTimerLimitSeconds: Number.isFinite(Number(session.suiteTimerLimitSeconds)) ? Number(session.suiteTimerLimitSeconds) : 3600,
                     sequenceIndex: targetIndex,
                     sequenceTotal: session.sequence.length,
                     reuseWindow: targetWindow || undefined
@@ -715,9 +814,7 @@
             }
 
             session.windowRef = targetWindow;
-            session.currentIndex = targetIndex;
             session.activeExamId = targetEntry.examId;
-            this._mirrorSessionToStorage(session);
             this._focusSuiteWindow(targetWindow);
             await this._sendSuiteReviewState(session, targetEntry.examId, targetWindow);
             return true;
@@ -747,6 +844,8 @@
                     windowName,
                     suiteSessionId: session.id,
                     suiteFlowMode: session.flowMode || 'simulation',
+                    suiteTimerMode: session.suiteTimerMode || 'countdown',
+                    suiteTimerLimitSeconds: Number.isFinite(Number(session.suiteTimerLimitSeconds)) ? Number(session.suiteTimerLimitSeconds) : 3600,
                     sequenceIndex: session.currentIndex,
                     sequenceTotal: session.sequence.length
                 };
@@ -806,6 +905,7 @@
                 const snapshot = {
                     id: session.id,
                     sequence: session.sequence,
+                    suiteSequence: this._buildSuiteSequencePayload(session),
                     currentIndex: session.currentIndex,
                     draftsByExam: session.draftsByExam || {},
                     elapsedByExam: session.elapsedByExam || {},
@@ -923,6 +1023,7 @@
                     suiteSessionId: session.id,
                     flowMode: session.flowMode || 'simulation',
                     examId,
+                    suiteSequence: this._buildSuiteSequencePayload(session),
                     currentIndex: idx,
                     total: session.sequence.length,
                     isLast: idx === session.sequence.length - 1,
@@ -932,6 +1033,8 @@
                     elapsed,
                     globalTimerAnchorMs: timerAnchorMs,
                     suiteTimerAnchorMs: timerAnchorMs,
+                    suiteTimerMode: session.suiteTimerMode || 'countdown',
+                    suiteTimerLimitSeconds: Number.isFinite(Number(session.suiteTimerLimitSeconds)) ? Number(session.suiteTimerLimitSeconds) : 3600,
                     suiteTimerPausedOffsetMs: pausedOffsetMs,
                     suiteTimerPausedAtMs: pausedAtMs,
                     suiteTimerRunning,
@@ -1034,6 +1137,8 @@
                     windowName: session.windowName || 'ielts-suite-mode-tab',
                     suiteSessionId: session.id,
                     suiteFlowMode: session.flowMode || 'simulation',
+                    suiteTimerMode: session.suiteTimerMode || 'countdown',
+                    suiteTimerLimitSeconds: Number.isFinite(Number(session.suiteTimerLimitSeconds)) ? Number(session.suiteTimerLimitSeconds) : 3600,
                     sequenceIndex: targetIdx,
                     sequenceTotal: session.sequence.length,
                     reuseWindow: sourceWindow && !sourceWindow.closed ? sourceWindow : undefined
@@ -1068,6 +1173,9 @@
             if (!session || (session.status !== 'active' && session.status !== 'initializing') || !examId) {
                 return false;
             }
+            if (session.flowMode !== 'simulation') {
+                return false;
+            }
             if (!Array.isArray(session.sequence) || !session.sequence.length) {
                 return false;
             }
@@ -1084,6 +1192,12 @@
             const windowInfo = this.examWindows && this.examWindows.get(examId)
                 ? this.examWindows.get(examId)
                 : null;
+            const pageType = windowInfo && typeof windowInfo.pageType === 'string'
+                ? windowInfo.pageType.toLowerCase()
+                : '';
+            if (!pageType.includes('unified-reading')) {
+                return false;
+            }
             let targetWindow = session.windowRef && !session.windowRef.closed ? session.windowRef : null;
             if (windowInfo) {
                 const info = windowInfo;
@@ -1126,13 +1240,7 @@
             session.activeExamId = examId;
             session.windowRef = targetWindow;
             this._mirrorSessionToStorage(session);
-            if (session.flowMode === 'simulation') {
-                return this._sendSimulationContext(session, examId, targetWindow);
-            }
-            if (!this._shouldAutoAdvanceAfterSubmit()) {
-                return this._sendSuiteReviewState(session, examId, targetWindow);
-            }
-            return true;
+            return this._sendSimulationContext(session, examId, targetWindow);
         },
 
         /**
@@ -1163,14 +1271,10 @@
             }
 
             // 添加套题结果到会话
-            const suiteCorrectAnswerMap = typeof this._resolveReplayCorrectAnswerMap === 'function'
-                ? this._resolveReplayCorrectAnswerMap(suiteData, { examId, comparison: suiteData.answerComparison || {} })
-                : {};
             const suiteResult = {
                 suiteId: suiteData.suiteId,
                 examId: examId,
                 answers: suiteData.answers || {},
-                correctAnswerMap: suiteCorrectAnswerMap,
                 correctAnswers: suiteData.correctAnswers || {},
                 answerComparison: suiteData.answerComparison || {},
                 scoreInfo: suiteData.scoreInfo || { correct: 0, total: 0, accuracy: 0, percentage: 0 },
@@ -1316,7 +1420,6 @@
                         examId: result.examId,
                         scoreInfo: result.scoreInfo,
                         answers: result.answers,
-                        correctAnswerMap: result.correctAnswerMap || {},
                         answerComparison: result.answerComparison,
                         spellingErrors: result.spellingErrors || [],
                         duration: result.duration || 0,
@@ -1509,13 +1612,26 @@
                     if (errorMap.has(key)) {
                         // 更新已存在的错误记录
                         const existing = errorMap.get(key);
+                        const existingTimestamp = Number(existing.timestamp) || 0;
+                        const incomingTimestamp = Number(error.timestamp) || 0;
                         existing.errorCount = (existing.errorCount || 1) + 1;
-                        existing.timestamp = Math.max(existing.timestamp || 0, error.timestamp || 0);
-                        
+
                         // 保留最新的用户输入
-                        if (error.timestamp > (existing.timestamp || 0)) {
+                        if (incomingTimestamp >= existingTimestamp) {
                             existing.userInput = error.userInput;
+                            existing.questionId = error.questionId || existing.questionId;
+                            existing.suiteId = error.suiteId || result.suiteId || existing.suiteId;
+                            existing.examId = error.examId || result.examId || existing.examId;
+                            existing.acceptedAnswers = Array.isArray(error.acceptedAnswers)
+                                ? error.acceptedAnswers.slice()
+                                : existing.acceptedAnswers;
+                            existing.canonicalAnswer = error.canonicalAnswer || existing.canonicalAnswer;
+                            existing.reasonCode = error.reasonCode || existing.reasonCode;
+                            existing.confidence = typeof error.confidence === 'number' ? error.confidence : existing.confidence;
+                            existing.tokenIndex = Number.isFinite(error.tokenIndex) ? error.tokenIndex : existing.tokenIndex;
+                            existing.metadata = error.metadata || existing.metadata;
                         }
+                        existing.timestamp = Math.max(existingTimestamp, incomingTimestamp);
                     } else {
                         // 添加新的错误记录
                         errorMap.set(key, {
@@ -1526,7 +1642,13 @@
                             examId: error.examId || result.examId,
                             timestamp: error.timestamp || Date.now(),
                             errorCount: error.errorCount || 1,
-                            source: error.source || this._detectMultiSuiteSource(result.examId)
+                            source: error.source || this._detectMultiSuiteSource(result.examId),
+                            acceptedAnswers: Array.isArray(error.acceptedAnswers) ? error.acceptedAnswers.slice() : undefined,
+                            canonicalAnswer: error.canonicalAnswer,
+                            reasonCode: error.reasonCode,
+                            confidence: typeof error.confidence === 'number' ? error.confidence : undefined,
+                            tokenIndex: Number.isFinite(error.tokenIndex) ? error.tokenIndex : undefined,
+                            metadata: error.metadata
                         });
                     }
                 });
@@ -1557,10 +1679,10 @@
                         duration: entry.duration,
                         scoreInfo: entry.scoreInfo,
                         answers: entry.answers,
-                        correctAnswerMap: entry.correctAnswerMap || {},
                         answerComparison: entry.answerComparison,
                         markedQuestions: Array.isArray(entry.markedQuestions) ? entry.markedQuestions.slice() : [],
                         highlights: this._resolveSuiteEntryHighlights(entry, draft),
+                        noteText: this._resolveSuiteEntryNoteText(entry, draft),
                         scrollY: this._resolveSuiteEntryScrollY(entry, draft),
                         rawData: this._sanitizeSuiteRawData(entry.rawData)
                     };
@@ -1691,23 +1813,91 @@
             return Array.isArray(list) ? list.filter(Boolean) : [];
         },
 
-        async _listPracticeRecordsViaAPI() {
+        async _listPracticeRecordsWithFallback(options = {}) {
             const normalizeList = (list) => (Array.isArray(list) ? list : []);
+            const includeRecorder = options && options.includeRecorder !== false;
 
-            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.list === 'function') {
-                return normalizeList(await window.PracticeRecordAPI.list());
+            if (
+                includeRecorder
+                && this.components
+                && this.components.practiceRecorder
+                && typeof this.components.practiceRecorder.getPracticeRecords === 'function'
+            ) {
+                try {
+                    return normalizeList(await this.components.practiceRecorder.getPracticeRecords());
+                } catch (error) {
+                    console.warn('[SuitePractice] 读取 PracticeRecorder 记录失败，尝试存储回退:', error);
+                }
+            }
+
+            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.listPracticeRecords === 'function') {
+                try {
+                    return normalizeList(await window.PracticeCore.store.listPracticeRecords());
+                } catch (error) {
+                    console.warn('[SuitePractice] 读取 PracticeCore 记录失败，尝试存储回退:', error);
+                }
+            }
+
+            if (window.PracticeStore && typeof window.PracticeStore.list === 'function') {
+                try {
+                    return normalizeList(await window.PracticeStore.list());
+                } catch (error) {
+                    console.warn('[SuitePractice] 读取 PracticeStore 记录失败，尝试存储回退:', error);
+                }
+            }
+
+            if (typeof storage?.get === 'function') {
+                try {
+                    return normalizeList(await storage.get('practice_records', []));
+                } catch (error) {
+                    console.warn('[SuitePractice] 读取 practice_records 失败:', error);
+                }
             }
 
             return [];
         },
 
-        async _recalculatePracticeStatsFromRecords() {
-            if (window.PracticeRecordAPI && typeof window.PracticeRecordAPI.recalculateStats === 'function') {
-                await window.PracticeRecordAPI.recalculateStats();
-                return true;
+        async _replacePracticeRecordsWithFallback(records) {
+            const normalizedRecords = Array.isArray(records) ? records : [];
+            if (window.PracticeStore && typeof window.PracticeStore.replace === 'function') {
+                await window.PracticeStore.replace(normalizedRecords);
+                return;
             }
-            console.warn('[SuitePractice] 统一练习统计 API 未就绪');
-            return false;
+            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.replacePracticeRecords === 'function') {
+                await window.PracticeCore.store.replacePracticeRecords(normalizedRecords);
+                return;
+            }
+            if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.savePracticeRecords === 'function') {
+                await window.simpleStorageWrapper.savePracticeRecords(normalizedRecords);
+                return;
+            }
+            const practiceKey = ['practice', 'records'].join('_');
+            await storage.set(practiceKey, normalizedRecords);
+        },
+
+        async _saveSinglePracticeRecordWithFallback(record) {
+            if (window.PracticeStore && typeof window.PracticeStore.save === 'function') {
+                await window.PracticeStore.save(record);
+                return;
+            }
+            if (window.PracticeCore && window.PracticeCore.store && typeof window.PracticeCore.store.savePracticeRecord === 'function') {
+                await window.PracticeCore.store.savePracticeRecord(record);
+                return;
+            }
+            if (window.simpleStorageWrapper && typeof window.simpleStorageWrapper.addPracticeRecord === 'function') {
+                await window.simpleStorageWrapper.addPracticeRecord(record);
+                return;
+            }
+
+            let practiceRecords = await this._listPracticeRecordsWithFallback({ includeRecorder: false });
+            if (!Array.isArray(practiceRecords)) {
+                practiceRecords = [];
+            }
+            practiceRecords.unshift(record);
+            if (practiceRecords.length > MAX_LEGACY_PRACTICE_RECORDS) {
+                practiceRecords.splice(MAX_LEGACY_PRACTICE_RECORDS);
+            }
+            await this._replacePracticeRecordsWithFallback(practiceRecords);
         },
 
         _isSuitePracticeRecord(record) {
@@ -1723,7 +1913,7 @@
         },
 
         async _loadSuitePracticeRecordsForFiltering() {
-            return this._listPracticeRecordsViaAPI();
+            return this._listPracticeRecordsWithFallback({ includeRecorder: true });
         },
 
         _collectExamIdsFromPracticeRecord(record, collector) {
@@ -2006,6 +2196,8 @@
                     ? false
                     : true;
                 const timerAnchorMs = Date.now();
+                const suiteTimerMode = 'countdown';
+                const suiteTimerLimitSeconds = 3600;
                 const session = {
                     id: suiteSessionId,
                     status: 'initializing',
@@ -2016,6 +2208,9 @@
                     draftsByExam: {},
                     elapsedByExam: {},
                     globalTimerAnchorMs: timerAnchorMs,
+                    suiteTimerAnchorMs: timerAnchorMs,
+                    suiteTimerMode,
+                    suiteTimerLimitSeconds,
                     suiteTimerPausedOffsetMs: 0,
                     suiteTimerPausedAtMs: null,
                     suiteTimerRunning: true,
@@ -2039,6 +2234,8 @@
                         windowName: suiteWindowName,
                         suiteSessionId,
                         suiteFlowMode: flowMode,
+                        suiteTimerMode,
+                        suiteTimerLimitSeconds,
                         sequenceIndex: 0,
                         sequenceTotal: normalizedSequence.length
                     });
@@ -2112,9 +2309,6 @@
             const comparison = rawData && rawData.answerComparison
                 ? rawData.answerComparison
                 : (score && score.details ? score.details : {});
-            const correctAnswerMap = typeof this._resolveReplayCorrectAnswerMap === 'function'
-                ? this._resolveReplayCorrectAnswerMap(rawData, { examId: exam && exam.id, comparison })
-                : {};
 
             const correct = toNumber(score.correct, 0);
             const total = toNumber(score.total, Object.keys(answers).length);
@@ -2148,7 +2342,6 @@
                     source: score && score.source ? score.source : 'suite_mode_aggregated'
                 },
                 answers,
-                correctAnswerMap,
                 answerComparison: comparison,
                 markedQuestions: Array.isArray(rawData?.metadata?.markedQuestions)
                     ? rawData.metadata.markedQuestions.slice()
@@ -2156,11 +2349,29 @@
                 rawData: this._sanitizeSuiteRawData(rawData)
             };
         },
+
         async _saveSuitePracticeRecord(record) {
-            if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.saveRecord !== 'function') {
-                throw new Error('统一练习记录存储未就绪');
+            const recorderAvailable = this.components
+                && this.components.practiceRecorder
+                && typeof this.components.practiceRecorder.savePracticeRecord === 'function';
+
+            if (recorderAvailable) {
+                try {
+                    await this.components.practiceRecorder.savePracticeRecord(record);
+                    await this._cleanupSuiteEntryRecords(record).catch(error => {
+                        console.warn('[SuitePractice] 清理套题子记录失败:', error);
+                    });
+                    return;
+                } catch (error) {
+                    console.warn('[SuitePractice] PracticeRecorder 保存套题记录失败，改用降级存储:', error);
+                }
             }
-            await window.PracticeRecordAPI.saveRecord(record, { updateStats: true });
+
+            await this._saveSuitePracticeRecordFallback(record);
+        },
+
+        async _saveSuitePracticeRecordFallback(record) {
+            await this._saveSinglePracticeRecordWithFallback(record);
             await this._cleanupSuiteEntryRecords(record).catch(error => {
                 console.warn('[SuitePractice] 清理套题子记录失败:', error);
             });
@@ -2171,48 +2382,88 @@
                 return;
             }
 
+            let practiceRecords = await this._listPracticeRecordsWithFallback({ includeRecorder: false });
+            if (!Array.isArray(practiceRecords) || practiceRecords.length === 0) {
+                return;
+            }
+
             const entrySessionIds = new Set();
+            const entryExamIds = new Set();
+            const entryTimestamps = [];
 
             record.suiteEntries.forEach((entry) => {
                 if (!entry || typeof entry !== 'object') {
                     return;
                 }
+                if (entry.examId) {
+                    entryExamIds.add(entry.examId);
+                }
                 const raw = entry.rawData || {};
-                const sessionId = raw.sessionId || entry.sessionId || entry.suiteEntrySessionId || null;
-                if (sessionId) {
-                    entrySessionIds.add(String(sessionId));
+                if (raw.sessionId) {
+                    entrySessionIds.add(raw.sessionId);
+                }
+                const ts = raw.completedAt || raw.endTime || raw.timestamp;
+                if (ts) {
+                    const parsed = new Date(ts).getTime();
+                    if (Number.isFinite(parsed)) {
+                        entryTimestamps.push(parsed);
+                    }
                 }
             });
 
-            if (entrySessionIds.size === 0) {
-                console.warn('[SuitePractice] 跳过套题子记录清理：suiteEntries 缺少 sessionId，不能用 examId/时间窗口猜测删除');
+            if (entrySessionIds.size === 0 && entryExamIds.size === 0) {
                 return;
             }
 
-            if (record.sessionId) {
-                entrySessionIds.delete(String(record.sessionId));
-            }
-            if (entrySessionIds.size === 0) {
-                return;
-            }
+            const referenceTime = (() => {
+                if (entryTimestamps.length) {
+                    const sum = entryTimestamps.reduce((acc, value) => acc + value, 0);
+                    return sum / entryTimestamps.length;
+                }
+                const fallbackTs = new Date(record.endTime || record.date || record.createdAt || Date.now()).getTime();
+                return Number.isFinite(fallbackTs) ? fallbackTs : Date.now();
+            })();
+            const tolerance = 10 * 60 * 1000; // 10分钟
 
-            if (!window.PracticeRecordAPI || typeof window.PracticeRecordAPI.deleteMany !== 'function') {
-                throw new Error('统一练习记录删除 API 未就绪');
-            }
-            const result = await window.PracticeRecordAPI.deleteMany(Array.from(entrySessionIds), { updateStats: true });
-            const deletedCount = Number(result && result.deletedCount) || 0;
-            if (deletedCount > 0) {
-                console.log('[SuitePractice] cleared ' + deletedCount + ' suite child records');
+            const before = practiceRecords.length;
+            practiceRecords = practiceRecords.filter((rec) => {
+                if (!rec || typeof rec !== 'object') {
+                    return true;
+                }
+                if (rec.sessionId === record.sessionId) {
+                    return true; // 保留聚合记录
+                }
+                const sessionMatch = rec.sessionId && entrySessionIds.has(rec.sessionId);
+                if (sessionMatch) {
+                    return false;
+                }
+                if (this._isSuitePracticeRecord(rec)) {
+                    return true;
+                }
+                const examMatch = rec.examId && entryExamIds.has(rec.examId);
+                if (!examMatch) {
+                    return true;
+                }
+                const recTime = new Date(rec.endTime || rec.date || rec.timestamp || rec.createdAt || Date.now()).getTime();
+                if (!Number.isFinite(recTime)) {
+                    return true;
+                }
+                const withinWindow = Math.abs(recTime - referenceTime) <= tolerance;
+                return !withinWindow;
+            });
+
+            if (practiceRecords.length !== before) {
+                await this._replacePracticeRecordsWithFallback(practiceRecords);
+                console.log('[SuitePractice] cleared ' + (before - practiceRecords.length) + ' suite child records');
             }
         },
 
         async _updatePracticeRecordsState() {
             try {
                 if (typeof window.syncPracticeRecords === 'function') {
-                    await window.syncPracticeRecords({ forceRender: true });
-                    return;
+                    window.syncPracticeRecords();
                 } else {
-                    const latest = await this._listPracticeRecordsViaAPI();
+                    const latest = await this._listPracticeRecordsWithFallback({ includeRecorder: false });
                     if (this.setState) {
                         this.setState('practice.records', Array.isArray(latest) ? latest : []);
                     }
@@ -2247,7 +2498,7 @@
             const targetMonth = date.getMonth();
             const targetDate = date.getDate();
 
-            const existingRecords = await this._listPracticeRecordsViaAPI();
+            const existingRecords = await this._listPracticeRecordsWithFallback({ includeRecorder: true });
 
             const resolveRecordDate = record => {
                 const candidates = [

@@ -471,6 +471,9 @@
         updateBrowseTitle() {
             const titleElement = document.getElementById('browse-title');
             if (!titleElement) return;
+            if (typeof global.syncReadingMemorizeBrowseModeUI === 'function') {
+                global.syncReadingMemorizeBrowseModeUI();
+            }
 
             if (isReadingMemorizeBrowseMode()) {
                 titleElement.textContent = '阅读背题选题';

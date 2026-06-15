@@ -6,13 +6,13 @@
     var groupStatus = Object.create(null);
     var dependencies = Object.create(null);
     var providedScripts = new Set();
-    var READING_EXAM_DATA_SCRIPT = 'assets/scripts/complete-exam-data.js';
+    var READING_EXAM_MANIFEST_SCRIPT = 'assets/generated/reading-exams/manifest.js';
     var LISTENING_EXAM_MANIFEST_SCRIPT = 'assets/generated/listening-exams/manifest.js';
     var LISTENING_EXAM_INDEX_SCRIPT = 'assets/generated/listening-exams/listening-index.compat.js';
 
     function registerDefaultManifest() {
         manifest['exam-data'] = [
-            READING_EXAM_DATA_SCRIPT
+            READING_EXAM_MANIFEST_SCRIPT
         ];
 
         manifest['state-core'] = [
