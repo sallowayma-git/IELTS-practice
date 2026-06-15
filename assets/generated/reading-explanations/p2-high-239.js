@@ -17,35 +17,35 @@
   "passageNotes": [
     {
       "label": "Paragraph A",
-      "text": "Nanoscience and nanotechnology have become very fashionable in recent times. Their prominence has inspired science fiction and raised a lot of hope and hype about the possibilities. But what exactly is nanotechnology? Most definitions agree that it is the manufacture of structures that measure up to 100 nanometres (nm). The diameter of an atom is typically only two or three tenths of a nanometre while that of the human hair is around 1,000,000 nm. Essentially, we are now able to build new structures from atoms and molecules as if we were using the bricks of a children’s construction toy."
+      "text": "近年来，纳米科学和纳米技术变得非常热门。它们的兴起激发了科幻创作，也让人们对其可能性产生了大量希望和宣传热潮。但纳米技术究竟是什么？大多数定义都认为，它是制造尺寸不超过 100 纳米（nm）的结构。一个原子的直径通常只有十分之二或三纳米，而一根人类头发的直径约为 1,000,000 纳米。本质上，我们现在已经能够像使用儿童搭建玩具中的积木一样，用原子和分子建造新的结构。"
     },
     {
       "label": "Paragraph B",
-      "text": "Most of the electronic consumer goods that we use today contain components that measure less than 100 nm. The lasers in our CD and DVD players make use of the properties of semiconductor layers that are just a few atoms in thickness, so we clearly are in the nanotechnology age. There are many other everyday items that we take for granted that have nanoparticles in them. One of these is sunscreen. In the 1990s there were safety issues with many of the sunscreen products available, so scientists at Oxford University set about finding a solution. The product they developed uses nanoparticles of titanium dioxide that are doped with the element manganese. This product is almost transparent to the eye when spread on the skin, and it is effective for much longer than many of the traditional preparations. In this case, we see an example of nanotechnology providing a solution to an existing problem rather than opening up new product areas."
+      "text": "我们今天使用的大多数消费电子产品都含有尺寸小于 100 纳米的部件。CD 和 DVD 播放器中的激光器利用了只有几个原子厚的半导体层的特性，因此我们显然已经处在纳米技术时代。还有许多我们习以为常的日用品也含有纳米颗粒，其中之一就是防晒霜。20 世纪 90 年代，市场上许多防晒产品存在安全问题，于是牛津大学的科学家开始寻找解决方案。他们开发的产品使用掺入锰元素的二氧化钛纳米颗粒。这种产品涂在皮肤上几乎透明，而且比许多传统制剂有效时间更长。在这个例子中，我们看到纳米技术不是开辟新的产品领域，而是为已有问题提供解决方案。"
     },
     {
       "label": "Paragraph C",
-      "text": "The technique of using nanotechnology to adapt existing products can also be applied to garments, upholstery, paint, and plastics to improve their longevity. Bearing this in mind, it is interesting to ask whether nanotechnology can help with some of the world’s major current issues. The recent growth in climate change awareness calls a range of things into question. Can we use energy more effectively? Can we reduce the carbon dioxide in the atmosphere? Can we use and purify water more effectively? Can health care be improved? Nanotechnology may very well provide the solutions. There are few times in history when the application of science to improving the human condition has been so apparent."
+      "text": "利用纳米技术改造现有产品的技术，也可以应用于服装、室内装饰材料、油漆和塑料，以延长它们的使用寿命。考虑到这一点，一个有趣的问题是：纳米技术是否能帮助解决当今世界的一些重大问题？近年来，人们对气候变化的意识不断增强，这引发了一系列疑问。我们能否更高效地使用能源？能否减少大气中的二氧化碳？能否更有效地使用和净化水？医疗保健能否得到改善？纳米技术很可能提供解决方案。历史上很少有哪个时期，科学在改善人类处境方面的应用如此明显。"
     },
     {
       "label": "Paragraph D",
-      "text": "We are already making new types of solar cells and batteries by using our newfound ability to manipulate matter at the atomic and molecular scale. If we can capture some of the huge quantities of energy that arrive at the Earth’s surface from the Sun, and store it effectively, we can reduce the need for fossil fuel-based power stations. We are already using nanoparticles and nanoporous materials to capture harmful greenhouse gases, and we may possibly convert some of them back into fuel. There are, however, many technical problems involved, and it will be another decade or so before some of these ideas are deployed."
+      "text": "我们已经在利用新获得的、在原子和分子尺度上操控物质的能力，制造新型太阳能电池和电池。如果我们能够捕获一部分从太阳到达地球表面的巨大能量，并有效地储存起来，就可以减少对化石燃料发电站的需求。我们也已经在使用纳米颗粒和纳米多孔材料来捕获有害温室气体，并且有可能将其中一部分重新转化为燃料。不过，这其中仍涉及许多技术问题，有些想法还需要大约十年才能投入应用。"
     },
     {
       "label": "Paragraph E",
-      "text": "Water purification is increasingly challenging and many believe that water, which we take for granted, is going to become more valuable than oil. Currently we do not use water efficiently, and many industrial and food processes leave contamination in water that is potentially toxic and difficult to remove. Nanofiltration may provide the solution to these problems, and may also offer new routes to the desalination of brackish water and groundwater in some parts of the world."
+      "text": "水净化正变得越来越具有挑战性，许多人认为，我们习以为常的水将会变得比石油更加宝贵。目前我们并没有高效地利用水资源，许多工业和食品加工过程会在水中留下潜在有毒且难以去除的污染物。纳米过滤可能为这些问题提供解决方案，也可能为世界某些地区的微咸水和地下水淡化提供新的途径。"
     },
     {
       "label": "Paragraph F",
-      "text": "Food production and processing are becoming more important as the world’s population increases. There are concerns that potentially harmful nano-products might enter the body via the gut. Such concerns are being addressed, but it is even more important to ask questions about how nanotechnology might increase the nutritious yield of food and be adapted to help preserve and package food. There is already evidence to show that it might also be helpful in the primary production of raw food materials, by way of better delivery of pesticides in the field and better extraction of protein and carbohydrates."
+      "text": "随着世界人口增长，食品生产和加工变得越来越重要。有人担心潜在有害的纳米产品可能通过肠道进入人体。这类担忧正在被处理，但更重要的是思考纳米技术如何提高食物的营养产量，以及如何被改造用于帮助保存和包装食物。已有证据表明，它也可能通过在田间更好地输送农药，以及更好地提取蛋白质和碳水化合物，帮助原始食品材料的初级生产。"
     },
     {
       "label": "Paragraph G",
-      "text": "Healthcare is an area where the application of nanotechnology is already exceeding the expectations of ten years ago. It is happening across several fronts: better appreciation of what the ‘natural’ nanoparticles circulating in body fluid do; better methods of delivering drugs to the body via nanoparticles that target the diseased body part; improvements to the diagnostic imaging techniques of ultrasound, magnetic resonance imaging and X-ray computerised tomography. We are now at the threshold of a new subject, ‘theranostics’, whereby nanoparticles will first deliver the diagnostic information to the clinician and then, using the same particle, deliver a form of therapy."
+      "text": "医疗保健是纳米技术应用已经超过十年前预期的领域。这种进展体现在多个方面：人们更好地理解在体液中循环的“天然”纳米颗粒的作用；通过靶向病变部位的纳米颗粒，更好地将药物输送到人体；超声、磁共振成像和 X 射线计算机断层扫描等诊断成像技术也得到改进。我们现在正处在一门新学科“诊疗一体化”的门槛上：纳米颗粒会先把诊断信息传递给临床医生，然后用同一个颗粒递送某种治疗手段。"
     },
     {
       "label": "Paragraph H",
-      "text": "Nanotechnology is a life-changing technology, making the quality of life better, enabling us to make use of our resources more effectively, thereby protecting our environment, and creating new business opportunities. There are many other examples in the world of ‘new materials’ that also make use of nanotechnology. The possibilities may well be limitless."
+      "text": "纳米技术是一项改变生活的技术，它能改善生活质量，使我们更有效地利用资源，从而保护环境，并创造新的商业机会。在“新材料”领域，还有许多其他利用纳米技术的例子。它的可能性很可能是无限的。"
     }
   ],
   "questionExplanations": [
