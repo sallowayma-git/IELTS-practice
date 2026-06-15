@@ -33,8 +33,11 @@
             background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
             color: var(--text);
             height: 100vh;
+            height: 100dvh;
             overflow: hidden;
-            padding-bottom: 72px;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
         }
 
         .header {
@@ -470,7 +473,7 @@
             }
 
             .practice-nav {
-                flex-wrap: wrap;
+                flex-wrap: nowrap;
                 align-items: center;
                 gap: 12px 15px;
                 padding: 12px 20px;
@@ -1034,16 +1037,19 @@
 
         /* ================= IELTS Redesign Custom Styles ================= */
         body {
-            padding-bottom: 72px;
+            padding-bottom: 0;
         }
 
         .shell {
-            height: calc(100vh - 67px - 72px);
+            flex: 1 1 auto;
+            height: auto;
+            min-height: 0;
         }
 
         /* Top Header */
         .header {
             height: 48px;
+            flex-shrink: 0;
             padding: 0 20px;
             background: #ffffff;
             border-bottom: 1.5px solid #e2e8f0;
@@ -1135,6 +1141,7 @@
 
         /* Sub Header Bar */
         .sub-header-bar {
+            flex-shrink: 0;
             background: #f1f5f9;
             border-bottom: 1.5px solid #e2e8f0;
             padding: 8px 20px;
@@ -1180,8 +1187,8 @@
             display: flex;
             align-items: center;
             justify-content: flex-start;
-            flex-wrap: wrap;
-            gap: 12px 20px;
+            flex-wrap: nowrap;
+            gap: 12px clamp(10px, 1vw, 20px);
             z-index: 2000;
             position: relative;
         }
@@ -1191,6 +1198,7 @@
                 display: none;
             }
             .part-nav-section:not(.active) {
+                flex: 0 0 auto;
                 padding-right: 12px;
                 gap: 0;
                 border-right: none;
@@ -1200,8 +1208,10 @@
         .part-nav-section {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding-right: 20px;
+            flex: 1 1 0;
+            min-width: 0;
+            gap: clamp(6px, 0.8vw, 12px);
+            padding-right: clamp(10px, 1.2vw, 20px);
             border-right: 1.5px solid var(--line);
             height: 48px;
         }
@@ -1232,18 +1242,24 @@
         .part-nav-questions {
             display: flex;
             align-items: center;
-            gap: 6px;
+            flex: 1 1 auto;
+            min-width: 0;
+            justify-content: space-between;
+            gap: clamp(2px, 0.35vw, 6px);
         }
 
         .q-column {
             display: flex;
             flex-direction: column;
             align-items: center;
+            flex: 1 1 0;
+            min-width: 12px;
+            max-width: 20px;
             gap: 3px;
         }
 
         .q-bar-segment {
-            width: 20px;
+            width: 100%;
             height: 3px;
             border-radius: 1px;
             background-color: #e2e8f0;
@@ -1270,7 +1286,8 @@
             font-size: 11.5px;
             color: #94a3b8;
             cursor: pointer;
-            min-width: 20px;
+            min-width: 0;
+            width: 100%;
             height: 20px;
             line-height: 18px;
             text-align: center;
@@ -1306,6 +1323,7 @@
             margin-left: auto;
             display: flex;
             align-items: center;
+            flex: 0 0 auto;
             gap: 10px;
         }
 
