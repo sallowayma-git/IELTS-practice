@@ -54,3 +54,4 @@ developer/tests/reports/listeningpractice-scan.md
 !developer/tests/e2e/fixtures/睡着过项目组(9.4)\[134篇]/
 !developer/tests/e2e/fixtures/睡着过项目组(9.4)\[134篇]/**
 node_modules
+.playwright-mcp/

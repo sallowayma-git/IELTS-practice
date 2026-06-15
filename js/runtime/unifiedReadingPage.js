@@ -706,7 +706,7 @@
         dom.shell = document.querySelector('.shell');
         dom.left = document.getElementById('left');
         dom.right = document.getElementById('right');
-        dom.divider = document.getElementById('divider');
+        dom.divider = document.querySelector('.shell > #divider');
         dom.groups = document.getElementById('question-groups');
         dom.results = document.getElementById('results');
         dom.nav = document.getElementById('question-nav');
@@ -1325,11 +1325,21 @@
         `;
     }
 
+    function sanitizePassageHtml(markup) {
+        const template = document.createElement('template');
+        template.innerHTML = String(markup || '');
+        template.content.querySelectorAll('#divider').forEach((node) => {
+            node.remove();
+        });
+        return template.innerHTML;
+    }
+
     function renderDataset(dataset) {
         clearExplanations();
         const passageHtml = (dataset.passage?.blocks || [])
             .map((block) => block?.bodyHtml || block?.html || '')
             .join('\n');
+        const sanitizedPassageHtml = sanitizePassageHtml(passageHtml);
         const groupsHtml = (dataset.questionGroups || [])
             .map((group) => createGroupMarkup(group))
             .join('\n');
@@ -1343,7 +1353,7 @@
             renderReadingSubtitle();
         }
         if (dom.left) {
-            dom.left.innerHTML = passageHtml;
+            dom.left.innerHTML = sanitizedPassageHtml;
         }
         if (dom.groups) {
             dom.groups.innerHTML = groupsHtml;
