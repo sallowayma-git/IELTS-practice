@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>IELTS Atlas Admin</title>
+        <link rel="stylesheet" href="/admin/admin.css" />
+    </head>
+    <body>
+        <header class="admin-header">
+            <div>
+                <p class="admin-kicker">IELTS Atlas</p>
+                <h1>Admin</h1>
+            </div>
+            <nav class="admin-nav" aria-label="Admin navigation">
+                <a href="/">App</a>
+                <button id="logout-button" type="button">Logout</button>
+            </nav>
+        </header>
+
+        <main class="admin-layout">
+            <section class="admin-summary" aria-label="Summary">
+                <div>
+                    <span class="summary-label">Users</span>
+                    <strong id="summary-users">0</strong>
+                </div>
+                <div>
+                    <span class="summary-label">Admins</span>
+                    <strong id="summary-admins">0</strong>
+                </div>
+                <div>
+                    <span class="summary-label">Records</span>
+                    <strong id="summary-records">0</strong>
+                </div>
+                <div>
+                    <span class="summary-label">Latest</span>
+                    <strong id="summary-latest">-</strong>
+                </div>
+            </section>
+
+            <section class="admin-main" aria-label="User administration">
+                <div class="admin-toolbar">
+                    <label class="search-field">
+                        <span>Search</span>
+                        <input id="user-search" type="search" autocomplete="off" />
+                    </label>
+                    <button id="refresh-button" type="button">Refresh</button>
+                </div>
+
+                <div class="admin-grid">
+                    <section class="admin-panel" aria-label="Users">
+                        <h2>Users</h2>
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Role</th>
+                                        <th>Records</th>
+                                        <th>Latest</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-body"></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="admin-panel" aria-label="Practice records">
+                        <div class="panel-heading">
+                            <h2 id="records-title">Practice Records</h2>
+                            <span id="records-count">0</span>
+                        </div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Type</th>
+                                        <th>Score</th>
+                                        <th>Updated</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="records-body"></tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </main>
+
+        <div id="status" class="status" role="status" aria-live="polite"></div>
+        <script src="/admin/admin.js"></script>
+    </body>
+</html>

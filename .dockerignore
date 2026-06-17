@@ -1,0 +1,8 @@
+.git
+.agents
+.codex
+.npm-cache
+.pnpm-store
+backend/.env
+backend/node_modules
+node_modules

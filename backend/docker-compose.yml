@@ -13,3 +13,44 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+
+  app:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    container_name: ielts-practice-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/ielts_practice
+      SESSION_SECRET: ${SESSION_SECRET:-replace-with-a-long-random-session-secret}
+      PORT: 3000
+      HOST: 0.0.0.0
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  tor:
+    build:
+      context: .
+      dockerfile: tor/Dockerfile
+    container_name: ielts-practice-tor
+    environment:
+      TOR_BRIDGES: ${TOR_BRIDGES:-}
+    depends_on:
+      app:
+        condition: service_healthy
+    volumes:
+      - tor_hidden_service:/var/lib/tor/hidden_service
+
+volumes:
+  tor_hidden_service:

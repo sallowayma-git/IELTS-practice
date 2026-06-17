@@ -1,0 +1,7 @@
+DataDirectory /var/lib/tor
+HiddenServiceDir /var/lib/tor/hidden_service
+HiddenServiceVersion 3
+HiddenServicePort 80 app:3000
+Log notice stdout
+User debian-tor
+%include /etc/tor/torrc.d/*.conf

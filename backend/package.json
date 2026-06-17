@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "test": "node --test",
+    "migrate": "node scripts/migrate.mjs",
+    "bootstrap:admin": "node scripts/bootstrap-admin.mjs",
     "smoke:postgres": "node scripts/smoke-postgres.mjs"
   },
   "dependencies": {

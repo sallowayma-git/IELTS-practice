@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,8 +12,10 @@ process.env.COOKIE_SECURE = process.env.COOKIE_SECURE || 'false';
 
 const appModule = await import('../src/app.js');
 const dbModule = await import('../src/db.js');
+const migrationsModule = await import('../src/migrations.js');
 const { createApp } = appModule.default || appModule;
 const db = dbModule.default || dbModule;
+const { runMigrations } = migrationsModule.default || migrationsModule;
 
 function assert(condition, message) {
     if (!condition) {
@@ -23,8 +24,9 @@ function assert(condition, message) {
 }
 
 async function applyMigration() {
-    const sql = fs.readFileSync(path.join(backendRoot, 'migrations', '001_init.sql'), 'utf8');
-    await db.query(sql);
+    await runMigrations(db, {
+        migrationsDir: path.join(backendRoot, 'migrations')
+    });
 }
 
 function listen(app, port = 0) {

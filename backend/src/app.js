@@ -5,7 +5,8 @@ const connectPgSimple = require('connect-pg-simple');
 const helmet = require('helmet');
 
 const db = require('./db');
-const { PostgresAuthStore, createAuthRouter } = require('./auth');
+const { PostgresAuthStore, createAuthRouter, publicUser, requireAdmin } = require('./auth');
+const { PostgresAdminStore, createAdminRouter } = require('./admin');
 const { PostgresPracticeRecordStore, createPracticeRecordsRouter } = require('./practiceRecords');
 
 function parseBoolean(value, fallback = false) {
@@ -25,16 +26,20 @@ function createDefaultSessionStore(pool) {
 function createApp(options = {}) {
     const app = express();
     const repoRoot = options.staticRoot || path.resolve(__dirname, '..', '..');
+    const adminRoot = options.adminRoot || path.resolve(__dirname, '..', 'admin');
     const pool = options.pool || db.pool;
     const dbClient = options.db || db;
     const cookieName = options.cookieName || 'ielts.sid';
     const cookieSecure = options.cookieSecure !== undefined
         ? options.cookieSecure
         : parseBoolean(process.env.COOKIE_SECURE, false);
+    const trustProxy = options.trustProxy !== undefined
+        ? options.trustProxy
+        : parseBoolean(process.env.TRUST_PROXY, false);
     const sessionSecret = options.sessionSecret || process.env.SESSION_SECRET || 'development-session-secret-change-me';
 
     app.disable('x-powered-by');
-    app.set('trust proxy', options.trustProxy || false);
+    app.set('trust proxy', trustProxy);
     app.use(helmet({
         contentSecurityPolicy: false
     }));
@@ -56,6 +61,7 @@ function createApp(options = {}) {
 
     const authStore = options.authStore || new PostgresAuthStore(dbClient);
     const practiceStore = options.practiceStore || new PostgresPracticeRecordStore(dbClient);
+    const adminStore = options.adminStore || new PostgresAdminStore(dbClient);
 
     app.get('/api/health', (req, res) => {
         res.json({ ok: true });
@@ -68,19 +74,39 @@ function createApp(options = {}) {
     app.use('/api/practice-records', createPracticeRecordsRouter({
         store: practiceStore
     }));
+    app.use('/api/admin', createAdminRouter({
+        store: adminStore
+    }));
 
     app.use('/api', (req, res) => {
         res.status(404).json({ error: 'API route not found' });
     });
 
+    app.get(['/admin', '/admin/'], (req, res) => {
+        if (!req.session || !req.session.user) {
+            return res.redirect('/');
+        }
+        req.session.user = publicUser(req.session.user);
+        if (req.session.user.role !== 'admin') {
+            return res.status(403).type('text/plain').send('Admin access required');
+        }
+        return res.sendFile(path.join(adminRoot, 'index.html'));
+    });
+    app.use('/admin', requireAdmin, express.static(adminRoot, {
+        dotfiles: 'deny',
+        index: false
+    }));
+
     app.get('/', (req, res) => {
         res.sendFile(path.join(repoRoot, 'index.html'));
     });
 
-    app.use(express.static(repoRoot, {
-        dotfiles: 'deny',
-        index: false
-    }));
+    for (const directory of ['assets', 'css', 'js', 'templates']) {
+        app.use(`/${directory}`, express.static(path.join(repoRoot, directory), {
+            dotfiles: 'deny',
+            index: false
+        }));
+    }
 
     app.use((error, req, res, next) => {
         if (res.headersSent) {

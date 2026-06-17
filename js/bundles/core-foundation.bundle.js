@@ -3856,9 +3856,12 @@ storageManager.ready
             account = createElement('div', 'remote-auth-account');
             account.hidden = true;
             const accountName = createElement('span', 'remote-auth-account__name');
+            const adminLink = createElement('a', 'remote-auth-account__admin', 'Admin');
+            adminLink.href = '/admin';
+            adminLink.hidden = true;
             const logout = createElement('button', 'remote-auth-account__logout', '退出');
             logout.type = 'button';
-            account.append(accountName, logout);
+            account.append(accountName, adminLink, logout);
             window.document.body.appendChild(account);
 
             function setMode(nextMode) {
@@ -3924,11 +3927,14 @@ storageManager.ready
         function updateAccount(user) {
             ensureUi();
             const name = account.querySelector('.remote-auth-account__name');
+            const adminLink = account.querySelector('.remote-auth-account__admin');
             if (user && user.username) {
                 name.textContent = user.username;
+                adminLink.hidden = user.role !== 'admin';
                 account.hidden = false;
             } else {
                 name.textContent = '';
+                adminLink.hidden = true;
                 account.hidden = true;
             }
         }

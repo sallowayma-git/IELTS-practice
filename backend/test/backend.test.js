@@ -1,15 +1,21 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+const bcrypt = require('bcryptjs');
 const session = require('express-session');
 
 const { createApp } = require('../src/app');
 const { MemoryAuthStore } = require('../src/auth');
+const { MemoryAdminStore } = require('../src/admin');
+const { bootstrapAdmin } = require('../src/bootstrapAdmin');
 const { MemoryPracticeRecordStore } = require('../src/practiceRecords');
 
 async function createClient() {
+    const authStore = new MemoryAuthStore();
+    const practiceStore = new MemoryPracticeRecordStore();
     const app = createApp({
-        authStore: new MemoryAuthStore(),
-        practiceStore: new MemoryPracticeRecordStore(),
+        authStore,
+        practiceStore,
+        adminStore: new MemoryAdminStore({ authStore, practiceStore }),
         sessionStore: new session.MemoryStore(),
         sessionSecret: 'test-session-secret',
         rateLimit: { maxAttempts: 100, windowMs: 60_000 }
@@ -64,6 +70,8 @@ async function createClient() {
         get csrfToken() {
             return csrfToken;
         },
+        authStore,
+        practiceStore,
         request,
         async csrf() {
             return request('GET', '/api/auth/csrf');
@@ -79,6 +87,17 @@ async function createClient() {
 async function register(client, username = 'alice', password = 'StrongPass1') {
     await client.csrf();
     return client.request('POST', '/api/auth/register', { username, password });
+}
+
+async function seedAdmin(client, username = 'admin_user', password = 'StrongPass1') {
+    const passwordHash = await bcrypt.hash(password, 4);
+    const user = await client.authStore.createUser({
+        username,
+        usernameLower: username.toLowerCase(),
+        passwordHash
+    });
+    user.role = 'admin';
+    return user;
 }
 
 test('auth registration rejects weak and duplicate credentials', async () => {
@@ -203,6 +222,130 @@ test('PUT practice records replaces the list returned by GET', async () => {
     }
 });
 
+test('admin API rejects anonymous and non-admin users', async () => {
+    const client = await createClient();
+    try {
+        const anonymous = await client.request('GET', '/api/admin/summary');
+        assert.equal(anonymous.response.status, 401);
+
+        const created = await register(client, 'ordinary_user', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+        assert.equal(created.json.user.role, 'user');
+
+        const forbidden = await client.request('GET', '/api/admin/summary');
+        assert.equal(forbidden.response.status, 403);
+    } finally {
+        await client.close();
+    }
+});
+
+test('admin can list users, inspect records, and delete one record', async () => {
+    const client = await createClient();
+    try {
+        await seedAdmin(client, 'admin_user', 'StrongPass1');
+        const created = await register(client, 'managed_user', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+        const managedUserId = created.json.user.id;
+
+        const records = [
+            { id: 'managed-record', sessionId: 'managed-session', type: 'reading', title: 'Managed Reading', score: 82 }
+        ];
+        const replaced = await client.request('PUT', '/api/practice-records', { records });
+        assert.equal(replaced.response.status, 200);
+
+        const logout = await client.request('POST', '/api/auth/logout');
+        assert.equal(logout.response.status, 200);
+
+        await client.csrf();
+        const login = await client.request('POST', '/api/auth/login', {
+            username: 'admin_user',
+            password: 'StrongPass1'
+        });
+        assert.equal(login.response.status, 200);
+        assert.equal(login.json.user.role, 'admin');
+
+        const summary = await client.request('GET', '/api/admin/summary');
+        assert.equal(summary.response.status, 200);
+        assert.equal(summary.json.userCount, 2);
+        assert.equal(summary.json.adminCount, 1);
+        assert.equal(summary.json.practiceRecordCount, 1);
+
+        const users = await client.request('GET', '/api/admin/users?q=managed');
+        assert.equal(users.response.status, 200);
+        assert.equal(users.json.users.length, 1);
+        assert.equal(users.json.users[0].id, managedUserId);
+
+        const listed = await client.request('GET', `/api/admin/users/${managedUserId}/practice-records`);
+        assert.equal(listed.response.status, 200);
+        assert.equal(listed.json.records[0].id, 'managed-record');
+
+        const removed = await client.request('DELETE', `/api/admin/users/${managedUserId}/practice-records/managed-record`);
+        assert.equal(removed.response.status, 200);
+        assert.equal(removed.json.removed, 1);
+
+        const afterDelete = await client.request('GET', `/api/admin/users/${managedUserId}/practice-records`);
+        assert.equal(afterDelete.json.records.length, 0);
+    } finally {
+        await client.close();
+    }
+});
+
+test('bootstrap admin creates and updates an admin user', async () => {
+    const users = new Map();
+    const db = {
+        async query(sql, params = []) {
+            if (sql.includes('SELECT id FROM users')) {
+                const user = users.get(params[0]);
+                return { rows: user ? [{ id: user.id }] : [] };
+            }
+            if (sql.includes('UPDATE users')) {
+                const [username, passwordHash, usernameLower] = params;
+                const user = users.get(usernameLower);
+                user.username = username;
+                user.password_hash = passwordHash;
+                user.role = 'admin';
+                return { rows: [{ id: user.id, username: user.username, role: user.role }] };
+            }
+            if (sql.includes('INSERT INTO users')) {
+                const [username, usernameLower, passwordHash] = params;
+                const user = {
+                    id: `user-${users.size + 1}`,
+                    username,
+                    username_lower: usernameLower,
+                    password_hash: passwordHash,
+                    role: 'admin'
+                };
+                users.set(usernameLower, user);
+                return { rows: [{ id: user.id, username: user.username, role: user.role }] };
+            }
+            throw new Error(`unexpected query: ${sql}`);
+        }
+    };
+    const bcryptStub = {
+        async hash(password) {
+            return `hash:${password}`;
+        }
+    };
+
+    const created = await bootstrapAdmin({
+        db,
+        username: 'AdminUser',
+        password: 'StrongPass1',
+        bcrypt: bcryptStub
+    });
+    assert.equal(created.created, true);
+    assert.equal(created.user.role, 'admin');
+
+    const updated = await bootstrapAdmin({
+        db,
+        username: 'AdminUser',
+        password: 'StrongerPass2',
+        bcrypt: bcryptStub
+    });
+    assert.equal(updated.created, false);
+    assert.equal(users.get('adminuser').password_hash, 'hash:StrongerPass2');
+});
+
 test('static hosting serves index and denies dotfiles with security headers', async () => {
     const client = await createClient();
     try {
@@ -214,6 +357,14 @@ test('static hosting serves index and denies dotfiles with security headers', as
         const dotfile = await client.request('GET', '/.git/config');
         assert.notEqual(dotfile.response.status, 200);
         assert.doesNotMatch(dotfile.text, /\[core\]/);
+
+        const backendSource = await client.request('GET', '/backend/src/app.js');
+        assert.notEqual(backendSource.response.status, 200);
+        assert.doesNotMatch(backendSource.text, /createApp/);
+
+        const bundle = await client.request('GET', '/js/bundles/core-foundation.bundle.js');
+        assert.equal(bundle.response.status, 200);
+        assert.match(bundle.text, /Generated by scripts\/build-bundles\.mjs/);
     } finally {
         await client.close();
     }

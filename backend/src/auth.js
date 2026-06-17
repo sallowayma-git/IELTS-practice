@@ -13,7 +13,8 @@ function publicUser(user) {
     if (!user) return null;
     return {
         id: user.id,
-        username: user.username
+        username: user.username,
+        role: user.role === 'admin' ? 'admin' : 'user'
     };
 }
 
@@ -85,6 +86,18 @@ function requireAuth(req, res, next) {
     if (!req.session || !req.session.user) {
         return res.status(401).json({ error: 'Authentication required' });
     }
+    req.session.user = publicUser(req.session.user);
+    return next();
+}
+
+function requireAdmin(req, res, next) {
+    if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+    }
+    req.session.user = publicUser(req.session.user);
+    if (req.session.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
     return next();
 }
 
@@ -113,7 +126,7 @@ class PostgresAuthStore {
 
     async findByUsernameLower(usernameLower) {
         const result = await this.db.query(
-            'SELECT id, username, username_lower, password_hash FROM users WHERE username_lower = $1',
+            'SELECT id, username, username_lower, password_hash, role FROM users WHERE username_lower = $1',
             [usernameLower]
         );
         return result.rows[0] || null;
@@ -123,7 +136,7 @@ class PostgresAuthStore {
         const result = await this.db.query(
             `INSERT INTO users (username, username_lower, password_hash)
              VALUES ($1, $2, $3)
-             RETURNING id, username, username_lower, password_hash`,
+             RETURNING id, username, username_lower, password_hash, role`,
             [username, usernameLower, passwordHash]
         );
         return result.rows[0];
@@ -149,7 +162,8 @@ class MemoryAuthStore {
             id: crypto.randomUUID(),
             username,
             username_lower: usernameLower,
-            password_hash: passwordHash
+            password_hash: passwordHash,
+            role: 'user'
         };
         this.users.set(usernameLower, user);
         return user;
@@ -253,11 +267,13 @@ function createAuthRouter(options = {}) {
 module.exports = {
     MemoryAuthStore,
     PostgresAuthStore,
+    USERNAME_PATTERN,
     createAuthRouter,
     createRateLimiter,
     ensureCsrfToken,
     normalizeUsername,
     publicUser,
+    requireAdmin,
     requireAuth,
     validatePasswordStrength,
     verifyCsrfToken

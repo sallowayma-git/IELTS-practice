@@ -7441,7 +7441,8 @@ body.theme-blue ::-webkit-scrollbar-thumb {
 }
 
 .remote-auth-overlay[hidden],
-.remote-auth-account[hidden] {
+.remote-auth-account[hidden],
+.remote-auth-account__admin[hidden] {
     display: none;
 }
 
@@ -7474,6 +7475,7 @@ body.theme-blue ::-webkit-scrollbar-thumb {
 
 .remote-auth-tab,
 .remote-auth-submit,
+.remote-auth-account__admin,
 .remote-auth-account__logout {
     border: 0;
     cursor: pointer;
@@ -7575,6 +7577,19 @@ body.theme-blue ::-webkit-scrollbar-thumb {
     background: #e2e8f0;
     color: #334155;
     padding: 0 10px;
+}
+
+.remote-auth-account__admin {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    border-radius: 6px;
+    background: #dff3ef;
+    color: #0f766e;
+    padding: 0 10px;
+    text-decoration: none;
+    font-weight: 700;
 }
 
 @media (max-width: 520px) {
