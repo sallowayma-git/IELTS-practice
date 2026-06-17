@@ -27,7 +27,7 @@
         };
     }
 
-    function bootstrap() {
+    async function bootstrap() {
         if (!window.persistentStore) {
             console.warn('[data/index] StorageManager 未就绪，延迟初始化数据仓库');
             setTimeout(bootstrap, 100);
@@ -38,7 +38,27 @@
             return;
         }
 
-        const dataSource = new ExamData.StorageDataSource(window.persistentStore);
+        const localDataSource = new ExamData.StorageDataSource(window.persistentStore);
+        let dataSource = localDataSource;
+        let remoteApiClient = null;
+        let remoteAuthState = { available: false, authenticated: false, user: null };
+
+        if (ExamData.RemoteApiClient && ExamData.RemotePracticeDataSource) {
+            remoteApiClient = new ExamData.RemoteApiClient();
+            try {
+                remoteAuthState = await remoteApiClient.getAuthState();
+                if (remoteAuthState.available) {
+                    dataSource = new ExamData.RemotePracticeDataSource(localDataSource, remoteApiClient);
+                    window.remoteApiClient = remoteApiClient;
+                }
+            } catch (error) {
+                console.warn('[data/index] 远端 API 检测失败，继续使用本地存储:', error);
+                remoteAuthState = { available: false, authenticated: false, user: null };
+                remoteApiClient = null;
+                dataSource = localDataSource;
+            }
+        }
+
         const registry = new ExamData.DataRepositoryRegistry(dataSource);
 
         const practiceRepo = new ExamData.PracticeRepository(dataSource, { maxRecords: 1000 });
@@ -158,6 +178,22 @@
         ExamData.registry = registry;
         ExamData.createDefaultUserStats = createDefaultUserStats;
         ExamData.createDefaultVocabConfig = createDefaultVocabConfig;
+
+        if (remoteApiClient && remoteAuthState.available && ExamData.createRemoteAuthController) {
+            const authController = ExamData.createRemoteAuthController({
+                apiClient: remoteApiClient,
+                localDataSource
+            });
+            window.remoteAuthController = authController;
+            if (remoteAuthState.authenticated) {
+                authController.handleAuthenticated(remoteAuthState.user).catch((error) => {
+                    console.warn('[data/index] 登录后导入本地记录失败:', error);
+                });
+            } else {
+                authController.show();
+            }
+        }
+
         console.log('[data/index] 数据仓库初始化完成');
     }
 

@@ -7427,3 +7427,169 @@ body.theme-blue ::-webkit-scrollbar-thumb {
 .inline-hover-link:hover {
     opacity: 0.7;
 }
+
+.remote-auth-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.58);
+    backdrop-filter: blur(8px);
+}
+
+.remote-auth-overlay[hidden],
+.remote-auth-account[hidden] {
+    display: none;
+}
+
+.remote-auth-panel {
+    width: min(420px, 100%);
+    border: 1px solid rgba(148, 163, 184, 0.32);
+    border-radius: 8px;
+    background: #ffffff;
+    color: #111827;
+    box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+    padding: 24px;
+}
+
+.remote-auth-title {
+    margin: 0 0 18px;
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.remote-auth-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 18px;
+    border-radius: 8px;
+    background: #f1f5f9;
+    padding: 4px;
+}
+
+.remote-auth-tab,
+.remote-auth-submit,
+.remote-auth-account__logout {
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+}
+
+.remote-auth-tab {
+    min-height: 36px;
+    border-radius: 6px;
+    color: #475569;
+    background: transparent;
+}
+
+.remote-auth-tab.is-active {
+    color: #0f172a;
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+}
+
+.remote-auth-form {
+    display: grid;
+    gap: 14px;
+}
+
+.remote-auth-field {
+    display: grid;
+    gap: 6px;
+    color: #334155;
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.remote-auth-field input {
+    min-height: 42px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 0 12px;
+    color: #0f172a;
+    background: #ffffff;
+    font: inherit;
+}
+
+.remote-auth-field input:focus {
+    outline: 2px solid rgba(37, 99, 235, 0.24);
+    border-color: #2563eb;
+}
+
+.remote-auth-error {
+    border-radius: 6px;
+    background: #fef2f2;
+    color: #991b1b;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+}
+
+.remote-auth-submit {
+    min-height: 42px;
+    border-radius: 6px;
+    background: #1f2937;
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.remote-auth-submit:disabled,
+.remote-auth-account__logout:disabled {
+    cursor: wait;
+    opacity: 0.72;
+}
+
+.remote-auth-account {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 9000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 38px;
+    border: 1px solid rgba(148, 163, 184, 0.32);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.92);
+    color: #0f172a;
+    box-shadow: 0 10px 32px rgba(15, 23, 42, 0.16);
+    padding: 6px 8px 6px 12px;
+}
+
+.remote-auth-account__name {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.remote-auth-account__logout {
+    min-height: 28px;
+    border-radius: 6px;
+    background: #e2e8f0;
+    color: #334155;
+    padding: 0 10px;
+}
+
+@media (max-width: 520px) {
+    .remote-auth-overlay {
+        align-items: flex-start;
+        padding: 72px 14px 20px;
+    }
+
+    .remote-auth-panel {
+        padding: 20px;
+    }
+
+    .remote-auth-account {
+        top: 10px;
+        right: 10px;
+        max-width: calc(100vw - 20px);
+    }
+}

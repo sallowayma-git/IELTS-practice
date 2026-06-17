@@ -3,6 +3,8 @@
 
 # 构建产物 — 为保证 fresh checkout 可直接静态运行，js/bundles/*.bundle.js 需纳入版本控制
 /.qoder/
+/.npm-cache/
+/.pnpm-store/
 /.vscode/
 /documents/
 /docs/
@@ -29,6 +31,9 @@
 
 
 package-lock.json
+backend/.env
+backend/node_modules/
+!backend/package-lock.json
 # 忽略可能的系统文件
 .DS_Store
 Thumbs.db

@@ -20,6 +20,9 @@ const bundles = {
         'js/utils/storage.js',
         'js/core/storageProviderRegistry.js',
         'js/data/dataSources/storageDataSource.js',
+        'js/data/remoteApiClient.js',
+        'js/data/dataSources/remotePracticeDataSource.js',
+        'js/data/authOverlay.js',
         'js/data/repositories/baseRepository.js',
         'js/data/repositories/dataRepositoryRegistry.js',
         'js/data/repositories/practiceRepository.js',
@@ -136,7 +139,13 @@ function readSource(relativePath) {
     if (!fs.existsSync(absolutePath)) {
         throw new Error(`Missing bundle input: ${relativePath}`);
     }
-    return fs.readFileSync(absolutePath, 'utf8').replace(/\s*$/, '\n');
+    return fs.readFileSync(absolutePath, 'utf8')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .split('\n')
+        .map((line) => line.replace(/[ \t]+$/g, ''))
+        .join('\n')
+        .replace(/\s*$/, '\n');
 }
 
 function renderBundle(outputPath, inputs) {
