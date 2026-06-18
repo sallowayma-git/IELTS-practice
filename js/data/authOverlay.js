@@ -245,16 +245,54 @@
 
             account = createElement('div', 'remote-auth-account');
             account.hidden = true;
+            const accountToggle = createElement('button', 'remote-auth-account__trigger');
+            accountToggle.type = 'button';
+            accountToggle.setAttribute('aria-haspopup', 'menu');
+            accountToggle.setAttribute('aria-expanded', 'false');
+            accountToggle.setAttribute('aria-label', 'User menu');
+            accountToggle.title = 'User menu';
+            const accountAvatar = createElement('span', 'remote-auth-account__avatar', 'U');
+            accountAvatar.setAttribute('aria-hidden', 'true');
+            const accountIdentity = createElement('span', 'remote-auth-account__identity');
             const accountName = createElement('span', 'remote-auth-account__name');
-            const adminLink = createElement('a', 'remote-auth-account__admin', 'Admin');
+            const accountRole = createElement('span', 'remote-auth-account__role', 'User');
+            const accountChevron = createElement('span', 'remote-auth-account__chevron', 'v');
+            accountChevron.setAttribute('aria-hidden', 'true');
+            accountIdentity.append(accountName, accountRole);
+            accountToggle.append(accountAvatar, accountIdentity, accountChevron);
+
+            const accountMenu = createElement('div', 'remote-auth-account__menu');
+            accountMenu.hidden = true;
+            accountMenu.setAttribute('role', 'menu');
+            const accountStats = createElement('div', 'remote-auth-account__stats');
+            [
+                ['total', '\u8bb0\u5f55', '0'],
+                ['average', '\u5e73\u5747', '0%'],
+                ['minutes', '\u5206\u949f', '0'],
+                ['streak', '\u8fde\u7eed', '0']
+            ].forEach(([key, label, value]) => {
+                const item = createElement('div', 'remote-auth-account__stat');
+                const valueNode = createElement('strong', null, value);
+                valueNode.dataset.accountStatValue = key;
+                item.append(valueNode, createElement('span', null, label));
+                accountStats.append(item);
+            });
+
+            const practice = createElement('button', 'remote-auth-account__menu-item remote-auth-account__practice', '\u7ec3\u4e60\u8bb0\u5f55');
+            practice.type = 'button';
+            practice.setAttribute('role', 'menuitem');
+            const adminLink = createElement('a', 'remote-auth-account__menu-item remote-auth-account__admin', 'Admin');
             adminLink.href = '/admin';
             adminLink.hidden = true;
-            const totp = createElement('button', 'remote-auth-account__totp', 'TOTP');
-            totp.type = 'button';
-            const logout = createElement('button', 'remote-auth-account__logout', '退出');
+            adminLink.setAttribute('role', 'menuitem');
+            const settingsTotp = window.document.getElementById('settings-totp-btn');
+            const logout = createElement('button', 'remote-auth-account__menu-item remote-auth-account__logout', '\u9000\u51fa');
             logout.type = 'button';
-            account.append(accountName, adminLink, totp, logout);
-            window.document.body.appendChild(account);
+            logout.setAttribute('role', 'menuitem');
+            accountMenu.append(accountStats, practice, adminLink, logout);
+            account.append(accountToggle, accountMenu);
+            const accountHost = window.document.querySelector('.hero-header__actions') || window.document.body;
+            accountHost.appendChild(account);
 
             totpPanel = createElement('section', 'remote-auth-totp');
             totpPanel.hidden = true;
@@ -405,6 +443,7 @@
             logout.addEventListener('click', async () => {
                 logout.disabled = true;
                 try {
+                    setAccountMenuOpen(false);
                     await apiClient.logout();
                     updateAccount(null);
                     hideTotpPanel();
@@ -417,14 +456,49 @@
                 }
             });
 
-            totp.addEventListener('click', async () => {
-                if (totpPanel.hidden) {
-                    totpPanel.hidden = false;
-                    await loadTotpPanel();
-                } else {
-                    hideTotpPanel();
+            if (settingsTotp) {
+                settingsTotp.addEventListener('click', async () => {
+                    if (totpPanel.hidden) {
+                        totpPanel.hidden = false;
+                        await loadTotpPanel();
+                    } else {
+                        hideTotpPanel();
+                    }
+                });
+            }
+
+            accountToggle.addEventListener('click', (event) => {
+                event.stopPropagation();
+                setAccountMenuOpen(!account.classList.contains('is-open'));
+            });
+
+            practice.addEventListener('click', () => {
+                setAccountMenuOpen(false);
+                if (typeof window.showView === 'function') {
+                    window.showView('practice');
+                    return;
+                }
+                const practiceView = window.document.getElementById('practice-view');
+                if (practiceView) {
+                    window.document.querySelectorAll('.view.active').forEach((view) => view.classList.remove('active'));
+                    practiceView.classList.add('active');
                 }
             });
+
+            window.document.addEventListener('click', (event) => {
+                if (account && !account.hidden && !account.contains(event.target)) {
+                    setAccountMenuOpen(false);
+                }
+            });
+
+            window.document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    setAccountMenuOpen(false);
+                }
+            });
+
+            window.addEventListener('storage-sync', syncAccountStats);
+            window.addEventListener('remote-auth-changed', syncAccountStats);
         }
 
         function show() {
@@ -455,20 +529,82 @@
             }
         }
 
+        function getAccountInitial(username) {
+            const normalized = String(username || '').trim();
+            return normalized ? normalized.charAt(0).toUpperCase() : 'U';
+        }
+
+        function setAccountMenuOpen(open) {
+            if (!account || account.hidden) {
+                return;
+            }
+            const menu = account.querySelector('.remote-auth-account__menu');
+            const trigger = account.querySelector('.remote-auth-account__trigger');
+            if (!menu || !trigger) {
+                return;
+            }
+            const nextOpen = Boolean(open);
+            menu.hidden = !nextOpen;
+            account.classList.toggle('is-open', nextOpen);
+            trigger.setAttribute('aria-expanded', nextOpen ? 'true' : 'false');
+            if (nextOpen) {
+                syncAccountStats();
+            }
+        }
+
+        function syncAccountStats() {
+            if (!account || account.hidden) {
+                return;
+            }
+            const statMap = {
+                total: 'total-practiced',
+                average: 'avg-score',
+                minutes: 'study-time',
+                streak: 'streak-days'
+            };
+            Object.entries(statMap).forEach(([key, sourceId]) => {
+                const valueNode = account.querySelector(`[data-account-stat-value="${key}"]`);
+                const sourceNode = window.document.getElementById(sourceId);
+                if (valueNode && sourceNode) {
+                    valueNode.textContent = sourceNode.textContent.trim() || valueNode.textContent;
+                }
+            });
+        }
+
         function updateAccount(user) {
             ensureUi();
             const name = account.querySelector('.remote-auth-account__name');
+            const role = account.querySelector('.remote-auth-account__role');
+            const avatar = account.querySelector('.remote-auth-account__avatar');
             const adminLink = account.querySelector('.remote-auth-account__admin');
-            const totp = account.querySelector('.remote-auth-account__totp');
+            const settingsTotp = window.document.getElementById('settings-totp-btn');
             if (user && user.username) {
                 name.textContent = user.username;
+                if (role) {
+                    role.textContent = user.role === 'admin' ? 'Admin' : 'User';
+                }
+                if (avatar) {
+                    avatar.textContent = getAccountInitial(user.username);
+                }
                 adminLink.hidden = user.role !== 'admin';
-                totp.hidden = false;
+                if (settingsTotp) {
+                    settingsTotp.hidden = false;
+                }
                 account.hidden = false;
+                syncAccountStats();
             } else {
                 name.textContent = '';
+                if (role) {
+                    role.textContent = '';
+                }
+                if (avatar) {
+                    avatar.textContent = 'U';
+                }
                 adminLink.hidden = true;
-                totp.hidden = true;
+                if (settingsTotp) {
+                    settingsTotp.hidden = true;
+                }
+                setAccountMenuOpen(false);
                 account.hidden = true;
             }
         }

@@ -38,7 +38,7 @@ body.hero-body {
     position: relative;
     z-index: 0;
     isolation: isolate;
-    background: #fbfffd;
+    background: #6CA67C;
     animation: none;
 }
 
@@ -48,6 +48,8 @@ body.hero-body {
     width: 100%;
     height: 100%;
     z-index: 0;
+    display: none !important;
+    visibility: hidden !important;
     pointer-events: none;
     transform: translateZ(0);
     backface-visibility: hidden;
@@ -71,8 +73,49 @@ body.hero-body {
 
 .hero-header {
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    align-items: center;
+    justify-content: flex-end;
+    min-height: 46px;
+}
+
+.hero-header__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    width: 100%;
+}
+
+.site-footer {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: center;
+    padding: 0 16px 36px;
+}
+
+.site-footer__github {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 38px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.52);
+    background: rgba(255, 255, 255, 0.32);
+    color: #0f172a;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+    padding: 0 14px;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.site-footer__github:hover,
+.site-footer__github:focus-visible {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.5);
+    transform: translateY(-1px);
 }
 
 .hero-header h1 {
@@ -2135,7 +2178,8 @@ body.hero-body {
 #settings-view #library-config-btn,
 #settings-view #force-refresh-btn,
 #settings-view #theme-switcher-btn-entry,
-#settings-view #show-onboarding-btn {
+#settings-view #show-onboarding-btn,
+#settings-view #settings-totp-btn {
     color: var(--bauhaus-text-main) !important;
     border-color: rgba(255, 255, 255, 0.52);
 }
@@ -2144,7 +2188,8 @@ body.hero-body {
 #settings-view #library-config-btn:hover,
 #settings-view #force-refresh-btn:hover,
 #settings-view #theme-switcher-btn-entry:hover,
-#settings-view #show-onboarding-btn:hover {
+#settings-view #show-onboarding-btn:hover,
+#settings-view #settings-totp-btn:hover {
     background: var(--bauhaus-accent-blue);
     color: white !important;
     box-shadow: 0 12px 24px rgba(37, 99, 235, 0.3);

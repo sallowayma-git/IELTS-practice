@@ -41,62 +41,8 @@
 
         <div class="container hero-shell">
             <div class="hero-header">
-                <h1 class="hero-brand-title" aria-label="IELTS Atlas">
-                    <span class="hero-brand-mark" aria-hidden="true">
-                        <svg
-                            viewBox="0 0 24 24"
-                            width="1em"
-                            height="1em"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.75"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        >
-                            <path d="M4.5 20V8.2a2.7 2.7 0 0 1 2.7-2.7H10"></path>
-                            <path d="M19.5 20V8.2a2.7 2.7 0 0 0-2.7-2.7H14"></path>
-                            <path d="M7.2 16.8H10a2 2 0 0 1 2 2V6.5a2 2 0 0 0-2-2H7.2a2.7 2.7 0 0 0-2.7 2.7v11.6a2 2 0 0 1 2-2Z"></path>
-                            <path d="M16.8 16.8H14a2 2 0 0 0-2 2V6.5a2 2 0 0 1 2-2h2.8a2.7 2.7 0 0 1 2.7 2.7v11.6a2 2 0 0 0-2-2Z"></path>
-                            <path d="M9 9.5h1.3M13.7 9.5H15"></path>
-                        </svg>
-                    </span>
-                    <span class="hero-brand-text">IELTS Atlas</span>
-                    <span class="hero-brand-subtitle"
-                        >项目仅授权ZYZ Reading Walks
-                        提供分发，小红书号：276752989</span
-                    >
-                    <a
-                        href="https://www.xiaohongshu.com/user/profile/5b4d76744eacab058489e72f"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="hero-badge hero-badge--cta hero-badge--redbook"
-                        aria-label="小红书主页"
-                    >
-                        小红书
-                    </a>
-                    <a
-                        href="https://github.com/sallowayma-git/IELTS-practice"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="inline-hover-link"
-                        aria-label="GitHub Repository"
-                    >
-                        <svg
-                            viewBox="0 0 24 24"
-                            width="28"
-                            height="28"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            fill="none"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                        >
-                            <path
-                                d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"
-                            ></path>
-                        </svg>
-                    </a>
-                </h1>
+                <div class="hero-header__actions" aria-label="Page actions">
+                </div>
             </div>
 
             <nav class="main-nav hero-nav" data-nav-controller="legacy">
@@ -113,13 +59,6 @@
                     data-view="browse"
                 >
                     📚 题库浏览
-                </button>
-                <button
-                    class="nav-btn hero-nav__btn"
-                    type="button"
-                    data-view="practice"
-                >
-                    📝 练习记录
                 </button>
                 <button
                     class="nav-btn hero-nav__btn"
@@ -891,6 +830,23 @@
                         </div>
                     </div>
 
+                    <div class="hero-panel hero-section settings-security-panel">
+                        <h3>🔐 安全</h3>
+                        <p class="hero-panel__muted">
+                            账号登录保护与二次验证设置。
+                        </p>
+                        <div class="hero-settings-actions">
+                            <button
+                                class="btn hero-btn settings-security__totp"
+                                id="settings-totp-btn"
+                                type="button"
+                                hidden
+                            >
+                                TOTP 二次验证
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="hero-panel hero-section">
                         <h3>📊 系统信息</h3>
                         <div class="hero-surface settings-system-info">
@@ -1008,6 +964,33 @@
                 <div class="vocab-view-shell" data-vocab-role="root"></div>
             </section>
         </div>
+
+        <footer class="site-footer" aria-label="Project links">
+            <a
+                href="https://github.com/sallowayma-git/IELTS-practice"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="site-footer__github inline-hover-link"
+                aria-label="GitHub Repository"
+                title="GitHub Repository"
+            >
+                <svg
+                    viewBox="0 0 24 24"
+                    width="22"
+                    height="22"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    fill="none"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                >
+                    <path
+                        d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"
+                    ></path>
+                </svg>
+                <span>GitHub</span>
+            </a>
+        </footer>
 
         <div
             id="fullscreen-clock-overlay"

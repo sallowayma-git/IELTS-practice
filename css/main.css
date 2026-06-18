@@ -167,8 +167,8 @@
 
 body {
     font-family: var(--font-family-primary);
-    background: linear-gradient(var(--body-gradient-angle), #ffd89b 0%, #6accc7 100%);
-    animation: bodyGradientRotation 120s ease-in-out infinite;
+    background: #6CA67C;
+    animation: none;
     min-height: 100vh;
     color: var(--color-gray-900);
     line-height: var(--line-height-normal);
@@ -7441,8 +7441,9 @@ body.theme-blue ::-webkit-scrollbar-thumb {
 
 .remote-auth-overlay[hidden],
 .remote-auth-account[hidden],
+.remote-auth-account__menu[hidden],
 .remote-auth-account__admin[hidden],
-.remote-auth-account__totp[hidden],
+#settings-totp-btn[hidden],
 .remote-auth-token-field[hidden],
 .remote-auth-setup[hidden],
 .remote-auth-recovery[hidden],
@@ -7491,7 +7492,6 @@ body.remote-auth-gated > :not(#remote-auth-overlay):not(.remote-auth-account):no
 .remote-auth-submit,
 .remote-auth-recovery__confirm,
 .remote-auth-account__admin,
-.remote-auth-account__totp,
 .remote-auth-account__logout,
 .remote-auth-totp button {
     border: 0;
@@ -7578,7 +7578,6 @@ body.remote-auth-gated > :not(#remote-auth-overlay):not(.remote-auth-account):no
 
 .remote-auth-submit:disabled,
 .remote-auth-recovery__confirm:disabled,
-.remote-auth-account__totp:disabled,
 .remote-auth-account__logout:disabled,
 .remote-auth-totp button:disabled {
     cursor: wait;
@@ -7625,59 +7624,167 @@ body.remote-auth-gated > :not(#remote-auth-overlay):not(.remote-auth-account):no
 }
 
 .remote-auth-account {
+    position: relative;
+    z-index: 9000;
+    color: #0f172a;
+}
+
+body > .remote-auth-account {
     position: fixed;
     top: 16px;
     right: 16px;
-    z-index: 9000;
+}
+
+.remote-auth-account__trigger {
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 38px;
-    border: 1px solid rgba(148, 163, 184, 0.32);
+    min-height: 42px;
+    border: 1px solid rgba(255, 255, 255, 0.72);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.92);
+    background: rgba(255, 255, 255, 0.76);
     color: #0f172a;
-    box-shadow: 0 10px 32px rgba(15, 23, 42, 0.16);
-    padding: 6px 8px 6px 12px;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+    cursor: pointer;
+    font: inherit;
+    padding: 5px 9px 5px 6px;
 }
 
-.remote-auth-account__name {
-    max-width: 180px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 0.9rem;
-    font-weight: 700;
+.remote-auth-account.is-open .remote-auth-account__trigger,
+.remote-auth-account__trigger:hover,
+.remote-auth-account__trigger:focus-visible {
+    background: rgba(255, 255, 255, 0.9);
 }
 
-.remote-auth-account__logout {
-    min-height: 28px;
-    border-radius: 6px;
-    background: #e2e8f0;
-    color: #334155;
-    padding: 0 10px;
-}
-
-.remote-auth-account__totp {
-    min-height: 28px;
-    border-radius: 6px;
-    background: #eef2ff;
-    color: #3730a3;
-    padding: 0 10px;
-    font-weight: 700;
-}
-
-.remote-auth-account__admin {
+.remote-auth-account__avatar {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 28px;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: #1f2937;
+    color: #ffffff;
+    font-size: 0.86rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.remote-auth-account__identity {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+    text-align: left;
+}
+
+.remote-auth-account__name {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+.remote-auth-account__role {
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.remote-auth-account__chevron {
+    color: #64748b;
+    font-size: 0.74rem;
+    font-weight: 800;
+    transform: translateY(-1px);
+}
+
+.remote-auth-account__menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: min(340px, calc(100vw - 32px));
+    border: 1px solid rgba(148, 163, 184, 0.32);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.96);
+    color: #0f172a;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+    padding: 10px;
+    display: grid;
+    gap: 8px;
+}
+
+.remote-auth-account__stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.remote-auth-account__stat {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    border: 1px solid #e2e8f0;
     border-radius: 6px;
+    background: #f8fafc;
+    padding: 8px 6px;
+    text-align: center;
+}
+
+.remote-auth-account__stat strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #0f172a;
+    font-size: 0.98rem;
+    line-height: 1.05;
+}
+
+.remote-auth-account__stat span {
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.remote-auth-account__menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 38px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: #f8fafc;
+    color: #334155;
+    padding: 0 12px;
+    text-align: left;
+    text-decoration: none;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.remote-auth-account__menu-item:hover,
+.remote-auth-account__menu-item:focus-visible {
+    border-color: #cbd5e1;
+    background: #ffffff;
+}
+
+.remote-auth-account__practice {
+    background: #eef6f0;
+    color: #255c38;
+}
+
+.remote-auth-account__admin {
     background: #dff3ef;
     color: #0f766e;
-    padding: 0 10px;
-    text-decoration: none;
-    font-weight: 700;
+}
+
+.remote-auth-account__logout {
+    background: #f1f5f9;
+    color: #334155;
 }
 
 .remote-auth-totp {
@@ -7745,10 +7852,27 @@ body.remote-auth-gated > :not(#remote-auth-overlay):not(.remote-auth-account):no
         padding: 20px;
     }
 
-    .remote-auth-account {
+    body > .remote-auth-account {
         top: 10px;
         right: 10px;
-        max-width: calc(100vw - 20px);
+    }
+
+    .remote-auth-account__identity {
+        max-width: 116px;
+    }
+
+    .remote-auth-account__menu {
+        position: fixed;
+        top: 64px;
+        left: 10px;
+        right: 10px;
+        width: auto;
+        max-height: calc(100vh - 84px);
+        overflow: auto;
+    }
+
+    .remote-auth-account__stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .remote-auth-totp {
