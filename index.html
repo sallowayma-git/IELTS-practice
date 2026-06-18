@@ -40,51 +40,162 @@
         <div class="message-container" id="message-container"></div>
 
         <div class="container hero-shell">
-            <div class="hero-header">
-                <div class="hero-header__actions" aria-label="Page actions">
+            <div class="app-topbar" role="banner">
+                <div class="app-topbar__brand" aria-label="IELTS Atlas">
+                    <span class="app-topbar__brand-name">IELTS Atlas</span>
+                    <span class="app-topbar__brand-meta">Practice</span>
+                </div>
+
+                <nav class="main-nav hero-nav" data-nav-controller="legacy">
+                    <button
+                        class="nav-btn hero-nav__btn active"
+                        type="button"
+                        data-view="overview"
+                    >
+                        总览
+                    </button>
+                    <button
+                        class="nav-btn hero-nav__btn"
+                        type="button"
+                        data-view="browse"
+                    >
+                        题库
+                    </button>
+                    <button
+                        class="nav-btn hero-nav__btn"
+                        type="button"
+                        data-view="more"
+                    >
+                        更多
+                    </button>
+                </nav>
+
+                <div class="app-topbar__actions hero-header">
+                    <div class="hero-header__actions" aria-label="Page actions">
+                    </div>
                 </div>
             </div>
 
-            <nav class="main-nav hero-nav" data-nav-controller="legacy">
-                <button
-                    class="nav-btn hero-nav__btn active"
-                    type="button"
-                    data-view="overview"
-                >
-                    📊 总览
-                </button>
-                <button
-                    class="nav-btn hero-nav__btn"
-                    type="button"
-                    data-view="browse"
-                >
-                    📚 题库浏览
-                </button>
-                <button
-                    class="nav-btn hero-nav__btn"
-                    type="button"
-                    data-view="more"
-                >
-                    ✨ 更多
-                </button>
-                <button
-                    class="nav-btn hero-nav__btn"
-                    type="button"
-                    data-view="settings"
-                >
-                    ⚙️ 设置
-                </button>
-            </nav>
-
             <!-- 总览页面 -->
             <div id="overview-view" class="view active hero-panel hero-section">
-                <div class="hero-panel__header">
-                    <h2 class="hero-panel__title">📊 学习总览</h2>
+                <div class="hero-panel__header overview-view__header">
+                    <div>
+                        <p class="hero-panel__eyebrow">IELTS Practice</p>
+                        <h2 class="hero-panel__title">学习工作台</h2>
+                        <p class="hero-panel__muted">
+                            从下一次练习、题库浏览或账户数据开始。
+                        </p>
+                    </div>
+                </div>
+
+                <div class="overview-workbench" aria-label="学习工作台">
+                    <section class="overview-workbench__primary hero-surface">
+                        <span class="overview-workbench__kicker">今日入口</span>
+                        <h3>先完成一组可控练习</h3>
+                        <p>
+                            随机进入一篇可打开的题目，或直接按题型浏览题库。
+                        </p>
+                        <div class="overview-workbench__actions">
+                            <button
+                                class="overview-workbench__action overview-workbench__action--primary"
+                                type="button"
+                                data-lane-action="instant-start"
+                            >
+                                开始随机练习
+                            </button>
+                            <button
+                                class="overview-workbench__action"
+                                type="button"
+                                data-lane-action="browse"
+                                data-lane-category="all"
+                                data-lane-type="all"
+                            >
+                                浏览全部题库
+                            </button>
+                        </div>
+                    </section>
+
+                    <aside class="overview-workbench__side">
+                        <button
+                            class="overview-shortcut"
+                            type="button"
+                            data-lane-action="browse"
+                            data-lane-category="P1"
+                            data-lane-type="reading"
+                        >
+                            <span>阅读 P1</span>
+                            <strong>从短篇阅读开始</strong>
+                        </button>
+                        <button
+                            class="overview-shortcut"
+                            type="button"
+                            data-index-action="open-view"
+                            data-action-value="account"
+                        >
+                            <span>账户中心</span>
+                            <strong>查看记录、平均与安全设置</strong>
+                        </button>
+                    </aside>
+                </div>
+
+                <div class="overview-library-heading">
+                    <div>
+                        <h3>题型库</h3>
+                        <p>按阅读或听力分组进入资源。</p>
+                    </div>
                 </div>
 
                 <div class="category-grid" id="category-overview">
                     <!-- 分类卡片将通过JavaScript动态生成 -->
                 </div>
+            </div>
+
+            <!-- 账户页面 -->
+            <div id="account-view" class="view hero-panel hero-section">
+                <div class="hero-panel__header account-view__header">
+                    <div>
+                        <h2 class="hero-panel__title">账户</h2>
+                        <p class="hero-panel__muted">
+                            当前账号的学习数据与常用入口。
+                        </p>
+                    </div>
+                </div>
+
+                <section class="account-view__profile hero-surface">
+                    <div class="account-view__avatar" id="account-profile-avatar" aria-hidden="true">
+                        U
+                    </div>
+                    <div class="account-view__identity">
+                        <strong id="account-profile-name">未登录</strong>
+                        <span id="account-profile-role">User</span>
+                    </div>
+                </section>
+
+                <section class="account-view__section">
+                    <h3 class="account-view__section-title">学习数据</h3>
+                    <div class="account-view__stats">
+                        <article class="account-view__stat">
+                            <span class="account-view__stat-label">练习记录</span>
+                            <strong class="account-view__stat-value" id="account-total-practiced">0</strong>
+                            <span class="account-view__stat-meta">累计完成记录</span>
+                        </article>
+                        <article class="account-view__stat">
+                            <span class="account-view__stat-label">平均正确率</span>
+                            <strong class="account-view__stat-value" id="account-avg-score">0%</strong>
+                            <span class="account-view__stat-meta">整体练习表现</span>
+                        </article>
+                        <article class="account-view__stat">
+                            <span class="account-view__stat-label">学习时长</span>
+                            <strong class="account-view__stat-value" id="account-study-time">0</strong>
+                            <span class="account-view__stat-meta">累计分钟数</span>
+                        </article>
+                        <article class="account-view__stat">
+                            <span class="account-view__stat-label">连续天数</span>
+                            <strong class="account-view__stat-value" id="account-streak-days">0</strong>
+                            <span class="account-view__stat-meta">持续学习节奏</span>
+                        </article>
+                    </div>
+                </section>
             </div>
 
             <!-- 题库浏览页面 -->

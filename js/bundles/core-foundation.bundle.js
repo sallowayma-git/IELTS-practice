@@ -4087,32 +4087,45 @@ storageManager.ready
             const accountMenu = createElement('div', 'remote-auth-account__menu');
             accountMenu.hidden = true;
             accountMenu.setAttribute('role', 'menu');
-            const accountStats = createElement('div', 'remote-auth-account__stats');
-            [
-                ['total', '\u8bb0\u5f55', '0'],
-                ['average', '\u5e73\u5747', '0%'],
-                ['minutes', '\u5206\u949f', '0'],
-                ['streak', '\u8fde\u7eed', '0']
-            ].forEach(([key, label, value]) => {
-                const item = createElement('div', 'remote-auth-account__stat');
-                const valueNode = createElement('strong', null, value);
-                valueNode.dataset.accountStatValue = key;
-                item.append(valueNode, createElement('span', null, label));
-                accountStats.append(item);
-            });
+            const menuHead = createElement('div', 'remote-auth-account__menu-head');
+            menuHead.setAttribute('role', 'presentation');
+            const menuAvatar = createElement('span', 'remote-auth-account__menu-avatar', 'U');
+            menuAvatar.setAttribute('aria-hidden', 'true');
+            const menuIdentity = createElement('span', 'remote-auth-account__menu-identity');
+            const menuName = createElement('strong', 'remote-auth-account__menu-name');
+            const menuRole = createElement('span', 'remote-auth-account__menu-role', 'User');
+            menuIdentity.append(menuName, menuRole);
+            menuHead.append(menuAvatar, menuIdentity);
 
-            const practice = createElement('button', 'remote-auth-account__menu-item remote-auth-account__practice', '\u7ec3\u4e60\u8bb0\u5f55');
+            function createAccountMenuItem(tag, className, titleText, descriptionText) {
+                const item = createElement(tag, className);
+                const text = createElement('span', 'remote-auth-account__menu-text');
+                text.append(
+                    createElement('span', 'remote-auth-account__menu-title', titleText),
+                    createElement('span', 'remote-auth-account__menu-desc', descriptionText)
+                );
+                item.append(text);
+                return item;
+            }
+
+            const accountHome = createAccountMenuItem('button', 'remote-auth-account__menu-item remote-auth-account__home', '账户', '查看学习数据和账户状态');
+            accountHome.type = 'button';
+            accountHome.setAttribute('role', 'menuitem');
+            const practice = createAccountMenuItem('button', 'remote-auth-account__menu-item remote-auth-account__practice', '练习记录', '进入历史记录与统计视图');
             practice.type = 'button';
             practice.setAttribute('role', 'menuitem');
-            const adminLink = createElement('a', 'remote-auth-account__menu-item remote-auth-account__admin', 'Admin');
+            const settings = createAccountMenuItem('button', 'remote-auth-account__menu-item remote-auth-account__settings', '设置', '管理题库、数据备份和安全');
+            settings.type = 'button';
+            settings.setAttribute('role', 'menuitem');
+            const adminLink = createAccountMenuItem('a', 'remote-auth-account__menu-item remote-auth-account__admin', 'Admin', '打开管理员后台');
             adminLink.href = '/admin';
             adminLink.hidden = true;
             adminLink.setAttribute('role', 'menuitem');
             const settingsTotp = window.document.getElementById('settings-totp-btn');
-            const logout = createElement('button', 'remote-auth-account__menu-item remote-auth-account__logout', '\u9000\u51fa');
+            const logout = createAccountMenuItem('button', 'remote-auth-account__menu-item remote-auth-account__logout', '退出', '结束当前登录会话');
             logout.type = 'button';
             logout.setAttribute('role', 'menuitem');
-            accountMenu.append(accountStats, practice, adminLink, logout);
+            accountMenu.append(menuHead, accountHome, practice, settings, adminLink, logout);
             account.append(accountToggle, accountMenu);
             const accountHost = window.document.querySelector('.hero-header__actions') || window.document.body;
             accountHost.appendChild(account);
@@ -4295,6 +4308,20 @@ storageManager.ready
                 setAccountMenuOpen(!account.classList.contains('is-open'));
             });
 
+            accountHome.addEventListener('click', () => {
+                setAccountMenuOpen(false);
+                syncAccountStats();
+                if (typeof window.showView === 'function') {
+                    window.showView('account');
+                    return;
+                }
+                const accountView = window.document.getElementById('account-view');
+                if (accountView) {
+                    window.document.querySelectorAll('.view.active').forEach((view) => view.classList.remove('active'));
+                    accountView.classList.add('active');
+                }
+            });
+
             practice.addEventListener('click', () => {
                 setAccountMenuOpen(false);
                 if (typeof window.showView === 'function') {
@@ -4305,6 +4332,19 @@ storageManager.ready
                 if (practiceView) {
                     window.document.querySelectorAll('.view.active').forEach((view) => view.classList.remove('active'));
                     practiceView.classList.add('active');
+                }
+            });
+
+            settings.addEventListener('click', () => {
+                setAccountMenuOpen(false);
+                if (typeof window.showView === 'function') {
+                    window.showView('settings');
+                    return;
+                }
+                const settingsView = window.document.getElementById('settings-view');
+                if (settingsView) {
+                    window.document.querySelectorAll('.view.active').forEach((view) => view.classList.remove('active'));
+                    settingsView.classList.add('active');
                 }
             });
 
@@ -4380,13 +4420,13 @@ storageManager.ready
                 return;
             }
             const statMap = {
-                total: 'total-practiced',
-                average: 'avg-score',
-                minutes: 'study-time',
-                streak: 'streak-days'
+                'account-total-practiced': 'total-practiced',
+                'account-avg-score': 'avg-score',
+                'account-study-time': 'study-time',
+                'account-streak-days': 'streak-days'
             };
-            Object.entries(statMap).forEach(([key, sourceId]) => {
-                const valueNode = account.querySelector(`[data-account-stat-value="${key}"]`);
+            Object.entries(statMap).forEach(([targetId, sourceId]) => {
+                const valueNode = window.document.getElementById(targetId);
                 const sourceNode = window.document.getElementById(sourceId);
                 if (valueNode && sourceNode) {
                     valueNode.textContent = sourceNode.textContent.trim() || valueNode.textContent;
@@ -4399,15 +4439,41 @@ storageManager.ready
             const name = account.querySelector('.remote-auth-account__name');
             const role = account.querySelector('.remote-auth-account__role');
             const avatar = account.querySelector('.remote-auth-account__avatar');
+            const menuName = account.querySelector('.remote-auth-account__menu-name');
+            const menuRole = account.querySelector('.remote-auth-account__menu-role');
+            const menuAvatar = account.querySelector('.remote-auth-account__menu-avatar');
             const adminLink = account.querySelector('.remote-auth-account__admin');
             const settingsTotp = window.document.getElementById('settings-totp-btn');
+            const profileName = window.document.getElementById('account-profile-name');
+            const profileRole = window.document.getElementById('account-profile-role');
+            const profileAvatar = window.document.getElementById('account-profile-avatar');
             if (user && user.username) {
+                const displayRole = user.role === 'admin' ? 'Admin' : 'User';
+                const initial = getAccountInitial(user.username);
                 name.textContent = user.username;
                 if (role) {
-                    role.textContent = user.role === 'admin' ? 'Admin' : 'User';
+                    role.textContent = displayRole;
                 }
                 if (avatar) {
-                    avatar.textContent = getAccountInitial(user.username);
+                    avatar.textContent = initial;
+                }
+                if (menuName) {
+                    menuName.textContent = user.username;
+                }
+                if (menuRole) {
+                    menuRole.textContent = displayRole;
+                }
+                if (menuAvatar) {
+                    menuAvatar.textContent = initial;
+                }
+                if (profileName) {
+                    profileName.textContent = user.username;
+                }
+                if (profileRole) {
+                    profileRole.textContent = displayRole;
+                }
+                if (profileAvatar) {
+                    profileAvatar.textContent = initial;
                 }
                 adminLink.hidden = user.role !== 'admin';
                 if (settingsTotp) {
@@ -4422,6 +4488,24 @@ storageManager.ready
                 }
                 if (avatar) {
                     avatar.textContent = 'U';
+                }
+                if (menuName) {
+                    menuName.textContent = '';
+                }
+                if (menuRole) {
+                    menuRole.textContent = '';
+                }
+                if (menuAvatar) {
+                    menuAvatar.textContent = 'U';
+                }
+                if (profileName) {
+                    profileName.textContent = '\u672a\u767b\u5f55';
+                }
+                if (profileRole) {
+                    profileRole.textContent = 'User';
+                }
+                if (profileAvatar) {
+                    profileAvatar.textContent = 'U';
                 }
                 adminLink.hidden = true;
                 if (settingsTotp) {

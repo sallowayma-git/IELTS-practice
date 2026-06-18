@@ -1829,6 +1829,24 @@ console.log('[DOM] DOM工具库已加载，统一事件委托、DOM创建和样�
         var value = target && target.dataset ? target.dataset.actionValue : undefined;
 
         switch (action) {
+            case 'open-view':
+                if (!value) {
+                    return undefined;
+                }
+                if (value === 'browse') {
+                    ensureBrowse();
+                } else if (value === 'more') {
+                    ensureMore();
+                } else if (value === 'settings') {
+                    ensureSettings();
+                }
+                if (typeof global.showView === 'function') {
+                    return global.showView(value);
+                }
+                if (global.app && typeof global.app.navigateToView === 'function') {
+                    return global.app.navigateToView(value);
+                }
+                return undefined;
             case 'filter-exams':
                 return typeof global.filterByType === 'function' ? global.filterByType(value || 'all') : undefined;
             case 'filter-frequency':
