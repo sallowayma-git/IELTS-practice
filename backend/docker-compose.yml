@@ -58,6 +58,7 @@ services:
     container_name: ielts-practice-tor
     environment:
       TOR_BRIDGES: ${TOR_BRIDGES:-}
+      TOR_BRIDGES_FILE: ${TOR_BRIDGES_FILE:-/etc/tor/bridges.txt}
     depends_on:
       app:
         condition: service_healthy

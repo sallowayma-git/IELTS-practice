@@ -32,6 +32,7 @@
 
 package-lock.json
 backend/.env
+backend/logs/
 backend/node_modules/
 !backend/package-lock.json
 # 忽略可能的系统文件

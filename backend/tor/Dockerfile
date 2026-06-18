@@ -5,6 +5,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY tor/torrc /etc/tor/torrc
+COPY tor/bridges.txt /etc/tor/bridges.txt
 COPY tor/docker-entrypoint.sh /usr/local/bin/tor-entrypoint
 RUN chmod +x /usr/local/bin/tor-entrypoint
 
