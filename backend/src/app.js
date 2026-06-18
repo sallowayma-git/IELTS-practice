@@ -101,7 +101,7 @@ function createApp(options = {}) {
         res.sendFile(path.join(repoRoot, 'index.html'));
     });
 
-    for (const directory of ['assets', 'css', 'js', 'templates']) {
+    for (const directory of ['assets', 'css', 'js', 'templates', 'ListeningPractice']) {
         app.use(`/${directory}`, express.static(path.join(repoRoot, directory), {
             dotfiles: 'deny',
             index: false

@@ -33,6 +33,13 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     ports:
       - "127.0.0.1:3000:3000"
+    volumes:
+      - type: bind
+        source: ../ListeningPractice
+        target: /app/ListeningPractice
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
       interval: 5s

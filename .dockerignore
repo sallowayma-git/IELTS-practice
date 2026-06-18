@@ -5,4 +5,5 @@
 .pnpm-store
 backend/.env
 backend/node_modules
+ListeningPractice
 node_modules
