@@ -1373,7 +1373,7 @@
         if (typeof group.allowOptionReuse === 'boolean') {
             return group.allowOptionReuse;
         }
-        const html = String(group.bodyHtml || group.leadHtml || group.html || '').toLowerCase();
+        const html = String(group.bodyHtml || '').toLowerCase();
         if (!html) {
             return false;
         }
