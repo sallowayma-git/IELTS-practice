@@ -8,6 +8,7 @@ const db = require('./db');
 const { PostgresAuthStore, createAuthRouter, publicUser, requireAdmin } = require('./auth');
 const { PostgresAdminStore, createAdminRouter } = require('./admin');
 const { PostgresPracticeRecordStore, createPracticeRecordsRouter } = require('./practiceRecords');
+const { PostgresTotpStore, createRequireAdminTotp, createTotpRouter } = require('./totp');
 
 function parseBoolean(value, fallback = false) {
     if (value === undefined || value === null || value === '') return fallback;
@@ -37,6 +38,9 @@ function createApp(options = {}) {
         ? options.trustProxy
         : parseBoolean(process.env.TRUST_PROXY, false);
     const sessionSecret = options.sessionSecret || process.env.SESSION_SECRET || 'development-session-secret-change-me';
+    const totpEnabled = options.totpEnabled !== undefined
+        ? Boolean(options.totpEnabled)
+        : parseBoolean(process.env.TOTP_ENABLED, true);
 
     app.disable('x-powered-by');
     app.set('trust proxy', trustProxy);
@@ -60,39 +64,66 @@ function createApp(options = {}) {
     }));
 
     const authStore = options.authStore || new PostgresAuthStore(dbClient);
+    const totpStore = options.totpStore || new PostgresTotpStore(dbClient);
     const practiceStore = options.practiceStore || new PostgresPracticeRecordStore(dbClient);
     const adminStore = options.adminStore || new PostgresAdminStore(dbClient);
+    const requireAdminTotp = options.requireAdminTotp || (
+        totpEnabled ? createRequireAdminTotp(totpStore) : ((req, res, next) => next())
+    );
 
     app.get('/api/health', (req, res) => {
         res.json({ ok: true });
     });
     app.use('/api/auth', createAuthRouter({
         store: authStore,
+        totpStore,
         cookieName,
-        rateLimit: options.rateLimit
+        rateLimit: options.rateLimit,
+        totpEnabled
+    }));
+    app.use('/api/auth/totp', createTotpRouter({
+        store: totpStore,
+        authStore,
+        rateLimit: options.totpRateLimit || options.rateLimit,
+        bcrypt: options.bcrypt,
+        enabled: totpEnabled,
+        issuer: options.totpIssuer,
+        encryptionKey: options.totpEncryptionKey,
+        recoveryHashRounds: options.totpRecoveryHashRounds
     }));
     app.use('/api/practice-records', createPracticeRecordsRouter({
         store: practiceStore
     }));
     app.use('/api/admin', createAdminRouter({
-        store: adminStore
+        store: adminStore,
+        requireAdminTotp
     }));
 
     app.use('/api', (req, res) => {
         res.status(404).json({ error: 'API route not found' });
     });
 
-    app.get(['/admin', '/admin/'], (req, res) => {
-        if (!req.session || !req.session.user) {
-            return res.redirect('/');
+    app.get(['/admin', '/admin/'], async (req, res, next) => {
+        try {
+            if (!req.session || !req.session.user) {
+                return res.redirect('/');
+            }
+            req.session.user = publicUser(req.session.user);
+            if (req.session.user.role !== 'admin') {
+                return res.status(403).type('text/plain').send('Admin access required');
+            }
+            if (totpEnabled) {
+                const totpStatus = await totpStore.getStatus(req.session.user.id);
+                if (!totpStatus.enabled) {
+                    return res.status(403).type('text/plain').send('Admin TOTP setup required');
+                }
+            }
+            return res.sendFile(path.join(adminRoot, 'index.html'));
+        } catch (error) {
+            return next(error);
         }
-        req.session.user = publicUser(req.session.user);
-        if (req.session.user.role !== 'admin') {
-            return res.status(403).type('text/plain').send('Admin access required');
-        }
-        return res.sendFile(path.join(adminRoot, 'index.html'));
     });
-    app.use('/admin', requireAdmin, express.static(adminRoot, {
+    app.use('/admin', requireAdmin, requireAdminTotp, express.static(adminRoot, {
         dotfiles: 'deny',
         index: false
     }));

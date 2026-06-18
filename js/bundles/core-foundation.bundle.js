@@ -3416,6 +3416,7 @@ storageManager.ready
             this.csrfToken = null;
             this.user = null;
             this.available = false;
+            this.pendingTotp = null;
         }
 
         isAuthenticated() {
@@ -3431,6 +3432,8 @@ storageManager.ready
                 this.available = true;
                 if (response.status === 401) {
                     this.user = null;
+                    this.csrfToken = null;
+                    this.pendingTotp = null;
                     return { available: true, authenticated: false, user: null };
                 }
                 const payload = await this._parseJson(response);
@@ -3456,6 +3459,7 @@ storageManager.ready
                 }
                 this.available = false;
                 this.user = null;
+                this.pendingTotp = null;
                 return { available: false, authenticated: false, user: null, error };
             }
         }
@@ -3475,6 +3479,7 @@ storageManager.ready
                 body: { username, password }
             });
             this.user = payload.user || null;
+            this.pendingTotp = null;
             if (payload.csrfToken) {
                 this.csrfToken = payload.csrfToken;
             }
@@ -3486,11 +3491,68 @@ storageManager.ready
                 method: 'POST',
                 body: { username, password }
             });
-            this.user = payload.user || null;
+            if (payload.requiresTotp || payload.requiresTotpSetup) {
+                this.user = null;
+                this.pendingTotp = {
+                    requiresTotp: Boolean(payload.requiresTotp),
+                    requiresTotpSetup: Boolean(payload.requiresTotpSetup),
+                    user: payload.user || null
+                };
+            } else {
+                this.user = payload.user || null;
+                this.pendingTotp = null;
+            }
             if (payload.csrfToken) {
                 this.csrfToken = payload.csrfToken;
             }
             return payload;
+        }
+
+        async getTotpStatus() {
+            const payload = await this.request('/api/auth/totp/status', { method: 'GET', csrf: false });
+            return payload.status || { enabled: false, recoveryCodesRemaining: 0 };
+        }
+
+        async startTotpSetup() {
+            return this.request('/api/auth/totp/setup', { method: 'POST' });
+        }
+
+        async verifyTotpSetup(token) {
+            const payload = await this.request('/api/auth/totp/verify-setup', {
+                method: 'POST',
+                body: { token }
+            });
+            this.user = payload.user || this.user;
+            this.pendingTotp = null;
+            if (payload.csrfToken) {
+                this.csrfToken = payload.csrfToken;
+            }
+            return payload;
+        }
+
+        async completeTotpLogin(token) {
+            const payload = await this.request('/api/auth/totp/login', {
+                method: 'POST',
+                body: { token }
+            });
+            this.user = payload.user || null;
+            this.pendingTotp = null;
+            if (payload.csrfToken) {
+                this.csrfToken = payload.csrfToken;
+            }
+            return payload;
+        }
+
+        async regenerateTotpRecoveryCodes() {
+            return this.request('/api/auth/totp/recovery-codes', { method: 'POST' });
+        }
+
+        async disableTotp(password, token) {
+            const payload = await this.request('/api/auth/totp/disable', {
+                method: 'POST',
+                body: { password, token }
+            });
+            return payload.status || { enabled: false, recoveryCodesRemaining: 0 };
         }
 
         async logout() {
@@ -3499,6 +3561,7 @@ storageManager.ready
             });
             this.user = null;
             this.csrfToken = null;
+            this.pendingTotp = null;
             return payload;
         }
 
@@ -3558,6 +3621,8 @@ storageManager.ready
             const payload = await this._parseJson(response);
             if (response.status === 401) {
                 this.user = null;
+                this.csrfToken = null;
+                this.pendingTotp = null;
             }
             if (!response.ok) {
                 throw new RemoteApiError(payload?.error || `Request failed with ${response.status}`, {
@@ -3759,6 +3824,9 @@ storageManager.ready
 (function(window) {
     const ExamData = window.ExamData = window.ExamData || {};
 
+    const gatedElements = new Map();
+    const USERNAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9_-]{2,31}$/;
+
     function getImportMarkerKey(userId) {
         return `remote_import_completed:${userId}`;
     }
@@ -3793,6 +3861,114 @@ storageManager.ready
         return element;
     }
 
+    function isAuthSurface(element) {
+        return element.id === 'remote-auth-overlay'
+            || element.classList.contains('remote-auth-account')
+            || element.classList.contains('remote-auth-totp');
+    }
+
+    function setRemoteAuthGate(active) {
+        const document = window.document;
+        if (!document || !document.body) {
+            return;
+        }
+        document.documentElement.classList.toggle('remote-auth-gated', Boolean(active));
+        document.body.classList.toggle('remote-auth-gated', Boolean(active));
+
+        Array.from(document.body.children).forEach((child) => {
+            if (isAuthSurface(child)) {
+                return;
+            }
+            if (active) {
+                if (!gatedElements.has(child)) {
+                    gatedElements.set(child, {
+                        inert: child.inert,
+                        ariaHidden: child.getAttribute('aria-hidden')
+                    });
+                }
+                child.inert = true;
+                child.setAttribute('aria-hidden', 'true');
+                return;
+            }
+            const previous = gatedElements.get(child);
+            if (previous) {
+                child.inert = previous.inert;
+                if (previous.ariaHidden === null) {
+                    child.removeAttribute('aria-hidden');
+                } else {
+                    child.setAttribute('aria-hidden', previous.ariaHidden);
+                }
+                gatedElements.delete(child);
+            } else {
+                child.inert = false;
+                child.removeAttribute('aria-hidden');
+            }
+        });
+
+        if (!active) {
+            gatedElements.clear();
+        }
+    }
+
+    function validateRemoteAuthFields(username, password, mode) {
+        const errors = [];
+        const normalizedUsername = String(username || '').trim();
+        const rawPassword = String(password || '');
+        if (!USERNAME_PATTERN.test(normalizedUsername)) {
+            errors.push('用户名需要 3-32 位，只能包含字母、数字、下划线或连字符。');
+        }
+        if (!rawPassword) {
+            errors.push('请输入密码。');
+        }
+        if (mode === 'register') {
+            if (rawPassword.length < 8) {
+                errors.push('密码至少需要 8 个字符。');
+            }
+            if (!/[a-z]/.test(rawPassword)) {
+                errors.push('密码需要包含小写字母。');
+            }
+            if (!/[A-Z]/.test(rawPassword)) {
+                errors.push('密码需要包含大写字母。');
+            }
+            if (!/[0-9]/.test(rawPassword)) {
+                errors.push('密码需要包含数字。');
+            }
+        }
+        return {
+            valid: errors.length === 0,
+            errors,
+            username: normalizedUsername
+        };
+    }
+
+    function formatRemoteAuthError(error) {
+        if (error && error.payload && Array.isArray(error.payload.details) && error.payload.details.length) {
+            return error.payload.details.join('；');
+        }
+        if (error && error.status === 429) {
+            return '请求过于频繁，请稍后再试。';
+        }
+        if (error && error.status === 403) {
+            return error.payload?.error || '当前操作被拒绝，请刷新后重试。';
+        }
+        return error?.payload?.error || error?.message || '认证失败';
+    }
+
+    function normalizeCode(value) {
+        return String(value || '').trim();
+    }
+
+    function formatTotpTime(value) {
+        if (!value) {
+            return '从未使用';
+        }
+        const date = new Date(value);
+        if (Number.isNaN(Number(date))) {
+            return '时间未知';
+        }
+        return date.toLocaleString();
+    }
+
     function createRemoteAuthController(options = {}) {
         const apiClient = options.apiClient;
         const localDataSource = options.localDataSource;
@@ -3801,8 +3977,11 @@ storageManager.ready
         const showMessage = options.showMessage || window.showMessage || function() {};
         let overlay = null;
         let account = null;
+        let totpPanel = null;
         let mode = 'login';
         let importPromptedInSession = false;
+        let pendingRecoveryUser = null;
+        let setOverlayMode = null;
 
         function ensureUi() {
             if (overlay) {
@@ -3814,6 +3993,8 @@ storageManager.ready
             overlay.hidden = true;
 
             const panel = createElement('section', 'remote-auth-panel');
+            panel.setAttribute('aria-modal', 'true');
+            panel.setAttribute('role', 'dialog');
             const title = createElement('h2', 'remote-auth-title', '登录 IELTS Atlas');
             const tabs = createElement('div', 'remote-auth-tabs');
             const loginTab = createElement('button', 'remote-auth-tab is-active', '登录');
@@ -3824,31 +4005,63 @@ storageManager.ready
 
             const form = createElement('form', 'remote-auth-form');
             const usernameLabel = createElement('label', 'remote-auth-field');
-            const usernameText = createElement('span', null, '用户名');
             const usernameInput = createElement('input');
             usernameInput.name = 'username';
             usernameInput.autocomplete = 'username';
             usernameInput.required = true;
             usernameInput.minLength = 3;
             usernameInput.maxLength = 32;
-            usernameLabel.append(usernameText, usernameInput);
+            usernameInput.pattern = '[A-Za-z0-9_][A-Za-z0-9_-]{2,31}';
+            usernameLabel.append(
+                createElement('span', null, '用户名'),
+                usernameInput,
+                createElement('small', 'remote-auth-help', '3-32 位，支持字母、数字、下划线和连字符。')
+            );
 
             const passwordLabel = createElement('label', 'remote-auth-field');
-            const passwordText = createElement('span', null, '密码');
             const passwordInput = createElement('input');
             passwordInput.name = 'password';
             passwordInput.type = 'password';
             passwordInput.autocomplete = 'current-password';
             passwordInput.required = true;
-            passwordInput.minLength = 8;
-            passwordLabel.append(passwordText, passwordInput);
+            passwordLabel.append(
+                createElement('span', null, '密码'),
+                passwordInput,
+                createElement('small', 'remote-auth-help', '请输入账号密码。')
+            );
+
+            const tokenLabel = createElement('label', 'remote-auth-field remote-auth-token-field');
+            const tokenInput = createElement('input');
+            tokenInput.name = 'totpToken';
+            tokenInput.inputMode = 'numeric';
+            tokenInput.autocomplete = 'one-time-code';
+            tokenInput.maxLength = 32;
+            tokenLabel.append(
+                createElement('span', null, '验证码或恢复码'),
+                tokenInput,
+                createElement('small', 'remote-auth-help', '输入认证器中的 6 位验证码，也可输入恢复码。')
+            );
+
+            const setupBox = createElement('div', 'remote-auth-setup');
+            const setupIntro = createElement('p', null, '管理员账号需要先绑定 TOTP。请用认证器扫描二维码，或手动输入密钥。');
+            const setupQr = createElement('img', 'remote-auth-setup__qr');
+            setupQr.alt = 'TOTP QR code';
+            const setupSecret = createElement('code', 'remote-auth-setup__secret');
+            setupBox.append(setupIntro, setupQr, setupSecret);
+
+            const recoveryBox = createElement('div', 'remote-auth-recovery');
+            const recoveryIntro = createElement('p', null, '请保存这些一次性恢复码。离开后不会再次显示。');
+            const recoveryList = createElement('ol', 'remote-auth-recovery__list');
+            const recoveryConfirm = createElement('button', 'remote-auth-recovery__confirm', '我已保存，继续');
+            recoveryConfirm.type = 'button';
+            recoveryBox.append(recoveryIntro, recoveryList, recoveryConfirm);
 
             const error = createElement('div', 'remote-auth-error');
             error.hidden = true;
             const submit = createElement('button', 'remote-auth-submit', '登录');
             submit.type = 'submit';
 
-            form.append(usernameLabel, passwordLabel, error, submit);
+            form.append(usernameLabel, passwordLabel, setupBox, tokenLabel, recoveryBox, error, submit);
             panel.append(title, tabs, form);
             overlay.append(panel);
             window.document.body.appendChild(overlay);
@@ -3859,43 +4072,156 @@ storageManager.ready
             const adminLink = createElement('a', 'remote-auth-account__admin', 'Admin');
             adminLink.href = '/admin';
             adminLink.hidden = true;
+            const totp = createElement('button', 'remote-auth-account__totp', 'TOTP');
+            totp.type = 'button';
             const logout = createElement('button', 'remote-auth-account__logout', '退出');
             logout.type = 'button';
-            account.append(accountName, adminLink, logout);
+            account.append(accountName, adminLink, totp, logout);
             window.document.body.appendChild(account);
+
+            totpPanel = createElement('section', 'remote-auth-totp');
+            totpPanel.hidden = true;
+            window.document.body.appendChild(totpPanel);
+
+            function setError(message) {
+                error.textContent = message || '';
+                error.hidden = !message;
+            }
 
             function setMode(nextMode) {
                 mode = nextMode;
+                const isPasswordMode = mode === 'login' || mode === 'register';
+                const isTokenMode = mode === 'totp' || mode === 'setup';
+                const isSetupMode = mode === 'setup';
+                const isRecoveryMode = mode === 'recovery';
+
+                tabs.hidden = !isPasswordMode;
+                usernameLabel.hidden = !isPasswordMode;
+                passwordLabel.hidden = !isPasswordMode;
+                tokenLabel.hidden = !isTokenMode;
+                setupBox.hidden = !isSetupMode;
+                recoveryBox.hidden = !isRecoveryMode;
+                submit.hidden = isRecoveryMode;
                 loginTab.classList.toggle('is-active', mode === 'login');
                 registerTab.classList.toggle('is-active', mode === 'register');
-                title.textContent = mode === 'login' ? '登录 IELTS Atlas' : '注册 IELTS Atlas';
-                submit.textContent = mode === 'login' ? '登录' : '注册';
+                title.textContent = {
+                    login: '登录 IELTS Atlas',
+                    register: '注册 IELTS Atlas',
+                    totp: '输入 TOTP 验证码',
+                    setup: '绑定 TOTP 二次验证',
+                    recovery: '保存恢复码'
+                }[mode] || '登录 IELTS Atlas';
+                submit.textContent = {
+                    login: '登录',
+                    register: '注册',
+                    totp: '验证并登录',
+                    setup: '验证并启用'
+                }[mode] || '继续';
                 passwordInput.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
-                error.hidden = true;
-                error.textContent = '';
+                passwordInput.minLength = mode === 'login' ? 1 : 8;
+                setError('');
+                usernameInput.setAttribute('aria-invalid', 'false');
+                passwordInput.setAttribute('aria-invalid', 'false');
+                tokenInput.setAttribute('aria-invalid', 'false');
+            }
+            setOverlayMode = setMode;
+
+            async function submitPasswordAuth() {
+                const validation = validateRemoteAuthFields(usernameInput.value, passwordInput.value, mode);
+                usernameInput.setAttribute('aria-invalid', validation.errors.some((message) => message.startsWith('用户名')) ? 'true' : 'false');
+                passwordInput.setAttribute('aria-invalid', validation.errors.some((message) => message.startsWith('密码') || message.startsWith('请输入密码')) ? 'true' : 'false');
+                if (!validation.valid) {
+                    setError(validation.errors.join('；'));
+                    return;
+                }
+                const payload = mode === 'login'
+                    ? await apiClient.login(validation.username, passwordInput.value)
+                    : await apiClient.register(validation.username, passwordInput.value);
+
+                if (payload.requiresTotp) {
+                    setMode('totp');
+                    tokenInput.value = '';
+                    window.setTimeout(() => tokenInput.focus({ preventScroll: true }), 0);
+                    return;
+                }
+                if (payload.requiresTotpSetup) {
+                    await beginOverlayTotpSetup();
+                    return;
+                }
+                await handleAuthenticated(payload.user);
+                showMessage(mode === 'login' ? '登录成功' : '注册成功', 'success');
             }
 
+            async function submitTotpToken() {
+                const token = normalizeCode(tokenInput.value);
+                if (!token) {
+                    tokenInput.setAttribute('aria-invalid', 'true');
+                    setError('请输入验证码或恢复码。');
+                    return;
+                }
+                if (mode === 'totp') {
+                    const payload = await apiClient.completeTotpLogin(token);
+                    await handleAuthenticated(payload.user);
+                    showMessage('登录成功', 'success');
+                    return;
+                }
+                if (mode === 'setup') {
+                    const payload = await apiClient.verifyTotpSetup(token);
+                    renderOverlayRecoveryCodes(payload.recoveryCodes || [], payload.user);
+                }
+            }
+
+            async function beginOverlayTotpSetup() {
+                const setup = await apiClient.startTotpSetup();
+                setupQr.src = setup.qrCodeDataUrl || '';
+                setupSecret.textContent = setup.secret || '';
+                tokenInput.value = '';
+                setMode('setup');
+                window.setTimeout(() => tokenInput.focus({ preventScroll: true }), 0);
+            }
+
+            function renderOverlayRecoveryCodes(codes, user) {
+                pendingRecoveryUser = user;
+                recoveryList.textContent = '';
+                codes.forEach((code) => {
+                    const item = createElement('li', null, code);
+                    recoveryList.append(item);
+                });
+                setMode('recovery');
+            }
+
+            recoveryConfirm.addEventListener('click', async () => {
+                await handleAuthenticated(pendingRecoveryUser || apiClient.user);
+                pendingRecoveryUser = null;
+                showMessage('TOTP 已启用', 'success');
+            });
+
+            setMode('login');
             loginTab.addEventListener('click', () => setMode('login'));
             registerTab.addEventListener('click', () => setMode('register'));
 
             form.addEventListener('submit', async (event) => {
                 event.preventDefault();
                 submit.disabled = true;
-                error.hidden = true;
-                error.textContent = '';
+                setError('');
                 try {
-                    const username = usernameInput.value.trim();
-                    const password = passwordInput.value;
-                    const payload = mode === 'login'
-                        ? await apiClient.login(username, password)
-                        : await apiClient.register(username, password);
-                    await handleAuthenticated(payload.user);
-                    showMessage(mode === 'login' ? '登录成功' : '注册成功', 'success');
+                    if (mode === 'login' || mode === 'register') {
+                        await submitPasswordAuth();
+                    } else {
+                        await submitTotpToken();
+                    }
                 } catch (requestError) {
-                    error.textContent = requestError?.payload?.details?.join('；') || requestError.message || '认证失败';
-                    error.hidden = false;
+                    setError(formatRemoteAuthError(requestError));
                 } finally {
                     submit.disabled = false;
+                    if (mode !== 'recovery') {
+                        submit.textContent = {
+                            login: '登录',
+                            register: '注册',
+                            totp: '验证并登录',
+                            setup: '验证并启用'
+                        }[mode] || '继续';
+                    }
                 }
             });
 
@@ -3904,39 +4230,195 @@ storageManager.ready
                 try {
                     await apiClient.logout();
                     updateAccount(null);
+                    hideTotpPanel();
+                    window.dispatchEvent(new CustomEvent('remote-auth-changed', { detail: { user: null } }));
                     show();
-                } catch (error) {
-                    showMessage(error.message || '退出失败', 'error');
+                } catch (requestError) {
+                    showMessage(formatRemoteAuthError(requestError), 'error');
                 } finally {
                     logout.disabled = false;
+                }
+            });
+
+            totp.addEventListener('click', async () => {
+                if (totpPanel.hidden) {
+                    totpPanel.hidden = false;
+                    await loadTotpPanel();
+                } else {
+                    hideTotpPanel();
                 }
             });
         }
 
         function show() {
             ensureUi();
+            if (setOverlayMode) {
+                setOverlayMode('login');
+            }
+            setRemoteAuthGate(true);
             overlay.hidden = false;
             updateAccount(null);
+            window.setTimeout(() => {
+                const username = overlay.querySelector('input[name="username"]');
+                if (username) {
+                    username.focus({ preventScroll: true });
+                }
+            }, 0);
         }
 
         function hide() {
             ensureUi();
             overlay.hidden = true;
+            setRemoteAuthGate(false);
+        }
+
+        function hideTotpPanel() {
+            if (totpPanel) {
+                totpPanel.hidden = true;
+            }
         }
 
         function updateAccount(user) {
             ensureUi();
             const name = account.querySelector('.remote-auth-account__name');
             const adminLink = account.querySelector('.remote-auth-account__admin');
+            const totp = account.querySelector('.remote-auth-account__totp');
             if (user && user.username) {
                 name.textContent = user.username;
                 adminLink.hidden = user.role !== 'admin';
+                totp.hidden = false;
                 account.hidden = false;
             } else {
                 name.textContent = '';
                 adminLink.hidden = true;
+                totp.hidden = true;
                 account.hidden = true;
             }
+        }
+
+        function renderRecoveryCodes(container, codes) {
+            const list = createElement('ol', 'remote-auth-recovery__list');
+            codes.forEach((code) => list.append(createElement('li', null, code)));
+            container.append(
+                createElement('p', 'remote-auth-totp__note', '请保存这些恢复码。它们只会显示一次。'),
+                list
+            );
+        }
+
+        async function loadTotpPanel() {
+            if (!totpPanel) {
+                return;
+            }
+            totpPanel.textContent = '';
+            const head = createElement('div', 'remote-auth-totp__head');
+            head.append(createElement('h3', null, 'TOTP 二次验证'));
+            const close = createElement('button', 'remote-auth-totp__close', '×');
+            close.type = 'button';
+            close.setAttribute('aria-label', '关闭');
+            close.addEventListener('click', hideTotpPanel);
+            head.append(close);
+            const status = createElement('div', 'remote-auth-totp__status', '正在加载...');
+            const body = createElement('div', 'remote-auth-totp__body');
+            totpPanel.append(head, status, body);
+            try {
+                const payload = await apiClient.getTotpStatus();
+                renderTotpStatus(payload, status, body);
+            } catch (requestError) {
+                status.textContent = formatRemoteAuthError(requestError);
+            }
+        }
+
+        function renderTotpStatus(status, statusNode, body) {
+            body.textContent = '';
+            if (status.enabled) {
+                statusNode.textContent = `已启用，剩余恢复码 ${status.recoveryCodesRemaining || 0} 个，上次使用：${formatTotpTime(status.lastUsedAt)}`;
+                const regenerate = createElement('button', 'remote-auth-totp__primary', '重新生成恢复码');
+                const disable = createElement('button', 'remote-auth-totp__danger', '关闭 TOTP');
+                regenerate.type = 'button';
+                disable.type = 'button';
+                regenerate.addEventListener('click', async () => {
+                    regenerate.disabled = true;
+                    body.textContent = '';
+                    try {
+                        const result = await apiClient.regenerateTotpRecoveryCodes();
+                        renderRecoveryCodes(body, result.recoveryCodes || []);
+                        statusNode.textContent = `已重新生成恢复码，剩余 ${result.status?.recoveryCodesRemaining || 0} 个。`;
+                    } catch (requestError) {
+                        statusNode.textContent = formatRemoteAuthError(requestError);
+                    } finally {
+                        regenerate.disabled = false;
+                    }
+                });
+                disable.addEventListener('click', async () => {
+                    if (apiClient.user?.role === 'admin') {
+                        statusNode.textContent = '管理员不能在这里关闭 TOTP。';
+                        return;
+                    }
+                    const password = window.prompt('请输入当前密码');
+                    if (password === null) return;
+                    const token = window.prompt('请输入 TOTP 验证码或恢复码');
+                    if (token === null) return;
+                    disable.disabled = true;
+                    try {
+                        const result = await apiClient.disableTotp(password, token);
+                        renderTotpStatus(result, statusNode, body);
+                        showMessage('TOTP 已关闭', 'success');
+                    } catch (requestError) {
+                        statusNode.textContent = formatRemoteAuthError(requestError);
+                    } finally {
+                        disable.disabled = false;
+                    }
+                });
+                body.append(regenerate, disable);
+                return;
+            }
+
+            statusNode.textContent = '未启用。启用后，登录需要输入认证器验证码。';
+            const enable = createElement('button', 'remote-auth-totp__primary', '启用 TOTP');
+            enable.type = 'button';
+            enable.addEventListener('click', async () => {
+                enable.disabled = true;
+                try {
+                    const setup = await apiClient.startTotpSetup();
+                    renderAccountTotpSetup(setup, statusNode, body);
+                } catch (requestError) {
+                    statusNode.textContent = formatRemoteAuthError(requestError);
+                } finally {
+                    enable.disabled = false;
+                }
+            });
+            body.append(enable);
+        }
+
+        function renderAccountTotpSetup(setup, statusNode, body) {
+            body.textContent = '';
+            statusNode.textContent = '扫描二维码后输入 6 位验证码完成绑定。';
+            const qr = createElement('img', 'remote-auth-totp__qr');
+            qr.alt = 'TOTP QR code';
+            qr.src = setup.qrCodeDataUrl || '';
+            const secret = createElement('code', 'remote-auth-totp__secret', setup.secret || '');
+            const token = createElement('input', 'remote-auth-totp__input');
+            token.inputMode = 'numeric';
+            token.autocomplete = 'one-time-code';
+            token.placeholder = '验证码';
+            const verify = createElement('button', 'remote-auth-totp__primary', '验证并启用');
+            verify.type = 'button';
+            verify.addEventListener('click', async () => {
+                verify.disabled = true;
+                try {
+                    const result = await apiClient.verifyTotpSetup(token.value);
+                    body.textContent = '';
+                    renderRecoveryCodes(body, result.recoveryCodes || []);
+                    statusNode.textContent = 'TOTP 已启用。';
+                    updateAccount(result.user || apiClient.user);
+                } catch (requestError) {
+                    statusNode.textContent = formatRemoteAuthError(requestError);
+                } finally {
+                    verify.disabled = false;
+                }
+            });
+            body.append(qr, secret, token, verify);
+            window.setTimeout(() => token.focus({ preventScroll: true }), 0);
         }
 
         async function maybeImportLocalRecords(user) {
@@ -3974,13 +4456,17 @@ storageManager.ready
             show,
             hide,
             updateAccount,
-            handleAuthenticated
+            handleAuthenticated,
+            loadTotpPanel
         };
     }
 
     ExamData.createRemoteAuthController = createRemoteAuthController;
     ExamData.createRemoteImportMarkerStore = createImportMarkerStore;
+    ExamData.formatRemoteAuthError = formatRemoteAuthError;
     ExamData.getRemoteImportMarkerKey = getImportMarkerKey;
+    ExamData.setRemoteAuthGate = setRemoteAuthGate;
+    ExamData.validateRemoteAuthFields = validateRemoteAuthFields;
 })(window);
 
 
@@ -4777,9 +5263,14 @@ storageManager.ready
         let dataSource = localDataSource;
         let remoteApiClient = null;
         let remoteAuthState = { available: false, authenticated: false, user: null };
+        let remoteAuthGateEnabled = false;
 
         if (ExamData.RemoteApiClient && ExamData.RemotePracticeDataSource) {
             remoteApiClient = new ExamData.RemoteApiClient();
+            if (ExamData.setRemoteAuthGate) {
+                ExamData.setRemoteAuthGate(true);
+                remoteAuthGateEnabled = true;
+            }
             try {
                 remoteAuthState = await remoteApiClient.getAuthState();
                 if (remoteAuthState.available) {
@@ -4791,6 +5282,10 @@ storageManager.ready
                 remoteAuthState = { available: false, authenticated: false, user: null };
                 remoteApiClient = null;
                 dataSource = localDataSource;
+                if (remoteAuthGateEnabled && ExamData.setRemoteAuthGate) {
+                    ExamData.setRemoteAuthGate(false);
+                    remoteAuthGateEnabled = false;
+                }
             }
         }
 
@@ -4927,6 +5422,8 @@ storageManager.ready
             } else {
                 authController.show();
             }
+        } else if (remoteAuthGateEnabled && ExamData.setRemoteAuthGate) {
+            ExamData.setRemoteAuthGate(false);
         }
 
         console.log('[data/index] 数据仓库初始化完成');

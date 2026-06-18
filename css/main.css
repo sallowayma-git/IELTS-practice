@@ -7436,18 +7436,32 @@ body.theme-blue ::-webkit-scrollbar-thumb {
     align-items: center;
     justify-content: center;
     padding: 24px;
-    background: rgba(15, 23, 42, 0.58);
-    backdrop-filter: blur(8px);
+    background: #f8fafc;
 }
 
 .remote-auth-overlay[hidden],
 .remote-auth-account[hidden],
-.remote-auth-account__admin[hidden] {
+.remote-auth-account__admin[hidden],
+.remote-auth-account__totp[hidden],
+.remote-auth-token-field[hidden],
+.remote-auth-setup[hidden],
+.remote-auth-recovery[hidden],
+.remote-auth-totp[hidden] {
     display: none;
 }
 
+html.remote-auth-gated,
+body.remote-auth-gated {
+    overflow: hidden;
+}
+
+body.remote-auth-gated > :not(#remote-auth-overlay):not(.remote-auth-account):not(.remote-auth-totp) {
+    visibility: hidden;
+    pointer-events: none;
+}
+
 .remote-auth-panel {
-    width: min(420px, 100%);
+    width: min(440px, 100%);
     border: 1px solid rgba(148, 163, 184, 0.32);
     border-radius: 8px;
     background: #ffffff;
@@ -7475,8 +7489,11 @@ body.theme-blue ::-webkit-scrollbar-thumb {
 
 .remote-auth-tab,
 .remote-auth-submit,
+.remote-auth-recovery__confirm,
 .remote-auth-account__admin,
-.remote-auth-account__logout {
+.remote-auth-account__totp,
+.remote-auth-account__logout,
+.remote-auth-totp button {
     border: 0;
     cursor: pointer;
     font: inherit;
@@ -7495,7 +7512,10 @@ body.theme-blue ::-webkit-scrollbar-thumb {
     box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
 }
 
-.remote-auth-form {
+.remote-auth-form,
+.remote-auth-setup,
+.remote-auth-recovery,
+.remote-auth-totp__body {
     display: grid;
     gap: 14px;
 }
@@ -7508,7 +7528,8 @@ body.theme-blue ::-webkit-scrollbar-thumb {
     font-weight: 600;
 }
 
-.remote-auth-field input {
+.remote-auth-field input,
+.remote-auth-totp__input {
     min-height: 42px;
     border: 1px solid #cbd5e1;
     border-radius: 6px;
@@ -7518,9 +7539,23 @@ body.theme-blue ::-webkit-scrollbar-thumb {
     font: inherit;
 }
 
-.remote-auth-field input:focus {
+.remote-auth-field input:focus,
+.remote-auth-totp__input:focus {
     outline: 2px solid rgba(37, 99, 235, 0.24);
     border-color: #2563eb;
+}
+
+.remote-auth-field input[aria-invalid="true"] {
+    border-color: #dc2626;
+    outline: 2px solid rgba(220, 38, 38, 0.14);
+}
+
+.remote-auth-help,
+.remote-auth-totp__note {
+    color: #64748b;
+    font-size: 0.78rem;
+    font-weight: 500;
+    line-height: 1.35;
 }
 
 .remote-auth-error {
@@ -7531,7 +7566,9 @@ body.theme-blue ::-webkit-scrollbar-thumb {
     font-size: 0.9rem;
 }
 
-.remote-auth-submit {
+.remote-auth-submit,
+.remote-auth-recovery__confirm,
+.remote-auth-totp__primary {
     min-height: 42px;
     border-radius: 6px;
     background: #1f2937;
@@ -7540,9 +7577,51 @@ body.theme-blue ::-webkit-scrollbar-thumb {
 }
 
 .remote-auth-submit:disabled,
-.remote-auth-account__logout:disabled {
+.remote-auth-recovery__confirm:disabled,
+.remote-auth-account__totp:disabled,
+.remote-auth-account__logout:disabled,
+.remote-auth-totp button:disabled {
     cursor: wait;
     opacity: 0.72;
+}
+
+.remote-auth-setup p,
+.remote-auth-recovery p {
+    margin: 0;
+    color: #475569;
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+
+.remote-auth-setup__qr,
+.remote-auth-totp__qr {
+    width: 180px;
+    height: 180px;
+    justify-self: center;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #ffffff;
+}
+
+.remote-auth-setup__secret,
+.remote-auth-totp__secret {
+    display: block;
+    overflow-wrap: anywhere;
+    border-radius: 6px;
+    background: #f1f5f9;
+    color: #0f172a;
+    padding: 10px;
+    font-size: 0.82rem;
+}
+
+.remote-auth-recovery__list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 14px;
+    margin: 0;
+    padding-left: 22px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.84rem;
 }
 
 .remote-auth-account {
@@ -7579,6 +7658,15 @@ body.theme-blue ::-webkit-scrollbar-thumb {
     padding: 0 10px;
 }
 
+.remote-auth-account__totp {
+    min-height: 28px;
+    border-radius: 6px;
+    background: #eef2ff;
+    color: #3730a3;
+    padding: 0 10px;
+    font-weight: 700;
+}
+
 .remote-auth-account__admin {
     display: inline-flex;
     align-items: center;
@@ -7589,6 +7677,61 @@ body.theme-blue ::-webkit-scrollbar-thumb {
     color: #0f766e;
     padding: 0 10px;
     text-decoration: none;
+    font-weight: 700;
+}
+
+.remote-auth-totp {
+    position: fixed;
+    top: 64px;
+    right: 16px;
+    z-index: 9001;
+    width: min(380px, calc(100vw - 32px));
+    max-height: calc(100vh - 88px);
+    overflow: auto;
+    border: 1px solid rgba(148, 163, 184, 0.32);
+    border-radius: 8px;
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+    padding: 14px;
+}
+
+.remote-auth-totp__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.remote-auth-totp__head h3 {
+    margin: 0;
+    font-size: 1rem;
+    letter-spacing: 0;
+}
+
+.remote-auth-totp__close {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    background: #f1f5f9;
+    color: #334155;
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+.remote-auth-totp__status {
+    margin: 0 0 10px;
+    color: #64748b;
+    font-size: 0.84rem;
+    line-height: 1.4;
+}
+
+.remote-auth-totp__danger {
+    min-height: 38px;
+    border-radius: 6px;
+    background: #fee2e2;
+    color: #991b1b;
     font-weight: 700;
 }
 
@@ -7606,5 +7749,11 @@ body.theme-blue ::-webkit-scrollbar-thumb {
         top: 10px;
         right: 10px;
         max-width: calc(100vw - 20px);
+    }
+
+    .remote-auth-totp {
+        top: 58px;
+        right: 10px;
+        width: calc(100vw - 20px);
     }
 }

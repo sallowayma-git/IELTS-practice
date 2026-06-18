@@ -45,6 +45,11 @@ function validatePasswordStrength(password) {
     };
 }
 
+function parseBoolean(value, fallback = false) {
+    if (value === undefined || value === null || value === '') return fallback;
+    return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
+}
+
 function createRateLimiter(options = {}) {
     const windowMs = options.windowMs || 10 * 60 * 1000;
     const maxAttempts = options.maxAttempts || 20;
@@ -176,6 +181,10 @@ function createAuthRouter(options = {}) {
     const store = options.store || new PostgresAuthStore(options.db);
     const checkRateLimit = options.checkRateLimit || createRateLimiter(options.rateLimit);
     const bcryptImpl = options.bcrypt || bcrypt;
+    const totpStore = options.totpStore || null;
+    const totpEnabled = options.totpEnabled !== undefined
+        ? Boolean(options.totpEnabled)
+        : parseBoolean(process.env.TOTP_ENABLED, true);
 
     router.get('/csrf', (req, res) => {
         res.json({ csrfToken: ensureCsrfToken(req) });
@@ -242,10 +251,36 @@ function createAuthRouter(options = {}) {
                 return res.status(401).json({ error: '用户名或密码错误' });
             }
 
+            const safeUser = publicUser(user);
+            if (totpEnabled && totpStore && typeof totpStore.getStatus === 'function') {
+                const status = await totpStore.getStatus(user.id);
+                if (status.enabled) {
+                    await regenerateSession(req);
+                    req.session.pendingTotpLogin = { user: safeUser };
+                    return res.json({
+                        requiresTotp: true,
+                        csrfToken: ensureCsrfToken(req)
+                    });
+                }
+                if (safeUser.role === 'admin') {
+                    await regenerateSession(req);
+                    req.session.pendingTotpSetup = {
+                        user: safeUser,
+                        forced: true,
+                        startedAt: Date.now()
+                    };
+                    return res.json({
+                        requiresTotpSetup: true,
+                        user: safeUser,
+                        csrfToken: ensureCsrfToken(req)
+                    });
+                }
+            }
+
             await regenerateSession(req);
-            req.session.user = publicUser(user);
+            req.session.user = safeUser;
             const csrfToken = ensureCsrfToken(req);
-            return res.json({ user: publicUser(user), csrfToken });
+            return res.json({ user: safeUser, csrfToken });
         } catch (error) {
             return next(error);
         }

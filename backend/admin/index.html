@@ -63,6 +63,11 @@
                                 <tbody id="users-body"></tbody>
                             </table>
                         </div>
+                        <div class="pagination-bar" aria-label="Users pagination">
+                            <button id="users-prev" type="button">Previous</button>
+                            <span id="users-range">0 of 0</span>
+                            <button id="users-next" type="button">Next</button>
+                        </div>
                     </section>
 
                     <section class="admin-panel" aria-label="Practice records">
@@ -84,8 +89,18 @@
                                 <tbody id="records-body"></tbody>
                             </table>
                         </div>
+                        <div class="pagination-bar" aria-label="Practice records pagination">
+                            <button id="records-prev" type="button">Previous</button>
+                            <span id="records-range">0 of 0</span>
+                            <button id="records-next" type="button">Next</button>
+                        </div>
                     </section>
                 </div>
+
+                <section class="admin-panel record-detail-panel" aria-label="Practice record detail">
+                    <h2 id="record-detail-title">Record Detail</h2>
+                    <div id="record-detail-body" class="record-detail-body">Select a record to inspect its stored payload.</div>
+                </section>
             </section>
         </main>
 

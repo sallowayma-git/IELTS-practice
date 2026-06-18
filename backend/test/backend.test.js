@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 const bcrypt = require('bcryptjs');
+const otp = require('otplib');
 const session = require('express-session');
 
 const { createApp } = require('../src/app');
@@ -11,18 +12,25 @@ const { MemoryAuthStore } = require('../src/auth');
 const { MemoryAdminStore } = require('../src/admin');
 const { bootstrapAdmin } = require('../src/bootstrapAdmin');
 const { MemoryPracticeRecordStore } = require('../src/practiceRecords');
+const { MemoryTotpStore } = require('../src/totp');
 
 async function createClient(options = {}) {
     const authStore = new MemoryAuthStore();
+    const totpStore = new MemoryTotpStore();
     const practiceStore = new MemoryPracticeRecordStore();
     const app = createApp({
         authStore,
+        totpStore,
         practiceStore,
         adminStore: new MemoryAdminStore({ authStore, practiceStore }),
         sessionStore: new session.MemoryStore(),
         sessionSecret: 'test-session-secret',
         staticRoot: options.staticRoot,
-        rateLimit: { maxAttempts: 100, windowMs: 60_000 }
+        rateLimit: options.rateLimit || { maxAttempts: 100, windowMs: 60_000 },
+        totpRateLimit: options.totpRateLimit,
+        totpEnabled: options.totpEnabled,
+        totpEncryptionKey: options.totpEncryptionKey || 'test-totp-key',
+        totpRecoveryHashRounds: 4
     });
     const server = await new Promise((resolve, reject) => {
         const listener = app.listen(0, '127.0.0.1', () => resolve(listener));
@@ -75,6 +83,7 @@ async function createClient(options = {}) {
             return csrfToken;
         },
         authStore,
+        totpStore,
         practiceStore,
         request,
         async csrf() {
@@ -104,6 +113,29 @@ async function seedAdmin(client, username = 'admin_user', password = 'StrongPass
     return user;
 }
 
+function generateTotpToken(secret) {
+    return otp.generateSync({ secret });
+}
+
+async function enableTotpForCurrentSession(client) {
+    const setup = await client.request('POST', '/api/auth/totp/setup', {});
+    assert.equal(setup.response.status, 200);
+    assert(setup.json.secret);
+    assert.match(setup.json.otpauthUrl, /^otpauth:\/\/totp\//);
+
+    const verified = await client.request('POST', '/api/auth/totp/verify-setup', {
+        token: generateTotpToken(setup.json.secret)
+    });
+    assert.equal(verified.response.status, 200);
+    assert.equal(verified.json.status.enabled, true);
+    assert.equal(verified.json.recoveryCodes.length, 10);
+    return {
+        secret: setup.json.secret,
+        recoveryCodes: verified.json.recoveryCodes,
+        user: verified.json.user
+    };
+}
+
 test('auth registration rejects weak and duplicate credentials', async () => {
     const client = await createClient();
     try {
@@ -126,6 +158,37 @@ test('auth registration rejects weak and duplicate credentials', async () => {
             password: 'StrongPass1'
         });
         assert.equal(duplicate.response.status, 409);
+    } finally {
+        await client.close();
+    }
+});
+
+test('auth write endpoints require a valid CSRF token', async () => {
+    const client = await createClient();
+    try {
+        const missing = await client.request('POST', '/api/auth/register', {
+            username: 'csrf_user',
+            password: 'StrongPass1'
+        });
+        assert.equal(missing.response.status, 403);
+
+        await client.csrf();
+        const invalid = await client.request('POST', '/api/auth/register', {
+            username: 'csrf_user',
+            password: 'StrongPass1'
+        }, {
+            csrf: false,
+            headers: {
+                'x-csrf-token': 'invalid-token'
+            }
+        });
+        assert.equal(invalid.response.status, 403);
+
+        const valid = await client.request('POST', '/api/auth/register', {
+            username: 'csrf_user',
+            password: 'StrongPass1'
+        });
+        assert.equal(valid.response.status, 201);
     } finally {
         await client.close();
     }
@@ -160,8 +223,205 @@ test('login, logout, and authenticated practice API access', async () => {
         const logoutAgain = await client.request('POST', '/api/auth/logout');
         assert.equal(logoutAgain.response.status, 200);
 
+        const meAfterLogout = await client.request('GET', '/api/auth/me');
+        assert.equal(meAfterLogout.response.status, 401);
+
         const afterLogout = await client.request('GET', '/api/practice-records');
         assert.equal(afterLogout.response.status, 401);
+    } finally {
+        await client.close();
+    }
+});
+
+test('auth login rate limit returns 429 after repeated attempts', async () => {
+    const client = await createClient({
+        rateLimit: { maxAttempts: 1, windowMs: 60_000 }
+    });
+    try {
+        const created = await register(client, 'limited_user', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+
+        const logout = await client.request('POST', '/api/auth/logout');
+        assert.equal(logout.response.status, 200);
+
+        await client.csrf();
+        const firstFailure = await client.request('POST', '/api/auth/login', {
+            username: 'limited_user',
+            password: 'WrongPass1'
+        });
+        assert.equal(firstFailure.response.status, 401);
+
+        const limited = await client.request('POST', '/api/auth/login', {
+            username: 'limited_user',
+            password: 'WrongPass1'
+        });
+        assert.equal(limited.response.status, 429);
+    } finally {
+        await client.close();
+    }
+});
+
+test('TOTP setup requires auth, CSRF, and returns recovery codes once', async () => {
+    const client = await createClient();
+    try {
+        await client.csrf();
+        const anonymous = await client.request('POST', '/api/auth/totp/setup', {});
+        assert.equal(anonymous.response.status, 401);
+
+        const created = await register(client, 'totp_user', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+
+        const missingCsrf = await client.request('POST', '/api/auth/totp/setup', {}, { csrf: false });
+        assert.equal(missingCsrf.response.status, 403);
+
+        const setup = await client.request('POST', '/api/auth/totp/setup', {});
+        assert.equal(setup.response.status, 200);
+        assert(setup.json.secret);
+        assert.match(setup.json.qrCodeDataUrl, /^data:image\/png;base64,/);
+
+        const bad = await client.request('POST', '/api/auth/totp/verify-setup', { token: '000000' });
+        assert.equal(bad.response.status, 401);
+
+        const verified = await client.request('POST', '/api/auth/totp/verify-setup', {
+            token: generateTotpToken(setup.json.secret)
+        });
+        assert.equal(verified.response.status, 200);
+        assert.equal(verified.json.status.enabled, true);
+        assert.equal(verified.json.status.recoveryCodesRemaining, 10);
+        assert.equal(verified.json.recoveryCodes.length, 10);
+
+        const status = await client.request('GET', '/api/auth/totp/status');
+        assert.equal(status.response.status, 200);
+        assert.equal(status.json.status.enabled, true);
+        assert.equal(status.json.status.recoveryCodesRemaining, 10);
+    } finally {
+        await client.close();
+    }
+});
+
+test('TOTP login requires a second factor before full session access', async () => {
+    const client = await createClient();
+    try {
+        await register(client, 'totp_login', 'StrongPass1');
+        const { secret } = await enableTotpForCurrentSession(client);
+        const logout = await client.request('POST', '/api/auth/logout');
+        assert.equal(logout.response.status, 200);
+
+        await client.csrf();
+        const passwordOnly = await client.request('POST', '/api/auth/login', {
+            username: 'totp_login',
+            password: 'StrongPass1'
+        });
+        assert.equal(passwordOnly.response.status, 200);
+        assert.equal(passwordOnly.json.requiresTotp, true);
+        assert.equal(passwordOnly.json.user, undefined);
+
+        const blocked = await client.request('GET', '/api/practice-records');
+        assert.equal(blocked.response.status, 401);
+
+        const bad = await client.request('POST', '/api/auth/totp/login', { token: '000000' });
+        assert.equal(bad.response.status, 401);
+
+        const login = await client.request('POST', '/api/auth/totp/login', {
+            token: generateTotpToken(secret)
+        });
+        assert.equal(login.response.status, 200);
+        assert.equal(login.json.user.username, 'totp_login');
+
+        const records = await client.request('GET', '/api/practice-records');
+        assert.equal(records.response.status, 200);
+    } finally {
+        await client.close();
+    }
+});
+
+test('TOTP recovery codes are one-time and can be regenerated', async () => {
+    const client = await createClient();
+    try {
+        await register(client, 'totp_recovery', 'StrongPass1');
+        const { recoveryCodes } = await enableTotpForCurrentSession(client);
+        await client.request('POST', '/api/auth/logout');
+
+        await client.csrf();
+        const passwordOnly = await client.request('POST', '/api/auth/login', {
+            username: 'totp_recovery',
+            password: 'StrongPass1'
+        });
+        assert.equal(passwordOnly.json.requiresTotp, true);
+
+        const recoveryLogin = await client.request('POST', '/api/auth/totp/login', {
+            token: recoveryCodes[0]
+        });
+        assert.equal(recoveryLogin.response.status, 200);
+
+        await client.request('POST', '/api/auth/logout');
+        await client.csrf();
+        await client.request('POST', '/api/auth/login', {
+            username: 'totp_recovery',
+            password: 'StrongPass1'
+        });
+        const reused = await client.request('POST', '/api/auth/totp/login', {
+            token: recoveryCodes[0]
+        });
+        assert.equal(reused.response.status, 401);
+
+        await client.csrf();
+        await client.request('POST', '/api/auth/login', {
+            username: 'totp_recovery',
+            password: 'StrongPass1'
+        });
+        const login = await client.request('POST', '/api/auth/totp/login', {
+            token: recoveryCodes[1]
+        });
+        assert.equal(login.response.status, 200);
+
+        const regenerated = await client.request('POST', '/api/auth/totp/recovery-codes');
+        assert.equal(regenerated.response.status, 200);
+        assert.equal(regenerated.json.recoveryCodes.length, 10);
+        assert.equal(regenerated.json.status.recoveryCodesRemaining, 10);
+    } finally {
+        await client.close();
+    }
+});
+
+test('ordinary users can disable TOTP with password and current code', async () => {
+    const client = await createClient();
+    try {
+        await register(client, 'totp_disable', 'StrongPass1');
+        const { secret } = await enableTotpForCurrentSession(client);
+
+        const wrongPassword = await client.request('POST', '/api/auth/totp/disable', {
+            password: 'WrongPass1',
+            token: generateTotpToken(secret)
+        });
+        assert.equal(wrongPassword.response.status, 401);
+
+        const disabled = await client.request('POST', '/api/auth/totp/disable', {
+            password: 'StrongPass1',
+            token: generateTotpToken(secret)
+        });
+        assert.equal(disabled.response.status, 200);
+        assert.equal(disabled.json.status.enabled, false);
+
+        await client.request('POST', '/api/auth/logout');
+        await client.csrf();
+        const login = await client.request('POST', '/api/auth/login', {
+            username: 'totp_disable',
+            password: 'StrongPass1'
+        });
+        assert.equal(login.response.status, 200);
+        assert.equal(login.json.user.username, 'totp_disable');
+    } finally {
+        await client.close();
+    }
+});
+
+test('removed passkey API returns 404', async () => {
+    const client = await createClient();
+    try {
+        await client.csrf();
+        const response = await client.request('POST', '/api/auth/passkeys/login/options', {});
+        assert.equal(response.response.status, 404);
     } finally {
         await client.close();
     }
@@ -238,6 +498,9 @@ test('admin API rejects anonymous and non-admin users', async () => {
 
         const forbidden = await client.request('GET', '/api/admin/summary');
         assert.equal(forbidden.response.status, 403);
+
+        const adminPage = await client.request('GET', '/admin');
+        assert.equal(adminPage.response.status, 403);
     } finally {
         await client.close();
     }
@@ -266,7 +529,16 @@ test('admin can list users, inspect records, and delete one record', async () =>
             password: 'StrongPass1'
         });
         assert.equal(login.response.status, 200);
-        assert.equal(login.json.user.role, 'admin');
+        assert.equal(login.json.requiresTotpSetup, true);
+
+        const adminRecordsBeforeTotp = await client.request('GET', '/api/admin/summary');
+        assert.equal(adminRecordsBeforeTotp.response.status, 401);
+
+        const enabledAdminTotp = await enableTotpForCurrentSession(client);
+        assert.equal(enabledAdminTotp.user.role, 'admin');
+
+        const adminPage = await client.request('GET', '/admin');
+        assert.equal(adminPage.response.status, 200);
 
         const summary = await client.request('GET', '/api/admin/summary');
         assert.equal(summary.response.status, 200);
@@ -279,9 +551,19 @@ test('admin can list users, inspect records, and delete one record', async () =>
         assert.equal(users.json.users.length, 1);
         assert.equal(users.json.users[0].id, managedUserId);
 
+        const pagedUsers = await client.request('GET', '/api/admin/users?limit=1&offset=1');
+        assert.equal(pagedUsers.response.status, 200);
+        assert.equal(pagedUsers.json.limit, 1);
+        assert.equal(pagedUsers.json.offset, 1);
+
         const listed = await client.request('GET', `/api/admin/users/${managedUserId}/practice-records`);
         assert.equal(listed.response.status, 200);
         assert.equal(listed.json.records[0].id, 'managed-record');
+
+        const blockedDelete = await client.request('DELETE', `/api/admin/users/${managedUserId}/practice-records/managed-record`, undefined, {
+            csrf: false
+        });
+        assert.equal(blockedDelete.response.status, 403);
 
         const removed = await client.request('DELETE', `/api/admin/users/${managedUserId}/practice-records/managed-record`);
         assert.equal(removed.response.status, 200);
@@ -296,6 +578,7 @@ test('admin can list users, inspect records, and delete one record', async () =>
 
 test('bootstrap admin creates and updates an admin user', async () => {
     const users = new Map();
+    let totpDeletes = 0;
     const db = {
         async query(sql, params = []) {
             if (sql.includes('SELECT id FROM users')) {
@@ -321,6 +604,10 @@ test('bootstrap admin creates and updates an admin user', async () => {
                 };
                 users.set(usernameLower, user);
                 return { rows: [{ id: user.id, username: user.username, role: user.role }] };
+            }
+            if (sql.includes('DELETE FROM user_totp_recovery_codes') || sql.includes('DELETE FROM user_totp_settings')) {
+                totpDeletes += 1;
+                return { rows: [], rowCount: 1 };
             }
             throw new Error(`unexpected query: ${sql}`);
         }
@@ -348,6 +635,16 @@ test('bootstrap admin creates and updates an admin user', async () => {
     });
     assert.equal(updated.created, false);
     assert.equal(users.get('adminuser').password_hash, 'hash:StrongerPass2');
+
+    const reset = await bootstrapAdmin({
+        db,
+        username: 'AdminUser',
+        password: 'StrongestPass3',
+        bcrypt: bcryptStub,
+        resetTotp: true
+    });
+    assert.equal(reset.totpReset, true);
+    assert.equal(totpDeletes, 2);
 });
 
 test('static hosting serves index and denies dotfiles with security headers', async () => {

@@ -41,6 +41,11 @@ button {
     cursor: pointer;
 }
 
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
 button:hover,
 a:hover {
     border-color: var(--accent);
@@ -251,6 +256,74 @@ tr.is-selected {
     color: var(--danger);
 }
 
+.record-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.record-actions button {
+    min-height: 30px;
+    padding: 0 10px;
+}
+
+.pagination-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.pagination-bar button {
+    min-height: 30px;
+    padding: 0 10px;
+}
+
+.record-detail-panel {
+    margin-top: 16px;
+}
+
+.record-detail-body {
+    padding: 14px 16px 16px;
+    color: var(--muted);
+}
+
+.record-detail-list {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+    gap: 8px 12px;
+    margin: 0 0 14px;
+}
+
+.record-detail-list dt {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.record-detail-list dd {
+    margin: 0;
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+
+.record-detail-body pre {
+    max-height: 320px;
+    margin: 0;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #f8fafc;
+    color: #1f2937;
+    padding: 12px;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
 .empty-cell {
     color: var(--muted);
 }
@@ -272,6 +345,12 @@ tr.is-selected {
     display: none;
 }
 
+.status[data-kind="error"] {
+    border-color: #f4b4ae;
+    background: var(--danger-bg);
+    color: var(--danger);
+}
+
 @media (max-width: 860px) {
     .admin-header,
     .admin-toolbar {
@@ -291,6 +370,10 @@ tr.is-selected {
 
     .admin-summary,
     .admin-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .record-detail-list {
         grid-template-columns: 1fr;
     }
 }

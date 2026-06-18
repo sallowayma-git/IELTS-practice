@@ -42,6 +42,54 @@ function createContext() {
     return { context, window: windowStub };
 }
 
+function createRemoteApiContext(fetchImpl) {
+    const windowStub = {
+        ExamData: {},
+        fetch: fetchImpl,
+        console: { log() {}, warn() {}, error() {}, info() {} }
+    };
+    const context = vm.createContext({
+        window: windowStub,
+        console: windowStub.console,
+        JSON,
+        Promise,
+        Error
+    });
+    loadScript('js/data/remoteApiClient.js', context);
+    return { context, window: windowStub };
+}
+
+function createClassList(initial = '') {
+    const values = new Set(String(initial).split(/\s+/).filter(Boolean));
+    return {
+        contains(value) {
+            return values.has(value);
+        },
+        toggle(value, force) {
+            if (force) values.add(value);
+            else values.delete(value);
+        }
+    };
+}
+
+function createElementStub(className = '') {
+    const attrs = new Map();
+    return {
+        id: '',
+        inert: false,
+        classList: createClassList(className),
+        getAttribute(name) {
+            return attrs.has(name) ? attrs.get(name) : null;
+        },
+        setAttribute(name, value) {
+            attrs.set(name, String(value));
+        },
+        removeAttribute(name) {
+            attrs.delete(name);
+        }
+    };
+}
+
 function createLocalDataSource(initial = {}) {
     const state = new Map(Object.entries(initial));
     const calls = [];
@@ -154,10 +202,269 @@ async function testImportMarkersAreScopedByUserId() {
     assert.strictEqual(await markerStore.has('user-b'), false);
 }
 
+async function testRemoteApiClientClearsAuthStateOnUnauthorized() {
+    const fetchCalls = [];
+    const { window } = createRemoteApiContext(async (url, options = {}) => {
+        fetchCalls.push([url, options]);
+        return {
+            status: 401,
+            ok: false,
+            async text() {
+                return JSON.stringify({ error: 'Authentication required' });
+            }
+        };
+    });
+    const client = new window.ExamData.RemoteApiClient();
+    client.user = { id: 'user-1', username: 'alice' };
+    client.csrfToken = 'csrf-old';
+    client.pendingTotp = { requiresTotp: true };
+
+    await assert.rejects(
+        () => client.request('/api/practice-records', { method: 'GET', csrf: false }),
+        (error) => error && error.status === 401
+    );
+    assert.strictEqual(client.user, null);
+    assert.strictEqual(client.csrfToken, null);
+    assert.strictEqual(client.pendingTotp, null);
+    assert.deepStrictEqual(fetchCalls[0][0], '/api/practice-records');
+}
+
+async function testRemoteApiClientAddsCsrfToWrites() {
+    const fetchCalls = [];
+    const { window } = createRemoteApiContext(async (url, options = {}) => {
+        fetchCalls.push([url, options]);
+        if (url === '/api/auth/csrf') {
+            return {
+                status: 200,
+                ok: true,
+                async text() {
+                    return JSON.stringify({ csrfToken: 'csrf-new' });
+                }
+            };
+        }
+        return {
+            status: 200,
+            ok: true,
+            async text() {
+                return JSON.stringify({ records: [] });
+            }
+        };
+    });
+    const client = new window.ExamData.RemoteApiClient();
+    await client.replacePracticeRecords([{ id: 'record-1' }]);
+
+    assert.deepStrictEqual(fetchCalls.map(([url]) => url), ['/api/auth/csrf', '/api/practice-records']);
+    assert.strictEqual(fetchCalls[1][1].headers['X-CSRF-Token'], 'csrf-new');
+    assert.strictEqual(fetchCalls[1][1].credentials, 'same-origin');
+}
+
+async function testRemoteApiClientHandlesTotpFlow() {
+    const fetchCalls = [];
+    const { window } = createRemoteApiContext(async (url, options = {}) => {
+        fetchCalls.push([url, options]);
+        if (url === '/api/auth/csrf') {
+            return {
+                status: 200,
+                ok: true,
+                async text() {
+                    return JSON.stringify({ csrfToken: 'csrf-totp' });
+                }
+            };
+        }
+        if (url === '/api/auth/login') {
+            const body = JSON.parse(options.body);
+            assert.strictEqual(body.username, 'alice');
+            return {
+                status: 200,
+                ok: true,
+                async text() {
+                    return JSON.stringify({ requiresTotp: true, csrfToken: 'csrf-after-password' });
+                }
+            };
+        }
+        if (url === '/api/auth/totp/login') {
+            const body = JSON.parse(options.body);
+            assert.strictEqual(body.token, '123456');
+            return {
+                status: 200,
+                ok: true,
+                async text() {
+                    return JSON.stringify({
+                        user: { id: 'user-1', username: 'alice' },
+                        csrfToken: 'csrf-after-login'
+                    });
+                }
+            };
+        }
+        if (url === '/api/auth/totp/status') {
+            return {
+                status: 200,
+                ok: true,
+                async text() {
+                    return JSON.stringify({ status: { enabled: true, recoveryCodesRemaining: 8 } });
+                }
+            };
+        }
+        if (url === '/api/auth/totp/setup') {
+            return {
+                status: 200,
+                ok: true,
+                async text() {
+                    return JSON.stringify({
+                        secret: 'ABC',
+                        otpauthUrl: 'otpauth://totp/test',
+                        qrCodeDataUrl: 'data:image/png;base64,AA=='
+                    });
+                }
+            };
+        }
+        if (url === '/api/auth/totp/verify-setup') {
+            return {
+                status: 200,
+                ok: true,
+                async text() {
+                    return JSON.stringify({
+                        user: { id: 'user-1', username: 'alice' },
+                        recoveryCodes: ['AAAA-BBBB'],
+                        csrfToken: 'csrf-after-setup',
+                        status: { enabled: true, recoveryCodesRemaining: 1 }
+                    });
+                }
+            };
+        }
+        if (url === '/api/auth/totp/recovery-codes') {
+            return {
+                status: 200,
+                ok: true,
+                async text() {
+                    return JSON.stringify({
+                        recoveryCodes: ['CCCC-DDDD'],
+                        status: { enabled: true, recoveryCodesRemaining: 1 }
+                    });
+                }
+            };
+        }
+        if (url === '/api/auth/totp/disable') {
+            const body = JSON.parse(options.body);
+            assert.strictEqual(body.password, 'StrongPass1');
+            assert.strictEqual(body.token, '123456');
+            return {
+                status: 200,
+                ok: true,
+                async text() {
+                    return JSON.stringify({ status: { enabled: false, recoveryCodesRemaining: 0 } });
+                }
+            };
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+    });
+    const apiClient = new window.ExamData.RemoteApiClient();
+
+    const passwordStep = await apiClient.login('alice', 'StrongPass1');
+    assert.strictEqual(passwordStep.requiresTotp, true);
+    assert.strictEqual(apiClient.user, null);
+    assert.strictEqual(apiClient.pendingTotp.requiresTotp, true);
+    assert.strictEqual(apiClient.csrfToken, 'csrf-after-password');
+
+    const loggedIn = await apiClient.completeTotpLogin('123456');
+    assert.strictEqual(loggedIn.user.username, 'alice');
+    assert.strictEqual(apiClient.user.username, 'alice');
+    assert.strictEqual(apiClient.csrfToken, 'csrf-after-login');
+    assert.strictEqual(apiClient.pendingTotp, null);
+
+    const status = await apiClient.getTotpStatus();
+    assert.strictEqual(status.recoveryCodesRemaining, 8);
+    const setup = await apiClient.startTotpSetup();
+    assert.strictEqual(setup.secret, 'ABC');
+    const verified = await apiClient.verifyTotpSetup('123456');
+    assert.deepStrictEqual(verified.recoveryCodes, ['AAAA-BBBB']);
+    assert.strictEqual(apiClient.csrfToken, 'csrf-after-setup');
+    const regenerated = await apiClient.regenerateTotpRecoveryCodes();
+    assert.deepStrictEqual(regenerated.recoveryCodes, ['CCCC-DDDD']);
+    const disabled = await apiClient.disableTotp('StrongPass1', '123456');
+    assert.strictEqual(disabled.enabled, false);
+
+    assert(fetchCalls.some(([url]) => url === '/api/auth/totp/login'));
+    assert(fetchCalls.some(([url]) => url === '/api/auth/totp/verify-setup'));
+}
+
+async function testAuthGateLocksAndRestoresBackgroundElements() {
+    const app = createElementStub('app-shell');
+    const overlay = createElementStub('remote-auth-overlay');
+    overlay.id = 'remote-auth-overlay';
+    const body = createElementStub('');
+    body.children = [app, overlay];
+    const documentElement = createElementStub('');
+    const windowStub = {
+        ExamData: {},
+        localStorage: null,
+        document: {
+            body,
+            documentElement
+        }
+    };
+    const context = vm.createContext({
+        window: windowStub,
+        console,
+        JSON,
+        Map,
+        Promise
+    });
+    loadScript('js/data/authOverlay.js', context);
+
+    windowStub.ExamData.setRemoteAuthGate(true);
+    assert.strictEqual(app.inert, true);
+    assert.strictEqual(app.getAttribute('aria-hidden'), 'true');
+    assert.strictEqual(overlay.inert, false);
+    assert.strictEqual(body.classList.contains('remote-auth-gated'), true);
+
+    windowStub.ExamData.setRemoteAuthGate(false);
+    assert.strictEqual(app.inert, false);
+    assert.strictEqual(app.getAttribute('aria-hidden'), null);
+    assert.strictEqual(body.classList.contains('remote-auth-gated'), false);
+}
+
+async function testAuthOverlayValidationAndErrorFormatting() {
+    const windowStub = {
+        ExamData: {},
+        localStorage: null
+    };
+    const context = vm.createContext({
+        window: windowStub,
+        console,
+        JSON,
+        Map,
+        Promise
+    });
+    loadScript('js/data/authOverlay.js', context);
+
+    const invalidUsername = windowStub.ExamData.validateRemoteAuthFields('a!', 'StrongPass1', 'login');
+    assert.strictEqual(invalidUsername.valid, false);
+    assert.match(invalidUsername.errors.join(' '), /用户名/);
+
+    const weakRegister = windowStub.ExamData.validateRemoteAuthFields('valid_user', 'weak', 'register');
+    assert.strictEqual(weakRegister.valid, false);
+    assert(weakRegister.errors.length >= 3);
+
+    assert.strictEqual(
+        windowStub.ExamData.formatRemoteAuthError({ status: 429, message: 'Too many requests' }),
+        '请求过于频繁，请稍后再试。'
+    );
+    assert.strictEqual(
+        windowStub.ExamData.formatRemoteAuthError({ payload: { details: ['a', 'b'] } }),
+        'a；b'
+    );
+}
+
 async function main() {
     await testPracticeRecordsUseRemoteAndMirrorLocal();
     await testUnauthorizedReadFallsBackToLocal();
     await testImportMarkersAreScopedByUserId();
+    await testRemoteApiClientClearsAuthStateOnUnauthorized();
+    await testRemoteApiClientAddsCsrfToWrites();
+    await testRemoteApiClientHandlesTotpFlow();
+    await testAuthGateLocksAndRestoresBackgroundElements();
+    await testAuthOverlayValidationAndErrorFormatting();
     console.log(JSON.stringify({
         status: 'pass',
         detail: 'remote practice data source tests passed'

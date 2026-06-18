@@ -31,6 +31,10 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-false}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      TOTP_ENABLED: ${TOTP_ENABLED:-true}
+      TOTP_ISSUER: ${TOTP_ISSUER:-IELTS Atlas}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:-}
+      ADMIN_RESET_TOTP: ${ADMIN_RESET_TOTP:-false}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:

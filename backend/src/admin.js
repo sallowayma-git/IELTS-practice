@@ -215,9 +215,11 @@ function createAdminRouter(options = {}) {
     const express = require('express');
     const router = express.Router();
     const store = options.store || new PostgresAdminStore(options.db);
+    const requireAdminTotp = options.requireAdminTotp || ((req, res, next) => next());
 
     router.use(requireAuth);
     router.use(requireAdmin);
+    router.use(requireAdminTotp);
 
     router.get('/summary', async (req, res, next) => {
         try {

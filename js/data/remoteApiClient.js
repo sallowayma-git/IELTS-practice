@@ -17,6 +17,7 @@
             this.csrfToken = null;
             this.user = null;
             this.available = false;
+            this.pendingTotp = null;
         }
 
         isAuthenticated() {
@@ -32,6 +33,8 @@
                 this.available = true;
                 if (response.status === 401) {
                     this.user = null;
+                    this.csrfToken = null;
+                    this.pendingTotp = null;
                     return { available: true, authenticated: false, user: null };
                 }
                 const payload = await this._parseJson(response);
@@ -57,6 +60,7 @@
                 }
                 this.available = false;
                 this.user = null;
+                this.pendingTotp = null;
                 return { available: false, authenticated: false, user: null, error };
             }
         }
@@ -76,6 +80,7 @@
                 body: { username, password }
             });
             this.user = payload.user || null;
+            this.pendingTotp = null;
             if (payload.csrfToken) {
                 this.csrfToken = payload.csrfToken;
             }
@@ -87,11 +92,68 @@
                 method: 'POST',
                 body: { username, password }
             });
-            this.user = payload.user || null;
+            if (payload.requiresTotp || payload.requiresTotpSetup) {
+                this.user = null;
+                this.pendingTotp = {
+                    requiresTotp: Boolean(payload.requiresTotp),
+                    requiresTotpSetup: Boolean(payload.requiresTotpSetup),
+                    user: payload.user || null
+                };
+            } else {
+                this.user = payload.user || null;
+                this.pendingTotp = null;
+            }
             if (payload.csrfToken) {
                 this.csrfToken = payload.csrfToken;
             }
             return payload;
+        }
+
+        async getTotpStatus() {
+            const payload = await this.request('/api/auth/totp/status', { method: 'GET', csrf: false });
+            return payload.status || { enabled: false, recoveryCodesRemaining: 0 };
+        }
+
+        async startTotpSetup() {
+            return this.request('/api/auth/totp/setup', { method: 'POST' });
+        }
+
+        async verifyTotpSetup(token) {
+            const payload = await this.request('/api/auth/totp/verify-setup', {
+                method: 'POST',
+                body: { token }
+            });
+            this.user = payload.user || this.user;
+            this.pendingTotp = null;
+            if (payload.csrfToken) {
+                this.csrfToken = payload.csrfToken;
+            }
+            return payload;
+        }
+
+        async completeTotpLogin(token) {
+            const payload = await this.request('/api/auth/totp/login', {
+                method: 'POST',
+                body: { token }
+            });
+            this.user = payload.user || null;
+            this.pendingTotp = null;
+            if (payload.csrfToken) {
+                this.csrfToken = payload.csrfToken;
+            }
+            return payload;
+        }
+
+        async regenerateTotpRecoveryCodes() {
+            return this.request('/api/auth/totp/recovery-codes', { method: 'POST' });
+        }
+
+        async disableTotp(password, token) {
+            const payload = await this.request('/api/auth/totp/disable', {
+                method: 'POST',
+                body: { password, token }
+            });
+            return payload.status || { enabled: false, recoveryCodesRemaining: 0 };
         }
 
         async logout() {
@@ -100,6 +162,7 @@
             });
             this.user = null;
             this.csrfToken = null;
+            this.pendingTotp = null;
             return payload;
         }
 
@@ -159,6 +222,8 @@
             const payload = await this._parseJson(response);
             if (response.status === 401) {
                 this.user = null;
+                this.csrfToken = null;
+                this.pendingTotp = null;
             }
             if (!response.ok) {
                 throw new RemoteApiError(payload?.error || `Request failed with ${response.status}`, {

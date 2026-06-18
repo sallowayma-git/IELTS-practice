@@ -42,9 +42,14 @@
         let dataSource = localDataSource;
         let remoteApiClient = null;
         let remoteAuthState = { available: false, authenticated: false, user: null };
+        let remoteAuthGateEnabled = false;
 
         if (ExamData.RemoteApiClient && ExamData.RemotePracticeDataSource) {
             remoteApiClient = new ExamData.RemoteApiClient();
+            if (ExamData.setRemoteAuthGate) {
+                ExamData.setRemoteAuthGate(true);
+                remoteAuthGateEnabled = true;
+            }
             try {
                 remoteAuthState = await remoteApiClient.getAuthState();
                 if (remoteAuthState.available) {
@@ -56,6 +61,10 @@
                 remoteAuthState = { available: false, authenticated: false, user: null };
                 remoteApiClient = null;
                 dataSource = localDataSource;
+                if (remoteAuthGateEnabled && ExamData.setRemoteAuthGate) {
+                    ExamData.setRemoteAuthGate(false);
+                    remoteAuthGateEnabled = false;
+                }
             }
         }
 
@@ -192,6 +201,8 @@
             } else {
                 authController.show();
             }
+        } else if (remoteAuthGateEnabled && ExamData.setRemoteAuthGate) {
+            ExamData.setRemoteAuthGate(false);
         }
 
         console.log('[data/index] 数据仓库初始化完成');

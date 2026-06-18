@@ -22,6 +22,20 @@ function validateAdminInput(username, password) {
     return normalizedUsername;
 }
 
+function parseBoolean(value, fallback = false) {
+    if (value === undefined || value === null || value === '') return fallback;
+    return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
+}
+
+async function resetAdminTotpIfRequested(db, userId, value) {
+    if (!parseBoolean(value, false)) {
+        return false;
+    }
+    await db.query('DELETE FROM user_totp_recovery_codes WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM user_totp_settings WHERE user_id = $1', [userId]);
+    return true;
+}
+
 async function bootstrapAdmin(options = {}) {
     const db = options.db;
     if (!db || typeof db.query !== 'function') {
@@ -50,7 +64,12 @@ async function bootstrapAdmin(options = {}) {
              RETURNING id, username, role`,
             [normalizedUsername, passwordHash, usernameLower]
         );
-        return { skipped: false, created: false, user: result.rows[0] };
+        const totpReset = await resetAdminTotpIfRequested(
+            db,
+            result.rows[0].id,
+            options.resetTotp ?? process.env.ADMIN_RESET_TOTP
+        );
+        return { skipped: false, created: false, totpReset, user: result.rows[0] };
     }
 
     const result = await db.query(
@@ -60,10 +79,11 @@ async function bootstrapAdmin(options = {}) {
         [normalizedUsername, usernameLower, passwordHash]
     );
 
-    return { skipped: false, created: true, user: result.rows[0] };
+    return { skipped: false, created: true, totpReset: false, user: result.rows[0] };
 }
 
 module.exports = {
     bootstrapAdmin,
+    resetAdminTotpIfRequested,
     validateAdminInput
 };
