@@ -35,6 +35,7 @@ services:
       TOTP_ISSUER: ${TOTP_ISSUER:-IELTS Atlas}
       TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:-}
       ADMIN_RESET_TOTP: ${ADMIN_RESET_TOTP:-false}
+      TRAFFIC_ENABLED: ${TRAFFIC_ENABLED:-true}
     ports:
       - "127.0.0.1:3000:3000"
     volumes:

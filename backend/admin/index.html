@@ -10,10 +10,11 @@
         <header class="admin-header">
             <div>
                 <p class="admin-kicker">IELTS Atlas</p>
-                <h1>Admin</h1>
+                <h1>Admin Console</h1>
             </div>
             <nav class="admin-nav" aria-label="Admin navigation">
                 <a href="/">App</a>
+                <button id="refresh-button" type="button">Refresh</button>
                 <button id="logout-button" type="button">Logout</button>
             </nav>
         </header>
@@ -33,23 +34,42 @@
                     <strong id="summary-records">0</strong>
                 </div>
                 <div>
-                    <span class="summary-label">Latest</span>
-                    <strong id="summary-latest">-</strong>
+                    <span class="summary-label">Active Users</span>
+                    <strong id="summary-active-users">0</strong>
+                </div>
+                <div>
+                    <span class="summary-label">Average Score</span>
+                    <strong id="summary-avg-score">-</strong>
+                </div>
+                <div>
+                    <span class="summary-label">Study Minutes</span>
+                    <strong id="summary-study-time">0</strong>
+                </div>
+                <div>
+                    <span class="summary-label">Page Views</span>
+                    <strong id="summary-pageviews">0</strong>
+                </div>
+                <div>
+                    <span class="summary-label">Requests Today</span>
+                    <strong id="summary-requests-today">0</strong>
                 </div>
             </section>
 
-            <section class="admin-main" aria-label="User administration">
+            <section class="admin-main" aria-label="Administration">
                 <div class="admin-toolbar">
                     <label class="search-field">
-                        <span>Search</span>
-                        <input id="user-search" type="search" autocomplete="off" />
+                        <span>Search users</span>
+                        <input id="user-search" type="search" autocomplete="off" placeholder="Username" />
                     </label>
-                    <button id="refresh-button" type="button">Refresh</button>
+                    <p class="admin-toolbar__meta" id="summary-latest">Latest record: -</p>
                 </div>
 
-                <div class="admin-grid">
+                <div class="admin-grid admin-grid--main">
                     <section class="admin-panel" aria-label="Users">
-                        <h2>Users</h2>
+                        <div class="panel-heading">
+                            <h2>Users</h2>
+                            <span id="users-range">0 of 0</span>
+                        </div>
                         <div class="table-wrap">
                             <table>
                                 <thead>
@@ -57,6 +77,7 @@
                                         <th>User</th>
                                         <th>Role</th>
                                         <th>Records</th>
+                                        <th>Avg</th>
                                         <th>Latest</th>
                                     </tr>
                                 </thead>
@@ -65,15 +86,87 @@
                         </div>
                         <div class="pagination-bar" aria-label="Users pagination">
                             <button id="users-prev" type="button">Previous</button>
-                            <span id="users-range">0 of 0</span>
                             <button id="users-next" type="button">Next</button>
                         </div>
                     </section>
 
+                    <section class="admin-panel user-management-panel" aria-label="User management">
+                        <div class="panel-heading">
+                            <h2>User Management</h2>
+                            <span id="selected-user-name">No user selected</span>
+                        </div>
+                        <div class="management-grid">
+                            <form id="create-user-form" class="admin-form">
+                                <h3>Create User</h3>
+                                <label>
+                                    <span>Username</span>
+                                    <input id="create-username" name="username" autocomplete="off" required />
+                                </label>
+                                <label>
+                                    <span>Password</span>
+                                    <input id="create-password" name="password" type="password" autocomplete="new-password" required />
+                                </label>
+                                <label>
+                                    <span>Role</span>
+                                    <select id="create-role" name="role">
+                                        <option value="user">User</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                </label>
+                                <button id="create-user-submit" type="submit">Create User</button>
+                            </form>
+
+                            <form id="edit-user-form" class="admin-form">
+                                <h3>Selected User</h3>
+                                <label>
+                                    <span>Role</span>
+                                    <select id="selected-user-role" name="role" disabled>
+                                        <option value="user">User</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    <span>Reset Password</span>
+                                    <input id="selected-user-password" name="password" type="password" autocomplete="new-password" placeholder="Leave empty to keep current" disabled />
+                                </label>
+                                <div class="form-actions">
+                                    <button id="save-user-button" type="submit" disabled>Save</button>
+                                    <button id="delete-user-button" class="delete-button" type="button" disabled>Delete User</button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="admin-grid admin-grid--stats">
+                    <section class="admin-panel" aria-label="Selected user statistics">
+                        <div class="panel-heading">
+                            <h2>User Statistics</h2>
+                            <span id="user-stats-title">Select a user</span>
+                        </div>
+                        <div class="metric-grid">
+                            <div><span>Records</span><strong id="user-stat-records">0</strong></div>
+                            <div><span>Average</span><strong id="user-stat-average">-</strong></div>
+                            <div><span>Study Minutes</span><strong id="user-stat-duration">0</strong></div>
+                            <div><span>Latest</span><strong id="user-stat-latest">-</strong></div>
+                        </div>
+                        <div id="user-type-stats" class="mini-list">No user selected.</div>
+                    </section>
+
+                    <section class="admin-panel" aria-label="Global learning statistics">
+                        <div class="panel-heading">
+                            <h2>Learning Statistics</h2>
+                            <span id="global-stats-range">All users</span>
+                        </div>
+                        <div id="global-type-stats" class="mini-list">Loading...</div>
+                    </section>
+                </div>
+
+                <div class="admin-grid admin-grid--main">
                     <section class="admin-panel" aria-label="Practice records">
                         <div class="panel-heading">
                             <h2 id="records-title">Practice Records</h2>
-                            <span id="records-count">0</span>
+                            <span id="records-range">0 of 0</span>
                         </div>
                         <div class="table-wrap">
                             <table>
@@ -91,15 +184,39 @@
                         </div>
                         <div class="pagination-bar" aria-label="Practice records pagination">
                             <button id="records-prev" type="button">Previous</button>
-                            <span id="records-range">0 of 0</span>
                             <button id="records-next" type="button">Next</button>
                         </div>
                     </section>
+
+                    <section class="admin-panel record-detail-panel" aria-label="Practice record detail">
+                        <div class="panel-heading">
+                            <h2 id="record-detail-title">Record Detail</h2>
+                        </div>
+                        <div id="record-detail-body" class="record-detail-body">Select a record to inspect its stored payload.</div>
+                    </section>
                 </div>
 
-                <section class="admin-panel record-detail-panel" aria-label="Practice record detail">
-                    <h2 id="record-detail-title">Record Detail</h2>
-                    <div id="record-detail-body" class="record-detail-body">Select a record to inspect its stored payload.</div>
+                <section class="admin-panel" aria-label="Traffic statistics">
+                    <div class="panel-heading">
+                        <h2>Website Traffic</h2>
+                        <span id="traffic-window">Last 14 days</span>
+                    </div>
+                    <div class="metric-grid">
+                        <div><span>Requests</span><strong id="traffic-requests">0</strong></div>
+                        <div><span>Page Views</span><strong id="traffic-pageviews">0</strong></div>
+                        <div><span>Visitors</span><strong id="traffic-visitors">0</strong></div>
+                        <div><span>Errors</span><strong id="traffic-errors">0</strong></div>
+                    </div>
+                    <div class="traffic-grid">
+                        <div>
+                            <h3>Daily Trend</h3>
+                            <div id="traffic-daily" class="mini-list">Loading...</div>
+                        </div>
+                        <div>
+                            <h3>Top Paths</h3>
+                            <div id="traffic-paths" class="mini-list">Loading...</div>
+                        </div>
+                    </div>
                 </section>
             </section>
         </main>

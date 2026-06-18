@@ -6,7 +6,7 @@ const helmet = require('helmet');
 
 const db = require('./db');
 const { PostgresAuthStore, createAuthRouter, publicUser, requireAdmin } = require('./auth');
-const { PostgresAdminStore, createAdminRouter } = require('./admin');
+const { PostgresAdminStore, createAdminRouter, createTrafficMiddleware } = require('./admin');
 const { PostgresPracticeRecordStore, createPracticeRecordsRouter } = require('./practiceRecords');
 const { PostgresTotpStore, createRequireAdminTotp, createTotpRouter } = require('./totp');
 
@@ -67,9 +67,19 @@ function createApp(options = {}) {
     const totpStore = options.totpStore || new PostgresTotpStore(dbClient);
     const practiceStore = options.practiceStore || new PostgresPracticeRecordStore(dbClient);
     const adminStore = options.adminStore || new PostgresAdminStore(dbClient);
+    const trafficStore = options.trafficStore || adminStore;
     const requireAdminTotp = options.requireAdminTotp || (
         totpEnabled ? createRequireAdminTotp(totpStore) : ((req, res, next) => next())
     );
+    const trafficEnabled = options.trafficEnabled !== undefined
+        ? Boolean(options.trafficEnabled)
+        : parseBoolean(process.env.TRAFFIC_ENABLED, true);
+
+    app.use(createTrafficMiddleware({
+        store: trafficStore,
+        enabled: trafficEnabled,
+        secret: sessionSecret
+    }));
 
     app.get('/api/health', (req, res) => {
         res.json({ ok: true });

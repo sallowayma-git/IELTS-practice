@@ -576,6 +576,103 @@ test('admin can list users, inspect records, and delete one record', async () =>
     }
 });
 
+test('admin can manage users and inspect learning and traffic stats', async () => {
+    const client = await createClient();
+    try {
+        await seedAdmin(client, 'admin_user', 'StrongPass1');
+        const created = await register(client, 'stats_user', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+        const managedUserId = created.json.user.id;
+
+        const records = [
+            {
+                id: 'stats-record-1',
+                sessionId: 'stats-session-1',
+                type: 'reading',
+                title: 'Stats Reading',
+                score: 80,
+                duration: 12,
+                correctAnswers: 8,
+                totalQuestions: 10,
+                updatedAt: '2026-01-02T00:00:00.000Z'
+            },
+            {
+                id: 'stats-record-2',
+                sessionId: 'stats-session-2',
+                type: 'listening',
+                title: 'Stats Listening',
+                score: 60,
+                duration: 8,
+                correctAnswers: 6,
+                totalQuestions: 10,
+                updatedAt: '2026-01-03T00:00:00.000Z'
+            }
+        ];
+        const replaced = await client.request('PUT', '/api/practice-records', { records });
+        assert.equal(replaced.response.status, 200);
+
+        await client.request('POST', '/api/auth/logout');
+        await client.csrf();
+        const login = await client.request('POST', '/api/auth/login', {
+            username: 'admin_user',
+            password: 'StrongPass1'
+        });
+        assert.equal(login.response.status, 200);
+        assert.equal(login.json.requiresTotpSetup, true);
+        await enableTotpForCurrentSession(client);
+
+        const weak = await client.request('POST', '/api/admin/users', {
+            username: 'weak_created',
+            password: 'weak',
+            role: 'user'
+        });
+        assert.equal(weak.response.status, 400);
+
+        const added = await client.request('POST', '/api/admin/users', {
+            username: 'created_user',
+            password: 'StrongPass1',
+            role: 'user'
+        });
+        assert.equal(added.response.status, 201);
+        assert.equal(added.json.user.role, 'user');
+
+        const patched = await client.request('PATCH', `/api/admin/users/${added.json.user.id}`, {
+            role: 'admin',
+            password: 'StrongerPass2'
+        });
+        assert.equal(patched.response.status, 200);
+        assert.equal(patched.json.user.role, 'admin');
+
+        const selfDelete = await client.request('DELETE', `/api/admin/users/${login.json.user.id}`);
+        assert.equal(selfDelete.response.status, 400);
+
+        const userStats = await client.request('GET', `/api/admin/users/${managedUserId}/stats`);
+        assert.equal(userStats.response.status, 200);
+        assert.equal(userStats.json.recordCount, 2);
+        assert.equal(userStats.json.averageScore, 70);
+        assert.equal(userStats.json.totalStudyMinutes, 20);
+        assert.equal(userStats.json.byType.length, 2);
+
+        const globalStats = await client.request('GET', '/api/admin/stats');
+        assert.equal(globalStats.response.status, 200);
+        assert.equal(globalStats.json.practiceRecordCount, 2);
+        assert.equal(globalStats.json.averageScore, 70);
+
+        await client.request('GET', '/');
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        const traffic = await client.request('GET', '/api/admin/traffic?days=7&limit=5');
+        assert.equal(traffic.response.status, 200);
+        assert(traffic.json.requests >= 1);
+        assert(traffic.json.topPaths.length >= 1);
+
+        const deleted = await client.request('DELETE', `/api/admin/users/${added.json.user.id}`);
+        assert.equal(deleted.response.status, 200);
+        assert.equal(deleted.json.deleted, true);
+    } finally {
+        await client.close();
+    }
+});
+
 test('bootstrap admin creates and updates an admin user', async () => {
     const users = new Map();
     let totpDeletes = 0;

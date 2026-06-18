@@ -1,5 +1,14 @@
+const crypto = require('node:crypto');
+const bcrypt = require('bcryptjs');
 const { z } = require('zod');
-const { requireAdmin, requireAuth, verifyCsrfToken } = require('./auth');
+const {
+    USERNAME_PATTERN,
+    normalizeUsername,
+    requireAdmin,
+    requireAuth,
+    validatePasswordStrength,
+    verifyCsrfToken
+} = require('./auth');
 
 const listQuerySchema = z.object({
     q: z.string().optional().default(''),
@@ -7,20 +16,59 @@ const listQuerySchema = z.object({
     offset: z.coerce.number().int().min(0).optional().default(0)
 });
 
+const createUserSchema = z.object({
+    username: z.string().trim().min(3).max(32).regex(USERNAME_PATTERN),
+    password: z.string().min(8).max(128),
+    role: z.enum(['user', 'admin']).optional().default('user')
+});
+
+const updateUserSchema = z.object({
+    role: z.enum(['user', 'admin']).optional(),
+    password: z.string().min(8).max(128).optional()
+}).refine((value) => value.role !== undefined || value.password !== undefined, {
+    message: 'No changes supplied'
+});
+
+const trafficQuerySchema = z.object({
+    days: z.coerce.number().int().min(1).max(90).optional().default(14),
+    limit: z.coerce.number().int().min(1).max(50).optional().default(10)
+});
+
 function toInteger(value) {
     const number = Number(value);
+    return Number.isFinite(number) ? Math.trunc(number) : 0;
+}
+
+function toNumber(value) {
+    const number = Number(value);
     return Number.isFinite(number) ? number : 0;
+}
+
+function roundNumber(value, digits = 1) {
+    const number = toNumber(value);
+    const factor = 10 ** digits;
+    return Math.round(number * factor) / factor;
+}
+
+function normalizeRole(value) {
+    return value === 'admin' ? 'admin' : 'user';
 }
 
 function serializeUser(row) {
     return {
         id: row.id,
         username: row.username,
-        role: row.role === 'admin' ? 'admin' : 'user',
+        role: normalizeRole(row.role),
         createdAt: row.created_at || row.createdAt || null,
         updatedAt: row.updated_at || row.updatedAt || null,
         recordCount: toInteger(row.record_count ?? row.recordCount),
-        latestRecordAt: row.latest_record_at || row.latestRecordAt || null
+        latestRecordAt: row.latest_record_at || row.latestRecordAt || null,
+        averageScore: row.average_score === null || row.average_score === undefined
+            ? null
+            : roundNumber(row.average_score),
+        totalStudyMinutes: roundNumber(row.total_duration ?? row.totalStudyMinutes ?? 0),
+        correctAnswers: toInteger(row.correct_answers ?? row.correctAnswers),
+        totalQuestions: toInteger(row.total_questions ?? row.totalQuestions)
     };
 }
 
@@ -42,6 +90,118 @@ function serializeRecord(row) {
     };
 }
 
+function serializeTypeStats(row) {
+    return {
+        type: row.type || 'unknown',
+        recordCount: toInteger(row.record_count ?? row.recordCount),
+        averageScore: row.average_score === null || row.average_score === undefined
+            ? null
+            : roundNumber(row.average_score),
+        totalStudyMinutes: roundNumber(row.total_duration ?? row.totalStudyMinutes ?? 0),
+        latestRecordAt: row.latest_record_at || row.latestRecordAt || null
+    };
+}
+
+function serializeTrafficDaily(row) {
+    return {
+        day: row.day,
+        requests: toInteger(row.requests),
+        pageViews: toInteger(row.page_views ?? row.pageViews),
+        uniqueVisitors: toInteger(row.unique_visitors ?? row.uniqueVisitors),
+        errors: toInteger(row.errors)
+    };
+}
+
+function serializeTrafficPath(row) {
+    return {
+        path: row.path,
+        routeGroup: row.route_group || row.routeGroup || 'other',
+        requests: toInteger(row.requests),
+        uniqueVisitors: toInteger(row.unique_visitors ?? row.uniqueVisitors),
+        lastSeenAt: row.last_seen_at || row.lastSeenAt || null
+    };
+}
+
+function serializeTrafficEvent(row) {
+    return {
+        occurredAt: row.occurred_at || row.occurredAt || null,
+        method: row.method,
+        path: row.path,
+        routeGroup: row.route_group || row.routeGroup || 'other',
+        statusCode: toInteger(row.status_code ?? row.statusCode),
+        durationMs: toInteger(row.duration_ms ?? row.durationMs),
+        userId: row.user_id || row.userId || null
+    };
+}
+
+function buildUserStats(user, records) {
+    const byType = new Map();
+    let scoreTotal = 0;
+    let scoreCount = 0;
+    let duration = 0;
+    let correct = 0;
+    let total = 0;
+    let latestRecordAt = null;
+
+    for (const record of records) {
+        const score = Number(record.score);
+        const recordDuration = Number(record.duration);
+        const correctAnswers = Number(record.correctAnswers ?? record.correct_answers);
+        const totalQuestions = Number(record.totalQuestions ?? record.total_questions);
+        const type = record.type || record.examType || 'unknown';
+        const updatedAt = record.updatedAt || record.updated_at || record.date || record.createdAt || null;
+        if (Number.isFinite(score)) {
+            scoreTotal += score;
+            scoreCount += 1;
+        }
+        if (Number.isFinite(recordDuration)) duration += recordDuration;
+        if (Number.isFinite(correctAnswers)) correct += correctAnswers;
+        if (Number.isFinite(totalQuestions)) total += totalQuestions;
+        if (updatedAt && (!latestRecordAt || Number(new Date(updatedAt)) > Number(new Date(latestRecordAt)))) {
+            latestRecordAt = updatedAt;
+        }
+        const entry = byType.get(type) || {
+            type,
+            recordCount: 0,
+            scoreTotal: 0,
+            scoreCount: 0,
+            totalStudyMinutes: 0,
+            latestRecordAt: null
+        };
+        entry.recordCount += 1;
+        if (Number.isFinite(score)) {
+            entry.scoreTotal += score;
+            entry.scoreCount += 1;
+        }
+        if (Number.isFinite(recordDuration)) entry.totalStudyMinutes += recordDuration;
+        if (updatedAt && (!entry.latestRecordAt || Number(new Date(updatedAt)) > Number(new Date(entry.latestRecordAt)))) {
+            entry.latestRecordAt = updatedAt;
+        }
+        byType.set(type, entry);
+    }
+
+    return {
+        user: serializeUser(user),
+        recordCount: records.length,
+        averageScore: scoreCount ? roundNumber(scoreTotal / scoreCount) : null,
+        totalStudyMinutes: roundNumber(duration),
+        correctAnswers: toInteger(correct),
+        totalQuestions: toInteger(total),
+        latestRecordAt,
+        byType: Array.from(byType.values()).map((entry) => ({
+            type: entry.type,
+            recordCount: entry.recordCount,
+            averageScore: entry.scoreCount ? roundNumber(entry.scoreTotal / entry.scoreCount) : null,
+            totalStudyMinutes: roundNumber(entry.totalStudyMinutes),
+            latestRecordAt: entry.latestRecordAt
+        }))
+    };
+}
+
+async function hashPassword(password, rounds = 12) {
+    return bcrypt.hash(password, rounds);
+}
+
 class PostgresAdminStore {
     constructor(db) {
         this.db = db;
@@ -53,14 +213,55 @@ class PostgresAdminStore {
                 (SELECT count(*)::int FROM users) AS user_count,
                 (SELECT count(*)::int FROM users WHERE role = 'admin') AS admin_count,
                 (SELECT count(*)::int FROM practice_records) AS practice_record_count,
-                (SELECT max(updated_at) FROM practice_records) AS latest_record_at
+                (SELECT count(DISTINCT user_id)::int FROM practice_records) AS active_user_count,
+                (SELECT avg(score) FROM practice_records WHERE score IS NOT NULL) AS average_score,
+                (SELECT coalesce(sum(duration), 0) FROM practice_records WHERE duration IS NOT NULL) AS total_duration,
+                (SELECT coalesce(sum(correct_answers), 0)::int FROM practice_records WHERE correct_answers IS NOT NULL) AS correct_answers,
+                (SELECT coalesce(sum(total_questions), 0)::int FROM practice_records WHERE total_questions IS NOT NULL) AS total_questions,
+                (SELECT max(updated_at) FROM practice_records) AS latest_record_at,
+                (SELECT count(*)::int FROM traffic_events) AS total_requests,
+                (SELECT count(*)::int FROM traffic_events WHERE route_group = 'page') AS total_page_views,
+                (SELECT count(DISTINCT ip_hash)::int FROM traffic_events WHERE ip_hash IS NOT NULL) AS unique_visitors,
+                (SELECT count(*)::int FROM traffic_events WHERE occurred_at >= date_trunc('day', now())) AS requests_today,
+                (SELECT count(*)::int FROM traffic_events WHERE route_group = 'page' AND occurred_at >= date_trunc('day', now())) AS page_views_today
         `);
         const row = result.rows[0] || {};
         return {
             userCount: toInteger(row.user_count),
             adminCount: toInteger(row.admin_count),
             practiceRecordCount: toInteger(row.practice_record_count),
-            latestRecordAt: row.latest_record_at || null
+            activeUserCount: toInteger(row.active_user_count),
+            averageScore: row.average_score === null || row.average_score === undefined ? null : roundNumber(row.average_score),
+            totalStudyMinutes: roundNumber(row.total_duration),
+            correctAnswers: toInteger(row.correct_answers),
+            totalQuestions: toInteger(row.total_questions),
+            latestRecordAt: row.latest_record_at || null,
+            traffic: {
+                totalRequests: toInteger(row.total_requests),
+                totalPageViews: toInteger(row.total_page_views),
+                uniqueVisitors: toInteger(row.unique_visitors),
+                requestsToday: toInteger(row.requests_today),
+                pageViewsToday: toInteger(row.page_views_today)
+            }
+        };
+    }
+
+    async globalStats() {
+        const totals = await this.summary();
+        const byType = await this.db.query(`
+            SELECT
+                coalesce(type, 'unknown') AS type,
+                count(*)::int AS record_count,
+                avg(score) AS average_score,
+                coalesce(sum(duration), 0) AS total_duration,
+                max(updated_at) AS latest_record_at
+            FROM practice_records
+            GROUP BY coalesce(type, 'unknown')
+            ORDER BY record_count DESC, type ASC
+        `);
+        return {
+            ...totals,
+            byType: byType.rows.map(serializeTypeStats)
         };
     }
 
@@ -76,7 +277,11 @@ class PostgresAdminStore {
                 u.created_at,
                 u.updated_at,
                 count(pr.id)::int AS record_count,
-                max(pr.updated_at) AS latest_record_at
+                max(pr.updated_at) AS latest_record_at,
+                avg(pr.score) AS average_score,
+                coalesce(sum(pr.duration), 0) AS total_duration,
+                coalesce(sum(pr.correct_answers), 0)::int AS correct_answers,
+                coalesce(sum(pr.total_questions), 0)::int AS total_questions
              FROM users u
              LEFT JOIN practice_records pr ON pr.user_id = u.id
              WHERE ($1 = '' OR u.username_lower LIKE '%' || $1 || '%' OR lower(u.username) LIKE '%' || $1 || '%')
@@ -97,6 +302,85 @@ class PostgresAdminStore {
             limit,
             offset
         };
+    }
+
+    async getUser(userId) {
+        const result = await this.db.query(
+            `SELECT
+                u.id,
+                u.username,
+                u.role,
+                u.created_at,
+                u.updated_at,
+                count(pr.id)::int AS record_count,
+                max(pr.updated_at) AS latest_record_at,
+                avg(pr.score) AS average_score,
+                coalesce(sum(pr.duration), 0) AS total_duration,
+                coalesce(sum(pr.correct_answers), 0)::int AS correct_answers,
+                coalesce(sum(pr.total_questions), 0)::int AS total_questions
+             FROM users u
+             LEFT JOIN practice_records pr ON pr.user_id = u.id
+             WHERE u.id = $1
+             GROUP BY u.id`,
+            [userId]
+        );
+        return result.rows[0] ? serializeUser(result.rows[0]) : null;
+    }
+
+    async createUser({ username, password, role }) {
+        const usernameValue = normalizeUsername(username);
+        const passwordHash = await hashPassword(password);
+        const result = await this.db.query(
+            `INSERT INTO users (username, username_lower, password_hash, role)
+             VALUES ($1, $2, $3, $4)
+             RETURNING id, username, role, created_at, updated_at`,
+            [usernameValue, usernameValue.toLowerCase(), passwordHash, normalizeRole(role)]
+        );
+        return serializeUser(result.rows[0]);
+    }
+
+    async updateUser(userId, changes = {}) {
+        const updates = [];
+        const params = [userId];
+        if (changes.role !== undefined) {
+            params.push(normalizeRole(changes.role));
+            updates.push(`role = $${params.length}`);
+        }
+        if (changes.password !== undefined) {
+            params.push(await hashPassword(changes.password));
+            updates.push(`password_hash = $${params.length}`);
+        }
+        if (!updates.length) {
+            return this.getUser(userId);
+        }
+        const result = await this.db.query(
+            `UPDATE users
+             SET ${updates.join(', ')}
+             WHERE id = $1
+             RETURNING id, username, role, created_at, updated_at`,
+            params
+        );
+        return result.rows[0] ? serializeUser(result.rows[0]) : null;
+    }
+
+    async countAdmins() {
+        const result = await this.db.query('SELECT count(*)::int AS total FROM users WHERE role = $1', ['admin']);
+        return toInteger(result.rows[0]?.total);
+    }
+
+    async deleteUser(userId) {
+        await this.db.query(
+            `DELETE FROM "session"
+             WHERE sess::jsonb #>> '{user,id}' = $1
+                OR sess::jsonb #>> '{pendingTotpLogin,user,id}' = $1
+                OR sess::jsonb #>> '{pendingTotpSetup,user,id}' = $1`,
+            [userId]
+        );
+        const result = await this.db.query(
+            'DELETE FROM users WHERE id = $1 RETURNING id, username, role',
+            [userId]
+        );
+        return result.rows[0] ? serializeUser(result.rows[0]) : null;
     }
 
     async listPracticeRecords(userId, options = {}) {
@@ -121,6 +405,34 @@ class PostgresAdminStore {
         };
     }
 
+    async userStats(userId) {
+        const user = await this.getUser(userId);
+        if (!user) return null;
+        const byType = await this.db.query(
+            `SELECT
+                coalesce(type, 'unknown') AS type,
+                count(*)::int AS record_count,
+                avg(score) AS average_score,
+                coalesce(sum(duration), 0) AS total_duration,
+                max(updated_at) AS latest_record_at
+             FROM practice_records
+             WHERE user_id = $1
+             GROUP BY coalesce(type, 'unknown')
+             ORDER BY record_count DESC, type ASC`,
+            [userId]
+        );
+        return {
+            user,
+            recordCount: user.recordCount,
+            averageScore: user.averageScore,
+            totalStudyMinutes: user.totalStudyMinutes,
+            correctAnswers: user.correctAnswers,
+            totalQuestions: user.totalQuestions,
+            latestRecordAt: user.latestRecordAt,
+            byType: byType.rows.map(serializeTypeStats)
+        };
+    }
+
     async deletePracticeRecord(userId, recordId) {
         const result = await this.db.query(
             'DELETE FROM practice_records WHERE user_id = $1 AND id = $2',
@@ -128,12 +440,97 @@ class PostgresAdminStore {
         );
         return result.rowCount || 0;
     }
+
+    async recordTraffic(event) {
+        await this.db.query(
+            `INSERT INTO traffic_events (
+                occurred_at, user_id, session_id, method, path, route_group,
+                status_code, duration_ms, ip_hash, user_agent, referrer
+             )
+             VALUES (now(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            [
+                event.userId || null,
+                event.sessionId || null,
+                event.method,
+                event.path,
+                event.routeGroup,
+                event.statusCode,
+                event.durationMs,
+                event.ipHash || null,
+                event.userAgent || null,
+                event.referrer || null
+            ]
+        );
+    }
+
+    async trafficSummary(options = {}) {
+        const days = options.days;
+        const limit = options.limit;
+        const totals = await this.db.query(
+            `SELECT
+                count(*)::int AS requests,
+                count(*) FILTER (WHERE route_group = 'page')::int AS page_views,
+                count(DISTINCT ip_hash)::int AS unique_visitors,
+                count(*) FILTER (WHERE status_code >= 400)::int AS errors,
+                avg(duration_ms) AS average_duration_ms
+             FROM traffic_events
+             WHERE occurred_at >= now() - ($1::int * interval '1 day')`,
+            [days]
+        );
+        const daily = await this.db.query(
+            `SELECT
+                to_char(date_trunc('day', occurred_at), 'YYYY-MM-DD') AS day,
+                count(*)::int AS requests,
+                count(*) FILTER (WHERE route_group = 'page')::int AS page_views,
+                count(DISTINCT ip_hash)::int AS unique_visitors,
+                count(*) FILTER (WHERE status_code >= 400)::int AS errors
+             FROM traffic_events
+             WHERE occurred_at >= now() - ($1::int * interval '1 day')
+             GROUP BY date_trunc('day', occurred_at)
+             ORDER BY day ASC`,
+            [days]
+        );
+        const topPaths = await this.db.query(
+            `SELECT
+                path,
+                route_group,
+                count(*)::int AS requests,
+                count(DISTINCT ip_hash)::int AS unique_visitors,
+                max(occurred_at) AS last_seen_at
+             FROM traffic_events
+             WHERE occurred_at >= now() - ($1::int * interval '1 day')
+             GROUP BY path, route_group
+             ORDER BY requests DESC, path ASC
+             LIMIT $2`,
+            [days, limit]
+        );
+        const recent = await this.db.query(
+            `SELECT occurred_at, method, path, route_group, status_code, duration_ms, user_id
+             FROM traffic_events
+             ORDER BY occurred_at DESC
+             LIMIT $1`,
+            [limit]
+        );
+        const row = totals.rows[0] || {};
+        return {
+            days,
+            requests: toInteger(row.requests),
+            pageViews: toInteger(row.page_views),
+            uniqueVisitors: toInteger(row.unique_visitors),
+            errors: toInteger(row.errors),
+            averageDurationMs: roundNumber(row.average_duration_ms),
+            daily: daily.rows.map(serializeTrafficDaily),
+            topPaths: topPaths.rows.map(serializeTrafficPath),
+            recent: recent.rows.map(serializeTrafficEvent)
+        };
+    }
 }
 
 class MemoryAdminStore {
     constructor(options = {}) {
         this.authStore = options.authStore;
         this.practiceStore = options.practiceStore;
+        this.trafficEvents = [];
     }
 
     _users() {
@@ -144,14 +541,64 @@ class MemoryAdminStore {
         return this.practiceStore?.recordsByUser?.get(userId) || [];
     }
 
+    _findUser(userId) {
+        return this._users().find((user) => user.id === userId) || null;
+    }
+
     async summary() {
         const users = this._users();
         const records = users.flatMap((user) => this._records(user.id));
+        const scores = records.map((record) => Number(record.score)).filter(Number.isFinite);
+        const duration = records.reduce((sum, record) => sum + (Number(record.duration) || 0), 0);
         return {
             userCount: users.length,
             adminCount: users.filter((user) => user.role === 'admin').length,
             practiceRecordCount: records.length,
-            latestRecordAt: null
+            activeUserCount: users.filter((user) => this._records(user.id).length > 0).length,
+            averageScore: scores.length ? roundNumber(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null,
+            totalStudyMinutes: roundNumber(duration),
+            correctAnswers: records.reduce((sum, record) => sum + (Number(record.correctAnswers) || 0), 0),
+            totalQuestions: records.reduce((sum, record) => sum + (Number(record.totalQuestions) || 0), 0),
+            latestRecordAt: records.reduce((latest, record) => {
+                const value = record.updatedAt || record.date || record.createdAt || null;
+                if (!value) return latest;
+                return !latest || Number(new Date(value)) > Number(new Date(latest)) ? value : latest;
+            }, null),
+            traffic: this._trafficTotals(this.trafficEvents)
+        };
+    }
+
+    async globalStats() {
+        const summary = await this.summary();
+        const byType = new Map();
+        for (const user of this._users()) {
+            for (const record of this._records(user.id)) {
+                const type = record.type || record.examType || 'unknown';
+                const entry = byType.get(type) || { type, recordCount: 0, scoreTotal: 0, scoreCount: 0, totalStudyMinutes: 0, latestRecordAt: null };
+                const score = Number(record.score);
+                const duration = Number(record.duration);
+                const updatedAt = record.updatedAt || record.date || record.createdAt || null;
+                entry.recordCount += 1;
+                if (Number.isFinite(score)) {
+                    entry.scoreTotal += score;
+                    entry.scoreCount += 1;
+                }
+                if (Number.isFinite(duration)) entry.totalStudyMinutes += duration;
+                if (updatedAt && (!entry.latestRecordAt || Number(new Date(updatedAt)) > Number(new Date(entry.latestRecordAt)))) {
+                    entry.latestRecordAt = updatedAt;
+                }
+                byType.set(type, entry);
+            }
+        }
+        return {
+            ...summary,
+            byType: Array.from(byType.values()).map((entry) => ({
+                type: entry.type,
+                recordCount: entry.recordCount,
+                averageScore: entry.scoreCount ? roundNumber(entry.scoreTotal / entry.scoreCount) : null,
+                totalStudyMinutes: roundNumber(entry.totalStudyMinutes),
+                latestRecordAt: entry.latestRecordAt
+            }))
         };
     }
 
@@ -162,16 +609,62 @@ class MemoryAdminStore {
             .sort((a, b) => a.username.localeCompare(b.username));
         const users = filtered
             .slice(options.offset, options.offset + options.limit)
-            .map((user) => serializeUser({
-                ...user,
-                recordCount: this._records(user.id).length
-            }));
+            .map((user) => buildUserStats(user, this._records(user.id)).user);
         return {
             users,
             total: filtered.length,
             limit: options.limit,
             offset: options.offset
         };
+    }
+
+    async getUser(userId) {
+        const user = this._findUser(userId);
+        return user ? buildUserStats(user, this._records(userId)).user : null;
+    }
+
+    async createUser({ username, password, role }) {
+        const usernameValue = normalizeUsername(username);
+        const usernameLower = usernameValue.toLowerCase();
+        if (this.authStore.users.has(usernameLower)) {
+            const error = new Error('duplicate user');
+            error.code = '23505';
+            throw error;
+        }
+        const user = {
+            id: crypto.randomUUID(),
+            username: usernameValue,
+            username_lower: usernameLower,
+            password_hash: await hashPassword(password, 4),
+            role: normalizeRole(role),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        this.authStore.users.set(usernameLower, user);
+        return serializeUser(user);
+    }
+
+    async updateUser(userId, changes = {}) {
+        const user = this._findUser(userId);
+        if (!user) return null;
+        if (changes.role !== undefined) user.role = normalizeRole(changes.role);
+        if (changes.password !== undefined) user.password_hash = await hashPassword(changes.password, 4);
+        user.updatedAt = new Date().toISOString();
+        return serializeUser(user);
+    }
+
+    async countAdmins() {
+        return this._users().filter((user) => user.role === 'admin').length;
+    }
+
+    async deleteUser(userId) {
+        const user = this._findUser(userId);
+        if (!user) return null;
+        this.authStore.users.delete(String(user.username || '').toLowerCase());
+        if (this.practiceStore?.recordsByUser) {
+            this.practiceStore.recordsByUser.delete(userId);
+        }
+        return serializeUser(user);
     }
 
     async listPracticeRecords(userId, options = {}) {
@@ -199,16 +692,111 @@ class MemoryAdminStore {
         };
     }
 
+    async userStats(userId) {
+        const user = this._findUser(userId);
+        if (!user) return null;
+        return buildUserStats(user, this._records(userId));
+    }
+
     async deletePracticeRecord(userId, recordId) {
         if (!this.practiceStore || typeof this.practiceStore.deleteById !== 'function') {
             return 0;
         }
         return this.practiceStore.deleteById(userId, recordId);
     }
+
+    async recordTraffic(event) {
+        this.trafficEvents.push({
+            ...event,
+            occurredAt: new Date().toISOString()
+        });
+    }
+
+    _trafficTotals(events) {
+        const today = new Date().toISOString().slice(0, 10);
+        return {
+            totalRequests: events.length,
+            totalPageViews: events.filter((event) => event.routeGroup === 'page').length,
+            uniqueVisitors: new Set(events.map((event) => event.ipHash).filter(Boolean)).size,
+            requestsToday: events.filter((event) => String(event.occurredAt || '').slice(0, 10) === today).length,
+            pageViewsToday: events.filter((event) => event.routeGroup === 'page' && String(event.occurredAt || '').slice(0, 10) === today).length
+        };
+    }
+
+    async trafficSummary(options = {}) {
+        const days = options.days || 14;
+        const limit = options.limit || 10;
+        const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+        const events = this.trafficEvents.filter((event) => Number(new Date(event.occurredAt)) >= cutoff);
+        const byDay = new Map();
+        const byPath = new Map();
+        for (const event of events) {
+            const day = String(event.occurredAt || '').slice(0, 10);
+            const daily = byDay.get(day) || { day, requests: 0, pageViews: 0, visitors: new Set(), errors: 0 };
+            daily.requests += 1;
+            if (event.routeGroup === 'page') daily.pageViews += 1;
+            if (event.ipHash) daily.visitors.add(event.ipHash);
+            if (event.statusCode >= 400) daily.errors += 1;
+            byDay.set(day, daily);
+            const pathKey = `${event.routeGroup}:${event.path}`;
+            const pathEntry = byPath.get(pathKey) || { path: event.path, routeGroup: event.routeGroup, requests: 0, visitors: new Set(), lastSeenAt: event.occurredAt };
+            pathEntry.requests += 1;
+            if (event.ipHash) pathEntry.visitors.add(event.ipHash);
+            if (Number(new Date(event.occurredAt)) > Number(new Date(pathEntry.lastSeenAt))) pathEntry.lastSeenAt = event.occurredAt;
+            byPath.set(pathKey, pathEntry);
+        }
+        return {
+            days,
+            requests: events.length,
+            pageViews: events.filter((event) => event.routeGroup === 'page').length,
+            uniqueVisitors: new Set(events.map((event) => event.ipHash).filter(Boolean)).size,
+            errors: events.filter((event) => event.statusCode >= 400).length,
+            averageDurationMs: events.length ? roundNumber(events.reduce((sum, event) => sum + (event.durationMs || 0), 0) / events.length) : 0,
+            daily: Array.from(byDay.values()).sort((a, b) => a.day.localeCompare(b.day)).map((entry) => ({
+                day: entry.day,
+                requests: entry.requests,
+                pageViews: entry.pageViews,
+                uniqueVisitors: entry.visitors.size,
+                errors: entry.errors
+            })),
+            topPaths: Array.from(byPath.values())
+                .sort((a, b) => b.requests - a.requests || a.path.localeCompare(b.path))
+                .slice(0, limit)
+                .map((entry) => ({
+                    path: entry.path,
+                    routeGroup: entry.routeGroup,
+                    requests: entry.requests,
+                    uniqueVisitors: entry.visitors.size,
+                    lastSeenAt: entry.lastSeenAt
+                })),
+            recent: events.slice(-limit).reverse().map(serializeTrafficEvent)
+        };
+    }
 }
 
 function parseListQuery(query) {
     return listQuerySchema.parse(query || {});
+}
+
+function parseTrafficQuery(query) {
+    return trafficQuerySchema.parse(query || {});
+}
+
+function validateNewPassword(password) {
+    const passwordCheck = validatePasswordStrength(password);
+    if (!passwordCheck.valid) {
+        const error = new Error('Password strength is insufficient');
+        error.status = 400;
+        error.details = passwordCheck.errors;
+        throw error;
+    }
+}
+
+function sendError(res, error) {
+    return res.status(error.status || 500).json({
+        error: error.message || 'Request failed',
+        details: error.details
+    });
 }
 
 function createAdminRouter(options = {}) {
@@ -229,10 +817,106 @@ function createAdminRouter(options = {}) {
         }
     });
 
+    router.get('/stats', async (req, res, next) => {
+        try {
+            return res.json(await store.globalStats());
+        } catch (error) {
+            return next(error);
+        }
+    });
+
+    router.get('/traffic', async (req, res, next) => {
+        try {
+            return res.json(await store.trafficSummary(parseTrafficQuery(req.query)));
+        } catch (error) {
+            return next(error);
+        }
+    });
+
     router.get('/users', async (req, res, next) => {
         try {
             const query = parseListQuery(req.query);
             return res.json(await store.listUsers(query));
+        } catch (error) {
+            return next(error);
+        }
+    });
+
+    router.post('/users', verifyCsrfToken, async (req, res, next) => {
+        try {
+            const parsed = createUserSchema.safeParse(req.body || {});
+            if (!parsed.success) {
+                return res.status(400).json({ error: 'Invalid user payload', details: parsed.error.flatten() });
+            }
+            validateNewPassword(parsed.data.password);
+            try {
+                const user = await store.createUser(parsed.data);
+                return res.status(201).json({ user });
+            } catch (error) {
+                if (error && error.code === '23505') {
+                    return res.status(409).json({ error: 'Username already exists' });
+                }
+                throw error;
+            }
+        } catch (error) {
+            if (error.status) return sendError(res, error);
+            return next(error);
+        }
+    });
+
+    router.get('/users/:userId/stats', async (req, res, next) => {
+        try {
+            const stats = await store.userStats(req.params.userId);
+            if (!stats) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            return res.json(stats);
+        } catch (error) {
+            return next(error);
+        }
+    });
+
+    router.patch('/users/:userId', verifyCsrfToken, async (req, res, next) => {
+        try {
+            const parsed = updateUserSchema.safeParse(req.body || {});
+            if (!parsed.success) {
+                return res.status(400).json({ error: 'Invalid user update', details: parsed.error.flatten() });
+            }
+            const current = await store.getUser(req.params.userId);
+            if (!current) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            if (parsed.data.password !== undefined) {
+                validateNewPassword(parsed.data.password);
+            }
+            if (current.id === req.session.user.id && parsed.data.role && parsed.data.role !== 'admin') {
+                return res.status(400).json({ error: 'You cannot remove your own admin role' });
+            }
+            if (current.role === 'admin' && parsed.data.role === 'user' && await store.countAdmins() <= 1) {
+                return res.status(400).json({ error: 'Cannot demote the last admin' });
+            }
+            const user = await store.updateUser(req.params.userId, parsed.data);
+            return res.json({ user });
+        } catch (error) {
+            if (error.status) return sendError(res, error);
+            return next(error);
+        }
+    });
+
+    router.delete('/users/:userId', verifyCsrfToken, async (req, res, next) => {
+        try {
+            const current = await store.getUser(req.params.userId);
+            if (!current) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            if (current.id === req.session.user.id) {
+                return res.status(400).json({ error: 'You cannot delete your own account from admin' });
+            }
+            if (current.role === 'admin' && await store.countAdmins() <= 1) {
+                return res.status(400).json({ error: 'Cannot delete the last admin' });
+            }
+            const user = await store.deleteUser(req.params.userId);
+            return res.json({ deleted: Boolean(user), user });
         } catch (error) {
             return next(error);
         }
@@ -259,11 +943,76 @@ function createAdminRouter(options = {}) {
     return router;
 }
 
+function classifyRouteGroup(pathname) {
+    if (pathname === '/' || pathname === '/admin' || pathname === '/admin/') {
+        return 'page';
+    }
+    if (pathname.startsWith('/api/')) {
+        return 'api';
+    }
+    if (
+        pathname.startsWith('/assets/')
+        || pathname.startsWith('/css/')
+        || pathname.startsWith('/js/')
+        || pathname.startsWith('/templates/')
+        || pathname.startsWith('/ListeningPractice/')
+        || pathname.startsWith('/admin/')
+    ) {
+        return 'asset';
+    }
+    return 'page';
+}
+
+function hashVisitor(req, secret) {
+    const source = [
+        req.ip || '',
+        req.get('user-agent') || '',
+        req.get('accept-language') || ''
+    ].join('|');
+    return crypto.createHmac('sha256', secret).update(source).digest('hex');
+}
+
+function createTrafficMiddleware(options = {}) {
+    const store = options.store;
+    const enabled = options.enabled !== false && store && typeof store.recordTraffic === 'function';
+    const secret = options.secret || 'traffic-development-secret';
+    if (!enabled) {
+        return (req, res, next) => next();
+    }
+    return (req, res, next) => {
+        const startedAt = Date.now();
+        res.on('finish', () => {
+            if (req.path === '/api/health') {
+                return;
+            }
+            const event = {
+                userId: req.session?.user?.id || null,
+                sessionId: req.sessionID || null,
+                method: req.method,
+                path: req.path || '/',
+                routeGroup: classifyRouteGroup(req.path || '/'),
+                statusCode: res.statusCode,
+                durationMs: Math.max(0, Date.now() - startedAt),
+                ipHash: hashVisitor(req, secret),
+                userAgent: String(req.get('user-agent') || '').slice(0, 500),
+                referrer: String(req.get('referer') || '').slice(0, 500)
+            };
+            Promise.resolve(store.recordTraffic(event)).catch((error) => {
+                console.error('[backend] traffic record failed:', error);
+            });
+        });
+        return next();
+    };
+}
+
 module.exports = {
     MemoryAdminStore,
     PostgresAdminStore,
+    classifyRouteGroup,
     createAdminRouter,
+    createTrafficMiddleware,
     parseListQuery,
+    parseTrafficQuery,
     serializeRecord,
     serializeUser
 };
