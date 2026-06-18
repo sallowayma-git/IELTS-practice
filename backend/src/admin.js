@@ -12,6 +12,7 @@ const {
 
 const listQuerySchema = z.object({
     q: z.string().optional().default(''),
+    role: z.enum(['all', 'user', 'admin']).optional().default('all'),
     limit: z.coerce.number().int().min(1).max(100).optional().default(25),
     offset: z.coerce.number().int().min(0).optional().default(0)
 });
@@ -31,6 +32,11 @@ const updateUserSchema = z.object({
 
 const trafficQuerySchema = z.object({
     days: z.coerce.number().int().min(1).max(90).optional().default(14),
+    limit: z.coerce.number().int().min(1).max(50).optional().default(10)
+});
+
+const analyticsQuerySchema = z.object({
+    days: z.coerce.number().int().min(1).max(180).optional().default(30),
     limit: z.coerce.number().int().min(1).max(50).optional().default(10)
 });
 
@@ -131,6 +137,49 @@ function serializeTrafficEvent(row) {
         statusCode: toInteger(row.status_code ?? row.statusCode),
         durationMs: toInteger(row.duration_ms ?? row.durationMs),
         userId: row.user_id || row.userId || null
+    };
+}
+
+function serializeDailyLearning(row) {
+    return {
+        day: row.day,
+        records: toInteger(row.records),
+        activeUsers: toInteger(row.active_users ?? row.activeUsers),
+        averageScore: row.average_score === null || row.average_score === undefined
+            ? null
+            : roundNumber(row.average_score),
+        totalStudyMinutes: roundNumber(row.total_duration ?? row.totalStudyMinutes ?? 0)
+    };
+}
+
+function serializeUserGrowth(row) {
+    return {
+        day: row.day,
+        users: toInteger(row.users),
+        admins: toInteger(row.admins)
+    };
+}
+
+function serializeScoreBucket(row) {
+    return {
+        bucket: row.bucket,
+        records: toInteger(row.records)
+    };
+}
+
+function serializeTrafficGroup(row) {
+    return {
+        group: row.route_group || row.group || 'other',
+        requests: toInteger(row.requests),
+        errors: toInteger(row.errors),
+        averageDurationMs: roundNumber(row.average_duration_ms ?? row.averageDurationMs)
+    };
+}
+
+function serializeTrafficStatus(row) {
+    return {
+        statusClass: row.status_class || row.statusClass || 'unknown',
+        requests: toInteger(row.requests)
     };
 }
 
@@ -265,8 +314,91 @@ class PostgresAdminStore {
         };
     }
 
+    async analytics(options = {}) {
+        const days = options.days;
+        const limit = options.limit;
+        const [dailyLearning, userGrowth, topUsers, scoreBuckets] = await Promise.all([
+            this.db.query(
+                `SELECT
+                    to_char(date_trunc('day', updated_at), 'YYYY-MM-DD') AS day,
+                    count(*)::int AS records,
+                    count(DISTINCT user_id)::int AS active_users,
+                    avg(score) AS average_score,
+                    coalesce(sum(duration), 0) AS total_duration
+                 FROM practice_records
+                 WHERE updated_at >= now() - ($1::int * interval '1 day')
+                 GROUP BY date_trunc('day', updated_at)
+                 ORDER BY day ASC`,
+                [days]
+            ),
+            this.db.query(
+                `SELECT
+                    to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day,
+                    count(*)::int AS users,
+                    count(*) FILTER (WHERE role = 'admin')::int AS admins
+                 FROM users
+                 WHERE created_at >= now() - ($1::int * interval '1 day')
+                 GROUP BY date_trunc('day', created_at)
+                 ORDER BY day ASC`,
+                [days]
+            ),
+            this.db.query(
+                `SELECT
+                    u.id,
+                    u.username,
+                    u.role,
+                    u.created_at,
+                    u.updated_at,
+                    count(pr.id)::int AS record_count,
+                    max(pr.updated_at) AS latest_record_at,
+                    avg(pr.score) AS average_score,
+                    coalesce(sum(pr.duration), 0) AS total_duration,
+                    coalesce(sum(pr.correct_answers), 0)::int AS correct_answers,
+                    coalesce(sum(pr.total_questions), 0)::int AS total_questions
+                 FROM users u
+                 JOIN practice_records pr ON pr.user_id = u.id
+                 WHERE pr.updated_at >= now() - ($1::int * interval '1 day')
+                 GROUP BY u.id
+                 ORDER BY record_count DESC, average_score DESC NULLS LAST, latest_record_at DESC
+                 LIMIT $2`,
+                [days, limit]
+            ),
+            this.db.query(
+                `SELECT bucket, count(*)::int AS records
+                 FROM (
+                    SELECT CASE
+                        WHEN score IS NULL THEN 'No score'
+                        WHEN score < 40 THEN '0-39'
+                        WHEN score < 60 THEN '40-59'
+                        WHEN score < 80 THEN '60-79'
+                        ELSE '80-100'
+                    END AS bucket
+                    FROM practice_records
+                    WHERE updated_at >= now() - ($1::int * interval '1 day')
+                 ) scored
+                 GROUP BY bucket
+                 ORDER BY CASE bucket
+                    WHEN '0-39' THEN 1
+                    WHEN '40-59' THEN 2
+                    WHEN '60-79' THEN 3
+                    WHEN '80-100' THEN 4
+                    ELSE 5
+                 END`,
+                [days]
+            )
+        ]);
+        return {
+            days,
+            dailyLearning: dailyLearning.rows.map(serializeDailyLearning),
+            userGrowth: userGrowth.rows.map(serializeUserGrowth),
+            topUsers: topUsers.rows.map(serializeUser),
+            scoreBuckets: scoreBuckets.rows.map(serializeScoreBucket)
+        };
+    }
+
     async listUsers(options = {}) {
         const q = String(options.q || '').trim().toLowerCase();
+        const role = options.role === 'admin' || options.role === 'user' ? options.role : 'all';
         const limit = options.limit;
         const offset = options.offset;
         const users = await this.db.query(
@@ -285,22 +417,25 @@ class PostgresAdminStore {
              FROM users u
              LEFT JOIN practice_records pr ON pr.user_id = u.id
              WHERE ($1 = '' OR u.username_lower LIKE '%' || $1 || '%' OR lower(u.username) LIKE '%' || $1 || '%')
+               AND ($4 = 'all' OR u.role = $4)
              GROUP BY u.id
              ORDER BY u.created_at DESC, u.username_lower ASC
              LIMIT $2 OFFSET $3`,
-            [q, limit, offset]
+            [q, limit, offset, role]
         );
         const total = await this.db.query(
             `SELECT count(*)::int AS total
              FROM users
-             WHERE ($1 = '' OR username_lower LIKE '%' || $1 || '%' OR lower(username) LIKE '%' || $1 || '%')`,
-            [q]
+             WHERE ($1 = '' OR username_lower LIKE '%' || $1 || '%' OR lower(username) LIKE '%' || $1 || '%')
+               AND ($2 = 'all' OR role = $2)`,
+            [q, role]
         );
         return {
             users: users.rows.map(serializeUser),
             total: toInteger(total.rows[0]?.total),
             limit,
-            offset
+            offset,
+            role
         };
     }
 
@@ -504,6 +639,34 @@ class PostgresAdminStore {
              LIMIT $2`,
             [days, limit]
         );
+        const routeGroups = await this.db.query(
+            `SELECT
+                route_group,
+                count(*)::int AS requests,
+                count(*) FILTER (WHERE status_code >= 400)::int AS errors,
+                avg(duration_ms) AS average_duration_ms
+             FROM traffic_events
+             WHERE occurred_at >= now() - ($1::int * interval '1 day')
+             GROUP BY route_group
+             ORDER BY requests DESC, route_group ASC`,
+            [days]
+        );
+        const statusCodes = await this.db.query(
+            `SELECT
+                CASE
+                    WHEN status_code >= 500 THEN '5xx'
+                    WHEN status_code >= 400 THEN '4xx'
+                    WHEN status_code >= 300 THEN '3xx'
+                    WHEN status_code >= 200 THEN '2xx'
+                    ELSE 'other'
+                END AS status_class,
+                count(*)::int AS requests
+             FROM traffic_events
+             WHERE occurred_at >= now() - ($1::int * interval '1 day')
+             GROUP BY status_class
+             ORDER BY status_class ASC`,
+            [days]
+        );
         const recent = await this.db.query(
             `SELECT occurred_at, method, path, route_group, status_code, duration_ms, user_id
              FROM traffic_events
@@ -521,6 +684,8 @@ class PostgresAdminStore {
             averageDurationMs: roundNumber(row.average_duration_ms),
             daily: daily.rows.map(serializeTrafficDaily),
             topPaths: topPaths.rows.map(serializeTrafficPath),
+            routeGroups: routeGroups.rows.map(serializeTrafficGroup),
+            statusCodes: statusCodes.rows.map(serializeTrafficStatus),
             recent: recent.rows.map(serializeTrafficEvent)
         };
     }
@@ -602,10 +767,88 @@ class MemoryAdminStore {
         };
     }
 
+    async analytics(options = {}) {
+        const days = options.days || 30;
+        const limit = options.limit || 10;
+        const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+        const dailyLearning = new Map();
+        const userGrowth = new Map();
+        const scoreBuckets = new Map();
+        const topUsers = [];
+
+        for (const user of this._users()) {
+            const createdAt = Number(new Date(user.createdAt || user.created_at || Date.now()));
+            if (createdAt >= cutoff) {
+                const day = new Date(createdAt).toISOString().slice(0, 10);
+                const entry = userGrowth.get(day) || { day, users: 0, admins: 0 };
+                entry.users += 1;
+                if (user.role === 'admin') entry.admins += 1;
+                userGrowth.set(day, entry);
+            }
+
+            const recentRecords = this._records(user.id).filter((record) => {
+                const timestamp = Number(new Date(record.updatedAt || record.date || record.createdAt || Date.now()));
+                return timestamp >= cutoff;
+            });
+            if (recentRecords.length) {
+                topUsers.push(buildUserStats(user, recentRecords).user);
+            }
+            for (const record of recentRecords) {
+                const timestamp = Number(new Date(record.updatedAt || record.date || record.createdAt || Date.now()));
+                const day = new Date(timestamp).toISOString().slice(0, 10);
+                const score = Number(record.score);
+                const duration = Number(record.duration);
+                const entry = dailyLearning.get(day) || {
+                    day,
+                    records: 0,
+                    users: new Set(),
+                    scoreTotal: 0,
+                    scoreCount: 0,
+                    totalStudyMinutes: 0
+                };
+                entry.records += 1;
+                entry.users.add(user.id);
+                if (Number.isFinite(score)) {
+                    entry.scoreTotal += score;
+                    entry.scoreCount += 1;
+                }
+                if (Number.isFinite(duration)) entry.totalStudyMinutes += duration;
+                dailyLearning.set(day, entry);
+
+                const bucket = !Number.isFinite(score)
+                    ? 'No score'
+                    : (score < 40 ? '0-39' : (score < 60 ? '40-59' : (score < 80 ? '60-79' : '80-100')));
+                scoreBuckets.set(bucket, (scoreBuckets.get(bucket) || 0) + 1);
+            }
+        }
+
+        return {
+            days,
+            dailyLearning: Array.from(dailyLearning.values())
+                .sort((a, b) => a.day.localeCompare(b.day))
+                .map((entry) => ({
+                    day: entry.day,
+                    records: entry.records,
+                    activeUsers: entry.users.size,
+                    averageScore: entry.scoreCount ? roundNumber(entry.scoreTotal / entry.scoreCount) : null,
+                    totalStudyMinutes: roundNumber(entry.totalStudyMinutes)
+                })),
+            userGrowth: Array.from(userGrowth.values()).sort((a, b) => a.day.localeCompare(b.day)),
+            topUsers: topUsers
+                .sort((a, b) => b.recordCount - a.recordCount || (b.averageScore || 0) - (a.averageScore || 0))
+                .slice(0, limit),
+            scoreBuckets: ['0-39', '40-59', '60-79', '80-100', 'No score']
+                .filter((bucket) => scoreBuckets.has(bucket))
+                .map((bucket) => ({ bucket, records: scoreBuckets.get(bucket) }))
+        };
+    }
+
     async listUsers(options = {}) {
         const q = String(options.q || '').trim().toLowerCase();
+        const role = options.role === 'admin' || options.role === 'user' ? options.role : 'all';
         const filtered = this._users()
             .filter((user) => !q || user.username.toLowerCase().includes(q))
+            .filter((user) => role === 'all' || user.role === role)
             .sort((a, b) => a.username.localeCompare(b.username));
         const users = filtered
             .slice(options.offset, options.offset + options.limit)
@@ -614,7 +857,8 @@ class MemoryAdminStore {
             users,
             total: filtered.length,
             limit: options.limit,
-            offset: options.offset
+            offset: options.offset,
+            role
         };
     }
 
@@ -730,6 +974,8 @@ class MemoryAdminStore {
         const events = this.trafficEvents.filter((event) => Number(new Date(event.occurredAt)) >= cutoff);
         const byDay = new Map();
         const byPath = new Map();
+        const byRouteGroup = new Map();
+        const byStatusClass = new Map();
         for (const event of events) {
             const day = String(event.occurredAt || '').slice(0, 10);
             const daily = byDay.get(day) || { day, requests: 0, pageViews: 0, visitors: new Set(), errors: 0 };
@@ -744,6 +990,20 @@ class MemoryAdminStore {
             if (event.ipHash) pathEntry.visitors.add(event.ipHash);
             if (Number(new Date(event.occurredAt)) > Number(new Date(pathEntry.lastSeenAt))) pathEntry.lastSeenAt = event.occurredAt;
             byPath.set(pathKey, pathEntry);
+
+            const groupKey = event.routeGroup || 'other';
+            const routeGroup = byRouteGroup.get(groupKey) || { group: groupKey, requests: 0, errors: 0, durationTotal: 0 };
+            routeGroup.requests += 1;
+            if (event.statusCode >= 400) routeGroup.errors += 1;
+            routeGroup.durationTotal += event.durationMs || 0;
+            byRouteGroup.set(groupKey, routeGroup);
+
+            const statusCode = Number(event.statusCode);
+            const statusClass = statusCode >= 500 ? '5xx'
+                : (statusCode >= 400 ? '4xx'
+                    : (statusCode >= 300 ? '3xx'
+                        : (statusCode >= 200 ? '2xx' : 'other')));
+            byStatusClass.set(statusClass, (byStatusClass.get(statusClass) || 0) + 1);
         }
         return {
             days,
@@ -769,6 +1029,17 @@ class MemoryAdminStore {
                     uniqueVisitors: entry.visitors.size,
                     lastSeenAt: entry.lastSeenAt
                 })),
+            routeGroups: Array.from(byRouteGroup.values())
+                .sort((a, b) => b.requests - a.requests || a.group.localeCompare(b.group))
+                .map((entry) => ({
+                    group: entry.group,
+                    requests: entry.requests,
+                    errors: entry.errors,
+                    averageDurationMs: entry.requests ? roundNumber(entry.durationTotal / entry.requests) : 0
+                })),
+            statusCodes: Array.from(byStatusClass.entries())
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([statusClass, requests]) => ({ statusClass, requests })),
             recent: events.slice(-limit).reverse().map(serializeTrafficEvent)
         };
     }
@@ -780,6 +1051,10 @@ function parseListQuery(query) {
 
 function parseTrafficQuery(query) {
     return trafficQuerySchema.parse(query || {});
+}
+
+function parseAnalyticsQuery(query) {
+    return analyticsQuerySchema.parse(query || {});
 }
 
 function validateNewPassword(password) {
@@ -828,6 +1103,14 @@ function createAdminRouter(options = {}) {
     router.get('/traffic', async (req, res, next) => {
         try {
             return res.json(await store.trafficSummary(parseTrafficQuery(req.query)));
+        } catch (error) {
+            return next(error);
+        }
+    });
+
+    router.get('/analytics', async (req, res, next) => {
+        try {
+            return res.json(await store.analytics(parseAnalyticsQuery(req.query)));
         } catch (error) {
             return next(error);
         }
@@ -1011,6 +1294,7 @@ module.exports = {
     classifyRouteGroup,
     createAdminRouter,
     createTrafficMiddleware,
+    parseAnalyticsQuery,
     parseListQuery,
     parseTrafficQuery,
     serializeRecord,

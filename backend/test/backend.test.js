@@ -584,6 +584,8 @@ test('admin can manage users and inspect learning and traffic stats', async () =
         assert.equal(created.response.status, 201);
         const managedUserId = created.json.user.id;
 
+        const recentRecordAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const latestRecordAt = new Date().toISOString();
         const records = [
             {
                 id: 'stats-record-1',
@@ -594,7 +596,7 @@ test('admin can manage users and inspect learning and traffic stats', async () =
                 duration: 12,
                 correctAnswers: 8,
                 totalQuestions: 10,
-                updatedAt: '2026-01-02T00:00:00.000Z'
+                updatedAt: recentRecordAt
             },
             {
                 id: 'stats-record-2',
@@ -605,7 +607,7 @@ test('admin can manage users and inspect learning and traffic stats', async () =
                 duration: 8,
                 correctAnswers: 6,
                 totalQuestions: 10,
-                updatedAt: '2026-01-03T00:00:00.000Z'
+                updatedAt: latestRecordAt
             }
         ];
         const replaced = await client.request('PUT', '/api/practice-records', { records });
@@ -643,6 +645,17 @@ test('admin can manage users and inspect learning and traffic stats', async () =
         assert.equal(patched.response.status, 200);
         assert.equal(patched.json.user.role, 'admin');
 
+        const adminUsers = await client.request('GET', '/api/admin/users?role=admin&limit=20&offset=0');
+        assert.equal(adminUsers.response.status, 200);
+        assert(adminUsers.json.users.length >= 2);
+        assert(adminUsers.json.users.every((user) => user.role === 'admin'));
+        assert(adminUsers.json.users.some((user) => user.id === patched.json.user.id));
+
+        const regularUsers = await client.request('GET', '/api/admin/users?role=user&limit=20&offset=0');
+        assert.equal(regularUsers.response.status, 200);
+        assert(regularUsers.json.users.every((user) => user.role === 'user'));
+        assert(regularUsers.json.users.some((user) => user.id === managedUserId));
+
         const selfDelete = await client.request('DELETE', `/api/admin/users/${login.json.user.id}`);
         assert.equal(selfDelete.response.status, 400);
 
@@ -658,12 +671,21 @@ test('admin can manage users and inspect learning and traffic stats', async () =
         assert.equal(globalStats.json.practiceRecordCount, 2);
         assert.equal(globalStats.json.averageScore, 70);
 
+        const analytics = await client.request('GET', '/api/admin/analytics?days=30&limit=5');
+        assert.equal(analytics.response.status, 200);
+        assert(analytics.json.dailyLearning.some((item) => item.records >= 1));
+        assert(analytics.json.topUsers.some((user) => user.id === managedUserId));
+        assert(analytics.json.scoreBuckets.some((item) => item.bucket === '60-79'));
+        assert(analytics.json.scoreBuckets.some((item) => item.bucket === '80-100'));
+
         await client.request('GET', '/');
         await new Promise((resolve) => setTimeout(resolve, 20));
         const traffic = await client.request('GET', '/api/admin/traffic?days=7&limit=5');
         assert.equal(traffic.response.status, 200);
         assert(traffic.json.requests >= 1);
         assert(traffic.json.topPaths.length >= 1);
+        assert(traffic.json.routeGroups.length >= 1);
+        assert(traffic.json.statusCodes.length >= 1);
 
         const deleted = await client.request('DELETE', `/api/admin/users/${added.json.user.id}`);
         assert.equal(deleted.response.status, 200);

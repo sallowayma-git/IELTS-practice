@@ -8,6 +8,7 @@
             limit: 25,
             offset: 0,
             total: 0,
+            role: 'all',
             loading: false
         },
         records: {
@@ -15,7 +16,10 @@
             offset: 0,
             total: 0,
             loading: false
-        }
+        },
+        analyticsDays: 30,
+        trafficDays: 14,
+        confirmResolver: null
     };
 
     const nodes = {
@@ -23,6 +27,7 @@
         logoutButton: document.getElementById('logout-button'),
         refreshButton: document.getElementById('refresh-button'),
         userSearch: document.getElementById('user-search'),
+        userRoleFilter: document.getElementById('user-role-filter'),
         summaryUsers: document.getElementById('summary-users'),
         summaryAdmins: document.getElementById('summary-admins'),
         summaryRecords: document.getElementById('summary-records'),
@@ -37,9 +42,11 @@
         usersNext: document.getElementById('users-next'),
         usersRange: document.getElementById('users-range'),
         createUserForm: document.getElementById('create-user-form'),
+        createUserSubmit: document.getElementById('create-user-submit'),
         createUsername: document.getElementById('create-username'),
         createPassword: document.getElementById('create-password'),
         createRole: document.getElementById('create-role'),
+        editUserForm: document.getElementById('edit-user-form'),
         selectedUserName: document.getElementById('selected-user-name'),
         selectedUserRole: document.getElementById('selected-user-role'),
         selectedUserPassword: document.getElementById('selected-user-password'),
@@ -52,6 +59,12 @@
         userStatLatest: document.getElementById('user-stat-latest'),
         userTypeStats: document.getElementById('user-type-stats'),
         globalTypeStats: document.getElementById('global-type-stats'),
+        analyticsRange: document.getElementById('analytics-range'),
+        analyticsWindow: document.getElementById('analytics-window'),
+        analyticsLearningTrend: document.getElementById('analytics-learning-trend'),
+        analyticsUserGrowth: document.getElementById('analytics-user-growth'),
+        analyticsTopUsers: document.getElementById('analytics-top-users'),
+        analyticsScoreBuckets: document.getElementById('analytics-score-buckets'),
         recordsBody: document.getElementById('records-body'),
         recordsTitle: document.getElementById('records-title'),
         recordsPrev: document.getElementById('records-prev'),
@@ -59,13 +72,21 @@
         recordsRange: document.getElementById('records-range'),
         recordDetailTitle: document.getElementById('record-detail-title'),
         recordDetailBody: document.getElementById('record-detail-body'),
+        trafficRange: document.getElementById('traffic-range'),
         trafficWindow: document.getElementById('traffic-window'),
         trafficRequests: document.getElementById('traffic-requests'),
         trafficPageviews: document.getElementById('traffic-pageviews'),
         trafficVisitors: document.getElementById('traffic-visitors'),
         trafficErrors: document.getElementById('traffic-errors'),
         trafficDaily: document.getElementById('traffic-daily'),
-        trafficPaths: document.getElementById('traffic-paths')
+        trafficPaths: document.getElementById('traffic-paths'),
+        trafficRouteGroups: document.getElementById('traffic-route-groups'),
+        trafficStatusCodes: document.getElementById('traffic-status-codes'),
+        confirmDialog: document.getElementById('confirm-dialog'),
+        confirmTitle: document.getElementById('confirm-title'),
+        confirmMessage: document.getElementById('confirm-message'),
+        confirmCancel: document.getElementById('confirm-cancel'),
+        confirmSubmit: document.getElementById('confirm-submit')
     };
 
     function setStatus(message, kind = 'info') {
@@ -123,6 +144,69 @@
         const start = Math.min(offset + 1, total);
         const end = Math.min(offset + limit, total);
         return `${start}-${end} of ${total}`;
+    }
+
+    function setListMessage(container, message) {
+        container.textContent = '';
+        const row = document.createElement('div');
+        row.className = 'mini-list__row is-empty';
+        row.textContent = message;
+        container.append(row);
+    }
+
+    function renderBarRows(container, items, options) {
+        container.textContent = '';
+        if (!items.length) {
+            setListMessage(container, options.emptyText);
+            return;
+        }
+        const values = items.map((item) => Math.max(0, Number(options.value(item)) || 0));
+        const max = Math.max(1, ...values);
+        for (const [index, item] of items.entries()) {
+            const row = document.createElement('div');
+            row.className = 'bar-row';
+            const label = document.createElement('strong');
+            label.textContent = options.label(item);
+            const bar = document.createElement('span');
+            bar.className = 'traffic-bar';
+            bar.style.setProperty('--bar-width', `${Math.max(5, Math.round((values[index] / max) * 100))}%`);
+            const meta = document.createElement('em');
+            meta.textContent = options.meta(item);
+            row.append(label, bar, meta);
+            container.append(row);
+        }
+    }
+
+    function closeConfirm(value) {
+        if (!state.confirmResolver) return;
+        const resolve = state.confirmResolver;
+        state.confirmResolver = null;
+        nodes.confirmDialog.hidden = true;
+        resolve(value);
+    }
+
+    function confirmAction(options) {
+        nodes.confirmTitle.textContent = options.title || 'Confirm action';
+        nodes.confirmMessage.textContent = options.message || '';
+        nodes.confirmSubmit.textContent = options.confirmText || 'Confirm';
+        nodes.confirmSubmit.classList.toggle('delete-button', options.kind !== 'normal');
+        nodes.confirmDialog.hidden = false;
+        nodes.confirmCancel.focus();
+        return new Promise((resolve) => {
+            state.confirmResolver = resolve;
+        });
+    }
+
+    async function withButtonBusy(button, label, action) {
+        const previous = button.textContent;
+        button.disabled = true;
+        button.textContent = label;
+        try {
+            return await action();
+        } finally {
+            button.textContent = previous;
+            button.disabled = false;
+        }
     }
 
     function updatePagination() {
@@ -196,6 +280,41 @@
         renderTypeStats(nodes.globalTypeStats, stats.byType || [], 'No learning records yet.');
     }
 
+    async function loadAnalytics() {
+        const days = state.analyticsDays;
+        nodes.analyticsWindow.textContent = `Last ${days} days`;
+        setListMessage(nodes.analyticsLearningTrend, 'Loading...');
+        setListMessage(nodes.analyticsUserGrowth, 'Loading...');
+        setListMessage(nodes.analyticsTopUsers, 'Loading...');
+        setListMessage(nodes.analyticsScoreBuckets, 'Loading...');
+        const analytics = await request(`/api/admin/analytics?days=${days}&limit=10`, { csrf: false });
+        nodes.analyticsWindow.textContent = `Last ${analytics.days} days`;
+        renderBarRows(nodes.analyticsLearningTrend, analytics.dailyLearning || [], {
+            emptyText: 'No practice activity in this range.',
+            label: (item) => item.day,
+            value: (item) => Number(item.records || 0),
+            meta: (item) => `${formatNumber(item.records)} records - ${formatNumber(item.activeUsers)} users - ${formatScoreValue(item.averageScore)}`
+        });
+        renderBarRows(nodes.analyticsUserGrowth, analytics.userGrowth || [], {
+            emptyText: 'No new users in this range.',
+            label: (item) => item.day,
+            value: (item) => Number(item.users || 0),
+            meta: (item) => `${formatNumber(item.users)} users - ${formatNumber(item.admins)} admins`
+        });
+        renderBarRows(nodes.analyticsTopUsers, analytics.topUsers || [], {
+            emptyText: 'No active learners in this range.',
+            label: (item) => item.username,
+            value: (item) => Number(item.recordCount || 0),
+            meta: (item) => `${formatNumber(item.recordCount)} records - ${formatScoreValue(item.averageScore)} - ${formatNumber(item.totalStudyMinutes)} min`
+        });
+        renderBarRows(nodes.analyticsScoreBuckets, analytics.scoreBuckets || [], {
+            emptyText: 'No scored records in this range.',
+            label: (item) => item.bucket,
+            value: (item) => Number(item.records || 0),
+            meta: (item) => `${formatNumber(item.records)} records`
+        });
+    }
+
     function renderUsers(payload) {
         nodes.usersBody.textContent = '';
         state.users.total = Number(payload.total || 0);
@@ -248,6 +367,7 @@
         try {
             const query = new URLSearchParams({
                 q: nodes.userSearch.value.trim(),
+                role: state.users.role,
                 limit: String(state.users.limit),
                 offset: String(state.users.offset)
             });
@@ -278,7 +398,7 @@
             const name = document.createElement('strong');
             name.textContent = item.type || 'unknown';
             const meta = document.createElement('span');
-            meta.textContent = `${formatNumber(item.recordCount)} records · ${formatScoreValue(item.averageScore)} · ${formatNumber(item.totalStudyMinutes)} min`;
+            meta.textContent = `${formatNumber(item.recordCount)} records - ${formatScoreValue(item.averageScore)} - ${formatNumber(item.totalStudyMinutes)} min`;
             row.append(name, meta);
             container.append(row);
         }
@@ -298,7 +418,7 @@
     function updateSelectedUserPanel() {
         const user = state.selectedUser;
         const disabled = !user;
-        nodes.selectedUserName.textContent = user ? `${user.username} · ${user.id}` : 'No user selected';
+        nodes.selectedUserName.textContent = user ? `${user.username} - ${user.id}` : 'No user selected';
         nodes.selectedUserRole.disabled = disabled;
         nodes.selectedUserPassword.disabled = disabled;
         nodes.saveUserButton.disabled = disabled;
@@ -377,11 +497,15 @@
             remove.textContent = 'Delete';
             remove.addEventListener('click', async () => {
                 const label = record.title || record.examId || record.id;
-                if (!window.confirm(`Delete record "${label}" updated ${formatDate(record.updatedAt)}?`)) {
+                const confirmed = await confirmAction({
+                    title: 'Delete practice record',
+                    message: `Delete "${label}" updated ${formatDate(record.updatedAt)}? This cannot be undone.`,
+                    confirmText: 'Delete record'
+                });
+                if (!confirmed) {
                     return;
                 }
-                remove.disabled = true;
-                try {
+                await withButtonBusy(remove, 'Deleting...', async () => {
                     await request(`/api/admin/users/${encodeURIComponent(state.selectedUser.id)}/practice-records/${encodeURIComponent(record.id)}`, {
                         method: 'DELETE'
                     });
@@ -391,11 +515,7 @@
                     }
                     await refreshAfterMutation();
                     await loadRecords(state.selectedUser.id, state.selectedUser.username);
-                } catch (error) {
-                    setStatus(error.message, 'error');
-                } finally {
-                    remove.disabled = false;
-                }
+                }).catch((error) => setStatus(error.message, 'error'));
             });
             action.append(details, remove);
             row.append(title, type, score, updated, action);
@@ -451,52 +571,49 @@
     }
 
     async function loadTraffic() {
-        const traffic = await request('/api/admin/traffic?days=14&limit=10', { csrf: false });
+        const days = state.trafficDays;
+        nodes.trafficWindow.textContent = `Last ${days} days`;
+        setListMessage(nodes.trafficDaily, 'Loading...');
+        setListMessage(nodes.trafficPaths, 'Loading...');
+        setListMessage(nodes.trafficRouteGroups, 'Loading...');
+        setListMessage(nodes.trafficStatusCodes, 'Loading...');
+        const traffic = await request(`/api/admin/traffic?days=${days}&limit=10`, { csrf: false });
         nodes.trafficWindow.textContent = `Last ${traffic.days} days`;
         nodes.trafficRequests.textContent = formatNumber(traffic.requests);
         nodes.trafficPageviews.textContent = formatNumber(traffic.pageViews);
         nodes.trafficVisitors.textContent = formatNumber(traffic.uniqueVisitors);
         nodes.trafficErrors.textContent = formatNumber(traffic.errors);
-        nodes.trafficDaily.textContent = '';
-        if (!traffic.daily.length) {
-            nodes.trafficDaily.textContent = 'No traffic captured yet.';
-        } else {
-            const maxRequests = Math.max(1, ...traffic.daily.map((item) => item.requests));
-            for (const item of traffic.daily) {
-                const row = document.createElement('div');
-                row.className = 'traffic-row';
-                const label = document.createElement('strong');
-                label.textContent = item.day;
-                const bar = document.createElement('span');
-                bar.className = 'traffic-bar';
-                bar.style.setProperty('--bar-width', `${Math.max(6, Math.round((item.requests / maxRequests) * 100))}%`);
-                const meta = document.createElement('em');
-                meta.textContent = `${formatNumber(item.requests)} req · ${formatNumber(item.pageViews)} views`;
-                row.append(label, bar, meta);
-                nodes.trafficDaily.append(row);
-            }
-        }
-        nodes.trafficPaths.textContent = '';
-        if (!traffic.topPaths.length) {
-            nodes.trafficPaths.textContent = 'No paths captured yet.';
-        } else {
-            for (const item of traffic.topPaths) {
-                const row = document.createElement('div');
-                row.className = 'mini-list__row';
-                const name = document.createElement('strong');
-                name.textContent = item.path;
-                const meta = document.createElement('span');
-                meta.textContent = `${item.routeGroup} · ${formatNumber(item.requests)} requests · ${formatNumber(item.uniqueVisitors)} visitors`;
-                row.append(name, meta);
-                nodes.trafficPaths.append(row);
-            }
-        }
+        renderBarRows(nodes.trafficDaily, traffic.daily || [], {
+            emptyText: 'No traffic captured yet.',
+            label: (item) => item.day,
+            value: (item) => Number(item.requests || 0),
+            meta: (item) => `${formatNumber(item.requests)} req - ${formatNumber(item.pageViews)} views - ${formatNumber(item.errors)} errors`
+        });
+        renderBarRows(nodes.trafficPaths, traffic.topPaths || [], {
+            emptyText: 'No paths captured yet.',
+            label: (item) => item.path,
+            value: (item) => Number(item.requests || 0),
+            meta: (item) => `${item.routeGroup} - ${formatNumber(item.requests)} requests - ${formatNumber(item.uniqueVisitors)} visitors`
+        });
+        renderBarRows(nodes.trafficRouteGroups, traffic.routeGroups || [], {
+            emptyText: 'No route groups captured yet.',
+            label: (item) => item.group,
+            value: (item) => Number(item.requests || 0),
+            meta: (item) => `${formatNumber(item.requests)} requests - ${formatNumber(item.errors)} errors - ${formatNumber(item.averageDurationMs)} ms avg`
+        });
+        renderBarRows(nodes.trafficStatusCodes, traffic.statusCodes || [], {
+            emptyText: 'No status codes captured yet.',
+            label: (item) => item.statusClass,
+            value: (item) => Number(item.requests || 0),
+            meta: (item) => `${formatNumber(item.requests)} requests`
+        });
     }
 
     async function refreshAfterMutation() {
         await Promise.all([
             loadSummary(),
             loadGlobalStats(),
+            loadAnalytics(),
             loadTraffic()
         ]);
         if (state.selectedUser) {
@@ -508,6 +625,7 @@
         await Promise.all([
             loadSummary(),
             loadGlobalStats(),
+            loadAnalytics(),
             loadTraffic()
         ]);
         await loadUsers();
@@ -521,7 +639,7 @@
 
     function bindEvents() {
         nodes.refreshButton.addEventListener('click', () => {
-            refreshAll().catch((error) => setStatus(error.message, 'error'));
+            withButtonBusy(nodes.refreshButton, 'Refreshing...', refreshAll).catch((error) => setStatus(error.message, 'error'));
         });
         nodes.userSearch.addEventListener('input', () => {
             window.clearTimeout(nodes.userSearch._timer);
@@ -530,6 +648,20 @@
                 clearUserSelection();
                 loadUsers().catch((error) => setStatus(error.message, 'error'));
             }, 200);
+        });
+        nodes.userRoleFilter.addEventListener('change', () => {
+            state.users.role = nodes.userRoleFilter.value;
+            state.users.offset = 0;
+            clearUserSelection();
+            loadUsers().catch((error) => setStatus(error.message, 'error'));
+        });
+        nodes.analyticsRange.addEventListener('change', () => {
+            state.analyticsDays = Number(nodes.analyticsRange.value) || 30;
+            loadAnalytics().catch((error) => setStatus(error.message, 'error'));
+        });
+        nodes.trafficRange.addEventListener('change', () => {
+            state.trafficDays = Number(nodes.trafficRange.value) || 14;
+            loadTraffic().catch((error) => setStatus(error.message, 'error'));
         });
         nodes.usersPrev.addEventListener('click', () => {
             state.users.offset = Math.max(0, state.users.offset - state.users.limit);
@@ -555,16 +687,18 @@
                 role: nodes.createRole.value
             };
             try {
-                const payload = await request('/api/admin/users', { method: 'POST', body });
-                nodes.createUserForm.reset();
-                setStatus(`Created ${payload.user.username}`);
-                state.users.offset = 0;
-                await refreshAll();
+                await withButtonBusy(nodes.createUserSubmit, 'Creating...', async () => {
+                    const payload = await request('/api/admin/users', { method: 'POST', body });
+                    nodes.createUserForm.reset();
+                    setStatus(`Created ${payload.user.username}`);
+                    state.users.offset = 0;
+                    await refreshAll();
+                });
             } catch (error) {
                 setStatus(error.message, 'error');
             }
         });
-        document.getElementById('edit-user-form').addEventListener('submit', async (event) => {
+        nodes.editUserForm.addEventListener('submit', async (event) => {
             event.preventDefault();
             if (!state.selectedUser) return;
             const body = {
@@ -574,30 +708,55 @@
                 body.password = nodes.selectedUserPassword.value;
             }
             try {
-                const payload = await request(`/api/admin/users/${encodeURIComponent(state.selectedUser.id)}`, {
-                    method: 'PATCH',
-                    body
+                await withButtonBusy(nodes.saveUserButton, 'Saving...', async () => {
+                    const payload = await request(`/api/admin/users/${encodeURIComponent(state.selectedUser.id)}`, {
+                        method: 'PATCH',
+                        body
+                    });
+                    state.selectedUser = payload.user;
+                    nodes.selectedUserPassword.value = '';
+                    setStatus(`Updated ${payload.user.username}`);
+                    await refreshAll();
                 });
-                state.selectedUser = payload.user;
-                nodes.selectedUserPassword.value = '';
-                setStatus(`Updated ${payload.user.username}`);
-                await refreshAll();
             } catch (error) {
                 setStatus(error.message, 'error');
             }
         });
         nodes.deleteUserButton.addEventListener('click', async () => {
             if (!state.selectedUser) return;
-            if (!window.confirm(`Delete user "${state.selectedUser.username}" and all related records?`)) {
+            const username = state.selectedUser.username;
+            const userId = state.selectedUser.id;
+            const confirmed = await confirmAction({
+                title: 'Delete user',
+                message: `Delete "${username}" and all related practice records? This cannot be undone.`,
+                confirmText: 'Delete user'
+            });
+            if (!confirmed) {
                 return;
             }
             try {
-                await request(`/api/admin/users/${encodeURIComponent(state.selectedUser.id)}`, { method: 'DELETE' });
-                setStatus(`Deleted ${state.selectedUser.username}`);
-                clearUserSelection();
-                await refreshAll();
+                await withButtonBusy(nodes.deleteUserButton, 'Deleting...', async () => {
+                    await request(`/api/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+                    setStatus(`Deleted ${username}`);
+                    clearUserSelection();
+                    await refreshAll();
+                });
+                updateSelectedUserPanel();
+                updatePagination();
             } catch (error) {
                 setStatus(error.message, 'error');
+            }
+        });
+        nodes.confirmCancel.addEventListener('click', () => closeConfirm(false));
+        nodes.confirmSubmit.addEventListener('click', () => closeConfirm(true));
+        nodes.confirmDialog.addEventListener('click', (event) => {
+            if (event.target === nodes.confirmDialog) {
+                closeConfirm(false);
+            }
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !nodes.confirmDialog.hidden) {
+                closeConfirm(false);
             }
         });
         nodes.logoutButton.addEventListener('click', async () => {
