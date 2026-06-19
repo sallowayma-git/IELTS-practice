@@ -15,15 +15,16 @@ const { MemoryPracticeRecordStore } = require('../src/practiceRecords');
 const { MemoryTotpStore } = require('../src/totp');
 
 async function createClient(options = {}) {
-    const authStore = new MemoryAuthStore();
+    const sessionStore = new session.MemoryStore();
+    const authStore = new MemoryAuthStore({ sessionStore });
     const totpStore = new MemoryTotpStore();
     const practiceStore = new MemoryPracticeRecordStore();
     const app = createApp({
         authStore,
         totpStore,
         practiceStore,
-        adminStore: new MemoryAdminStore({ authStore, practiceStore }),
-        sessionStore: new session.MemoryStore(),
+        adminStore: new MemoryAdminStore({ authStore, practiceStore, sessionStore }),
+        sessionStore,
         sessionSecret: 'test-session-secret',
         staticRoot: options.staticRoot,
         rateLimit: options.rateLimit || { maxAttempts: 100, windowMs: 60_000 },
@@ -38,57 +39,71 @@ async function createClient(options = {}) {
     });
     const { port } = server.address();
     const baseUrl = `http://127.0.0.1:${port}`;
-    let cookie = '';
-    let csrfToken = '';
 
-    async function request(method, path, body, options = {}) {
-        const headers = {
-            ...(options.headers || {})
-        };
-        if (cookie) {
-            headers.cookie = cookie;
-        }
-        if (options.csrf !== false && csrfToken && method !== 'GET') {
-            headers['x-csrf-token'] = csrfToken;
-        }
-        if (body !== undefined) {
-            headers['content-type'] = 'application/json';
-        }
-        const response = await fetch(`${baseUrl}${path}`, {
-            method,
-            headers,
-            body: body === undefined ? undefined : JSON.stringify(body)
-        });
-        const setCookie = response.headers.get('set-cookie');
-        if (setCookie) {
-            cookie = setCookie.split(';')[0];
-        }
-        const text = await response.text();
-        let json = null;
-        if (text) {
-            try {
-                json = JSON.parse(text);
-            } catch (_) {
-                json = null;
+    function createSessionClient() {
+        let cookie = '';
+        let csrfToken = '';
+
+        async function request(method, path, body, options = {}) {
+            const headers = {
+                ...(options.headers || {})
+            };
+            if (cookie) {
+                headers.cookie = cookie;
             }
+            if (options.csrf !== false && csrfToken && method !== 'GET') {
+                headers['x-csrf-token'] = csrfToken;
+            }
+            if (body !== undefined) {
+                headers['content-type'] = 'application/json';
+            }
+            const response = await fetch(`${baseUrl}${path}`, {
+                method,
+                headers,
+                body: body === undefined ? undefined : JSON.stringify(body)
+            });
+            const setCookie = response.headers.get('set-cookie');
+            if (setCookie) {
+                cookie = setCookie.split(';')[0];
+            }
+            const text = await response.text();
+            let json = null;
+            if (text) {
+                try {
+                    json = JSON.parse(text);
+                } catch (_) {
+                    json = null;
+                }
+            }
+            if (json && json.csrfToken) {
+                csrfToken = json.csrfToken;
+            }
+            return { response, json, text };
         }
-        if (json && json.csrfToken) {
-            csrfToken = json.csrfToken;
-        }
-        return { response, json, text };
+
+        return {
+            get csrfToken() {
+                return csrfToken;
+            },
+            request,
+            async csrf() {
+                return request('GET', '/api/auth/csrf');
+            }
+        };
     }
 
+    const primarySession = createSessionClient();
+
     return {
-        get csrfToken() {
-            return csrfToken;
-        },
         authStore,
         totpStore,
         practiceStore,
-        request,
-        async csrf() {
-            return request('GET', '/api/auth/csrf');
+        get csrfToken() {
+            return primarySession.csrfToken;
         },
+        request: primarySession.request,
+        csrf: primarySession.csrf,
+        createSession: createSessionClient,
         close() {
             return new Promise((resolve, reject) => {
                 server.close((error) => error ? reject(error) : resolve());
@@ -96,6 +111,42 @@ async function createClient(options = {}) {
         }
     };
 }
+
+function createProductionAppWithSecret(sessionSecret) {
+    const sessionStore = new session.MemoryStore();
+    const authStore = new MemoryAuthStore({ sessionStore });
+    const totpStore = new MemoryTotpStore();
+    const practiceStore = new MemoryPracticeRecordStore();
+    return () => createApp({
+        authStore,
+        totpStore,
+        practiceStore,
+        adminStore: new MemoryAdminStore({ authStore, practiceStore, sessionStore }),
+        sessionStore,
+        sessionSecret,
+        nodeEnv: 'production',
+        rateLimit: { maxAttempts: 100, windowMs: 60_000 },
+        totpEncryptionKey: 'test-totp-key'
+    });
+}
+
+test('production app rejects missing or placeholder session secrets', () => {
+    assert.throws(
+        createProductionAppWithSecret('development-session-secret-change-me'),
+        /SESSION_SECRET/
+    );
+    assert.throws(
+        createProductionAppWithSecret('replace-with-a-long-random-session-secret'),
+        /SESSION_SECRET/
+    );
+    assert.throws(
+        createProductionAppWithSecret('short-secret'),
+        /SESSION_SECRET/
+    );
+    assert.doesNotThrow(
+        createProductionAppWithSecret('0123456789abcdef0123456789abcdef')
+    );
+});
 
 async function register(client, username = 'alice', password = 'StrongPass1') {
     await client.csrf();
@@ -315,6 +366,54 @@ test('users can update their own username and password', async () => {
         });
         assert.equal(newPasswordLogin.response.status, 200);
         assert.equal(newPasswordLogin.json.user.username, 'renamed_user');
+    } finally {
+        await client.close();
+    }
+});
+
+test('account username and password changes revoke other sessions', async () => {
+    const client = await createClient();
+    try {
+        const created = await register(client, 'session_user', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+
+        const otherSession = client.createSession();
+        await otherSession.csrf();
+        const otherLogin = await otherSession.request('POST', '/api/auth/login', {
+            username: 'session_user',
+            password: 'StrongPass1'
+        });
+        assert.equal(otherLogin.response.status, 200);
+
+        const renamed = await client.request('PATCH', '/api/auth/account/username', {
+            username: 'session_user_renamed',
+            password: 'StrongPass1'
+        });
+        assert.equal(renamed.response.status, 200);
+
+        const otherAfterRename = await otherSession.request('GET', '/api/auth/me');
+        assert.equal(otherAfterRename.response.status, 401);
+
+        const anotherSession = client.createSession();
+        await anotherSession.csrf();
+        const anotherLogin = await anotherSession.request('POST', '/api/auth/login', {
+            username: 'session_user_renamed',
+            password: 'StrongPass1'
+        });
+        assert.equal(anotherLogin.response.status, 200);
+
+        const passwordChanged = await client.request('PATCH', '/api/auth/account/password', {
+            currentPassword: 'StrongPass1',
+            newPassword: 'StrongerPass2'
+        });
+        assert.equal(passwordChanged.response.status, 200);
+
+        const anotherAfterPasswordChange = await anotherSession.request('GET', '/api/auth/me');
+        assert.equal(anotherAfterPasswordChange.response.status, 401);
+
+        const currentSession = await client.request('GET', '/api/auth/me');
+        assert.equal(currentSession.response.status, 200);
+        assert.equal(currentSession.json.user.username, 'session_user_renamed');
     } finally {
         await client.close();
     }
@@ -849,6 +948,67 @@ test('admin can manage users and inspect learning and traffic stats', async () =
         const deleted = await client.request('DELETE', `/api/admin/users/${added.json.user.id}`);
         assert.equal(deleted.response.status, 200);
         assert.equal(deleted.json.deleted, true);
+    } finally {
+        await client.close();
+    }
+});
+
+test('admin user changes invalidate target sessions and stale admin roles', async () => {
+    const client = await createClient();
+    try {
+        await seedAdmin(client, 'owner_admin', 'StrongPass1');
+        const adminSession = client.createSession();
+        await adminSession.csrf();
+        const ownerLogin = await adminSession.request('POST', '/api/auth/login', {
+            username: 'owner_admin',
+            password: 'StrongPass1'
+        });
+        assert.equal(ownerLogin.response.status, 200);
+        assert.equal(ownerLogin.json.requiresTotpSetup, true);
+        await enableTotpForCurrentSession(adminSession);
+
+        const userSession = client.createSession();
+        const createdUser = await register(userSession, 'reset_target', 'StrongPass1');
+        assert.equal(createdUser.response.status, 201);
+        const userRecords = await userSession.request('GET', '/api/practice-records');
+        assert.equal(userRecords.response.status, 200);
+
+        const resetPassword = await adminSession.request('PATCH', `/api/admin/users/${createdUser.json.user.id}`, {
+            password: 'StrongerPass2'
+        });
+        assert.equal(resetPassword.response.status, 200);
+
+        const staleUserSession = await userSession.request('GET', '/api/practice-records');
+        assert.equal(staleUserSession.response.status, 401);
+
+        const createdAdmin = await adminSession.request('POST', '/api/admin/users', {
+            username: 'target_admin',
+            password: 'StrongPass1',
+            role: 'admin'
+        });
+        assert.equal(createdAdmin.response.status, 201);
+
+        const targetAdminSession = client.createSession();
+        await targetAdminSession.csrf();
+        const targetLogin = await targetAdminSession.request('POST', '/api/auth/login', {
+            username: 'target_admin',
+            password: 'StrongPass1'
+        });
+        assert.equal(targetLogin.response.status, 200);
+        assert.equal(targetLogin.json.requiresTotpSetup, true);
+        await enableTotpForCurrentSession(targetAdminSession);
+
+        const targetSummary = await targetAdminSession.request('GET', '/api/admin/summary');
+        assert.equal(targetSummary.response.status, 200);
+
+        const demoted = await adminSession.request('PATCH', `/api/admin/users/${createdAdmin.json.user.id}`, {
+            role: 'user'
+        });
+        assert.equal(demoted.response.status, 200);
+        assert.equal(demoted.json.user.role, 'user');
+
+        const staleAdminSession = await targetAdminSession.request('GET', '/api/admin/summary');
+        assert.equal(staleAdminSession.response.status, 401);
     } finally {
         await client.close();
     }

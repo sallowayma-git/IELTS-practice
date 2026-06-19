@@ -4,6 +4,7 @@ const { z } = require('zod');
 const {
     USERNAME_PATTERN,
     normalizeUsername,
+    publicUser,
     requireAdmin,
     requireAuth,
     validatePasswordStrength,
@@ -503,14 +504,21 @@ class PostgresAdminStore {
         return toInteger(result.rows[0]?.total);
     }
 
-    async deleteUser(userId) {
+    async deleteSessionsForUser(userId, exceptSid = null) {
         await this.db.query(
             `DELETE FROM "session"
-             WHERE sess::jsonb #>> '{user,id}' = $1
-                OR sess::jsonb #>> '{pendingTotpLogin,user,id}' = $1
-                OR sess::jsonb #>> '{pendingTotpSetup,user,id}' = $1`,
-            [userId]
+             WHERE (
+                    sess::jsonb #>> '{user,id}' = $1
+                 OR sess::jsonb #>> '{pendingTotpLogin,user,id}' = $1
+                 OR sess::jsonb #>> '{pendingTotpSetup,user,id}' = $1
+             )
+             AND ($2::text IS NULL OR sid <> $2::text)`,
+            [userId, exceptSid]
         );
+    }
+
+    async deleteUser(userId) {
+        await this.deleteSessionsForUser(userId);
         const result = await this.db.query(
             'DELETE FROM users WHERE id = $1 RETURNING id, username, role',
             [userId]
@@ -695,6 +703,7 @@ class MemoryAdminStore {
     constructor(options = {}) {
         this.authStore = options.authStore;
         this.practiceStore = options.practiceStore;
+        this.sessionStore = options.sessionStore;
         this.trafficEvents = [];
     }
 
@@ -901,9 +910,44 @@ class MemoryAdminStore {
         return this._users().filter((user) => user.role === 'admin').length;
     }
 
+    async deleteSessionsForUser(userId, exceptSid = null) {
+        const store = this.sessionStore;
+        if (!store || typeof store.destroy !== 'function') {
+            return;
+        }
+        let entries = [];
+        if (store.sessions && typeof store.sessions === 'object') {
+            entries = Object.entries(store.sessions).map(([sid, raw]) => {
+                try {
+                    return [sid, typeof raw === 'string' ? JSON.parse(raw) : raw];
+                } catch (_) {
+                    return [sid, null];
+                }
+            });
+        } else if (typeof store.all === 'function') {
+            const sessions = await new Promise((resolve, reject) => {
+                store.all((error, items) => error ? reject(error) : resolve(items || {}));
+            });
+            entries = Array.isArray(sessions)
+                ? sessions.map((value, index) => [value?.id || String(index), value])
+                : Object.entries(sessions);
+        }
+        await Promise.all(entries
+            .filter(([sid, value]) => {
+                if (exceptSid && sid === exceptSid) return false;
+                return value?.user?.id === userId
+                    || value?.pendingTotpLogin?.user?.id === userId
+                    || value?.pendingTotpSetup?.user?.id === userId;
+            })
+            .map(([sid]) => new Promise((resolve, reject) => {
+                store.destroy(sid, (error) => error ? reject(error) : resolve());
+            })));
+    }
+
     async deleteUser(userId) {
         const user = this._findUser(userId);
         if (!user) return null;
+        await this.deleteSessionsForUser(userId);
         this.authStore.users.delete(String(user.username || '').toLowerCase());
         if (this.practiceStore?.recordsByUser) {
             this.practiceStore.recordsByUser.delete(userId);
@@ -1081,6 +1125,21 @@ function createAdminRouter(options = {}) {
     const requireAdminTotp = options.requireAdminTotp || ((req, res, next) => next());
 
     router.use(requireAuth);
+    router.use(async (req, res, next) => {
+        try {
+            if (req.session?.user?.id && typeof store.getUser === 'function') {
+                const current = await store.getUser(req.session.user.id);
+                if (!current) {
+                    delete req.session.user;
+                    return res.status(401).json({ error: 'Authentication required' });
+                }
+                req.session.user = publicUser(current);
+            }
+            return next();
+        } catch (error) {
+            return next(error);
+        }
+    });
     router.use(requireAdmin);
     router.use(requireAdminTotp);
 
@@ -1179,6 +1238,9 @@ function createAdminRouter(options = {}) {
                 return res.status(400).json({ error: 'Cannot demote the last admin' });
             }
             const user = await store.updateUser(req.params.userId, parsed.data);
+            if (typeof store.deleteSessionsForUser === 'function') {
+                await store.deleteSessionsForUser(req.params.userId, req.sessionID);
+            }
             return res.json({ user });
         } catch (error) {
             if (error.status) return sendError(res, error);

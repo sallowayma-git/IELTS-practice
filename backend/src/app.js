@@ -24,6 +24,24 @@ function createDefaultSessionStore(pool) {
     });
 }
 
+const DEFAULT_SESSION_SECRET = 'development-session-secret-change-me';
+const PLACEHOLDER_SESSION_SECRET = 'replace-with-a-long-random-session-secret';
+
+function resolveSessionSecret(options = {}) {
+    const secret = options.sessionSecret || process.env.SESSION_SECRET || DEFAULT_SESSION_SECRET;
+    const production = (options.nodeEnv || process.env.NODE_ENV) === 'production';
+    const weakSecret = !secret
+        || secret === DEFAULT_SESSION_SECRET
+        || secret === PLACEHOLDER_SESSION_SECRET
+        || String(secret).length < 32;
+
+    if (production && weakSecret) {
+        throw new Error('SESSION_SECRET must be set to a non-placeholder value of at least 32 characters in production');
+    }
+
+    return secret;
+}
+
 function createApp(options = {}) {
     const app = express();
     const repoRoot = options.staticRoot || path.resolve(__dirname, '..', '..');
@@ -37,7 +55,7 @@ function createApp(options = {}) {
     const trustProxy = options.trustProxy !== undefined
         ? options.trustProxy
         : parseBoolean(process.env.TRUST_PROXY, false);
-    const sessionSecret = options.sessionSecret || process.env.SESSION_SECRET || 'development-session-secret-change-me';
+    const sessionSecret = resolveSessionSecret(options);
     const totpEnabled = options.totpEnabled !== undefined
         ? Boolean(options.totpEnabled)
         : parseBoolean(process.env.TOTP_ENABLED, true);
@@ -112,6 +130,26 @@ function createApp(options = {}) {
     app.use('/api/practice-records', createPracticeRecordsRouter({
         store: practiceStore
     }));
+
+    async function refreshSessionUser(req, res, next) {
+        try {
+            if (req.session?.user?.id && typeof authStore.findById === 'function') {
+                const user = await authStore.findById(req.session.user.id);
+                if (!user) {
+                    delete req.session.user;
+                    delete req.session.pendingTotpLogin;
+                    delete req.session.pendingTotpSetup;
+                    return next();
+                }
+                req.session.user = publicUser(user);
+            }
+            return next();
+        } catch (error) {
+            return next(error);
+        }
+    }
+
+    app.use(['/api/admin', '/admin'], refreshSessionUser);
     app.use('/api/admin', createAdminRouter({
         store: adminStore,
         requireAdminTotp
