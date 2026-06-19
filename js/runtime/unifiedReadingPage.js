@@ -895,12 +895,14 @@
 
     function createGroupMarkup(group) {
         const questionIds = Array.isArray(group.questionIds) ? group.questionIds.join(',') : '';
+        const safeGroupId = escapeHtml(group.groupId || '');
+        const safeQuestionIds = escapeHtml(questionIds);
         const allowOptionReuseFlag = resolveAllowOptionReuse(group);
         const allowOptionReuse = typeof allowOptionReuseFlag === 'boolean'
             ? ` data-allow-option-reuse="${allowOptionReuseFlag ? 'true' : 'false'}"`
             : '';
         return `
-            <section class="unified-group" data-group-id="${group.groupId}" data-question-ids="${questionIds}"${allowOptionReuse}>
+            <section class="unified-group" data-group-id="${safeGroupId}" data-question-ids="${safeQuestionIds}"${allowOptionReuse}>
                 ${group.bodyHtml || ''}
             </section>
         `;
@@ -995,8 +997,9 @@
         const order = Array.isArray(state.dataset?.questionOrder) ? state.dataset.questionOrder : [];
         dom.nav.innerHTML = order.map((questionId) => {
             const status = navStatus.get(questionId) || '';
+            const safeStatus = ['answered', 'correct', 'incorrect'].includes(status) ? status : '';
             const label = displayLabel(questionId);
-            return `<button class="q-item ${status}" data-question-id="${questionId}" type="button">${label}</button>`;
+            return `<button class="q-item ${safeStatus}" data-question-id="${escapeHtml(questionId)}" type="button">${escapeHtml(label)}</button>`;
         }).join('');
     }
 
@@ -1317,11 +1320,12 @@
     }
 
     function findQuestionAnchor(questionId) {
+        const escapedQuestionId = escapeSelector(questionId);
         const directCandidates = [
             document.getElementById(`${questionId}-anchor`),
-            document.querySelector(`[data-question="${questionId}"]`),
-            document.querySelector(`[data-question-id="${questionId}"]`),
-            document.querySelector(`[name="${questionId}"]`)
+            document.querySelector(`[data-question="${escapedQuestionId}"]`),
+            document.querySelector(`[data-question-id="${escapedQuestionId}"]`),
+            document.querySelector(`[name="${escapedQuestionId}"]`)
         ].filter(Boolean);
         if (directCandidates.length) {
             return directCandidates[0];
@@ -2982,9 +2986,23 @@
         };
     }
 
+    function getMessageTargetOrigin() {
+        const origin = global.location && global.location.origin;
+        return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+    }
+
+    function isAllowedIncomingMessageOrigin(event) {
+        if (!event || !event.origin || event.origin === 'null') {
+            return true;
+        }
+        const origin = global.location && global.location.origin;
+        return Boolean(origin && origin !== 'null' && event.origin === origin);
+    }
+
     function postMessage(type, payload) {
         const envelope = buildEnvelope(type, payload);
         const candidates = [global.opener, state.parentWindow, global.parent];
+        const targetOrigin = getMessageTargetOrigin();
         const visited = new Set();
         for (let index = 0; index < candidates.length; index += 1) {
             const target = candidates[index];
@@ -2993,7 +3011,7 @@
             }
             visited.add(target);
             try {
-                target.postMessage(envelope, '*');
+                target.postMessage(envelope, targetOrigin);
                 state.parentWindow = target;
                 return true;
             } catch (_) {
@@ -3570,7 +3588,7 @@
         const opener = global.opener && !global.opener.closed ? global.opener : null;
         if (hasEndlessMarker && opener) {
             try {
-                opener.postMessage({ type: 'ENDLESS_USER_EXIT' }, '*');
+                opener.postMessage({ type: 'ENDLESS_USER_EXIT' }, getMessageTargetOrigin());
                 if (typeof opener.stopEndlessPractice === 'function') {
                     opener.stopEndlessPractice();
                 } else if (opener.AppActions && typeof opener.AppActions.stopEndlessPractice === 'function') {
@@ -3619,6 +3637,9 @@
     }
 
     function handleIncoming(event) {
+        if (!isAllowedIncomingMessageOrigin(event)) {
+            return;
+        }
         const payload = event?.data;
         if (!payload || typeof payload !== 'object') {
             return;
@@ -3921,7 +3942,7 @@
         bootstrap().catch((error) => {
             console.error('[UnifiedReadingPage] 初始化失败:', error);
             if (dom.groups) {
-                dom.groups.innerHTML = `<div class="group"><h4>加载失败</h4><p>${error.message}</p></div>`;
+                dom.groups.innerHTML = `<div class="group"><h4>加载失败</h4><p>${escapeHtml(error.message)}</p></div>`;
             }
         });
     });

@@ -6,6 +6,17 @@
     var browsePrefetchTriggered = false;
     var morePrefetchTriggered = false;
 
+    function getMessageTargetOrigin() {
+        var origin = global.location && global.location.origin;
+        return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+    }
+
+    function isAllowedMessageOrigin(event) {
+        if (!event || !event.origin || event.origin === 'null') return true;
+        var origin = global.location && global.location.origin;
+        return Boolean(origin && origin !== 'null' && event.origin === origin);
+    }
+
     function ensurePracticeSuite() {
         if (!global.AppLazyLoader || typeof global.AppLazyLoader.ensureGroup !== 'function') {
             return Promise.resolve();
@@ -674,7 +685,7 @@
                 sourceWindow.postMessage({
                     type: 'ENDLESS_COUNTDOWN',
                     data: { seconds: countdown }
-                }, '*');
+                }, getMessageTargetOrigin());
             }
         } catch (_) { }
 
@@ -698,7 +709,7 @@
                     sourceWindow.postMessage({
                         type: 'ENDLESS_COUNTDOWN_TICK',
                         data: { seconds: countdown }
-                    }, '*');
+                    }, getMessageTargetOrigin());
                 }
             } catch (_) { }
 
@@ -711,7 +722,7 @@
                         sourceWindow.postMessage({
                             type: 'ENDLESS_COUNTDOWN_END',
                             data: {}
-                        }, '*');
+                        }, getMessageTargetOrigin());
                     }
                 } catch (_) { }
 
@@ -773,6 +784,7 @@
 
         // 监听 PRACTICE_COMPLETE / REQUEST_INIT 消息（无尽模式专用拦截）
         var handler = function (event) {
+            if (!isAllowedMessageOrigin(event)) return;
             if (!endlessState || !endlessState.active) return;
             var msg = event && event.data;
             if (!msg || typeof msg.type !== 'string') return;

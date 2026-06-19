@@ -2,6 +2,11 @@
     const MAX_LEGACY_PRACTICE_RECORDS = 1000;
     const isFileProtocol = !!(global && global.location && global.location.protocol === 'file:');
 
+    function getMessageTargetOrigin() {
+        const origin = global && global.location && global.location.origin;
+        return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+    }
+
     function getSuitePreferenceUtils() {
         return global.SuitePreferenceUtils || null;
     }
@@ -543,9 +548,9 @@
                             markedQuestions: Array.isArray(replayEntry.markedQuestions) ? replayEntry.markedQuestions : [],
                             entry: replayEntry
                         }
-                    }, '*');
+                    }, getMessageTargetOrigin());
                 }
-                resolvedWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, '*');
+                resolvedWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, getMessageTargetOrigin());
                 return true;
             } catch (error) {
                 console.warn('[SuitePractice] 发送套题回看上下文失败:', error);
@@ -905,7 +910,7 @@
                 }
             };
             try {
-                targetWindow.postMessage(payload, '*');
+                targetWindow.postMessage(payload, getMessageTargetOrigin());
                 return true;
             } catch (e) {
                 console.warn('[SuitePractice] 发送模拟上下文失败:', e);
@@ -2456,7 +2461,7 @@
                         data: {
                             suiteSessionId: session.id || null
                         }
-                    }, '*');
+                    }, getMessageTargetOrigin());
                 } catch (forceCloseError) {
                     console.warn('[SuitePractice] 无法通知套题窗口关闭:', forceCloseError);
                 }

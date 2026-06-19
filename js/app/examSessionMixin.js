@@ -5,6 +5,11 @@
     const LISTENING_RECORD_BRIDGE_SCRIPT_PATH = './js/bundles/listening-record-bridge.bundle.js';
     const PRACTICE_ENHANCER_BUILD_ID = '20250105';
 
+    function getMessageTargetOrigin() {
+        const origin = global && global.location && global.location.origin;
+        return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+    }
+
     async function getActiveExamIndexSnapshot() {
         const stateGetters = [
             () => (typeof global.getExamIndexState === 'function') ? global.getExamIndexState() : null,
@@ -1171,7 +1176,7 @@
                                 return;
                             }
                             try {
-                                parentWindow.postMessage({ type: type, data: data || {} }, '*');
+                                parentWindow.postMessage({ type: type, data: data || {} }, ${JSON.stringify(getMessageTargetOrigin())});
                             } catch (error) {
                                 console.warn('[InlineEnhancer] 无法发送消息:', error);
                             }
@@ -1307,7 +1312,18 @@
                             });
                         }
 
+                        function isAllowedIncomingMessage(event) {
+                            if (!event || !event.origin || event.origin === 'null') {
+                                return true;
+                            }
+                            var origin = window.location && window.location.origin;
+                            return !!(origin && origin !== 'null' && event.origin === origin);
+                        }
+
                         window.addEventListener('message', function(event) {
+                            if (!isAllowedIncomingMessage(event)) {
+                                return;
+                            }
                             var message = event && event.data ? event.data : null;
                             if (!message || typeof message.type !== 'string') {
                                 return;
@@ -1460,7 +1476,7 @@
                 examWindow.postMessage({
                     type: 'INIT_SESSION',
                     data: initPayload
-                }, '*');
+                }, getMessageTargetOrigin());
 
                 // 存储会话信息
                 if (!this.examWindows) {
@@ -1600,8 +1616,8 @@
                 const windowInfo = this.ensureExamWindowSession(examId, examWindow);
                 const initPayload = this._buildExamInitPayload(examId, windowInfo);
                 try {
-                    examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                    examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                    examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin());
+                    examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin());
                 } catch (postError) {
                     console.warn('[App] 跨源初始化题目窗口失败:', postError);
                 }
@@ -2115,8 +2131,8 @@
                 try {
                     const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
                     const initPayload = this._buildExamInitPayload(examId, windowInfo);
-                    targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                    targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                    targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin());
+                    targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin());
                 } catch (initError) {
                     console.warn('[App] 发送初始化消息失败:', initError);
                 }
@@ -2176,8 +2192,8 @@
                         windowInfo.lastHandshakeAt = Date.now();
                         this.examWindows && this.examWindows.set(examId, windowInfo);
                         // 直接发送两种事件名，确保增强器任何实现都能收到
-                        examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                        examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                        examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin());
+                        examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin());
                     } catch (_) { /* 忽略 */ }
                 }
                 attempts++;
@@ -2855,8 +2871,8 @@
             };
             const contextPayload = this._buildReviewContextPayload(session, safeIndex);
             try {
-                targetWindow.postMessage({ type: 'REPLAY_PRACTICE_RECORD', data: replayPayload }, '*');
-                targetWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, '*');
+                targetWindow.postMessage({ type: 'REPLAY_PRACTICE_RECORD', data: replayPayload }, getMessageTargetOrigin());
+                targetWindow.postMessage({ type: 'REVIEW_CONTEXT', data: contextPayload }, getMessageTargetOrigin());
                 return true;
             } catch (error) {
                 console.warn('[ReviewReplay] 向题目页发送回放数据失败:', error);
@@ -3038,8 +3054,8 @@
             try {
                 const windowInfo = this.ensureExamWindowSession(examId, targetWindow);
                 const initPayload = this._buildExamInitPayload(examId, windowInfo, extras);
-                targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin());
+                targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin());
                 return initPayload;
             } catch (initError) {
                 console.warn('[App] 发送初始化消息失败:', initError);
@@ -3415,8 +3431,8 @@
                     const targetWindow = (windowInfo && windowInfo.window) || null;
                     if (targetWindow && typeof targetWindow.postMessage === 'function') {
                         const initPayload = this._buildExamInitPayload(examId, windowInfo || {});
-                        targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-                        targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+                        targetWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin());
+                        targetWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin());
                     }
                 } catch (initError) {
                     console.warn('[App] 听力桥预初始化 ready 后补发 INIT_SESSION 失败:', initError);
