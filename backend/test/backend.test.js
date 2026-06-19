@@ -552,6 +552,9 @@ test('TOTP setup requires auth, CSRF, and returns recovery codes once', async ()
         assert.equal(status.response.status, 200);
         assert.equal(status.json.status.enabled, true);
         assert.equal(status.json.status.recoveryCodesRemaining, 10);
+
+        const repeatedSetup = await client.request('POST', '/api/auth/totp/setup', {});
+        assert.equal(repeatedSetup.response.status, 409);
     } finally {
         await client.close();
     }

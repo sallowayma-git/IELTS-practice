@@ -1701,9 +1701,12 @@
             `;
             return;
         }
+        const safeWord = escapeHtml(word.word || '');
+        const safeMeaning = escapeHtml(word.meaning || '暂无释义');
+
         if (session.stage === 'recognition') {
             const meaningBlock = session.meaningVisible
-                ? `<div class="vocab-card__meaning" data-visible="true">${word.meaning || '暂无释义'}</div>`
+                ? `<div class="vocab-card__meaning" data-visible="true">${safeMeaning}</div>`
                 : '';
             const revealControl = session.meaningVisible
                 ? ''
@@ -1711,7 +1714,7 @@
             card.innerHTML = `
                 <div class="vocab-card vocab-card--recognition">
                     <div class="vocab-card__wordline">
-                        <div class="vocab-card__word">${word.word}</div>
+                        <div class="vocab-card__word">${safeWord}</div>
                     </div>
                     ${meaningBlock}
                     ${revealControl}
@@ -1741,7 +1744,7 @@
             card.innerHTML = `
                 <div class="vocab-card vocab-card--spelling">
                     <div class="vocab-card__meaning" data-visible="true" style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">
-                        ${word.meaning || '暂无释义'}
+                        ${safeMeaning}
                     </div>
                     <p class="vocab-card__instruction">${instructionText}</p>
                     ${attemptsHint}
@@ -1898,8 +1901,8 @@
                         </div>
                     </div>
                     <dl class="vocab-feedback__details">
-                        <div><dt>正确拼写</dt><dd>${word.word}</dd></div>
-                        <div><dt>释义</dt><dd>${word.meaning || '暂无释义'}</dd></div>
+                        <div><dt>正确拼写</dt><dd>${safeWord}</dd></div>
+                        <div><dt>释义</dt><dd>${safeMeaning}</dd></div>
                         <div><dt>间隔天数</dt><dd>${intervalDays} 天</dd></div>
                         <div><dt>难度因子</dt><dd>${easeFactor}</dd></div>
                         <div><dt>连续正确</dt><dd>${repetitions} 次</dd></div>
@@ -2000,7 +2003,7 @@
         } catch (error) {
             console.error('[VocabSessionView] 初始化失败:', error);
             if (state.elements.sessionCard) {
-                state.elements.sessionCard.innerHTML = `<div class="vocab-card-error">初始化失败：${error.message || error}</div>`;
+                state.elements.sessionCard.innerHTML = `<div class="vocab-card-error">初始化失败：${escapeHtml(error.message || error)}</div>`;
             }
             return;
         }

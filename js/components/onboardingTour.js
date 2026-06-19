@@ -13,6 +13,16 @@
     LAST_SHOWN: 'onboardingLastShown'
   };
 
+  function escapeHtml(value) {
+    if (value == null) return '';
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   // 默认步骤配置
   const DEFAULT_STEPS = [
     {
@@ -452,6 +462,9 @@
       if (!this._tooltip) return;
 
       const progressPercent = ((current + 1) / total) * 100;
+      const title = escapeHtml(step.title);
+      const content = escapeHtml(step.content);
+      const nextText = escapeHtml(step.nextText || '下一步');
 
       this._tooltip.innerHTML = `
         <div class="onboarding-tooltip__progress">
@@ -460,13 +473,13 @@
           </div>
           <span class="onboarding-tooltip__progress-text">${current + 1} / ${total}</span>
         </div>
-        <h3 class="onboarding-tooltip__title">${step.title}</h3>
-        <p class="onboarding-tooltip__content">${step.content}</p>
+        <h3 class="onboarding-tooltip__title">${title}</h3>
+        <p class="onboarding-tooltip__content">${content}</p>
         <div class="onboarding-tooltip__actions">
           ${step.showPrev ? '<button class="onboarding-tooltip__btn onboarding-tooltip__btn--secondary" data-action="prev">上一步</button>' : '<div></div>'}
           <div>
             ${step.showSkip ? '<button class="onboarding-tooltip__btn onboarding-tooltip__btn--skip" data-action="skip">跳过</button>' : ''}
-            ${step.hideNext ? '' : `<button class="onboarding-tooltip__btn onboarding-tooltip__btn--primary" data-action="next">${step.nextText}</button>`}
+            ${step.hideNext ? '' : `<button class="onboarding-tooltip__btn onboarding-tooltip__btn--primary" data-action="next">${nextText}</button>`}
           </div>
         </div>
       `;
@@ -479,12 +492,16 @@
     showWelcome(step) {
       if (!this._tooltip) return;
 
+      const title = escapeHtml(step.title);
+      const content = escapeHtml(step.content);
+      const nextText = escapeHtml(step.nextText || '下一步');
+
       this._tooltip.innerHTML = `
         <div class="onboarding-welcome">
           <div class="onboarding-welcome__icon">🎓</div>
-          <h3 class="onboarding-tooltip__title">${step.title}</h3>
-          <p class="onboarding-tooltip__content">${step.content}</p>
-          <button class="onboarding-tooltip__btn onboarding-tooltip__btn--primary" data-action="next" style="margin-top: 16px;">${step.nextText}</button>
+          <h3 class="onboarding-tooltip__title">${title}</h3>
+          <p class="onboarding-tooltip__content">${content}</p>
+          <button class="onboarding-tooltip__btn onboarding-tooltip__btn--primary" data-action="next" style="margin-top: 16px;">${nextText}</button>
         </div>
       `;
 

@@ -19,6 +19,22 @@
         accuracy: '🎯'
     };
 
+    function escapeHtml(value) {
+        if (value == null) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function clampPercent(value) {
+        var numeric = Number(value);
+        if (!Number.isFinite(numeric)) return 0;
+        return Math.max(0, Math.min(100, numeric));
+    }
+
     function GoalSettingsPanel(options) {
         this.container = options.container || null;
         this.goalManager = options.goalManager || null;
@@ -99,20 +115,25 @@
             : String(progress.current);
 
         var cls = 'goal-card' + (completed ? ' goal-card-completed' : '');
-        var html = '<div class="' + cls + '" data-goal-id="' + goal.id + '">';
+        var safeGoalId = escapeHtml(goal.id);
+        var safeTitle = escapeHtml(goal.title || periodLabel + typeLabel);
+        var safeDisplay = escapeHtml(display);
+        var safeTarget = escapeHtml(goal.target);
+        var width = clampPercent(percent);
+        var html = '<div class="' + cls + '" data-goal-id="' + safeGoalId + '">';
         html += '<div class="goal-card-header">';
         html += '<span class="goal-card-icon">' + icon + '</span>';
-        html += '<span class="goal-card-title">' + (goal.title || periodLabel + typeLabel) + '</span>';
+        html += '<span class="goal-card-title">' + safeTitle + '</span>';
         if (completed) {
             html += '<span class="goal-card-badge">✅</span>';
         }
-        html += '<button class="goal-btn-delete" data-action="delete-goal" data-goal-id="' + goal.id + '" title="删除">×</button>';
+        html += '<button class="goal-btn-delete" data-action="delete-goal" data-goal-id="' + safeGoalId + '" title="删除">×</button>';
         html += '</div>';
         html += '<div class="goal-card-progress">';
         html += '<div class="goal-progress-bar">';
-        html += '<div class="goal-progress-fill" style="width:' + Math.min(100, percent) + '%"></div>';
+        html += '<div class="goal-progress-fill" style="width:' + width + '%"></div>';
         html += '</div>';
-        html += '<div class="goal-progress-text">' + display + ' / ' + goal.target + ' ' + this._unitLabel(goal.type) + '</div>';
+        html += '<div class="goal-progress-text">' + safeDisplay + ' / ' + safeTarget + ' ' + this._unitLabel(goal.type) + '</div>';
         html += '</div>';
         html += '</div>';
         return html;

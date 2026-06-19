@@ -44,24 +44,43 @@
             this.currentListId = this.vocabStore.getActiveListId();
             this.previousListId = this.currentListId;
 
-            // 创建切换器 HTML 结构
-            const switcherHTML = `
-                <div class="vocab-list-switcher">
-                    <button class="switcher-btn" id="vocab-list-menu-btn" type="button" aria-label="切换词表">
-                        <span class="current-list-icon"></span>
-                        <span class="current-list-name"></span>
-                        <span class="dropdown-icon">▼</span>
-                    </button>
-                    <div class="switcher-dropdown" id="vocab-list-dropdown" style="display: none;" role="menu">
-                        <div class="dropdown-content">
-                            ${this.renderListOptions()}
-                        </div>
-                    </div>
-                </div>
-            `;
+            // 创建切换器 DOM 结构，避免词表元数据被当作 HTML 执行
+            container.textContent = '';
 
-            // 插入到容器
-            container.innerHTML = switcherHTML;
+            const switcher = document.createElement('div');
+            switcher.className = 'vocab-list-switcher';
+
+            const menuButton = document.createElement('button');
+            menuButton.className = 'switcher-btn';
+            menuButton.id = 'vocab-list-menu-btn';
+            menuButton.type = 'button';
+            menuButton.setAttribute('aria-label', '切换词表');
+
+            const currentIcon = document.createElement('span');
+            currentIcon.className = 'current-list-icon';
+
+            const currentName = document.createElement('span');
+            currentName.className = 'current-list-name';
+
+            const dropdownIcon = document.createElement('span');
+            dropdownIcon.className = 'dropdown-icon';
+            dropdownIcon.textContent = '▼';
+
+            menuButton.append(currentIcon, currentName, dropdownIcon);
+
+            const dropdown = document.createElement('div');
+            dropdown.className = 'switcher-dropdown';
+            dropdown.id = 'vocab-list-dropdown';
+            dropdown.style.display = 'none';
+            dropdown.setAttribute('role', 'menu');
+
+            const dropdownContent = document.createElement('div');
+            dropdownContent.className = 'dropdown-content';
+            this.renderListOptions(dropdownContent);
+
+            dropdown.appendChild(dropdownContent);
+            switcher.append(menuButton, dropdown);
+            container.appendChild(switcher);
 
             // 更新当前词表显示
             this.updateCurrentListDisplay();
@@ -75,34 +94,97 @@
 
         /**
          * 渲染词表选项列表
-         * @returns {string} HTML 字符串
+         * @param {HTMLElement} dropdownContent - 下拉内容容器
          */
-        renderListOptions() {
-            const lists = this.vocabStore.VOCAB_LISTS;
+        renderListOptions(dropdownContent) {
+            if (!dropdownContent) return;
+
+            dropdownContent.textContent = '';
             const availableLists = this.vocabStore.getAvailableLists();
             
             if (!availableLists || availableLists.length === 0) {
-                return '<div class="list-option-empty">暂无可用词表</div>';
+                const empty = document.createElement('div');
+                empty.className = 'list-option-empty';
+                empty.textContent = '暂无可用词表';
+                dropdownContent.appendChild(empty);
+                return;
             }
 
-            return availableLists.map(list => {
-                const isActive = list.id === this.currentListId;
-                const activeClass = isActive ? 'active' : '';
-                
-                return `
-                    <div class="list-option ${activeClass}" 
-                         data-list-id="${list.id}" 
-                         role="menuitem"
-                         tabindex="0">
-                        <span class="list-icon">${list.icon}</span>
-                        <span class="list-name">${list.name}</span>
-                        <span class="list-count" data-list-id="${list.id}">
-                            <span class="count-loading">...</span>
-                        </span>
-                        ${isActive ? '<span class="active-indicator">✓</span>' : ''}
-                    </div>
-                `;
-            }).join('');
+            availableLists.forEach(list => {
+                dropdownContent.appendChild(this.createListOption(list));
+            });
+        }
+
+        /**
+         * 创建单个词表选项
+         * @param {Object} list - 词表配置
+         * @returns {HTMLElement}
+         */
+        createListOption(list) {
+            const listId = String(list.id || '');
+            const isActive = listId === this.currentListId;
+
+            const option = document.createElement('div');
+            option.className = 'list-option';
+            if (isActive) {
+                option.classList.add('active');
+            }
+            option.dataset.listId = listId;
+            option.setAttribute('role', 'menuitem');
+            option.tabIndex = 0;
+
+            const icon = document.createElement('span');
+            icon.className = 'list-icon';
+            icon.textContent = list.icon || '';
+
+            const name = document.createElement('span');
+            name.className = 'list-name';
+            name.textContent = list.name || '';
+
+            const count = document.createElement('span');
+            count.className = 'list-count';
+            count.dataset.listId = listId;
+
+            const loading = document.createElement('span');
+            loading.className = 'count-loading';
+            loading.textContent = '...';
+            count.appendChild(loading);
+
+            option.append(icon, name, count);
+
+            if (isActive) {
+                const activeIndicator = document.createElement('span');
+                activeIndicator.className = 'active-indicator';
+                activeIndicator.textContent = '✓';
+                option.appendChild(activeIndicator);
+            }
+
+            return option;
+        }
+
+        /**
+         * 按数据属性查找词表选项，避免拼接 CSS 选择器
+         * @param {string} listId - 词表 ID
+         * @returns {HTMLElement|null}
+         */
+        findListOption(listId) {
+            if (!this.container) return null;
+            const targetId = String(listId);
+            const options = this.container.querySelectorAll('.list-option');
+            return Array.from(options).find(option => option.dataset.listId === targetId) || null;
+        }
+
+        /**
+         * 按数据属性查找词表计数元素，避免拼接 CSS 选择器
+         * @param {string} listId - 词表 ID
+         * @returns {HTMLElement|null}
+         */
+        findListCountLoading(listId) {
+            if (!this.container) return null;
+            const targetId = String(listId);
+            const counts = this.container.querySelectorAll('.list-count');
+            const count = Array.from(counts).find(element => element.dataset.listId === targetId);
+            return count ? count.querySelector('.count-loading') : null;
         }
 
         /**
@@ -330,7 +412,7 @@
         showLoadingState(listId) {
             if (!this.container) return;
 
-            const listOption = this.container.querySelector(`.list-option[data-list-id="${listId}"]`);
+            const listOption = this.findListOption(listId);
             if (listOption) {
                 listOption.classList.add('loading');
             }
@@ -344,7 +426,7 @@
 
             const dropdownContent = this.container.querySelector('.dropdown-content');
             if (dropdownContent) {
-                dropdownContent.innerHTML = this.renderListOptions();
+                this.renderListOptions(dropdownContent);
             }
 
             // 更新词表计数
@@ -414,7 +496,7 @@
 
             // 更新 UI 显示
             results.forEach(({ listId, count }) => {
-                const countEl = this.container.querySelector(`.list-count[data-list-id="${listId}"] .count-loading`);
+                const countEl = this.findListCountLoading(listId);
                 if (countEl) {
                     countEl.textContent = count;
                     countEl.classList.remove('count-loading');
@@ -501,7 +583,7 @@
         destroy() {
             this.detachEventListeners();
             if (this.container) {
-                this.container.innerHTML = '';
+                this.container.textContent = '';
                 this.container = null;
             }
         }

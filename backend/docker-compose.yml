@@ -24,7 +24,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/ielts_practice
-      SESSION_SECRET: ${SESSION_SECRET:-replace-with-a-long-random-session-secret}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in backend/.env to a long random value}
       PORT: 3000
       HOST: 0.0.0.0
       COOKIE_SECURE: ${COOKIE_SECURE:-false}

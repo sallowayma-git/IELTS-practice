@@ -5,6 +5,29 @@
 class PracticeHistoryEnhancer {
     constructor() {
         this.initialized = false;
+        this.recordTitleListenerAttached = false;
+        this.boundRecordTitleClickHandler = (event) => {
+            const target = event.target instanceof HTMLElement
+                ? event.target.closest('.practice-record-title[data-record-id]')
+                : null;
+            if (!target) {
+                return;
+            }
+            event.preventDefault();
+            this.showRecordDetails(target.dataset.recordId);
+        };
+    }
+
+    escapeHtml(value) {
+        if (value == null) {
+            return '';
+        }
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
     /**
@@ -56,9 +79,18 @@ class PracticeHistoryEnhancer {
                 this.showExportDialog();
             };
         }
+        this.ensureRecordTitleListener();
         
         this.initialized = true;
         console.log('[PracticeHistoryEnhancer] 降级初始化完成');
+    }
+
+    ensureRecordTitleListener() {
+        if (this.recordTitleListenerAttached) {
+            return;
+        }
+        document.addEventListener('click', this.boundRecordTitleClickHandler);
+        this.recordTitleListenerAttached = true;
     }
 
     /**
@@ -113,10 +145,11 @@ class PracticeHistoryEnhancer {
                 if (originalCreateRecordItem) {
                     practiceHistory.createRecordItem = (record) => {
                         const html = originalCreateRecordItem(record);
+                        const recordId = this.escapeHtml(record && record.id);
                         // 替换标题，使其可点击
                         return html.replace(
                             /<h4 class="record-title clickable">([^<]+)<\/h4>/,
-                            `<h4 class="record-title practice-record-title" onclick="window.practiceHistoryEnhancer.showRecordDetails('${record.id}')" title="点击查看详情">$1</h4>`
+                            `<h4 class="record-title practice-record-title" data-record-id="${recordId}" title="点击查看详情">$1</h4>`
                         );
                     };
                 }
@@ -132,6 +165,7 @@ class PracticeHistoryEnhancer {
                 practiceHistory.showRecordDetails = (recordId) => {
                     this.showRecordDetails(recordId);
                 };
+                this.ensureRecordTitleListener();
 
                 console.log('[PracticeHistoryEnhancer] 标准练习历史组件已增强');
             } else {
@@ -146,6 +180,7 @@ class PracticeHistoryEnhancer {
                         this.showRecordDetails(recordId);
                     };
                 }
+                this.ensureRecordTitleListener();
                 
                 console.log('[PracticeHistoryEnhancer] 全局函数已增强');
             }

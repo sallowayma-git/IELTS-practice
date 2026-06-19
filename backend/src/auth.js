@@ -197,13 +197,20 @@ class PostgresAuthStore {
         return result.rows[0]?.total || 0;
     }
 
-    async deleteSessionsForUser(userId) {
+    async deleteSessionsForUser(userId, exceptSid = null) {
+        const params = [userId];
+        let exceptClause = '';
+        if (exceptSid) {
+            params.push(exceptSid);
+            exceptClause = ` AND sid <> $${params.length}`;
+        }
         await this.db.query(
             `DELETE FROM "session"
-             WHERE sess->'user'->>'id' = $1
+             WHERE (sess->'user'->>'id' = $1
                 OR sess->'pendingTotpLogin'->'user'->>'id' = $1
-                OR sess->'pendingTotpSetup'->'user'->>'id' = $1`,
-            [userId]
+                OR sess->'pendingTotpSetup'->'user'->>'id' = $1)
+                ${exceptClause}`,
+            params
         );
     }
 
@@ -217,8 +224,9 @@ class PostgresAuthStore {
 }
 
 class MemoryAuthStore {
-    constructor() {
+    constructor(options = {}) {
         this.users = new Map();
+        this.sessionStore = options.sessionStore || null;
     }
 
     async findByUsernameLower(usernameLower) {
@@ -274,8 +282,54 @@ class MemoryAuthStore {
         return Array.from(this.users.values()).filter((user) => user.role === 'admin').length;
     }
 
-    async deleteSessionsForUser() {
-        return undefined;
+    async deleteSessionsForUser(userId, exceptSid = null) {
+        const store = this.sessionStore;
+        if (!store) return;
+
+        const shouldDestroy = (value) => {
+            return value?.user?.id === userId
+                || value?.pendingTotpLogin?.user?.id === userId
+                || value?.pendingTotpSetup?.user?.id === userId;
+        };
+
+        const parseSession = (raw) => {
+            if (!raw) return null;
+            if (typeof raw === 'string') {
+                try {
+                    return JSON.parse(raw);
+                } catch (_) {
+                    return null;
+                }
+            }
+            return raw;
+        };
+
+        const destroy = (sid) => new Promise((resolve) => {
+            store.destroy(sid, () => resolve());
+        });
+
+        if (store.sessions && typeof store.sessions === 'object') {
+            const sids = Object.entries(store.sessions)
+                .filter(([sid, raw]) => sid !== exceptSid && shouldDestroy(parseSession(raw)))
+                .map(([sid]) => sid);
+            await Promise.all(sids.map(destroy));
+            return;
+        }
+
+        if (typeof store.all === 'function') {
+            await new Promise((resolve) => {
+                store.all(async (error, sessions) => {
+                    if (!error && sessions) {
+                        const entries = Object.entries(sessions);
+                        const sids = entries
+                            .filter(([sid, value]) => sid !== exceptSid && shouldDestroy(parseSession(value)))
+                            .map(([sid]) => sid);
+                        await Promise.all(sids.map(destroy));
+                    }
+                    resolve();
+                });
+            });
+        }
     }
 
     async deleteUser(userId) {
@@ -457,6 +511,9 @@ function createAuthRouter(options = {}) {
             if (!updatedUser) {
                 return res.status(404).json({ error: 'User not found' });
             }
+            if (typeof store.deleteSessionsForUser === 'function') {
+                await store.deleteSessionsForUser(currentUser.id, req.sessionID);
+            }
             req.session.user = publicUser(updatedUser);
             return res.json({ user: req.session.user, csrfToken: ensureCsrfToken(req) });
         } catch (error) {
@@ -489,6 +546,9 @@ function createAuthRouter(options = {}) {
             const updatedUser = await store.updatePassword(currentUser.id, passwordHash);
             if (!updatedUser) {
                 return res.status(404).json({ error: 'User not found' });
+            }
+            if (typeof store.deleteSessionsForUser === 'function') {
+                await store.deleteSessionsForUser(currentUser.id, req.sessionID);
             }
             req.session.user = publicUser(updatedUser);
             return res.json({ ok: true, user: req.session.user, csrfToken: ensureCsrfToken(req) });
