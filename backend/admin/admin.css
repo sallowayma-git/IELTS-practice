@@ -466,6 +466,117 @@ tr.is-selected {
     padding: 0;
 }
 
+.admin-chart {
+    min-height: 170px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8faf8 100%);
+    padding: 10px;
+}
+
+.admin-chart__svg {
+    display: block;
+    width: 100%;
+    height: 150px;
+}
+
+.admin-chart__grid {
+    stroke: rgba(100, 116, 139, 0.18);
+    stroke-width: 1;
+}
+
+.admin-chart__area {
+    fill: rgba(108, 166, 124, 0.16);
+}
+
+.admin-chart__line {
+    fill: none;
+    stroke: var(--accent);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 3;
+}
+
+.admin-chart__point,
+.admin-chart__bar {
+    cursor: pointer;
+    fill: var(--accent);
+    transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.admin-chart__point:hover,
+.admin-chart__point:focus,
+.admin-chart__bar:hover,
+.admin-chart__bar:focus {
+    opacity: 0.78;
+    outline: none;
+}
+
+.admin-chart__empty {
+    display: grid;
+    min-height: 148px;
+    place-items: center;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+}
+
+.segment-chart {
+    display: flex;
+    overflow: hidden;
+    min-height: 52px;
+    border-radius: 8px;
+    background: #edf1ec;
+}
+
+.segment-chart__item {
+    min-width: 12px;
+    border: 0;
+    cursor: pointer;
+    transition: filter 160ms ease, opacity 160ms ease;
+}
+
+.segment-chart__item:hover,
+.segment-chart__item:focus-visible {
+    filter: brightness(0.92);
+    outline: 2px solid rgba(31, 41, 55, 0.2);
+    outline-offset: -2px;
+}
+
+.segment-chart__item--0 { background: #6ca67c; }
+.segment-chart__item--1 { background: #2563eb; }
+.segment-chart__item--2 { background: #f59e0b; }
+.segment-chart__item--3 { background: #dc2626; }
+.segment-chart__item--4 { background: #7c3aed; }
+.segment-chart__item--5 { background: #0f766e; }
+
+.segment-chart__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.segment-chart__legend-item {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #ffffff;
+    color: var(--muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 5px 8px;
+}
+
+.segment-chart__legend-item:hover,
+.segment-chart__legend-item:focus-visible {
+    border-color: var(--accent);
+    color: var(--text);
+    outline: none;
+}
+
 .traffic-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

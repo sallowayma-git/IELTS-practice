@@ -61,9 +61,12 @@
         globalTypeStats: document.getElementById('global-type-stats'),
         analyticsRange: document.getElementById('analytics-range'),
         analyticsWindow: document.getElementById('analytics-window'),
+        analyticsLearningChart: document.getElementById('analytics-learning-chart'),
         analyticsLearningTrend: document.getElementById('analytics-learning-trend'),
+        analyticsUserGrowthChart: document.getElementById('analytics-user-growth-chart'),
         analyticsUserGrowth: document.getElementById('analytics-user-growth'),
         analyticsTopUsers: document.getElementById('analytics-top-users'),
+        analyticsScoreChart: document.getElementById('analytics-score-chart'),
         analyticsScoreBuckets: document.getElementById('analytics-score-buckets'),
         recordsBody: document.getElementById('records-body'),
         recordsTitle: document.getElementById('records-title'),
@@ -78,9 +81,12 @@
         trafficPageviews: document.getElementById('traffic-pageviews'),
         trafficVisitors: document.getElementById('traffic-visitors'),
         trafficErrors: document.getElementById('traffic-errors'),
+        trafficDailyChart: document.getElementById('traffic-daily-chart'),
         trafficDaily: document.getElementById('traffic-daily'),
         trafficPaths: document.getElementById('traffic-paths'),
+        trafficRouteChart: document.getElementById('traffic-route-chart'),
         trafficRouteGroups: document.getElementById('traffic-route-groups'),
+        trafficStatusChart: document.getElementById('traffic-status-chart'),
         trafficStatusCodes: document.getElementById('traffic-status-codes'),
         confirmDialog: document.getElementById('confirm-dialog'),
         confirmTitle: document.getElementById('confirm-title'),
@@ -175,6 +181,181 @@
             row.append(label, bar, meta);
             container.append(row);
         }
+    }
+
+    function svgElement(tag, attributes = {}) {
+        const element = document.createElementNS('http://www.w3.org/2000/svg', tag);
+        Object.entries(attributes).forEach(([key, value]) => {
+            element.setAttribute(key, String(value));
+        });
+        return element;
+    }
+
+    function setChartMessage(container, message) {
+        if (!container) return;
+        container.textContent = '';
+        const empty = document.createElement('div');
+        empty.className = 'admin-chart__empty';
+        empty.textContent = message;
+        container.append(empty);
+    }
+
+    function addChartAction(element, detailFactory, item) {
+        const detail = detailFactory(item);
+        element.setAttribute('tabindex', '0');
+        element.setAttribute('role', 'button');
+        element.setAttribute('aria-label', detail);
+        const title = svgElement('title');
+        title.textContent = detail;
+        element.append(title);
+        const activate = () => setStatus(detail, 'info');
+        element.addEventListener('click', activate);
+        element.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                activate();
+            }
+        });
+    }
+
+    function renderLineChart(container, items, options) {
+        if (!container) return;
+        container.textContent = '';
+        if (!items.length) {
+            setChartMessage(container, options.emptyText);
+            return;
+        }
+        const width = 360;
+        const height = 160;
+        const padding = { top: 16, right: 16, bottom: 28, left: 34 };
+        const values = items.map((item) => Math.max(0, Number(options.value(item)) || 0));
+        const max = Math.max(1, ...values);
+        const innerWidth = width - padding.left - padding.right;
+        const innerHeight = height - padding.top - padding.bottom;
+        const points = values.map((value, index) => {
+            const x = padding.left + (items.length === 1 ? innerWidth / 2 : (index / (items.length - 1)) * innerWidth);
+            const y = padding.top + innerHeight - (value / max) * innerHeight;
+            return { x, y, value, item: items[index] };
+        });
+
+        const svg = svgElement('svg', {
+            class: 'admin-chart__svg',
+            viewBox: `0 0 ${width} ${height}`,
+            preserveAspectRatio: 'none'
+        });
+        [0, 0.5, 1].forEach((ratio) => {
+            const y = padding.top + ratio * innerHeight;
+            svg.append(svgElement('line', {
+                class: 'admin-chart__grid',
+                x1: padding.left,
+                x2: width - padding.right,
+                y1: y,
+                y2: y
+            }));
+        });
+        if (points.length > 1) {
+            const area = svgElement('polygon', {
+                class: 'admin-chart__area',
+                points: [
+                    `${padding.left},${height - padding.bottom}`,
+                    ...points.map((point) => `${point.x},${point.y}`),
+                    `${width - padding.right},${height - padding.bottom}`
+                ].join(' ')
+            });
+            svg.append(area);
+            svg.append(svgElement('polyline', {
+                class: 'admin-chart__line',
+                points: points.map((point) => `${point.x},${point.y}`).join(' ')
+            }));
+        }
+        points.forEach((point) => {
+            const circle = svgElement('circle', {
+                class: 'admin-chart__point',
+                cx: point.x,
+                cy: point.y,
+                r: 4.5
+            });
+            addChartAction(circle, options.detail, point.item);
+            svg.append(circle);
+        });
+        container.append(svg);
+    }
+
+    function renderColumnChart(container, items, options) {
+        if (!container) return;
+        container.textContent = '';
+        if (!items.length) {
+            setChartMessage(container, options.emptyText);
+            return;
+        }
+        const width = 360;
+        const height = 160;
+        const padding = { top: 18, right: 16, bottom: 28, left: 24 };
+        const values = items.map((item) => Math.max(0, Number(options.value(item)) || 0));
+        const max = Math.max(1, ...values);
+        const innerWidth = width - padding.left - padding.right;
+        const innerHeight = height - padding.top - padding.bottom;
+        const gap = 5;
+        const barWidth = Math.max(6, (innerWidth - gap * Math.max(0, items.length - 1)) / Math.max(1, items.length));
+        const svg = svgElement('svg', {
+            class: 'admin-chart__svg',
+            viewBox: `0 0 ${width} ${height}`,
+            preserveAspectRatio: 'none'
+        });
+        values.forEach((value, index) => {
+            const barHeight = Math.max(2, (value / max) * innerHeight);
+            const x = padding.left + index * (barWidth + gap);
+            const y = padding.top + innerHeight - barHeight;
+            const bar = svgElement('rect', {
+                class: 'admin-chart__bar',
+                x,
+                y,
+                width: barWidth,
+                height: barHeight,
+                rx: 4
+            });
+            addChartAction(bar, options.detail, items[index]);
+            svg.append(bar);
+        });
+        container.append(svg);
+    }
+
+    function renderSegmentChart(container, items, options) {
+        if (!container) return;
+        container.textContent = '';
+        if (!items.length) {
+            setChartMessage(container, options.emptyText);
+            return;
+        }
+        const values = items.map((item) => Math.max(0, Number(options.value(item)) || 0));
+        const total = values.reduce((sum, value) => sum + value, 0);
+        if (!total) {
+            setChartMessage(container, options.emptyText);
+            return;
+        }
+        const track = document.createElement('div');
+        track.className = 'segment-chart';
+        items.forEach((item, index) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `segment-chart__item segment-chart__item--${index % 6}`;
+            button.style.flexGrow = Math.max(1, values[index]);
+            button.title = options.detail(item);
+            button.setAttribute('aria-label', options.detail(item));
+            button.addEventListener('click', () => setStatus(options.detail(item), 'info'));
+            track.append(button);
+        });
+        const legend = document.createElement('div');
+        legend.className = 'segment-chart__legend';
+        items.forEach((item, index) => {
+            const entry = document.createElement('button');
+            entry.type = 'button';
+            entry.className = 'segment-chart__legend-item';
+            entry.textContent = `${options.label(item)} ${Math.round((values[index] / total) * 100)}%`;
+            entry.addEventListener('click', () => setStatus(options.detail(item), 'info'));
+            legend.append(entry);
+        });
+        container.append(track, legend);
     }
 
     function closeConfirm(value) {
@@ -289,6 +470,22 @@
         setListMessage(nodes.analyticsScoreBuckets, 'Loading...');
         const analytics = await request(`/api/admin/analytics?days=${days}&limit=10`, { csrf: false });
         nodes.analyticsWindow.textContent = `Last ${analytics.days} days`;
+        renderLineChart(nodes.analyticsLearningChart, analytics.dailyLearning || [], {
+            emptyText: 'No practice activity in this range.',
+            value: (item) => Number(item.records || 0),
+            detail: (item) => `${item.day}: ${formatNumber(item.records)} records, ${formatNumber(item.activeUsers)} active users, average ${formatScoreValue(item.averageScore)}`
+        });
+        renderColumnChart(nodes.analyticsUserGrowthChart, analytics.userGrowth || [], {
+            emptyText: 'No new users in this range.',
+            value: (item) => Number(item.users || 0),
+            detail: (item) => `${item.day}: ${formatNumber(item.users)} new users, ${formatNumber(item.admins)} admins`
+        });
+        renderSegmentChart(nodes.analyticsScoreChart, analytics.scoreBuckets || [], {
+            emptyText: 'No scored records in this range.',
+            label: (item) => item.bucket,
+            value: (item) => Number(item.records || 0),
+            detail: (item) => `${item.bucket}: ${formatNumber(item.records)} scored records`
+        });
         renderBarRows(nodes.analyticsLearningTrend, analytics.dailyLearning || [], {
             emptyText: 'No practice activity in this range.',
             label: (item) => item.day,
@@ -583,6 +780,23 @@
         nodes.trafficPageviews.textContent = formatNumber(traffic.pageViews);
         nodes.trafficVisitors.textContent = formatNumber(traffic.uniqueVisitors);
         nodes.trafficErrors.textContent = formatNumber(traffic.errors);
+        renderLineChart(nodes.trafficDailyChart, traffic.daily || [], {
+            emptyText: 'No traffic captured yet.',
+            value: (item) => Number(item.requests || 0),
+            detail: (item) => `${item.day}: ${formatNumber(item.requests)} requests, ${formatNumber(item.pageViews)} page views, ${formatNumber(item.errors)} errors`
+        });
+        renderSegmentChart(nodes.trafficRouteChart, traffic.routeGroups || [], {
+            emptyText: 'No route groups captured yet.',
+            label: (item) => item.group,
+            value: (item) => Number(item.requests || 0),
+            detail: (item) => `${item.group}: ${formatNumber(item.requests)} requests, ${formatNumber(item.errors)} errors, ${formatNumber(item.averageDurationMs)} ms avg`
+        });
+        renderSegmentChart(nodes.trafficStatusChart, traffic.statusCodes || [], {
+            emptyText: 'No status codes captured yet.',
+            label: (item) => item.statusClass,
+            value: (item) => Number(item.requests || 0),
+            detail: (item) => `${item.statusClass}: ${formatNumber(item.requests)} requests`
+        });
         renderBarRows(nodes.trafficDaily, traffic.daily || [], {
             emptyText: 'No traffic captured yet.',
             label: (item) => item.day,

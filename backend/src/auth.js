@@ -9,6 +9,21 @@ const credentialsSchema = z.object({
     password: z.string().min(1).max(128)
 });
 
+const updateUsernameSchema = z.object({
+    username: z.string().trim().min(3).max(32).regex(USERNAME_PATTERN),
+    password: z.string().min(1).max(128)
+});
+
+const updatePasswordSchema = z.object({
+    currentPassword: z.string().min(1).max(128),
+    newPassword: z.string().min(1).max(128)
+});
+
+const deleteAccountSchema = z.object({
+    password: z.string().min(1).max(128),
+    confirm: z.string().trim().min(1).max(64)
+});
+
 function publicUser(user) {
     if (!user) return null;
     return {
@@ -137,6 +152,14 @@ class PostgresAuthStore {
         return result.rows[0] || null;
     }
 
+    async findById(userId) {
+        const result = await this.db.query(
+            'SELECT id, username, username_lower, password_hash, role FROM users WHERE id = $1',
+            [userId]
+        );
+        return result.rows[0] || null;
+    }
+
     async createUser({ username, usernameLower, passwordHash }) {
         const result = await this.db.query(
             `INSERT INTO users (username, username_lower, password_hash)
@@ -145,6 +168,51 @@ class PostgresAuthStore {
             [username, usernameLower, passwordHash]
         );
         return result.rows[0];
+    }
+
+    async updateUsername(userId, { username, usernameLower }) {
+        const result = await this.db.query(
+            `UPDATE users
+             SET username = $2, username_lower = $3
+             WHERE id = $1
+             RETURNING id, username, username_lower, password_hash, role`,
+            [userId, username, usernameLower]
+        );
+        return result.rows[0] || null;
+    }
+
+    async updatePassword(userId, passwordHash) {
+        const result = await this.db.query(
+            `UPDATE users
+             SET password_hash = $2
+             WHERE id = $1
+             RETURNING id, username, username_lower, password_hash, role`,
+            [userId, passwordHash]
+        );
+        return result.rows[0] || null;
+    }
+
+    async countAdmins() {
+        const result = await this.db.query('SELECT count(*)::int AS total FROM users WHERE role = $1', ['admin']);
+        return result.rows[0]?.total || 0;
+    }
+
+    async deleteSessionsForUser(userId) {
+        await this.db.query(
+            `DELETE FROM "session"
+             WHERE sess->'user'->>'id' = $1
+                OR sess->'pendingTotpLogin'->'user'->>'id' = $1
+                OR sess->'pendingTotpSetup'->'user'->>'id' = $1`,
+            [userId]
+        );
+    }
+
+    async deleteUser(userId) {
+        const result = await this.db.query(
+            'DELETE FROM users WHERE id = $1 RETURNING id, username, username_lower, password_hash, role',
+            [userId]
+        );
+        return result.rows[0] || null;
     }
 }
 
@@ -155,6 +223,10 @@ class MemoryAuthStore {
 
     async findByUsernameLower(usernameLower) {
         return this.users.get(usernameLower) || null;
+    }
+
+    async findById(userId) {
+        return Array.from(this.users.values()).find((user) => user.id === userId) || null;
     }
 
     async createUser({ username, usernameLower, passwordHash }) {
@@ -173,6 +245,59 @@ class MemoryAuthStore {
         this.users.set(usernameLower, user);
         return user;
     }
+
+    async updateUsername(userId, { username, usernameLower }) {
+        const existing = await this.findById(userId);
+        if (!existing) return null;
+        const currentKey = String(existing.username_lower || existing.username || '').toLowerCase();
+        const nextOwner = this.users.get(usernameLower);
+        if (nextOwner && nextOwner.id !== userId) {
+            const error = new Error('duplicate user');
+            error.code = '23505';
+            throw error;
+        }
+        this.users.delete(currentKey);
+        existing.username = username;
+        existing.username_lower = usernameLower;
+        this.users.set(usernameLower, existing);
+        return existing;
+    }
+
+    async updatePassword(userId, passwordHash) {
+        const existing = await this.findById(userId);
+        if (!existing) return null;
+        existing.password_hash = passwordHash;
+        return existing;
+    }
+
+    async countAdmins() {
+        return Array.from(this.users.values()).filter((user) => user.role === 'admin').length;
+    }
+
+    async deleteSessionsForUser() {
+        return undefined;
+    }
+
+    async deleteUser(userId) {
+        const existing = await this.findById(userId);
+        if (!existing) return null;
+        this.users.delete(String(existing.username_lower || existing.username || '').toLowerCase());
+        return existing;
+    }
+}
+
+function sendValidationError(res, parsed, fallbackMessage) {
+    return res.status(400).json({
+        error: fallbackMessage,
+        details: parsed.error.flatten()
+    });
+}
+
+async function getCurrentStoredUser(store, sessionUser) {
+    if (!sessionUser || !sessionUser.id || typeof store.findById !== 'function') {
+        return null;
+    }
+    return store.findById(sessionUser.id);
 }
 
 function createAuthRouter(options = {}) {
@@ -182,6 +307,9 @@ function createAuthRouter(options = {}) {
     const checkRateLimit = options.checkRateLimit || createRateLimiter(options.rateLimit);
     const bcryptImpl = options.bcrypt || bcrypt;
     const totpStore = options.totpStore || null;
+    const onDeleteUser = typeof options.onDeleteUser === 'function'
+        ? options.onDeleteUser
+        : async () => {};
     const totpEnabled = options.totpEnabled !== undefined
         ? Boolean(options.totpEnabled)
         : parseBoolean(process.env.TOTP_ENABLED, true);
@@ -291,6 +419,117 @@ function createAuthRouter(options = {}) {
             await destroySession(req);
             res.clearCookie(options.cookieName || 'ielts.sid');
             return res.json({ ok: true });
+        } catch (error) {
+            return next(error);
+        }
+    });
+
+    router.patch('/account/username', requireAuth, verifyCsrfToken, async (req, res, next) => {
+        try {
+            const parsed = updateUsernameSchema.safeParse(req.body || {});
+            if (!parsed.success) {
+                return sendValidationError(res, parsed, 'Invalid account update payload');
+            }
+            const currentUser = await getCurrentStoredUser(store, req.session.user);
+            if (!currentUser) {
+                return res.status(401).json({ error: 'Authentication required' });
+            }
+            const passwordOk = await bcryptImpl.compare(parsed.data.password, currentUser.password_hash);
+            if (!passwordOk) {
+                return res.status(401).json({ error: 'Current password is incorrect' });
+            }
+            const username = normalizeUsername(parsed.data.username);
+            const usernameLower = username.toLowerCase();
+            if (usernameLower === String(currentUser.username_lower || '').toLowerCase()) {
+                req.session.user = publicUser(currentUser);
+                return res.json({ user: req.session.user, csrfToken: ensureCsrfToken(req) });
+            }
+
+            let updatedUser;
+            try {
+                updatedUser = await store.updateUsername(currentUser.id, { username, usernameLower });
+            } catch (error) {
+                if (error && error.code === '23505') {
+                    return res.status(409).json({ error: 'Username already exists' });
+                }
+                throw error;
+            }
+            if (!updatedUser) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            req.session.user = publicUser(updatedUser);
+            return res.json({ user: req.session.user, csrfToken: ensureCsrfToken(req) });
+        } catch (error) {
+            return next(error);
+        }
+    });
+
+    router.patch('/account/password', requireAuth, verifyCsrfToken, async (req, res, next) => {
+        try {
+            const parsed = updatePasswordSchema.safeParse(req.body || {});
+            if (!parsed.success) {
+                return sendValidationError(res, parsed, 'Invalid password update payload');
+            }
+            const currentUser = await getCurrentStoredUser(store, req.session.user);
+            if (!currentUser) {
+                return res.status(401).json({ error: 'Authentication required' });
+            }
+            const passwordOk = await bcryptImpl.compare(parsed.data.currentPassword, currentUser.password_hash);
+            if (!passwordOk) {
+                return res.status(401).json({ error: 'Current password is incorrect' });
+            }
+            const passwordCheck = validatePasswordStrength(parsed.data.newPassword);
+            if (!passwordCheck.valid) {
+                return res.status(400).json({ error: 'Password strength is insufficient', details: passwordCheck.errors });
+            }
+            if (parsed.data.currentPassword === parsed.data.newPassword) {
+                return res.status(400).json({ error: 'New password must be different from the current password' });
+            }
+            const passwordHash = await bcryptImpl.hash(parsed.data.newPassword, 12);
+            const updatedUser = await store.updatePassword(currentUser.id, passwordHash);
+            if (!updatedUser) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            req.session.user = publicUser(updatedUser);
+            return res.json({ ok: true, user: req.session.user, csrfToken: ensureCsrfToken(req) });
+        } catch (error) {
+            return next(error);
+        }
+    });
+
+    router.delete('/account', requireAuth, verifyCsrfToken, async (req, res, next) => {
+        try {
+            const parsed = deleteAccountSchema.safeParse(req.body || {});
+            if (!parsed.success) {
+                return sendValidationError(res, parsed, 'Invalid account deletion payload');
+            }
+            const currentUser = await getCurrentStoredUser(store, req.session.user);
+            if (!currentUser) {
+                return res.status(401).json({ error: 'Authentication required' });
+            }
+            const passwordOk = await bcryptImpl.compare(parsed.data.password, currentUser.password_hash);
+            if (!passwordOk) {
+                return res.status(401).json({ error: 'Current password is incorrect' });
+            }
+            if (String(parsed.data.confirm || '').trim() !== currentUser.username) {
+                return res.status(400).json({ error: 'Type your current username to confirm account deletion' });
+            }
+            if (publicUser(currentUser).role === 'admin'
+                && typeof store.countAdmins === 'function'
+                && await store.countAdmins() <= 1) {
+                return res.status(409).json({ error: 'The last admin account cannot be deleted' });
+            }
+            if (typeof store.deleteSessionsForUser === 'function') {
+                await store.deleteSessionsForUser(currentUser.id);
+            }
+            const deletedUser = await store.deleteUser(currentUser.id);
+            if (!deletedUser) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            await onDeleteUser(currentUser.id, deletedUser);
+            await destroySession(req);
+            res.clearCookie(options.cookieName || 'ielts.sid');
+            return res.json({ ok: true, deleted: true });
         } catch (error) {
             return next(error);
         }

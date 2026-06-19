@@ -3555,6 +3555,41 @@ storageManager.ready
             return payload.status || { enabled: false, recoveryCodesRemaining: 0 };
         }
 
+        async updateUsername(username, password) {
+            const payload = await this.request('/api/auth/account/username', {
+                method: 'PATCH',
+                body: { username, password }
+            });
+            this.user = payload.user || this.user;
+            if (payload.csrfToken) {
+                this.csrfToken = payload.csrfToken;
+            }
+            return payload;
+        }
+
+        async updatePassword(currentPassword, newPassword) {
+            const payload = await this.request('/api/auth/account/password', {
+                method: 'PATCH',
+                body: { currentPassword, newPassword }
+            });
+            this.user = payload.user || this.user;
+            if (payload.csrfToken) {
+                this.csrfToken = payload.csrfToken;
+            }
+            return payload;
+        }
+
+        async deleteAccount(password, confirm) {
+            const payload = await this.request('/api/auth/account', {
+                method: 'DELETE',
+                body: { password, confirm }
+            });
+            this.user = null;
+            this.csrfToken = null;
+            this.pendingTotp = null;
+            return payload;
+        }
+
         async logout() {
             const payload = await this.request('/api/auth/logout', {
                 method: 'POST'
@@ -3978,6 +4013,7 @@ storageManager.ready
         let overlay = null;
         let account = null;
         let totpPanel = null;
+        let accountFormsBound = false;
         let mode = 'login';
         let importPromptedInSession = false;
         let pendingRecoveryUser = null;
@@ -4360,8 +4396,140 @@ storageManager.ready
                 }
             });
 
+            bindAccountForms();
+
             window.addEventListener('storage-sync', syncAccountStats);
             window.addEventListener('remote-auth-changed', syncAccountStats);
+        }
+
+        function setAccountFormStatus(node, message, type) {
+            if (!node) {
+                return;
+            }
+            node.textContent = message || '';
+            node.classList.toggle('is-error', type === 'error');
+            node.classList.toggle('is-success', type === 'success');
+        }
+
+        function setFormBusy(form, busy) {
+            if (!form) {
+                return;
+            }
+            Array.from(form.querySelectorAll('button, input')).forEach((element) => {
+                element.disabled = Boolean(busy);
+            });
+        }
+
+        function bindAccountForms() {
+            if (accountFormsBound) {
+                return;
+            }
+            const usernameForm = window.document.getElementById('account-username-form');
+            const passwordForm = window.document.getElementById('account-password-form');
+            const deleteForm = window.document.getElementById('account-delete-form');
+            if (!usernameForm && !passwordForm && !deleteForm) {
+                return;
+            }
+            accountFormsBound = true;
+
+            if (usernameForm) {
+                usernameForm.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+                    const username = window.document.getElementById('account-username-input')?.value || '';
+                    const password = window.document.getElementById('account-username-password')?.value || '';
+                    const status = window.document.getElementById('account-username-status');
+                    const normalizedUsername = String(username).trim();
+                    if (!USERNAME_PATTERN.test(normalizedUsername)) {
+                        setAccountFormStatus(status, 'Use 3-32 letters, numbers, "_" or "-".', 'error');
+                        return;
+                    }
+                    if (!password) {
+                        setAccountFormStatus(status, 'Current password is required.', 'error');
+                        return;
+                    }
+                    setFormBusy(usernameForm, true);
+                    setAccountFormStatus(status, 'Saving...', null);
+                    try {
+                        const payload = await apiClient.updateUsername(normalizedUsername, password);
+                        updateAccount(payload.user || apiClient.user);
+                        window.document.getElementById('account-username-password').value = '';
+                        window.dispatchEvent(new CustomEvent('remote-auth-changed', { detail: { user: payload.user || apiClient.user } }));
+                        setAccountFormStatus(status, 'Username updated.', 'success');
+                        showMessage('Username updated', 'success');
+                    } catch (requestError) {
+                        setAccountFormStatus(status, formatRemoteAuthError(requestError), 'error');
+                    } finally {
+                        setFormBusy(usernameForm, false);
+                    }
+                });
+            }
+
+            if (passwordForm) {
+                passwordForm.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+                    const currentPassword = window.document.getElementById('account-current-password')?.value || '';
+                    const newPassword = window.document.getElementById('account-new-password')?.value || '';
+                    const confirmPassword = window.document.getElementById('account-confirm-password')?.value || '';
+                    const status = window.document.getElementById('account-password-status');
+                    if (!currentPassword || !newPassword) {
+                        setAccountFormStatus(status, 'Current and new passwords are required.', 'error');
+                        return;
+                    }
+                    if (newPassword !== confirmPassword) {
+                        setAccountFormStatus(status, 'New password confirmation does not match.', 'error');
+                        return;
+                    }
+                    setFormBusy(passwordForm, true);
+                    setAccountFormStatus(status, 'Updating...', null);
+                    try {
+                        const payload = await apiClient.updatePassword(currentPassword, newPassword);
+                        updateAccount(payload.user || apiClient.user);
+                        passwordForm.reset();
+                        setAccountFormStatus(status, 'Password updated.', 'success');
+                        showMessage('Password updated', 'success');
+                    } catch (requestError) {
+                        setAccountFormStatus(status, formatRemoteAuthError(requestError), 'error');
+                    } finally {
+                        setFormBusy(passwordForm, false);
+                    }
+                });
+            }
+
+            if (deleteForm) {
+                deleteForm.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+                    const password = window.document.getElementById('account-delete-password')?.value || '';
+                    const confirm = window.document.getElementById('account-delete-confirm')?.value || '';
+                    const status = window.document.getElementById('account-delete-status');
+                    const username = apiClient.user?.username || '';
+                    if (!password || !confirm) {
+                        setAccountFormStatus(status, 'Password and username confirmation are required.', 'error');
+                        return;
+                    }
+                    if (confirm !== username) {
+                        setAccountFormStatus(status, 'Type your current username exactly.', 'error');
+                        return;
+                    }
+                    if (!window.confirm('Delete this account and all server-side practice records? This cannot be undone.')) {
+                        return;
+                    }
+                    setFormBusy(deleteForm, true);
+                    setAccountFormStatus(status, 'Deleting...', null);
+                    try {
+                        await apiClient.deleteAccount(password, confirm);
+                        deleteForm.reset();
+                        updateAccount(null);
+                        hideTotpPanel();
+                        window.dispatchEvent(new CustomEvent('remote-auth-changed', { detail: { user: null } }));
+                        show();
+                        showMessage('Account deleted', 'success');
+                    } catch (requestError) {
+                        setAccountFormStatus(status, formatRemoteAuthError(requestError), 'error');
+                    } finally {
+                        setFormBusy(deleteForm, false);
+                    }
+                });
+            }
         }
 
         function show() {
@@ -4447,6 +4615,10 @@ storageManager.ready
             const profileName = window.document.getElementById('account-profile-name');
             const profileRole = window.document.getElementById('account-profile-role');
             const profileAvatar = window.document.getElementById('account-profile-avatar');
+            const usernameInput = window.document.getElementById('account-username-input');
+            const usernamePassword = window.document.getElementById('account-username-password');
+            const passwordForm = window.document.getElementById('account-password-form');
+            const deleteForm = window.document.getElementById('account-delete-form');
             if (user && user.username) {
                 const displayRole = user.role === 'admin' ? 'Admin' : 'User';
                 const initial = getAccountInitial(user.username);
@@ -4478,6 +4650,12 @@ storageManager.ready
                 adminLink.hidden = user.role !== 'admin';
                 if (settingsTotp) {
                     settingsTotp.hidden = false;
+                }
+                if (usernameInput) {
+                    usernameInput.value = user.username;
+                }
+                if (usernamePassword) {
+                    usernamePassword.value = '';
                 }
                 account.hidden = false;
                 syncAccountStats();
@@ -4511,6 +4689,21 @@ storageManager.ready
                 if (settingsTotp) {
                     settingsTotp.hidden = true;
                 }
+                if (usernameInput) {
+                    usernameInput.value = '';
+                }
+                if (usernamePassword) {
+                    usernamePassword.value = '';
+                }
+                if (passwordForm) {
+                    passwordForm.reset();
+                }
+                if (deleteForm) {
+                    deleteForm.reset();
+                }
+                ['account-username-status', 'account-password-status', 'account-delete-status'].forEach((id) => {
+                    setAccountFormStatus(window.document.getElementById(id), '', null);
+                });
                 setAccountMenuOpen(false);
                 account.hidden = true;
             }

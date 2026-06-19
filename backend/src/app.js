@@ -89,7 +89,15 @@ function createApp(options = {}) {
         totpStore,
         cookieName,
         rateLimit: options.rateLimit,
-        totpEnabled
+        totpEnabled,
+        onDeleteUser: async (userId) => {
+            if (practiceStore && typeof practiceStore.clear === 'function') {
+                await practiceStore.clear(userId);
+            }
+            if (totpStore && typeof totpStore.disable === 'function') {
+                await totpStore.disable(userId);
+            }
+        }
     }));
     app.use('/api/auth/totp', createTotpRouter({
         store: totpStore,

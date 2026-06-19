@@ -156,6 +156,41 @@
             return payload.status || { enabled: false, recoveryCodesRemaining: 0 };
         }
 
+        async updateUsername(username, password) {
+            const payload = await this.request('/api/auth/account/username', {
+                method: 'PATCH',
+                body: { username, password }
+            });
+            this.user = payload.user || this.user;
+            if (payload.csrfToken) {
+                this.csrfToken = payload.csrfToken;
+            }
+            return payload;
+        }
+
+        async updatePassword(currentPassword, newPassword) {
+            const payload = await this.request('/api/auth/account/password', {
+                method: 'PATCH',
+                body: { currentPassword, newPassword }
+            });
+            this.user = payload.user || this.user;
+            if (payload.csrfToken) {
+                this.csrfToken = payload.csrfToken;
+            }
+            return payload;
+        }
+
+        async deleteAccount(password, confirm) {
+            const payload = await this.request('/api/auth/account', {
+                method: 'DELETE',
+                body: { password, confirm }
+            });
+            this.user = null;
+            this.csrfToken = null;
+            this.pendingTotp = null;
+            return payload;
+        }
+
         async logout() {
             const payload = await this.request('/api/auth/logout', {
                 method: 'POST'

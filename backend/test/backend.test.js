@@ -233,6 +233,165 @@ test('login, logout, and authenticated practice API access', async () => {
     }
 });
 
+test('users can update their own username and password', async () => {
+    const client = await createClient();
+    try {
+        const created = await register(client, 'account_user', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+
+        await client.authStore.createUser({
+            username: 'taken_user',
+            usernameLower: 'taken_user',
+            passwordHash: await bcrypt.hash('StrongPass1', 4)
+        });
+
+        const wrongPasswordRename = await client.request('PATCH', '/api/auth/account/username', {
+            username: 'renamed_user',
+            password: 'WrongPass1'
+        });
+        assert.equal(wrongPasswordRename.response.status, 401);
+
+        const duplicateRename = await client.request('PATCH', '/api/auth/account/username', {
+            username: 'taken_user',
+            password: 'StrongPass1'
+        });
+        assert.equal(duplicateRename.response.status, 409);
+
+        const renamed = await client.request('PATCH', '/api/auth/account/username', {
+            username: 'renamed_user',
+            password: 'StrongPass1'
+        });
+        assert.equal(renamed.response.status, 200);
+        assert.equal(renamed.json.user.username, 'renamed_user');
+
+        const me = await client.request('GET', '/api/auth/me');
+        assert.equal(me.response.status, 200);
+        assert.equal(me.json.user.username, 'renamed_user');
+
+        const weakPassword = await client.request('PATCH', '/api/auth/account/password', {
+            currentPassword: 'StrongPass1',
+            newPassword: 'weak'
+        });
+        assert.equal(weakPassword.response.status, 400);
+
+        const wrongCurrentPassword = await client.request('PATCH', '/api/auth/account/password', {
+            currentPassword: 'WrongPass1',
+            newPassword: 'StrongerPass2'
+        });
+        assert.equal(wrongCurrentPassword.response.status, 401);
+
+        const samePassword = await client.request('PATCH', '/api/auth/account/password', {
+            currentPassword: 'StrongPass1',
+            newPassword: 'StrongPass1'
+        });
+        assert.equal(samePassword.response.status, 400);
+
+        const passwordChanged = await client.request('PATCH', '/api/auth/account/password', {
+            currentPassword: 'StrongPass1',
+            newPassword: 'StrongerPass2'
+        });
+        assert.equal(passwordChanged.response.status, 200);
+        assert.equal(passwordChanged.json.user.username, 'renamed_user');
+
+        const logout = await client.request('POST', '/api/auth/logout');
+        assert.equal(logout.response.status, 200);
+
+        await client.csrf();
+        const oldUsernameLogin = await client.request('POST', '/api/auth/login', {
+            username: 'account_user',
+            password: 'StrongerPass2'
+        });
+        assert.equal(oldUsernameLogin.response.status, 401);
+
+        const oldPasswordLogin = await client.request('POST', '/api/auth/login', {
+            username: 'renamed_user',
+            password: 'StrongPass1'
+        });
+        assert.equal(oldPasswordLogin.response.status, 401);
+
+        const newPasswordLogin = await client.request('POST', '/api/auth/login', {
+            username: 'renamed_user',
+            password: 'StrongerPass2'
+        });
+        assert.equal(newPasswordLogin.response.status, 200);
+        assert.equal(newPasswordLogin.json.user.username, 'renamed_user');
+    } finally {
+        await client.close();
+    }
+});
+
+test('users can delete their own account and associated records', async () => {
+    const client = await createClient();
+    try {
+        const created = await register(client, 'delete_user', 'StrongPass1');
+        assert.equal(created.response.status, 201);
+        const userId = created.json.user.id;
+
+        const replaced = await client.request('PUT', '/api/practice-records', {
+            records: [{ id: 'delete-record', title: 'Delete me', score: 80 }]
+        });
+        assert.equal(replaced.response.status, 200);
+        assert.equal(replaced.json.records.length, 1);
+
+        const wrongConfirm = await client.request('DELETE', '/api/auth/account', {
+            password: 'StrongPass1',
+            confirm: 'wrong_user'
+        });
+        assert.equal(wrongConfirm.response.status, 400);
+
+        const wrongPassword = await client.request('DELETE', '/api/auth/account', {
+            password: 'WrongPass1',
+            confirm: 'delete_user'
+        });
+        assert.equal(wrongPassword.response.status, 401);
+
+        const deleted = await client.request('DELETE', '/api/auth/account', {
+            password: 'StrongPass1',
+            confirm: 'delete_user'
+        });
+        assert.equal(deleted.response.status, 200);
+        assert.equal(deleted.json.deleted, true);
+
+        const me = await client.request('GET', '/api/auth/me');
+        assert.equal(me.response.status, 401);
+        assert.equal(await client.authStore.findByUsernameLower('delete_user'), null);
+        assert.deepEqual(await client.practiceStore.list(userId), []);
+
+        await client.csrf();
+        const login = await client.request('POST', '/api/auth/login', {
+            username: 'delete_user',
+            password: 'StrongPass1'
+        });
+        assert.equal(login.response.status, 401);
+    } finally {
+        await client.close();
+    }
+});
+
+test('the last admin account cannot delete itself', async () => {
+    const client = await createClient();
+    try {
+        await client.csrf();
+        await seedAdmin(client, 'sole_admin', 'StrongPass1');
+        const login = await client.request('POST', '/api/auth/login', {
+            username: 'sole_admin',
+            password: 'StrongPass1'
+        });
+        assert.equal(login.response.status, 200);
+        assert.equal(login.json.requiresTotpSetup, true);
+        await enableTotpForCurrentSession(client);
+
+        const blocked = await client.request('DELETE', '/api/auth/account', {
+            password: 'StrongPass1',
+            confirm: 'sole_admin'
+        });
+        assert.equal(blocked.response.status, 409);
+        assert(await client.authStore.findByUsernameLower('sole_admin'));
+    } finally {
+        await client.close();
+    }
+});
+
 test('auth login rate limit returns 429 after repeated attempts', async () => {
     const client = await createClient({
         rateLimit: { maxAttempts: 1, windowMs: 60_000 }

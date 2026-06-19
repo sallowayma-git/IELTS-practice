@@ -1032,6 +1032,97 @@ body.no-scroll {
     line-height: 1.25;
 }
 
+.account-view__management {
+    margin-top: 24px;
+}
+
+.account-view__forms {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.account-view__form {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    min-width: 0;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.84);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07);
+    padding: 16px;
+}
+
+.account-view__form--danger {
+    border-color: rgba(220, 38, 38, 0.24);
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.account-view__form h4,
+.account-view__form p {
+    margin: 0;
+}
+
+.account-view__form h4 {
+    color: #0f172a;
+    font-size: 0.98rem;
+    font-weight: 800;
+    letter-spacing: 0;
+}
+
+.account-view__form p {
+    color: #64748b;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.account-view__form label {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    color: #334155;
+    font-size: 0.84rem;
+    font-weight: 700;
+}
+
+.account-view__form input {
+    min-height: 40px;
+    min-width: 0;
+    border: 1px solid rgba(100, 116, 139, 0.35);
+    border-radius: 7px;
+    background: #ffffff;
+    color: #0f172a;
+    font: inherit;
+    padding: 0 11px;
+}
+
+.account-view__form input:focus {
+    border-color: #2563eb;
+    outline: 2px solid rgba(37, 99, 235, 0.18);
+}
+
+.account-view__form-status {
+    min-height: 1.1em;
+    color: #64748b;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.account-view__form-status.is-error {
+    color: #b91c1c;
+}
+
+.account-view__form-status.is-success {
+    color: #047857;
+}
+
+.account-view__danger-button {
+    background: #b91c1c !important;
+    color: #ffffff !important;
+}
+
 @media (max-width: 860px) {
     .overview-workbench {
         grid-template-columns: 1fr;
@@ -1043,6 +1134,10 @@ body.no-scroll {
 
     .account-view__stats {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .account-view__forms {
+        grid-template-columns: 1fr;
     }
 }
 
