@@ -1570,6 +1570,26 @@
     return null;
   }
 
+  function getMessageTargetOrigin() {
+    var origin = window.location && window.location.origin;
+    return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+  }
+
+  function isAllowedParentMessage(event) {
+    if (!event) return false;
+    var expected = state.parentWindow || findParentWindow();
+    if (event.source && expected && event.source !== expected) {
+      return false;
+    }
+    if (event.origin && event.origin !== 'null') {
+      var allowedOrigin = window.location && window.location.origin;
+      if (allowedOrigin && allowedOrigin !== 'null' && event.origin !== allowedOrigin) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   function sendMessage(type, data) {
     var pw = state.parentWindow || findParentWindow();
     if (!pw) {
@@ -1577,7 +1597,7 @@
       return false;
     }
     try {
-      pw.postMessage({ type: type, data: data || {}, source: 'listening_record_bridge', timestamp: Date.now() }, '*');
+      pw.postMessage({ type: type, data: data || {}, source: 'listening_record_bridge', timestamp: Date.now() }, getMessageTargetOrigin());
       return true;
     } catch (e) {
       warn('postMessage failed:', e);
@@ -1883,11 +1903,28 @@
     if (!started || depth !== 0) return null;
     var snippet = text.substring(objectStart, i + 1);
     try {
-      return (new Function('return (' + snippet + ')'))();
+      return parseSafeObjectLiteral(snippet);
     } catch (e) {
       warn('parseObjectLiteral failed for', label, e);
       return null;
     }
+  }
+
+  function parseSafeObjectLiteral(snippet) {
+    var source = String(snippet || '').trim();
+    if (!source) return null;
+    if (/[`;]|\bfunction\b|=>/.test(source) || /[{,]\s*\[/.test(source)) {
+      throw new Error('unsafe object literal');
+    }
+    var json = source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/.*$/gm, '$1')
+      .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, function (_, body) {
+        return JSON.stringify(body.replace(/\\'/g, "'"));
+      })
+      .replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g, '$1"$2":')
+      .replace(/,\s*([}\]])/g, '$1');
+    return JSON.parse(json);
   }
 
   function readInlineAnswerConfig(doc) {
@@ -2551,6 +2588,7 @@
   function initMessageListener() {
     window.addEventListener('message', function (event) {
       if (!event || !event.data) return;
+      if (!isAllowedParentMessage(event)) return;
       var data = event.data;
       var type = data.type;
 

@@ -18,6 +18,11 @@ function normalizeRecordId(id) {
     return String(id);
 }
 
+function getMessageTargetOrigin() {
+    const origin = window.location && window.location.origin;
+    return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+}
+
 if (typeof window !== 'undefined') {
     window.normalizeRecordId = normalizeRecordId;
 }
@@ -775,8 +780,8 @@ function setupMessageListener() {
             sessionId: entry.rec.sessionId || entry.sid
         };
         try {
-            entry.rec.win.postMessage({ type: 'INIT_SESSION', data: payload }, '*');
-            entry.rec.win.postMessage({ type: 'init_exam_session', data: payload }, '*');
+            entry.rec.win.postMessage({ type: 'INIT_SESSION', data: payload }, getMessageTargetOrigin());
+            entry.rec.win.postMessage({ type: 'init_exam_session', data: payload }, getMessageTargetOrigin());
         } catch (_) { }
     };
 

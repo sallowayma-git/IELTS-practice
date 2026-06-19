@@ -151,6 +151,36 @@
         return title;
     }
 
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function getMessageTargetOrigin() {
+        const origin = window.location && window.location.origin;
+        return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+    }
+
+    function isAllowedParentMessage(event, parentWindow) {
+        if (!event || !parentWindow) {
+            return false;
+        }
+        if (event.source && event.source !== parentWindow) {
+            return false;
+        }
+        if (event.origin && event.origin !== 'null') {
+            const allowedOrigin = window.location && window.location.origin;
+            if (allowedOrigin && allowedOrigin !== 'null' && event.origin !== allowedOrigin) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     const enhancerMixinRegistry = [];
 
     const registerPracticeEnhancerMixin = (definition) => {
@@ -1641,9 +1671,9 @@
                 const statusClass = entry.isCorrect ? 'result-correct' : 'result-incorrect';
                 return `
                     <tr>
-                        <td>${label}</td>
-                        <td>${userAnswer}</td>
-                        <td>${correctAnswer}</td>
+                        <td>${escapeHtml(label)}</td>
+                        <td>${escapeHtml(userAnswer)}</td>
+                        <td>${escapeHtml(correctAnswer)}</td>
                         <td class="${statusClass}">${status}</td>
                     </tr>
                 `;
@@ -1762,6 +1792,9 @@
             }
             this.startInitRequestLoop();
             window.addEventListener('message', (event) => {
+                if (!isAllowedParentMessage(event, this.parentWindow)) {
+                    return;
+                }
                 const payload = event && event.data ? event.data : null;
                 if (!payload || typeof payload.type !== 'string') {
                     return;
@@ -4448,7 +4481,7 @@
             };
 
             try {
-                this.parentWindow.postMessage(message, '*');
+                this.parentWindow.postMessage(message, getMessageTargetOrigin());
                 console.log('[PracticeEnhancer] 消息已发送:', type);
             } catch (error) {
                 console.error('[PracticeEnhancer] 发送消息失败:', error);
