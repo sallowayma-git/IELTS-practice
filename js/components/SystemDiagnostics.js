@@ -2,6 +2,27 @@
  * 系统诊断和修复工具
  * 合并了索引验证、通信测试、通信恢复和错误修复功能
  */
+function getMessageTargetOrigin() {
+    const origin = window.location && window.location.origin;
+    return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+}
+
+function isTrustedWindowMessage(event, expectedWindow) {
+    if (!event || !expectedWindow) {
+        return false;
+    }
+    if (event.source && event.source !== expectedWindow) {
+        return false;
+    }
+    if (event.origin && event.origin !== 'null') {
+        const origin = window.location && window.location.origin;
+        if (origin && origin !== 'null' && event.origin !== origin) {
+            return false;
+        }
+    }
+    return true;
+}
+
 class SystemDiagnostics {
     constructor() {
         // 索引验证相关
@@ -176,7 +197,7 @@ class SystemDiagnostics {
                 }
             };
 
-            examWindow.postMessage(testMessage, '*');
+            examWindow.postMessage(testMessage, getMessageTargetOrigin());
 
             // 等待响应
             const result = await new Promise((resolve) => {
@@ -192,7 +213,7 @@ class SystemDiagnostics {
                 }, timeout);
 
                 const messageHandler = (event) => {
-                    if (event.data.type === 'COMMUNICATION_TEST_RESPONSE') {
+                    if (isTrustedWindowMessage(event, examWindow) && event.data.type === 'COMMUNICATION_TEST_RESPONSE') {
                         clearTimeout(timeoutId);
                         cleanup();
                         resolve({
@@ -295,7 +316,7 @@ class SystemDiagnostics {
                     connection.window.postMessage({
                         type: 'HEARTBEAT',
                         timestamp: Date.now()
-                    }, '*');
+                    }, getMessageTargetOrigin());
                 }
             } catch (error) {
                 this.handleConnectionLost(examId, 'connection_error');

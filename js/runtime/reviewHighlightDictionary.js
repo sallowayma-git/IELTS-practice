@@ -25,6 +25,11 @@
             .replace(/'/g, '&#39;');
     }
 
+    function getMessageTargetOrigin() {
+        const origin = global.location && global.location.origin;
+        return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+    }
+
     function ensureStyle() {
         if (document.getElementById(STYLE_ID)) {
             return;
@@ -483,7 +488,7 @@
                     type: VOCAB_MESSAGE_TYPE,
                     source: 'practice_page',
                     data: payload
-                }, '*');
+                }, getMessageTargetOrigin());
                 return true;
             } catch (_) {
                 // try next target

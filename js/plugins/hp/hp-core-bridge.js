@@ -28,6 +28,50 @@
   const resourceProbeCache = new Map();
   const localFallbackSessions = new Map();
 
+  function getMessageTargetOrigin() {
+    const origin = window.location && window.location.origin;
+    return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+  }
+
+  function hasAllowedMessageOrigin(event) {
+    if (!event || !event.origin || event.origin === 'null') {
+      return true;
+    }
+    const origin = window.location && window.location.origin;
+    return Boolean(origin && origin !== 'null' && event.origin === origin);
+  }
+
+  function findLocalSessionForMessage(event, payload) {
+    const sid = payload && (payload.sessionId || payload.sessionID || (payload.data && (payload.data.sessionId || payload.data.sessionID)));
+    if (sid && localFallbackSessions.has(sid)) {
+      return localFallbackSessions.get(sid);
+    }
+    const sourceWindow = event && event.source;
+    if (!sourceWindow) {
+      return null;
+    }
+    for (const session of localFallbackSessions.values()) {
+      if (session && session.win === sourceWindow) {
+        return session;
+      }
+    }
+    return null;
+  }
+
+  function isAllowedLocalSessionMessage(event, payload) {
+    if (!hasAllowedMessageOrigin(event)) {
+      return false;
+    }
+    const session = findLocalSessionForMessage(event, payload);
+    if (!session) {
+      return false;
+    }
+    if (event && event.source && session.win && event.source !== session.win) {
+      return false;
+    }
+    return true;
+  }
+
   function normalizeEventType(value) {
     if (window.PracticeCore && window.PracticeCore.protocol && typeof window.PracticeCore.protocol.normalizeMessageType === 'function') {
       return window.PracticeCore.protocol.normalizeMessageType(value);
@@ -281,8 +325,8 @@
         if (attempts === 0) {
           console.log('[hpCore] 发送 INIT_SESSION 到练习页', payload);
         }
-        examWindow.postMessage({ type: 'INIT_SESSION', data: payload }, '*');
-        examWindow.postMessage({ type: 'init_exam_session', data: payload }, '*');
+        examWindow.postMessage({ type: 'INIT_SESSION', data: payload }, getMessageTargetOrigin());
+        examWindow.postMessage({ type: 'init_exam_session', data: payload }, getMessageTargetOrigin());
       } catch (_) {}
       attempts += 1;
       if (attempts >= maxAttempts) {
@@ -800,16 +844,15 @@
       window.addEventListener('message', (ev) => {
         const payload = ev && ev.data ? ev.data : {};
         const normalized = normalizeEventType(payload.type);
+        if (!normalized || !isAllowedLocalSessionMessage(ev, payload)) return;
         if (normalized === 'SESSION_READY') {
-          const sid = payload.sessionId || payload.sessionID;
+          const sid = payload.sessionId || payload.sessionID || (payload.data && (payload.data.sessionId || payload.data.sessionID));
           if (sid) clearLocalHandshake(sid, 'ready');
           return;
         }
 
-        if (!normalized) return;
-
         if (isPracticeCompleteType(normalized)) {
-          const sid = payload.sessionId || payload.sessionID;
+          const sid = payload.sessionId || payload.sessionID || (payload.data && (payload.data.sessionId || payload.data.sessionID));
           const sessionEntry = sid ? localFallbackSessions.get(sid) : null;
           if (sid) clearLocalHandshake(sid, 'complete');
 

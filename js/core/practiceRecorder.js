@@ -6,6 +6,11 @@ const AnswerSanitizer = (typeof window !== 'undefined' && window.AnswerSanitizer
  * 练习记录管理器
  * 负责练习会话管理、成绩记录和数据持久化
  */
+function getMessageTargetOrigin() {
+    const origin = window.location && window.location.origin;
+    return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+}
+
 class PracticeRecorder {
     constructor() {
         this.activeSessions = new Map();
@@ -73,10 +78,11 @@ class PracticeRecorder {
                 || payload?.results?.metadata?.allowSynthetic === true
             )
         );
-        if (explicitAllow) {
-            return true;
+        const inTestEnvironment = this.isInTestEnvironment();
+        if (!inTestEnvironment) {
+            return false;
         }
-        return this.isInTestEnvironment();
+        return explicitAllow || inTestEnvironment;
     }
 
     async recordRejectedCompletionPayload(payload, context = {}) {
@@ -338,6 +344,9 @@ class PracticeRecorder {
         if (!normalized) {
             return;
         }
+        if (!this.isAllowedExamMessage(event, normalized)) {
+            return;
+        }
         const { type, data } = normalized;
 
         switch (type) {
@@ -364,6 +373,41 @@ class PracticeRecorder {
             default:
                 break;
         }
+    }
+
+    isAllowedExamMessage(event, normalized) {
+        if (!event || !normalized || !normalized.data) {
+            return false;
+        }
+
+        if (event.origin && event.origin !== 'null') {
+            const allowedOrigin = window.location && window.location.origin;
+            if (allowedOrigin && allowedOrigin !== 'null' && event.origin !== allowedOrigin) {
+                return false;
+            }
+        }
+
+        const data = normalized.data;
+        const candidateExamIds = [
+            data.examId,
+            data.originalExamId,
+            data.derivedExamId,
+            data.rawExamId
+        ].map((id) => (typeof id === 'string' ? id.trim() : '')).filter(Boolean);
+        if (candidateExamIds.some((examId) => this.activeSessions.has(examId))) {
+            return true;
+        }
+
+        const sessionId = typeof data.sessionId === 'string' ? data.sessionId.trim() : '';
+        if (sessionId) {
+            for (const session of this.activeSessions.values()) {
+                if (session && session.sessionId === sessionId) {
+                    return true;
+                }
+            }
+        }
+
+        return normalized.type === 'session_completed' && this.isSyntheticSessionAllowed(data);
     }
 
     normalizeIncomingMessage(rawMessage) {
@@ -2492,7 +2536,7 @@ class PracticeRecorder {
                     sessionId: sessionId,
                     timestamp: Date.now()
                 }
-            }, '*');
+            }, getMessageTargetOrigin());
         }
     }
 

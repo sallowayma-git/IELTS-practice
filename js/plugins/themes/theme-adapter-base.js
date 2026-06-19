@@ -29,6 +29,27 @@
   // 路径解析备用策略顺序
   const PATH_FALLBACK_ORDER = ['map', 'fallback', 'raw', 'relative-up', 'relative-design'];
 
+  function getMessageTargetOrigin() {
+    const origin = window.location && window.location.origin;
+    return origin && origin !== 'null' && /^https?:\/\//i.test(origin) ? origin : '*';
+  }
+
+  function hasAllowedMessageOrigin(event) {
+    if (!event || !event.origin || event.origin === 'null') {
+      return true;
+    }
+    const origin = window.location && window.location.origin;
+    return Boolean(origin && origin !== 'null' && event.origin === origin);
+  }
+
+  function extractPayloadSessionId(payload) {
+    return payload && (
+      payload.sessionId
+      || payload.sessionID
+      || (payload.data && (payload.data.sessionId || payload.data.sessionID))
+    );
+  }
+
   /**
    * 深拷贝数组
    */
@@ -707,8 +728,8 @@
         }
 
         try {
-          examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, '*');
-          examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, '*');
+          examWindow.postMessage({ type: 'INIT_SESSION', data: initPayload }, getMessageTargetOrigin());
+          examWindow.postMessage({ type: 'init_exam_session', data: initPayload }, getMessageTargetOrigin());
         } catch (error) {
           console.warn('[ThemeAdapterBase] postMessage 失败:', error);
         }
@@ -878,6 +899,30 @@
      * 处理 postMessage 消息
      * @param {MessageEvent} event - 消息事件
      */
+    _isKnownSessionMessage(event, payload) {
+      if (!hasAllowedMessageOrigin(event)) {
+        return false;
+      }
+      if (!this._activeSessions || !this._activeSessions.size) {
+        return false;
+      }
+      const sessionId = extractPayloadSessionId(payload);
+      if (sessionId && this._activeSessions.has(sessionId)) {
+        const session = this._activeSessions.get(sessionId);
+        return !(event && event.source && session && session.window && event.source !== session.window);
+      }
+      const sourceWindow = event && event.source;
+      if (!sourceWindow) {
+        return false;
+      }
+      for (const session of this._activeSessions.values()) {
+        if (session && session.window === sourceWindow) {
+          return true;
+        }
+      }
+      return false;
+    },
+
     _handleMessage(event) {
       if (!event || !event.data) return;
 
@@ -886,6 +931,9 @@
       if (!rawType) return;
 
       const normalizedType = normalizeMessageType(rawType);
+      if (!this._isKnownSessionMessage(event, payload)) {
+        return;
+      }
 
       // 处理 SESSION_READY 消息
       if (normalizedType === 'SESSION_READY') {
